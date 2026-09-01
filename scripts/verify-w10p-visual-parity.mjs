@@ -2523,6 +2523,14 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "frozenBaselineObservationSequenceBefore(removedSequence, exactConsoleSequence,)",
     "frozenBaselineObservationSequenceBefore(removedSequence, successorTargets[0].addSequence,)",
     "frozenBaselineObservationSequenceBefore(successorTargets[0].addSequence, successorTargets[0].acknowledgementSequences[0],)",
+    "const cleanClientUnsubscribeSequenceBound =",
+    "removedTargets[0].outboundRemoveSequence !== null",
+    "frozenBaselineObservationSequenceBefore(removedTargets[0].addSequence, removedTargets[0].outboundRemoveSequence,)",
+    "frozenBaselineObservationSequenceBefore(removedTargets[0].outboundRemoveSequence, successorTargets[0].addSequence,)",
+    "const cleanClientUnsubscribeTransitionCount = Number(",
+    "const acceptedListenerTransitionCount = tupleBoundRetirementCount + cleanClientUnsubscribeTransitionCount",
+    "tupleBoundRetirementCount * cleanClientUnsubscribeTransitionCount",
+    "const retiredExactConsoleErrorCount = tupleBoundRetirementCount",
     "const reserveInboundPayloadSequence = () =>",
     "const FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS = 3_000",
     "const FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS = 50",
@@ -2560,6 +2568,13 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "frozenBaselineListenerBindingRawValueOutputCount: 0",
     "verifyFrozenBaselineListenerBindingFixtures();",
     "browserConsoleErrorRecoveredProtectedReadCount + browserConsoleErrorRetiredFrozenBaselineCount",
+    "const frozenBaselineAuthenticationAnomalyRetirement = Object.freeze({ schemaVersion: 2",
+    'tupleBoundRetirementCount: sumFrozenBaselineAuthenticationAnomalyGroupField("tupleBoundRetirementCount",)',
+    'cleanClientUnsubscribeTransitionCount: sumFrozenBaselineAuthenticationAnomalyGroupField("cleanClientUnsubscribeTransitionCount",)',
+    'acceptedListenerTransitionCount: sumFrozenBaselineAuthenticationAnomalyGroupField("acceptedListenerTransitionCount",)',
+    'sumFrozenBaselineAuthenticationAnomalyGroupField("tupleBoundRetirementCount",) + sumFrozenBaselineAuthenticationAnomalyGroupField("cleanClientUnsubscribeTransitionCount",) === 1',
+    'sumFrozenBaselineAuthenticationAnomalyGroupField("tupleBoundRetirementCount",) * sumFrozenBaselineAuthenticationAnomalyGroupField("cleanClientUnsubscribeTransitionCount",) === 0',
+    'sumFrozenBaselineAuthenticationAnomalyGroupField("retiredExactConsoleErrorCount",) === sumFrozenBaselineAuthenticationAnomalyGroupField("tupleBoundRetirementCount",) * frozenBaselineAuthenticationAnomalyPolicy.consoleError.expectedCount',
     "frozenBaselineAuthenticationAnomalyRetirement,",
   ]) {
     assert.equal(
@@ -2695,6 +2710,705 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     /same(?:Authorization|AppCheck)Token/u,
     "The page attestation normalizer must not accept renderer self-asserted authority equality.",
   );
+  const exactWebChannelSessionHashSourceStart = sourceText.indexOf(
+    "const safeExactFirestoreListenSessionHashes = (requestUrl) => {",
+  );
+  const exactWebChannelSessionHashSourceEnd = sourceText.indexOf(
+    "const exactFirestoreListenInitialRequest = (requestUrl) => {",
+    exactWebChannelSessionHashSourceStart,
+  );
+  assert.ok(exactWebChannelSessionHashSourceStart >= 0);
+  assert.ok(
+    exactWebChannelSessionHashSourceEnd > exactWebChannelSessionHashSourceStart,
+  );
+  const exactWebChannelSessionHashSource = sourceText.slice(
+    exactWebChannelSessionHashSourceStart,
+    exactWebChannelSessionHashSourceEnd,
+  );
+  assert.match(
+    exactWebChannelSessionHashSource,
+    /parsed\.protocol !== "https:"[\s\S]*?parsed\.hostname\.toLowerCase\(\) !== "firestore\.googleapis\.com"[\s\S]*?parsed\.username !== ""[\s\S]*?parsed\.password !== ""[\s\S]*?!\["", "443"\]\.includes\(parsed\.port\)[\s\S]*?parsed\.hash !== ""[\s\S]*?parsed\.pathname !== FIRESTORE_LISTEN_WEBCHANNEL_PATHNAME[\s\S]*?databaseValues\.length !== 1[\s\S]*?projects\/\$\{contract\.firebaseProjectId\}\/databases\/\(default\)[\s\S]*?sidValues\.length !== 1[\s\S]*?!boundedOpaqueSessionValue\(sidValues\[0\], 512\)[\s\S]*?gsessionidValues\.length > 1[\s\S]*?!boundedOpaqueSessionValue\(gsessionidValues\[0\], 512\)/u,
+    "Exact WebChannel diagnostics must accept only the HTTPS Staging Firestore Listen path, exact database and bounded opaque session values.",
+  );
+  assert.match(
+    exactWebChannelSessionHashSource,
+    /return Object\.freeze\(\{\s*sidSha256: secretSha256\(sidValues\[0\]\),\s*gsessionidSha256:\s*gsessionidValues\.length === 1\s*\? secretSha256\(gsessionidValues\[0\]\)\s*:\s*null,\s*\}\);/u,
+    "The exact Listen session helper must export only hashes, never raw SID or gsessionid values.",
+  );
+  const exactWebChannelDiagnosticClassifierStart = sourceText.indexOf(
+    "const classifySafeExactAuthenticationWebChannelDiagnosticUrl = (",
+  );
+  const exactWebChannelDiagnosticClassifierEnd = sourceText.indexOf(
+    "const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS",
+    exactWebChannelDiagnosticClassifierStart,
+  );
+  assert.ok(exactWebChannelDiagnosticClassifierStart >= 0);
+  assert.ok(
+    exactWebChannelDiagnosticClassifierEnd >
+      exactWebChannelDiagnosticClassifierStart,
+  );
+  const exactWebChannelDiagnosticClassifierSource = sourceText.slice(
+    exactWebChannelDiagnosticClassifierStart,
+    exactWebChannelDiagnosticClassifierEnd,
+  );
+  assert.match(
+    exactWebChannelDiagnosticClassifierSource,
+    /const sessionHashes\s*=\s*safeExactFirestoreListenSessionHashes\(requestUrl\);\s*if \(sessionHashes === null\) return null;/u,
+    "The safe WebChannel diagnostic classifier must fail closed before classifying any URL outside the exact Listen session scope.",
+  );
+  for (const exactClassifierFragment of [
+    'method: "POST",\n      observerSurface: "playwright-request",\n      resourceType: "fetch"',
+    'method: "GET",\n      observerSurface: "playwright-request",\n      resourceType: "fetch",\n      postDataPresent: false',
+    'method: "GET",\n      observerSurface: "cdp-request-paused",\n      resourceType: "image",\n      postDataPresent: false',
+  ]) {
+    assert.equal(
+      exactWebChannelDiagnosticClassifierSource.includes(
+        exactClassifierFragment,
+      ),
+      true,
+      `The safe WebChannel diagnostic classifier lost an exact transport surface: ${exactClassifierFragment}`,
+    );
+  }
+  assert.match(
+    exactWebChannelDiagnosticClassifierSource,
+    /const classified\s*=\s*\[\s*sessionForwardClass,\s*backchannelClass,\s*terminationClass,\s*\]\.filter\(\(value\) => value !== null\);\s*if \(classified\.length !== 1\) return null;/u,
+    "Exactly one WebChannel request or termination class must bind each safe diagnostic URL.",
+  );
+  assert.match(
+    exactWebChannelDiagnosticClassifierSource,
+    /return Object\.freeze\(\{\s*requestClass: sessionForwardClass \|\| backchannelClass,\s*terminationClass,\s*sidSha256: sessionHashes\.sidSha256,\s*gsessionidSha256: sessionHashes\.gsessionidSha256,\s*\}\);/u,
+    "The safe WebChannel diagnostic classifier must retain its exact four-key, hash-only result contract.",
+  );
+  const exactWebChannelDiagnosticFixtureSourceStart = sourceText.indexOf(
+    "const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {",
+  );
+  const exactWebChannelDiagnosticFixtureSourceEnd = sourceText.indexOf(
+    "const verifyAppCheckSecretNegativeFixtures = () => {",
+    exactWebChannelDiagnosticFixtureSourceStart,
+  );
+  assert.ok(exactWebChannelDiagnosticFixtureSourceStart >= 0);
+  assert.ok(
+    exactWebChannelDiagnosticFixtureSourceEnd >
+      exactWebChannelDiagnosticFixtureSourceStart,
+  );
+  const exactWebChannelDiagnosticFixtureSource = sourceText.slice(
+    exactWebChannelDiagnosticFixtureSourceStart,
+    exactWebChannelDiagnosticFixtureSourceEnd,
+  );
+  const compactExactWebChannelDiagnosticFixtureSource =
+    exactWebChannelDiagnosticFixtureSource.replace(/\s+/gu, "");
+  for (const exactDiagnosticFixtureFragment of [
+    "constsafeExactWebChannelDiagnosticFixtures=safeExactWebChannelDiagnosticPositiveUrls.map((url)=>classifySafeExactAuthenticationWebChannelDiagnosticUrl(url.toString()),)",
+    "safeExactWebChannelDiagnosticFixtures.map((fixture)=>[fixture?.requestClass,fixture?.terminationClass,])",
+    '["backchannel-get",null]',
+    '[null,"termination-image-get"]',
+    "Object.keys(fixture)",
+    '"requestClass","terminationClass","sidSha256","gsessionidSha256"',
+    "assert.match(fixture.sidSha256,/^[a-f0-9]{64}$/u)",
+    "constsafeExactWebChannelDiagnosticNegativeUrls=[",
+    'url.searchParams.set("token","private")',
+    'url.searchParams.append("SID",diagnosticPrivateSid)',
+    'url.searchParams.append("gsessionid",diagnosticPrivateGsessionid)',
+    'url.searchParams.append("database",firestoreDatabase)',
+    'url.pathname="/google.firestore.v1.Firestore/Write/channel"',
+    "classifySafeExactAuthenticationWebChannelDiagnosticUrl(url.toString()),null",
+    "constsafeExactWebChannelDiagnosticRecordFixtures=Object.freeze({",
+    "for(const[recordClass,record]ofObject.entries(safeExactWebChannelDiagnosticRecordFixtures,))",
+    "Object.keys(record).sort(),exactDiagnosticRecordKeys[recordClass]",
+    "assertSafeDiagnosticShape(safeExactWebChannelDiagnosticRecordFixtures)",
+    "constsafeExactWebChannelDiagnosticSerialized=JSON.stringify({safeExactWebChannelDiagnosticFixtures,safeExactWebChannelDiagnosticRecordFixtures,})",
+    "safeExactWebChannelDiagnosticSerialized.includes(rawValue),false",
+    "diagnosticOnlyRequestFailureCount-protectedReadRecoveredRequestFailureCount,1",
+    "diagnosticOnlyConsoleErrorCount-protectedReadRecoveredConsoleErrorCount-tupleBoundRetiredConsoleErrorCount,1",
+    "safeExactWebChannelDiagnosticAcceptedFixtureCount:safeExactWebChannelDiagnosticFixtures.length",
+    "safeExactWebChannelDiagnosticRejectedFixtureCount:safeExactWebChannelDiagnosticNegativeUrls.length",
+    "safeExactWebChannelDiagnosticBindingAcceptedFixtureCount:exactDiagnosticObservations.length*2",
+    "safeExactWebChannelDiagnosticBindingRejectedFixtureCount:safeExactWebChannelDiagnosticBindingNegativeFixtures.length",
+    "safeExactWebChannelDiagnosticRawValueOutputCount:0",
+    "safeExactWebChannelDiagnosticNetworkAccess:0",
+  ]) {
+    assert.equal(
+      compactExactWebChannelDiagnosticFixtureSource.includes(
+        exactDiagnosticFixtureFragment,
+      ),
+      true,
+      `The safe exact WebChannel diagnostic fixture contract is missing: ${exactDiagnosticFixtureFragment}`,
+    );
+  }
+  for (const rawSentinelName of [
+    "diagnosticPrivateSid",
+    "diagnosticPrivateGsessionid",
+    "diagnosticPrivateNetworkId",
+    "diagnosticPrivateUrl",
+    "diagnosticPrivateJwt",
+  ]) {
+    assert.equal(
+      exactWebChannelDiagnosticFixtureSource.includes(rawSentinelName),
+      true,
+      `The safe exact WebChannel diagnostic raw sentinel is missing: ${rawSentinelName}`,
+    );
+  }
+  const exactDiagnosticPositiveUrlFixtureSource =
+    exactWebChannelDiagnosticFixtureSource.slice(
+      exactWebChannelDiagnosticFixtureSource.indexOf(
+        "const safeExactWebChannelDiagnosticPositiveUrls = [",
+      ),
+      exactWebChannelDiagnosticFixtureSource.indexOf(
+        "const safeExactWebChannelDiagnosticFixtures =",
+      ),
+    );
+  assert.equal(
+    (exactDiagnosticPositiveUrlFixtureSource.match(/\bdiagnosticUrl\(/gu) || [])
+      .length,
+    6,
+    "Safe exact WebChannel diagnostics must retain six accepted URL fixtures.",
+  );
+  const exactDiagnosticNegativeUrlFixtureSource =
+    exactWebChannelDiagnosticFixtureSource.slice(
+      exactWebChannelDiagnosticFixtureSource.indexOf(
+        "const safeExactWebChannelDiagnosticNegativeUrls = [",
+      ),
+      exactWebChannelDiagnosticFixtureSource.indexOf(
+        "for (const url of safeExactWebChannelDiagnosticNegativeUrls)",
+      ),
+    );
+  assert.equal(
+    (exactDiagnosticNegativeUrlFixtureSource.match(/\bmutateUrl\(/gu) || [])
+      .length,
+    27,
+    "Safe exact WebChannel diagnostics must retain twenty-seven rejected URL fixtures.",
+  );
+  const exactDiagnosticAcceptedBindingFixtureSource =
+    exactWebChannelDiagnosticFixtureSource.slice(
+      exactWebChannelDiagnosticFixtureSource.indexOf(
+        "const exactDiagnosticObservations = [",
+      ),
+      exactWebChannelDiagnosticFixtureSource.indexOf(
+        "for (const observation of exactDiagnosticObservations)",
+      ),
+    );
+  assert.equal(
+    (
+      exactDiagnosticAcceptedBindingFixtureSource.match(
+        /\bexactDiagnosticObservation\(\{/gu,
+      ) || []
+    ).length,
+    3,
+    "Three exact request classes must each pass both network-id and URL-hash binding, for six accepted binding fixtures.",
+  );
+  const exactDiagnosticRejectedBindingFixtureSource =
+    exactWebChannelDiagnosticFixtureSource.slice(
+      exactWebChannelDiagnosticFixtureSource.indexOf(
+        "const safeExactWebChannelDiagnosticBindingNegativeFixtures = [",
+      ),
+      exactWebChannelDiagnosticFixtureSource.indexOf(
+        "for (const fixture of safeExactWebChannelDiagnosticBindingNegativeFixtures)",
+      ),
+    );
+  assert.equal(
+    (exactDiagnosticRejectedBindingFixtureSource.match(/\blifecycle:/gu) || [])
+      .length,
+    15,
+    "Safe exact WebChannel diagnostics must retain fifteen rejected strict-binding fixtures.",
+  );
+  assert.match(
+    exactWebChannelDiagnosticFixtureSource,
+    /for \(const observation of exactDiagnosticObservations\) \{[\s\S]*?expectedNetworkId: diagnosticPrivateNetworkId,[\s\S]*?\),\s*true,\s*\);[\s\S]*?expectedRequestUrlSha256: observation\.requestUrlSha256,[\s\S]*?\),\s*true,\s*\);[\s\S]*?for \(const fixture of safeExactWebChannelDiagnosticBindingNegativeFixtures\) \{[\s\S]*?isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate\(fixture\),\s*false,/u,
+    "The diagnostic self-test must bind every request class through both exact identities and reject every lifecycle/auth/hash drift fixture.",
+  );
+  assert.match(
+    exactWebChannelDiagnosticFixtureSource,
+    /const forbiddenRawDiagnosticKeys\s*=\s*new Set\(\[\s*"authorization",\s*"gsessionid",\s*"networkRequestId",\s*"requestId",\s*"requestUrl",\s*"sequence",\s*"sid",\s*"token",\s*"url",\s*\]\);[\s\S]*?if \(key\.endsWith\("Sha256"\)\) \{\s*assert\.ok\(\s*nestedValue === null \|\| \/\^\[a-f0-9\]\{64\}\$\/u\.test\(nestedValue\),?\s*\);/u,
+    "Diagnostic fixture records must recursively reject raw identifier keys and require exact SHA-256 values.",
+  );
+  const exactDiagnosticRecordKeysSourceStart =
+    exactWebChannelDiagnosticFixtureSource.indexOf(
+      "const exactDiagnosticRecordKeys = Object.freeze({",
+    );
+  const exactDiagnosticRecordKeysSourceEnd =
+    exactWebChannelDiagnosticFixtureSource.indexOf(
+      "for (const [recordClass, record] of Object.entries(",
+      exactDiagnosticRecordKeysSourceStart,
+    );
+  assert.ok(exactDiagnosticRecordKeysSourceStart >= 0);
+  assert.ok(
+    exactDiagnosticRecordKeysSourceEnd > exactDiagnosticRecordKeysSourceStart,
+  );
+  const exactDiagnosticRecordKeysSource =
+    exactWebChannelDiagnosticFixtureSource.slice(
+      exactDiagnosticRecordKeysSourceStart,
+      exactDiagnosticRecordKeysSourceEnd,
+    );
+  const extractExactDiagnosticRecordKeys = (recordClass) => {
+    const match = exactDiagnosticRecordKeysSource.match(
+      new RegExp(`${recordClass}:\\s*\\[([\\s\\S]*?)\\]`, "u"),
+    );
+    assert.ok(
+      match,
+      `Missing exact diagnostic record key list: ${recordClass}`,
+    );
+    return [...match[1].matchAll(/"([A-Za-z0-9]+)"/gu)].map(
+      (keyMatch) => keyMatch[1],
+    );
+  };
+  const expectedExactDiagnosticRecordKeys = Object.freeze({
+    requestFailure: [
+      "exactWebChannelBindingCandidateCount",
+      "failureClass",
+      "firebaseService",
+      "gsessionidSha256",
+      "networkIdentityBound",
+      "networkRequestIdSha256",
+      "requestUrlSha256",
+      "resourceType",
+      "sidSha256",
+      "webChannelDiagnosticPhase",
+      "webChannelLifecycleState",
+      "webChannelListenPathExact",
+      "webChannelRequestClass",
+      "webChannelRequestUrlBound",
+      "webChannelTerminationClass",
+    ],
+    loadingFailure: [
+      "blockedReasonClass",
+      "blockedReasonPresent",
+      "canceled",
+      "corsErrorStatusAbsent",
+      "exactNetworkBindingCandidateCount",
+      "failureClass",
+      "gsessionidSha256",
+      "lifecycleState",
+      "networkRequestIdSha256",
+      "requestClass",
+      "requestUrlSha256",
+      "resourceType",
+      "sidSha256",
+      "terminationClass",
+    ],
+    networkLog: [
+      "categoryAbsent",
+      "errorNameClass",
+      "exactNetworkBindingCandidateCount",
+      "gsessionidSha256",
+      "levelError",
+      "lifecycleState",
+      "locationUrlBound",
+      "messageClass",
+      "networkRequestIdSha256",
+      "operationClass",
+      "requestClass",
+      "requestUrlSha256",
+      "resourceType",
+      "sha256",
+      "sidSha256",
+      "sourceClass",
+      "sourceNetwork",
+      "terminationClass",
+    ],
+    consoleLocation: [
+      "errorNameClass",
+      "exactWebChannelBindingCandidateCount",
+      "gsessionidSha256",
+      "lifecycleState",
+      "messageClass",
+      "networkRequestIdSha256",
+      "operationClass",
+      "requestClass",
+      "requestUrlBound",
+      "requestUrlSha256",
+      "resourceType",
+      "sha256",
+      "sidSha256",
+      "sourceClass",
+      "terminationClass",
+    ],
+  });
+  for (const [recordClass, expectedKeys] of Object.entries(
+    expectedExactDiagnosticRecordKeys,
+  )) {
+    assert.deepEqual(
+      extractExactDiagnosticRecordKeys(recordClass),
+      expectedKeys,
+      `The ${recordClass} safe diagnostic exact-key allowlist changed.`,
+    );
+  }
+  assert.equal(
+    exactWebChannelDiagnosticFixtureSource.includes(
+      "value: `Failed to load resource: net::ERR_ABORTED ${diagnosticPrivateJwt}`",
+    ),
+    true,
+    "The JWT sentinel must pass through the real browser-error sanitizer before diagnostic serialization.",
+  );
+  assert.match(
+    exactWebChannelDiagnosticFixtureSource,
+    /freezeSafeExactAuthenticationWebChannelDiagnosticRecord\(\s*"requestFailure",[\s\S]*?failureClass: diagnosticPrivateJwt,[\s\S]*?\),\s*\);/u,
+    "The shared diagnostic record gate must reject a raw JWT placed in an allowed string field.",
+  );
+  const exactWebChannelDiagnosticRecordGateSourceStart = sourceText.indexOf(
+    "const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS =",
+  );
+  const exactWebChannelDiagnosticRecordGateSourceEnd = sourceText.indexOf(
+    "const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS",
+    exactWebChannelDiagnosticRecordGateSourceStart,
+  );
+  assert.ok(exactWebChannelDiagnosticRecordGateSourceStart >= 0);
+  assert.ok(
+    exactWebChannelDiagnosticRecordGateSourceEnd >
+      exactWebChannelDiagnosticRecordGateSourceStart,
+  );
+  const exactWebChannelDiagnosticRecordGateSource = sourceText.slice(
+    exactWebChannelDiagnosticRecordGateSourceStart,
+    exactWebChannelDiagnosticRecordGateSourceEnd,
+  );
+  const compactExactWebChannelDiagnosticRecordGateSource =
+    exactWebChannelDiagnosticRecordGateSource.replace(/\s+/gu, "");
+  const registrySourceStart = exactWebChannelDiagnosticRecordGateSource.indexOf(
+    "const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS =",
+  );
+  const registrySourceEnd = exactWebChannelDiagnosticRecordGateSource.indexOf(
+    "const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RAW_KEYS =",
+    registrySourceStart,
+  );
+  const registrySource = exactWebChannelDiagnosticRecordGateSource.slice(
+    registrySourceStart,
+    registrySourceEnd,
+  );
+  for (const [recordClass, expectedKeys] of Object.entries(
+    expectedExactDiagnosticRecordKeys,
+  )) {
+    const registryMatch = registrySource.match(
+      new RegExp(
+        `${recordClass}:\\s*Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\)`,
+        "u",
+      ),
+    );
+    assert.ok(registryMatch, `Missing production key registry: ${recordClass}`);
+    assert.deepEqual(
+      [...registryMatch[1].matchAll(/"([A-Za-z0-9]+)"/gu)].map(
+        (keyMatch) => keyMatch[1],
+      ),
+      expectedKeys,
+      `The production ${recordClass} diagnostic key registry changed.`,
+    );
+  }
+  for (const rawKey of [
+    "authorization",
+    "body",
+    "gsessionid",
+    "headers",
+    "networkRequestId",
+    "outboundRemoveSequence",
+    "password",
+    "postData",
+    "requestId",
+    "requestUrl",
+    "sequence",
+    "sid",
+    "token",
+    "url",
+    "username",
+    "webChannelMessageSequence",
+  ]) {
+    assert.equal(
+      exactWebChannelDiagnosticRecordGateSource.includes(`"${rawKey}"`),
+      true,
+      `The shared diagnostic gate lost a forbidden raw key: ${rawKey}`,
+    );
+  }
+  for (const recordGateFragment of [
+    "Object.prototype.hasOwnProperty.call(SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS,recordClass,)",
+    "constownKeys=Reflect.ownKeys(record)",
+    'ownKeys.every((key)=>typeofkey==="string")',
+    "[...ownKeys].sort(),SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS[recordClass]",
+    "SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RAW_KEYS.has(key)",
+    'key==="sha256"||key.endsWith("Sha256")',
+    "/^[a-f0-9]{64}$/u.test(value)",
+    "Number.isSafeInteger(value)&&value>=0",
+    "value.length>=1&&value.length<=128",
+    "/^[a-z0-9]+(?:-[a-z0-9]+)*$/u",
+    "returnObject.freeze({...record})",
+  ]) {
+    assert.equal(
+      compactExactWebChannelDiagnosticRecordGateSource.includes(
+        recordGateFragment,
+      ),
+      true,
+      `The shared exact diagnostic record gate is incomplete: ${recordGateFragment}`,
+    );
+  }
+  const exactWebChannelProductionDiagnosticSourceStart = sourceText.indexOf(
+    'appCheckCdpSession.on("Network.loadingFailed", (event) => {',
+  );
+  const exactWebChannelProductionDiagnosticSourceEnd = sourceText.indexOf(
+    "const authenticationExactWebChannelRequestFailureDiagnostics =",
+    exactWebChannelProductionDiagnosticSourceStart,
+  );
+  assert.ok(exactWebChannelProductionDiagnosticSourceStart >= 0);
+  assert.ok(
+    exactWebChannelProductionDiagnosticSourceEnd >
+      exactWebChannelProductionDiagnosticSourceStart,
+  );
+  const exactWebChannelProductionDiagnosticSource = sourceText.slice(
+    exactWebChannelProductionDiagnosticSourceStart,
+    exactWebChannelProductionDiagnosticSourceEnd,
+  );
+  for (const recordClass of [
+    "loadingFailure",
+    "networkLog",
+    "requestFailure",
+    "consoleLocation",
+  ]) {
+    assert.equal(
+      (
+        exactWebChannelProductionDiagnosticSource.match(
+          new RegExp(
+            `freezeSafeExactAuthenticationWebChannelDiagnosticRecord\\(\\s*"${recordClass}"`,
+            "gu",
+          ),
+        ) || []
+      ).length,
+      1,
+      `The production ${recordClass} diagnostic must pass the shared record gate exactly once.`,
+    );
+  }
+  for (const [recordClass, expectedCount] of [
+    ["requestFailure", 3],
+    ["loadingFailure", 1],
+    ["networkLog", 1],
+    ["consoleLocation", 1],
+  ]) {
+    assert.equal(
+      (
+        exactWebChannelDiagnosticFixtureSource.match(
+          new RegExp(
+            `freezeSafeExactAuthenticationWebChannelDiagnosticRecord\\(\\s*"${recordClass}"`,
+            "gu",
+          ),
+        ) || []
+      ).length,
+      expectedCount,
+      `The ${recordClass} fixture must exercise the shared record gate exactly ${expectedCount} time(s).`,
+    );
+  }
+  const exactWebChannelDiagnosticBindingSourceStart = sourceText.indexOf(
+    "const isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate = ({",
+  );
+  const exactWebChannelDiagnosticBindingSourceEnd = sourceText.indexOf(
+    "const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS",
+    exactWebChannelDiagnosticBindingSourceStart,
+  );
+  assert.ok(exactWebChannelDiagnosticBindingSourceStart >= 0);
+  assert.ok(
+    exactWebChannelDiagnosticBindingSourceEnd >
+      exactWebChannelDiagnosticBindingSourceStart,
+  );
+  const exactWebChannelDiagnosticBindingSource = sourceText.slice(
+    exactWebChannelDiagnosticBindingSourceStart,
+    exactWebChannelDiagnosticBindingSourceEnd,
+  );
+  const compactExactWebChannelDiagnosticBindingSource =
+    exactWebChannelDiagnosticBindingSource.replace(/\s+/gu, "");
+  for (const exactBindingFragment of [
+    'JSON.stringify(Object.keys(sessionHashes).sort())===JSON.stringify(["gsessionidSha256","sidSha256"])',
+    '"session-forward-post","backchannel-get"',
+    ".includes(observation?.webChannelRequestClass",
+    'observation?.webChannelTerminationClass==="termination-image-get"',
+    'observation?.resourceType==="xhr"',
+    'observation?.resourceType==="image"',
+    'observation.requestMethod==="POST"',
+    'observation.requestMethod==="GET"',
+    "(expectedNetworkId!==null||expectedRequestUrlSha256!==null)",
+    'lifecycle.state==="response-awaiting"',
+    'lifecycle.diagnosticPhase==="authentication"',
+    'observation.diagnosticPhase==="authentication"',
+    'observation.firebaseService==="firestore"',
+    "observation.isFirebaseRequest===true",
+    "observation.stagingMarker===true",
+    "observation.productionMarker===false",
+    "observation.unboundFirebaseRequest===false",
+    "observation.malformedUrlEncoding===false",
+    "observation.firebaseTransportValid===true",
+    "observation.serviceResourceBound===true",
+    "observation.webChannelListenPathExact===true",
+    "/^[a-f0-9]{64}$/u.test(sessionHashes.sidSha256)",
+    "/^[a-f0-9]{64}$/u.test(requestUrlHash)",
+    "lifecycle.networkId===expectedNetworkId",
+    "requestUrlHash===expectedRequestUrlSha256",
+  ]) {
+    assert.equal(
+      compactExactWebChannelDiagnosticBindingSource.includes(
+        exactBindingFragment,
+      ),
+      true,
+      `The strict exact WebChannel diagnostic binding is incomplete: ${exactBindingFragment}`,
+    );
+  }
+  const exactWebChannelDiagnosticResolverSourceStart = sourceText.indexOf(
+    "const resolveExactAuthenticationWebChannelBindingForNetworkId = (",
+  );
+  const exactWebChannelDiagnosticResolverSourceEnd = sourceText.indexOf(
+    "const cdpHandlerDiagnosticContexts = new WeakMap();",
+    exactWebChannelDiagnosticResolverSourceStart,
+  );
+  assert.ok(exactWebChannelDiagnosticResolverSourceStart >= 0);
+  assert.ok(
+    exactWebChannelDiagnosticResolverSourceEnd >
+      exactWebChannelDiagnosticResolverSourceStart,
+  );
+  const compactExactWebChannelDiagnosticResolverSource = sourceText
+    .slice(
+      exactWebChannelDiagnosticResolverSourceStart,
+      exactWebChannelDiagnosticResolverSourceEnd,
+    )
+    .replace(/\s+/gu, "");
+  for (const exactResolverFragment of [
+    "isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({lifecycle,observation,expectedNetworkId:networkId,})",
+    "binding:candidates.length===1?candidates[0]:null",
+    "classifySafeExactAuthenticationWebChannelDiagnosticUrl(requestUrl)",
+    "expectedRequestUrlSha256:requestUrlSha256",
+    "observation.webChannelRequestClass===diagnosticUrlClassification.requestClass",
+    "observation.webChannelTerminationClass===diagnosticUrlClassification.terminationClass",
+    "observation.webChannelListenSessionHashes.sidSha256===diagnosticUrlClassification.sidSha256",
+    "observation.webChannelListenSessionHashes.gsessionidSha256===diagnosticUrlClassification.gsessionidSha256",
+  ]) {
+    assert.equal(
+      compactExactWebChannelDiagnosticResolverSource.includes(
+        exactResolverFragment,
+      ),
+      true,
+      `The exact-one WebChannel diagnostic resolver is incomplete: ${exactResolverFragment}`,
+    );
+  }
+  assert.equal(
+    (
+      compactExactWebChannelDiagnosticResolverSource.match(
+        /binding:candidates\.length===1\?candidates\[0\]:null/gu,
+      ) || []
+    ).length,
+    2,
+    "Both network-id and URL/hash diagnostic resolvers must require exactly one candidate.",
+  );
+  assert.match(
+    sourceText,
+    /appCheckCdpSession\.on\("Network\.loadingFailed", \(event\) => \{[\s\S]*?resolveExactAuthenticationWebChannelBindingForNetworkId\(\s*event\.requestId,?\s*\)[\s\S]*?authenticationExactWebChannelLoadingFailuresByNetworkId\.set/u,
+    "CDP loading-failed diagnostics must use the exact-one network binding before recording safe evidence.",
+  );
+  assert.match(
+    sourceText,
+    /appCheckCdpSession\.on\("Log\.entryAdded", \(\{ entry \}\) => \{[\s\S]*?resolveExactAuthenticationWebChannelBindingForNetworkId\(\s*entry\?\.networkRequestId,?\s*\)[\s\S]*?authenticationExactWebChannelNetworkLogRecords\.push/u,
+    "CDP network-log diagnostics must use the exact-one network binding before recording safe evidence.",
+  );
+  assert.match(
+    sourceText,
+    /page\.on\("requestfailed", \(request\) => \{[\s\S]*?resolveExactChromiumNetworkRequestIdentity\(\{[\s\S]*?resolveExactAuthenticationWebChannelBindingForNetworkId\(\s*chromiumIdentity\.networkRequestId,?\s*\)[\s\S]*?groupBrowserRequestFailureDiagnostics\.push/u,
+    "Playwright request failures must derive an exact Chromium network identity before binding safe WebChannel diagnostics.",
+  );
+  assert.match(
+    sourceText,
+    /page\.on\("console", \(message\) => \{[\s\S]*?resolveExactAuthenticationWebChannelBindingForRequestUrl\(\s*location\?\.url,?\s*\)[\s\S]*?if \(exactWebChannelBinding\.binding !== null\)[\s\S]*?authenticationExactWebChannelConsoleLocationRecords\.push/u,
+    "Console-location diagnostics must use the same strict URL classifier and exact-one hash binding.",
+  );
+  const exactWebChannelRequestFailureFilterSourceStart = sourceText.indexOf(
+    "const authenticationExactWebChannelRequestFailureDiagnostics =",
+  );
+  const exactWebChannelRequestFailureFilterSourceEnd = sourceText.indexOf(
+    "const authenticationExactWebChannelLoadingFailureDiagnostics =",
+    exactWebChannelRequestFailureFilterSourceStart,
+  );
+  assert.ok(exactWebChannelRequestFailureFilterSourceStart >= 0);
+  assert.ok(
+    exactWebChannelRequestFailureFilterSourceEnd >
+      exactWebChannelRequestFailureFilterSourceStart,
+  );
+  const compactExactWebChannelRequestFailureFilterSource = sourceText
+    .slice(
+      exactWebChannelRequestFailureFilterSourceStart,
+      exactWebChannelRequestFailureFilterSourceEnd,
+    )
+    .replace(/\s+/gu, "");
+  for (const strictRequestFailureFragment of [
+    'record.firebaseService==="firestore"',
+    "record.networkIdentityBound===true",
+    "record.exactWebChannelBindingCandidateCount===1",
+    "record.webChannelListenPathExact===true",
+    "record.webChannelRequestUrlBound===true",
+    'record.webChannelDiagnosticPhase==="authentication"',
+    'record.webChannelLifecycleState==="response-awaiting"',
+    "/^[a-f0-9]{64}$/u.test(record.requestUrlSha256)",
+    "/^[a-f0-9]{64}$/u.test(record.networkRequestIdSha256)",
+    "/^[a-f0-9]{64}$/u.test(record.sidSha256)",
+    '"session-forward-post","backchannel-get"',
+    'record.resourceType==="fetch"',
+    'record.webChannelTerminationClass==="termination-image-get"',
+    'record.resourceType==="image"',
+  ]) {
+    assert.equal(
+      compactExactWebChannelRequestFailureFilterSource.includes(
+        strictRequestFailureFragment,
+      ),
+      true,
+      `The requestfailed exact WebChannel diagnostic filter is incomplete: ${strictRequestFailureFragment}`,
+    );
+  }
+  const authenticationFatalAccountingSourceStart = sourceText.indexOf(
+    "const authenticationObservedBrowserRequestFailureCount =",
+  );
+  const authenticationFatalAccountingSourceEnd = sourceText.indexOf(
+    "const sortSafeDiagnosticRecords = (records) =>",
+    authenticationFatalAccountingSourceStart,
+  );
+  assert.ok(authenticationFatalAccountingSourceStart >= 0);
+  assert.ok(
+    authenticationFatalAccountingSourceEnd >
+      authenticationFatalAccountingSourceStart,
+  );
+  const authenticationFatalAccountingSource = sourceText.slice(
+    authenticationFatalAccountingSourceStart,
+    authenticationFatalAccountingSourceEnd,
+  );
+  assert.match(
+    authenticationFatalAccountingSource,
+    /const authenticationFatalBrowserRequestFailureCount\s*=\s*authenticationObservedBrowserRequestFailureCount -\s*authenticationRecoveredBrowserRequestFailureCount;/u,
+    "Exact WebChannel request diagnostics must not decrement the authentication request-failure fatal count.",
+  );
+  assert.match(
+    authenticationFatalAccountingSource,
+    /const authenticationConsoleErrorRecoveredCount\s*=\s*authenticationConsoleErrorRecoveredProtectedReadCount \+\s*authenticationConsoleErrorRetiredFrozenBaselineCount;\s*const authenticationConsoleErrorFatalCount\s*=\s*authenticationConsoleErrorObservedCount -\s*authenticationConsoleErrorRecoveredCount;/u,
+    "Exact WebChannel console diagnostics must not decrement the authentication console-error fatal count.",
+  );
+  assert.doesNotMatch(
+    authenticationFatalAccountingSource,
+    /authenticationExactWebChannel/u,
+    "Diagnostic-only WebChannel evidence must remain absent from authentication fatal recovery accounting.",
+  );
+  const globalFatalAccountingSourceStart = sourceText.indexOf(
+    "const fatalProtectedReadTransportFailureCount =",
+  );
+  const globalFatalAccountingSourceEnd = sourceText.indexOf(
+    "for (const count of [",
+    globalFatalAccountingSourceStart,
+  );
+  assert.ok(globalFatalAccountingSourceStart >= 0);
+  assert.ok(globalFatalAccountingSourceEnd > globalFatalAccountingSourceStart);
+  const globalFatalAccountingSource = sourceText.slice(
+    globalFatalAccountingSourceStart,
+    globalFatalAccountingSourceEnd,
+  );
+  assert.match(
+    globalFatalAccountingSource,
+    /const browserRequestFailureFatalCount\s*=\s*browserRequestFailureCount - browserRequestFailureRecoveredProtectedReadCount;/u,
+    "Global request-failure fatal accounting must subtract protected-read recovery only.",
+  );
+  assert.match(
+    globalFatalAccountingSource,
+    /const browserConsoleErrorFatalCount\s*=\s*browserConsoleErrorObservedAuthenticationCount -\s*browserConsoleErrorRecoveredProtectedReadCount -\s*browserConsoleErrorRetiredFrozenBaselineCount;/u,
+    "Global console-error fatal accounting must subtract protected-read recovery and exact listener retirement only.",
+  );
+  assert.doesNotMatch(
+    globalFatalAccountingSource,
+    /ExactWebChannel/u,
+    "Diagnostic-only WebChannel evidence must remain absent from global fatal recovery accounting.",
+  );
   const frozenBaselineFixtureSourceStart = sourceText.indexOf(
     "const verifyFrozenBaselineListenerBindingFixtures = async () => {",
   );
@@ -2708,6 +3422,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     frozenBaselineFixtureSourceStart,
     frozenBaselineFixtureSourceEnd,
   );
+  const compactFrozenBaselineFixtureSource =
+    frozenBaselineFixtureSource.replace(/\s+/gu, "");
   const frozenBaselineProductionSource = `${sourceText.slice(
     0,
     frozenBaselineFixtureSourceStart,
@@ -2963,6 +3679,29 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     frozenBaselineObserverSourceStart,
     frozenBaselineObserverSourceEnd,
   );
+  const compactFrozenBaselineObserverSource =
+    frozenBaselineObserverSource.replace(/\s+/gu, "");
+  for (const requiredBranchFragment of [
+    "constcleanClientUnsubscribeReady=",
+    "removedTargets[0].outboundRemoveSequence!==null",
+    "frozenBaselineObservationSequenceBefore(removedTargets[0].addSequence,removedTargets[0].outboundRemoveSequence,)",
+    "frozenBaselineObservationSequenceBefore(removedTargets[0].outboundRemoveSequence,successorTargets[0].addSequence,)",
+    "returnanomalyReady||cleanClientUnsubscribeReady",
+    "constcleanClientUnsubscribeSequenceBound=eligible&&",
+    "constcleanClientUnsubscribeTransitionCount=Number(eligible&&exactConsoleSequences.length===0&&inboundRemoveCauseCodeCount===0&&removedTargetClassMatchCount===0",
+    "acceptedPostRemoveReaddCount===0&&conflictingOrStaleInboundLogicalMessageCount===0",
+    "constacceptedListenerTransitionCount=tupleBoundRetirementCount+cleanClientUnsubscribeTransitionCount",
+    "assert.equal(tupleBoundRetirementCount*cleanClientUnsubscribeTransitionCount,0,)",
+    "assert.ok([0,1].includes(acceptedListenerTransitionCount))",
+    "constretiredExactConsoleErrorCount=tupleBoundRetirementCount",
+    "?settledDecision.acceptedListenerTransitionCount===1&&settledDecision.fatalExactConsoleErrorCount===0",
+  ]) {
+    assert.equal(
+      compactFrozenBaselineObserverSource.includes(requiredBranchFragment),
+      true,
+      `The mutually exclusive frozen-baseline listener transition contract is missing: ${requiredBranchFragment}`,
+    );
+  }
   for (const [pattern, expectedCount] of [
     [/outboundAddTargetCount \+= 1/gu, 1],
     [/targetClassCounts\.set\(/gu, 1],
@@ -2985,7 +3724,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     frozenBaselineObserverSource.slice(
       frozenBaselineObserverSource.indexOf("const safeSnapshot = () => {"),
     ),
-    /\b(?:webChannelMessageSequence|messageStructureSha256|addWebChannelMessageSequence|removeWebChannelMessageSequence|addMessageStructureSha256|removeMessageStructureSha256|mutationSequence)\b/u,
+    /\b(?:webChannelMessageSequence|messageStructureSha256|addWebChannelMessageSequence|removeWebChannelMessageSequence|addMessageStructureSha256|removeMessageStructureSha256|outboundRemoveSequence|mutationSequence)\b/u,
     "Epoch sequence and hash bindings must not reach snapshots or exported observer evidence.",
   );
   assert.match(
@@ -3098,6 +3837,64 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     /preexistingSuccessorObserver\.observeOutboundRequest\(\{\s*requestUrl: requestUrl\.toString\(\),[\s\S]*?attendanceTarget\("2026_2", 4\)\],\s*\{\s*offset: 1,\s*\}[\s\S]*?assert\.equal\(preexistingSuccessorSnapshot\.parseFailureCount, 0\);\s*assert\.equal\(preexistingSuccessorSnapshot\.successorAddTargetCount, 1\);\s*assert\.equal\(preexistingSuccessorSnapshot\.successorSequenceBound, false\);/u,
     "An exact successor replay must preserve the earliest add sequence and must not increment successor accounting.",
   );
+  for (const cleanFixtureFragment of [
+    "constcleanClientUnsubscribeObserver=createObserver()",
+    '{removeTarget:2},{addTarget:attendanceTarget("2026_2",4)}',
+    'targetChangeType:"CURRENT",targetIds:[4]',
+    "assert.equal(cleanClientUnsubscribeObserver.readyForSettlement(),true)",
+    "tupleBoundRetirementCount:0,retiredExactConsoleErrorCount:0,fatalExactConsoleErrorCount:0",
+    "successorSequenceBound:false,cleanClientUnsubscribeSequenceBound:true,cleanClientUnsubscribeTransitionCount:1,acceptedListenerTransitionCount:1",
+    "assert.equal(cleanClientUnsubscribeSnapshot.exactConsoleErrorCount,0)",
+    "assert.equal(cleanClientUnsubscribeSnapshot.inboundRemoveCauseCodeCount,0)",
+    "assert.equal(cleanClientUnsubscribeSnapshot.removedTargetClassMatchCount,0)",
+  ]) {
+    assert.equal(
+      compactFrozenBaselineFixtureSource.includes(cleanFixtureFragment),
+      true,
+      `The clean client-unsubscribe listener fixture is incomplete: ${cleanFixtureFragment}`,
+    );
+  }
+  for (const cleanNegativeFixtureFragment of [
+    "constpreexistingSuccessorSnapshot=preexistingSuccessorObserver.safeSnapshot()",
+    "preexistingSuccessorSnapshot.cleanClientUnsubscribeSequenceBound,false",
+    "preexistingSuccessorSnapshot.cleanClientUnsubscribeTransitionCount,0",
+    "constnoneligibleCleanClientUnsubscribeObserver=createNoneligibleAdminObserver()",
+    "constnoneligibleCleanClientUnsubscribeSnapshot=noneligibleCleanClientUnsubscribeObserver.safeSnapshot()",
+    "assert.equal(noneligibleCleanClientUnsubscribeSnapshot.passed,true)",
+    "noneligibleCleanClientUnsubscribeSnapshot.cleanClientUnsubscribeSequenceBound,false",
+    "noneligibleCleanClientUnsubscribeSnapshot.cleanClientUnsubscribeTransitionCount,0",
+    "noneligibleCleanClientUnsubscribeSnapshot.acceptedListenerTransitionCount,0",
+    "constwrongTargetCleanObserver=createObserver()",
+    "constwrongTargetCleanSnapshot=wrongTargetCleanObserver.safeSnapshot()",
+    "wrongTargetCleanSnapshot.cleanClientUnsubscribeSequenceBound,false",
+    "wrongTargetCleanSnapshot.cleanClientUnsubscribeTransitionCount,0",
+    "wrongTargetCleanSnapshot.acceptedListenerTransitionCount,0",
+    "constcauseOnlyTransitionObserver=createObserver()",
+    "constcauseOnlyTransitionSnapshot=causeOnlyTransitionObserver.safeSnapshot()",
+    "causeOnlyTransitionSnapshot.inboundRemoveCauseCodeCount,1",
+    "causeOnlyTransitionSnapshot.exactConsoleErrorCount,0",
+    "causeOnlyTransitionSnapshot.tupleBoundRetirementCount,0",
+    "causeOnlyTransitionSnapshot.cleanClientUnsubscribeTransitionCount,0",
+    "causeOnlyTransitionSnapshot.acceptedListenerTransitionCount,0",
+    "constconsoleOnlyTransitionObserver=createObserver()",
+    "constconsoleOnlyTransitionSnapshot=consoleOnlyTransitionObserver.safeSnapshot()",
+    "consoleOnlyTransitionSnapshot.inboundRemoveCauseCodeCount,0",
+    "consoleOnlyTransitionSnapshot.exactConsoleErrorCount,1",
+    "consoleOnlyTransitionSnapshot.tupleBoundRetirementCount,0",
+    "consoleOnlyTransitionSnapshot.cleanClientUnsubscribeTransitionCount,0",
+    "consoleOnlyTransitionSnapshot.acceptedListenerTransitionCount,0",
+  ]) {
+    assert.equal(
+      compactFrozenBaselineFixtureSource.includes(cleanNegativeFixtureFragment),
+      true,
+      `The clean client-unsubscribe negative fixture contract is missing: ${cleanNegativeFixtureFragment}`,
+    );
+  }
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const noneligibleCleanClientUnsubscribeObserver\s*=\s*createNoneligibleAdminObserver\(\);[\s\S]*?postData: requestBodyForTargets\(\[attendanceTarget\("2026_1", 2\)\]\)[\s\S]*?\{ removeTarget: 2 \}, \{ addTarget: attendanceTarget\("2026_2", 4\) \}[\s\S]*?targetChangeType: "CURRENT",\s*targetIds: \[4\][\s\S]*?const noneligibleCleanClientUnsubscribeSnapshot\s*=\s*noneligibleCleanClientUnsubscribeObserver\.safeSnapshot\(\);\s*assert\.equal\(noneligibleCleanClientUnsubscribeSnapshot\.passed, true\);\s*assert\.equal\(\s*noneligibleCleanClientUnsubscribeSnapshot\.cleanClientUnsubscribeSequenceBound,\s*false,\s*\);\s*assert\.equal\(\s*noneligibleCleanClientUnsubscribeSnapshot\.cleanClientUnsubscribeTransitionCount,\s*0,\s*\);\s*assert\.equal\(\s*noneligibleCleanClientUnsubscribeSnapshot\.acceptedListenerTransitionCount,\s*0,\s*\);/u,
+    "The noneligible clean remove-to-successor lifecycle must pass without accepting either listener transition branch.",
+  );
   assert.match(
     frozenBaselineFixtureSource,
     /for \(const privateReplayBindingField of \[\s*"messageStructureSha256",\s*"webChannelMessageSequence",\s*"addMessageStructureSha256",\s*"addWebChannelMessageSequence",\s*"removeMessageStructureSha256",\s*"removeWebChannelMessageSequence",\s*"outboundRemoveSequence",\s*\]\) \{[\s\S]*?serializedSafeEvidence\.includes\(privateReplayBindingField\),\s*false,[\s\S]*?serializedSafeFailureDiagnostics\.includes\(privateReplayBindingField\),\s*false,[\s\S]*?serializedSafeEvidence\.includes\(canonicalReplayLeft\.messageStructureSha256\),\s*false,[\s\S]*?serializedSafeFailureDiagnostics\.includes\(\s*canonicalReplayLeft\.messageStructureSha256,\s*\),\s*false,[\s\S]*?serializedSafeEvidence\.includes\(\s*canonicalRemoveMutation\.messageStructureSha256,\s*\),\s*false,[\s\S]*?serializedSafeFailureDiagnostics\.includes\(\s*canonicalRemoveMutation\.messageStructureSha256,\s*\),\s*false,/u,
@@ -3105,8 +3902,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /frozenBaselineListenerBindingPositiveFixtureCount:\s*5/u,
-    "The frozen-baseline listener source contract must retain five positive lifecycle fixtures.",
+    /frozenBaselineListenerBindingPositiveFixtureCount:\s*7/u,
+    "The frozen-baseline listener source contract must retain the five existing positives, eligible clean lifecycle and noneligible guard fixture.",
   );
   assert.equal(
     (
@@ -3130,8 +3927,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   assert.equal(
     (frozenBaselineFixtureSource.match(/negativeSnapshots\.push\(/gu) || [])
       .length,
-    7,
-    "The frozen-baseline listener source contract must retain nineteen negative lifecycle fixtures.",
+    10,
+    "The frozen-baseline listener source contract must retain twenty-two negative lifecycle fixtures.",
   );
   assert.match(
     frozenBaselineFixtureSource,
@@ -5252,8 +6049,10 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
   const policy = frozenBaselineAuthenticationAnomalyPolicy;
   assertNoRawFrozenBaselineAuthenticationRetirementFields(retirement);
   assertExactObjectKeys(retirement, [
+    "acceptedListenerTransitionCount",
     "ambiguousRemovedTargetCount",
     "bufferExceededCount",
+    "cleanClientUnsubscribeTransitionCount",
     "eligibleGroupCount",
     "expectedEligibleGroupCount",
     "fatalExactConsoleErrorCount",
@@ -5273,11 +6072,12 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
     "successorAddTargetCount",
     "targetClasses",
     "transportObserver",
+    "tupleBoundRetirementCount",
     "unboundRemovedTargetCount",
     "unknownRemovedTargetCount",
     "unknownTargetCount",
   ]);
-  assert.equal(retirement.schemaVersion, 1);
+  assert.equal(retirement.schemaVersion, 2);
   assert.equal(retirement.policyId, policy.id);
   assert.equal(
     retirement.presentationSourceCommit,
@@ -5300,8 +6100,10 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
   assert.equal(retirement.passed, true);
   assert.equal(Array.isArray(retirement.groups), true);
   const integerFields = [
+    "acceptedListenerTransitionCount",
     "ambiguousRemovedTargetCount",
     "bufferExceededCount",
+    "cleanClientUnsubscribeTransitionCount",
     "eligibleGroupCount",
     "expectedEligibleGroupCount",
     "fatalExactConsoleErrorCount",
@@ -5313,6 +6115,7 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
     "retiredExactConsoleErrorCount",
     "streamFailureCount",
     "successorAddTargetCount",
+    "tupleBoundRetirementCount",
     "unboundRemovedTargetCount",
     "unknownRemovedTargetCount",
     "unknownTargetCount",
@@ -5342,8 +6145,10 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
   assert.deepEqual(observedGroupKeys, exactExpectedGroupKeys);
   assert.equal(new Set(observedGroupKeys).size, observedGroupKeys.length);
   const groupIntegerFields = [
+    "acceptedListenerTransitionCount",
     "ambiguousRemovedTargetCount",
     "bufferExceededCount",
+    "cleanClientUnsubscribeTransitionCount",
     "exactConsoleErrorCount",
     "fatalExactConsoleErrorCount",
     "inboundRemoveCauseCodeCount",
@@ -5360,8 +6165,10 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
     "unknownTargetCount",
   ];
   const aggregateFields = [
+    "acceptedListenerTransitionCount",
     "ambiguousRemovedTargetCount",
     "bufferExceededCount",
+    "cleanClientUnsubscribeTransitionCount",
     "fatalExactConsoleErrorCount",
     "inboundRemoveCauseCodeCount",
     "observedExactConsoleErrorCount",
@@ -5370,6 +6177,7 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
     "retiredExactConsoleErrorCount",
     "streamFailureCount",
     "successorAddTargetCount",
+    "tupleBoundRetirementCount",
     "unboundRemovedTargetCount",
     "unknownRemovedTargetCount",
     "unknownTargetCount",
@@ -5379,13 +6187,15 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
   );
   let eligibleGroupCount = 0;
   let removedTargetClassMatchCount = 0;
-  let tupleBoundRetirementCount = 0;
   for (const group of retirement.groups) {
     assertExactObjectKeys(group, [
+      "acceptedListenerTransitionCount",
       "ambiguousRemovedTargetCount",
       "authenticationRole",
       "bufferExceededCount",
       "captureRole",
+      "cleanClientUnsubscribeSequenceBound",
+      "cleanClientUnsubscribeTransitionCount",
       "dashboardStable",
       "eligible",
       "exactConsoleErrorCount",
@@ -5430,6 +6240,7 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
     assert.equal(typeof group.dashboardStable, "boolean");
     assert.equal(typeof group.successorExplicitlyAcknowledged, "boolean");
     assert.equal(typeof group.successorSequenceBound, "boolean");
+    assert.equal(typeof group.cleanClientUnsubscribeSequenceBound, "boolean");
     assert.equal(group.dashboardStable, true);
     assert.equal(group.passed, true);
     for (const field of groupIntegerFields) {
@@ -5472,6 +6283,23 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
       group.successorAddTargetCount === 1 &&
         group.successorTargetAcknowledgedCount === 1,
     );
+    assert.ok([0, 1].includes(group.tupleBoundRetirementCount));
+    assert.ok([0, 1].includes(group.cleanClientUnsubscribeTransitionCount));
+    assert.ok([0, 1].includes(group.acceptedListenerTransitionCount));
+    assert.equal(
+      group.acceptedListenerTransitionCount,
+      group.tupleBoundRetirementCount +
+        group.cleanClientUnsubscribeTransitionCount,
+    );
+    assert.equal(
+      group.tupleBoundRetirementCount *
+        group.cleanClientUnsubscribeTransitionCount,
+      0,
+    );
+    assert.equal(
+      group.retiredExactConsoleErrorCount,
+      group.tupleBoundRetirementCount * policy.consoleError.expectedCount,
+    );
     const isEligible =
       group.stage === policy.stage &&
       group.captureRole === policy.captureRole &&
@@ -5483,20 +6311,32 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
       eligibleGroupCount += 1;
       assert.equal(histogram[policy.removedTargetClass], 1);
       assert.equal(histogram[policy.successorTargetClass], 1);
-      assert.equal(
-        group.exactConsoleErrorCount,
-        policy.consoleError.expectedCount,
-      );
-      assert.equal(group.inboundRemoveCauseCodeCount, 1);
-      assert.equal(group.removedTargetClassMatchCount, 1);
       assert.equal(group.successorAddTargetCount, 1);
       assert.equal(group.successorTargetAcknowledgedCount, 1);
-      assert.equal(group.successorSequenceBound, true);
-      assert.equal(group.tupleBoundRetirementCount, 1);
-      assert.equal(
-        group.retiredExactConsoleErrorCount,
-        policy.consoleError.expectedCount,
-      );
+      assert.equal(group.acceptedListenerTransitionCount, 1);
+      if (group.tupleBoundRetirementCount === 1) {
+        assert.equal(group.cleanClientUnsubscribeTransitionCount, 0);
+        assert.equal(
+          group.exactConsoleErrorCount,
+          policy.consoleError.expectedCount,
+        );
+        assert.equal(group.inboundRemoveCauseCodeCount, 1);
+        assert.equal(group.removedTargetClassMatchCount, 1);
+        assert.equal(group.successorSequenceBound, true);
+        assert.equal(
+          group.retiredExactConsoleErrorCount,
+          policy.consoleError.expectedCount,
+        );
+      } else {
+        assert.equal(group.tupleBoundRetirementCount, 0);
+        assert.equal(group.cleanClientUnsubscribeTransitionCount, 1);
+        assert.equal(group.exactConsoleErrorCount, 0);
+        assert.equal(group.inboundRemoveCauseCodeCount, 0);
+        assert.equal(group.removedTargetClassMatchCount, 0);
+        assert.equal(group.successorSequenceBound, false);
+        assert.equal(group.cleanClientUnsubscribeSequenceBound, true);
+        assert.equal(group.retiredExactConsoleErrorCount, 0);
+      }
     } else {
       for (const field of [
         "exactConsoleErrorCount",
@@ -5504,10 +6344,13 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
         "removedTargetClassMatchCount",
         "retiredExactConsoleErrorCount",
         "tupleBoundRetirementCount",
+        "cleanClientUnsubscribeTransitionCount",
+        "acceptedListenerTransitionCount",
       ]) {
         assert.equal(group[field], 0);
       }
       assert.equal(group.successorSequenceBound, false);
+      assert.equal(group.cleanClientUnsubscribeSequenceBound, false);
     }
     assert.equal(group.unknownRemovedTargetCount, 0);
     assert.equal(group.unboundRemovedTargetCount, 0);
@@ -5524,21 +6367,29 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
       aggregateValues[field] += group[field];
     }
     removedTargetClassMatchCount += group.removedTargetClassMatchCount;
-    tupleBoundRetirementCount += group.tupleBoundRetirementCount;
   }
   assert.equal(eligibleGroupCount, retirement.eligibleGroupCount);
   for (const field of aggregateFields) {
     assert.equal(retirement[field], aggregateValues[field]);
   }
-  assert.equal(removedTargetClassMatchCount, 1);
-  assert.equal(tupleBoundRetirementCount, 1);
   assert.equal(
-    retirement.observedExactConsoleErrorCount,
-    policy.consoleError.expectedCount,
+    retirement.acceptedListenerTransitionCount,
+    retirement.tupleBoundRetirementCount +
+      retirement.cleanClientUnsubscribeTransitionCount,
+  );
+  assert.equal(retirement.acceptedListenerTransitionCount, 1);
+  assert.equal(
+    retirement.tupleBoundRetirementCount *
+      retirement.cleanClientUnsubscribeTransitionCount,
+    0,
+  );
+  assert.equal(
+    removedTargetClassMatchCount,
+    retirement.tupleBoundRetirementCount,
   );
   assert.equal(
     retirement.retiredExactConsoleErrorCount,
-    policy.consoleError.expectedCount,
+    retirement.tupleBoundRetirementCount * policy.consoleError.expectedCount,
   );
   assert.equal(retirement.fatalExactConsoleErrorCount, 0);
   assert.equal(
@@ -5546,7 +6397,10 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
     retirement.retiredExactConsoleErrorCount +
       retirement.fatalExactConsoleErrorCount,
   );
-  assert.equal(retirement.inboundRemoveCauseCodeCount, 1);
+  assert.equal(
+    retirement.inboundRemoveCauseCodeCount,
+    retirement.tupleBoundRetirementCount,
+  );
   assert.equal(retirement.unknownRemovedTargetCount, 0);
   assert.equal(retirement.unboundRemovedTargetCount, 0);
   assert.equal(retirement.ambiguousRemovedTargetCount, 0);
@@ -5570,7 +6424,17 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
             ? 1
             : 0,
     }));
-  const group = ({ stage, captureRole, authenticationRole, width, height }) => {
+  const group = ({
+    stage,
+    captureRole,
+    authenticationRole,
+    width,
+    height,
+    transitionBranch = "anomaly",
+  }) => {
+    assert.ok(
+      ["anomaly", "clean-client-unsubscribe"].includes(transitionBranch),
+    );
     const eligible =
       stage === frozenBaselineAuthenticationAnomalyPolicy.stage &&
       captureRole === frozenBaselineAuthenticationAnomalyPolicy.captureRole &&
@@ -5578,6 +6442,9 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
         frozenBaselineAuthenticationAnomalyPolicy.authenticationRole &&
       `${width}x${height}` ===
         frozenBaselineAuthenticationAnomalyPolicy.viewport;
+    const anomalyTransition = eligible && transitionBranch === "anomaly";
+    const cleanClientUnsubscribeTransition =
+      eligible && transitionBranch === "clean-client-unsubscribe";
     const targetClassHistogram = histogram({ eligible });
     return {
       groupKey: `${stage}:${captureRole}:${width}x${height}`,
@@ -5587,14 +6454,14 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
       viewport: `${width}x${height}`,
       phase: "authentication",
       eligible,
-      exactConsoleErrorCount: Number(eligible),
+      exactConsoleErrorCount: Number(anomalyTransition),
       outboundAddTargetCount: targetClassHistogram.reduce(
         (total, entry) => total + entry.count,
         0,
       ),
       targetClassHistogram,
-      inboundRemoveCauseCodeCount: Number(eligible),
-      removedTargetClassMatchCount: Number(eligible),
+      inboundRemoveCauseCodeCount: Number(anomalyTransition),
+      removedTargetClassMatchCount: Number(anomalyTransition),
       successorAddTargetCount: Number(eligible),
       successorTargetAcknowledgedCount: Number(eligible),
       unknownTargetCount: 2,
@@ -5604,12 +6471,17 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
       streamFailureCount: 0,
       parseFailureCount: 0,
       bufferExceededCount: 0,
-      tupleBoundRetirementCount: Number(eligible),
-      retiredExactConsoleErrorCount: Number(eligible),
+      tupleBoundRetirementCount: Number(anomalyTransition),
+      cleanClientUnsubscribeTransitionCount: Number(
+        cleanClientUnsubscribeTransition,
+      ),
+      acceptedListenerTransitionCount: Number(eligible),
+      retiredExactConsoleErrorCount: Number(anomalyTransition),
       fatalExactConsoleErrorCount: 0,
       dashboardStable: true,
       successorExplicitlyAcknowledged: eligible,
-      successorSequenceBound: eligible,
+      successorSequenceBound: anomalyTransition,
+      cleanClientUnsubscribeSequenceBound: cleanClientUnsubscribeTransition,
       passed: true,
     };
   };
@@ -5662,6 +6534,12 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
       ["observedExactConsoleErrorCount", "exactConsoleErrorCount"],
       ["retiredExactConsoleErrorCount", "retiredExactConsoleErrorCount"],
       ["fatalExactConsoleErrorCount", "fatalExactConsoleErrorCount"],
+      ["tupleBoundRetirementCount", "tupleBoundRetirementCount"],
+      [
+        "cleanClientUnsubscribeTransitionCount",
+        "cleanClientUnsubscribeTransitionCount",
+      ],
+      ["acceptedListenerTransitionCount", "acceptedListenerTransitionCount"],
       ["outboundAddTargetCount", "outboundAddTargetCount"],
       ["inboundRemoveCauseCodeCount", "inboundRemoveCauseCodeCount"],
       ["successorAddTargetCount", "successorAddTargetCount"],
@@ -5683,7 +6561,7 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
     return fixture;
   };
   const validFixture = finalize({
-    schemaVersion: 1,
+    schemaVersion: 2,
     policyId: frozenBaselineAuthenticationAnomalyPolicy.id,
     presentationSourceCommit:
       frozenBaselineAuthenticationAnomalyPolicy.presentationSourceCommit,
@@ -5694,6 +6572,9 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
     observedExactConsoleErrorCount: 0,
     retiredExactConsoleErrorCount: 0,
     fatalExactConsoleErrorCount: 0,
+    tupleBoundRetirementCount: 0,
+    cleanClientUnsubscribeTransitionCount: 0,
+    acceptedListenerTransitionCount: 0,
     outboundAddTargetCount: 0,
     inboundRemoveCauseCodeCount: 0,
     successorAddTargetCount: 0,
@@ -5709,6 +6590,20 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
     groups: clone(baseGroups),
     passed: true,
   });
+  const cleanClientUnsubscribeValidFixture = clone(validFixture);
+  const cleanEligibleGroup = cleanClientUnsubscribeValidFixture.groups.find(
+    ({ eligible }) => eligible,
+  );
+  cleanEligibleGroup.exactConsoleErrorCount = 0;
+  cleanEligibleGroup.inboundRemoveCauseCodeCount = 0;
+  cleanEligibleGroup.removedTargetClassMatchCount = 0;
+  cleanEligibleGroup.tupleBoundRetirementCount = 0;
+  cleanEligibleGroup.cleanClientUnsubscribeTransitionCount = 1;
+  cleanEligibleGroup.acceptedListenerTransitionCount = 1;
+  cleanEligibleGroup.retiredExactConsoleErrorCount = 0;
+  cleanEligibleGroup.successorSequenceBound = false;
+  cleanEligibleGroup.cleanClientUnsubscribeSequenceBound = true;
+  finalize(cleanClientUnsubscribeValidFixture);
   const verify = (fixture) =>
     assertFrozenBaselineAuthenticationAnomalyRetirement({
       retirement: fixture,
@@ -5717,9 +6612,15 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
         frozenBaselineAuthenticationAnomalyPolicy.presentationSourceCommit,
     });
   assert.doesNotThrow(() => verify(validFixture));
+  assert.doesNotThrow(() => verify(cleanClientUnsubscribeValidFixture));
   const mutations = [];
   const pushFinalizedMutation = (mutate) => {
     const fixture = clone(validFixture);
+    mutate(fixture);
+    mutations.push(finalize(fixture));
+  };
+  const pushFinalizedCleanMutation = (mutate) => {
+    const fixture = clone(cleanClientUnsubscribeValidFixture);
     mutate(fixture);
     mutations.push(finalize(fixture));
   };
@@ -5752,6 +6653,45 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
     eligible.removedTargetClassMatchCount = 0;
     eligible.tupleBoundRetirementCount = 0;
     eligible.retiredExactConsoleErrorCount = 0;
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.cleanClientUnsubscribeSequenceBound = true;
+    eligible.cleanClientUnsubscribeTransitionCount = 1;
+    eligible.acceptedListenerTransitionCount = 2;
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.exactConsoleErrorCount = 0;
+    eligible.inboundRemoveCauseCodeCount = 0;
+    eligible.removedTargetClassMatchCount = 0;
+    eligible.tupleBoundRetirementCount = 0;
+    eligible.cleanClientUnsubscribeTransitionCount = 0;
+    eligible.acceptedListenerTransitionCount = 0;
+    eligible.retiredExactConsoleErrorCount = 0;
+    eligible.successorSequenceBound = false;
+    eligible.cleanClientUnsubscribeSequenceBound = false;
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.acceptedListenerTransitionCount = 0;
+  });
+  pushFinalizedCleanMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.cleanClientUnsubscribeSequenceBound = false;
+  });
+  pushFinalizedCleanMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.retiredExactConsoleErrorCount = 1;
+  });
+  pushFinalizedCleanMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.exactConsoleErrorCount = 1;
+  });
+  pushFinalizedCleanMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.inboundRemoveCauseCodeCount = 1;
+    eligible.removedTargetClassMatchCount = 1;
   });
   pushFinalizedMutation((fixture) => {
     const eligible = fixture.groups.find(({ eligible }) => eligible);
@@ -5818,6 +6758,7 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
   }
   for (const forbiddenReplayField of [
     "messageStructureSha256",
+    "outboundRemoveSequence",
     "webChannelMessageSequence",
   ]) {
     assert.throws(() =>
@@ -5827,12 +6768,18 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
     );
   }
   return {
-    frozenBaselineAuthenticationRetirementAcceptedFixtureCount: 1,
+    frozenBaselineAuthenticationRetirementAcceptedFixtureCount: 2,
     frozenBaselineAuthenticationRetirementRejectedFixtureCount:
       mutations.length,
     frozenBaselineAuthenticationRetirementCandidateRejectedCaseCount: 1,
     frozenBaselineAuthenticationRetirementOtherGroupRejectedCaseCount: 1,
     frozenBaselineAuthenticationRetirementMissingExactErrorRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementMutuallyExclusiveBranchRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementMissingBranchRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementAcceptedCountMismatchRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementCleanSequenceRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementCleanRetiredConsoleRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementCleanPartialAnomalyRejectedCaseCount: 2,
     frozenBaselineAuthenticationRetirementDuplicateExactErrorRejectedCaseCount: 1,
     frozenBaselineAuthenticationRetirementDuplicateRemovedTargetRejectedCaseCount: 1,
     frozenBaselineAuthenticationRetirementSuccessorHistogramMismatchRejectedCaseCount: 1,
@@ -5841,7 +6788,7 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
     frozenBaselineAuthenticationRetirementDuplicateGroupRejectedCaseCount: 1,
     frozenBaselineAuthenticationRetirementParseFailureRejectedCaseCount: 1,
     frozenBaselineAuthenticationRetirementRawFieldRejectedCaseCount: 4,
-    frozenBaselineAuthenticationRetirementReplayFieldRejectedCaseCount: 2,
+    frozenBaselineAuthenticationRetirementReplayFieldRejectedCaseCount: 3,
     frozenBaselineAuthenticationRetirementNetworkAccess: 0,
   };
 };
@@ -6192,8 +7139,15 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     frozenBaselineListenerPostSettlementGuardSourceContractVerified: true,
     frozenBaselineListenerTerminalFailureSourceContractVerified: true,
     frozenBaselineListenerBoundedReadinessSettlementSourceContractVerified: true,
-    frozenBaselineListenerBindingPositiveFixtureSourceCount: 5,
-    frozenBaselineListenerBindingNegativeFixtureSourceCount: 19,
+    frozenBaselineListenerBindingPositiveFixtureSourceCount: 7,
+    frozenBaselineListenerBindingNegativeFixtureSourceCount: 22,
+    safeExactWebChannelDiagnosticSourceContractVerified: true,
+    safeExactWebChannelDiagnosticAcceptedFixtureSourceCount: 6,
+    safeExactWebChannelDiagnosticRejectedFixtureSourceCount: 27,
+    safeExactWebChannelDiagnosticBindingAcceptedFixtureSourceCount: 6,
+    safeExactWebChannelDiagnosticBindingRejectedFixtureSourceCount: 15,
+    safeExactWebChannelDiagnosticRawValueOutputCount: 0,
+    safeExactWebChannelDiagnosticFatalRecoverySubtractionCount: 0,
     safeAuthenticationSignInSourceContractVerified: true,
     safeAuthenticationSignInSourceMutationRejectedCaseCount,
     authenticationCollectionListPreflightSourceMutationRejectedCaseCount,

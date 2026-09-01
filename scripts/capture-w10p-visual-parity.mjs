@@ -6619,6 +6619,47 @@ const exactFirestoreListenSessionIdentity = (requestUrl) => {
     return null;
   }
 };
+const safeExactFirestoreListenSessionHashes = (requestUrl) => {
+  try {
+    const parsed = new URL(String(requestUrl));
+    const databaseValues = parsed.searchParams.getAll("database");
+    const sidValues = parsed.searchParams.getAll("SID");
+    const gsessionidValues = parsed.searchParams.getAll("gsessionid");
+    const boundedOpaqueSessionValue = (value, maximumLength) =>
+      typeof value === "string" &&
+      value.length >= 1 &&
+      value.length <= maximumLength &&
+      !/[\u0000-\u0020\u007f]/u.test(value);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.hostname.toLowerCase() !== "firestore.googleapis.com" ||
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      !["", "443"].includes(parsed.port) ||
+      parsed.hash !== "" ||
+      parsed.pathname !== FIRESTORE_LISTEN_WEBCHANNEL_PATHNAME ||
+      databaseValues.length !== 1 ||
+      databaseValues[0] !==
+        `projects/${contract.firebaseProjectId}/databases/(default)` ||
+      sidValues.length !== 1 ||
+      !boundedOpaqueSessionValue(sidValues[0], 512) ||
+      gsessionidValues.length > 1 ||
+      (gsessionidValues.length === 1 &&
+        !boundedOpaqueSessionValue(gsessionidValues[0], 512))
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      sidSha256: secretSha256(sidValues[0]),
+      gsessionidSha256:
+        gsessionidValues.length === 1
+          ? secretSha256(gsessionidValues[0])
+          : null,
+    });
+  } catch {
+    return null;
+  }
+};
 const exactFirestoreListenInitialRequest = (requestUrl) => {
   try {
     const parsed = new URL(String(requestUrl));
@@ -7892,7 +7933,7 @@ const createFrozenBaselineListenerBindingObserver = ({
     const successorTargets = allTargetEpochs().filter(
       (target) => target.targetClass === policy.successorTargetClass,
     );
-    return (
+    const anomalyReady =
       pendingInitialMutationsByRequestId.size === 0 &&
       exactConsoleSequences.length === policy.consoleError.expectedCount &&
       inboundRemoveCauseCodeCount === 1 &&
@@ -7902,8 +7943,32 @@ const createFrozenBaselineListenerBindingObserver = ({
       successorAddTargetCount === 1 &&
       successorTargetAcknowledgedCount === 1 &&
       successorTargets.length === 1 &&
-      successorTargets[0].acknowledgementSequences.length >= 1
-    );
+      successorTargets[0].acknowledgementSequences.length >= 1;
+    const cleanClientUnsubscribeReady =
+      pendingInitialMutationsByRequestId.size === 0 &&
+      exactConsoleSequences.length === 0 &&
+      inboundRemoveCauseCodeCount === 0 &&
+      removedTargetClassMatchCount === 0 &&
+      removedTargets.length === 1 &&
+      removedTargets[0].outboundRemoveSequence !== null &&
+      removedTargets[0].removedCauseCodeSequences.length === 0 &&
+      successorAddTargetCount === 1 &&
+      successorTargetAcknowledgedCount === 1 &&
+      successorTargets.length === 1 &&
+      successorTargets[0].acknowledgementSequences.length >= 1 &&
+      frozenBaselineObservationSequenceBefore(
+        removedTargets[0].addSequence,
+        removedTargets[0].outboundRemoveSequence,
+      ) &&
+      frozenBaselineObservationSequenceBefore(
+        removedTargets[0].outboundRemoveSequence,
+        successorTargets[0].addSequence,
+      ) &&
+      frozenBaselineObservationSequenceBefore(
+        successorTargets[0].addSequence,
+        successorTargets[0].acknowledgementSequences[0],
+      );
+    return anomalyReady || cleanClientUnsubscribeReady;
   };
   const settleAuthentication = ({ dashboardStable }) => {
     assert.equal(settledDecision, null);
@@ -7942,6 +8007,23 @@ const createFrozenBaselineListenerBindingObserver = ({
         successorTargets[0].addSequence,
         successorTargets[0].acknowledgementSequences[0],
       );
+    const cleanClientUnsubscribeSequenceBound =
+      eligible &&
+      successorExplicitlyAcknowledged &&
+      removedTargets.length === 1 &&
+      removedTargets[0].outboundRemoveSequence !== null &&
+      frozenBaselineObservationSequenceBefore(
+        removedTargets[0].addSequence,
+        removedTargets[0].outboundRemoveSequence,
+      ) &&
+      frozenBaselineObservationSequenceBefore(
+        removedTargets[0].outboundRemoveSequence,
+        successorTargets[0].addSequence,
+      ) &&
+      frozenBaselineObservationSequenceBefore(
+        successorTargets[0].addSequence,
+        successorTargets[0].acknowledgementSequences[0],
+      );
     const tupleBoundRetirementCount = Number(
       eligible &&
         exactConsoleSequences.length === policy.consoleError.expectedCount &&
@@ -7967,6 +8049,36 @@ const createFrozenBaselineListenerBindingObserver = ({
         parseFailureCount === 0 &&
         bufferExceededCount === 0,
     );
+    const cleanClientUnsubscribeTransitionCount = Number(
+      eligible &&
+        exactConsoleSequences.length === 0 &&
+        inboundRemoveCauseCodeCount === 0 &&
+        removedTargetClassMatchCount === 0 &&
+        removedTargets.length === 1 &&
+        removedTargets[0].removedCauseCodeSequences.length === 0 &&
+        successorTargets.length === 1 &&
+        successorAddTargetCount === 1 &&
+        successorTargetAcknowledgedCount === 1 &&
+        successorExplicitlyAcknowledged &&
+        cleanClientUnsubscribeSequenceBound &&
+        unknownRemovedTargetCount === 0 &&
+        unboundRemovedTargetCount === 0 &&
+        ambiguousRemovedTargetCount === 0 &&
+        ambiguousAcknowledgementTargetCount === 0 &&
+        ambiguousOtherRemovedTargetCount === 0 &&
+        streamFailureCount === 0 &&
+        parseFailureCount === 0 &&
+        bufferExceededCount === 0 &&
+        acceptedPostRemoveReaddCount === 0 &&
+        conflictingOrStaleInboundLogicalMessageCount === 0,
+    );
+    const acceptedListenerTransitionCount =
+      tupleBoundRetirementCount + cleanClientUnsubscribeTransitionCount;
+    assert.equal(
+      tupleBoundRetirementCount * cleanClientUnsubscribeTransitionCount,
+      0,
+    );
+    assert.ok([0, 1].includes(acceptedListenerTransitionCount));
     const retiredExactConsoleErrorCount = tupleBoundRetirementCount;
     const fatalExactConsoleErrorCount =
       exactConsoleSequences.length - retiredExactConsoleErrorCount;
@@ -7977,6 +8089,9 @@ const createFrozenBaselineListenerBindingObserver = ({
       dashboardStable: true,
       successorExplicitlyAcknowledged,
       successorSequenceBound,
+      cleanClientUnsubscribeSequenceBound,
+      cleanClientUnsubscribeTransitionCount,
+      acceptedListenerTransitionCount,
     });
     settledSemanticLedger = Object.freeze(snapshotSemanticLedger());
     return settledDecision;
@@ -8103,9 +8218,11 @@ const createFrozenBaselineListenerBindingObserver = ({
       ambiguousAcknowledgementTargetCount === 0 &&
       ambiguousOtherRemovedTargetCount === 0 &&
       (eligible
-        ? settledDecision.tupleBoundRetirementCount === 1 &&
+        ? settledDecision.acceptedListenerTransitionCount === 1 &&
           settledDecision.fatalExactConsoleErrorCount === 0
-        : settledDecision.tupleBoundRetirementCount === 0 &&
+        : settledDecision.acceptedListenerTransitionCount === 0 &&
+          settledDecision.tupleBoundRetirementCount === 0 &&
+          settledDecision.cleanClientUnsubscribeTransitionCount === 0 &&
           exactConsoleSequences.length === 0 &&
           inboundRemoveCauseCodeCount === 0);
     return Object.freeze({
@@ -8138,6 +8255,12 @@ const createFrozenBaselineListenerBindingObserver = ({
       successorExplicitlyAcknowledged:
         settledDecision.successorExplicitlyAcknowledged,
       successorSequenceBound: settledDecision.successorSequenceBound,
+      cleanClientUnsubscribeSequenceBound:
+        settledDecision.cleanClientUnsubscribeSequenceBound,
+      cleanClientUnsubscribeTransitionCount:
+        settledDecision.cleanClientUnsubscribeTransitionCount,
+      acceptedListenerTransitionCount:
+        settledDecision.acceptedListenerTransitionCount,
       passed,
     });
   };
@@ -8848,6 +8971,9 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     dashboardStable: true,
     successorExplicitlyAcknowledged: true,
     successorSequenceBound: true,
+    cleanClientUnsubscribeSequenceBound: false,
+    cleanClientUnsubscribeTransitionCount: 0,
+    acceptedListenerTransitionCount: 1,
   });
   const positiveSnapshot = positiveObserver.safeSnapshot();
   assert.equal(positiveSnapshot.passed, true);
@@ -8859,6 +8985,125 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       targetClass,
       count: targetClass === "unknown" ? 0 : 1,
     })),
+  );
+  assert.equal(positiveSnapshot.cleanClientUnsubscribeTransitionCount, 0);
+  assert.equal(positiveSnapshot.acceptedListenerTransitionCount, 1);
+  const cleanClientUnsubscribeObserver = createObserver();
+  cleanClientUnsubscribeObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  cleanClientUnsubscribeObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages(
+      [{ removeTarget: 2 }, { addTarget: attendanceTarget("2026_2", 4) }],
+      { offset: 1 },
+    ),
+  });
+  cleanClientUnsubscribeObserver.observeInboundPayload({
+    sessionIdentity: exactFirestoreListenSessionIdentity(requestUrl.toString()),
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "CURRENT",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  assert.equal(cleanClientUnsubscribeObserver.readyForSettlement(), true);
+  const cleanClientUnsubscribeDecision =
+    cleanClientUnsubscribeObserver.settleAuthentication({
+      dashboardStable: true,
+    });
+  assert.deepEqual(cleanClientUnsubscribeDecision, {
+    tupleBoundRetirementCount: 0,
+    retiredExactConsoleErrorCount: 0,
+    fatalExactConsoleErrorCount: 0,
+    dashboardStable: true,
+    successorExplicitlyAcknowledged: true,
+    successorSequenceBound: false,
+    cleanClientUnsubscribeSequenceBound: true,
+    cleanClientUnsubscribeTransitionCount: 1,
+    acceptedListenerTransitionCount: 1,
+  });
+  const cleanClientUnsubscribeSnapshot =
+    cleanClientUnsubscribeObserver.safeSnapshot();
+  assert.equal(cleanClientUnsubscribeSnapshot.passed, true);
+  assert.equal(cleanClientUnsubscribeSnapshot.exactConsoleErrorCount, 0);
+  assert.equal(cleanClientUnsubscribeSnapshot.inboundRemoveCauseCodeCount, 0);
+  assert.equal(cleanClientUnsubscribeSnapshot.removedTargetClassMatchCount, 0);
+  assert.equal(
+    cleanClientUnsubscribeSnapshot.cleanClientUnsubscribeSequenceBound,
+    true,
+  );
+  assert.equal(
+    cleanClientUnsubscribeSnapshot.cleanClientUnsubscribeTransitionCount,
+    1,
+  );
+  assert.equal(
+    cleanClientUnsubscribeSnapshot.acceptedListenerTransitionCount,
+    1,
+  );
+  const noneligibleCleanClientUnsubscribeObserver =
+    createNoneligibleAdminObserver();
+  noneligibleCleanClientUnsubscribeObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  noneligibleCleanClientUnsubscribeObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages(
+      [{ removeTarget: 2 }, { addTarget: attendanceTarget("2026_2", 4) }],
+      { offset: 1 },
+    ),
+  });
+  noneligibleCleanClientUnsubscribeObserver.observeInboundPayload({
+    sessionIdentity: exactFirestoreListenSessionIdentity(requestUrl.toString()),
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "CURRENT",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  noneligibleCleanClientUnsubscribeObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const noneligibleCleanClientUnsubscribeSnapshot =
+    noneligibleCleanClientUnsubscribeObserver.safeSnapshot();
+  assert.equal(noneligibleCleanClientUnsubscribeSnapshot.passed, true);
+  assert.equal(
+    noneligibleCleanClientUnsubscribeSnapshot.cleanClientUnsubscribeSequenceBound,
+    false,
+  );
+  assert.equal(
+    noneligibleCleanClientUnsubscribeSnapshot.cleanClientUnsubscribeTransitionCount,
+    0,
+  );
+  assert.equal(
+    noneligibleCleanClientUnsubscribeSnapshot.acceptedListenerTransitionCount,
+    0,
   );
   const positiveFailureDiagnostic = positiveObserver.safeFailureDiagnostic();
   assert.equal(Object.isFrozen(positiveFailureDiagnostic), true);
@@ -10152,7 +10397,174 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.equal(preexistingSuccessorSnapshot.parseFailureCount, 0);
   assert.equal(preexistingSuccessorSnapshot.successorAddTargetCount, 1);
   assert.equal(preexistingSuccessorSnapshot.successorSequenceBound, false);
+  assert.equal(
+    preexistingSuccessorSnapshot.cleanClientUnsubscribeSequenceBound,
+    false,
+  );
+  assert.equal(
+    preexistingSuccessorSnapshot.cleanClientUnsubscribeTransitionCount,
+    0,
+  );
   negativeSnapshots.push(preexistingSuccessorSnapshot);
+  const wrongTargetCleanObserver = createObserver();
+  wrongTargetCleanObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([
+      attendanceTarget("2026_1", 2),
+      historyDictionaryTarget,
+    ]),
+  });
+  wrongTargetCleanObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages(
+      [{ removeTarget: 6 }, { addTarget: attendanceTarget("2026_2", 4) }],
+      { offset: 2 },
+    ),
+  });
+  wrongTargetCleanObserver.observeInboundPayload({
+    sessionIdentity: preexistingSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "CURRENT",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  wrongTargetCleanObserver.settleAuthentication({ dashboardStable: true });
+  const wrongTargetCleanSnapshot = wrongTargetCleanObserver.safeSnapshot();
+  assert.equal(wrongTargetCleanSnapshot.parseFailureCount, 0);
+  assert.equal(wrongTargetCleanSnapshot.successorTargetAcknowledgedCount, 1);
+  assert.equal(
+    wrongTargetCleanSnapshot.cleanClientUnsubscribeSequenceBound,
+    false,
+  );
+  assert.equal(
+    wrongTargetCleanSnapshot.cleanClientUnsubscribeTransitionCount,
+    0,
+  );
+  assert.equal(wrongTargetCleanSnapshot.acceptedListenerTransitionCount, 0);
+  negativeSnapshots.push(wrongTargetCleanSnapshot);
+  const causeOnlyTransitionObserver = createObserver();
+  causeOnlyTransitionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  causeOnlyTransitionObserver.observeInboundPayload({
+    sessionIdentity: preexistingSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "REMOVE",
+              targetIds: [2],
+              cause: { code: 7 },
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  causeOnlyTransitionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 4)], {
+      offset: 1,
+    }),
+  });
+  causeOnlyTransitionObserver.observeInboundPayload({
+    sessionIdentity: preexistingSessionIdentity,
+    payload: JSON.stringify([
+      [
+        2,
+        [
+          {
+            targetChange: {
+              targetChangeType: "ADD",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  causeOnlyTransitionObserver.settleAuthentication({ dashboardStable: true });
+  const causeOnlyTransitionSnapshot =
+    causeOnlyTransitionObserver.safeSnapshot();
+  assert.equal(causeOnlyTransitionSnapshot.inboundRemoveCauseCodeCount, 1);
+  assert.equal(causeOnlyTransitionSnapshot.exactConsoleErrorCount, 0);
+  assert.equal(causeOnlyTransitionSnapshot.tupleBoundRetirementCount, 0);
+  assert.equal(
+    causeOnlyTransitionSnapshot.cleanClientUnsubscribeTransitionCount,
+    0,
+  );
+  assert.equal(causeOnlyTransitionSnapshot.acceptedListenerTransitionCount, 0);
+  negativeSnapshots.push(causeOnlyTransitionSnapshot);
+  const consoleOnlyTransitionObserver = createObserver();
+  consoleOnlyTransitionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  consoleOnlyTransitionObserver.observeConsoleError(exactConsoleError);
+  consoleOnlyTransitionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages(
+      [{ removeTarget: 2 }, { addTarget: attendanceTarget("2026_2", 4) }],
+      { offset: 1 },
+    ),
+  });
+  consoleOnlyTransitionObserver.observeInboundPayload({
+    sessionIdentity: preexistingSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "CURRENT",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  consoleOnlyTransitionObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const consoleOnlyTransitionSnapshot =
+    consoleOnlyTransitionObserver.safeSnapshot();
+  assert.equal(consoleOnlyTransitionSnapshot.inboundRemoveCauseCodeCount, 0);
+  assert.equal(consoleOnlyTransitionSnapshot.exactConsoleErrorCount, 1);
+  assert.equal(consoleOnlyTransitionSnapshot.tupleBoundRetirementCount, 0);
+  assert.equal(
+    consoleOnlyTransitionSnapshot.cleanClientUnsubscribeTransitionCount,
+    0,
+  );
+  assert.equal(
+    consoleOnlyTransitionSnapshot.acceptedListenerTransitionCount,
+    0,
+  );
+  negativeSnapshots.push(consoleOnlyTransitionSnapshot);
   const wrongUidObserver = createObserver();
   wrongUidObserver.observeOutboundRequest({
     requestUrl: requestUrl.toString(),
@@ -10370,7 +10782,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     );
   }
   return {
-    frozenBaselineListenerBindingPositiveFixtureCount: 5,
+    frozenBaselineListenerBindingPositiveFixtureCount: 7,
     frozenBaselineListenerBindingNegativeFixtureCount: negativeSnapshots.length,
     frozenBaselineListenerBindingStreamFixtureCount: 1,
     frozenBaselineListenerBindingTargetClassFixtureCount:
@@ -12342,6 +12754,256 @@ const classifyExactStagingFirestoreWebChannelTerminationLifecycleScope = ({
   } catch {
     return null;
   }
+};
+const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_INSPECTION =
+  Object.freeze({
+    firebaseService: "firestore",
+    isFirebaseRequest: true,
+    stagingMarker: true,
+    productionMarker: false,
+    unboundFirebaseRequest: false,
+    malformedUrlEncoding: false,
+    firebaseTransportValid: true,
+    serviceResourceBound: true,
+  });
+const classifySafeExactAuthenticationWebChannelDiagnosticUrl = (requestUrl) => {
+  const sessionHashes = safeExactFirestoreListenSessionHashes(requestUrl);
+  if (sessionHashes === null) return null;
+  const sharedOptions = {
+    requestUrl,
+    redirected: false,
+    inspection: SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_INSPECTION,
+  };
+  const sessionForwardClass =
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      ...sharedOptions,
+      method: "POST",
+      observerSurface: "playwright-request",
+      resourceType: "fetch",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      postDataPresent: true,
+    });
+  const backchannelClass =
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      ...sharedOptions,
+      method: "GET",
+      observerSurface: "playwright-request",
+      resourceType: "fetch",
+      postDataPresent: false,
+    });
+  const terminationClass =
+    classifyExactStagingFirestoreWebChannelTerminationLifecycleScope({
+      ...sharedOptions,
+      method: "GET",
+      observerSurface: "cdp-request-paused",
+      resourceType: "image",
+      postDataPresent: false,
+    });
+  const classified = [
+    sessionForwardClass,
+    backchannelClass,
+    terminationClass,
+  ].filter((value) => value !== null);
+  if (classified.length !== 1) return null;
+  return Object.freeze({
+    requestClass: sessionForwardClass || backchannelClass,
+    terminationClass,
+    sidSha256: sessionHashes.sidSha256,
+    gsessionidSha256: sessionHashes.gsessionidSha256,
+  });
+};
+const isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate = ({
+  lifecycle,
+  observation,
+  expectedNetworkId = null,
+  expectedRequestUrlSha256 = null,
+}) => {
+  const sessionHashes = observation?.webChannelListenSessionHashes || null;
+  const requestUrlHash = observation?.requestUrlSha256 || null;
+  const exactSessionHashKeys =
+    sessionHashes !== null &&
+    JSON.stringify(Object.keys(sessionHashes).sort()) ===
+      JSON.stringify(["gsessionidSha256", "sidSha256"]);
+  const forwardOrBackchannel =
+    ["session-forward-post", "backchannel-get"].includes(
+      observation?.webChannelRequestClass,
+    ) &&
+    observation?.webChannelTerminationClass === null &&
+    observation?.resourceType === "xhr" &&
+    ((observation.webChannelRequestClass === "session-forward-post" &&
+      observation.requestMethod === "POST") ||
+      (observation.webChannelRequestClass === "backchannel-get" &&
+        observation.requestMethod === "GET"));
+  const termination =
+    observation?.webChannelRequestClass === null &&
+    observation?.webChannelTerminationClass === "termination-image-get" &&
+    observation?.resourceType === "image" &&
+    observation?.requestMethod === "GET";
+  return (
+    (expectedNetworkId !== null || expectedRequestUrlSha256 !== null) &&
+    lifecycle !== null &&
+    observation !== null &&
+    lifecycle.state === "response-awaiting" &&
+    lifecycle.diagnosticPhase === "authentication" &&
+    typeof lifecycle.networkId === "string" &&
+    lifecycle.networkId.length > 0 &&
+    observation.diagnosticPhase === "authentication" &&
+    observation.firebaseService === "firestore" &&
+    observation.isFirebaseRequest === true &&
+    observation.stagingMarker === true &&
+    observation.productionMarker === false &&
+    observation.unboundFirebaseRequest === false &&
+    observation.malformedUrlEncoding === false &&
+    observation.firebaseTransportValid === true &&
+    observation.serviceResourceBound === true &&
+    observation.webChannelListenPathExact === true &&
+    exactSessionHashKeys &&
+    /^[a-f0-9]{64}$/u.test(sessionHashes.sidSha256) &&
+    (sessionHashes.gsessionidSha256 === null ||
+      /^[a-f0-9]{64}$/u.test(sessionHashes.gsessionidSha256)) &&
+    /^[a-f0-9]{64}$/u.test(requestUrlHash) &&
+    (expectedNetworkId === null || lifecycle.networkId === expectedNetworkId) &&
+    (expectedRequestUrlSha256 === null ||
+      requestUrlHash === expectedRequestUrlSha256) &&
+    (forwardOrBackchannel || termination)
+  );
+};
+const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS =
+  Object.freeze({
+    requestFailure: Object.freeze([
+      "exactWebChannelBindingCandidateCount",
+      "failureClass",
+      "firebaseService",
+      "gsessionidSha256",
+      "networkIdentityBound",
+      "networkRequestIdSha256",
+      "requestUrlSha256",
+      "resourceType",
+      "sidSha256",
+      "webChannelDiagnosticPhase",
+      "webChannelLifecycleState",
+      "webChannelListenPathExact",
+      "webChannelRequestClass",
+      "webChannelRequestUrlBound",
+      "webChannelTerminationClass",
+    ]),
+    loadingFailure: Object.freeze([
+      "blockedReasonClass",
+      "blockedReasonPresent",
+      "canceled",
+      "corsErrorStatusAbsent",
+      "exactNetworkBindingCandidateCount",
+      "failureClass",
+      "gsessionidSha256",
+      "lifecycleState",
+      "networkRequestIdSha256",
+      "requestClass",
+      "requestUrlSha256",
+      "resourceType",
+      "sidSha256",
+      "terminationClass",
+    ]),
+    networkLog: Object.freeze([
+      "categoryAbsent",
+      "errorNameClass",
+      "exactNetworkBindingCandidateCount",
+      "gsessionidSha256",
+      "levelError",
+      "lifecycleState",
+      "locationUrlBound",
+      "messageClass",
+      "networkRequestIdSha256",
+      "operationClass",
+      "requestClass",
+      "requestUrlSha256",
+      "resourceType",
+      "sha256",
+      "sidSha256",
+      "sourceClass",
+      "sourceNetwork",
+      "terminationClass",
+    ]),
+    consoleLocation: Object.freeze([
+      "errorNameClass",
+      "exactWebChannelBindingCandidateCount",
+      "gsessionidSha256",
+      "lifecycleState",
+      "messageClass",
+      "networkRequestIdSha256",
+      "operationClass",
+      "requestClass",
+      "requestUrlBound",
+      "requestUrlSha256",
+      "resourceType",
+      "sha256",
+      "sidSha256",
+      "sourceClass",
+      "terminationClass",
+    ]),
+  });
+const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RAW_KEYS = Object.freeze(
+  new Set([
+    "authorization",
+    "body",
+    "gsessionid",
+    "headers",
+    "networkRequestId",
+    "outboundRemoveSequence",
+    "password",
+    "postData",
+    "requestId",
+    "requestUrl",
+    "sequence",
+    "sid",
+    "token",
+    "url",
+    "username",
+    "webChannelMessageSequence",
+  ]),
+);
+const freezeSafeExactAuthenticationWebChannelDiagnosticRecord = (
+  recordClass,
+  record,
+) => {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS,
+      recordClass,
+    ),
+    true,
+  );
+  assert.ok(record && typeof record === "object" && !Array.isArray(record));
+  const ownKeys = Reflect.ownKeys(record);
+  assert.equal(
+    ownKeys.every((key) => typeof key === "string"),
+    true,
+  );
+  assert.deepEqual(
+    [...ownKeys].sort(),
+    SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS[recordClass],
+  );
+  for (const key of ownKeys) {
+    assert.equal(
+      SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RAW_KEYS.has(key),
+      false,
+    );
+    const value = record[key];
+    if (key === "sha256" || key.endsWith("Sha256")) {
+      assert.ok(value === null || /^[a-f0-9]{64}$/u.test(value));
+      continue;
+    }
+    if (value === null || typeof value === "boolean") continue;
+    if (typeof value === "number") {
+      assert.ok(Number.isSafeInteger(value) && value >= 0);
+      continue;
+    }
+    assert.equal(typeof value, "string");
+    assert.ok(value.length >= 1 && value.length <= 128);
+    assert.match(value, /^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+  }
+  return Object.freeze({ ...record });
 };
 const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS = [
   "classified",
@@ -26283,6 +26945,612 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
       SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
   };
 };
+const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
+  const firestoreDatabase = `projects/${contract.firebaseProjectId}/databases/(default)`;
+  const diagnosticPrivateSid = "privateDiagnosticSid_123";
+  const diagnosticPrivateGsessionid = "privateDiagnosticGsession_456";
+  const diagnosticPrivateNetworkId = "private-diagnostic-network-id";
+  const diagnosticPrivateJwt = `${"d".repeat(24)}.${"e".repeat(24)}.${"f".repeat(24)}`;
+  const diagnosticUrl = (entries) => {
+    const url = new URL(
+      "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
+    );
+    for (const [name, value] of entries) {
+      url.searchParams.append(name, value);
+    }
+    return url;
+  };
+  const forwardEntries = [
+    ["gsessionid", diagnosticPrivateGsessionid],
+    ["VER", "8"],
+    ["database", firestoreDatabase],
+    ["RID", "100000"],
+    ["SID", diagnosticPrivateSid],
+    ["AID", "0"],
+    ["zx", "abc123"],
+    ["t", "1"],
+  ];
+  const backchannelEntries = [
+    ["gsessionid", diagnosticPrivateGsessionid],
+    ["VER", "8"],
+    ["database", firestoreDatabase],
+    ["RID", "rpc"],
+    ["SID", diagnosticPrivateSid],
+    ["AID", "0"],
+    ["CI", "0"],
+    ["TYPE", "xmlhttp"],
+    ["zx", "abc123"],
+    ["t", "1"],
+  ];
+  const terminationEntries = [
+    ["gsessionid", diagnosticPrivateGsessionid],
+    ["VER", "8"],
+    ["database", firestoreDatabase],
+    ["RID", "100001"],
+    ["SID", diagnosticPrivateSid],
+    ["TYPE", "terminate"],
+    ["zx", "abc123"],
+  ];
+  const withoutEntry = (entries, name) =>
+    entries.filter(([entryName]) => entryName !== name);
+  const safeExactWebChannelDiagnosticPositiveUrls = [
+    diagnosticUrl(forwardEntries),
+    diagnosticUrl(withoutEntry(forwardEntries, "gsessionid")),
+    diagnosticUrl(backchannelEntries),
+    diagnosticUrl([
+      ...withoutEntry(backchannelEntries, "gsessionid"),
+      ["TO", "30000"],
+    ]),
+    diagnosticUrl(terminationEntries),
+    diagnosticUrl(withoutEntry(terminationEntries, "gsessionid")),
+  ];
+  const safeExactWebChannelDiagnosticFixtures =
+    safeExactWebChannelDiagnosticPositiveUrls.map((url) =>
+      classifySafeExactAuthenticationWebChannelDiagnosticUrl(url.toString()),
+    );
+  assert.deepEqual(
+    safeExactWebChannelDiagnosticFixtures.map((fixture) => [
+      fixture?.requestClass,
+      fixture?.terminationClass,
+    ]),
+    [
+      ["session-forward-post", null],
+      ["session-forward-post", null],
+      ["backchannel-get", null],
+      ["backchannel-get", null],
+      [null, "termination-image-get"],
+      [null, "termination-image-get"],
+    ],
+  );
+  for (const fixture of safeExactWebChannelDiagnosticFixtures) {
+    assert.ok(fixture);
+    assert.deepEqual(Object.keys(fixture), [
+      "requestClass",
+      "terminationClass",
+      "sidSha256",
+      "gsessionidSha256",
+    ]);
+    assert.match(fixture.sidSha256, /^[a-f0-9]{64}$/u);
+    if (fixture.gsessionidSha256 !== null) {
+      assert.match(fixture.gsessionidSha256, /^[a-f0-9]{64}$/u);
+    }
+  }
+  const cloneUrl = (url) => new URL(url.toString());
+  const forwardUrl = safeExactWebChannelDiagnosticPositiveUrls[0];
+  const backchannelUrl = safeExactWebChannelDiagnosticPositiveUrls[2];
+  const terminationUrl = safeExactWebChannelDiagnosticPositiveUrls[4];
+  const mutateUrl = (url, mutate) => {
+    const next = cloneUrl(url);
+    mutate(next);
+    return next;
+  };
+  const safeExactWebChannelDiagnosticNegativeUrls = [
+    mutateUrl(forwardUrl, (url) => url.searchParams.set("token", "private")),
+    mutateUrl(forwardUrl, (url) =>
+      url.searchParams.append("SID", diagnosticPrivateSid),
+    ),
+    mutateUrl(forwardUrl, (url) =>
+      url.searchParams.append("gsessionid", diagnosticPrivateGsessionid),
+    ),
+    mutateUrl(forwardUrl, (url) =>
+      url.searchParams.append("database", firestoreDatabase),
+    ),
+    mutateUrl(forwardUrl, (url) => {
+      url.protocol = "http:";
+    }),
+    mutateUrl(forwardUrl, (url) => {
+      url.hostname = "example.invalid";
+    }),
+    mutateUrl(forwardUrl, (url) => {
+      url.port = "444";
+    }),
+    mutateUrl(forwardUrl, (url) => {
+      url.pathname = "/google.firestore.v1.Firestore/Write/channel";
+    }),
+    mutateUrl(forwardUrl, (url) =>
+      url.searchParams.set(
+        "database",
+        "projects/wrong-project/databases/(default)",
+      ),
+    ),
+    mutateUrl(forwardUrl, (url) => url.searchParams.delete("SID")),
+    mutateUrl(forwardUrl, (url) => url.searchParams.set("SID", "")),
+    mutateUrl(forwardUrl, (url) =>
+      url.searchParams.set("SID", "s".repeat(513)),
+    ),
+    mutateUrl(forwardUrl, (url) => url.searchParams.set("SID", "bad sid")),
+    mutateUrl(forwardUrl, (url) =>
+      url.searchParams.set("gsessionid", "bad session"),
+    ),
+    mutateUrl(forwardUrl, (url) => url.searchParams.set("VER", "7")),
+    mutateUrl(forwardUrl, (url) => url.searchParams.set("RID", "01")),
+    mutateUrl(forwardUrl, (url) => url.searchParams.set("AID", "-1")),
+    mutateUrl(forwardUrl, (url) => url.searchParams.set("t", "0")),
+    mutateUrl(forwardUrl, (url) => url.searchParams.set("zx", "ABC")),
+    mutateUrl(backchannelUrl, (url) => url.searchParams.set("RID", "1")),
+    mutateUrl(backchannelUrl, (url) => url.searchParams.set("CI", "2")),
+    mutateUrl(backchannelUrl, (url) =>
+      url.searchParams.set("TYPE", "terminate"),
+    ),
+    mutateUrl(backchannelUrl, (url) => url.searchParams.set("TO", "0")),
+    mutateUrl(terminationUrl, (url) => url.searchParams.set("RID", "01")),
+    mutateUrl(terminationUrl, (url) => url.searchParams.set("TYPE", "xmlhttp")),
+    mutateUrl(forwardUrl, (url) => {
+      url.username = "private-user";
+    }),
+    mutateUrl(forwardUrl, (url) => {
+      url.hash = "private-fragment";
+    }),
+  ];
+  for (const url of safeExactWebChannelDiagnosticNegativeUrls) {
+    assert.equal(
+      classifySafeExactAuthenticationWebChannelDiagnosticUrl(url.toString()),
+      null,
+    );
+  }
+  const privateRequestUrl = forwardUrl.toString();
+  const requestUrlSha256 = secretSha256(privateRequestUrl);
+  const networkRequestIdSha256 = secretSha256(diagnosticPrivateNetworkId);
+  const sessionHashes = safeExactWebChannelDiagnosticFixtures[0];
+  const exactDiagnosticLifecycle = Object.freeze({
+    networkId: diagnosticPrivateNetworkId,
+    state: "response-awaiting",
+    diagnosticPhase: "authentication",
+  });
+  const exactDiagnosticObservation = ({
+    requestClass,
+    terminationClass,
+    requestMethod,
+    resourceType,
+    fixtureIndex,
+  }) =>
+    Object.freeze({
+      diagnosticPhase: "authentication",
+      firebaseService: "firestore",
+      isFirebaseRequest: true,
+      stagingMarker: true,
+      productionMarker: false,
+      unboundFirebaseRequest: false,
+      malformedUrlEncoding: false,
+      firebaseTransportValid: true,
+      serviceResourceBound: true,
+      webChannelListenPathExact: true,
+      webChannelListenSessionHashes: Object.freeze({
+        sidSha256:
+          safeExactWebChannelDiagnosticFixtures[fixtureIndex].sidSha256,
+        gsessionidSha256:
+          safeExactWebChannelDiagnosticFixtures[fixtureIndex].gsessionidSha256,
+      }),
+      requestUrlSha256: secretSha256(
+        safeExactWebChannelDiagnosticPositiveUrls[fixtureIndex].toString(),
+      ),
+      webChannelRequestClass: requestClass,
+      webChannelTerminationClass: terminationClass,
+      requestMethod,
+      resourceType,
+    });
+  const exactDiagnosticObservations = [
+    exactDiagnosticObservation({
+      requestClass: "session-forward-post",
+      terminationClass: null,
+      requestMethod: "POST",
+      resourceType: "xhr",
+      fixtureIndex: 0,
+    }),
+    exactDiagnosticObservation({
+      requestClass: "backchannel-get",
+      terminationClass: null,
+      requestMethod: "GET",
+      resourceType: "xhr",
+      fixtureIndex: 2,
+    }),
+    exactDiagnosticObservation({
+      requestClass: null,
+      terminationClass: "termination-image-get",
+      requestMethod: "GET",
+      resourceType: "image",
+      fixtureIndex: 4,
+    }),
+  ];
+  for (const observation of exactDiagnosticObservations) {
+    assert.equal(
+      isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({
+        lifecycle: exactDiagnosticLifecycle,
+        observation,
+        expectedNetworkId: diagnosticPrivateNetworkId,
+      }),
+      true,
+    );
+    assert.equal(
+      isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({
+        lifecycle: exactDiagnosticLifecycle,
+        observation,
+        expectedRequestUrlSha256: observation.requestUrlSha256,
+      }),
+      true,
+    );
+  }
+  const exactForwardObservation = exactDiagnosticObservations[0];
+  const safeExactWebChannelDiagnosticBindingNegativeFixtures = [
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: exactForwardObservation,
+    },
+    {
+      lifecycle: { ...exactDiagnosticLifecycle, state: "terminal-complete" },
+      observation: exactForwardObservation,
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: {
+        ...exactDiagnosticLifecycle,
+        diagnosticPhase: "active-route",
+      },
+      observation: exactForwardObservation,
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: {
+        ...exactForwardObservation,
+        diagnosticPhase: "active-route",
+      },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: exactForwardObservation,
+      expectedNetworkId: "wrong-network-id",
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: exactForwardObservation,
+      expectedRequestUrlSha256: secretSha256("wrong-url"),
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: {
+        ...exactForwardObservation,
+        firebaseService: "auth",
+      },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: {
+        ...exactForwardObservation,
+        stagingMarker: false,
+      },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: {
+        ...exactForwardObservation,
+        webChannelListenPathExact: false,
+      },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: {
+        ...exactForwardObservation,
+        webChannelListenSessionHashes: {
+          ...exactForwardObservation.webChannelListenSessionHashes,
+          rawSid: diagnosticPrivateSid,
+        },
+      },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: {
+        ...exactForwardObservation,
+        webChannelListenSessionHashes: {
+          ...exactForwardObservation.webChannelListenSessionHashes,
+          sidSha256: "invalid",
+        },
+      },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: {
+        ...exactForwardObservation,
+        webChannelRequestClass: "initial-forward-post",
+      },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: {
+        ...exactForwardObservation,
+        webChannelTerminationClass: "termination-image-get",
+      },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: { ...exactForwardObservation, requestMethod: "GET" },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+    {
+      lifecycle: exactDiagnosticLifecycle,
+      observation: { ...exactForwardObservation, resourceType: "image" },
+      expectedNetworkId: diagnosticPrivateNetworkId,
+    },
+  ];
+  for (const fixture of safeExactWebChannelDiagnosticBindingNegativeFixtures) {
+    assert.equal(
+      isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate(fixture),
+      false,
+    );
+  }
+  const safeConsoleRecord = createSafeBrowserErrorRecord({
+    sourceClass: "console-error",
+    value: `Failed to load resource: net::ERR_ABORTED ${diagnosticPrivateJwt}`,
+    debugToken: "12345678-1234-4123-8123-123456789abc",
+  });
+  const safeExactWebChannelDiagnosticRecordFixtures = Object.freeze({
+    requestFailure: freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+      "requestFailure",
+      {
+        firebaseService: "firestore",
+        resourceType: "fetch",
+        failureClass: "aborted",
+        requestUrlSha256,
+        networkRequestIdSha256,
+        networkIdentityBound: true,
+        exactWebChannelBindingCandidateCount: 1,
+        webChannelRequestClass: "session-forward-post",
+        webChannelTerminationClass: null,
+        webChannelListenPathExact: true,
+        webChannelRequestUrlBound: true,
+        webChannelDiagnosticPhase: "authentication",
+        webChannelLifecycleState: "response-awaiting",
+        sidSha256: sessionHashes.sidSha256,
+        gsessionidSha256: sessionHashes.gsessionidSha256,
+      },
+    ),
+    loadingFailure: freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+      "loadingFailure",
+      {
+        networkRequestIdSha256,
+        requestUrlSha256,
+        requestClass: "session-forward-post",
+        terminationClass: null,
+        resourceType: "xhr",
+        lifecycleState: "response-awaiting",
+        sidSha256: sessionHashes.sidSha256,
+        gsessionidSha256: sessionHashes.gsessionidSha256,
+        failureClass: "aborted",
+        canceled: true,
+        blockedReasonPresent: false,
+        blockedReasonClass: null,
+        corsErrorStatusAbsent: true,
+        exactNetworkBindingCandidateCount: 1,
+      },
+    ),
+    networkLog: freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+      "networkLog",
+      {
+        networkRequestIdSha256,
+        requestUrlSha256,
+        requestClass: "session-forward-post",
+        terminationClass: null,
+        resourceType: "xhr",
+        lifecycleState: "response-awaiting",
+        sidSha256: sessionHashes.sidSha256,
+        gsessionidSha256: sessionHashes.gsessionidSha256,
+        ...safeConsoleRecord,
+        sourceNetwork: true,
+        levelError: true,
+        categoryAbsent: true,
+        locationUrlBound: true,
+        exactNetworkBindingCandidateCount: 1,
+      },
+    ),
+    consoleLocation: freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+      "consoleLocation",
+      {
+        networkRequestIdSha256,
+        requestUrlSha256,
+        requestClass: "session-forward-post",
+        terminationClass: null,
+        resourceType: "xhr",
+        lifecycleState: "response-awaiting",
+        sidSha256: sessionHashes.sidSha256,
+        gsessionidSha256: sessionHashes.gsessionidSha256,
+        ...safeConsoleRecord,
+        requestUrlBound: true,
+        exactWebChannelBindingCandidateCount: 1,
+      },
+    ),
+  });
+  assert.throws(() =>
+    freezeSafeExactAuthenticationWebChannelDiagnosticRecord("requestFailure", {
+      ...safeExactWebChannelDiagnosticRecordFixtures.requestFailure,
+      requestUrl: privateRequestUrl,
+    }),
+  );
+  assert.throws(() =>
+    freezeSafeExactAuthenticationWebChannelDiagnosticRecord("requestFailure", {
+      ...safeExactWebChannelDiagnosticRecordFixtures.requestFailure,
+      failureClass: diagnosticPrivateJwt,
+    }),
+  );
+  const exactDiagnosticRecordKeys = Object.freeze({
+    requestFailure: [
+      "exactWebChannelBindingCandidateCount",
+      "failureClass",
+      "firebaseService",
+      "gsessionidSha256",
+      "networkIdentityBound",
+      "networkRequestIdSha256",
+      "requestUrlSha256",
+      "resourceType",
+      "sidSha256",
+      "webChannelDiagnosticPhase",
+      "webChannelLifecycleState",
+      "webChannelListenPathExact",
+      "webChannelRequestClass",
+      "webChannelRequestUrlBound",
+      "webChannelTerminationClass",
+    ],
+    loadingFailure: [
+      "blockedReasonClass",
+      "blockedReasonPresent",
+      "canceled",
+      "corsErrorStatusAbsent",
+      "exactNetworkBindingCandidateCount",
+      "failureClass",
+      "gsessionidSha256",
+      "lifecycleState",
+      "networkRequestIdSha256",
+      "requestClass",
+      "requestUrlSha256",
+      "resourceType",
+      "sidSha256",
+      "terminationClass",
+    ],
+    networkLog: [
+      "categoryAbsent",
+      "errorNameClass",
+      "exactNetworkBindingCandidateCount",
+      "gsessionidSha256",
+      "levelError",
+      "lifecycleState",
+      "locationUrlBound",
+      "messageClass",
+      "networkRequestIdSha256",
+      "operationClass",
+      "requestClass",
+      "requestUrlSha256",
+      "resourceType",
+      "sha256",
+      "sidSha256",
+      "sourceClass",
+      "sourceNetwork",
+      "terminationClass",
+    ],
+    consoleLocation: [
+      "errorNameClass",
+      "exactWebChannelBindingCandidateCount",
+      "gsessionidSha256",
+      "lifecycleState",
+      "messageClass",
+      "networkRequestIdSha256",
+      "operationClass",
+      "requestClass",
+      "requestUrlBound",
+      "requestUrlSha256",
+      "resourceType",
+      "sha256",
+      "sidSha256",
+      "sourceClass",
+      "terminationClass",
+    ],
+  });
+  for (const [recordClass, record] of Object.entries(
+    safeExactWebChannelDiagnosticRecordFixtures,
+  )) {
+    assert.deepEqual(
+      Object.keys(record).sort(),
+      exactDiagnosticRecordKeys[recordClass],
+    );
+  }
+  const forbiddenRawDiagnosticKeys = new Set([
+    "authorization",
+    "gsessionid",
+    "networkRequestId",
+    "requestId",
+    "requestUrl",
+    "sequence",
+    "sid",
+    "token",
+    "url",
+  ]);
+  const assertSafeDiagnosticShape = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(assertSafeDiagnosticShape);
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, nestedValue] of Object.entries(value)) {
+      assert.equal(forbiddenRawDiagnosticKeys.has(key), false);
+      if (key.endsWith("Sha256")) {
+        assert.ok(nestedValue === null || /^[a-f0-9]{64}$/u.test(nestedValue));
+      }
+      assertSafeDiagnosticShape(nestedValue);
+    }
+  };
+  assertSafeDiagnosticShape(safeExactWebChannelDiagnosticRecordFixtures);
+  const safeExactWebChannelDiagnosticSerialized = JSON.stringify({
+    safeExactWebChannelDiagnosticFixtures,
+    safeExactWebChannelDiagnosticRecordFixtures,
+  });
+  const diagnosticPrivateUrl = privateRequestUrl;
+  for (const rawValue of [
+    diagnosticPrivateSid,
+    diagnosticPrivateGsessionid,
+    diagnosticPrivateNetworkId,
+    diagnosticPrivateUrl,
+    diagnosticPrivateJwt,
+  ]) {
+    assert.equal(
+      safeExactWebChannelDiagnosticSerialized.includes(rawValue),
+      false,
+    );
+  }
+  const diagnosticOnlyRequestFailureCount = 1;
+  const diagnosticOnlyConsoleErrorCount = 1;
+  const protectedReadRecoveredRequestFailureCount = 0;
+  const protectedReadRecoveredConsoleErrorCount = 0;
+  const tupleBoundRetiredConsoleErrorCount = 0;
+  assert.equal(
+    diagnosticOnlyRequestFailureCount -
+      protectedReadRecoveredRequestFailureCount,
+    1,
+  );
+  assert.equal(
+    diagnosticOnlyConsoleErrorCount -
+      protectedReadRecoveredConsoleErrorCount -
+      tupleBoundRetiredConsoleErrorCount,
+    1,
+  );
+  return {
+    safeExactWebChannelDiagnosticAcceptedFixtureCount:
+      safeExactWebChannelDiagnosticFixtures.length,
+    safeExactWebChannelDiagnosticRejectedFixtureCount:
+      safeExactWebChannelDiagnosticNegativeUrls.length,
+    safeExactWebChannelDiagnosticBindingAcceptedFixtureCount:
+      exactDiagnosticObservations.length * 2,
+    safeExactWebChannelDiagnosticBindingRejectedFixtureCount:
+      safeExactWebChannelDiagnosticBindingNegativeFixtures.length,
+    safeExactWebChannelDiagnosticRawValueOutputCount: 0,
+    safeExactWebChannelDiagnosticNetworkAccess: 0,
+  };
+};
 const verifyAppCheckSecretNegativeFixtures = () => {
   const debugToken = "12345678-1234-4123-8123-123456789abc";
   const exchangedToken = `${"a".repeat(24)}.${"b".repeat(24)}.${"c".repeat(
@@ -26362,6 +27630,8 @@ const safeAuthenticationFailureDiagnosticSelfTest =
   await verifySafeAuthenticationFailureDiagnosticFixtures();
 const safeBrowserErrorDiagnosticSelfTest =
   verifySafeBrowserErrorDiagnosticFixtures();
+const safeExactAuthenticationWebChannelDiagnosticSelfTest =
+  verifySafeExactAuthenticationWebChannelDiagnosticFixtures();
 const frozenBaselineListenerBindingSelfTest =
   await verifyFrozenBaselineListenerBindingFixtures();
 const preTransmissionBoundaryNegativeSelfTest =
@@ -31742,6 +33012,7 @@ if (args.includes("--self-test-app-check")) {
       ...authenticationCollectionListPreflightSelfTest,
       ...safeAuthenticationFailureDiagnosticSelfTest,
       ...safeBrowserErrorDiagnosticSelfTest,
+      ...safeExactAuthenticationWebChannelDiagnosticSelfTest,
       ...frozenBaselineListenerBindingSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
@@ -40700,6 +41971,10 @@ try {
     const frozenBaselineListenerRequestsByNetworkId = new Map();
     const frozenBaselineInitialRequestIdByGsessionid = new Map();
     const frozenBaselineSessionSidByGsessionid = new Map();
+    const authenticationExactWebChannelLoadingFailuresByNetworkId = new Map();
+    let authenticationExactWebChannelLoadingFailureDuplicateCount = 0;
+    const authenticationExactWebChannelNetworkLogRecords = [];
+    const authenticationExactWebChannelConsoleLocationRecords = [];
     if (frozenBaselineListenerBindingObserver) {
       const promoteFrozenBaselineInitialTargets = (gsessionid) => {
         const networkRequestId =
@@ -41264,6 +42539,54 @@ try {
             terminalClass: "loading-failed",
           });
         }
+        const exactWebChannelBinding =
+          resolveExactAuthenticationWebChannelBindingForNetworkId(
+            event.requestId,
+          );
+        if (exactWebChannelBinding.binding !== null) {
+          const { lifecycle, observation } = exactWebChannelBinding.binding;
+          const blockedReasonPresent = Object.prototype.hasOwnProperty.call(
+            event,
+            "blockedReason",
+          );
+          const corsErrorStatusPresent = Object.prototype.hasOwnProperty.call(
+            event,
+            "corsErrorStatus",
+          );
+          authenticationExactWebChannelLoadingFailureDuplicateCount += Number(
+            authenticationExactWebChannelLoadingFailuresByNetworkId.has(
+              event.requestId,
+            ),
+          );
+          authenticationExactWebChannelLoadingFailuresByNetworkId.set(
+            event.requestId,
+            freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+              "loadingFailure",
+              {
+                networkRequestIdSha256: sha256(event.requestId),
+                requestUrlSha256: observation.requestUrlSha256,
+                requestClass: observation.webChannelRequestClass,
+                terminationClass: observation.webChannelTerminationClass,
+                resourceType: observation.resourceType,
+                lifecycleState: lifecycle.state,
+                sidSha256: observation.webChannelListenSessionHashes.sidSha256,
+                gsessionidSha256:
+                  observation.webChannelListenSessionHashes.gsessionidSha256,
+                failureClass: safeBrowserRequestFailureClass(event.errorText),
+                canceled: event.canceled === true,
+                blockedReasonPresent,
+                blockedReasonClass: blockedReasonPresent
+                  ? event.blockedReason === "inspector"
+                    ? "inspector"
+                    : "unsupported"
+                  : null,
+                corsErrorStatusAbsent: !corsErrorStatusPresent,
+                exactNetworkBindingCandidateCount:
+                  exactWebChannelBinding.candidateCount,
+              },
+            ),
+          );
+        }
         const attempt =
           authenticationProtectedReadAttemptsByNetworkId.get(event.requestId) ||
           null;
@@ -41374,12 +42697,7 @@ try {
     });
     appCheckCdpSession.on("Log.entryAdded", ({ entry }) => {
       try {
-        const attempt =
-          authenticationProtectedReadAttemptsByNetworkId.get(
-            entry?.networkRequestId,
-          ) || null;
-        if (attempt === null) return;
-        let rawText = String(entry.text || "");
+        let rawText = String(entry?.text || "");
         const safeRecord = createSafeBrowserErrorRecord({
           sourceClass: "console-error",
           value: rawText,
@@ -41387,6 +42705,49 @@ try {
           debugSentinel: APP_CHECK_DEBUG_SENTINEL,
           deploymentBypassSecret: bypassSecret,
         });
+        const exactWebChannelBinding =
+          resolveExactAuthenticationWebChannelBindingForNetworkId(
+            entry?.networkRequestId,
+          );
+        if (exactWebChannelBinding.binding !== null) {
+          const { lifecycle, observation } = exactWebChannelBinding.binding;
+          authenticationExactWebChannelNetworkLogRecords.push(
+            freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+              "networkLog",
+              {
+                networkRequestIdSha256: sha256(entry.networkRequestId),
+                requestUrlSha256: observation.requestUrlSha256,
+                requestClass: observation.webChannelRequestClass,
+                terminationClass: observation.webChannelTerminationClass,
+                resourceType: observation.resourceType,
+                lifecycleState: lifecycle.state,
+                sidSha256: observation.webChannelListenSessionHashes.sidSha256,
+                gsessionidSha256:
+                  observation.webChannelListenSessionHashes.gsessionidSha256,
+                ...safeRecord,
+                sourceNetwork: entry.source === "network",
+                levelError: entry.level === "error",
+                categoryAbsent: !Object.prototype.hasOwnProperty.call(
+                  entry,
+                  "category",
+                ),
+                locationUrlBound:
+                  typeof entry.url === "string" &&
+                  sha256(entry.url) === observation.requestUrlSha256,
+                exactNetworkBindingCandidateCount:
+                  exactWebChannelBinding.candidateCount,
+              },
+            ),
+          );
+        }
+        const attempt =
+          authenticationProtectedReadAttemptsByNetworkId.get(
+            entry?.networkRequestId,
+          ) || null;
+        if (attempt === null) {
+          rawText = "";
+          return;
+        }
         const exactTarget = exactAuthenticationProtectedReadTargetForUrl(
           entry.url,
         );
@@ -41440,6 +42801,73 @@ try {
     let groupAuthenticationProfileGetCurrentTunnelClass = null;
     const allowedEgressLifecycleByFetchRequestId = new Map();
     const allowedEgressFetchRequestIdsByNetworkId = new Map();
+    const resolveExactAuthenticationWebChannelBindingForNetworkId = (
+      networkId,
+    ) => {
+      if (typeof networkId !== "string" || networkId.length === 0) {
+        return Object.freeze({ candidateCount: 0, binding: null });
+      }
+      const candidates = [
+        ...(allowedEgressFetchRequestIdsByNetworkId.get(networkId) || []),
+      ]
+        .map((fetchRequestId) => ({
+          fetchRequestId,
+          lifecycle:
+            allowedEgressLifecycleByFetchRequestId.get(fetchRequestId) || null,
+          observation:
+            allowedEgressRequestsByFetchRequestId.get(fetchRequestId) || null,
+        }))
+        .filter(({ lifecycle, observation }) =>
+          isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({
+            lifecycle,
+            observation,
+            expectedNetworkId: networkId,
+          }),
+        );
+      return Object.freeze({
+        candidateCount: candidates.length,
+        binding: candidates.length === 1 ? candidates[0] : null,
+      });
+    };
+    const resolveExactAuthenticationWebChannelBindingForRequestUrl = (
+      requestUrl,
+    ) => {
+      const diagnosticUrlClassification =
+        classifySafeExactAuthenticationWebChannelDiagnosticUrl(requestUrl);
+      if (diagnosticUrlClassification === null) {
+        return Object.freeze({ candidateCount: 0, binding: null });
+      }
+      const requestUrlSha256 = sha256(requestUrl);
+      const candidates = [...allowedEgressLifecycleByFetchRequestId.entries()]
+        .map(([fetchRequestId, lifecycle]) => ({
+          fetchRequestId,
+          lifecycle,
+          observation:
+            allowedEgressRequestsByFetchRequestId.get(fetchRequestId) || null,
+        }))
+        .filter(({ lifecycle, observation }) =>
+          isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({
+            lifecycle,
+            observation,
+            expectedRequestUrlSha256: requestUrlSha256,
+          }),
+        )
+        .filter(
+          ({ observation }) =>
+            observation.webChannelRequestClass ===
+              diagnosticUrlClassification.requestClass &&
+            observation.webChannelTerminationClass ===
+              diagnosticUrlClassification.terminationClass &&
+            observation.webChannelListenSessionHashes.sidSha256 ===
+              diagnosticUrlClassification.sidSha256 &&
+            observation.webChannelListenSessionHashes.gsessionidSha256 ===
+              diagnosticUrlClassification.gsessionidSha256,
+        );
+      return Object.freeze({
+        candidateCount: candidates.length,
+        binding: candidates.length === 1 ? candidates[0] : null,
+      });
+    };
     const cdpHandlerDiagnosticContexts = new WeakMap();
     const cdpHandlerPrimaryRequestIds = new WeakMap();
     const allowedEgressHandlerTaskCoordinator =
@@ -41628,6 +43056,11 @@ try {
           diagnosticPhase: diagnosticContext.phase,
           webChannelRequestClass,
           webChannelTerminationClass,
+          webChannelListenPathExact:
+            safeExactFirestoreListenSessionHashes(requestUrl) !== null,
+          webChannelListenSessionHashes:
+            safeExactFirestoreListenSessionHashes(requestUrl),
+          requestUrlSha256: sha256(requestUrl),
           firebaseService: preTransmissionInspection.firebaseService,
           isFirebaseRequest: preTransmissionInspection.isFirebaseRequest,
           stagingMarker: preTransmissionInspection.stagingMarker,
@@ -43985,14 +45418,65 @@ try {
       const observation = requestObservations.get(request);
       let rawFailureText = String(request.failure()?.errorText || "");
       const failureClass = safeBrowserRequestFailureClass(rawFailureText);
+      let exactWebChannelBinding = Object.freeze({
+        candidateCount: 0,
+        binding: null,
+      });
+      let networkRequestIdSha256 = null;
+      try {
+        const chromiumIdentity = resolveExactChromiumNetworkRequestIdentity({
+          browser,
+          request,
+        });
+        networkRequestIdSha256 = sha256(chromiumIdentity.networkRequestId);
+        exactWebChannelBinding =
+          resolveExactAuthenticationWebChannelBindingForNetworkId(
+            chromiumIdentity.networkRequestId,
+          );
+      } catch {
+        exactWebChannelBinding = Object.freeze({
+          candidateCount: 0,
+          binding: null,
+        });
+      }
+      const exactWebChannelLifecycle =
+        exactWebChannelBinding.binding?.lifecycle || null;
+      const exactWebChannelObservation =
+        exactWebChannelBinding.binding?.observation || null;
       groupBrowserRequestFailureDiagnostics.push(
-        Object.freeze({
-          firebaseService: safeFirebaseServiceDiagnosticClass(observation),
-          resourceType: safeHttpErrorResourceTypeClass(
-            observation?.resourceType || request.resourceType(),
-          ),
-          failureClass,
-        }),
+        freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+          "requestFailure",
+          {
+            firebaseService: safeFirebaseServiceDiagnosticClass(observation),
+            resourceType: safeHttpErrorResourceTypeClass(
+              observation?.resourceType || request.resourceType(),
+            ),
+            failureClass,
+            requestUrlSha256: sha256(request.url()),
+            networkRequestIdSha256,
+            networkIdentityBound: exactWebChannelBinding.binding !== null,
+            exactWebChannelBindingCandidateCount:
+              exactWebChannelBinding.candidateCount,
+            webChannelRequestClass:
+              exactWebChannelObservation?.webChannelRequestClass || null,
+            webChannelTerminationClass:
+              exactWebChannelObservation?.webChannelTerminationClass || null,
+            webChannelListenPathExact:
+              exactWebChannelObservation?.webChannelListenPathExact === true,
+            webChannelRequestUrlBound:
+              exactWebChannelObservation?.requestUrlSha256 ===
+              sha256(request.url()),
+            webChannelDiagnosticPhase:
+              exactWebChannelObservation?.diagnosticPhase || null,
+            webChannelLifecycleState: exactWebChannelLifecycle?.state || null,
+            sidSha256:
+              exactWebChannelObservation?.webChannelListenSessionHashes
+                ?.sidSha256 || null,
+            gsessionidSha256:
+              exactWebChannelObservation?.webChannelListenSessionHashes
+                ?.gsessionidSha256 || null,
+          },
+        ),
       );
       const configRequestClass = classifyExactAuthenticationConfigReadRequest({
         requestUrl: request.url(),
@@ -44077,14 +45561,43 @@ try {
           safeRecord.operationClass === "unknown-operation"
         ) {
           const location = message.location();
+          const exactWebChannelBinding =
+            resolveExactAuthenticationWebChannelBindingForRequestUrl(
+              location?.url,
+            );
+          if (exactWebChannelBinding.binding !== null) {
+            const { lifecycle, observation } = exactWebChannelBinding.binding;
+            authenticationExactWebChannelConsoleLocationRecords.push(
+              freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+                "consoleLocation",
+                {
+                  networkRequestIdSha256: sha256(lifecycle.networkId),
+                  requestUrlSha256: sha256(location.url),
+                  requestClass: observation.webChannelRequestClass,
+                  terminationClass: observation.webChannelTerminationClass,
+                  resourceType: observation.resourceType,
+                  lifecycleState: lifecycle.state,
+                  sidSha256:
+                    observation.webChannelListenSessionHashes.sidSha256,
+                  gsessionidSha256:
+                    observation.webChannelListenSessionHashes.gsessionidSha256,
+                  ...safeRecord,
+                  requestUrlBound:
+                    observation.requestUrlSha256 === sha256(location.url),
+                  exactWebChannelBindingCandidateCount:
+                    exactWebChannelBinding.candidateCount,
+                },
+              ),
+            );
+          }
+          const timestamp =
+            typeof message.timestamp === "function"
+              ? message.timestamp()
+              : null;
           const exactTarget = exactAuthenticationProtectedReadTargetForUrl(
             location?.url,
           );
           if (exactTarget !== null) {
-            const timestamp =
-              typeof message.timestamp === "function"
-                ? message.timestamp()
-                : null;
             authenticationProtectedReadPlaywrightConsoleErrorRecords.push(
               Object.freeze({
                 target: exactTarget,
@@ -45079,6 +46592,60 @@ try {
         authenticationConsoleErrorRecoveredProtectedReadCount;
       browserConsoleErrorRetiredFrozenBaselineCount +=
         authenticationConsoleErrorRetiredFrozenBaselineCount;
+      const sortSafeDiagnosticRecords = (records) =>
+        [...records].sort((left, right) => {
+          const leftCanonical = canonicalJson(left);
+          const rightCanonical = canonicalJson(right);
+          return leftCanonical < rightCanonical
+            ? -1
+            : leftCanonical > rightCanonical
+              ? 1
+              : 0;
+        });
+      const authenticationExactWebChannelRequestFailureDiagnostics =
+        sortSafeDiagnosticRecords(
+          groupBrowserRequestFailureDiagnostics.filter(
+            (record) =>
+              record.firebaseService === "firestore" &&
+              record.networkIdentityBound === true &&
+              record.exactWebChannelBindingCandidateCount === 1 &&
+              record.webChannelListenPathExact === true &&
+              record.webChannelRequestUrlBound === true &&
+              record.webChannelDiagnosticPhase === "authentication" &&
+              record.webChannelLifecycleState === "response-awaiting" &&
+              /^[a-f0-9]{64}$/u.test(record.requestUrlSha256) &&
+              /^[a-f0-9]{64}$/u.test(record.networkRequestIdSha256) &&
+              /^[a-f0-9]{64}$/u.test(record.sidSha256) &&
+              (record.gsessionidSha256 === null ||
+                /^[a-f0-9]{64}$/u.test(record.gsessionidSha256)) &&
+              ((["session-forward-post", "backchannel-get"].includes(
+                record.webChannelRequestClass,
+              ) &&
+                record.webChannelTerminationClass === null &&
+                record.resourceType === "fetch") ||
+                (record.webChannelRequestClass === null &&
+                  record.webChannelTerminationClass ===
+                    "termination-image-get" &&
+                  record.resourceType === "image")),
+          ),
+        );
+      const authenticationExactWebChannelLoadingFailureDiagnostics =
+        sortSafeDiagnosticRecords([
+          ...authenticationExactWebChannelLoadingFailuresByNetworkId.values(),
+        ]);
+      const authenticationExactWebChannelNetworkLogDiagnostics =
+        sortSafeDiagnosticRecords(
+          authenticationExactWebChannelNetworkLogRecords,
+        );
+      const authenticationExactWebChannelConsoleLocationDiagnostics =
+        sortSafeDiagnosticRecords(
+          authenticationExactWebChannelConsoleLocationRecords,
+        );
+      const exactWebChannelFailedSidHashes = new Set(
+        authenticationExactWebChannelRequestFailureDiagnostics
+          .map((record) => record.sidSha256)
+          .filter((value) => typeof value === "string"),
+      );
       const authenticationBrowserErrorDiagnostic = {
         ...authenticationGroupContext,
         ...authenticationBrowserErrorSnapshot,
@@ -45098,6 +46665,17 @@ try {
           groupBrowserRequestFailureDiagnostics,
         ),
         authenticationNetworkAttestationDrainDiagnostic,
+        authenticationExactWebChannelRequestFailureDiagnostics,
+        authenticationExactWebChannelLoadingFailureDiagnostics,
+        authenticationExactWebChannelLoadingFailureDuplicateCount,
+        authenticationExactWebChannelNetworkLogDiagnostics,
+        authenticationExactWebChannelConsoleLocationDiagnostics,
+        authenticationExactWebChannelFailedRequestSingleSidBound:
+          authenticationExactWebChannelRequestFailureDiagnostics.length > 0 &&
+          exactWebChannelFailedSidHashes.size === 1,
+        authenticationExactWebChannelTerminationClassifiedRequestCount:
+          webChannelTerminationClassifiedRequestCount -
+          groupWebChannelTerminationClassifiedStart,
         authenticationBootstrapRetirementAttestation:
           groupAuthenticationBootstrapRetirementAttestation,
         authenticatedApplicationWebChannelEpoch,
@@ -47824,7 +49402,7 @@ const sumFrozenBaselineAuthenticationAnomalyGroupField = (field) =>
     0,
   );
 const frozenBaselineAuthenticationAnomalyRetirement = Object.freeze({
-  schemaVersion: 1,
+  schemaVersion: 2,
   policyId: frozenBaselineAuthenticationAnomalyPolicy.id,
   presentationSourceCommit:
     frozenBaselineAuthenticationAnomalyPolicy.presentationSourceCommit,
@@ -47844,6 +49422,17 @@ const frozenBaselineAuthenticationAnomalyRetirement = Object.freeze({
   fatalExactConsoleErrorCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
     "fatalExactConsoleErrorCount",
   ),
+  tupleBoundRetirementCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "tupleBoundRetirementCount",
+  ),
+  cleanClientUnsubscribeTransitionCount:
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "cleanClientUnsubscribeTransitionCount",
+    ),
+  acceptedListenerTransitionCount:
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "acceptedListenerTransitionCount",
+    ),
   outboundAddTargetCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
     "outboundAddTargetCount",
   ),
@@ -47887,9 +49476,35 @@ const frozenBaselineAuthenticationAnomalyRetirement = Object.freeze({
       (attestation) => attestation.eligible,
     ).length === 1 &&
     sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "acceptedListenerTransitionCount",
+    ) === 1 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "tupleBoundRetirementCount",
+    ) +
+      sumFrozenBaselineAuthenticationAnomalyGroupField(
+        "cleanClientUnsubscribeTransitionCount",
+      ) ===
+      1 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "tupleBoundRetirementCount",
+    ) *
+      sumFrozenBaselineAuthenticationAnomalyGroupField(
+        "cleanClientUnsubscribeTransitionCount",
+      ) ===
+      0 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
       "retiredExactConsoleErrorCount",
     ) ===
-      frozenBaselineAuthenticationAnomalyPolicy.consoleError.expectedCount &&
+      sumFrozenBaselineAuthenticationAnomalyGroupField(
+        "tupleBoundRetirementCount",
+      ) *
+        frozenBaselineAuthenticationAnomalyPolicy.consoleError.expectedCount &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "exactConsoleErrorCount",
+    ) ===
+      sumFrozenBaselineAuthenticationAnomalyGroupField(
+        "retiredExactConsoleErrorCount",
+      ) &&
     sumFrozenBaselineAuthenticationAnomalyGroupField(
       "fatalExactConsoleErrorCount",
     ) === 0 &&
