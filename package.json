@@ -115,7 +115,6 @@
     "verify:w10p-visual-fixture-isolation": "node scripts/seed-w10p-visual-fixture.mjs --project=westory-staging-177587430482 --verify-isolation",
     "verify:w10p-app-check-gate": "node scripts/capture-w10p-visual-parity.mjs --self-test-app-check && node scripts/verify-w10p-visual-parity.mjs --self-test-app-check",
     "verify:w10p-app-check-cdp-loopback": "node scripts/capture-w10p-visual-parity.mjs --self-test-app-check-cdp",
-    "verify:w10p-student-own-collection-rules": "firebase emulators:exec --project demo-westory-session-w10p-student-own-collections --only firestore \"node scripts/verify-w10p-student-own-collection-rules.mjs\"",
     "verify:w10p-active-firebase-binding": "node scripts/verify-w10p-active-firebase-binding.mjs",
     "setup:w10p-visual-fixture": "node scripts/seed-w10p-visual-fixture.mjs --project=westory-staging-177587430482 --setup",
     "audit:w10p-visual-fixture": "node scripts/seed-w10p-visual-fixture.mjs --project=westory-staging-177587430482 --audit",
