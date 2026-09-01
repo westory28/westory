@@ -2509,6 +2509,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const exactFirestoreListenInitialRequest = (requestUrl) =>",
     "const frozenBaselineListenerTupleKey = ({ gsessionid, sid }, targetId) =>",
     "const createFrozenBaselineListenerBindingObserver = ({",
+    "sessionSidSha256: secretSha256(sessionIdentity.sid)",
+    "sessionGsessionidSha256: secretSha256(sessionIdentity.gsessionid)",
     "secretSha256(parentSegments[1]) === expectedUidHash",
     'Object.prototype.hasOwnProperty.call(targetChange, "targetChangeType",)',
     '? targetChange.targetChangeType : "NO_CHANGE"',
@@ -2529,6 +2531,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "frozenBaselineObservationSequenceBefore(removedTargets[0].outboundRemoveSequence, successorTargets[0].addSequence,)",
     "const cleanClientUnsubscribeTransitionCount = Number(",
     "const acceptedListenerTransitionCount = tupleBoundRetirementCount + cleanClientUnsubscribeTransitionCount",
+    "const removedTargetSessionSidSha256 =",
+    "const removedTargetSessionGsessionidSha256 =",
+    "const successorTargetSessionSidSha256 =",
+    "const successorTargetSessionGsessionidSha256 =",
+    "const removedAndSuccessorTargetSameSession =",
     "tupleBoundRetirementCount * cleanClientUnsubscribeTransitionCount",
     "const retiredExactConsoleErrorCount = tupleBoundRetirementCount",
     "const reserveInboundPayloadSequence = () =>",
@@ -2568,7 +2575,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "frozenBaselineListenerBindingRawValueOutputCount: 0",
     "verifyFrozenBaselineListenerBindingFixtures();",
     "browserConsoleErrorRecoveredProtectedReadCount + browserConsoleErrorRetiredFrozenBaselineCount",
-    "const frozenBaselineAuthenticationAnomalyRetirement = Object.freeze({ schemaVersion: 2",
+    "const frozenBaselineAuthenticationAnomalyRetirement = Object.freeze({ schemaVersion: 3",
     'tupleBoundRetirementCount: sumFrozenBaselineAuthenticationAnomalyGroupField("tupleBoundRetirementCount",)',
     'cleanClientUnsubscribeTransitionCount: sumFrozenBaselineAuthenticationAnomalyGroupField("cleanClientUnsubscribeTransitionCount",)',
     'acceptedListenerTransitionCount: sumFrozenBaselineAuthenticationAnomalyGroupField("acceptedListenerTransitionCount",)',
@@ -2816,7 +2823,18 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "for(const[recordClass,record]ofObject.entries(safeExactWebChannelDiagnosticRecordFixtures,))",
     "Object.keys(record).sort(),exactDiagnosticRecordKeys[recordClass]",
     "assertSafeDiagnosticShape(safeExactWebChannelDiagnosticRecordFixtures)",
-    "constsafeExactWebChannelDiagnosticSerialized=JSON.stringify({safeExactWebChannelDiagnosticFixtures,safeExactWebChannelDiagnosticRecordFixtures,})",
+    "constdiagnosticTombstoneRegistry=createExactAuthenticationWebChannelDiagnosticTombstoneRegistry()",
+    'finalResponseReleaseState,"not-started"',
+    'diagnosticTombstoneRegistry.markFinalResponseReleaseCommand({fetchRequestId:"private-fetch-request-id",finalResponseStatusClass:"2xx",})',
+    'finalResponseReleaseState,"command-in-flight"',
+    'diagnosticTombstoneRegistry.markFinalResponseReleased("private-fetch-request-id",)',
+    'safeReleasedTombstone.finalResponseReleaseState,"released"',
+    "safeReleasedTombstone.admissionSequence<safeReleasedTombstone.releaseCommandSequence",
+    "safeReleasedTombstone.releaseCommandSequence<safeReleasedTombstone.releaseCompletedSequence",
+    "ambiguousDiagnosticTombstoneRegistry.resolveForNetworkId(diagnosticPrivateNetworkId,)",
+    "{candidateCount:2,binding:null}",
+    "diagnosticTombstoneRegistry.clear()",
+    "constsafeExactWebChannelDiagnosticSerialized=JSON.stringify({safeExactWebChannelDiagnosticFixtures,safeExactWebChannelDiagnosticRecordFixtures,safeReleasedTombstone,})",
     "safeExactWebChannelDiagnosticSerialized.includes(rawValue),false",
     "diagnosticOnlyRequestFailureCount-protectedReadRecoveredRequestFailureCount,1",
     "diagnosticOnlyConsoleErrorCount-protectedReadRecoveredConsoleErrorCount-tupleBoundRetiredConsoleErrorCount,1",
@@ -2824,6 +2842,9 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "safeExactWebChannelDiagnosticRejectedFixtureCount:safeExactWebChannelDiagnosticNegativeUrls.length",
     "safeExactWebChannelDiagnosticBindingAcceptedFixtureCount:exactDiagnosticObservations.length*2",
     "safeExactWebChannelDiagnosticBindingRejectedFixtureCount:safeExactWebChannelDiagnosticBindingNegativeFixtures.length",
+    "safeExactWebChannelDiagnosticTombstoneAcceptedFixtureCount:1",
+    "safeExactWebChannelDiagnosticTombstoneAmbiguousFixtureCount:1",
+    "safeExactWebChannelDiagnosticTombstoneReleaseSequenceFixtureCount:3",
     "safeExactWebChannelDiagnosticRawValueOutputCount:0",
     "safeExactWebChannelDiagnosticNetworkAccess:0",
   ]) {
@@ -2955,10 +2976,13 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     requestFailure: [
       "exactWebChannelBindingCandidateCount",
       "failureClass",
+      "finalResponseReleaseState",
+      "finalResponseStatusClass",
       "firebaseService",
       "gsessionidSha256",
       "networkIdentityBound",
       "networkRequestIdSha256",
+      "observedSequence",
       "requestUrlSha256",
       "resourceType",
       "sidSha256",
@@ -2976,9 +3000,12 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       "corsErrorStatusAbsent",
       "exactNetworkBindingCandidateCount",
       "failureClass",
+      "finalResponseReleaseState",
+      "finalResponseStatusClass",
       "gsessionidSha256",
       "lifecycleState",
       "networkRequestIdSha256",
+      "observedSequence",
       "requestClass",
       "requestUrlSha256",
       "resourceType",
@@ -2989,12 +3016,15 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       "categoryAbsent",
       "errorNameClass",
       "exactNetworkBindingCandidateCount",
+      "finalResponseReleaseState",
+      "finalResponseStatusClass",
       "gsessionidSha256",
       "levelError",
       "lifecycleState",
       "locationUrlBound",
       "messageClass",
       "networkRequestIdSha256",
+      "observedSequence",
       "operationClass",
       "requestClass",
       "requestUrlSha256",
@@ -3008,10 +3038,13 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     consoleLocation: [
       "errorNameClass",
       "exactWebChannelBindingCandidateCount",
+      "finalResponseReleaseState",
+      "finalResponseStatusClass",
       "gsessionidSha256",
       "lifecycleState",
       "messageClass",
       "networkRequestIdSha256",
+      "observedSequence",
       "operationClass",
       "requestClass",
       "requestUrlBound",
@@ -3021,6 +3054,26 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       "sidSha256",
       "sourceClass",
       "terminationClass",
+    ],
+    tombstone: [
+      "admissionSequence",
+      "diagnosticPhase",
+      "exactBoundaryBound",
+      "fetchRequestIdSha256",
+      "finalResponseReleaseState",
+      "finalResponseStatusClass",
+      "gsessionidSha256",
+      "lifecycleState",
+      "networkRequestIdSha256",
+      "releaseCommandSequence",
+      "releaseCompletedSequence",
+      "requestClass",
+      "requestMethod",
+      "requestUrlSha256",
+      "resourceType",
+      "sidSha256",
+      "terminationClass",
+      "webChannelListenPathExact",
     ],
   });
   for (const [recordClass, expectedKeys] of Object.entries(
@@ -3123,6 +3176,12 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RAW_KEYS.has(key)",
     'key==="sha256"||key.endsWith("Sha256")',
     "/^[a-f0-9]{64}$/u.test(value)",
+    'key==="finalResponseReleaseState"',
+    "SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_FINAL_RESPONSE_RELEASE_STATES.includes(value,)",
+    'key==="finalResponseStatusClass"',
+    'value===null||value==="2xx"',
+    'key==="lifecycleState"||key==="webChannelLifecycleState"',
+    'value===null||value==="response-awaiting"',
     "Number.isSafeInteger(value)&&value>=0",
     "value.length>=1&&value.length<=128",
     "/^[a-z0-9]+(?:-[a-z0-9]+)*$/u",
@@ -3262,14 +3321,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     )
     .replace(/\s+/gu, "");
   for (const exactResolverFragment of [
-    "isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({lifecycle,observation,expectedNetworkId:networkId,})",
-    "binding:candidates.length===1?candidates[0]:null",
-    "classifySafeExactAuthenticationWebChannelDiagnosticUrl(requestUrl)",
-    "expectedRequestUrlSha256:requestUrlSha256",
-    "observation.webChannelRequestClass===diagnosticUrlClassification.requestClass",
-    "observation.webChannelTerminationClass===diagnosticUrlClassification.terminationClass",
-    "observation.webChannelListenSessionHashes.sidSha256===diagnosticUrlClassification.sidSha256",
-    "observation.webChannelListenSessionHashes.gsessionidSha256===diagnosticUrlClassification.gsessionidSha256",
+    "authenticationExactWebChannelDiagnosticTombstones.resolveForNetworkId(networkId,)",
+    "authenticationExactWebChannelDiagnosticTombstones.resolveForRequestUrl(requestUrl,)",
   ]) {
     assert.equal(
       compactExactWebChannelDiagnosticResolverSource.includes(
@@ -3279,14 +3332,34 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The exact-one WebChannel diagnostic resolver is incomplete: ${exactResolverFragment}`,
     );
   }
+  for (const tombstoneRegistryFragment of [
+    "constcreateExactAuthenticationWebChannelDiagnosticTombstoneRegistry=()=>{",
+    "isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({lifecycle,observation,expectedNetworkId:lifecycle?.networkId||null,})",
+    'finalResponseReleaseState:"not-started"',
+    'finalResponseReleaseState:"command-in-flight"',
+    'finalResponseReleaseState:"released"',
+    "entry.record.networkRequestIdSha256===secretSha256(networkId)",
+    "entry.record.requestUrlSha256===requestUrlSha256",
+    "entry.record.sidSha256===classification.sidSha256",
+    "entry.record.gsessionidSha256===classification.gsessionidSha256",
+    "binding:candidates.length===1?candidates[0]:null",
+  ]) {
+    assert.equal(
+      compactExactWebChannelDiagnosticRecordGateSource.includes(
+        tombstoneRegistryFragment,
+      ),
+      true,
+      `The immutable WebChannel tombstone registry is incomplete: ${tombstoneRegistryFragment}`,
+    );
+  }
   assert.equal(
     (
-      compactExactWebChannelDiagnosticResolverSource.match(
+      compactExactWebChannelDiagnosticRecordGateSource.match(
         /binding:candidates\.length===1\?candidates\[0\]:null/gu,
       ) || []
     ).length,
-    2,
-    "Both network-id and URL/hash diagnostic resolvers must require exactly one candidate.",
+    1,
+    "The shared tombstone resolver must require exactly one candidate for both indexes.",
   );
   assert.match(
     sourceText,
@@ -3307,6 +3380,21 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     sourceText,
     /page\.on\("console", \(message\) => \{[\s\S]*?resolveExactAuthenticationWebChannelBindingForRequestUrl\(\s*location\?\.url,?\s*\)[\s\S]*?if \(exactWebChannelBinding\.binding !== null\)[\s\S]*?authenticationExactWebChannelConsoleLocationRecords\.push/u,
     "Console-location diagnostics must use the same strict URL classifier and exact-one hash binding.",
+  );
+  assert.match(
+    sourceText,
+    /setAllowedEgressLifecycleState\(event\.requestId, "response-awaiting"\);[\s\S]*?authenticationExactWebChannelDiagnosticTombstones\.register\(\{[\s\S]*?fetchRequestId: event\.requestId,[\s\S]*?allowedEgressLifecycleByFetchRequestId\.get\(event\.requestId\)[\s\S]*?allowedEgressRequestsByFetchRequestId\.get\(event\.requestId\)/u,
+    "Exact WebChannel tombstones must be registered only after the request enters response-awaiting with its exact active observation.",
+  );
+  assert.match(
+    sourceText,
+    /markFinalResponseReleaseCommand\([\s\S]*?fetchRequestId: primaryRequestId,[\s\S]*?finalResponseStatusClass: safeHttpStatusClass\(responseStatus\)[\s\S]*?allowedEgressRequestsByFetchRequestId\.delete\(primaryRequestId\);[\s\S]*?Fetch\.continueResponse[\s\S]*?completeProxyAuthorization\(\);[\s\S]*?"final-response-released"[\s\S]*?markFinalResponseReleased\(\s*primaryRequestId/u,
+    "A tombstone must record the final status before observation deletion and become released only after continueResponse and proxy completion succeed.",
+  );
+  assert.match(
+    sourceText,
+    /page\.on\("requestfailed", \(request\) => \{[\s\S]*?resourceType: safeHttpErrorResourceTypeClass\(\s*request\.resourceType\(\),?\s*\)[\s\S]*?finalResponseReleaseState:[\s\S]*?exactWebChannelTombstone\?\.finalResponseReleaseState/u,
+    "Playwright request-failure evidence must retain the Playwright fetch/image surface while the tombstone keeps the exact CDP xhr/image surface.",
   );
   const exactWebChannelRequestFailureFilterSourceStart = sourceText.indexOf(
     "const authenticationExactWebChannelRequestFailureDiagnostics =",
@@ -3844,6 +3932,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "assert.equal(cleanClientUnsubscribeObserver.readyForSettlement(),true)",
     "tupleBoundRetirementCount:0,retiredExactConsoleErrorCount:0,fatalExactConsoleErrorCount:0",
     "successorSequenceBound:false,cleanClientUnsubscribeSequenceBound:true,cleanClientUnsubscribeTransitionCount:1,acceptedListenerTransitionCount:1",
+    "removedTargetSessionSidSha256:secretSha256(privateSid)",
+    "removedTargetSessionGsessionidSha256:secretSha256(privateGsessionid)",
+    "successorTargetSessionSidSha256:secretSha256(privateSid)",
+    "successorTargetSessionGsessionidSha256:secretSha256(privateGsessionid)",
+    "removedAndSuccessorTargetSameSession:true",
     "assert.equal(cleanClientUnsubscribeSnapshot.exactConsoleErrorCount,0)",
     "assert.equal(cleanClientUnsubscribeSnapshot.inboundRemoveCauseCodeCount,0)",
     "assert.equal(cleanClientUnsubscribeSnapshot.removedTargetClassMatchCount,0)",
@@ -3864,6 +3957,9 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "noneligibleCleanClientUnsubscribeSnapshot.cleanClientUnsubscribeSequenceBound,false",
     "noneligibleCleanClientUnsubscribeSnapshot.cleanClientUnsubscribeTransitionCount,0",
     "noneligibleCleanClientUnsubscribeSnapshot.acceptedListenerTransitionCount,0",
+    '"removedTargetSessionSidSha256","removedTargetSessionGsessionidSha256","successorTargetSessionSidSha256","successorTargetSessionGsessionidSha256"',
+    "assert.equal(noneligibleCleanClientUnsubscribeSnapshot[field],null)",
+    "noneligibleCleanClientUnsubscribeSnapshot.removedAndSuccessorTargetSameSession,false",
     "constwrongTargetCleanObserver=createObserver()",
     "constwrongTargetCleanSnapshot=wrongTargetCleanObserver.safeSnapshot()",
     "wrongTargetCleanSnapshot.cleanClientUnsubscribeSequenceBound,false",
@@ -6077,7 +6173,7 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
     "unknownRemovedTargetCount",
     "unknownTargetCount",
   ]);
-  assert.equal(retirement.schemaVersion, 2);
+  assert.equal(retirement.schemaVersion, 3);
   assert.equal(retirement.policyId, policy.id);
   assert.equal(
     retirement.presentationSourceCommit,
@@ -6206,13 +6302,18 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
       "parseFailureCount",
       "passed",
       "phase",
+      "removedAndSuccessorTargetSameSession",
       "removedTargetClassMatchCount",
+      "removedTargetSessionGsessionidSha256",
+      "removedTargetSessionSidSha256",
       "retiredExactConsoleErrorCount",
       "stage",
       "streamFailureCount",
       "successorAddTargetCount",
       "successorExplicitlyAcknowledged",
       "successorSequenceBound",
+      "successorTargetSessionGsessionidSha256",
+      "successorTargetSessionSidSha256",
       "successorTargetAcknowledgedCount",
       "targetClassHistogram",
       "tupleBoundRetirementCount",
@@ -6241,6 +6342,7 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
     assert.equal(typeof group.successorExplicitlyAcknowledged, "boolean");
     assert.equal(typeof group.successorSequenceBound, "boolean");
     assert.equal(typeof group.cleanClientUnsubscribeSequenceBound, "boolean");
+    assert.equal(typeof group.removedAndSuccessorTargetSameSession, "boolean");
     assert.equal(group.dashboardStable, true);
     assert.equal(group.passed, true);
     for (const field of groupIntegerFields) {
@@ -6308,6 +6410,21 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
       group.phase === policy.phase;
     assert.equal(group.eligible, isEligible);
     if (isEligible) {
+      for (const field of [
+        "removedTargetSessionGsessionidSha256",
+        "removedTargetSessionSidSha256",
+        "successorTargetSessionGsessionidSha256",
+        "successorTargetSessionSidSha256",
+      ]) {
+        assert.match(group[field], /^[a-f0-9]{64}$/u);
+      }
+      assert.equal(
+        group.removedAndSuccessorTargetSameSession,
+        group.removedTargetSessionSidSha256 ===
+          group.successorTargetSessionSidSha256 &&
+          group.removedTargetSessionGsessionidSha256 ===
+            group.successorTargetSessionGsessionidSha256,
+      );
       eligibleGroupCount += 1;
       assert.equal(histogram[policy.removedTargetClass], 1);
       assert.equal(histogram[policy.successorTargetClass], 1);
@@ -6338,6 +6455,15 @@ const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
         assert.equal(group.retiredExactConsoleErrorCount, 0);
       }
     } else {
+      for (const field of [
+        "removedTargetSessionGsessionidSha256",
+        "removedTargetSessionSidSha256",
+        "successorTargetSessionGsessionidSha256",
+        "successorTargetSessionSidSha256",
+      ]) {
+        assert.equal(group[field], null);
+      }
+      assert.equal(group.removedAndSuccessorTargetSameSession, false);
       for (const field of [
         "exactConsoleErrorCount",
         "inboundRemoveCauseCodeCount",
@@ -6482,6 +6608,11 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
       successorExplicitlyAcknowledged: eligible,
       successorSequenceBound: anomalyTransition,
       cleanClientUnsubscribeSequenceBound: cleanClientUnsubscribeTransition,
+      removedTargetSessionSidSha256: eligible ? "1".repeat(64) : null,
+      removedTargetSessionGsessionidSha256: eligible ? "2".repeat(64) : null,
+      successorTargetSessionSidSha256: eligible ? "1".repeat(64) : null,
+      successorTargetSessionGsessionidSha256: eligible ? "2".repeat(64) : null,
+      removedAndSuccessorTargetSameSession: eligible,
       passed: true,
     };
   };
@@ -6561,7 +6692,7 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
     return fixture;
   };
   const validFixture = finalize({
-    schemaVersion: 2,
+    schemaVersion: 3,
     policyId: frozenBaselineAuthenticationAnomalyPolicy.id,
     presentationSourceCommit:
       frozenBaselineAuthenticationAnomalyPolicy.presentationSourceCommit,
@@ -6729,6 +6860,14 @@ const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
   });
   pushFinalizedMutation((fixture) => {
     fixture.groups[0].bufferExceededCount = 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.removedTargetSessionSidSha256 = "not-a-sha256";
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.removedAndSuccessorTargetSameSession = false;
   });
   pushFinalizedMutation((fixture) => {
     fixture.groups.push(clone(fixture.groups.at(-1)));
@@ -7146,6 +7285,9 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     safeExactWebChannelDiagnosticRejectedFixtureSourceCount: 27,
     safeExactWebChannelDiagnosticBindingAcceptedFixtureSourceCount: 6,
     safeExactWebChannelDiagnosticBindingRejectedFixtureSourceCount: 15,
+    safeExactWebChannelDiagnosticTombstoneAcceptedFixtureSourceCount: 1,
+    safeExactWebChannelDiagnosticTombstoneAmbiguousFixtureSourceCount: 1,
+    safeExactWebChannelDiagnosticTombstoneReleaseSequenceSourceCount: 3,
     safeExactWebChannelDiagnosticRawValueOutputCount: 0,
     safeExactWebChannelDiagnosticFatalRecoverySubtractionCount: 0,
     safeAuthenticationSignInSourceContractVerified: true,
