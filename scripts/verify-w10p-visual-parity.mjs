@@ -3628,6 +3628,12 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "authenticationWebChannelApplicationBindingDiagnostics",
     "authenticationExactWebChannelLoadingFailureHandlerErrorCount",
     "authenticationExactWebChannelNetworkLogHandlerErrorCount",
+    "authenticationExactWriteTerminationLocalBlockRecoveryAttestation",
+    "authenticationExactWriteTerminationLocalBlockRecoveryCount",
+    "authenticationBrowserRequestFailureRecoveredExactWriteTerminationLocalBlockCount",
+    "authenticationConsoleErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "authenticationAllowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "authenticationSensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
   ]) {
     assert.equal(
       authenticationBrowserErrorDiagnosticSource.includes(
@@ -3661,7 +3667,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const authenticationObservedBrowserRequestFailureCount =",
   );
   const authenticationFatalAccountingSourceEnd = sourceText.indexOf(
-    "const sortSafeDiagnosticRecords = (records) =>",
+    "const authenticationBrowserErrorDiagnostic = {",
     authenticationFatalAccountingSourceStart,
   );
   assert.ok(authenticationFatalAccountingSourceStart >= 0);
@@ -3673,20 +3679,62 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     authenticationFatalAccountingSourceStart,
     authenticationFatalAccountingSourceEnd,
   );
-  assert.match(
-    authenticationFatalAccountingSource,
-    /const authenticationFatalBrowserRequestFailureCount\s*=\s*authenticationObservedBrowserRequestFailureCount -\s*authenticationRecoveredBrowserRequestFailureCount;/u,
-    "Exact WebChannel request diagnostics must not decrement the authentication request-failure fatal count.",
+  const compactAuthenticationFatalAccountingSource =
+    authenticationFatalAccountingSource.replace(/\s+/gu, "");
+  for (const exactAuthenticationRecoveryFragment of [
+    "authenticationExactWriteTerminationLocalBlockRecoveryAttestation=resolveSafeExactWriteTerminationLocalBlockRecoveryAtSettlement({",
+    "authenticationBrowserRequestFailureRecoveredExactWriteTerminationLocalBlockCount=browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount-groupBrowserRequestFailureRecoveredExactWriteTerminationLocalBlockStart",
+    "authenticationRecoveredBrowserRequestFailureCount=authenticationBrowserRequestFailureRecoveredProtectedReadCount+authenticationBrowserRequestFailureRecoveredExactWriteTerminationLocalBlockCount",
+    "authenticationFatalBrowserRequestFailureCount=authenticationObservedBrowserRequestFailureCount-authenticationRecoveredBrowserRequestFailureCount",
+    "authenticationConsoleErrorRecoveredCount=authenticationConsoleErrorRecoveredProtectedReadCount+authenticationConsoleErrorRetiredFrozenBaselineCount+authenticationConsoleErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "authenticationConsoleErrorFatalCount=authenticationConsoleErrorObservedCount-authenticationConsoleErrorRecoveredCount",
+    "authenticationAllowedEgressResponseErrorFatalCount=authenticationAllowedEgressResponseErrorObservedCount-authenticationAllowedEgressResponseErrorRecoveredProtectedReadCount-authenticationAllowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "authenticationSensitiveAppCheckResponseErrorFatalCount=authenticationSensitiveAppCheckResponseErrorObservedCount-authenticationSensitiveAppCheckResponseErrorRecoveredProtectedReadCount-authenticationSensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+  ]) {
+    assert.equal(
+      compactAuthenticationFatalAccountingSource.includes(
+        exactAuthenticationRecoveryFragment,
+      ),
+      true,
+      "The named exact Write-termination authentication settlement accounting is incomplete: " +
+        exactAuthenticationRecoveryFragment,
+    );
+  }
+  assert.equal(
+    (
+      authenticationFatalAccountingSource.match(
+        /browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount \+=/gu,
+      ) || []
+    ).length,
+    1,
+    "Exact Write-termination request recovery must increment only once at authentication settlement.",
   );
-  assert.match(
-    authenticationFatalAccountingSource,
-    /const authenticationConsoleErrorRecoveredCount\s*=\s*authenticationConsoleErrorRecoveredProtectedReadCount \+\s*authenticationConsoleErrorRetiredFrozenBaselineCount;\s*const authenticationConsoleErrorFatalCount\s*=\s*authenticationConsoleErrorObservedCount -\s*authenticationConsoleErrorRecoveredCount;/u,
-    "Exact WebChannel console diagnostics must not decrement the authentication console-error fatal count.",
+  assert.equal(
+    (
+      authenticationFatalAccountingSource.match(
+        /browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount \+=/gu,
+      ) || []
+    ).length,
+    1,
+    "Exact Write-termination console recovery must increment only once at authentication settlement.",
   );
-  assert.doesNotMatch(
-    authenticationFatalAccountingSource,
-    /authenticationExactWebChannel/u,
-    "Diagnostic-only WebChannel evidence must remain absent from authentication fatal recovery accounting.",
+  assert.equal(
+    (
+      authenticationFatalAccountingSource.match(
+        /allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount \+=/gu,
+      ) || []
+    ).length,
+    1,
+    "Exact Write-termination allowed-egress recovery must increment only once at authentication settlement.",
+  );
+  assert.equal(
+    (
+      authenticationFatalAccountingSource.match(
+        /sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount \+=/gu,
+      ) || []
+    ).length,
+    1,
+    "Exact Write-termination sensitive App Check recovery must increment only once at authentication settlement.",
   );
   const globalFatalAccountingSourceStart = sourceText.indexOf(
     "const fatalProtectedReadTransportFailureCount =",
@@ -3703,18 +3751,23 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     globalFatalAccountingSource,
-    /const browserRequestFailureFatalCount\s*=\s*browserRequestFailureCount - browserRequestFailureRecoveredProtectedReadCount;/u,
-    "Global request-failure fatal accounting must subtract protected-read recovery only.",
+    /const browserRequestFailureFatalCount\s*=\s*browserRequestFailureCount -\s*browserRequestFailureRecoveredProtectedReadCount -\s*browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount;/u,
+    "Global request-failure fatal accounting must subtract protected-read and the one named exact Write-termination recovery only.",
   );
   assert.match(
     globalFatalAccountingSource,
-    /const browserConsoleErrorFatalCount\s*=\s*browserConsoleErrorObservedAuthenticationCount -\s*browserConsoleErrorRecoveredProtectedReadCount -\s*browserConsoleErrorRetiredFrozenBaselineCount;/u,
-    "Global console-error fatal accounting must subtract protected-read recovery and exact listener retirement only.",
+    /const browserConsoleErrorFatalCount\s*=\s*browserConsoleErrorObservedAuthenticationCount -\s*browserConsoleErrorRecoveredProtectedReadCount -\s*browserConsoleErrorRetiredFrozenBaselineCount -\s*browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount;/u,
+    "Global console-error fatal accounting must subtract protected-read, exact listener retirement, and the one named exact Write-termination recovery only.",
   );
-  assert.doesNotMatch(
+  assert.match(
     globalFatalAccountingSource,
-    /ExactWebChannel/u,
-    "Diagnostic-only WebChannel evidence must remain absent from global fatal recovery accounting.",
+    /const allowedEgressResponseErrorFatalCount\s*=\s*allowedEgressResponseErrorAbortCount -\s*allowedEgressResponseErrorRecoveredProtectedReadCount -\s*allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount;/u,
+    "Global allowed-egress fatal accounting lost the named exact Write-termination recovery.",
+  );
+  assert.match(
+    globalFatalAccountingSource,
+    /const sensitiveAppCheckResponseErrorFatalCount\s*=\s*sensitiveAppCheckResponseErrorAbortRequestCount -\s*sensitiveAppCheckResponseErrorRecoveredProtectedReadCount -\s*sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount;/u,
+    "Global sensitive App Check fatal accounting lost the named exact Write-termination recovery.",
   );
   const frozenBaselineFixtureSourceStart = sourceText.indexOf(
     "const verifyFrozenBaselineListenerBindingFixtures = async () => {",
@@ -5000,7 +5053,241 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   return true;
 };
+const assertCaptureExactWriteTerminationLocalBlockRecoverySourceContract = (
+  sourceText,
+) => {
+  const policySourceStart = sourceText.indexOf(
+    "const SAFE_EXACT_WRITE_TERMINATION_LOCAL_BLOCK_RECOVERY_POLICY = Object.freeze({",
+  );
+  const resolverSourceStart = sourceText.indexOf(
+    "const resolveSafeExactWriteTerminationLocalBlockRecoveryAtSettlement = ({",
+    policySourceStart,
+  );
+  const resolverSourceEnd = sourceText.indexOf(
+    "const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS",
+    resolverSourceStart,
+  );
+  assert.ok(policySourceStart >= 0);
+  assert.ok(resolverSourceStart > policySourceStart);
+  assert.ok(resolverSourceEnd > resolverSourceStart);
+  const policySource = sourceText.slice(policySourceStart, resolverSourceStart);
+  const compactPolicySource = policySource.replace(/\s+/gu, "");
+  for (const policyFragment of [
+    'id:"baseline-student-1024x768-firestore-write-termination-local-block-v1"',
+    'groupKey:"baseline:student:1024x768"',
+    'stage:"baseline"',
+    'captureRole:"student"',
+    'authenticationRole:"student"',
+    'viewport:"1024x768"',
+    'diagnosticPhase:"authentication"',
+    'issuerClass:"primary-app-check-cdp-handler"',
+    'intentClass:"primary-allowed-egress-response-error-terminalization"',
+    'phaseClass:"response"',
+    'operationClass:"response-fail"',
+    'policyReasonClass:"response-error"',
+    'requestScopeClass:"allowed-egress"',
+    'firebaseService:"firestore"',
+    'requestMethod:"get"',
+    'resourceType:"image"',
+    'responseFetchCorrelationClass:"same-fetch"',
+    'webChannelPathClass:"write-channel"',
+    "webChannelRequestClass:null",
+    'webChannelTerminationClass:"termination-image-get"',
+    "maximumRecoveryCountPerGroup:1",
+    "maximumRecoveryCountGlobal:1",
+  ]) {
+    assert.equal(
+      compactPolicySource.includes(policyFragment),
+      true,
+      "The exact Write-termination local-block recovery policy drifted: " +
+        policyFragment,
+    );
+  }
+
+  const resolverSource = sourceText.slice(
+    resolverSourceStart,
+    resolverSourceEnd,
+  );
+  const compactResolverSource = resolverSource.replace(/\s+/gu, "");
+  for (const resolverFragment of [
+    "intents.length<=SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "probes.length<=SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "tombstones.length<=SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "targetIntentCandidates.length===1?targetIntentCandidates[0]:null",
+    'identityIntent.errorReasonClass==="blocked-by-client"',
+    "identityIntent.exactScopeBound===true",
+    'identityIntent.commandState==="complete"',
+    "identityIntent.completedSequence>identityIntent.issuedSequence",
+    "identityIntent.failedSequence===null",
+    "identityIntent.fetchRequestIdSha256===identityIntent.primaryFetchRequestIdSha256",
+    "targetIdentityBoundIntentCount=exactIntent===null?0:intents.filter(",
+    "targetIdentityBoundIntentCount===1",
+    "targetBoundTombstones.length===1",
+    'targetBoundTombstones[0].lifecycleState==="response-awaiting"',
+    'targetBoundTombstones[0].finalResponseReleaseState==="not-started"',
+    "targetBoundTombstones[0].finalResponseStatusClass===null",
+    "targetBoundTombstones[0].releaseCommandSequence===0",
+    "targetBoundTombstones[0].releaseCompletedSequence===0",
+    "targetBoundTombstones[0].requestClass===policy.webChannelRequestClass",
+    "targetBoundTombstones[0].terminationClass===policy.webChannelTerminationClass",
+    "targetBoundTombstones[0].fetchRequestIdSha256===exactIntent.fetchRequestIdSha256",
+    "targetBoundTombstones[0].networkRequestIdSha256===exactIntent.networkRequestIdSha256",
+    "targetBoundTombstones[0].requestUrlSha256===exactIntent.requestUrlSha256",
+    'probe.sourceClass==="playwright-request-failed"',
+    'probe.failureClass==="other"',
+    'probe.sourceClass==="network-loading-failed"',
+    'probe.blockedReasonClass==="inspector"',
+    'probe.sourceClass==="console-location"',
+    'probe.sourceClass==="network-log"',
+    'probe.failureClass==="resource-load-failed"',
+    "probe.diagnosticPhase===policy.diagnosticPhase",
+    "probe.observedSequence>exactIntent.issuedSequence",
+    "targetBoundProbes.length===4",
+    "exactPlaywrightRequestFailedProbeCount===1",
+    "exactNetworkLoadingFailedProbeCount===1",
+    "exactConsoleLocationProbeCount===1",
+    "exactNetworkLogProbeCount===1",
+    "recoveryCount<=policy.maximumRecoveryCountPerGroup",
+    "browserRequestFailureRecoveredCount:recoveryCount",
+    "browserConsoleErrorRecoveredCount:recoveryCount",
+    "allowedEgressResponseErrorRecoveredCount:recoveryCount",
+    "sensitiveAppCheckResponseErrorRecoveredCount:recoveryCount",
+    "httpResponseFailureRecoveredCount:0",
+    "firebaseResponseFailureRecoveredCount:0",
+    "productionAccessRecoveredCount:0",
+    "productionWriteRecoveredCount:0",
+    "crossLedgerSequenceComparisonCount:0",
+  ]) {
+    assert.equal(
+      compactResolverSource.includes(resolverFragment),
+      true,
+      "The exact Write-termination settlement resolver is incomplete: " +
+        resolverFragment,
+    );
+  }
+  assert.equal(
+    (resolverSource.match(/\bselectedIntent\b/gu) || []).length,
+    0,
+    "Supporting-only probes must not depend on the diagnostic resolver selecting an intent.",
+  );
+  assert.doesNotMatch(
+    resolverSource,
+    /\b(?:fetch|writeFileSync|readFileSync|page|browser|appCheckCdpSession)\s*(?:\(|\.)/u,
+    "The exact Write-termination recovery resolver must remain pure and network-free.",
+  );
+  const crossLedgerSequenceComparisonPatterns = [
+    /(?:tombstone|targetBoundTombstones\[\d+\])\.(?:admissionSequence|releaseCommandSequence|releaseCompletedSequence)\s*(?:===|!==|<=|>=|<|>)\s*(?:intent|identityIntent|exactIntent)\.(?:issuedSequence|completedSequence|failedSequence)/u,
+    /(?:intent|identityIntent|exactIntent)\.(?:issuedSequence|completedSequence|failedSequence)\s*(?:===|!==|<=|>=|<|>)\s*(?:tombstone|targetBoundTombstones\[\d+\])\.(?:admissionSequence|releaseCommandSequence|releaseCompletedSequence)/u,
+  ];
+  for (const pattern of crossLedgerSequenceComparisonPatterns) {
+    assert.doesNotMatch(
+      resolverSource,
+      pattern,
+      "Separate local-intent and tombstone registry sequence clocks must never be compared.",
+    );
+  }
+  assert.doesNotMatch(
+    resolverSource,
+    /requestScopeClass\s*===\s*["']authentication-protected-read["']/u,
+    "Protected-read recovery must remain separate from exact Write-termination recovery.",
+  );
+  assert.doesNotMatch(
+    resolverSource,
+    /probe\.observedSequence\s*>\s*exactIntent\.completedSequence/u,
+    "Exact recovery must allow a response-side probe observed after intent issuance but before the failRequest completion transition.",
+  );
+
+  const fixtureSourceStart = sourceText.indexOf(
+    "const verifySafeExactWriteTerminationLocalBlockRecoveryFixtures = () => {",
+  );
+  const fixtureSourceEnd = sourceText.indexOf(
+    "const verifyAppCheckSecretNegativeFixtures = () => {",
+    fixtureSourceStart,
+  );
+  assert.ok(fixtureSourceStart >= 0 && fixtureSourceEnd > fixtureSourceStart);
+  const fixtureSource = sourceText.slice(fixtureSourceStart, fixtureSourceEnd);
+  const compactFixtureSource = fixtureSource.replace(/\s+/gu, "");
+  for (const fixtureFragment of [
+    "completedSequence:20",
+    "issuedSequence:10",
+    "admissionSequence:1",
+    "releaseCommandSequence:0",
+    "releaseCompletedSequence:0",
+    "observedSequence:11",
+    "observedSequence:12",
+    "observedSequence:13",
+    "observedSequence:14",
+    'sourceClass:"playwright-request-failed"',
+    'sourceClass:"network-loading-failed"',
+    'blockedReasonClass:"inspector"',
+    'sourceClass:"console-location"',
+    'sourceClass:"network-log"',
+    "positive.recoveryCount,1",
+    "positive.browserRequestFailureRecoveredCount,1",
+    "positive.browserConsoleErrorRecoveredCount,1",
+    "positive.allowedEgressResponseErrorRecoveredCount,1",
+    "positive.sensitiveAppCheckResponseErrorRecoveredCount,1",
+    "positive.httpResponseFailureRecoveredCount,0",
+    "positive.firebaseResponseFailureRecoveredCount,0",
+    "positive.productionAccessRecoveredCount,0",
+    "positive.productionWriteRecoveredCount,0",
+    "positive.crossLedgerSequenceComparisonCount,0",
+    'groupKey:"baseline:student:1440x900"',
+    'requestScopeClass:"authentication-protected-read"',
+    'commandState:"failed"',
+    "exactScopeBound:false",
+    "intents:[exactIntent,exactIntent]",
+    "exact-write-termination-recovery-mismatched-primary-fetch",
+    'intentClass:"primary-handler-exception-block"',
+    "exact-write-termination-recovery-conflicting-url",
+    "observedSequence:exactIntent.issuedSequence",
+    "probes:exactProbes.slice(0,3)",
+    "probes:[...exactProbes,exactProbes[1]]",
+    'finalResponseReleaseState:"released"',
+    'finalResponseStatusClass:"2xx"',
+    "tombstones:[exactTombstone,exactTombstone]",
+    "exact-write-termination-recovery-mismatched-url",
+    'blockedReasonClass:"unsupported"',
+    'diagnosticPhase:"screen-capture"',
+    "resolution.recoveryCount,0",
+    "resolution.sensitiveAppCheckResponseErrorRecoveredCount,0",
+    "resolution.httpResponseFailureRecoveredCount,0",
+    "resolution.firebaseResponseFailureRecoveredCount,0",
+    "resolution.productionAccessRecoveredCount,0",
+    "resolution.productionWriteRecoveredCount,0",
+    "safeExactWriteTerminationLocalBlockRecoveryAcceptedFixtureCount:1",
+    "safeExactWriteTerminationLocalBlockRecoveryRejectedFixtureCount:negativeFixtures.length",
+    "safeExactWriteTerminationLocalBlockRecoveryPreCompletionProbeAcceptedFixtureCount:1",
+    "safeExactWriteTerminationLocalBlockRecoveryCrossLedgerSequenceComparisonCount:0",
+    "safeExactWriteTerminationLocalBlockRecoveryRawValueOutputCount:0",
+    "safeExactWriteTerminationLocalBlockRecoveryNetworkAccess:0",
+  ]) {
+    assert.equal(
+      compactFixtureSource.includes(fixtureFragment),
+      true,
+      "The exact Write-termination recovery fixture contract is incomplete: " +
+        fixtureFragment,
+    );
+  }
+  assert.equal(
+    (
+      fixtureSource.match(
+        /const resolution = resolveFixture\(fixture\);[\s\S]*?assert\.equal\(resolution\.recoveryCount, 0\);/gu,
+      ) || []
+    ).length,
+    1,
+    "Every negative exact Write-termination fixture must pass through one shared zero-recovery assertion.",
+  );
+  return true;
+};
+
 const assertCaptureSafeLocalBlockIntentSourceContract = (sourceText) => {
+  assert.equal(
+    assertCaptureExactWriteTerminationLocalBlockRecoverySourceContract(
+      sourceText,
+    ),
+    true,
+  );
   const expectedIssuerClasses = Object.freeze([
     "browser-wide-pre-transmission-boundary",
     "primary-app-check-cdp-handler",
@@ -5539,7 +5826,7 @@ const assertCaptureSafeLocalBlockIntentSourceContract = (sourceText) => {
     "const verifySafeLocalBlockIntentDiagnosticFixtures = () => {",
   );
   const fixtureSourceEnd = sourceText.indexOf(
-    "const verifyAppCheckSecretNegativeFixtures = () => {",
+    "const verifySafeExactWriteTerminationLocalBlockRecoveryFixtures = () => {",
     fixtureSourceStart,
   );
   assert.ok(fixtureSourceStart >= 0 && fixtureSourceEnd > fixtureSourceStart);
@@ -6027,6 +6314,9 @@ const assertCaptureSafeLocalBlockIntentSourceContract = (sourceText) => {
     "authenticationLocalBlockIntentResolutionDiagnostics",
     "authenticationLocalBlockIntentDiagnosticErrorCount",
     "authenticationAllowedEgressResponseErrorAbortCount",
+    "authenticationExactWriteTerminationLocalBlockRecoveryAttestation",
+    "authenticationExactWriteTerminationLocalBlockRecoveryCount",
+    "authenticationSensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
   ]) {
     assert.equal(
       authenticationDiagnosticSource.includes(outputField),
@@ -6041,39 +6331,168 @@ const assertCaptureSafeLocalBlockIntentSourceContract = (sourceText) => {
   );
 
   const authenticationFatalAccountingStart = sourceText.indexOf(
-    "const authenticationBrowserErrorCountDelta =",
+    "const authenticationExactWriteTerminationLocalBlockRecoveryAttestation =",
   );
   const authenticationFatalAccountingEnd = sourceText.indexOf(
-    "const authenticationLocalBlockIntentDiagnostics =",
+    "const authenticationBrowserErrorDiagnostic = {",
     authenticationFatalAccountingStart,
   );
   assert.ok(
     authenticationFatalAccountingStart >= 0 &&
       authenticationFatalAccountingEnd > authenticationFatalAccountingStart,
   );
+  const authenticationFatalAccountingSource = sourceText.slice(
+    authenticationFatalAccountingStart,
+    authenticationFatalAccountingEnd,
+  );
+  for (const settlementCounter of [
+    "exactWriteTerminationLocalBlockRecoveryGroupCount",
+    "browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount",
+    "browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+  ]) {
+    assert.equal(
+      (sourceText.match(new RegExp(settlementCounter + " \\+=", "gu")) || [])
+        .length,
+      1,
+      settlementCounter + " must have exactly one runtime increment callsite.",
+    );
+    assert.match(
+      authenticationFatalAccountingSource,
+      new RegExp(settlementCounter + " \\+=", "u"),
+      settlementCounter + " must increment only at authentication settlement.",
+    );
+  }
+  const primaryHandlerSourceStart = sourceText.indexOf(
+    'appCheckCdpSession.on("Fetch.requestPaused", (event) => {',
+  );
+  assert.ok(
+    primaryHandlerSourceStart >= 0 &&
+      authenticationFatalAccountingStart > primaryHandlerSourceStart,
+  );
   assert.doesNotMatch(
     sourceText.slice(
+      primaryHandlerSourceStart,
       authenticationFatalAccountingStart,
-      authenticationFatalAccountingEnd,
     ),
-    /localBlockIntent/iu,
-    "Local-block diagnostics must not subtract authentication failures from fatal accounting.",
+    /RecoveredExactWriteTerminationLocalBlockCount \+=/u,
+    "CDP and browser event handlers must record evidence only; they cannot increment exact recovery counters.",
   );
+  assert.match(
+    authenticationFatalAccountingSource,
+    /SAFE_EXACT_WRITE_TERMINATION_LOCAL_BLOCK_RECOVERY_POLICY\.maximumRecoveryCountGlobal/u,
+    "Authentication settlement must enforce the one-recovery global budget before incrementing.",
+  );
+  for (const forbiddenRecoveryCounter of [
+    "httpResponseFailureRecoveredExactWriteTerminationLocalBlockCount",
+    "firebaseResponseFailureRecoveredExactWriteTerminationLocalBlockCount",
+    "productionAccessRecoveredExactWriteTerminationLocalBlockCount",
+    "productionWriteRecoveredExactWriteTerminationLocalBlockCount",
+  ]) {
+    assert.equal(
+      sourceText.includes(forbiddenRecoveryCounter),
+      false,
+      forbiddenRecoveryCounter + " must not exist.",
+    );
+  }
   const globalFatalAccountingStart = sourceText.lastIndexOf(
     "const fatalProtectedReadTransportFailureCount =",
   );
   const globalFatalAccountingEnd = sourceText.indexOf(
-    "const authenticationProtectedReadRetry = Object.freeze({",
+    "const exactWriteTerminationLocalBlockRecovery = Object.freeze({",
     globalFatalAccountingStart,
   );
   assert.ok(
     globalFatalAccountingStart >= 0 &&
       globalFatalAccountingEnd > globalFatalAccountingStart,
   );
-  assert.doesNotMatch(
-    sourceText.slice(globalFatalAccountingStart, globalFatalAccountingEnd),
-    /localBlockIntent/iu,
-    "Local-block diagnostics must not subtract any global request or console failure from fatal accounting.",
+  const compactGlobalFatalAccountingSource = sourceText
+    .slice(globalFatalAccountingStart, globalFatalAccountingEnd)
+    .replace(/\s+/gu, "");
+  for (const globalReconciliationFragment of [
+    "browserRequestFailureCount,browserRequestFailureRecoveredProtectedReadCount+browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount+browserRequestFailureFatalCount",
+    "browserConsoleErrorObservedAuthenticationCount,browserConsoleErrorRecoveredProtectedReadCount+browserConsoleErrorRetiredFrozenBaselineCount+browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount+browserConsoleErrorFatalCount",
+    "allowedEgressResponseErrorAbortCount,allowedEgressResponseErrorRecoveredProtectedReadCount+allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount+allowedEgressResponseErrorFatalCount",
+    "sensitiveAppCheckResponseErrorAbortRequestCount,sensitiveAppCheckResponseErrorRecoveredProtectedReadCount+sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount+sensitiveAppCheckResponseErrorFatalCount",
+  ]) {
+    assert.equal(
+      compactGlobalFatalAccountingSource.includes(globalReconciliationFragment),
+      true,
+      "Global exact Write-termination recovery reconciliation is incomplete: " +
+        globalReconciliationFragment,
+    );
+  }
+  const aggregateSourceStart = sourceText.indexOf(
+    "const exactWriteTerminationLocalBlockRecovery = Object.freeze({",
+    globalFatalAccountingStart,
+  );
+  const aggregateSourceEnd = sourceText.indexOf(
+    "const authenticationProtectedReadRetry = Object.freeze({",
+    aggregateSourceStart,
+  );
+  assert.ok(
+    aggregateSourceStart >= 0 && aggregateSourceEnd > aggregateSourceStart,
+  );
+  const compactAggregateSource = sourceText
+    .slice(aggregateSourceStart, aggregateSourceEnd)
+    .replace(/\s+/gu, "");
+  for (const aggregateFragment of [
+    "schemaVersion:1",
+    "maximumRecoveryCountPerGroup:SAFE_EXACT_WRITE_TERMINATION_LOCAL_BLOCK_RECOVERY_POLICY.maximumRecoveryCountPerGroup",
+    "maximumRecoveryCountGlobal:SAFE_EXACT_WRITE_TERMINATION_LOCAL_BLOCK_RECOVERY_POLICY.maximumRecoveryCountGlobal",
+    "eligibleGroupCount:sortedExactWriteTerminationLocalBlockRecoveryGroupAttestations.filter((attestation)=>attestation.eligible,).length",
+    "recoveryGroupCount:exactWriteTerminationLocalBlockRecoveryGroupCount",
+    "exactWriteTerminationLocalBlockRecoveryGroupCount<=SAFE_EXACT_WRITE_TERMINATION_LOCAL_BLOCK_RECOVERY_POLICY.maximumRecoveryCountGlobal",
+    "browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount===exactWriteTerminationLocalBlockRecoveryGroupCount",
+    "browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount===exactWriteTerminationLocalBlockRecoveryGroupCount",
+    "allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount===exactWriteTerminationLocalBlockRecoveryGroupCount",
+    "sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount===exactWriteTerminationLocalBlockRecoveryGroupCount",
+    'sumExactWriteTerminationLocalBlockRecoveryGroupField("rejectedEvidenceCount",)===0',
+    'sumExactWriteTerminationLocalBlockRecoveryGroupField("httpResponseFailureRecoveredCount",)===0',
+    'sumExactWriteTerminationLocalBlockRecoveryGroupField("firebaseResponseFailureRecoveredCount",)===0',
+    'sumExactWriteTerminationLocalBlockRecoveryGroupField("productionAccessRecoveredCount",)===0',
+    'sumExactWriteTerminationLocalBlockRecoveryGroupField("productionWriteRecoveredCount",)===0',
+    'sumExactWriteTerminationLocalBlockRecoveryGroupField("crossLedgerSequenceComparisonCount",)===0',
+  ]) {
+    assert.equal(
+      compactAggregateSource.includes(aggregateFragment),
+      true,
+      "The exact Write-termination aggregate max-budget contract is incomplete: " +
+        aggregateFragment,
+    );
+  }
+  const protectedReadAggregateSourceStart = aggregateSourceEnd;
+  const protectedReadAggregateSourceEnd = sourceText.indexOf(
+    "assert.equal(authenticationProtectedReadRetry.passed, true);",
+    protectedReadAggregateSourceStart,
+  );
+  assert.ok(
+    protectedReadAggregateSourceEnd > protectedReadAggregateSourceStart,
+  );
+  const compactProtectedReadAggregateSource = sourceText
+    .slice(protectedReadAggregateSourceStart, protectedReadAggregateSourceEnd)
+    .replace(/\s+/gu, "");
+  for (const protectedReadComponentFragment of [
+    "schemaVersion:7",
+    "browserConsoleErrorRecoveredCount:browserConsoleErrorRecoveredProtectedReadCount+browserConsoleErrorRetiredFrozenBaselineCount+browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "browserRequestFailureRecoveredCount:browserRequestFailureRecoveredProtectedReadCount+browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount",
+    "allowedEgressResponseErrorRecoveredCount:allowedEgressResponseErrorRecoveredProtectedReadCount+allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "sensitiveAppCheckResponseErrorRecoveredCount:sensitiveAppCheckResponseErrorRecoveredProtectedReadCount+sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+  ]) {
+    assert.equal(
+      compactProtectedReadAggregateSource.includes(
+        protectedReadComponentFragment,
+      ),
+      true,
+      "The protected-read manifest totals lost an explicit exact Write-termination component: " +
+        protectedReadComponentFragment,
+    );
+  }
+  assert.match(
+    sourceText,
+    /const manifest = \{[\s\S]*?authenticationProtectedReadRetry,\s*exactWriteTerminationLocalBlockRecovery,/u,
+    "The manifest must emit both the protected-read totals and the separately named exact Write-termination recovery aggregate.",
   );
   return true;
 };
@@ -8591,7 +9010,7 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     safeExactWebChannelDiagnosticTombstoneRegistrationReasonSourceCount: 9,
     safeExactWebChannelDiagnosticSettlementResolutionSourceCount: 3,
     safeExactWebChannelDiagnosticRawValueOutputCount: 0,
-    safeExactWebChannelDiagnosticFatalRecoverySubtractionCount: 0,
+    safeExactWebChannelDiagnosticNamedWriteTerminationRecoverySubtractionCount: 4,
     safeLocalBlockIntentSourceContractVerified: true,
     safeLocalBlockIntentFixedTaxonomySourceCount: 15,
     safeLocalBlockIntentIssuerClassSourceCount: 2,
@@ -8612,7 +9031,13 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     safeLocalBlockIntentTransitionMutationRejectedCaseCount: 1,
     safeLocalBlockIntentWebChannelPathAcceptedFixtureSourceCount: 8,
     safeLocalBlockIntentWebChannelTerminationRejectedFixtureSourceCount: 2,
-    safeLocalBlockIntentFatalRecoverySubtractionCount: 0,
+    safeLocalBlockIntentNamedWriteTerminationRecoverySubtractionCount: 4,
+    safeExactWriteTerminationLocalBlockRecoveryAcceptedFixtureSourceCount: 1,
+    safeExactWriteTerminationLocalBlockRecoveryRejectedFixtureSourceCount: 16,
+    safeExactWriteTerminationLocalBlockRecoveryPreCompletionProbeAcceptedFixtureSourceCount: 1,
+    safeExactWriteTerminationLocalBlockRecoveryCrossLedgerSequenceComparisonCount: 0,
+    safeExactWriteTerminationLocalBlockRecoveryRawValueOutputCount: 0,
+    safeExactWriteTerminationLocalBlockRecoveryNetworkAccess: 0,
     safeAuthenticationSignInSourceContractVerified: true,
     safeAuthenticationSignInSourceMutationRejectedCaseCount,
     authenticationCollectionListPreflightSourceMutationRejectedCaseCount,
@@ -11439,21 +11864,292 @@ assert.equal(manifest.vercelProjectId, contract.vercelProjectId);
 assert.equal(manifest.stableAlias, contract.stableAlias);
 assert.equal(manifest.productionAccess, 0);
 assert.equal(manifest.productionWrites, 0);
+const exactWriteTerminationLocalBlockRecovery =
+  manifest.exactWriteTerminationLocalBlockRecovery;
+assertExactObjectKeys(exactWriteTerminationLocalBlockRecovery, [
+  "allowedEgressResponseErrorRecoveredCount",
+  "attestationSetSha256",
+  "attestations",
+  "browserConsoleErrorRecoveredCount",
+  "browserRequestFailureRecoveredCount",
+  "crossLedgerSequenceComparisonCount",
+  "eligibleGroupCount",
+  "expectedGroupAttestationCount",
+  "firebaseResponseFailureRecoveredCount",
+  "groupAttestationCount",
+  "httpResponseFailureRecoveredCount",
+  "maximumRecoveryCountGlobal",
+  "maximumRecoveryCountPerGroup",
+  "passed",
+  "policyId",
+  "productionAccessRecoveredCount",
+  "productionWriteRecoveredCount",
+  "recoveryGroupCount",
+  "rejectedEvidenceCount",
+  "schemaVersion",
+  "sensitiveAppCheckResponseErrorRecoveredCount",
+]);
+assert.equal(exactWriteTerminationLocalBlockRecovery.schemaVersion, 1);
+assert.equal(
+  exactWriteTerminationLocalBlockRecovery.policyId,
+  "baseline-student-1024x768-firestore-write-termination-local-block-v1",
+);
+assert.equal(
+  exactWriteTerminationLocalBlockRecovery.maximumRecoveryCountPerGroup,
+  1,
+);
+assert.equal(
+  exactWriteTerminationLocalBlockRecovery.maximumRecoveryCountGlobal,
+  1,
+);
+assert.equal(exactWriteTerminationLocalBlockRecovery.eligibleGroupCount, 1);
+assert.equal(
+  exactWriteTerminationLocalBlockRecovery.groupAttestationCount,
+  exactWriteTerminationLocalBlockRecovery.expectedGroupAttestationCount,
+);
+assert.equal(
+  exactWriteTerminationLocalBlockRecovery.attestations.length,
+  exactWriteTerminationLocalBlockRecovery.groupAttestationCount,
+);
+assert.ok(
+  [0, 1].includes(exactWriteTerminationLocalBlockRecovery.recoveryGroupCount),
+);
+for (const recoveredField of [
+  "browserRequestFailureRecoveredCount",
+  "browserConsoleErrorRecoveredCount",
+  "allowedEgressResponseErrorRecoveredCount",
+  "sensitiveAppCheckResponseErrorRecoveredCount",
+]) {
+  assert.equal(
+    exactWriteTerminationLocalBlockRecovery[recoveredField],
+    exactWriteTerminationLocalBlockRecovery.recoveryGroupCount,
+  );
+}
+for (const forbiddenRecoveredField of [
+  "httpResponseFailureRecoveredCount",
+  "firebaseResponseFailureRecoveredCount",
+  "productionAccessRecoveredCount",
+  "productionWriteRecoveredCount",
+  "crossLedgerSequenceComparisonCount",
+  "rejectedEvidenceCount",
+]) {
+  assert.equal(
+    exactWriteTerminationLocalBlockRecovery[forbiddenRecoveredField],
+    0,
+  );
+}
+assert.equal(exactWriteTerminationLocalBlockRecovery.passed, true);
+assert.match(
+  exactWriteTerminationLocalBlockRecovery.attestationSetSha256,
+  /^[a-f0-9]{64}$/u,
+);
+assert.equal(
+  exactWriteTerminationLocalBlockRecovery.attestationSetSha256,
+  sha256(canonicalJson(exactWriteTerminationLocalBlockRecovery.attestations)),
+);
+assert.deepEqual(
+  exactWriteTerminationLocalBlockRecovery.attestations.map(
+    (attestation) => attestation.groupKey,
+  ),
+  exactWriteTerminationLocalBlockRecovery.attestations
+    .map((attestation) => attestation.groupKey)
+    .sort((left, right) => left.localeCompare(right)),
+);
+const exactWriteTerminationLocalBlockRecoveryGroupKeys = new Set();
+for (const attestation of exactWriteTerminationLocalBlockRecovery.attestations) {
+  assertExactObjectKeys(attestation, [
+    "allowedEgressResponseErrorRecoveredCount",
+    "authenticationRole",
+    "browserConsoleErrorRecoveredCount",
+    "browserRequestFailureRecoveredCount",
+    "captureRole",
+    "crossLedgerSequenceComparisonCount",
+    "eligible",
+    "exactConsoleLocationProbeCount",
+    "exactIntentCount",
+    "exactNetworkLoadingFailedProbeCount",
+    "exactNetworkLogProbeCount",
+    "exactPlaywrightRequestFailedProbeCount",
+    "exactTombstoneCount",
+    "firebaseResponseFailureRecoveredCount",
+    "groupKey",
+    "httpResponseFailureRecoveredCount",
+    "passed",
+    "policyId",
+    "productionAccessRecoveredCount",
+    "productionWriteRecoveredCount",
+    "recoveryCount",
+    "rejectedEvidenceCount",
+    "schemaVersion",
+    "sensitiveAppCheckResponseErrorRecoveredCount",
+    "stage",
+    "targetBoundProbeCount",
+    "targetBoundTombstoneCount",
+    "targetIdentityBoundIntentCount",
+    "targetIntentCandidateCount",
+    "viewport",
+  ]);
+  assert.equal(
+    exactWriteTerminationLocalBlockRecoveryGroupKeys.has(attestation.groupKey),
+    false,
+  );
+  exactWriteTerminationLocalBlockRecoveryGroupKeys.add(attestation.groupKey);
+  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(
+    attestation.policyId,
+    exactWriteTerminationLocalBlockRecovery.policyId,
+  );
+  assert.equal(typeof attestation.eligible, "boolean");
+  assert.equal(attestation.passed, true);
+  for (const field of [
+    "targetIntentCandidateCount",
+    "targetIdentityBoundIntentCount",
+    "exactIntentCount",
+    "targetBoundTombstoneCount",
+    "exactTombstoneCount",
+    "targetBoundProbeCount",
+    "exactPlaywrightRequestFailedProbeCount",
+    "exactNetworkLoadingFailedProbeCount",
+    "exactConsoleLocationProbeCount",
+    "exactNetworkLogProbeCount",
+    "rejectedEvidenceCount",
+    "recoveryCount",
+    "browserRequestFailureRecoveredCount",
+    "browserConsoleErrorRecoveredCount",
+    "allowedEgressResponseErrorRecoveredCount",
+    "sensitiveAppCheckResponseErrorRecoveredCount",
+    "httpResponseFailureRecoveredCount",
+    "firebaseResponseFailureRecoveredCount",
+    "productionAccessRecoveredCount",
+    "productionWriteRecoveredCount",
+    "crossLedgerSequenceComparisonCount",
+  ]) {
+    assert.equal(Number.isSafeInteger(attestation[field]), true);
+    assert.ok(attestation[field] >= 0);
+  }
+  assert.ok([0, 1].includes(attestation.recoveryCount));
+  for (const recoveredField of [
+    "browserRequestFailureRecoveredCount",
+    "browserConsoleErrorRecoveredCount",
+    "allowedEgressResponseErrorRecoveredCount",
+    "sensitiveAppCheckResponseErrorRecoveredCount",
+  ]) {
+    assert.equal(attestation[recoveredField], attestation.recoveryCount);
+  }
+  for (const forbiddenRecoveredField of [
+    "httpResponseFailureRecoveredCount",
+    "firebaseResponseFailureRecoveredCount",
+    "productionAccessRecoveredCount",
+    "productionWriteRecoveredCount",
+    "crossLedgerSequenceComparisonCount",
+    "rejectedEvidenceCount",
+  ]) {
+    assert.equal(attestation[forbiddenRecoveredField], 0);
+  }
+  if (attestation.eligible) {
+    assert.deepEqual(
+      {
+        groupKey: attestation.groupKey,
+        stage: attestation.stage,
+        captureRole: attestation.captureRole,
+        authenticationRole: attestation.authenticationRole,
+        viewport: attestation.viewport,
+      },
+      {
+        groupKey: "baseline:student:1024x768",
+        stage: "baseline",
+        captureRole: "student",
+        authenticationRole: "student",
+        viewport: "1024x768",
+      },
+    );
+    assert.equal(attestation.recoveryCount, attestation.exactIntentCount);
+    assert.equal(
+      attestation.recoveryCount,
+      attestation.targetIdentityBoundIntentCount,
+    );
+    assert.equal(attestation.recoveryCount, attestation.exactTombstoneCount);
+    assert.equal(
+      attestation.targetBoundProbeCount,
+      attestation.recoveryCount * 4,
+    );
+    for (const probeCountField of [
+      "exactPlaywrightRequestFailedProbeCount",
+      "exactNetworkLoadingFailedProbeCount",
+      "exactConsoleLocationProbeCount",
+      "exactNetworkLogProbeCount",
+    ]) {
+      assert.equal(attestation[probeCountField], attestation.recoveryCount);
+    }
+  } else {
+    assert.equal(attestation.recoveryCount, 0);
+  }
+}
+const sumExactWriteTerminationLocalBlockRecoveryAttestationField = (field) =>
+  exactWriteTerminationLocalBlockRecovery.attestations.reduce(
+    (total, attestation) => total + attestation[field],
+    0,
+  );
+for (const [aggregateField, attestationField] of [
+  ["recoveryGroupCount", "recoveryCount"],
+  [
+    "browserRequestFailureRecoveredCount",
+    "browserRequestFailureRecoveredCount",
+  ],
+  ["browserConsoleErrorRecoveredCount", "browserConsoleErrorRecoveredCount"],
+  [
+    "allowedEgressResponseErrorRecoveredCount",
+    "allowedEgressResponseErrorRecoveredCount",
+  ],
+  [
+    "sensitiveAppCheckResponseErrorRecoveredCount",
+    "sensitiveAppCheckResponseErrorRecoveredCount",
+  ],
+  ["rejectedEvidenceCount", "rejectedEvidenceCount"],
+  ["httpResponseFailureRecoveredCount", "httpResponseFailureRecoveredCount"],
+  [
+    "firebaseResponseFailureRecoveredCount",
+    "firebaseResponseFailureRecoveredCount",
+  ],
+  ["productionAccessRecoveredCount", "productionAccessRecoveredCount"],
+  ["productionWriteRecoveredCount", "productionWriteRecoveredCount"],
+  ["crossLedgerSequenceComparisonCount", "crossLedgerSequenceComparisonCount"],
+]) {
+  assert.equal(
+    exactWriteTerminationLocalBlockRecovery[aggregateField],
+    sumExactWriteTerminationLocalBlockRecoveryAttestationField(
+      attestationField,
+    ),
+  );
+}
+assert.equal(
+  exactWriteTerminationLocalBlockRecovery.attestations.filter(
+    (attestation) => attestation.eligible,
+  ).length,
+  1,
+);
 const authenticationProtectedReadRetry =
   manifest.authenticationProtectedReadRetry;
 assertExactObjectKeys(authenticationProtectedReadRetry, [
   "allowedEgressResponseErrorFatalCount",
   "allowedEgressResponseErrorObservedCount",
   "allowedEgressResponseErrorRecoveredCount",
+  "allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+  "allowedEgressResponseErrorRecoveredProtectedReadCount",
   "attestationCount",
   "attestationSetSha256",
   "attestations",
   "browserConsoleErrorFatalCount",
   "browserConsoleErrorObservedCount",
   "browserConsoleErrorRecoveredCount",
+  "browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount",
+  "browserConsoleErrorRecoveredProtectedReadCount",
+  "browserConsoleErrorRetiredFrozenBaselineCount",
   "browserRequestFailureFatalCount",
   "browserRequestFailureObservedCount",
   "browserRequestFailureRecoveredCount",
+  "browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount",
+  "browserRequestFailureRecoveredProtectedReadCount",
   "expectedGroupCount",
   "fatalProtectedReadTransportFailureCount",
   "observedProtectedReadTransportFailureCount",
@@ -11467,8 +12163,10 @@ assertExactObjectKeys(authenticationProtectedReadRetry, [
   "sensitiveAppCheckResponseErrorFatalCount",
   "sensitiveAppCheckResponseErrorObservedCount",
   "sensitiveAppCheckResponseErrorRecoveredCount",
+  "sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+  "sensitiveAppCheckResponseErrorRecoveredProtectedReadCount",
 ]);
-assert.equal(authenticationProtectedReadRetry.schemaVersion, 6);
+assert.equal(authenticationProtectedReadRetry.schemaVersion, 7);
 assert.equal(
   authenticationProtectedReadRetry.policyId,
   "w10p-protected-read-per-target-transport-retry-v4",
@@ -11485,15 +12183,24 @@ for (const field of [
   "fatalProtectedReadTransportFailureCount",
   "browserConsoleErrorObservedCount",
   "browserConsoleErrorRecoveredCount",
+  "browserConsoleErrorRecoveredProtectedReadCount",
+  "browserConsoleErrorRetiredFrozenBaselineCount",
+  "browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount",
   "browserConsoleErrorFatalCount",
   "browserRequestFailureObservedCount",
   "browserRequestFailureRecoveredCount",
+  "browserRequestFailureRecoveredProtectedReadCount",
+  "browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount",
   "browserRequestFailureFatalCount",
   "allowedEgressResponseErrorObservedCount",
   "allowedEgressResponseErrorRecoveredCount",
+  "allowedEgressResponseErrorRecoveredProtectedReadCount",
+  "allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
   "allowedEgressResponseErrorFatalCount",
   "sensitiveAppCheckResponseErrorObservedCount",
   "sensitiveAppCheckResponseErrorRecoveredCount",
+  "sensitiveAppCheckResponseErrorRecoveredProtectedReadCount",
+  "sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
   "sensitiveAppCheckResponseErrorFatalCount",
 ]) {
   assert.equal(Number.isInteger(authenticationProtectedReadRetry[field]), true);
@@ -11528,6 +12235,39 @@ assert.equal(
   authenticationProtectedReadRetry.attestationSetSha256,
   sha256(canonicalJson(authenticationProtectedReadRetry.attestations)),
 );
+assert.equal(
+  exactWriteTerminationLocalBlockRecovery.expectedGroupAttestationCount,
+  authenticationProtectedReadRetry.expectedGroupCount,
+);
+assert.deepEqual(
+  [...exactWriteTerminationLocalBlockRecoveryGroupKeys].sort(),
+  authenticationProtectedReadRetry.attestations
+    .map((attestation) => attestation.groupKey)
+    .sort((left, right) => left.localeCompare(right)),
+);
+for (const [protectedReadComponentField, exactWriteAggregateField] of [
+  [
+    "browserRequestFailureRecoveredExactWriteTerminationLocalBlockCount",
+    "browserRequestFailureRecoveredCount",
+  ],
+  [
+    "browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "browserConsoleErrorRecoveredCount",
+  ],
+  [
+    "allowedEgressResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "allowedEgressResponseErrorRecoveredCount",
+  ],
+  [
+    "sensitiveAppCheckResponseErrorRecoveredExactWriteTerminationLocalBlockCount",
+    "sensitiveAppCheckResponseErrorRecoveredCount",
+  ],
+]) {
+  assert.equal(
+    authenticationProtectedReadRetry[protectedReadComponentField],
+    exactWriteTerminationLocalBlockRecovery[exactWriteAggregateField],
+  );
+}
 const protectedReadRetryRolePairs = {
   admin: "admin",
   student: "student",
@@ -12469,13 +13209,38 @@ assert.equal(
   ),
 );
 assert.equal(
-  authenticationProtectedReadRetry.browserConsoleErrorRecoveredCount,
+  authenticationProtectedReadRetry.browserConsoleErrorRecoveredProtectedReadCount,
   authenticationProtectedReadRetry.attestations.reduce(
     (total, attestation) =>
       total + attestation.recoveredProtectedReadConsoleErrorCount,
     0,
-  ) +
-    frozenBaselineAuthenticationAnomalyRetirement.retiredExactConsoleErrorCount,
+  ),
+);
+assert.equal(
+  authenticationProtectedReadRetry.browserConsoleErrorRetiredFrozenBaselineCount,
+  frozenBaselineAuthenticationAnomalyRetirement.retiredExactConsoleErrorCount,
+);
+assert.equal(
+  authenticationProtectedReadRetry.browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount,
+  exactWriteTerminationLocalBlockRecovery.browserConsoleErrorRecoveredCount,
+);
+assert.equal(
+  authenticationProtectedReadRetry.browserConsoleErrorRecoveredCount,
+  authenticationProtectedReadRetry.browserConsoleErrorRecoveredProtectedReadCount +
+    authenticationProtectedReadRetry.browserConsoleErrorRetiredFrozenBaselineCount +
+    authenticationProtectedReadRetry.browserConsoleErrorRecoveredExactWriteTerminationLocalBlockCount,
+);
+assert.equal(
+  authenticationProtectedReadRetry.browserRequestFailureRecoveredProtectedReadCount,
+  authenticationProtectedReadRetry.recoveredProtectedReadTransportFailureCount,
+);
+assert.equal(
+  authenticationProtectedReadRetry.allowedEgressResponseErrorRecoveredProtectedReadCount,
+  authenticationProtectedReadRetry.recoveredProtectedReadTransportFailureCount,
+);
+assert.equal(
+  authenticationProtectedReadRetry.sensitiveAppCheckResponseErrorRecoveredProtectedReadCount,
+  authenticationProtectedReadRetry.recoveredProtectedReadTransportFailureCount,
 );
 assert.equal(
   authenticationProtectedReadRetry.browserConsoleErrorObservedCount,
@@ -12487,26 +13252,38 @@ assert.ok(
   authenticationProtectedReadRetry.browserConsoleErrorObservedCount >=
     authenticationProtectedReadRetry.browserConsoleErrorRecoveredCount,
 );
-for (const [observedField, recoveredField, fatalField] of [
+for (const [
+  observedField,
+  recoveredField,
+  fatalField,
+  expectedRecoveredCount,
+] of [
   [
     "observedProtectedReadTransportFailureCount",
     "recoveredProtectedReadTransportFailureCount",
     "fatalProtectedReadTransportFailureCount",
+    authenticationProtectedReadRetry.recoveredProtectedReadTransportFailureCount,
   ],
   [
     "browserRequestFailureObservedCount",
     "browserRequestFailureRecoveredCount",
     "browserRequestFailureFatalCount",
+    authenticationProtectedReadRetry.browserRequestFailureRecoveredProtectedReadCount +
+      exactWriteTerminationLocalBlockRecovery.browserRequestFailureRecoveredCount,
   ],
   [
     "allowedEgressResponseErrorObservedCount",
     "allowedEgressResponseErrorRecoveredCount",
     "allowedEgressResponseErrorFatalCount",
+    authenticationProtectedReadRetry.allowedEgressResponseErrorRecoveredProtectedReadCount +
+      exactWriteTerminationLocalBlockRecovery.allowedEgressResponseErrorRecoveredCount,
   ],
   [
     "sensitiveAppCheckResponseErrorObservedCount",
     "sensitiveAppCheckResponseErrorRecoveredCount",
     "sensitiveAppCheckResponseErrorFatalCount",
+    authenticationProtectedReadRetry.sensitiveAppCheckResponseErrorRecoveredProtectedReadCount +
+      exactWriteTerminationLocalBlockRecovery.sensitiveAppCheckResponseErrorRecoveredCount,
   ],
 ]) {
   assert.equal(
@@ -12517,7 +13294,7 @@ for (const [observedField, recoveredField, fatalField] of [
   assert.equal(authenticationProtectedReadRetry[fatalField], 0);
   assert.equal(
     authenticationProtectedReadRetry[recoveredField],
-    authenticationProtectedReadRetry.recoveredProtectedReadTransportFailureCount,
+    expectedRecoveredCount,
   );
 }
 const networkSummary = manifest.networkSummary;
