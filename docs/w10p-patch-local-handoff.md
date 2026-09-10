@@ -8,7 +8,9 @@
 - branch: `codex/phase6-w10p-presentation-freeze`
 - 시작 HEAD: `aed4dd1f232e561a563f990e98cb10a17af2f12d`
 - 시작 Tree: `c1dc4d597baa7d8137562be300003c698dd1ef58`
-- 최종 패치 커밋·Tree는 이 문서 다음에 기록되는 로컬 Git 커밋과 별도 revision 기록을 확인합니다. 이 문서에 자기 자신을 포함한 커밋 해시를 추정해 넣지 않습니다.
+- 검증한 소스 커밋: `563409d6ab759a2744b02c95646094f25d6ec257`
+- 검증한 소스 Tree: `59a27b4648a72304e98c8c936c9dbfb1e2d9d119`
+- 이 해시를 추가한 뒤의 문서 기록 커밋은 위 소스 커밋과 구분합니다. 소스는 아직 배포하지 않았습니다.
 - `package.json`: 21,629 bytes, SHA-256 `b7eb6e9556d34bf21a937982ca2c44db755691dae4cbbe4fbe55594964dcf332`. package/lockfile 및 의존성은 변경하지 않았습니다.
 - 원본 `C:\westory` 소스는 수정하지 않았습니다. 허용된 `.git/worktrees/westory-w10p/inspect-w10p-staging-rules.ps1`만 Staging config·Rules·해시 검사에 맞게 수정했으며 실행하지 않았습니다.
 
