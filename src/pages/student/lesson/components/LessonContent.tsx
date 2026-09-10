@@ -89,6 +89,42 @@ const getInlineBlankWidth = (answer: string) =>
   Math.min(220, Math.max(76, answer.length * 14 + 24));
 const getInlineBlankFontSize = (width: number, textLength: number) =>
   Math.max(11, Math.min(19, (width - 12) / (Math.max(1, textLength) * 0.92)));
+const createAnswerSession = (context: string) => ({
+  context,
+  revision: null as number | null,
+  edits: 0,
+  touched: new Set<string>(),
+  corePointFinds: new Set<string>(),
+  overviewRequest: 0,
+  rewardSettled: false,
+  saving: false,
+  restoring: false,
+  refreshing: false,
+  loadedLesson: null as LessonData | null,
+  materialChanged: false,
+  materialUnavailable: false,
+  preservedSnapshot: null as ReturnType<
+    typeof buildLessonAnswerSnapshot
+  > | null,
+});
+const getLessonStudyIdentity = (value: LessonData) => {
+  const normalized = normalizeLessonData(value);
+  return JSON.stringify({
+    unitId: normalized.unitId,
+    contentRevision: normalized.contentRevision,
+    videoUrl: normalized.videoUrl,
+    contentHtml: normalized.contentHtml,
+    pdfName: normalized.pdfName,
+    pdfUrl: normalized.pdfUrl,
+    pdfStoragePath: normalized.pdfStoragePath,
+    worksheetPageImages: normalized.worksheetPageImages,
+    worksheetTextRegions: normalized.worksheetTextRegions,
+    worksheetBlanks: normalized.worksheetBlanks,
+    worksheetExamHighlights: normalized.worksheetExamHighlights,
+    worksheetFootnoteAnchors: normalized.worksheetFootnoteAnchors,
+    footnotes: normalized.footnotes,
+  });
+};
 const LessonContent: React.FC<LessonContentProps> = ({
   unitId,
   fallbackTitle,
@@ -100,9 +136,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
 }) => {
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
-  const [lesson, setLesson] = useState<LessonData | null>(
-    lessonOverride ? normalizeLessonData(lessonOverride) : null,
-  );
+  const [lesson, setLesson] = useState<LessonData | null>(null);
+  const [lessonTitle, setLessonTitle] = useState("");
+  const [lessonRefresh, setLessonRefresh] = useState<
+    "idle" | "checking" | "error" | "changed" | "unavailable"
+  >("idle");
+  const [lessonRefreshAttempt, setLessonRefreshAttempt] = useState(0);
+  const [previewVersion, setPreviewVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -140,36 +180,30 @@ const LessonContent: React.FC<LessonContentProps> = ({
     useState<CorePointOverviewState>(EMPTY_CORE_POINT_OVERVIEW);
 
   const contentRef = useRef<HTMLDivElement>(null);
-  const answerContext = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}/${unitId || ""}/${disablePersistence}`;
-  const answerSessionRef = useRef({
-    context: answerContext,
-    revision: null as number | null,
-    edits: 0,
-    touched: new Set<string>(),
-    corePointFinds: new Set<string>(),
-    overviewRequest: 0,
-    rewardSettled: false,
-    saving: false,
-    restoring: false,
-  });
+  const answerContext = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}/${unitId || ""}/${disablePersistence}/${previewVersion}`;
+  const answerSessionRef = useRef(createAnswerSession(answerContext));
+  const answerSnapshotRef = useRef<
+    (() => ReturnType<typeof buildLessonAnswerSnapshot>) | null
+  >(null);
   if (answerSessionRef.current.context !== answerContext) {
-    answerSessionRef.current = {
-      context: answerContext,
-      revision: null,
-      edits: 0,
-      touched: new Set<string>(),
-      corePointFinds: new Set<string>(),
-      overviewRequest: 0,
-      rewardSettled: false,
-      saving: false,
-      restoring: false,
-    };
+    answerSessionRef.current = createAnswerSession(answerContext);
   }
   useEffect(() => {
     setIsSaving(false);
     setStudentAnswers({});
     setHasUnsavedChanges(false);
     setSaveMessage("");
+    setSaveCompletionPopup(null);
+    setLessonRefresh("idle");
+    setActiveWorksheetPage(null);
+    setActiveFootnote(null);
+    setFootnotePanelOpen(false);
+    setActiveWorksheetFootnoteAnchorId(null);
+    setActiveFootnoteAnchorKey("");
+    setHighlightedFootnoteAnchorKey("");
+    setWorksheetScreenOpen(false);
+    viewStartedAtRef.current = Date.now();
+    interactedRef.current = false;
     setFoundCorePointIds([]);
     foundCorePointIdsRef.current = [];
     setPendingCorePointIds([]);
@@ -178,22 +212,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
     corePointOverviewRef.current = EMPTY_CORE_POINT_OVERVIEW;
   }, [answerContext]);
-  useEffect(
-    () => () => {
-      answerSessionRef.current = {
-        context: "",
-        revision: null,
-        edits: 0,
-        touched: new Set<string>(),
-        corePointFinds: new Set<string>(),
-        overviewRequest: 0,
-        rewardSettled: false,
-        saving: false,
-        restoring: false,
-      };
-    },
-    [],
-  );
+  useEffect(() => {
+    // StrictMode repeats setup after cleanup before another render.
+    if (answerSessionRef.current.context !== answerContext) {
+      answerSessionRef.current = createAnswerSession(answerContext);
+    }
+    return () => {
+      answerSessionRef.current = createAnswerSession("");
+    };
+  }, []);
   const foundCorePointIdsRef = useRef<string[]>([]);
   const corePointOverviewRef = useRef<CorePointOverviewState>(
     EMPTY_CORE_POINT_OVERVIEW,
@@ -231,7 +258,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       title: fallbackTitle || "",
     });
     return getLessonContentSections(normalized).worksheet.pageImages;
-  }, [fallbackTitle, lesson]);
+  }, [lesson]);
   const currentCorePointIds = useMemo(() => {
     if (!lesson) return [];
     const normalized = normalizeLessonData(lesson, {
@@ -264,95 +291,106 @@ const LessonContent: React.FC<LessonContentProps> = ({
   }, [worksheetPageImagesForNav]);
 
   useEffect(() => {
-    const normalized = lessonOverride
-      ? normalizeLessonData(lessonOverride)
-      : null;
-    setLesson(normalized);
-    setIsBlocked(
-      Boolean(
-        !allowHiddenAccess &&
-        normalized &&
-        normalized.isVisibleToStudents === false,
-      ),
-    );
-    setError(false);
-    setLoading(false);
-    setStudentAnswers({});
-    setHasUnsavedChanges(false);
-    setSaveMessage("");
-    setSaveCompletionPopup(null);
-    setActiveWorksheetPage(null);
-    setActiveFootnote(null);
-    setFootnotePanelOpen(false);
-    setActiveWorksheetFootnoteAnchorId(null);
-    setActiveFootnoteAnchorKey("");
-    setHighlightedFootnoteAnchorKey("");
-    setFoundCorePointIds([]);
-    setPendingCorePointIds([]);
-    setCorePointRewardPending(false);
-    setCorePointRewardSettled(false);
-    setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
-    viewStartedAtRef.current = Date.now();
-    interactedRef.current = false;
-  }, [allowHiddenAccess, lessonOverride]);
-
-  useEffect(() => {
-    if (lessonOverride || !unitId) {
-      if (!lessonOverride) setLesson(null);
-      return;
-    }
-
     let cancelled = false;
+    const session = answerSessionRef.current;
+    const isCurrent = () => !cancelled && answerSessionRef.current === session;
+    const markUnavailable = () => {
+      if (session.loadedLesson && !session.materialUnavailable) {
+        session.preservedSnapshot = answerSnapshotRef.current?.() || null;
+      }
+      session.materialUnavailable = true;
+      setIsBlocked(true);
+      setLessonRefresh("unavailable");
+      setActiveFootnote(null);
+      setFootnotePanelOpen(false);
+      setWorksheetScreenOpen(false);
+    };
     const fetchLesson = async () => {
-      setLoading(true);
-      setError(false);
-      setIsBlocked(false);
-      setActiveWorksheetPage(null);
+      session.refreshing = true;
+      if (!session.loadedLesson) {
+        setLoading(true);
+        setError(false);
+        setIsBlocked(false);
+      } else if (!session.materialChanged && !session.materialUnavailable) {
+        setLessonRefresh("checking");
+      }
       try {
-        const lessonData = await readStudentLesson(config, unitId);
-        if (cancelled) return;
-        if (lessonData) {
-          const data = normalizeLessonData(lessonData, {
-            unitId,
-            title: fallbackTitle || "",
-          });
-          setLesson(data);
-          setIsBlocked(
-            !allowHiddenAccess && data.isVisibleToStudents === false,
-          );
-        } else {
-          setLesson(null);
+        const lessonData =
+          lessonOverride ||
+          (unitId ? await readStudentLesson(config, unitId) : null);
+        if (!isCurrent()) return;
+        if (!lessonData) {
+          if (session.loadedLesson) markUnavailable();
+          else {
+            setLesson(null);
+            setError(true);
+          }
+          return;
         }
-        setStudentAnswers({});
-        setHasUnsavedChanges(false);
-        setSaveMessage("");
-        setSaveCompletionPopup(null);
-        setActiveWorksheetPage(null);
-        setActiveFootnote(null);
-        setFootnotePanelOpen(false);
-        setActiveWorksheetFootnoteAnchorId(null);
-        setActiveFootnoteAnchorKey("");
-        setHighlightedFootnoteAnchorKey("");
-        setFoundCorePointIds([]);
-        setPendingCorePointIds([]);
-        setCorePointRewardPending(false);
-        setCorePointRewardSettled(false);
-        setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
-        viewStartedAtRef.current = Date.now();
-        interactedRef.current = false;
+        const data = normalizeLessonData(lessonData, {
+          unitId: unitId || undefined,
+          title: fallbackTitle || "",
+        });
+        if (!allowHiddenAccess && data.isVisibleToStudents === false) {
+          markUnavailable();
+          return;
+        }
+        // A read cannot settle an earlier write or silently rebase its revisions.
+        if (session.materialUnavailable) return;
+        if (session.loadedLesson) {
+          if (
+            getLessonStudyIdentity(session.loadedLesson) !==
+            getLessonStudyIdentity(data)
+          ) {
+            if (disablePersistence) {
+              setPreviewVersion((version) => version + 1);
+              return;
+            }
+            session.materialChanged = true;
+            session.preservedSnapshot = answerSnapshotRef.current?.() || null;
+            setLessonRefresh("changed");
+            setSaveCompletionPopup(null);
+            return;
+          }
+          setLessonTitle(data.title);
+          if (!session.materialChanged) setLessonRefresh("idle");
+          return;
+        }
+        session.loadedLesson = data;
+        setLesson(data);
+        setLessonTitle(data.title);
+        setLessonRefresh("idle");
       } catch (fetchError) {
-        if (cancelled) return;
+        if (!isCurrent()) return;
         console.error("Error fetching lesson:", fetchError);
-        setError(true);
+        const code = String((fetchError as { code?: unknown })?.code || "");
+        if (/(permission-denied|unauthenticated)$/.test(code))
+          markUnavailable();
+        else if (!session.loadedLesson) {
+          setError(true);
+          setLessonRefresh("error");
+        } else if (!session.materialChanged && !session.materialUnavailable)
+          setLessonRefresh("error");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (isCurrent()) {
+          session.refreshing = false;
+          setLoading(false);
+        }
       }
     };
     void fetchLesson();
     return () => {
       cancelled = true;
     };
-  }, [allowHiddenAccess, config, fallbackTitle, lessonOverride, unitId]);
+  }, [
+    answerContext,
+    allowHiddenAccess,
+    config,
+    fallbackTitle,
+    lessonOverride,
+    unitId,
+    lessonRefreshAttempt,
+  ]);
 
   const getProgressRef = () => {
     if (!canPersist || !currentUser?.uid || !unitId) return null;
@@ -568,7 +606,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
     )
       return;
     const session = answerSessionRef.current;
-    if (session.saving) return;
+    if (
+      session.saving ||
+      session.materialChanged ||
+      session.materialUnavailable ||
+      session.loadedLesson !== lesson
+    )
+      return;
     if (session.revision === null) {
       showToast({
         tone: "info",
@@ -599,6 +643,16 @@ const LessonContent: React.FC<LessonContentProps> = ({
       });
       if (answerSessionRef.current !== session) return;
       session.revision = result.answerRevision;
+      if (session.materialChanged || session.materialUnavailable) {
+        setSaveCompletionPopup(null);
+        showToast({
+          tone: "info",
+          title: "이전 요청의 답안이 저장되었습니다.",
+          message:
+            "현재 화면의 자료 확인 안내를 따라 주세요. 작성한 답안은 내려받아 보관할 수 있습니다.",
+        });
+        return;
+      }
       const changedDuringSave = session.edits !== editVersion;
       if (!changedDuringSave) {
         setStudentAnswers(result.answers);
@@ -789,6 +843,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
     if (!canPersist || !lesson || lesson.unitId !== unitId) return;
     let cancelled = false;
     const session = answerSessionRef.current;
+    if (
+      session.loadedLesson !== lesson ||
+      session.revision !== null ||
+      session.materialChanged ||
+      session.materialUnavailable
+    )
+      return;
     const isInitialRestore = session.revision === null;
     const restoreProgress = async () => {
       const progressRef = getProgressRef();
@@ -802,7 +863,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
         const snap = isInitialRestore
           ? await getDocFromServer(progressRef)
           : await getDoc(progressRef);
-        if (cancelled || answerSessionRef.current !== session) return;
+        if (
+          cancelled ||
+          answerSessionRef.current !== session ||
+          session.materialChanged ||
+          session.materialUnavailable
+        )
+          return;
         const data = (snap.data() || {}) as {
           answers?: Record<string, { value?: string; status?: AnswerStatus }>;
           answerRevision?: number;
@@ -1000,6 +1067,85 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setSaveCompletionPopup(null);
   };
 
+  answerSnapshotRef.current = () => getAnswerSnapshot();
+  const retryLessonRead = () => {
+    const session = answerSessionRef.current;
+    if (
+      session.refreshing ||
+      session.materialChanged ||
+      session.materialUnavailable
+    )
+      return;
+    session.refreshing = true;
+    setLessonRefresh("checking");
+    setLessonRefreshAttempt((attempt) => attempt + 1);
+  };
+  const downloadOwnAnswers = () => {
+    const session = answerSessionRef.current;
+    if (!session.loadedLesson) return;
+    const snapshot = session.materialUnavailable
+      ? session.preservedSnapshot
+      : answerSnapshotRef.current?.();
+    if (!snapshot) return;
+    const worksheetIds = getLessonContentSections(
+      session.loadedLesson,
+    ).worksheet.blanks.map((blank) => blank.id);
+    const lines = Object.entries(snapshot.answers).map(([key, answer]) => {
+      const pageIndex = worksheetIds.indexOf(key);
+      const label =
+        pageIndex >= 0
+          ? `학습지 빈칸 ${pageIndex + 1}`
+          : `본문 빈칸 ${Number(key) + 1}`;
+      return `${label}: ${answer.value || ""}`;
+    });
+    const url = URL.createObjectURL(
+      new Blob(["\uFEFF내가 작성한 수업 답안\n\n" + lines.join("\n")], {
+        type: "text/plain;charset=utf-8",
+      }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "내-수업-답안.txt";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+  const lessonRecoveryNotice =
+    lessonRefresh !== "idle" ? (
+      <div
+        className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-blue-900"
+        aria-live="polite"
+      >
+        <p role="status">
+          {lessonRefresh === "checking"
+            ? "수업 자료를 다시 확인하고 있습니다. 입력은 계속할 수 있습니다."
+            : lessonRefresh === "error"
+              ? "수업 자료를 다시 확인하지 못했습니다. 입력한 내용은 이 화면에 유지됩니다."
+              : lessonRefresh === "changed"
+                ? "수업 자료가 변경되었습니다. 현재 답안을 내려받아 보관한 뒤 수업 목록에서 자료를 다시 열어 주세요."
+                : "현재 수업 자료를 확인할 수 없습니다. 답안을 내려받아 보관한 뒤 수업 목록에서 다시 열어 주세요."}
+        </p>
+        {lessonRefresh === "error" && (
+          <button
+            type="button"
+            onClick={retryLessonRead}
+            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+          >
+            수업 자료 다시 확인
+          </button>
+        )}
+        {(lessonRefresh === "changed" || lessonRefresh === "unavailable") &&
+          answerSessionRef.current.loadedLesson && (
+            <button
+              type="button"
+              onClick={downloadOwnAnswers}
+              className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+            >
+              내 답안 내려받기
+            </button>
+          )}
+      </div>
+    ) : null;
+
   if (!unitId && !lessonOverride)
     return (
       <div className="flex h-full flex-col items-center justify-center py-32 text-center animate-fadeIn">
@@ -1024,17 +1170,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
         <h2 className="text-xl font-bold text-gray-500">
           수업 자료를 찾을 수 없습니다.
         </h2>
+        {lessonRecoveryNotice}
       </div>
     );
-  if (isBlocked)
+  if (isBlocked || answerSessionRef.current.materialUnavailable)
     return (
       <div className="flex h-full flex-col items-center justify-center py-32 text-center animate-fadeIn">
         <div className="mb-4 text-6xl text-amber-400">🔒</div>
         <h2 className="text-xl font-bold text-gray-700">
-          아직 학생에게 공개되지 않았습니다.
+          현재 수업 자료를 확인할 수 없습니다.
         </h2>
+        {lessonRecoveryNotice}
       </div>
     );
+  if (answerSessionRef.current.loadedLesson !== lesson)
+    return <InlineLoading message="수업 자료를 불러오는 중입니다." />;
 
   const normalizedLesson = normalizeLessonData(lesson, {
     title: fallbackTitle || "",
@@ -1158,6 +1308,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     overview?: CorePointOverviewState,
   ) => {
     if (
+      answerSessionRef.current.materialChanged ||
+      answerSessionRef.current.materialUnavailable ||
       !canPersist ||
       !currentUser?.uid ||
       !corePointRewardSafety.claimable ||
@@ -1173,7 +1325,12 @@ const LessonContent: React.FC<LessonContentProps> = ({
         overview?.loaded === true
           ? overview
           : await refreshCorePointOverview(nextFoundIds);
-      if (answerSessionRef.current !== session) return;
+      if (
+        answerSessionRef.current !== session ||
+        session.materialChanged ||
+        session.materialUnavailable
+      )
+        return;
       const remainingCount = Math.max(
         0,
         latestOverview.totalCount - latestOverview.foundCount,
@@ -1234,7 +1391,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
     highlightId: string,
     optimisticFoundIds: string[],
   ) => {
-    if (!canPersist || !unitId) return;
+    if (
+      !canPersist ||
+      !unitId ||
+      answerSessionRef.current.materialChanged ||
+      answerSessionRef.current.materialUnavailable
+    )
+      return;
     const session = answerSessionRef.current;
     let recorded = false;
     setPendingCorePointIds((current) =>
@@ -1308,6 +1471,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
   };
 
   const handleFindCorePoint = (highlightId: string) => {
+    if (
+      answerSessionRef.current.materialChanged ||
+      answerSessionRef.current.materialUnavailable
+    )
+      return;
     const currentIdSet = new Set(currentCorePointIds);
     if (!currentIdSet.has(highlightId)) return;
     const previousFoundIds = foundCorePointIdsRef.current.filter((id) =>
@@ -1404,8 +1572,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setAnswerRestore({ context: answerContext, status: "loading" });
     setAnswerRestoreAttempt((attempt) => attempt + 1);
   };
-  const floatingSaveButtonLabel =
-    answerRestoreStatus !== "ready"
+  const floatingSaveButtonLabel = answerSessionRef.current.materialChanged
+    ? "자료 확인 필요"
+    : answerRestoreStatus !== "ready"
       ? answerRestoreStatus === "error"
         ? "답안 확인 필요"
         : "답안 확인 중"
@@ -1428,6 +1597,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     displayedCorePointTotalCount > 0 &&
     displayedCorePointFoundCount >= displayedCorePointTotalCount;
   const corePointRewardReady =
+    !answerSessionRef.current.materialChanged &&
+    !answerSessionRef.current.materialUnavailable &&
     isCorePointCompletionReady &&
     corePointRewardSafety.claimable &&
     pendingCorePointIds.length === 0 &&
@@ -1510,10 +1681,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
           type="button"
           onClick={handleSaveAction}
           disabled={
-            answerRestoreStatus !== "ready" || isSaving || !hasUnsavedChanges
+            answerSessionRef.current.materialChanged ||
+            answerRestoreStatus !== "ready" ||
+            isSaving ||
+            !hasUnsavedChanges
           }
           data-session-action="true"
           className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 ${
+            answerSessionRef.current.materialChanged ||
             answerRestoreStatus !== "ready"
               ? "cursor-not-allowed bg-slate-100 text-slate-500 focus-visible:ring-slate-100"
               : isSaving
@@ -1569,7 +1744,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         <button
           type="button"
           onClick={handleReset}
-          disabled={isSaving}
+          disabled={isSaving || answerSessionRef.current.materialChanged}
           className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-blue-50 px-4 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <i className="fas fa-rotate-left text-xs"></i>
@@ -1593,7 +1768,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
       >
         <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
           <h2 className="min-w-0 flex-1 text-2xl font-extrabold leading-tight text-slate-900 md:text-3xl">
-            {normalizedLesson.title || fallbackTitle || "제목 없음"}
+            {lessonTitle ||
+              normalizedLesson.title ||
+              fallbackTitle ||
+              "제목 없음"}
           </h2>
           {fullscreenPreview && onClosePreview && (
             <button
@@ -1606,7 +1784,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
           )}
         </div>
 
+        {lessonRecoveryNotice}
+
         {canPersist &&
+          !answerSessionRef.current.materialChanged &&
           needsAnswerRestore &&
           answerRestoreStatus !== "ready" && (
             <div
@@ -1664,6 +1845,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
                 foundCorePointIds={foundCorePointIds}
                 corePointRewardPending={corePointRewardPending}
+                corePointInteractionDisabled={
+                  answerSessionRef.current.materialChanged
+                }
                 hideCorePointStatus
                 footnoteTitles={Object.fromEntries(
                   footnotes.map((footnote) => [
@@ -1756,7 +1940,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           </div>
         )}
 
-        {saveCompletionPopup && (
+        {saveCompletionPopup && !answerSessionRef.current.materialChanged && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
             <div
               role="dialog"

@@ -40,6 +40,7 @@ interface LessonWorksheetStageProps {
   studentAnswers?: Record<string, { value?: string; status?: AnswerStatus }>;
   foundCorePointIds?: string[];
   corePointRewardPending?: boolean;
+  corePointInteractionDisabled?: boolean;
   hideCorePointStatus?: boolean;
   onSelectBlank?: (blankId: string) => void;
   onDeleteBlank?: (blankId: string) => void;
@@ -703,6 +704,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   studentAnswers = {},
   foundCorePointIds = [],
   corePointRewardPending = false,
+  corePointInteractionDisabled = false,
   hideCorePointStatus = false,
   onSelectBlank,
   onDeleteBlank,
@@ -2886,6 +2888,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           key={highlight.id}
                           type="button"
                           data-exam-highlight="true"
+                          disabled={corePointInteractionDisabled}
                           aria-label={
                             isFoundCorePoint
                               ? "이미 찾은 핵심포인트"
@@ -2905,7 +2908,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           onClick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
-                            if (isFoundCorePoint) return;
+                            if (
+                              isFoundCorePoint ||
+                              corePointInteractionDisabled
+                            )
+                              return;
                             queueCorePointBurst(pageImage.page, event);
                             onFindCorePoint?.(highlight.id);
                           }}
