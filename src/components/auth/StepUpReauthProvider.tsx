@@ -367,6 +367,12 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       await reauthenticateWithCredential(user, credential);
       await finishSuccess(current);
     } catch (error) {
+      // Firestore was paused for this attempt, even if another tab changed
+      // identity. Restore transport without refreshing the previous user.
+      await recoverAuthenticationAfterFailedReauthentication(
+        user,
+        current.ownerUid,
+      );
       if (
         error instanceof StepUpReauthError &&
         error.code === "IDENTITY_CHANGED"
@@ -374,10 +380,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         rejectPending(current, error);
         return;
       }
-      await recoverAuthenticationAfterFailedReauthentication(
-        user,
-        current.ownerUid,
-      );
       setErrorMessage(getStepUpReauthFailureMessage(error, "password"));
     } finally {
       submittingRef.current = false;
@@ -414,6 +416,10 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       await reauthenticateWithPopup(user, provider);
       await finishSuccess(current);
     } catch (error) {
+      await recoverAuthenticationAfterFailedReauthentication(
+        user,
+        current.ownerUid,
+      );
       if (
         error instanceof StepUpReauthError &&
         error.code === "IDENTITY_CHANGED"
@@ -421,10 +427,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         rejectPending(current, error);
         return;
       }
-      await recoverAuthenticationAfterFailedReauthentication(
-        user,
-        current.ownerUid,
-      );
       setErrorMessage(getStepUpReauthFailureMessage(error, "google"));
     } finally {
       submittingRef.current = false;
