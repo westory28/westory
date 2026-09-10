@@ -414,9 +414,10 @@ const continuitySuccessBlock = continuityBlock.slice(
   continuityBlock.indexOf("} catch (error)"),
 );
 assert.doesNotMatch(continuitySuccessBlock, /clearAuthenticatedState\(\)/);
-assert.doesNotMatch(
+assert.match(
   continuityBlock,
   /setAuthenticationStatus\("AUTHENTICATING"\)/,
+  "same UID keeps identity/config but protected reads wait for its new server probe",
 );
 
 assert.ok(
@@ -476,7 +477,7 @@ const postSessionTokenRefreshIndex = providerSource.indexOf(
   synchronizeIndex + 1,
 );
 const authenticatedUserWaitIndex = providerSource.indexOf(
-  "await waitForAuthenticatedUser(current.ownerUid)",
+  "await waitForAuthenticatedUser(current)",
   postSessionTokenRefreshIndex + 1,
 );
 const postSessionNetworkResumeIndex = providerSource.indexOf(

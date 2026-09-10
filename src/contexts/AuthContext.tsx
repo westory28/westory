@@ -9,6 +9,7 @@ import React, {
 import { User, onIdTokenChanged, signOut } from "firebase/auth";
 import { doc, getDocFromServer, onSnapshot } from "firebase/firestore";
 import { auth, authPersistenceReady, db } from "../lib/firebase";
+import { waitForAuthenticationReads } from "../lib/authenticationReadBarrier";
 import { SystemConfig, InterfaceConfig, UserData } from "../types";
 import {
   cloneDefaultMenus,
@@ -42,6 +43,7 @@ import {
 } from "../lib/sessionPolicy";
 import {
   STUDENT_MAINTENANCE_CONFIG_DOC_ID,
+  invalidateStudentMaintenanceBootstrap,
   normalizeStudentMaintenanceConfig,
   readStudentMaintenanceBootstrap,
   resolveStudentMaintenanceAccess,
@@ -259,6 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     let active = true;
+    let tokenEventSequence = 0;
     let unsubscribe: () => void = () => undefined;
     let unsubscribeUserDoc: (() => void) | null = null;
     let visibilitySettingsReady: Promise<void> | null = null;
@@ -415,6 +418,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           void visibilitySettingsReady?.catch(() => undefined);
           logoutReasonRef.current = null;
           authResolutionPendingRef.current = false;
+          setAuthenticationStatus("AUTHENTICATED");
           clearResolutionGuard();
         } catch (e) {
           console.error("Failed to sync user data", e);
@@ -479,6 +483,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       unsubscribe = onIdTokenChanged(
         auth,
         async (user) => {
+          const eventSequence = ++tokenEventSequence;
+          // Invalidate older async resolutions immediately. Sign-out must not
+          // wait for an in-flight popup or paused Firestore transport.
+          authRevisionRef.current += 1;
+          if (user) await waitForAuthenticationReads();
+          if (
+            !active ||
+            eventSequence !== tokenEventSequence ||
+            auth.currentUser?.uid !== user?.uid
+          ) {
+            return;
+          }
           markLoginPerf("westory-auth-current-user-resolved", {
             hasUser: user ? "true" : "false",
           });
@@ -496,6 +512,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const refreshRevision = authRevisionRef.current + 1;
             authRevisionRef.current = refreshRevision;
             authResolutionPendingRef.current = true;
+            // Keep identity/configuration, but do not expose protected children
+            // with a previous profile while this token's server probe is pending.
+            setAuthenticationStatus("AUTHENTICATING");
             scheduleResolutionGuard();
             try {
               const maintenanceAllowed = await verifyMaintenanceAccess(
@@ -532,7 +551,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 applicationSession.authorityMode,
               );
               setCurrentUser(user);
-              setAuthenticationStatus("AUTHENTICATED");
               setAuthenticationError("");
               void subscribeUserDocument(user, refreshRevision);
             } catch (error) {
@@ -612,7 +630,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               setApplicationSessionAuthorityMode(
                 applicationSession.authorityMode,
               );
-              setAuthenticationStatus("AUTHENTICATED");
               setCurrentUser(user);
             } catch (error) {
               if (!active || authRevisionRef.current !== authRevision) return;
@@ -779,6 +796,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const prepareForReauthentication = useCallback(() => {
     authRevisionRef.current += 1;
+    if (auth.currentUser) {
+      invalidateStudentMaintenanceBootstrap(auth.currentUser.uid);
+    }
     authResolutionPendingRef.current = true;
     stopUserDocSubscriptionRef.current();
     firstUserDocReadyRef.current = null;

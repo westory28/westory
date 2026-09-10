@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 import { disableNetwork, enableNetwork } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
+import { holdAuthenticationReads } from "../../lib/authenticationReadBarrier";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   beginApplicationSessionReauthentication,
@@ -101,6 +102,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
   const pendingRef = useRef<PendingRequest | null>(null);
   const submittingRef = useRef(false);
   const firestorePausedRef = useRef(false);
+  const releaseAuthenticationReadsRef = useRef<(() => void) | null>(null);
   const protectedContentRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
   const {
@@ -119,24 +121,40 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     authReadyRef.current = { authenticationStatus, currentUser, userData };
   }, [authenticationStatus, currentUser, userData]);
 
-  const waitForAuthenticatedUser = useCallback(async (ownerUid: string) => {
-    const expiresAt = Date.now() + 15_000;
-    while (Date.now() < expiresAt) {
-      const snapshot = authReadyRef.current;
-      if (
-        snapshot.authenticationStatus === "AUTHENTICATED" &&
-        snapshot.currentUser?.uid === ownerUid &&
-        snapshot.userData?.uid === ownerUid
-      ) {
-        return;
-      }
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 25));
+  const assertCurrentRequest = useCallback((current: PendingRequest) => {
+    if (
+      pendingRef.current !== current ||
+      auth.currentUser?.uid !== current.ownerUid
+    ) {
+      throw new StepUpReauthError(
+        "IDENTITY_CHANGED",
+        "로그인 상태가 바뀌어 작업을 실행하지 않았습니다.",
+      );
     }
-    throw new StepUpReauthError(
-      "SESSION_REFRESH_FAILED",
-      "새 로그인 세션으로 사용자 권한을 다시 확인하지 못했습니다.",
-    );
   }, []);
+
+  const waitForAuthenticatedUser = useCallback(
+    async (current: PendingRequest) => {
+      const expiresAt = Date.now() + 15_000;
+      while (Date.now() < expiresAt) {
+        assertCurrentRequest(current);
+        const snapshot = authReadyRef.current;
+        if (
+          snapshot.authenticationStatus === "AUTHENTICATED" &&
+          snapshot.currentUser?.uid === current.ownerUid &&
+          snapshot.userData?.uid === current.ownerUid
+        ) {
+          return;
+        }
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 25));
+      }
+      throw new StepUpReauthError(
+        "SESSION_REFRESH_FAILED",
+        "새 로그인 세션으로 사용자 권한을 다시 확인하지 못했습니다.",
+      );
+    },
+    [assertCurrentRequest],
+  );
 
   useEffect(() => {
     const protectedContent = protectedContentRef.current;
@@ -160,14 +178,24 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const pauseFirestoreForReauthentication = useCallback(async () => {
-    await disableNetwork(db);
+    // Mark ownership before awaiting, so unmount also queues a matching resume
+    // when disableNetwork is still completing.
     firestorePausedRef.current = true;
+    await disableNetwork(db);
   }, []);
 
   const resumeFirestoreAfterReauthentication = useCallback(async () => {
-    if (!firestorePausedRef.current) return;
-    await enableNetwork(db);
-    firestorePausedRef.current = false;
+    try {
+      if (firestorePausedRef.current) {
+        await enableNetwork(db);
+        firestorePausedRef.current = false;
+      }
+    } finally {
+      // A failed resume must fail the subsequent server probe, not leave Auth
+      // waiting forever. The recovery path can retry transport restoration.
+      releaseAuthenticationReadsRef.current?.();
+      releaseAuthenticationReadsRef.current = null;
+    }
   }, []);
 
   const rejectPending = useCallback(
@@ -187,6 +215,12 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         throw new StepUpReauthError(
           "UNAUTHENTICATED",
           "로그인 사용자를 확인할 수 없습니다.",
+        );
+      }
+      if (authReadyRef.current.authenticationStatus === "MAINTENANCE") {
+        throw new StepUpReauthError(
+          "UNAVAILABLE",
+          "현재 접속이 제한되어 작업을 실행하지 않았습니다.",
         );
       }
       if (!options?.force) {
@@ -231,14 +265,35 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => registerStepUpReauthHandler(requestReauth), [requestReauth]);
 
+  useEffect(() => {
+    const current = pendingRef.current;
+    if (!current) return;
+    if (
+      auth.currentUser?.uid !== current.ownerUid ||
+      authenticationStatus === "MAINTENANCE"
+    ) {
+      rejectPending(
+        current,
+        new StepUpReauthError(
+          "IDENTITY_CHANGED",
+          "접속 상태가 바뀌어 작업을 실행하지 않았습니다.",
+        ),
+      );
+      void resumeFirestoreAfterReauthentication().catch(console.error);
+    }
+  }, [
+    authenticationStatus,
+    currentUser,
+    pending,
+    rejectPending,
+    resumeFirestoreAfterReauthentication,
+  ]);
+
   useEffect(
     () => () => {
       const current = pendingRef.current;
       pendingRef.current = null;
-      if (firestorePausedRef.current) {
-        firestorePausedRef.current = false;
-        void enableNetwork(db);
-      }
+      void resumeFirestoreAfterReauthentication().catch(console.error);
       current?.reject(
         new StepUpReauthError(
           "UNAVAILABLE",
@@ -246,10 +301,11 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         ),
       );
     },
-    [],
+    [resumeFirestoreAfterReauthentication],
   );
 
   const finishSuccess = async (current: PendingRequest) => {
+    assertCurrentRequest(current);
     const user = auth.currentUser;
     if (!user || user.uid !== current.ownerUid) {
       throw new StepUpReauthError(
@@ -307,14 +363,21 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       await getIdToken(user, true);
       await resumeFirestoreAfterReauthentication();
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-      await waitForAuthenticatedUser(current.ownerUid);
+      await waitForAuthenticatedUser(current);
     } catch (error) {
+      if (
+        error instanceof StepUpReauthError &&
+        error.code === "IDENTITY_CHANGED"
+      ) {
+        throw error;
+      }
       throw new StepUpReauthError(
         "SESSION_REFRESH_FAILED",
         "새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다.",
         error,
       );
     }
+    assertCurrentRequest(current);
     pendingRef.current = null;
     resetDialog();
     current.resolve();
@@ -322,12 +385,16 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const recoverAuthenticationAfterFailedReauthentication = async (
     user: User,
-    ownerUid: string,
+    current: PendingRequest,
   ) => {
     await resumeFirestoreAfterReauthentication().catch((error) => {
       console.error("Failed to resume Firestore after reauthentication", error);
     });
-    if (auth.currentUser?.uid !== ownerUid) return;
+    if (
+      pendingRef.current !== current ||
+      auth.currentUser?.uid !== current.ownerUid
+    )
+      return;
     await getIdToken(user, true).catch((error) => {
       console.error(
         "Failed to restore authentication after reauthentication",
@@ -358,21 +425,22 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     setErrorMessage("");
     try {
       await beginApplicationSessionReauthentication();
+      assertCurrentRequest(current);
+      releaseAuthenticationReadsRef.current = holdAuthenticationReads();
       prepareForReauthentication();
       await new Promise<void>((resolve) =>
         window.requestAnimationFrame(() => resolve()),
       );
+      assertCurrentRequest(current);
       await pauseFirestoreForReauthentication();
+      assertCurrentRequest(current);
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
       await finishSuccess(current);
     } catch (error) {
       // Firestore was paused for this attempt, even if another tab changed
       // identity. Restore transport without refreshing the previous user.
-      await recoverAuthenticationAfterFailedReauthentication(
-        user,
-        current.ownerUid,
-      );
+      await recoverAuthenticationAfterFailedReauthentication(user, current);
       if (
         error instanceof StepUpReauthError &&
         error.code === "IDENTITY_CHANGED"
@@ -406,20 +474,21 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     setErrorMessage("");
     try {
       await beginApplicationSessionReauthentication();
+      assertCurrentRequest(current);
+      releaseAuthenticationReadsRef.current = holdAuthenticationReads();
       prepareForReauthentication();
       await new Promise<void>((resolve) =>
         window.requestAnimationFrame(() => resolve()),
       );
+      assertCurrentRequest(current);
       await pauseFirestoreForReauthentication();
+      assertCurrentRequest(current);
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: user.email || "" });
       await reauthenticateWithPopup(user, provider);
       await finishSuccess(current);
     } catch (error) {
-      await recoverAuthenticationAfterFailedReauthentication(
-        user,
-        current.ownerUid,
-      );
+      await recoverAuthenticationAfterFailedReauthentication(user, current);
       if (
         error instanceof StepUpReauthError &&
         error.code === "IDENTITY_CHANGED"

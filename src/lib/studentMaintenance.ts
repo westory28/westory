@@ -239,6 +239,10 @@ const loadStudentMaintenanceBootstrap = async (
   }
 };
 
+export const invalidateStudentMaintenanceBootstrap = (uid: string) => {
+  bootstrapCache.delete(uid);
+};
+
 export const readStudentMaintenanceBootstrap = (
   user: User,
 ): Promise<StudentMaintenanceBootstrap> => {
@@ -253,7 +257,11 @@ export const readStudentMaintenanceBootstrap = (
   }
 
   const promise = loadStudentMaintenanceBootstrap(user).then((result) => {
-    bootstrapCache.set(user.uid, { result, resolvedAt: Date.now() });
+    // A read started before reauthentication must not repopulate the cache
+    // after a newer epoch has invalidated or replaced its flight.
+    if (bootstrapCache.get(user.uid)?.promise === promise) {
+      bootstrapCache.set(user.uid, { result, resolvedAt: Date.now() });
+    }
     return result;
   });
   bootstrapCache.set(user.uid, { promise });

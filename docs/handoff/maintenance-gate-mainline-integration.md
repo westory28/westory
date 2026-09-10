@@ -35,7 +35,14 @@ Auth bootstrap과 Login은 deduplicated maintenance/profile preflight를 사용�
 - application session 생성
 - config·menu load
 - user listener
-- protected provider와 page child mount
+- 업무 provider와 page child mount
+
+2026-09-11 재인증 복구 보완: 요청을 조정하는 `StepUpReauthProvider`만
+MaintenanceGate 바깥에서 유지합니다. 점검 상태 재조회가 재인증 창 자체를
+미마운트하지 않도록 하기 위함입니다. 업무 provider와 페이지는 계속
+MaintenanceGate와 ProtectedAccessGate 안에 있으며, 차단 상태에서 재인증
+요청이나 업무 실행을 허용하지 않습니다. 초기 로그인 preflight의
+maintenance-before-session 순서와 서버 점검 차단은 유지합니다.
 
 설정이 실시간으로 활성화되면 이미 로그인한 학생도 보호 화면에서 빠져나옵니다. 비활성화 뒤 token refresh가 오래 걸릴 때는 bounded resolution guard가 error/retry 상태로 전환합니다.
 

@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { transformSync } from "esbuild";
+
+const code = transformSync(readFileSync("src/lib/authenticationReadBarrier.ts", "utf8"), {loader:"ts",format:"esm"}).code;
+const {holdAuthenticationReads,waitForAuthenticationReads} = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+await waitForAuthenticationReads();
+const releaseA=holdAuthenticationReads(), releaseB=holdAuthenticationReads();
+let resumed=false;
+const waiting=waitForAuthenticationReads().then(()=>{resumed=true;});
+releaseA();releaseA();
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(resumed,false,"one attempt cannot release another attempt's read hold");
+releaseB();await waiting;assert.equal(resumed,true);
+const releaseC=holdAuthenticationReads();resumed=false;
+const followup=waitForAuthenticationReads().then(()=>{resumed=true;});
+releaseC();const releaseD=holdAuthenticationReads();
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(resumed,false,"a newly acquired hold must be observed before reads resume");
+releaseD();await followup;assert.equal(resumed,true);
+await waitForAuthenticationReads();
+console.log(JSON.stringify({suite:"authentication-read-barrier",passed:true,cases:6}));

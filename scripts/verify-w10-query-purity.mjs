@@ -95,7 +95,7 @@ for (const path of integrationFiles) {
 }
 
 const app = read("src/App.tsx");
-assert.match(app, /<StudentMaintenanceGate>[\s\S]*?<StepUpReauthProvider>/u);
+assert.match(app, /<StepUpReauthProvider>[\s\S]*?<StudentMaintenanceGate>[\s\S]*?<AppToastProvider>/u);
 assert.match(
   app,
   /<ProtectedAccessGate>[\s\S]*?<AppDialogProvider>[\s\S]*?<MainLayout>/u,

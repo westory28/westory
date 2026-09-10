@@ -217,8 +217,8 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <Router>
-        <StudentMaintenanceGate>
-          <StepUpReauthProvider>
+        <StepUpReauthProvider>
+          <StudentMaintenanceGate>
             <AppToastProvider>
               <Suspense fallback={<RouteContentFallback />}>
                 <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
@@ -533,8 +533,8 @@ const App: React.FC = () => {
                 </div>
               </Suspense>
             </AppToastProvider>
-          </StepUpReauthProvider>
-        </StudentMaintenanceGate>
+          </StudentMaintenanceGate>
+        </StepUpReauthProvider>
       </Router>
     </AuthProvider>
   );
