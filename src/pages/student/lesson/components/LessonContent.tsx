@@ -2,7 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import { InlineLoading } from "../../../../components/common/LoadingState";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocFromServer,
+  getDocs,
+} from "firebase/firestore";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../../lib/appEvents";
 import { db } from "../../../../lib/firebase";
@@ -107,6 +113,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [answerRestore, setAnswerRestore] = useState<{
+    context: string;
+    status: "loading" | "error" | "ready";
+  }>({ context: "", status: "loading" });
+  const [answerRestoreAttempt, setAnswerRestoreAttempt] = useState(0);
   const [activeWorksheetPage, setActiveWorksheetPage] = useState<number | null>(
     null,
   );
@@ -139,6 +150,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     overviewRequest: 0,
     rewardSettled: false,
     saving: false,
+    restoring: false,
   });
   if (answerSessionRef.current.context !== answerContext) {
     answerSessionRef.current = {
@@ -150,6 +162,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       overviewRequest: 0,
       rewardSettled: false,
       saving: false,
+      restoring: false,
     };
   }
   useEffect(() => {
@@ -176,6 +189,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         overviewRequest: 0,
         rewardSettled: false,
         saving: false,
+        restoring: false,
       };
     },
     [],
@@ -558,9 +572,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
     if (session.revision === null) {
       showToast({
         tone: "info",
-        title: "저장된 답안을 확인하고 있습니다.",
+        title: "저장된 답안을 먼저 확인해 주세요.",
         message:
-          "잠시 후 다시 저장해 주세요. 계속 확인되지 않으면 입력 내용을 보관한 뒤 화면을 다시 열어 주세요.",
+          "입력 내용은 유지됩니다. 화면 위의 답안 확인 안내를 확인해 주세요.",
       });
       return;
     }
@@ -775,12 +789,19 @@ const LessonContent: React.FC<LessonContentProps> = ({
     if (!canPersist || !lesson || lesson.unitId !== unitId) return;
     let cancelled = false;
     const session = answerSessionRef.current;
+    const isInitialRestore = session.revision === null;
     const restoreProgress = async () => {
       const progressRef = getProgressRef();
       const container = contentRef.current;
       if (!progressRef || !container) return;
+      session.restoring = true;
+      if (isInitialRestore) {
+        setAnswerRestore({ context: answerContext, status: "loading" });
+      }
       try {
-        const snap = await getDoc(progressRef);
+        const snap = isInitialRestore
+          ? await getDocFromServer(progressRef)
+          : await getDoc(progressRef);
         if (cancelled || answerSessionRef.current !== session) return;
         const data = (snap.data() || {}) as {
           answers?: Record<string, { value?: string; status?: AnswerStatus }>;
@@ -788,7 +809,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
           corePointFinds?: unknown;
         };
         const answers = data.answers || {};
-        session.revision = data.answerRevision ?? 0;
+        const revision = data.answerRevision ?? 0;
+        if (!Number.isSafeInteger(revision) || revision < 0) {
+          throw new Error("Invalid saved answer revision");
+        }
         const currentCorePointIdSet = new Set(
           worksheet.examHighlights.map((highlight) => highlight.id),
         );
@@ -829,6 +853,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
           input.classList.remove("correct", "wrong");
           if (saved.status) input.classList.add(saved.status);
         });
+        session.revision = revision;
+        if (isInitialRestore) {
+          setAnswerRestore({ context: answerContext, status: "ready" });
+        }
         void refreshCorePointOverview(restoredCorePointIds).catch(
           (overviewError) => {
             console.warn(
@@ -838,7 +866,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
           },
         );
       } catch (restoreError) {
+        if (cancelled || answerSessionRef.current !== session) return;
+        if (isInitialRestore) {
+          setAnswerRestore({ context: answerContext, status: "error" });
+        }
         console.error("Failed to restore lesson progress:", restoreError);
+      } finally {
+        if (!cancelled) session.restoring = false;
       }
     };
     const { bodyHtml, worksheet } = getLessonContentSections(lesson);
@@ -853,8 +887,16 @@ const LessonContent: React.FC<LessonContentProps> = ({
     void restoreProgress();
     return () => {
       cancelled = true;
+      session.restoring = false;
     };
-  }, [answerContext, canPersist, currentUser?.uid, lesson, unitId]);
+  }, [
+    answerContext,
+    answerRestoreAttempt,
+    canPersist,
+    currentUser?.uid,
+    lesson,
+    unitId,
+  ]);
 
   useEffect(() => {
     if (!canPersist || !currentUser?.uid || !lesson) {
@@ -1342,13 +1384,38 @@ const LessonContent: React.FC<LessonContentProps> = ({
     });
   };
 
-  const floatingSaveButtonLabel = isSaving
-    ? "저장 중..."
-    : hasUnsavedChanges
-      ? "저장 가능"
-      : saveMessage === "완료 반영됨"
-        ? "완료 반영됨"
-        : "저장";
+  const needsAnswerRestore = Boolean(
+    bodyHtml || worksheet.blanks.length || worksheet.examHighlights.length,
+  );
+  const answerRestoreStatus = !needsAnswerRestore
+    ? "ready"
+    : answerRestore.context === answerContext
+      ? answerRestore.status
+      : "loading";
+  const retryAnswerRestore = () => {
+    const session = answerSessionRef.current;
+    if (
+      session.restoring ||
+      session.revision !== null ||
+      answerRestoreStatus !== "error"
+    )
+      return;
+    session.restoring = true;
+    setAnswerRestore({ context: answerContext, status: "loading" });
+    setAnswerRestoreAttempt((attempt) => attempt + 1);
+  };
+  const floatingSaveButtonLabel =
+    answerRestoreStatus !== "ready"
+      ? answerRestoreStatus === "error"
+        ? "답안 확인 필요"
+        : "답안 확인 중"
+      : isSaving
+        ? "저장 중..."
+        : hasUnsavedChanges
+          ? "저장 가능"
+          : saveMessage === "완료 반영됨"
+            ? "완료 반영됨"
+            : "저장";
   const displayedCorePointTotalCount = corePointOverview.loaded
     ? corePointOverview.totalCount
     : currentCorePointIds.length;
@@ -1442,16 +1509,20 @@ const LessonContent: React.FC<LessonContentProps> = ({
         <button
           type="button"
           onClick={handleSaveAction}
-          disabled={isSaving || !hasUnsavedChanges}
+          disabled={
+            answerRestoreStatus !== "ready" || isSaving || !hasUnsavedChanges
+          }
           data-session-action="true"
           className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 ${
-            isSaving
-              ? "bg-blue-600 text-white focus-visible:ring-blue-100"
-              : hasUnsavedChanges
-                ? "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-100"
-                : saveMessage === "완료 반영됨"
-                  ? "cursor-default bg-blue-50 text-blue-700 focus-visible:ring-blue-100"
-                  : "cursor-not-allowed bg-slate-100 text-slate-400 focus-visible:ring-slate-100"
+            answerRestoreStatus !== "ready"
+              ? "cursor-not-allowed bg-slate-100 text-slate-500 focus-visible:ring-slate-100"
+              : isSaving
+                ? "bg-blue-600 text-white focus-visible:ring-blue-100"
+                : hasUnsavedChanges
+                  ? "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-100"
+                  : saveMessage === "완료 반영됨"
+                    ? "cursor-default bg-blue-50 text-blue-700 focus-visible:ring-blue-100"
+                    : "cursor-not-allowed bg-slate-100 text-slate-400 focus-visible:ring-slate-100"
           }`}
           aria-label={floatingSaveButtonLabel}
         >
@@ -1534,6 +1605,31 @@ const LessonContent: React.FC<LessonContentProps> = ({
             </button>
           )}
         </div>
+
+        {canPersist &&
+          needsAnswerRestore &&
+          answerRestoreStatus !== "ready" && (
+            <div
+              className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-blue-900"
+              aria-live="polite"
+              aria-busy={answerRestoreStatus === "loading"}
+            >
+              <p role="status">
+                {answerRestoreStatus === "error"
+                  ? "저장된 답안을 불러오지 못했습니다. 입력한 내용은 이 화면에 유지됩니다."
+                  : "저장된 답안을 확인하고 있습니다. 기다리는 동안에도 입력할 수 있습니다."}
+              </p>
+              {answerRestoreStatus === "error" && (
+                <button
+                  type="button"
+                  onClick={retryAnswerRestore}
+                  className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+                >
+                  저장된 답안 다시 확인
+                </button>
+              )}
+            </div>
+          )}
 
         {embedUrl && (
           <div

@@ -15,22 +15,36 @@ writeFileSync(
 import React,{useSyncExternalStore} from '${root.replaceAll("\\", "/")}/node_modules/react/index.js';
 const params=new URLSearchParams(location.search);
 const config={year:'2026',semester:'2'},listeners=new Set();
-let identity={config,currentUser:{uid:'student-a'},unit:'unit-a',preview:params.has('preview')};
+let identity={config,currentUser:{uid:'student-a'},unit:'unit-a',preview:params.has('preview'),fetch:params.has('fetch')};
 export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>identity);
 window.selectLesson=(uid,unit)=>{identity={...identity,currentUser:uid?{uid}:null,unit};listeners.forEach(fn=>fn());};
+window.refreshConfig=()=>{identity={...identity,config:{...identity.config}};listeners.forEach(fn=>fn());};
 window.coreCalls=[];window.coreToasts=[];window.corePointsUpdated=0;
 window.addEventListener('points-updated',()=>window.corePointsUpdated++);
 const image='data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="700"><rect width="800" height="700" fill="white"/><text x="60" y="100" font-size="30">학습 검증</text></svg>');
 const lessons=Object.fromEntries(['unit-a','unit-b'].map(unit=>[unit,{unitId:unit,title:unit,contentRevision:1,contentHtml:'<p>[고려] 시대</p>',isVisibleToStudents:true,worksheetPageImages:[{page:1,imageUrl:image,width:800,height:700}],worksheetExamHighlights:[{id:'point-a',page:1,leftRatio:.12,topRatio:.25,widthRatio:.3,heightRatio:.08}],worksheetBlanks:[]}]));
+if(params.has('answers'))Object.values(lessons).forEach(lesson=>{lesson.contentHtml='<p>[고려] 시대와 [발해]</p>';lesson.worksheetBlanks=[{id:'worksheet-a',page:1,leftRatio:.12,topRatio:.45,widthRatio:.3,heightRatio:.08,answer:'고려'}];});
+if(params.has('noAnswers'))Object.values(lessons).forEach(lesson=>{lesson.contentHtml='';lesson.worksheetBlanks=[];lesson.worksheetExamHighlights=[];});
 export const lessonFor=unit=>lessons[unit];
 const progress=new Map(),rewards=new Set(),pending=[],restores=[],overviews=[];
 if(params.has('reward'))progress.set('student-a/unit-a',{corePointFinds:['point-a']});
 window.delayRestore=params.has('restore');window.delayOverview=params.has('overview');window.failOverview=false;
-const unitData=(uid,unit)=>progress.get(uid+'/'+unit)||{};
+const unitData=(uid,unit)=>({...params.has('answers')?{answerRevision:uid==='student-b'||unit==='unit-b'?11:7,answers:{'0':{value:'고려',status:'correct'},'1':{value:'발해',status:'correct'},'worksheet-a':{value:'고려',status:'correct'}}}:{},...progress.get(uid+'/'+unit)||{}});
+window.cachedAnswerReads=0;
+const answerReads=[];window.answerReadCalls=[];window.answerSaves=[];
+export const getDocFromServer=ref=>{
+ if(!params.has('answers'))return getDoc(ref);
+ window.answerReadCalls.push(ref.path);
+ const revision=ref.path.includes('student-b')||ref.path.endsWith('unit-b')?11:7;
+ const data={answerRevision:revision,answers:{'0':{value:'고려',status:'correct'},'1':{value:'발해',status:'correct'},'worksheet-a':{value:'고려',status:'correct'}},corePointFinds:[]};
+ return new Promise((resolve,reject)=>answerReads.push({resolve,reject,data}));
+};
+window.finishAnswerRead=(ok=true,index=0,revision)=>{const item=answerReads.splice(index,1)[0];if(!item)throw Error('No pending answer read');if(!ok){item.reject(Error('Synthetic answer read failure'));return;}if(revision!==undefined)item.data.answerRevision=revision;item.resolve(snapshot(item.data));};
+window.pendingAnswerReads=()=>answerReads.length;
 const snapshot=data=>({exists:()=>Object.keys(data).length>0,data:()=>data});
 export const db={}; export const doc=(_db,...parts)=>({path:parts.join('/')});export const collection=doc;
 export const getDoc=async ref=>{const m=ref.path.match(/lesson_progress\/([^/]+)(?:\/units\/([^/]+))?$/);if(!m)return snapshot({});const [,uid,unit]=m;
- if(unit){const data=structuredClone(unitData(uid,unit));if(window.delayRestore)return new Promise(resolve=>restores.push(()=>resolve(snapshot(data))));return snapshot(data);}
+ if(unit){window.cachedAnswerReads++;const data=structuredClone(unitData(uid,unit));if(window.delayRestore)return new Promise(resolve=>restores.push(()=>resolve(snapshot(data))));return snapshot(data);}
  if(window.failOverview)throw Error('Synthetic overview failure');const data={corePointRewardClaimed:params.has('staleReward')?false:rewards.has(uid)};if(window.delayOverview)return new Promise((resolve,reject)=>overviews.push(ok=>ok?resolve(snapshot(data)):reject(Error('Old overview failure'))));return snapshot(data);};
 export const getDocs=async ref=>{if(window.failOverview)throw Error('Synthetic overview failure');const uid=ref.path.split('/').at(-2);return {docs:['unit-a','unit-b'].map(unit=>({id:unit,data:()=>unitData(uid,unit)}))};};
 export const readStudentLesson=async(_config,unit)=>lessons[unit];
@@ -38,7 +52,7 @@ export const readStudentVisibleLessons=async()=>[lessons[identity.unit]];
 const write=(kind,input)=>{const uid=identity.currentUser?.uid;window.coreCalls.push({kind,input,uid});return new Promise((resolve,reject)=>pending.push({kind,input,uid,resolve,reject}));};
 export const recordLessonCorePointFind=input=>write('find',input);
 export const claimLessonCorePointReward=input=>write('reward',input);
-export const saveLessonAnswers=async input=>({unitId:input.unitId,answerRevision:1,answers:Object.fromEntries(Object.entries(input.answers).map(([key,value])=>[key,{value,status:value==='고려'?'correct':'wrong'}])),correctCount:1,totalCount:1});
+export const saveLessonAnswers=async input=>{window.answerSaves.push(input);return {unitId:input.unitId,answerRevision:input.expectedAnswerRevision+1,answers:Object.fromEntries(Object.entries(input.answers).map(([key,value])=>[key,{value,status:value==='고려'||value==='발해'?'correct':'wrong'}])),correctCount:1,totalCount:1};};
 window.finishCore=(kind,ok=true)=>{const index=pending.findIndex(v=>v.kind===kind);if(index<0)throw Error('No pending '+kind);const item=pending.splice(index,1)[0];if(!ok){item.reject(Error('Synthetic command failure'));return;}if(kind==='find'){progress.set(item.uid+'/'+item.input.unitId,{corePointFinds:['point-a']});item.resolve({result:{settled:true}});}else{rewards.add(item.uid);item.resolve({result:{awarded:true,settled:true,amount:500,totalAwarded:500}});}};
 window.finishRestores=()=>{window.delayRestore=false;restores.splice(0).forEach(fn=>fn());};
 window.finishOverviews=(ok=true)=>{window.delayOverview=false;overviews.splice(0).forEach(fn=>fn(ok));};
@@ -51,7 +65,7 @@ export const lazyWithRetry=load=>React.lazy(load);
 );
 const bundle = await build({
   stdin: {
-    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import Lesson from './src/pages/student/lesson/components/LessonContent';import {useAuth,lessonFor} from '${fixture.replaceAll("\\", "/")}';function App(){const state=useAuth();return <React.Suspense fallback="loading"><Lesson unitId={state.unit} lessonOverride={lessonFor(state.unit)} disablePersistence={state.preview}/></React.Suspense>};createRoot(document.getElementById('root')).render(<App/>);`,
+    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import Lesson from './src/pages/student/lesson/components/LessonContent';import {useAuth,lessonFor} from '${fixture.replaceAll("\\", "/")}';function App(){const state=useAuth();return <React.Suspense fallback="loading"><Lesson unitId={state.unit} lessonOverride={state.fetch?null:lessonFor(state.unit)} disablePersistence={state.preview}/></React.Suspense>};createRoot(document.getElementById('root')).render(<App/>);`,
     resolveDir: root,
     loader: "tsx",
   },
@@ -288,6 +302,189 @@ try {
     checks++;
     results.push({ width, passed: true });
   }
+  const retryAnswers = () =>
+    page.getByRole("button", { name: "저장된 답안 다시 확인", exact: true });
+  const inline = (index) =>
+    page.locator(`.cloze-input[data-blank-index="${index}"]`);
+  const pdfBlank = () =>
+    page.locator('.worksheet-blank-input[data-blank-id="worksheet-a"]');
+  const finishRead = (ok = true, index = 0, revision) =>
+    page.evaluate(
+      ([ok, index, revision]) => window.finishAnswerRead(ok, index, revision),
+      [ok, index, revision],
+    );
+  const openAnswers = async () => {
+    await open("?answers");
+    await page.waitForFunction(() => window.pendingAnswerReads() > 0);
+    // lessonOverride is normalized again on mount; settle cancelled reads separately.
+    while (await page.evaluate(() => window.pendingAnswerReads() > 1))
+      await finishRead(false);
+    return page.evaluate(() => window.answerReadCalls.length);
+  };
+  for (const width of [320, 390, 768, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const initialReads = await openAnswers();
+    await inline(0).fill("새 초안");
+    await pdfBlank().fill("학습지 초안");
+    assert.equal(
+      await page
+        .getByRole("button", { name: "답안 확인 중", exact: true })
+        .isDisabled(),
+      true,
+    );
+    checks++;
+    await finishRead(false);
+    await retryAnswers().waitFor();
+    assert.equal(await inline(0).inputValue(), "새 초안");
+    assert.equal(await pdfBlank().inputValue(), "학습지 초안");
+    checks += 2;
+    await retryAnswers().focus();
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(
+      (count) => window.answerReadCalls.length === count + 1,
+      initialReads,
+    );
+    await finishRead(false);
+    await retryAnswers().waitFor();
+    await retryAnswers().evaluate((button) => {
+      button.click();
+      button.click();
+      button.click();
+    });
+    await page.waitForFunction(
+      (count) => window.answerReadCalls.length === count + 2,
+      initialReads,
+    );
+    assert.equal(await page.evaluate(() => window.pendingAnswerReads()), 1);
+    checks++;
+    await inline(0).fill("재시도 중 초안");
+    await point().click();
+    await finish("find");
+    await finishRead();
+    await retryAnswers().waitFor({ state: "hidden" });
+    await page
+      .getByRole("button", { name: "저장 가능", exact: true })
+      .waitFor();
+    assert.equal(await inline(0).inputValue(), "재시도 중 초안");
+    assert.equal(await pdfBlank().inputValue(), "학습지 초안");
+    assert.equal(await inline(1).inputValue(), "발해");
+    checks += 3;
+    await found(true);
+    await page.getByRole("button", { name: "저장 가능", exact: true }).click();
+    await page.waitForFunction(() => window.answerSaves.length === 1);
+    const saved = await page.evaluate(() => window.answerSaves[0]);
+    assert.equal(saved.expectedAnswerRevision, 7);
+    assert.deepEqual(saved.answers, {
+      0: "재시도 중 초안",
+      1: "발해",
+      "worksheet-a": "학습지 초안",
+    });
+    checks += 2;
+    await page.getByRole("button", { name: "저장", exact: true }).waitFor();
+    await openAnswers();
+    await finishRead(false);
+    await retryAnswers().waitFor();
+    const layout = await page.evaluate(() => ({
+      width: document.documentElement.scrollWidth,
+      viewport: innerWidth,
+      button: [...document.querySelectorAll("button")]
+        .find((button) => button.textContent === "저장된 답안 다시 확인")
+        ?.getBoundingClientRect().height,
+    }));
+    assert.ok(layout.width <= layout.viewport, JSON.stringify(layout));
+    assert.ok(layout.button >= 44);
+    checks += 2;
+    await page.screenshot({
+      path: join(output, `answer-read-error-${width}.png`),
+      fullPage: true,
+    });
+    await retryAnswers().click();
+    await finishRead(true, 0, -1);
+    await retryAnswers().waitFor();
+    assert.equal(await page.evaluate(() => window.answerSaves.length), 0);
+    checks++;
+    await retryAnswers().click();
+    await finishRead(true, 0, 0);
+    await page.getByRole("button", { name: "저장", exact: true }).waitFor();
+    assert.equal(await inline(0).inputValue(), "고려");
+    checks++;
+    results.push({ width, scenario: "answer read retry", passed: true });
+  }
+  for (const change of ["account", "unit", "signout"]) {
+    for (const oldSuccess of [true, false]) {
+      await openAnswers();
+      await finishRead(false);
+      await retryAnswers().click();
+      await page.waitForFunction(() => window.pendingAnswerReads() === 1);
+      await page.evaluate(
+        (change) =>
+          window.selectLesson(
+            change === "signout"
+              ? null
+              : change === "account"
+                ? "student-b"
+                : "student-a",
+            change === "unit" ? "unit-b" : "unit-a",
+          ),
+        change,
+      );
+      if (change !== "signout") {
+        await page.waitForFunction(() => window.pendingAnswerReads() === 2);
+        await finishRead(true, 1);
+        await page.getByRole("button", { name: "저장", exact: true }).waitFor();
+        await inline(0).fill("새 문맥 답안");
+      }
+      await finishRead(oldSuccess);
+      await page.waitForTimeout(100);
+      assert.equal(await retryAnswers().count(), 0);
+      checks++;
+      if (change !== "signout") {
+        assert.equal(await inline(0).inputValue(), "새 문맥 답안");
+        checks++;
+        await page
+          .getByRole("button", { name: "저장 가능", exact: true })
+          .click();
+        await page.waitForFunction(() => window.answerSaves.length === 1);
+        assert.equal(
+          await page.evaluate(
+            () => window.answerSaves[0].expectedAnswerRevision,
+          ),
+          11,
+        );
+        checks++;
+      }
+    }
+  }
+  await open("?answers&preview");
+  assert.equal(await page.evaluate(() => window.answerReadCalls.length), 0);
+  assert.equal(await retryAnswers().count(), 0);
+  checks += 2;
+  await open("?answers&fetch");
+  await page.waitForFunction(() => window.pendingAnswerReads() === 1);
+  await finishRead(false);
+  await retryAnswers().click();
+  await finishRead();
+  await page.getByRole("button", { name: "저장", exact: true }).waitFor();
+  await page.evaluate(() => window.refreshConfig());
+  await page.waitForFunction(() => window.cachedAnswerReads === 1);
+  await page.waitForFunction(
+    () => document.querySelector(".worksheet-blank-input")?.value === "고려",
+  );
+  assert.equal(await inline(1).inputValue(), "발해");
+  checks++;
+  await inline(0).fill("변경한 답안");
+  await page.getByRole("button", { name: "저장 가능", exact: true }).click();
+  await page.waitForFunction(() => window.answerSaves.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.answerSaves[0].answers), {
+    0: "변경한 답안",
+    1: "발해",
+    "worksheet-a": "고려",
+  });
+  checks++;
+  await page.goto(origin + "/?answers&noAnswers");
+  await page.getByRole("button", { name: "저장", exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.answerReadCalls.length), 0);
+  checks++;
   assert.deepEqual(errors, []);
   writeFileSync(
     join(output, "result.json"),
