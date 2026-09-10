@@ -98,6 +98,7 @@ const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
 ] as const;
 
 export const HIGH_RISK_COMMANDS = new Set<string>([
+  "uploadLessonAssetContent",
   ...COMMAND_GATEWAY_HIGH_RISK_COMMANDS,
   // Retained direct-callable names that have not yet moved to the gateway.
   "deleteStudentData",

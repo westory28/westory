@@ -8,6 +8,7 @@ import {
   saveLessonDocument,
   saveLessonTree,
   uploadLessonAsset,
+  downloadLessonPdfReference,
 } from "../../lib/lessonManagement";
 import {
   collection,
@@ -1254,10 +1255,7 @@ const ManageLesson: React.FC = () => {
       "원본 PDF를 확인하고 구조 추출을 다시 요청하는 중입니다...",
     );
     try {
-      const original = await getBlob(
-        ref(await getFirebaseStorage(), path),
-        20 * 1024 * 1024,
-      );
+      const original = await downloadLessonPdfReference(lessonPdfUrl, path);
       const asset = await uploadLessonAsset(config, {
         unitId: selectedNodeId,
         expectedRevision,

@@ -1,6 +1,5 @@
 import { doc, getDoc, getDocFromServer } from "firebase/firestore";
-import { ref, uploadBytes } from "firebase/storage";
-import { auth, db, getFirebaseStorage } from "./firebase";
+import { auth, db, getHttpsCallable, getFirebaseStorage } from "./firebase";
 import {
   executeWestoryCommand,
   type W2CommandPayloads,
@@ -10,6 +9,43 @@ import type { SystemConfig } from "../types";
 import type { LessonPdfProcessingMeta } from "./lessonPdfExtraction";
 
 type Config = Pick<SystemConfig, "year" | "semester"> | null | undefined;
+// Re-extraction uses the same saved asset URL as the lesson viewer. Do not
+// require the editing teacher to be the original uploader of a shared lesson.
+export const downloadLessonPdfReference = async (url: string, path: string) => {
+  const parsed = new URL(url);
+  const bucket = (await getFirebaseStorage()).app.options.storageBucket;
+  if (
+    parsed.origin !== "https://firebasestorage.googleapis.com" ||
+    parsed.pathname !==
+      `/v0/b/${encodeURIComponent(String(bucket))}/o/${encodeURIComponent(path)}` ||
+    parsed.searchParams.get("alt") !== "media" ||
+    !parsed.searchParams.get("token")
+  )
+    throw new Error("저장된 원본 PDF 주소를 확인해 주세요.");
+  const response = await fetch(parsed.href, {
+    method: "GET",
+    redirect: "error",
+  });
+  if (!response.ok || !response.body)
+    throw new Error("원본 PDF를 불러올 수 없습니다.");
+  const reader = response.body.getReader();
+  const chunks: BlobPart[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 20 * 1024 * 1024)
+        throw new Error("원본 PDF는 20MB 이하여야 합니다.");
+      chunks.push(new Uint8Array(value).buffer);
+    }
+  } finally {
+    await reader.cancel();
+  }
+  return new Blob(chunks, { type: "application/pdf" });
+};
+
 export const getLessonCommandScope = async (config: Config) => {
   const match = getSemesterCollectionPath(config, "lessons").match(
     /^years\/(\d{4})\/semesters\/([12])\/lessons$/,
@@ -93,15 +129,17 @@ export const uploadLessonAsset = async (
   const prior = (await getDocFromServer(ticketRef)).data();
   if (prior?.status === "PENDING") {
     try {
-      await uploadBytes(
-        ref(await getFirebaseStorage(), ticket.storagePath),
-        input.file,
-        {
-          contentType:
-            input.file.type ||
-            (input.kind === "PDF" ? "application/pdf" : "image/png"),
-        },
-      );
+      const bytes = new Uint8Array(await input.file.arrayBuffer());
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 16384)
+        binary += String.fromCharCode(
+          ...bytes.subarray(offset, offset + 16384),
+        );
+      const upload = await getHttpsCallable<
+        { uploadId: string; contentBase64: string },
+        { accepted: boolean }
+      >("uploadLessonAssetContent");
+      await upload({ uploadId: ticket.uploadId, contentBase64: btoa(binary) });
     } catch (error) {
       // A lost upload acknowledgement may race the finalizer. Poll the ticket
       // once before surfacing the error; never overwrite an existing object.

@@ -72,6 +72,7 @@ const SESSION_CONTROL_CALLABLES = new Set([
   "saveAssessmentProgress",
 ]);
 const USER_EVENT_COMMAND_CALLABLES = new Map([
+  ["uploadLessonAssetContent", { file: "src/lib/lessonManagement.ts", function: "uploadLessonAsset", symbolId: "src/lib/lessonManagement.ts::uploadLessonAsset#1" }],
   [
     "executeLessonCorePointCommand",
     {

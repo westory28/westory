@@ -218,27 +218,14 @@ service firebase.storage {
     }
 
     match /lesson_uploads/{uploadId}/source {
-      function ticket() {
-        return firestore.get(/databases/(default)/documents/lesson_asset_uploads/$(uploadId)).data;
-      }
-      function canCreateTicketAsset() {
-        let upload = ticket();
-        return resource == null && request.resource != null && canUseWestory()
-          && (request.auth.token.email == "westoria28@gmail.com" || userProfile().role == 'teacher')
-          && upload.ownerUid == request.auth.uid
-          && upload.uploadId == uploadId
-          && upload.storagePath == 'lesson_uploads/' + uploadId + '/source'
-          && upload.status == 'PENDING'
-          && upload.expiresAtMs > request.time.toMillis()
-          && request.resource.size == upload.byteSize
-          && request.resource.contentType == upload.contentType
-          && isLessonPdfAssetUpload();
-      }
-      allow read: if canUseWestory() && (ticket().ownerUid == request.auth.uid || ticket().status == 'ATTACHED');
-      allow create: if canCreateTicketAsset();
-      allow update, delete: if false;
+      // Server transport validates the session, teacher role and upload ticket.
+      // Raw reads remain owner/admin only and fail closed during session fences.
+      // Shared lesson display/re-extraction uses its verified saved asset URL.
+      allow read: if canUseWestory() && resource != null
+        && (resource.metadata.ownerUid == request.auth.uid
+          || request.auth.token.email == "westoria28@gmail.com");
+      allow write: if false;
     }
-
     match /map-resources/{resourceId}/{allPaths=**} {
       allow read: if canUseWestory();
       allow write: if false;

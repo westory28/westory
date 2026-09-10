@@ -61,6 +61,8 @@ jobs:
       - run: node functions/scripts/verify-lesson-answers.cjs
       - run: node functions/scripts/verify-lesson-management.cjs
       - run: node functions/scripts/verify-lesson-assets.cjs
+      - run: node functions/scripts/verify-lesson-transport.cjs
+      - run: node scripts/verify-lesson-pdf-download.mjs
       - run: node functions/scripts/verify-history-dictionary-bulk-conflict.cjs
       - run: node functions/scripts/verify-history-dictionary-request-scope.cjs
       - uses: actions/setup-java@v5

@@ -32,6 +32,7 @@ Object.assign(exports, sessionAuthority.callableExports);
 Object.assign(exports, require("./sourceArchiveBeta"));
 Object.assign(exports, require("./lessonPdfBeta"));
 Object.assign(exports, require("./lessonAssetUploads"));
+exports.uploadLessonAssetContent = require("./lessonAssetTransport").uploadLessonAssetContent;
 exports.updateStudentMaintenanceConfig =
   studentMaintenance.createUpdateStudentMaintenanceConfigCallable({
     assertActiveApplicationSession:

@@ -99,7 +99,7 @@ exports.processLessonAssetUpload = onObjectFinalized(
           throw new Error("이미지 형식을 확인할 수 없습니다.");
       }
       await file.setMetadata({
-        metadata: { firebaseStorageDownloadTokens: ticket.downloadToken },
+        metadata: { firebaseStorageDownloadTokens: ticket.downloadToken, ownerUid: ticket.ownerUid, uploadId: ticket.uploadId },
         cacheControl: "private,max-age=3600",
       });
       const url = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket.name)}/o/${encodeURIComponent(ticket.storagePath)}?alt=media&token=${ticket.downloadToken}`;

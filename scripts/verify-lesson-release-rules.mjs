@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
-import { ref, uploadBytes, deleteObject } from "firebase/storage";
+import { ref, uploadBytes, deleteObject, getBytes } from "firebase/storage";
 
 const production = readFileSync("firestore.rules", "utf8");
 const staging = readFileSync("firestore.staging.rules", "utf8");
@@ -235,7 +235,7 @@ for (const [variant, rules] of [
       }),
     );
     checks++;
-    await assertSucceeds(
+    await assertFails(
       uploadBytes(ref(storage, ticket.storagePath), data, {
         contentType: "image/png",
       }),
@@ -249,6 +249,15 @@ for (const [variant, rules] of [
     checks++;
     await assertFails(deleteObject(ref(storage, ticket.storagePath)));
     checks++;
+    await env.withSecurityRulesDisabled(async (context) => {
+      await uploadBytes(ref(context.storage(bucket), ticket.storagePath), data, {
+        contentType: "image/png", customMetadata: { ownerUid: "teacher" },
+      });
+    });
+    await assertSucceeds(getBytes(ref(storage, ticket.storagePath)));
+    await assertSucceeds(getBytes(ref(clients.admin.storage(bucket), ticket.storagePath)));
+    await assertFails(getBytes(ref(clients.student.storage(bucket), ticket.storagePath)));
+    checks += 3;
     await assertFails(
       uploadBytes(
         ref(storage, `${root}/lesson_pdfs/unit-one/page-1.png`),
