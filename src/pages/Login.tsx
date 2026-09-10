@@ -446,6 +446,10 @@ const isLocalAuthHost = (): boolean => {
 
 const shouldPreferRedirectLogin = (): boolean => {
   if (isLocalAuthHost()) return false;
+  // Cross-site redirect results can be lost under browser storage partitioning.
+  // Staging uses Firebase's hosted auth helper, so keep the opener via popup.
+  if (runtimeEnvironment === "staging" && hasCrossOriginAuthDomain())
+    return false;
   if (typeof window !== "undefined" && window.location.protocol === "https:") {
     // Some embedded desktop browsers do not preserve the popup opener state,
     // which can leave Firebase's auth helper page open instead of returning.
@@ -563,6 +567,8 @@ const getLoginFailureMessage = (error?: unknown): string => {
   }
 
   if (code === "auth/popup-blocked") {
+    if (runtimeEnvironment === "staging" && hasCrossOriginAuthDomain())
+      return "브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 로그인해 주세요.";
     return "브라우저가 로그인 팝업을 차단했습니다. 다시 시도하거나 리다이렉트 로그인을 사용해주세요.";
   }
 
@@ -610,6 +616,8 @@ const isPopupFallbackError = (error: unknown): boolean => {
 };
 
 const shouldFallbackToRedirectLogin = (error: unknown): boolean => {
+  if (runtimeEnvironment === "staging" && hasCrossOriginAuthDomain())
+    return false;
   const code = (error as Partial<AuthError>)?.code || "";
   if (!isLocalAuthHost()) return isPopupFallbackError(error);
   return (
