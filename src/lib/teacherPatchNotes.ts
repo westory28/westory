@@ -203,7 +203,9 @@ export const updateTeacherPatchNote = async (
   noteId: string,
   input: TeacherPatchNoteInput,
 ) => {
-  const { completedAt, ...payload } = buildNotePayload(uid, input);
+  // Editing content must not resend a stale status from another window.
+  // Status and its timestamp are changed together by the status operation only.
+  const { completedAt, status, ...payload } = buildNotePayload(uid, input);
   await updateDoc(doc(db, "teacherPatchNotes", uid, "notes", noteId), {
     ...payload,
   });

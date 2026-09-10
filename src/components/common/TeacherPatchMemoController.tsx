@@ -260,7 +260,7 @@ const getElementRect = (element: HTMLElement): TeacherPatchNoteTargetRect => {
 
 type FilterKey = "open" | "all" | "done";
 
-const TeacherPatchMemoController: React.FC = () => {
+const TeacherPatchMemoPanel: React.FC = () => {
   const { currentUser, userData } = useAuth();
   const { showToast } = useAppToast();
   const location = useLocation();
@@ -269,6 +269,8 @@ const TeacherPatchMemoController: React.FC = () => {
   const canUsePatchMemo = isTeacherUser(userData, currentUser?.email);
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState<TeacherPatchNote[]>([]);
+  const [notesError, setNotesError] = useState(false);
+  const [reloadNotes, setReloadNotes] = useState(0);
   const [filter, setFilter] = useState<FilterKey>("open");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [body, setBody] = useState("");
@@ -287,6 +289,26 @@ const TeacherPatchMemoController: React.FC = () => {
   );
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const mutationPending = useRef(false);
+  const mounted = useRef(true);
+  const emptyDraft = JSON.stringify(["", "bug", "normal", "", "", "", null]);
+  const pristineDraft = useRef(emptyDraft);
+  const draftKey = JSON.stringify([
+    body,
+    type,
+    priority,
+    targetLabel,
+    targetText,
+    targetSelector,
+    targetRect,
+  ]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const uid = currentUser?.uid || "";
 
@@ -295,14 +317,28 @@ const TeacherPatchMemoController: React.FC = () => {
       setNotes([]);
       return undefined;
     }
-    return subscribeTeacherPatchNotes(uid, setNotes, () =>
-      showToast({
-        tone: "error",
-        title: "패치 메모를 불러오지 못했습니다.",
-        message: "권한이나 네트워크 상태를 확인해 주세요.",
-      }),
+    let active = true;
+    const unsubscribe = subscribeTeacherPatchNotes(
+      uid,
+      (nextNotes) => {
+        if (!active) return;
+        setNotes(nextNotes);
+      },
+      () => {
+        if (!active) return;
+        setNotesError(true);
+        showToast({
+          tone: "error",
+          title: "패치 메모를 불러오지 못했습니다.",
+          message: "연결 상태를 확인한 뒤 목록을 다시 불러와 주세요.",
+        });
+      },
     );
-  }, [canUsePatchMemo, isTeacherRoute, showToast, uid]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [canUsePatchMemo, isTeacherRoute, reloadNotes, showToast, uid]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -381,6 +417,7 @@ const TeacherPatchMemoController: React.FC = () => {
   if (!currentUser || !isTeacherRoute || !canUsePatchMemo) return null;
 
   const resetForm = (nextPath = currentPath) => {
+    pristineDraft.current = emptyDraft;
     setEditingNoteId(null);
     setBody("");
     setType("bug");
@@ -392,6 +429,11 @@ const TeacherPatchMemoController: React.FC = () => {
     setTargetRect(null);
   };
 
+  const canReplaceDraft = () =>
+    !mutationPending.current &&
+    (draftKey === pristineDraft.current ||
+      window.confirm("저장하지 않은 메모 내용이 있습니다. 버리고 계속할까요?"));
+
   const openPanel = () => {
     if (selectingTarget) {
       setSelectingTarget(false);
@@ -399,7 +441,8 @@ const TeacherPatchMemoController: React.FC = () => {
       return;
     }
     if (!open) {
-      resetForm(currentPath);
+      if (!body && !editingNoteId && !targetSelector)
+        setSourcePath(currentPath);
       setOpen(true);
       return;
     }
@@ -408,6 +451,16 @@ const TeacherPatchMemoController: React.FC = () => {
   };
 
   const startEdit = (note: TeacherPatchNote) => {
+    if (!canReplaceDraft()) return;
+    pristineDraft.current = JSON.stringify([
+      note.body,
+      note.type,
+      note.priority,
+      note.targetLabel || "",
+      note.targetText || "",
+      note.targetSelector || "",
+      note.targetRect || null,
+    ]);
     setEditingNoteId(note.id);
     setBody(note.body);
     setType(note.type);
@@ -436,7 +489,7 @@ const TeacherPatchMemoController: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (saving) return;
+    if (mutationPending.current) return;
     if (!body.trim()) {
       showToast({
         tone: "warning",
@@ -447,22 +500,21 @@ const TeacherPatchMemoController: React.FC = () => {
     }
 
     const input = buildInput();
+    mutationPending.current = true;
     setSaving(true);
     try {
       if (editingNoteId) {
-        const originalStatus =
-          notes.find((note) => note.id === editingNoteId)?.status || "open";
-        await updateTeacherPatchNote(uid, editingNoteId, {
-          ...input,
-          status: originalStatus,
-        });
+        await updateTeacherPatchNote(uid, editingNoteId, input);
+        if (!mounted.current) return;
         showToast({ tone: "success", title: "패치 메모를 수정했습니다." });
       } else {
         await createTeacherPatchNote(uid, input);
+        if (!mounted.current) return;
         showToast({ tone: "success", title: "패치 메모를 추가했습니다." });
       }
       resetForm(currentPath);
     } catch (error) {
+      if (!mounted.current) return;
       console.error("Failed to save teacher patch note:", error);
       showToast({
         tone: "error",
@@ -470,7 +522,8 @@ const TeacherPatchMemoController: React.FC = () => {
         message: "내용을 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setSaving(false);
+      mutationPending.current = false;
+      if (mounted.current) setSaving(false);
     }
   };
 
@@ -478,34 +531,49 @@ const TeacherPatchMemoController: React.FC = () => {
     note: TeacherPatchNote,
     status: TeacherPatchNoteStatus,
   ) => {
+    if (mutationPending.current) return;
+    mutationPending.current = true;
+    setSaving(true);
     try {
       await updateTeacherPatchNoteStatus(uid, note, status);
     } catch (error) {
+      if (!mounted.current) return;
       console.error("Failed to update teacher patch note status:", error);
       showToast({
         tone: "error",
         title: "처리 상태를 바꾸지 못했습니다.",
         message: "잠시 후 다시 시도해 주세요.",
       });
+    } finally {
+      mutationPending.current = false;
+      if (mounted.current) setSaving(false);
     }
   };
 
   const handleDelete = async (note: TeacherPatchNote) => {
+    if (mutationPending.current) return;
     const confirmed = window.confirm(
       `"${truncate(getNotePreview(note), 40)}" 메모를 삭제할까요?`,
     );
     if (!confirmed) return;
+    mutationPending.current = true;
+    setSaving(true);
     try {
       await deleteTeacherPatchNote(uid, note.id);
+      if (!mounted.current) return;
       if (editingNoteId === note.id) resetForm(currentPath);
       showToast({ tone: "success", title: "패치 메모를 삭제했습니다." });
     } catch (error) {
+      if (!mounted.current) return;
       console.error("Failed to delete teacher patch note:", error);
       showToast({
         tone: "error",
         title: "패치 메모를 삭제하지 못했습니다.",
         message: "잠시 후 다시 시도해 주세요.",
       });
+    } finally {
+      mutationPending.current = false;
+      if (mounted.current) setSaving(false);
     }
   };
 
@@ -594,7 +662,11 @@ const TeacherPatchMemoController: React.FC = () => {
           </header>
 
           <div className="flex-1 overflow-y-auto px-4 py-4">
-            <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+            <fieldset
+              disabled={saving}
+              aria-busy={saving}
+              className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-3"
+            >
               <label className="block">
                 <span className="text-xs font-extrabold text-slate-700">
                   메모
@@ -728,7 +800,9 @@ const TeacherPatchMemoController: React.FC = () => {
                 {editingNoteId && (
                   <button
                     type="button"
-                    onClick={() => resetForm(currentPath)}
+                    onClick={() => {
+                      if (canReplaceDraft()) resetForm(currentPath);
+                    }}
                     className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-extrabold text-slate-600 transition hover:bg-slate-50"
                   >
                     새 메모
@@ -747,7 +821,7 @@ const TeacherPatchMemoController: React.FC = () => {
                   {saving ? "저장 중" : editingNoteId ? "수정 저장" : "추가"}
                 </button>
               </div>
-            </section>
+            </fieldset>
 
             <section className="mt-4">
               <div className="grid grid-cols-3 gap-2">
@@ -771,7 +845,28 @@ const TeacherPatchMemoController: React.FC = () => {
                 ))}
               </div>
 
-              {!filteredNotes.length && (
+              {notesError && (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
+                >
+                  <p>
+                    메모 목록을 불러오지 못했습니다. 작성 중인 내용은
+                    유지됩니다.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700"
+                    onClick={() => {
+                      setNotesError(false);
+                      setReloadNotes((value) => value + 1);
+                    }}
+                  >
+                    목록 다시 불러오기
+                  </button>
+                </div>
+              )}
+              {!filteredNotes.length && !notesError && (
                 <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500">
                   표시할 패치 메모가 없습니다.
                 </div>
@@ -792,6 +887,7 @@ const TeacherPatchMemoController: React.FC = () => {
                       <div className="flex items-start gap-3">
                         <button
                           type="button"
+                          disabled={saving}
                           onClick={() =>
                             void handleStatusChange(
                               note,
@@ -814,6 +910,7 @@ const TeacherPatchMemoController: React.FC = () => {
 
                         <button
                           type="button"
+                          disabled={saving}
                           onClick={() => startEdit(note)}
                           className="min-w-0 flex-1 text-left"
                         >
@@ -884,6 +981,7 @@ const TeacherPatchMemoController: React.FC = () => {
                           </button>
                           <button
                             type="button"
+                            disabled={saving}
                             onClick={() => void handleDelete(note)}
                             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100"
                             aria-label="패치 메모 삭제"
@@ -930,6 +1028,13 @@ const TeacherPatchMemoController: React.FC = () => {
       </button>
     </>
   );
+};
+
+// A personal draft must never survive an account or teacher-permission change.
+const TeacherPatchMemoController: React.FC = () => {
+  const { currentUser, userData } = useAuth();
+  if (!currentUser || !isTeacherUser(userData, currentUser.email)) return null;
+  return <TeacherPatchMemoPanel key={currentUser.uid} />;
 };
 
 export default TeacherPatchMemoController;
