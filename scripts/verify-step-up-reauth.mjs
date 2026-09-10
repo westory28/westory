@@ -64,6 +64,10 @@ const {
 } = stepUp;
 
 for (const commandType of [
+  "createTeacherPatchNote",
+  "updateTeacherPatchNote",
+  "updateTeacherPatchNoteStatus",
+  "deleteTeacherPatchNote",
   "saveTeacherDraft",
   "discardTeacherDraft",
   "resolveTeacherDraft",
@@ -536,7 +540,7 @@ assert.doesNotMatch(
 assert.match(firebaseSource, /prepareCallableDataWithApplicationSession/);
 assert.match(
   firebaseSource,
-  /new ReCaptchaEnterpriseProvider\(appCheckSiteKey\)/,
+  /new ReCaptchaEnterpriseProvider\(\s*activeFirebaseBinding\?\.appCheckSiteKey \?\? appCheckSiteKey,?\s*\)/,
 );
 assert.match(firebaseSource, /isTokenAutoRefreshEnabled: true/);
 assert.match(firebaseSource, /isProtectedCloudRuntime && !appCheckSiteKey/);

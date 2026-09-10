@@ -5,16 +5,20 @@ import { isTeacherUser } from "../../lib/permissions";
 import {
   createTeacherPatchNote,
   deleteTeacherPatchNote,
+  isPatchNoteResultConfirmedFailure,
+  isPatchNoteResultUncertain,
   subscribeTeacherPatchNotes,
   updateTeacherPatchNote,
   updateTeacherPatchNoteStatus,
   type TeacherPatchNote,
+  type TeacherPatchNoteInput,
   type TeacherPatchNotePriority,
   type TeacherPatchNoteStatus,
   type TeacherPatchNoteTargetRect,
   type TeacherPatchNoteType,
 } from "../../lib/teacherPatchNotes";
 import { useAppToast } from "./AppToastProvider";
+import type { PatchNoteCommandResult } from "../../lib/commandGateway";
 
 const PATCH_MEMO_ROOT_SELECTOR = "[data-patch-memo-root]";
 const PATCH_TARGET_SELECTOR = "[data-patch-target]";
@@ -259,6 +263,20 @@ const getElementRect = (element: HTMLElement): TeacherPatchNoteTargetRect => {
 };
 
 type FilterKey = "open" | "all" | "done";
+type PatchMemoOperation = (
+  | { kind: "create"; input: TeacherPatchNoteInput }
+  | {
+      kind: "update";
+      noteId: string;
+      revision: number;
+      input: TeacherPatchNoteInput;
+    }
+  | { kind: "status"; note: TeacherPatchNote; status: TeacherPatchNoteStatus }
+  | { kind: "delete"; note: TeacherPatchNote }
+) & {
+  outcomeUncertain?: boolean;
+  onSuccess: (result: PatchNoteCommandResult) => void;
+};
 
 const TeacherPatchMemoPanel: React.FC = () => {
   const { currentUser, userData } = useAuth();
@@ -273,6 +291,7 @@ const TeacherPatchMemoPanel: React.FC = () => {
   const [reloadNotes, setReloadNotes] = useState(0);
   const [filter, setFilter] = useState<FilterKey>("open");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingRevision, setEditingRevision] = useState(0);
   const [body, setBody] = useState("");
   const [type, setType] = useState<TeacherPatchNoteType>("bug");
   const [priority, setPriority] = useState<TeacherPatchNotePriority>("normal");
@@ -283,6 +302,9 @@ const TeacherPatchMemoPanel: React.FC = () => {
   const [targetRect, setTargetRect] =
     useState<TeacherPatchNoteTargetRect | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const controlsLocked = saving || uncertain;
   const [selectingTarget, setSelectingTarget] = useState(false);
   const [hoverRect, setHoverRect] = useState<TeacherPatchNoteTargetRect | null>(
     null,
@@ -290,6 +312,7 @@ const TeacherPatchMemoPanel: React.FC = () => {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   const mutationPending = useRef(false);
+  const pendingOperation = useRef<PatchMemoOperation | null>(null);
   const mounted = useRef(true);
   const emptyDraft = JSON.stringify(["", "bug", "normal", "", "", "", null]);
   const pristineDraft = useRef(emptyDraft);
@@ -417,6 +440,8 @@ const TeacherPatchMemoPanel: React.FC = () => {
   if (!currentUser || !isTeacherRoute || !canUsePatchMemo) return null;
 
   const resetForm = (nextPath = currentPath) => {
+    setSaveError("");
+    setEditingRevision(0);
     pristineDraft.current = emptyDraft;
     setEditingNoteId(null);
     setBody("");
@@ -431,6 +456,7 @@ const TeacherPatchMemoPanel: React.FC = () => {
 
   const canReplaceDraft = () =>
     !mutationPending.current &&
+    !pendingOperation.current &&
     (draftKey === pristineDraft.current ||
       window.confirm("저장하지 않은 메모 내용이 있습니다. 버리고 계속할까요?"));
 
@@ -462,6 +488,8 @@ const TeacherPatchMemoPanel: React.FC = () => {
       note.targetRect || null,
     ]);
     setEditingNoteId(note.id);
+    setEditingRevision(note.noteRevision);
+    setSaveError("");
     setBody(note.body);
     setType(note.type);
     setPriority(note.priority);
@@ -488,8 +516,64 @@ const TeacherPatchMemoPanel: React.FC = () => {
     };
   };
 
+  const performMutation = async (operation = pendingOperation.current) => {
+    if (!operation || mutationPending.current) return;
+    mutationPending.current = true;
+    pendingOperation.current = operation;
+    setSaving(true);
+    setSaveError("");
+    try {
+      let result: PatchNoteCommandResult;
+      if (operation.kind === "create")
+        result = await createTeacherPatchNote(uid, operation.input);
+      else if (operation.kind === "update")
+        result = await updateTeacherPatchNote(
+          uid,
+          operation.noteId,
+          operation.revision,
+          operation.input,
+        );
+      else if (operation.kind === "status")
+        result = await updateTeacherPatchNoteStatus(
+          uid,
+          operation.note,
+          operation.status,
+        );
+      else result = await deleteTeacherPatchNote(uid, operation.note);
+      if (!mounted.current) return;
+      pendingOperation.current = null;
+      setUncertain(false);
+      operation.onSuccess(result);
+    } catch (error) {
+      if (!mounted.current) return;
+      const resultUncertain =
+        isPatchNoteResultUncertain(error) ||
+        (operation.outcomeUncertain === true &&
+          !isPatchNoteResultConfirmedFailure(error));
+      operation.outcomeUncertain = resultUncertain;
+      // Keep the exact original payload until its outcome is known. Editing an
+      // ambiguous create into a new payload would create a second command.
+      if (!resultUncertain) pendingOperation.current = null;
+      setUncertain(resultUncertain);
+      const message = resultUncertain
+        ? "처리 결과를 확인하지 못했습니다. 같은 요청으로 다시 시도해 주세요."
+        : error instanceof Error
+          ? error.message
+          : "처리하지 못했습니다. 작성 내용은 유지됩니다.";
+      setSaveError(message);
+      showToast({
+        tone: "error",
+        title: "패치 메모를 처리하지 못했습니다.",
+        message,
+      });
+    } finally {
+      mutationPending.current = false;
+      if (mounted.current) setSaving(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (mutationPending.current) return;
+    if (mutationPending.current || pendingOperation.current) return;
     if (!body.trim()) {
       showToast({
         tone: "warning",
@@ -500,81 +584,57 @@ const TeacherPatchMemoPanel: React.FC = () => {
     }
 
     const input = buildInput();
-    mutationPending.current = true;
-    setSaving(true);
-    try {
-      if (editingNoteId) {
-        await updateTeacherPatchNote(uid, editingNoteId, input);
-        if (!mounted.current) return;
-        showToast({ tone: "success", title: "패치 메모를 수정했습니다." });
-      } else {
-        await createTeacherPatchNote(uid, input);
-        if (!mounted.current) return;
-        showToast({ tone: "success", title: "패치 메모를 추가했습니다." });
-      }
-      resetForm(currentPath);
-    } catch (error) {
-      if (!mounted.current) return;
-      console.error("Failed to save teacher patch note:", error);
-      showToast({
-        tone: "error",
-        title: "패치 메모를 저장하지 못했습니다.",
-        message: "내용을 확인한 뒤 다시 시도해 주세요.",
-      });
-    } finally {
-      mutationPending.current = false;
-      if (mounted.current) setSaving(false);
-    }
+    await performMutation({
+      ...(editingNoteId
+        ? {
+            kind: "update" as const,
+            noteId: editingNoteId,
+            revision: editingRevision,
+            input,
+          }
+        : { kind: "create" as const, input }),
+      onSuccess: () => {
+        showToast({
+          tone: "success",
+          title: editingNoteId
+            ? "패치 메모를 수정했습니다."
+            : "패치 메모를 추가했습니다.",
+        });
+        resetForm(currentPath);
+      },
+    });
   };
 
   const handleStatusChange = async (
     note: TeacherPatchNote,
     status: TeacherPatchNoteStatus,
   ) => {
-    if (mutationPending.current) return;
-    mutationPending.current = true;
-    setSaving(true);
-    try {
-      await updateTeacherPatchNoteStatus(uid, note, status);
-    } catch (error) {
-      if (!mounted.current) return;
-      console.error("Failed to update teacher patch note status:", error);
-      showToast({
-        tone: "error",
-        title: "처리 상태를 바꾸지 못했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
-      });
-    } finally {
-      mutationPending.current = false;
-      if (mounted.current) setSaving(false);
-    }
+    if (mutationPending.current || pendingOperation.current) return;
+    await performMutation({
+      kind: "status",
+      note,
+      status,
+      onSuccess: (result) => {
+        if (editingNoteId === note.id && editingRevision === note.noteRevision)
+          setEditingRevision(result.noteRevision);
+      },
+    });
   };
 
   const handleDelete = async (note: TeacherPatchNote) => {
-    if (mutationPending.current) return;
+    if (mutationPending.current || pendingOperation.current) return;
     const confirmed = window.confirm(
       `"${truncate(getNotePreview(note), 40)}" 메모를 삭제할까요?`,
     );
     if (!confirmed) return;
-    mutationPending.current = true;
-    setSaving(true);
-    try {
-      await deleteTeacherPatchNote(uid, note.id);
-      if (!mounted.current) return;
-      if (editingNoteId === note.id) resetForm(currentPath);
-      showToast({ tone: "success", title: "패치 메모를 삭제했습니다." });
-    } catch (error) {
-      if (!mounted.current) return;
-      console.error("Failed to delete teacher patch note:", error);
-      showToast({
-        tone: "error",
-        title: "패치 메모를 삭제하지 못했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
-      });
-    } finally {
-      mutationPending.current = false;
-      if (mounted.current) setSaving(false);
-    }
+    await performMutation({
+      kind: "delete",
+      note,
+      onSuccess: () => {
+        if (editingNoteId === note.id) resetForm(currentPath);
+        showToast({ tone: "success", title: "패치 메모를 삭제했습니다." });
+      },
+    });
   };
 
   const handleCopyForCodex = async (note: TeacherPatchNote) => {
@@ -663,7 +723,7 @@ const TeacherPatchMemoPanel: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto px-4 py-4">
             <fieldset
-              disabled={saving}
+              disabled={controlsLocked}
               aria-busy={saving}
               className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-3"
             >
@@ -823,6 +883,25 @@ const TeacherPatchMemoPanel: React.FC = () => {
               </div>
             </fieldset>
 
+            {saveError && (
+              <div
+                role="alert"
+                className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
+              >
+                <p>{saveError}</p>
+                {uncertain && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void performMutation()}
+                    className="mt-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700"
+                  >
+                    {saving ? "처리 중" : "같은 요청 다시 시도"}
+                  </button>
+                )}
+              </div>
+            )}
+
             <section className="mt-4">
               <div className="grid grid-cols-3 gap-2">
                 {[
@@ -887,7 +966,7 @@ const TeacherPatchMemoPanel: React.FC = () => {
                       <div className="flex items-start gap-3">
                         <button
                           type="button"
-                          disabled={saving}
+                          disabled={controlsLocked}
                           onClick={() =>
                             void handleStatusChange(
                               note,
@@ -910,7 +989,7 @@ const TeacherPatchMemoPanel: React.FC = () => {
 
                         <button
                           type="button"
-                          disabled={saving}
+                          disabled={controlsLocked}
                           onClick={() => startEdit(note)}
                           className="min-w-0 flex-1 text-left"
                         >
@@ -981,7 +1060,7 @@ const TeacherPatchMemoPanel: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            disabled={saving}
+                            disabled={controlsLocked}
                             onClick={() => void handleDelete(note)}
                             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100"
                             aria-label="패치 메모 삭제"

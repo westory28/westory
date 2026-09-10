@@ -19,6 +19,7 @@ const archiveEnrollment = require("./archiveEnrollment");
 const assessmentLifecycle = require("./assessmentLifecycle");
 const lessonAnswers = require("./lessonAnswers");
 const lessonManagement = require("./lessonManagement");
+const teacherPatchNotes = require("./teacherPatchNotes");
 const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
 const w8Domains = require("./w8Domains");
@@ -11703,6 +11704,7 @@ const authorizeCommandGatewayActor = async ({
 }) => {
   const lessonAnswerCommandTypes = Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES);
   const lessonManagementCommandTypes = Object.values(lessonManagement.LESSON_COMMAND_TYPES);
+  const patchNoteCommandTypes = Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES);
   const assessmentCommandTypes = Object.values(
     assessmentLifecycle.ASSESSMENT_COMMAND_TYPES,
   );
@@ -11721,6 +11723,7 @@ const authorizeCommandGatewayActor = async ({
     !assessmentCommandTypes.includes(commandType) &&
     !lessonAnswerCommandTypes.includes(commandType) &&
     !lessonManagementCommandTypes.includes(commandType) &&
+    !patchNoteCommandTypes.includes(commandType) &&
     !gradeCommandTypes.includes(commandType) &&
     !wisCommandTypes.includes(commandType) &&
     !w8CommandTypes.includes(commandType) &&
@@ -11841,6 +11844,10 @@ const authorizeCommandGatewayActor = async ({
   if (lessonManagementCommandTypes.includes(commandType)) {
     if (!profileSnapshot.exists || profile.role !== "teacher") throw new HttpsError("permission-denied", "수업자료 편집 권한이 필요합니다.", { reason: "LESSON_MANAGE_REQUIRED" });
     return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "lesson:manage" };
+  }
+  if (patchNoteCommandTypes.includes(commandType)) {
+    if (!profileSnapshot.exists || profile.role !== "teacher") throw new HttpsError("permission-denied", "교사 개인 메모만 저장할 수 있습니다.", { reason: "PATCH_NOTE_TEACHER_REQUIRED" });
+    return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "patch-note:manage_own" };
   }
   if (teacherOperationsCommandTypes.includes(commandType)) {
     const role = String(profile.role || "student").trim() || "student";
@@ -12123,6 +12130,7 @@ const assessmentCommandAdapter =
   assessmentLifecycle.createAssessmentCommandAdapter();
 const lessonAnswerCommandAdapter = lessonAnswers.createLessonAnswerCommandAdapter();
 const lessonManagementCommandAdapter = lessonManagement.createLessonCommandAdapter();
+const patchNoteCommandAdapter = teacherPatchNotes.createPatchNoteCommandAdapter();
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
 const w8CommandAdapter = w8Domains.createW8CommandAdapter();
@@ -12138,6 +12146,7 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
+    ...Object.fromEntries(Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).map((commandType) => [commandType, patchNoteCommandAdapter])),
     ...Object.fromEntries(Object.values(lessonManagement.LESSON_COMMAND_TYPES).map((commandType) => [commandType, lessonManagementCommandAdapter])),
     ...Object.fromEntries(Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).map((commandType) => [commandType, lessonAnswerCommandAdapter])),
     [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]:

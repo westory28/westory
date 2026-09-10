@@ -1,17 +1,13 @@
 import {
-  addDoc,
   collection,
-  deleteDoc,
-  doc,
   limit,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
-  updateDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
+import { executeWestoryCommand, WestoryCommandError } from "./commandGateway";
 
 export type TeacherPatchNoteType = "bug" | "improvement" | "content" | "etc";
 export type TeacherPatchNotePriority = "normal" | "high";
@@ -34,6 +30,7 @@ export interface TeacherPatchNoteTarget {
 export interface TeacherPatchNote extends TeacherPatchNoteTarget {
   id: string;
   ownerUid: string;
+  noteRevision: number;
   title: string;
   body: string;
   type: TeacherPatchNoteType;
@@ -126,6 +123,11 @@ const mapTeacherPatchNoteDoc = (docSnap: {
   return {
     id: docSnap.id,
     ownerUid: String(data.ownerUid || ""),
+    noteRevision: Object.prototype.hasOwnProperty.call(data, "noteRevision")
+      ? typeof data.noteRevision === "number"
+        ? data.noteRevision
+        : -1
+      : 0,
     title: String(data.title || ""),
     body: String(data.body || ""),
     type: normalizeType(data.type),
@@ -142,23 +144,18 @@ const mapTeacherPatchNoteDoc = (docSnap: {
   };
 };
 
-const buildNotePayload = (uid: string, input: TeacherPatchNoteInput) => {
-  const status = normalizeStatus(input.status);
+const buildNoteContent = (input: TeacherPatchNoteInput) => {
   const body = trimMultilineLimit(input.body, 2000);
   const payload = {
-    ownerUid: uid,
     title: trimLimit(input.title || body.split("\n")[0] || "패치 메모", 80),
     body,
     type: normalizeType(input.type),
     priority: normalizePriority(input.priority),
-    status,
     sourcePath: trimLimit(input.sourcePath, 240) || "/teacher",
     targetLabel: trimLimit(input.targetLabel, 120),
     targetText: trimLimit(input.targetText, 240),
     targetSelector: trimLimit(input.targetSelector, 240),
     targetRect: normalizeRect(input.targetRect),
-    updatedAt: serverTimestamp(),
-    completedAt: status === "done" ? serverTimestamp() : null,
   };
   return payload;
 };
@@ -192,23 +189,28 @@ export const createTeacherPatchNote = async (
   uid: string,
   input: TeacherPatchNoteInput,
 ) => {
-  await addDoc(getTeacherPatchNotesCollection(uid), {
-    ...buildNotePayload(uid, { ...input, status: "open" }),
-    createdAt: serverTimestamp(),
-  });
+  assertCurrentOwner(uid);
+  return (
+    await executeWestoryCommand("createTeacherPatchNote", {
+      content: buildNoteContent(input),
+    })
+  ).result;
 };
 
 export const updateTeacherPatchNote = async (
   uid: string,
   noteId: string,
+  expectedNoteRevision: number,
   input: TeacherPatchNoteInput,
 ) => {
-  // Editing content must not resend a stale status from another window.
-  // Status and its timestamp are changed together by the status operation only.
-  const { completedAt, status, ...payload } = buildNotePayload(uid, input);
-  await updateDoc(doc(db, "teacherPatchNotes", uid, "notes", noteId), {
-    ...payload,
-  });
+  assertCurrentOwner(uid);
+  return (
+    await executeWestoryCommand("updateTeacherPatchNote", {
+      noteId,
+      expectedNoteRevision,
+      content: buildNoteContent(input),
+    })
+  ).result;
 };
 
 export const updateTeacherPatchNoteStatus = async (
@@ -216,13 +218,38 @@ export const updateTeacherPatchNoteStatus = async (
   note: TeacherPatchNote,
   status: TeacherPatchNoteStatus,
 ) => {
-  await updateDoc(doc(db, "teacherPatchNotes", uid, "notes", note.id), {
-    status,
-    updatedAt: serverTimestamp(),
-    completedAt: status === "done" ? serverTimestamp() : null,
-  });
+  assertCurrentOwner(uid);
+  return (
+    await executeWestoryCommand("updateTeacherPatchNoteStatus", {
+      noteId: note.id,
+      expectedNoteRevision: note.noteRevision,
+      status,
+    })
+  ).result;
 };
 
-export const deleteTeacherPatchNote = async (uid: string, noteId: string) => {
-  await deleteDoc(doc(db, "teacherPatchNotes", uid, "notes", noteId));
+export const deleteTeacherPatchNote = async (
+  uid: string,
+  note: TeacherPatchNote,
+) => {
+  assertCurrentOwner(uid);
+  return (
+    await executeWestoryCommand("deleteTeacherPatchNote", {
+      noteId: note.id,
+      expectedNoteRevision: note.noteRevision,
+    })
+  ).result;
 };
+
+const assertCurrentOwner = (uid: string) => {
+  if (!uid || auth.currentUser?.uid !== uid)
+    throw new Error(
+      "로그인 사용자가 바뀌었습니다. 메모 화면을 다시 열어 주세요.",
+    );
+};
+
+export const isPatchNoteResultUncertain = (error: unknown) =>
+  error instanceof WestoryCommandError && error.state === "retryable";
+
+export const isPatchNoteResultConfirmedFailure = (error: unknown) =>
+  error instanceof WestoryCommandError && error.outcomeConfirmed;

@@ -4,10 +4,10 @@
   "expectedDispositionCounts": {
     "DRAFT_REQUIRED": 4,
     "DOMAIN_DRAFT_EXISTS": 10,
-    "COMMAND_ONLY": 25,
+    "COMMAND_ONLY": 26,
     "READ_ONLY": 2,
     "NOT_APPLICABLE": 2,
-    "RELEASE_DECISION": 8,
+    "RELEASE_DECISION": 7,
     "UNKNOWN": 0
   },
   "surfaces": [
@@ -486,12 +486,12 @@
     },
     {
       "id": "PATCH01",
-      "disposition": "RELEASE_DECISION",
+      "disposition": "COMMAND_ONLY",
       "file": "src/components/common/TeacherPatchMemoController.tsx",
-      "anchors": ["handleSubmit", "createTeacherPatchNote"],
-      "rationale": "패치 메모는 공식 gateway와 receipt 계약이 없습니다.",
-      "completion": "RELEASE_PENDING",
-      "adapter": "none"
+      "anchors": ["performMutation", "editingRevision", "isPatchNoteResultUncertain", "createTeacherPatchNote"],
+      "rationale": "개인 패치 메모는 본인 경로의 Gateway·receipt·서버 CAS로 저장하며, 결과가 불명확하면 원래 요청과 초안을 유지합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "teacher-patch-note-command-adapter"
     }
   ]
 }

@@ -26,7 +26,7 @@ const rules = readFileSync(
   "utf8",
 );
 const firestoreHost = "127.0.0.1";
-const firestorePort = 8080;
+const firestorePort = Number(process.env.FIRESTORE_EMULATOR_HOST?.split(":").pop() || 8080);
 
 const schoolEmail = (name) => `${name}@yongshin-ms.ms.kr`;
 
@@ -244,13 +244,17 @@ const main = async () => {
       limit(100),
     );
 
-  await assertSucceeds(setDoc(teacherNoteRef, notePayload(teacherUid)));
+  await assertFails(setDoc(teacherNoteRef, notePayload(teacherUid)));
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "teacherPatchNotes", teacherUid, "notes", "note-1"), notePayload(teacherUid, { noteRevision: 1 }));
+    await setDoc(doc(context.firestore(), "teacherPatchNotes", teacherUid, "notes", "legacy-note"), notePayload(teacherUid));
+  });
 
   if (process.env.WESTORY_TEACHER_PATCH_RULE_CASE === "CREATE_ONLY") {
     console.log(
       JSON.stringify({
         projectId,
-        checks: ["teacher can create own patch note"],
+        checks: ["direct SDK create is blocked; trusted fixture seeded"],
       }),
     );
     await testEnv.cleanup();
@@ -266,15 +270,19 @@ const main = async () => {
   );
 
   await assertFails(getDocs(teacherNotes));
+  const legacyRef = doc(teacherNotes, "legacy-note");
+  await assertFails(updateDoc(legacyRef, { title: "기존 메모 수정", updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(legacyRef, { status: "done", updatedAt: serverTimestamp(), completedAt: serverTimestamp() }));
+  await assertFails(deleteDoc(legacyRef));
 
-  await assertSucceeds(
+  await assertFails(
     updateDoc(teacherNoteRef, {
       title: "알림장 이미지 교체 확인",
       updatedAt: serverTimestamp(),
     }),
   );
 
-  await assertSucceeds(
+  await assertFails(
     updateDoc(teacherNoteRef, {
       status: "done",
       updatedAt: serverTimestamp(),
@@ -291,28 +299,28 @@ const main = async () => {
 
   await assertFails(
     getDocs(
-      collection(otherTeacherDb, "teacherPatchNotes", teacherUid, "notes"),
+      ownNotesQuery(otherTeacherDb, teacherUid),
     ),
   );
 
   await assertFails(
-    getDocs(collection(anonymousDb, "teacherPatchNotes", teacherUid, "notes")),
+    getDocs(ownNotesQuery(anonymousDb, teacherUid)),
   );
 
   await assertFails(
-    getDocs(collection(expiredDb, "teacherPatchNotes", expiredUid, "notes")),
+    getDocs(ownNotesQuery(expiredDb, expiredUid)),
   );
 
   await assertFails(
-    getDocs(collection(revokedDb, "teacherPatchNotes", revokedUid, "notes")),
+    getDocs(ownNotesQuery(revokedDb, revokedUid)),
   );
 
   await assertFails(
-    getDocs(collection(protocolDb, "teacherPatchNotes", protocolUid, "notes")),
+    getDocs(ownNotesQuery(protocolDb, protocolUid)),
   );
 
   await assertFails(
-    getDocs(collection(revisionDb, "teacherPatchNotes", revisionUid, "notes")),
+    getDocs(ownNotesQuery(revisionDb, revisionUid)),
   );
 
   await assertFails(getDocs(collectionGroup(teacherDb, "notes")));
@@ -345,20 +353,20 @@ const main = async () => {
     }),
   );
 
-  await assertSucceeds(deleteDoc(teacherNoteRef));
+  await assertFails(deleteDoc(teacherNoteRef));
 
   console.log(
     JSON.stringify(
       {
         projectId,
         checks: [
-          "teacher can create own patch note",
+          "direct SDK create is blocked",
           "teacher can list own patch notes",
           "admin can list own patch notes",
           "reauthenticated teacher can list own patch notes",
           "teacher query without required order and limit remains blocked",
-          "teacher can update memo fields",
-          "teacher can mark patch note done",
+          "direct SDK content update is blocked",
+          "direct SDK status update is blocked",
           "teacher cannot write another teacher path",
           "another teacher cannot read owner notes",
           "anonymous cannot read patch notes",
@@ -371,7 +379,7 @@ const main = async () => {
           "staff portal user cannot create patch notes",
           "student sourcePath remains blocked",
           "unexpected payload fields remain blocked",
-          "teacher can delete own patch note",
+          "direct SDK delete is blocked",
         ],
       },
       null,

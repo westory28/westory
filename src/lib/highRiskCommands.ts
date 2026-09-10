@@ -1,4 +1,8 @@
 const COMMAND_GATEWAY_LOW_RISK_COMMANDS = new Set([
+  "createTeacherPatchNote",
+  "updateTeacherPatchNote",
+  "updateTeacherPatchNoteStatus",
+  "deleteTeacherPatchNote",
   "saveLessonAnswers",
   "startAssessmentAttempt",
   "submitAssessmentAttempt",

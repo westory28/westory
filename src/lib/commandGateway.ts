@@ -9,6 +9,10 @@ import {
 } from "./stepUpReauth";
 
 export type W2CommandType =
+  | "createTeacherPatchNote"
+  | "updateTeacherPatchNote"
+  | "updateTeacherPatchNoteStatus"
+  | "deleteTeacherPatchNote"
   | "saveLessonDocument"
   | "saveLessonTree"
   | "prepareLessonAssetUpload"
@@ -273,7 +277,38 @@ interface NoticeInput {
   priority: "NORMAL" | "HIGH";
 }
 
+export interface PatchNoteCommandContent {
+  title: string;
+  body: string;
+  type: "bug" | "improvement" | "content" | "etc";
+  priority: "normal" | "high";
+  sourcePath: string;
+  targetLabel: string;
+  targetText: string;
+  targetSelector: string;
+  targetRect: { x: number; y: number; width: number; height: number } | null;
+}
+
+export interface PatchNoteCommandResult {
+  noteId: string;
+  noteRevision: number;
+  status: "open" | "done" | null;
+  deleted: boolean;
+}
+
 export interface W2CommandPayloads {
+  createTeacherPatchNote: { content: PatchNoteCommandContent };
+  updateTeacherPatchNote: {
+    noteId: string;
+    expectedNoteRevision: number;
+    content: PatchNoteCommandContent;
+  };
+  updateTeacherPatchNoteStatus: {
+    noteId: string;
+    expectedNoteRevision: number;
+    status: "open" | "done";
+  };
+  deleteTeacherPatchNote: { noteId: string; expectedNoteRevision: number };
   saveLessonDocument: {
     semesterId: string;
     expectedSemesterRevision: number;
@@ -966,6 +1001,10 @@ interface WisAccountValuePayload extends WisAccountCommandBase {
 }
 
 export interface W2CommandResults {
+  createTeacherPatchNote: PatchNoteCommandResult;
+  updateTeacherPatchNote: PatchNoteCommandResult;
+  updateTeacherPatchNoteStatus: PatchNoteCommandResult;
+  deleteTeacherPatchNote: PatchNoteCommandResult;
   saveLessonDocument: {
     unitId: string;
     contentRevision: number;
@@ -1389,6 +1428,7 @@ export class WestoryCommandError extends Error {
   readonly retryable: boolean;
   readonly reason: string;
   readonly originalError?: unknown;
+  readonly outcomeConfirmed: boolean;
 
   constructor(
     state: Exclude<WestoryCommandClientState, "pending" | "succeeded">,
@@ -1397,6 +1437,7 @@ export class WestoryCommandError extends Error {
       retryable?: boolean;
       reason?: string;
       originalError?: unknown;
+      outcomeConfirmed?: boolean;
     } = {},
   ) {
     super(message);
@@ -1405,6 +1446,7 @@ export class WestoryCommandError extends Error {
     this.retryable = options.retryable ?? state === "retryable";
     this.reason = options.reason || "COMMAND_FAILED";
     this.originalError = options.originalError;
+    this.outcomeConfirmed = options.outcomeConfirmed === true;
   }
 }
 
@@ -1772,10 +1814,42 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
           }
         }
       } catch (error) {
-        if (!isAmbiguousFunctionError(error)) {
+        const normalized = normalizeCommandError(error);
+        // These adapter failures occur after the transaction finds no receipt.
+        // Its original revision can no longer commit after a change/deletion.
+        const confirmedPatchRejection =
+          normalized instanceof WestoryCommandError &&
+          ["PATCH_NOTE_CONFLICT", "PATCH_NOTE_NOT_FOUND"].includes(
+            normalized.reason,
+          );
+        // A denial on a later attempt happens before receipt lookup and cannot
+        // disprove an earlier commit. Keep its ID through reauthentication.
+        if (
+          !confirmedPatchRejection &&
+          (storedHandle ||
+            isAmbiguousFunctionError(error) ||
+            (normalized instanceof WestoryCommandError && normalized.retryable))
+        ) {
+          await rememberPendingCommandHandle(logicalCommandKey, {
+            ...handle,
+            lastKnownState: "retryable",
+            lastCheckedAtClient: new Date().toISOString(),
+          });
+          throw new WestoryCommandError("retryable", normalized.message, {
+            retryable: true,
+            reason: "COMMAND_OUTCOME_UNCONFIRMED",
+            originalError: error,
+          });
+        } else {
           await forgetPendingCommandHandle(logicalCommandKey, handle.commandId);
         }
-        throw normalizeCommandError(error);
+        if (confirmedPatchRejection)
+          throw new WestoryCommandError(normalized.state, normalized.message, {
+            reason: normalized.reason,
+            outcomeConfirmed: true,
+            originalError: error,
+          });
+        throw normalized;
       }
     },
     ownerUid,
