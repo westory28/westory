@@ -376,8 +376,8 @@ const main = async () => {
   });
   const helperModule = { exports: {} };
   runInNewContext(transformSync(readFileSync("src/lib/teacherPatchNotes.ts", "utf8"), { loader: "ts", format: "cjs" }).code, {
-    module: helperModule, exports: helperModule.exports, console,
-    require: name => name === "firebase/firestore" ? firestore : name === "./firebase" ? { db: teacherDb } : {},
+    module: helperModule, exports: helperModule.exports, console, setTimeout, clearTimeout,
+    require: name => name === "firebase/firestore" ? firestore : name === "./firebase" ? { db: teacherDb, auth: { currentUser: { uid: teacherUid } } } : {},
   });
   const loadPage = (after, expectedCount) => new Promise((resolve, reject) => {
     let unsubscribe = () => {};

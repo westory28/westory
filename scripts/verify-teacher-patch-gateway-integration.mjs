@@ -52,8 +52,12 @@ try {
   assert.equal(created.result.noteRevision, 1); checks++;
   const noteId = created.result.noteId;
   const path = `teacherPatchNotes/${teacher.uid}/notes/${noteId}`;
-  assert.equal((await getDoc(doc(teacher.db, path))).data().ownerUid, teacher.uid); checks++;
-  await assertSucceeds(getDocs(query(collection(teacher.db, "teacherPatchNotes", teacher.uid, "notes"), orderBy("updatedAt", "desc"), limit(100)))); checks++;
+  const storedNote = (await getDoc(doc(teacher.db, path))).data();
+  assert.equal(storedNote.ownerUid, teacher.uid);
+  assert.ok(storedNote.createdAt instanceof Timestamp && storedNote.createdAt.toMillis() > 0);
+  assert.ok(storedNote.updatedAt instanceof Timestamp && storedNote.updatedAt.toMillis() > 0); checks += 3;
+  const createdPage = await assertSucceeds(getDocs(query(collection(teacher.db, "teacherPatchNotes", teacher.uid, "notes"), orderBy("updatedAt", "desc"), limit(100))));
+  assert.ok(createdPage.docs.some(note => note.id === noteId)); checks++;
   assert.equal((await execute(teacher, "createTeacherPatchNote", { content }, createId)).replayed, true); checks++;
   await expectReason(execute(teacher, "createTeacherPatchNote", { content: { ...content, body: "다른 생성" } }, createId), "COMMAND_ID_CONFLICT");
   await expectReason(execute(student, "createTeacherPatchNote", { content }), "PATCH_NOTE_TEACHER_REQUIRED");

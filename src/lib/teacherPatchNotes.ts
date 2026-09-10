@@ -1,5 +1,6 @@
 import {
   collection,
+  getDocsFromServer,
   limit,
   onSnapshot,
   orderBy,
@@ -189,30 +190,81 @@ export const subscribeTeacherPatchNotes = (
     );
     return () => {};
   }
-  return onSnapshot(
-    query(
-      getTeacherPatchNotesCollection(uid),
-      orderBy("updatedAt", "desc"),
-      ...(after ? [startAfter(after.snapshot)] : []),
-      limit(TEACHER_PATCH_NOTES_LIMIT),
-    ),
-    (snapshot) => {
-      const notes = snapshot.docs.map(mapTeacherPatchNoteDoc).sort((a, b) => {
-        if (a.status !== b.status) return a.status === "open" ? -1 : 1;
-        return getTimestampMs(b.updatedAt) - getTimestampMs(a.updatedAt);
-      });
-      // Use the server order, not the UI's status grouping, as the boundary.
-      const last = snapshot.docs[snapshot.docs.length - 1];
-      onChange(notes, {
-        nextCursor: last ? { ownerUid: uid, snapshot: last } : null,
-        hasNext: snapshot.docs.length === TEACHER_PATCH_NOTES_LIMIT,
-      });
-    },
-    (error) => {
-      console.error("Failed to subscribe teacher patch notes:", error);
-      onError?.(error);
-    },
+  const notesQuery = query(
+    getTeacherPatchNotesCollection(uid),
+    orderBy("updatedAt", "desc"),
+    ...(after ? [startAfter(after.snapshot)] : []),
+    limit(TEACHER_PATCH_NOTES_LIMIT),
   );
+  let stopped = false;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let unsubscribe: Unsubscribe = () => {};
+  const isCurrent = () => !stopped && auth.currentUser?.uid === uid;
+  const reportError = (error: Error) => {
+    if (!isCurrent()) return;
+    console.error("Failed to subscribe teacher patch notes:", error);
+    onError?.(error);
+  };
+  const listen = () => {
+    if (!isCurrent()) return;
+    unsubscribe = onSnapshot(
+      notesQuery,
+      (snapshot) => {
+        if (!isCurrent()) return;
+        const notes = snapshot.docs.map(mapTeacherPatchNoteDoc).sort((a, b) => {
+          if (a.status !== b.status) return a.status === "open" ? -1 : 1;
+          return getTimestampMs(b.updatedAt) - getTimestampMs(a.updatedAt);
+        });
+        // Use the server order, not the UI's status grouping, as the boundary.
+        const last = snapshot.docs[snapshot.docs.length - 1];
+        onChange(notes, {
+          nextCursor: last ? { ownerUid: uid, snapshot: last } : null,
+          hasNext: snapshot.docs.length === TEACHER_PATCH_NOTES_LIMIT,
+        });
+      },
+      reportError,
+    );
+  };
+  // A restored listener may reuse a query target from the previous credential.
+  // Confirm this exact bounded query against the server before attaching it.
+  const retryDelays = [250, 1000, 2000];
+  const prepare = async (attempt = 0) => {
+    if (!isCurrent()) return;
+    try {
+      await getDocsFromServer(notesQuery);
+      listen();
+    } catch (error) {
+      if (!isCurrent()) return;
+      // Preserve Firestore's cached/offline listener and automatic reconnect.
+      if ((error as { code?: string }).code === "unavailable") {
+        listen();
+        return;
+      }
+      if (
+        (error as { code?: string }).code === "permission-denied" &&
+        attempt < retryDelays.length
+      ) {
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
+          void prepare(attempt + 1);
+        }, retryDelays[attempt]);
+        return;
+      }
+      reportError(error as Error);
+    }
+  };
+  if (!isCurrent()) {
+    onError?.(
+      new Error("메모 목록의 계정이 바뀌었습니다. 다시 로그인해 주세요."),
+    );
+    return () => {};
+  }
+  void prepare();
+  return () => {
+    stopped = true;
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    unsubscribe();
+  };
 };
 
 export const createTeacherPatchNote = async (

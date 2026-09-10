@@ -1,0 +1,15 @@
+# Teacher patch memo query recovery
+
+The dedicated Staging reproduction used the actual Firebase SDK, current AuthContext and reauthentication provider, and synthetic teacher credentials. After password reauthentication, the Gateway saved a note and REST read the owned notes successfully, while a restored Firestore query listener terminated with `permission-denied`. Its parent, ordering, limit and new `auth_time` matched the REST request. No Firestore request was rejected by the harness network fence.
+
+Retrying the same SDK query could recover. Short listener reattachments alone, a static protected-document probe, and a probe with an authentication-epoch-specific document ID did not reliably fix the reproduction. These experiments are not part of this patch. The exact server-side cause remains unconfirmed; the implementation does not depend on a presumed Rules or SDK defect.
+
+`subscribeTeacherPatchNotes` now confirms the exact bounded query with `getDocsFromServer` before attaching the listener. Only `permission-denied` during that preparatory query is retried, at 250, 1000 and 2000 ms. There are at most four `getDocsFromServer` calls per subscription; this is not a limit on billed document reads or listener traffic. The query object, owner path, 100-document limit and cursor are unchanged. Persistent rejection and other errors reach the existing list-error UI. A later listener error is reported normally.
+
+For `unavailable`, the helper attaches the existing listener so that Firestore's offline cache and network-reconnect behavior remain available. No Rules, role grants, writes, session issuance or dependency versions change. Each individual SDK request still uses the SDK's own completion behavior; the retry count is bounded, not the total elapsed request time.
+
+Disposal clears the retry timer and listener. Both server-read completion and callbacks verify the current owner and disposal state. An old page or account cannot attach a late listener or overwrite the next list. Existing edit drafts, expected revisions and pending command IDs are not reset by this helper.
+
+Verification includes actual-helper deterministic tests for preparation, bounded/permanent rejection, offline fallback, account changes, disposal and late callbacks; the memo UI recovery suite; both local Rules variants with 207 notes and pagination; and the Gateway emulator integration. The latter now asserts that a created note is actually present in the query and has server timestamp fields, instead of merely asserting that the query did not throw.
+
+The external Staging SDK harness tests the actual helper without fresh-query priming, listener mocks or production access. It checks five viewports, password `auth_time` advancement, an active own session, one Gateway note per completed request, actual listed note IDs, protected reads, and denied direct writes. It uses a custom Firebase/settings binding and temporary AppCheck debug token. It is not acceptance evidence for actual Google authentication, the shipped Firebase initializer, SameUserMultiContext or all protected listeners. Those KI-W1-01 acceptance items remain open.
