@@ -135,6 +135,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
     revision: null as number | null,
     edits: 0,
     touched: new Set<string>(),
+    corePointFinds: new Set<string>(),
+    overviewRequest: 0,
+    rewardSettled: false,
     saving: false,
   });
   if (answerSessionRef.current.context !== answerContext) {
@@ -143,6 +146,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
       revision: null,
       edits: 0,
       touched: new Set<string>(),
+      corePointFinds: new Set<string>(),
+      overviewRequest: 0,
+      rewardSettled: false,
       saving: false,
     };
   }
@@ -151,6 +157,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setStudentAnswers({});
     setHasUnsavedChanges(false);
     setSaveMessage("");
+    setFoundCorePointIds([]);
+    foundCorePointIdsRef.current = [];
+    setPendingCorePointIds([]);
+    setCorePointRewardPending(false);
+    setCorePointRewardSettled(false);
+    setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
+    corePointOverviewRef.current = EMPTY_CORE_POINT_OVERVIEW;
   }, [answerContext]);
   useEffect(
     () => () => {
@@ -159,6 +172,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
         revision: null,
         edits: 0,
         touched: new Set<string>(),
+        corePointFinds: new Set<string>(),
+        overviewRequest: 0,
+        rewardSettled: false,
         saving: false,
       };
     },
@@ -343,27 +359,39 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const refreshCorePointOverview = async (
     currentUnitFoundIds = foundCorePointIdsRef.current,
   ) => {
+    const session = answerSessionRef.current;
+    const request = ++session.overviewRequest;
     if (!canPersist || !currentUser?.uid) {
       const fallbackOverview = {
         loaded: false,
         totalCount: currentCorePointIds.length,
-        foundCount: foundCorePointIdsRef.current.length,
+        foundCount: currentUnitFoundIds.length,
       };
       setCorePointOverview(fallbackOverview);
       return fallbackOverview;
     }
 
-    const [visibleLessons, progressRootSnap, progressUnitsSnap] =
-      await Promise.all([
-        readStudentVisibleLessons(config),
-        getDoc(getProgressRootRef()!),
-        getDocs(
-          collection(
-            db,
-            `${getSemesterCollectionPath(config, "lesson_progress")}/${currentUser.uid}/units`,
-          ),
+    const snapshots = await Promise.all([
+      readStudentVisibleLessons(config),
+      getDoc(getProgressRootRef()!),
+      getDocs(
+        collection(
+          db,
+          `${getSemesterCollectionPath(config, "lesson_progress")}/${currentUser.uid}/units`,
         ),
-      ]);
+      ),
+    ]).catch((overviewError) => {
+      if (
+        answerSessionRef.current !== session ||
+        session.overviewRequest !== request
+      )
+        return null;
+      throw overviewError;
+    });
+    if (answerSessionRef.current !== session) return EMPTY_CORE_POINT_OVERVIEW;
+    if (!snapshots || session.overviewRequest !== request)
+      return corePointOverviewRef.current;
+    const [visibleLessons, progressRootSnap, progressUnitsSnap] = snapshots;
 
     const progressByUnitId = new Map(
       progressUnitsSnap.docs.map((item) => [
@@ -387,7 +415,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       const corePointIdSet = new Set(corePointIds);
       const rawFoundIds =
         lessonUnitId === unitId
-          ? currentUnitFoundIds
+          ? foundCorePointIdsRef.current
           : progressByUnitId.get(lessonUnitId)?.corePointFinds;
       const foundIds = Array.isArray(rawFoundIds)
         ? rawFoundIds
@@ -406,7 +434,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
       ? (progressRootSnap.data() as { corePointRewardClaimed?: boolean })
       : null;
     setCorePointOverview(nextOverview);
-    setCorePointRewardSettled(Boolean(progressRoot?.corePointRewardClaimed));
+    corePointOverviewRef.current = nextOverview;
+    setCorePointRewardSettled(
+      session.rewardSettled || Boolean(progressRoot?.corePointRewardClaimed),
+    );
     return nextOverview;
   };
 
@@ -761,11 +792,18 @@ const LessonContent: React.FC<LessonContentProps> = ({
         const currentCorePointIdSet = new Set(
           worksheet.examHighlights.map((highlight) => highlight.id),
         );
-        const restoredCorePointIds = Array.isArray(data.corePointFinds)
-          ? data.corePointFinds
+        const restoredCorePointIds = [
+          ...new Set(
+            [
+              ...(Array.isArray(data.corePointFinds)
+                ? data.corePointFinds
+                : []),
+              ...session.corePointFinds,
+            ]
               .map((value) => String(value || "").trim())
-              .filter((value) => value && currentCorePointIdSet.has(value))
-          : [];
+              .filter((value) => value && currentCorePointIdSet.has(value)),
+          ),
+        ];
         setStudentAnswers((local) => ({
           ...answers,
           ...Object.fromEntries(
@@ -829,13 +867,26 @@ const LessonContent: React.FC<LessonContentProps> = ({
     }
 
     let cancelled = false;
-    void refreshCorePointOverview()
+    const session = answerSessionRef.current;
+    const overviewPromise = refreshCorePointOverview();
+    const request = session.overviewRequest;
+    void overviewPromise
       .then((overview) => {
-        if (cancelled) return;
+        if (
+          cancelled ||
+          answerSessionRef.current !== session ||
+          session.overviewRequest !== request
+        )
+          return;
         corePointOverviewRef.current = overview;
       })
       .catch((overviewError) => {
-        if (cancelled) return;
+        if (
+          cancelled ||
+          answerSessionRef.current !== session ||
+          session.overviewRequest !== request
+        )
+          return;
         console.warn("Failed to load core point overview:", overviewError);
         setCorePointOverview({
           loaded: false,
@@ -1073,12 +1124,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
     )
       return;
 
+    const session = answerSessionRef.current;
     setCorePointRewardPending(true);
     try {
       const latestOverview =
         overview?.loaded === true
           ? overview
           : await refreshCorePointOverview(nextFoundIds);
+      if (answerSessionRef.current !== session) return;
       const remainingCount = Math.max(
         0,
         latestOverview.totalCount - latestOverview.foundCount,
@@ -1100,12 +1153,20 @@ const LessonContent: React.FC<LessonContentProps> = ({
         authenticated: Boolean(currentUser?.uid),
         persistenceEnabled: canPersist,
       });
+      if (answerSessionRef.current !== session) return;
       if (rewardResult.awarded && rewardResult.amount > 0) {
         notifyPointsUpdated();
       }
       if (rewardResult.settled) {
+        session.rewardSettled = true;
         setCorePointRewardSettled(true);
-        await refreshCorePointOverview(nextFoundIds);
+        await refreshCorePointOverview(nextFoundIds).catch((overviewError) => {
+          console.warn(
+            "Failed to refresh confirmed core point reward:",
+            overviewError,
+          );
+        });
+        if (answerSessionRef.current !== session) return;
       }
       showToast({
         tone: rewardResult.awarded ? "reward" : "info",
@@ -1113,6 +1174,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         message: rewardResult.message,
       });
     } catch (pointError) {
+      if (answerSessionRef.current !== session) return;
       console.error("Failed to confirm core point completion:", pointError);
       const failure = resolveLegacyLessonRewardFailure(pointError);
       showToast({
@@ -1121,7 +1183,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
         message: failure.message,
       });
     } finally {
-      setCorePointRewardPending(false);
+      if (answerSessionRef.current === session)
+        setCorePointRewardPending(false);
     }
   };
 
@@ -1130,6 +1193,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     optimisticFoundIds: string[],
   ) => {
     if (!canPersist || !unitId) return;
+    const session = answerSessionRef.current;
+    let recorded = false;
     setPendingCorePointIds((current) =>
       current.includes(highlightId) ? current : [...current, highlightId],
     );
@@ -1139,11 +1204,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
         unitId,
         corePointId: highlightId,
       });
+      if (answerSessionRef.current !== session) return;
+      recorded = true;
       const overview = await refreshCorePointOverview(
         foundCorePointIdsRef.current.length
           ? foundCorePointIdsRef.current
           : optimisticFoundIds,
       );
+      if (answerSessionRef.current !== session) return;
       if (
         overview.loaded &&
         overview.totalCount > 0 &&
@@ -1156,7 +1224,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
         });
       }
     } catch (persistError) {
+      if (answerSessionRef.current !== session) return;
+      if (recorded) {
+        console.warn(
+          "Failed to refresh recorded core point overview:",
+          persistError,
+        );
+        showToast({
+          tone: "info",
+          title: "핵심포인트를 저장했습니다.",
+          message: "전체 진행 상태는 잠시 후 다시 확인해 주세요.",
+        });
+        return;
+      }
       console.error("Failed to record lesson core point:", persistError);
+      session.corePointFinds.delete(highlightId);
       const nextFoundIds = foundCorePointIdsRef.current.filter(
         (id) => id !== highlightId,
       );
@@ -1175,9 +1257,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
         message: "네트워크 상태를 확인한 뒤 핵심포인트를 다시 눌러 주세요.",
       });
     } finally {
-      setPendingCorePointIds((current) =>
-        current.filter((id) => id !== highlightId),
-      );
+      if (answerSessionRef.current === session) {
+        setPendingCorePointIds((current) =>
+          current.filter((id) => id !== highlightId),
+        );
+      }
     }
   };
 
@@ -1189,6 +1273,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     );
     const nextFoundSet = new Set(previousFoundIds);
     if (nextFoundSet.has(highlightId)) return;
+    answerSessionRef.current.corePointFinds.add(highlightId);
     nextFoundSet.add(highlightId);
     const nextFoundIds = currentCorePointIds.filter((id) =>
       nextFoundSet.has(id),

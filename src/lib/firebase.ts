@@ -349,16 +349,26 @@ const getFirebaseFunctions = () => {
 
 const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
   name: string,
+  options?: { expectedUid: string },
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
   const [functions, { httpsCallable }] = await Promise.all([
     getFirebaseFunctions(),
     import("firebase/functions"),
   ]);
   const callable = httpsCallable<RequestData, ResponseData>(functions, name);
+  const assertExpectedOwner = () => {
+    if (options && auth.currentUser?.uid !== options.expectedUid) {
+      throw new StepUpReauthError(
+        "IDENTITY_CHANGED",
+        "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
+      );
+    }
+  };
 
   const invokeWithSession = async (data?: RequestData) => {
     const { prepareCallableDataWithApplicationSession } =
       await import("./applicationSession");
+    assertExpectedOwner();
     const prepared = prepareCallableDataWithApplicationSession(name, data);
     return callable(prepared as RequestData | undefined);
   };
@@ -368,6 +378,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
   callableWithSession.stream = async (data, options) => {
     const { prepareCallableDataWithApplicationSession } =
       await import("./applicationSession");
+    assertExpectedOwner();
     const prepared = prepareCallableDataWithApplicationSession(name, data);
     return callable.stream(prepared as RequestData, options);
   };

@@ -36,7 +36,7 @@ assert.match(
 );
 assert.match(
   clientSource,
-  /if \(!isAmbiguous\(error\)\)[\s\S]*forgetPending/,
+  /if \(auth\.currentUser\?\.uid === ownerUid && !isAmbiguous\(error\)\)[\s\S]*forgetPending/,
   "ambiguous failures must preserve the retry handle",
 );
 assert.match(

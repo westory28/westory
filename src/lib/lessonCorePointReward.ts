@@ -173,17 +173,30 @@ const executeLessonCorePointCommand = async <Result>(options: {
       payload: Record<string, string>;
     },
     LessonCorePointCommandResponse<Result>
-  >("executeLessonCorePointCommand");
+  >("executeLessonCorePointCommand", { expectedUid: ownerUid });
   try {
+    if (auth.currentUser?.uid !== ownerUid) {
+      throw new Error("로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.");
+    }
     const response = await callable({
       commandId: handle.commandId,
       commandType: options.commandType,
       payload: options.payload,
     });
+    if (auth.currentUser?.uid !== ownerUid) {
+      throw new Error(
+        "로그인 사용자가 바뀌어 이전 작업의 표시를 중단했습니다.",
+      );
+    }
     await forgetPending(logicalKey, handle.commandId);
+    if (auth.currentUser?.uid !== ownerUid) {
+      throw new Error(
+        "로그인 사용자가 바뀌어 이전 작업의 표시를 중단했습니다.",
+      );
+    }
     return response.data;
   } catch (error) {
-    if (!isAmbiguous(error)) {
+    if (auth.currentUser?.uid === ownerUid && !isAmbiguous(error)) {
       await forgetPending(logicalKey, handle.commandId);
     }
     throw error;

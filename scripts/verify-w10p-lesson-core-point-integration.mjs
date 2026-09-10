@@ -35,6 +35,11 @@ for (const variable of [
 ]) {
   assert.ok(process.env[variable], `${variable} is required.`);
 }
+assert.match(process.env.FIRESTORE_EMULATOR_HOST, /^127\.0\.0\.1:\d+$/);
+const firestorePort = Number(process.env.FIRESTORE_EMULATOR_HOST.split(":")[1]);
+assert.ok(
+  Number.isInteger(firestorePort) && firestorePort > 0 && firestorePort < 65536,
+);
 
 const year = "2026";
 const semester = "2";
@@ -138,7 +143,7 @@ const commonPayload = { year, semester };
 const main = async () => {
   const testEnv = await initializeTestEnvironment({
     projectId,
-    firestore: { host: "127.0.0.1", port: 8080, rules },
+    firestore: { host: "127.0.0.1", port: firestorePort, rules },
   });
   const student = makeClient("w10p-lesson-reward-student");
   const unenrolled = makeClient("w10p-lesson-reward-unenrolled");
@@ -536,13 +541,16 @@ const main = async () => {
     );
 
     const responseLossClaimId = randomUUID();
-    await expectReason(
-      execute(student, "claimLessonCorePointReward", commonPayload, {
-        commandId: responseLossClaimId,
-        dropResponse: true,
-      }),
-      "TEST_RESPONSE_LOSS",
-    );
+    const [, concurrentClaim] = await Promise.all([
+      expectReason(
+        execute(student, "claimLessonCorePointReward", commonPayload, {
+          commandId: responseLossClaimId,
+          dropResponse: true,
+        }),
+        "TEST_RESPONSE_LOSS",
+      ),
+      execute(student, "claimLessonCorePointReward", commonPayload),
+    ]);
     const accountAfterClaim = await readDocument(testEnv, accountPath);
     assert.equal(accountAfterClaim.balance, 600);
     assert.equal(accountAfterClaim.revision, 2);
@@ -607,7 +615,12 @@ const main = async () => {
       })
     ).data;
     assert.equal(recoveredClaim.replayed, true);
-    assert.equal(recoveredClaim.result.awarded, true);
+    assert.equal(
+      Number(recoveredClaim.result.awarded) +
+        Number(concurrentClaim.data.result.awarded),
+      1,
+      "different concurrent command IDs must produce exactly one award",
+    );
 
     const duplicateClaim = (
       await execute(student, "claimLessonCorePointReward", commonPayload)
@@ -646,7 +659,7 @@ const main = async () => {
       receipts.filter(
         (item) => item.data.commandType === "claimLessonCorePointReward",
       ).length,
-      2,
+      3,
     );
 
     console.log(
@@ -656,6 +669,7 @@ const main = async () => {
         canonicalFinds: 2,
         rewardAmount: 500,
         ledgerEntries: 1,
+        concurrentClaimCommands: 2,
         productionAccess: 0,
       }),
     );
