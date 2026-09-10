@@ -1,6 +1,16 @@
 {
   "indexes": [
     {
+      "collectionGroup": "history_dictionary_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "normalizedWord", "order": "ASCENDING" },
+        { "fieldPath": "year", "order": "ASCENDING" },
+        { "fieldPath": "semester", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "quiz_results",
       "queryScope": "COLLECTION",
       "fields": [

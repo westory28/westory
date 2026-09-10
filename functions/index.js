@@ -11237,12 +11237,21 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
         },
       ];
     } else {
+      if (!year || !semester) {
+        throw new HttpsError("failed-precondition", "요청을 처리할 학기를 확인해 주세요.");
+      }
       const requestSnap = await transaction.get(
         db
           .collection(HISTORY_DICTIONARY_REQUESTS_COLLECTION)
           .where("normalizedWord", "==", normalizedWord)
-          .limit(100),
+          .where("year", "==", year)
+          .where("semester", "==", semester)
+          .where("status", "in", ["requested", "needs_approval"])
+          .limit(101),
       );
+      if (requestSnap.docs.length > 100) {
+        throw new HttpsError("resource-exhausted", "미처리 요청이 많습니다. 요청 목록에서 나누어 승인해 주세요.");
+      }
       docs = requestSnap.docs;
     }
 
@@ -11422,16 +11431,17 @@ exports.saveHistoryDictionaryTermsBulk = onCall(
     const termRefs = terms.map((term) =>
       db.doc(getHistoryDictionaryTermPath(term.termId)),
     );
-    const existingSnaps = await db.getAll(...termRefs);
-    const batch = db.batch();
-
-    terms.forEach((term, index) => {
-      const existing = existingSnaps[index]?.exists
-        ? existingSnaps[index].data() || {}
-        : {};
-      batch.set(
-        termRefs[index],
-        {
+    await db.runTransaction(async (transaction) => {
+      const existingSnaps = await transaction.getAll(...termRefs);
+      if (existingSnaps.some((snapshot) => snapshot.exists)) {
+        throw new HttpsError(
+          "already-exists",
+          "이미 등록된 단어가 있습니다. 목록을 새로 고친 뒤 중복 항목을 제외해 주세요.",
+          { reason: "HISTORY_DICTIONARY_BULK_CONFLICT" },
+        );
+      }
+      terms.forEach((term, index) => {
+        transaction.create(termRefs[index], {
           word: term.word,
           normalizedWord: term.normalizedWord,
           definition: term.definition,
@@ -11439,17 +11449,14 @@ exports.saveHistoryDictionaryTermsBulk = onCall(
           relatedUnitId: term.relatedUnitId,
           tags: term.tags,
           status: "published",
-          createdBy: existing.createdBy || manager.uid,
+          createdBy: manager.uid,
           updatedBy: manager.uid,
-          createdAt: existing.createdAt || FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           publishedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
+        });
+      });
     });
-
-    await batch.commit();
 
     return {
       savedCount: terms.length,
