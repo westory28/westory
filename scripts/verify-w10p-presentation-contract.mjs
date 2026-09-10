@@ -58,6 +58,22 @@ const frozenPresentationFiles = [
 ];
 
 const approvedSecurityStateClassExceptions = new Map([
+  // 2026-09-10 user scope: remove saved ink/presentation launcher cards.
+  // Only tokens lost with those controls are excepted; other pages stay frozen.
+  [
+    "src/pages/teacher/ManageLesson.tsx",
+    new Set([
+      "mt-4",
+      "rounded-3xl",
+      "uppercase",
+      "tracking-[0.18em]",
+      "text-slate-400",
+      "fa-triangle-exclamation",
+      "text-[11px]",
+      "fa-check",
+      "fa-clock",
+    ]),
+  ],
   [
     "src/components/common/NotificationBell.tsx",
     new Set([
@@ -135,6 +151,16 @@ const presentationResults = frozenPresentationFiles.map((path) => {
     retainedClassTokens: baselineTokens.length - missing.length,
   };
 });
+
+const teacherPresentation = read(
+  "src/pages/teacher/components/TeacherLessonPresentation.tsx",
+);
+assert.doesNotMatch(
+  teacherPresentation,
+  /persistPresentation|setDoc|updateDoc|teacherPresentationStorage|localStorage/u,
+);
+assert.match(teacherPresentation, /annotationEnabled=\{false\}/u);
+assert.match(teacherPresentation, /mode="teacher-present"/u);
 
 const app = read("src/App.tsx");
 const main = read("src/main.tsx");

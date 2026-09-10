@@ -37993,7 +37993,7 @@ const preBackupNamespaceAccessAttestationHash =
       backupNamespaceHash: sha256(
         `w10p_visual_fixture_backups/${contract.fixtureId}`,
       ),
-      localRulesSourceHash: sha256(readFileSync(resolve("firestore.rules"))),
+      localRulesSourceHash: sha256(readFileSync(resolve("firestore.staging.rules"))),
       probeRevisionHash: preBackupProbeRevisionHash,
       probeProfilePathHash: sha256("users/w10p-visual-backup-preflight"),
       positiveControlPathHash: sha256(
@@ -38039,7 +38039,7 @@ const backupNamespaceAccessAttestationHash = assertBackupAccessProbeAttestation(
       `w10p_visual_fixture_backups/${contract.fixtureId}`,
     ),
     backupManifestHash: fixtureAudit.isolation?.backupManifestHash,
-    localRulesSourceHash: sha256(readFileSync(resolve("firestore.rules"))),
+    localRulesSourceHash: sha256(readFileSync(resolve("firestore.staging.rules"))),
     existingWriteCanaryPathHash: sha256(postExistingCanary.path),
     absentWriteCanaryPathHash: sha256(postAbsentCanary.path),
     existingWriteCanaryRevisionHash: postExistingCanary.revisionHash,
@@ -38256,7 +38256,7 @@ const trustedInputPaths = [
   "scripts/w10p-visual-parity-contract.json",
   "scripts/w10p-route-menu-inventory.json",
   "scripts/seed-w10p-visual-fixture.mjs",
-  "firestore.rules",
+  "firestore.staging.rules",
   "package.json",
   "package-lock.json",
 ];

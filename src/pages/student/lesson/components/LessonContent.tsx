@@ -24,7 +24,7 @@ import {
 } from "../../../../lib/studentLessonReadCache";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
 import { recordLessonCorePointFind } from "../../../../lib/lessonCorePointReward";
-import { recordLegacyLessonCompletion } from "../../../../lib/legacyLessonSafetyAdapter";
+import { saveLessonAnswers } from "../../../../lib/lessonAnswers";
 import {
   requestLegacyLessonCorePointReward,
   resolveLegacyLessonRewardFailure,
@@ -129,6 +129,41 @@ const LessonContent: React.FC<LessonContentProps> = ({
     useState<CorePointOverviewState>(EMPTY_CORE_POINT_OVERVIEW);
 
   const contentRef = useRef<HTMLDivElement>(null);
+  const answerContext = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}/${unitId || ""}/${disablePersistence}`;
+  const answerSessionRef = useRef({
+    context: answerContext,
+    revision: null as number | null,
+    edits: 0,
+    touched: new Set<string>(),
+    saving: false,
+  });
+  if (answerSessionRef.current.context !== answerContext) {
+    answerSessionRef.current = {
+      context: answerContext,
+      revision: null,
+      edits: 0,
+      touched: new Set<string>(),
+      saving: false,
+    };
+  }
+  useEffect(() => {
+    setIsSaving(false);
+    setStudentAnswers({});
+    setHasUnsavedChanges(false);
+    setSaveMessage("");
+  }, [answerContext]);
+  useEffect(
+    () => () => {
+      answerSessionRef.current = {
+        context: "",
+        revision: null,
+        edits: 0,
+        touched: new Set<string>(),
+        saving: false,
+      };
+    },
+    [],
+  );
   const foundCorePointIdsRef = useRef<string[]>([]);
   const corePointOverviewRef = useRef<CorePointOverviewState>(
     EMPTY_CORE_POINT_OVERVIEW,
@@ -479,59 +514,92 @@ const LessonContent: React.FC<LessonContentProps> = ({
   };
 
   const saveProgressSafely = async () => {
-    if (!currentUser?.uid || !unitId) return;
+    if (
+      !canPersist ||
+      !currentUser?.uid ||
+      !unitId ||
+      !lesson ||
+      lesson.unitId !== unitId
+    )
+      return;
+    const session = answerSessionRef.current;
+    if (session.saving) return;
+    if (session.revision === null) {
+      showToast({
+        tone: "info",
+        title: "저장된 답안을 확인하고 있습니다.",
+        message:
+          "잠시 후 다시 저장해 주세요. 계속 확인되지 않으면 입력 내용을 보관한 뒤 화면을 다시 열어 주세요.",
+      });
+      return;
+    }
     const answerSnapshot = getAnswerSnapshot({ finalize: true });
-    const correctCount = Object.values(answerSnapshot.answers).filter(
-      (answer) => answer.status === "correct",
-    ).length;
-    const accuracyPercent =
-      answerSnapshot.totalCount > 0
-        ? Math.round((correctCount / answerSnapshot.totalCount) * 100)
-        : 0;
-    const accuracyMessage =
-      answerSnapshot.totalCount > 0
-        ? `정답률 ${accuracyPercent}% · 정답 ${correctCount}/${answerSnapshot.totalCount}`
-        : "학습 완료를 반영했습니다.";
+    const editVersion = session.edits;
+    session.saving = true;
+    setIsSaving(true);
     try {
       emitSessionActivity();
-      setIsSaving(true);
-      await recordLegacyLessonCompletion({
+      const result = await saveLessonAnswers({
         config,
         studentUid: currentUser.uid,
         unitId,
+        expectedContentRevision: lesson.contentRevision ?? 0,
+        expectedAnswerRevision: session.revision,
+        answers: Object.fromEntries(
+          Object.entries(answerSnapshot.answers).map(([key, answer]) => [
+            key,
+            answer.value,
+          ]),
+        ),
       });
-      setStudentAnswers(answerSnapshot.answers);
-      applyAnswerStatusesToInputs(answerSnapshot.answers);
-      setHasUnsavedChanges(false);
-      setSaveMessage("완료 반영됨");
-      const toastTitle = "학습 완료 반영";
-      let toastMessage = `${accuracyMessage} 입력 내용은 현재 화면에만 유지됩니다.`;
-      if (lesson && interactedRef.current && unitId) {
-        const elapsedMs = Date.now() - viewStartedAtRef.current;
-        if (elapsedMs >= 30000) {
-          toastMessage = `${accuracyMessage} 현재 이 화면에서는 위스 보상을 지급하지 않습니다.`;
-        }
+      if (answerSessionRef.current !== session) return;
+      session.revision = result.answerRevision;
+      const changedDuringSave = session.edits !== editVersion;
+      if (!changedDuringSave) {
+        setStudentAnswers(result.answers);
+        applyAnswerStatusesToInputs(result.answers);
+        session.touched.clear();
       }
-      setSaveCompletionPopup(null);
+      setHasUnsavedChanges(changedDuringSave);
+      setSaveMessage(changedDuringSave ? "새 입력 저장 필요" : "저장됨");
+      const accuracy = result.totalCount
+        ? Math.round((result.correctCount / result.totalCount) * 100)
+        : 0;
+      const message = result.totalCount
+        ? `정답률 ${accuracy}% · 정답 ${result.correctCount}/${result.totalCount}`
+        : "학습 내용을 저장했습니다.";
+      setSaveCompletionPopup(
+        changedDuringSave
+          ? null
+          : {
+              title: "답안 저장 완료",
+              message,
+              detail: "다시 접속해도 이어서 볼 수 있습니다.",
+            },
+      );
       showToast({
         tone: "info",
-        title: toastTitle,
-        message: toastMessage,
+        title: "답안 저장 완료",
+        message: changedDuringSave
+          ? `${message} 저장 중에 입력한 내용은 한 번 더 저장해 주세요.`
+          : `${message} 다시 접속해도 이어서 볼 수 있습니다.`,
       });
     } catch (saveError) {
-      console.error("Failed to record legacy lesson completion:", saveError);
-      setSaveMessage("저장 불가");
+      if (answerSessionRef.current !== session) return;
+      console.error("Failed to save lesson answers:", saveError);
+      setSaveMessage("저장 실패 · 입력 유지됨");
       setSaveCompletionPopup(null);
       showToast({
         tone: "error",
-        title: "학습 완료를 반영하지 못했습니다.",
+        title: "답안을 저장하지 못했습니다.",
         message:
           saveError instanceof Error
             ? saveError.message
             : "네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setIsSaving(false);
+      session.saving = false;
+      if (answerSessionRef.current === session) setIsSaving(false);
     }
   };
 
@@ -621,6 +689,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
       )
         return;
       target.classList.remove("correct", "wrong");
+      answerSessionRef.current.edits += 1;
+      const key = target.dataset.blankId || target.dataset.blankIndex;
+      if (key) answerSessionRef.current.touched.add(key);
       interactedRef.current = true;
       setHasUnsavedChanges(true);
       setSaveMessage("저장 필요");
@@ -670,19 +741,23 @@ const LessonContent: React.FC<LessonContentProps> = ({
   }, [activeFootnoteAnchorKey, highlightedFootnoteAnchorKey, lesson]);
 
   useEffect(() => {
-    if (!canPersist || !lesson) return;
+    if (!canPersist || !lesson || lesson.unitId !== unitId) return;
+    let cancelled = false;
+    const session = answerSessionRef.current;
     const restoreProgress = async () => {
       const progressRef = getProgressRef();
       const container = contentRef.current;
       if (!progressRef || !container) return;
       try {
         const snap = await getDoc(progressRef);
-        if (!snap.exists()) return;
-        const data = snap.data() as {
+        if (cancelled || answerSessionRef.current !== session) return;
+        const data = (snap.data() || {}) as {
           answers?: Record<string, { value?: string; status?: AnswerStatus }>;
+          answerRevision?: number;
           corePointFinds?: unknown;
         };
         const answers = data.answers || {};
+        session.revision = data.answerRevision ?? 0;
         const currentCorePointIdSet = new Set(
           worksheet.examHighlights.map((highlight) => highlight.id),
         );
@@ -691,11 +766,18 @@ const LessonContent: React.FC<LessonContentProps> = ({
               .map((value) => String(value || "").trim())
               .filter((value) => value && currentCorePointIdSet.has(value))
           : [];
-        setStudentAnswers(answers);
+        setStudentAnswers((local) => ({
+          ...answers,
+          ...Object.fromEntries(
+            Object.entries(local).filter(([key]) => session.touched.has(key)),
+          ),
+        }));
         setFoundCorePointIds(restoredCorePointIds);
         foundCorePointIdsRef.current = restoredCorePointIds;
-        setHasUnsavedChanges(false);
-        setSaveMessage("");
+        if (!session.edits) {
+          setHasUnsavedChanges(false);
+          setSaveMessage("");
+        }
         const inputs = container.querySelectorAll(
           ".cloze-input, .worksheet-blank-input",
         ) as NodeListOf<HTMLInputElement>;
@@ -703,6 +785,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           const key =
             input.dataset.blankId || input.dataset.blankIndex || String(index);
           const saved = answers[key];
+          if (session.touched.has(key)) return;
           if (!saved) return;
           input.value = saved.value || "";
           input.classList.remove("correct", "wrong");
@@ -730,7 +813,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
     )
       return;
     void restoreProgress();
-  }, [canPersist, currentUser?.uid, lesson, unitId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [answerContext, canPersist, currentUser?.uid, lesson, unitId]);
 
   useEffect(() => {
     if (!canPersist || !currentUser?.uid || !lesson) {
@@ -795,6 +881,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
       });
     }
     setStudentAnswers(nextAnswers);
+    answerSessionRef.current.edits += 1;
+    Object.keys(nextAnswers).forEach((key) =>
+      answerSessionRef.current.touched.add(key),
+    );
     setHasUnsavedChanges(true);
     setSaveMessage("저장 필요");
     setSaveCompletionPopup(null);
@@ -805,6 +895,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     value: string,
     _answer: string,
   ) => {
+    answerSessionRef.current.edits += 1;
+    answerSessionRef.current.touched.add(blankId);
     setStudentAnswers((prev) => ({
       ...prev,
       [blankId]: { value, status: "" },

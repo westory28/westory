@@ -1,4 +1,5 @@
 const COMMAND_GATEWAY_LOW_RISK_COMMANDS = new Set([
+  "saveLessonAnswers",
   "startAssessmentAttempt",
   "submitAssessmentAttempt",
   "requestGradeReview",
@@ -14,6 +15,9 @@ const COMMAND_GATEWAY_LOW_RISK_COMMANDS = new Set([
 ]);
 
 const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
+  "saveLessonDocument",
+  "saveLessonTree",
+  "prepareLessonAssetUpload",
   "updateTermsSettings",
   "addConsentItem",
   "updateConsentItem",

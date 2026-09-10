@@ -665,13 +665,14 @@ function FootnoteEditorDialog({
                 <div className="grid gap-3">
                   <label className="block">
                     <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-                      유튜브 링크
+                      링크
                     </span>
                     <input
-                      value={footnote.youtubeUrl ?? ""}
+                      value={footnote.linkUrl || footnote.youtubeUrl || ""}
                       onChange={(event) =>
                         onFootnoteDraftChange?.({
-                          youtubeUrl: event.target.value,
+                          linkUrl: event.target.value,
+                          youtubeUrl: "",
                         })
                       }
                       onBeforeInput={stopFieldEventPropagation}
@@ -680,7 +681,7 @@ function FootnoteEditorDialog({
                       onCompositionStart={stopFieldEventPropagation}
                       onCompositionUpdate={stopFieldEventPropagation}
                       onCompositionEnd={stopFieldEventPropagation}
-                      placeholder="https://www.youtube.com/watch?v=..."
+                      placeholder="https://... (웹페이지 또는 유튜브)"
                       className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                     />
                   </label>

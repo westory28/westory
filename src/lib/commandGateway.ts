@@ -9,6 +9,10 @@ import {
 } from "./stepUpReauth";
 
 export type W2CommandType =
+  | "saveLessonDocument"
+  | "saveLessonTree"
+  | "prepareLessonAssetUpload"
+  | "saveLessonAnswers"
   | "updateTermsSettings"
   | "addConsentItem"
   | "updateConsentItem"
@@ -270,6 +274,41 @@ interface NoticeInput {
 }
 
 export interface W2CommandPayloads {
+  saveLessonDocument: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedRevision: number;
+    unitId: string;
+    document: Partial<import("./lessonData").LessonData>;
+    assetUploadIds: string[];
+    tree?: Array<{ id: string; title: string; children: unknown[] }>;
+    expectedTreeRevision?: number;
+  };
+  saveLessonTree: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedRevision: number;
+    tree: Array<{ id: string; title: string; children: unknown[] }>;
+  };
+  prepareLessonAssetUpload: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedRevision: number;
+    unitId: string;
+    kind: "PDF" | "PAGE" | "FOOTNOTE";
+    contentType: string;
+    byteSize: number;
+    sha256: string;
+    originalName: string;
+  };
+  saveLessonAnswers: {
+    semesterId: string;
+    unitId: string;
+    expectedSemesterRevision: number;
+    expectedContentRevision: number;
+    expectedAnswerRevision: number;
+    answers: Record<string, string>;
+  };
   updateTermsSettings: { text: string };
   addConsentItem: { title: string; text: string; required: boolean };
   updateConsentItem: {
@@ -927,6 +966,28 @@ interface WisAccountValuePayload extends WisAccountCommandBase {
 }
 
 export interface W2CommandResults {
+  saveLessonDocument: {
+    unitId: string;
+    contentRevision: number;
+    treeRevision: number | null;
+    pdfProcessing:
+      | import("./lessonPdfExtraction").LessonPdfProcessingMeta
+      | null;
+  };
+  saveLessonTree: { contentRevision: number };
+  prepareLessonAssetUpload: {
+    uploadId: string;
+    storagePath: string;
+    expiresAtMs: number;
+  };
+  saveLessonAnswers: {
+    unitId: string;
+    answers: Record<string, { value: string; status: "correct" | "wrong" }>;
+    answerRevision: number;
+    contentRevision: number;
+    correctCount: number;
+    totalCount: number;
+  };
   updateTermsSettings: unknown;
   addConsentItem: { item: ConsentCommandItem; revision: string };
   updateConsentItem: { item: ConsentCommandItem; revision: string };

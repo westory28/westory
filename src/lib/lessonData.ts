@@ -34,6 +34,7 @@ export interface LessonFootnote {
   imageStoragePath?: string;
   contentType?: LessonFootnoteContentType;
   youtubeUrl?: string;
+  linkUrl?: string;
   sourceArchiveAssetId?: string;
   sourceArchiveImagePath?: string;
   sourceArchiveThumbPath?: string;
@@ -43,6 +44,7 @@ export interface LessonFootnote {
 }
 
 export interface LessonData {
+  contentRevision?: number;
   unitId?: string;
   title: string;
   videoUrl?: string;
@@ -181,6 +183,7 @@ export const createLessonFootnoteDraft = (
     imageStoragePath: String(partial.imageStoragePath || "").trim(),
     contentType: resolveLessonFootnoteContentType(partial),
     youtubeUrl: String(partial.youtubeUrl || "").trim(),
+    linkUrl: String(partial.linkUrl || "").trim(),
     sourceArchiveAssetId: String(partial.sourceArchiveAssetId || "").trim(),
     sourceArchiveImagePath: String(partial.sourceArchiveImagePath || "").trim(),
     sourceArchiveThumbPath: String(partial.sourceArchiveThumbPath || "").trim(),
@@ -220,6 +223,7 @@ export const sanitizeLessonFootnote = (
     imageStoragePath: String(footnote.imageStoragePath || "").trim(),
     contentType: resolveLessonFootnoteContentType(footnote),
     youtubeUrl: String(footnote.youtubeUrl || "").trim(),
+    linkUrl: String(footnote.linkUrl || "").trim(),
     sourceArchiveAssetId: String(footnote.sourceArchiveAssetId || "").trim(),
     sourceArchiveImagePath: String(
       footnote.sourceArchiveImagePath || "",
@@ -263,6 +267,7 @@ const normalizeLessonFootnotes = (raw: unknown): LessonFootnote[] => {
         imageStoragePath: source.imageStoragePath as string,
         contentType: source.contentType as LessonFootnoteContentType,
         youtubeUrl: source.youtubeUrl as string,
+        linkUrl: source.linkUrl as string,
         sourceArchiveAssetId: source.sourceArchiveAssetId as string,
         sourceArchiveImagePath: source.sourceArchiveImagePath as string,
         sourceArchiveThumbPath: source.sourceArchiveThumbPath as string,
@@ -381,6 +386,11 @@ export const normalizeLessonData = (
 
   return {
     unitId: String(source.unitId || fallback.unitId || "").trim() || undefined,
+    contentRevision:
+      Number.isSafeInteger(source.contentRevision) &&
+      Number(source.contentRevision) >= 0
+        ? Number(source.contentRevision)
+        : (fallback.contentRevision ?? 0),
     title: String(source.title || fallback.title || "").trim(),
     videoUrl: String(source.videoUrl || fallback.videoUrl || "").trim(),
     contentHtml: String(source.contentHtml || fallback.contentHtml || ""),

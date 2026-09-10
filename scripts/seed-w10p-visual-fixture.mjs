@@ -2603,7 +2603,7 @@ const writeAuditArtifactAtomically = (result) => {
 };
 
 const assertBackupNamespaceDefaultDenied = () => {
-  const rules = readFileSync(resolve("firestore.rules"), "utf8");
+  const rules = readFileSync(resolve("firestore.staging.rules"), "utf8");
   assert.equal(
     rules.includes("w10p_visual_fixture_backups"),
     false,
@@ -4780,7 +4780,7 @@ const verifyPreBackupNamespaceDenied = async () => {
     identityEmailHash: sha256(PREFLIGHT_EMAIL),
     backupNamespaceHash: sha256(BACKUP_ROOT_PATH),
     localRulesSourceHash: sha256(
-      readFileSync(resolve("firestore.rules"), "utf8"),
+      readFileSync(resolve("firestore.staging.rules"), "utf8"),
     ),
     probeRevisionHash: PRE_BACKUP_PROBE_REVISION_HASH,
     probeProfilePathHash: sha256(profileRef.path),
@@ -5263,7 +5263,7 @@ const verifyLiveBackupNamespaceDenied = async (backups) => {
     backupNamespaceHash: sha256(BACKUP_ROOT_PATH),
     backupManifestHash: backupManifestFor(backups).hash,
     localRulesSourceHash: sha256(
-      readFileSync(resolve("firestore.rules"), "utf8"),
+      readFileSync(resolve("firestore.staging.rules"), "utf8"),
     ),
     probeSessionPathHash: sha256(probeSessionRef.path),
     readDocumentPathHash: sha256(probeDocumentPath),

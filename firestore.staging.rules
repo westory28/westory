@@ -183,8 +183,18 @@ service cloud.firestore {
     }
 
     function isTrustedW10PVisualFixtureAdmin() {
-      // Synthetic capture authority exists only in firestore.staging.rules.
-      return false;
+      return canUseWestory()
+        && request.auth.uid == 'w10p-visual-admin'
+        && request.auth.token.email == 'w10p-visual-admin@yongshin-ms.ms.kr'
+        && request.auth.token.fixtureOwner == 'w10p-visual-parity'
+        && request.auth.token.fixtureId == 'w10p-visual-fixture-v1'
+        && request.auth.token.fixtureRole == 'admin'
+        && hasUserProfile()
+        && userProfile().uid == 'w10p-visual-admin'
+        && userProfile().email == 'w10p-visual-admin@yongshin-ms.ms.kr'
+        && userProfile().role == 'teacher'
+        && userProfile().fixtureOwner == 'w10p-visual-parity'
+        && userProfile().fixtureId == 'w10p-visual-fixture-v1';
     }
 
     function hasPermission(permission) {

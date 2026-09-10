@@ -17,6 +17,8 @@ const commandGateway = require("./commandGateway");
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
 const assessmentLifecycle = require("./assessmentLifecycle");
+const lessonAnswers = require("./lessonAnswers");
+const lessonManagement = require("./lessonManagement");
 const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
 const w8Domains = require("./w8Domains");
@@ -29,6 +31,7 @@ const {
 Object.assign(exports, sessionAuthority.callableExports);
 Object.assign(exports, require("./sourceArchiveBeta"));
 Object.assign(exports, require("./lessonPdfBeta"));
+Object.assign(exports, require("./lessonAssetUploads"));
 exports.updateStudentMaintenanceConfig =
   studentMaintenance.createUpdateStudentMaintenanceConfigCallable({
     assertActiveApplicationSession:
@@ -11690,6 +11693,8 @@ const authorizeCommandGatewayActor = async ({
   identity,
   commandType,
 }) => {
+  const lessonAnswerCommandTypes = Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES);
+  const lessonManagementCommandTypes = Object.values(lessonManagement.LESSON_COMMAND_TYPES);
   const assessmentCommandTypes = Object.values(
     assessmentLifecycle.ASSESSMENT_COMMAND_TYPES,
   );
@@ -11706,6 +11711,8 @@ const authorizeCommandGatewayActor = async ({
     commandType !== commandGateway.GET_SEMESTER_CORE_STATE_COMMAND_TYPE &&
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS &&
     !assessmentCommandTypes.includes(commandType) &&
+    !lessonAnswerCommandTypes.includes(commandType) &&
+    !lessonManagementCommandTypes.includes(commandType) &&
     !gradeCommandTypes.includes(commandType) &&
     !wisCommandTypes.includes(commandType) &&
     !w8CommandTypes.includes(commandType) &&
@@ -11733,6 +11740,9 @@ const authorizeCommandGatewayActor = async ({
     });
   }
   if (actorEmail === ADMIN_EMAIL) {
+    if (lessonAnswerCommandTypes.includes(commandType)) {
+      throw new HttpsError("permission-denied", "학생 계정으로 답안을 저장해 주세요.", { reason: "LESSON_STUDENT_REQUIRED" });
+    }
     if (
       gradeCommandTypes.includes(commandType) &&
       gradeEvidence.STUDENT_COMMAND_TYPES.has(commandType)
@@ -11813,6 +11823,16 @@ const authorizeCommandGatewayActor = async ({
         reason: "W11_ADMIN_REQUIRED",
       },
     );
+  }
+  if (lessonAnswerCommandTypes.includes(commandType)) {
+    if (!profileSnapshot.exists || profile.role !== "student") {
+      throw new HttpsError("permission-denied", "학생 계정으로 답안을 저장해 주세요.", { reason: "LESSON_STUDENT_REQUIRED" });
+    }
+    return { actorUid, actorEmail, actorRole: "student", actorCapability: "lesson:save_own_answers" };
+  }
+  if (lessonManagementCommandTypes.includes(commandType)) {
+    if (!profileSnapshot.exists || profile.role !== "teacher") throw new HttpsError("permission-denied", "수업자료 편집 권한이 필요합니다.", { reason: "LESSON_MANAGE_REQUIRED" });
+    return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "lesson:manage" };
   }
   if (teacherOperationsCommandTypes.includes(commandType)) {
     const role = String(profile.role || "student").trim() || "student";
@@ -12093,6 +12113,8 @@ const archiveEnrollmentCommandAdapter =
   archiveEnrollment.createArchiveEnrollmentCommandAdapter();
 const assessmentCommandAdapter =
   assessmentLifecycle.createAssessmentCommandAdapter();
+const lessonAnswerCommandAdapter = lessonAnswers.createLessonAnswerCommandAdapter();
+const lessonManagementCommandAdapter = lessonManagement.createLessonCommandAdapter();
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
 const w8CommandAdapter = w8Domains.createW8CommandAdapter();
@@ -12108,6 +12130,8 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
+    ...Object.fromEntries(Object.values(lessonManagement.LESSON_COMMAND_TYPES).map((commandType) => [commandType, lessonManagementCommandAdapter])),
+    ...Object.fromEntries(Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).map((commandType) => [commandType, lessonAnswerCommandAdapter])),
     [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]:
       retiredLegacyPointV1CommandAdapter,
     [commandGateway.COMMAND_TYPES.CREATE_SEMESTER_MANIFEST]:

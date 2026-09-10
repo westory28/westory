@@ -16,12 +16,13 @@ jobs:
       VITE_APP_ENV: staging
       VITE_VERCEL_PROJECT_ROLE: staging
       VITE_USE_FIREBASE_EMULATORS: "false"
-      VITE_FIREBASE_API_KEY: ci-staging-api-key
-      VITE_FIREBASE_AUTH_DOMAIN: ci-staging.invalid
-      VITE_FIREBASE_PROJECT_ID: westory-ci-staging
-      VITE_FIREBASE_STORAGE_BUCKET: westory-ci-staging.invalid
-      VITE_FIREBASE_MESSAGING_SENDER_ID: "000000000001"
-      VITE_FIREBASE_APP_ID: 1:000000000001:web:westory-ci-staging
+      # Build-only placeholder; this job never signs in or deploys its bundle.
+      VITE_FIREBASE_API_KEY: AIzaCI_BUILD_ONLY_NOT_A_REAL_FIREBASE_KEY
+      VITE_FIREBASE_AUTH_DOMAIN: westory-staging-177587430482.firebaseapp.com
+      VITE_FIREBASE_PROJECT_ID: westory-staging-177587430482
+      VITE_FIREBASE_STORAGE_BUCKET: westory-staging-177587430482.firebasestorage.app
+      VITE_FIREBASE_MESSAGING_SENDER_ID: "894916304910"
+      VITE_FIREBASE_APP_ID: 1:894916304910:web:bd8c8a9e3ed8bd1620dc5f
       VITE_FIREBASE_FUNCTIONS_REGION: asia-northeast3
       VITE_FIREBASE_APPCHECK_SITE_KEY: ci-recaptcha-enterprise-site-key
       VITE_PUBLIC_BASE: /
@@ -57,9 +58,13 @@ jobs:
 
       - run: npm --prefix functions ci --ignore-scripts
       - run: npm --prefix functions run check
+      - run: node functions/scripts/verify-lesson-answers.cjs
+      - run: node functions/scripts/verify-lesson-management.cjs
+      - run: node functions/scripts/verify-lesson-assets.cjs
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
       - run: npm install --global firebase-tools@15.15.0
+      - run: firebase emulators:exec --project demo-westory-session-lesson-rules --only firestore,storage "node scripts/verify-lesson-release-rules.mjs"
       - run: npm run verify:w11-semester-cutover

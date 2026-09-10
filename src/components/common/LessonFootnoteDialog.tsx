@@ -25,7 +25,20 @@ const LessonFootnoteDialog: React.FC<LessonFootnoteDialogProps> = ({
 
   const title = getLessonFootnoteDisplayTitle(footnote) || "각주";
   const primaryType = getLessonFootnotePrimaryContentType(footnote);
-  const youtubeEmbedUrl = getLessonFootnoteYouTubeEmbedUrl(footnote.youtubeUrl);
+  const sourceLink = footnote.linkUrl || footnote.youtubeUrl || "";
+  let linkUrl = "";
+  try {
+    const parsed = new URL(sourceLink);
+    if (
+      ["https:", "http:"].includes(parsed.protocol) &&
+      !parsed.username &&
+      !parsed.password
+    )
+      linkUrl = parsed.href;
+  } catch {
+    /* An incomplete editor draft has no clickable link. */
+  }
+  const youtubeEmbedUrl = getLessonFootnoteYouTubeEmbedUrl(sourceLink);
   const hasDescription = Boolean(String(footnote.bodyHtml || "").trim());
 
   return (
@@ -51,7 +64,7 @@ const LessonFootnoteDialog: React.FC<LessonFootnoteDialogProps> = ({
             </button>
           </div>
           <div className="max-h-[calc(88vh-88px)] space-y-5 overflow-y-auto px-5 py-5">
-            {primaryType === "youtube" && youtubeEmbedUrl ? (
+            {youtubeEmbedUrl ? (
               <div
                 className="relative overflow-hidden rounded-3xl border border-slate-200 bg-black"
                 style={{ paddingBottom: "56.25%" }}
@@ -102,7 +115,19 @@ const LessonFootnoteDialog: React.FC<LessonFootnoteDialogProps> = ({
               />
             ) : null}
 
+            {linkUrl ? (
+              <a
+                href={linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+              >
+                링크 열기 · 새 창
+              </a>
+            ) : null}
+
             {!hasDescription &&
+            !linkUrl &&
             !(primaryType === "youtube" && youtubeEmbedUrl) &&
             !(primaryType === "image" && footnote.imageUrl) &&
             !(
