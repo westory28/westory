@@ -119,7 +119,11 @@ const getDesktopSubmenuChildren = (
   );
 };
 
-const Header: React.FC<Record<string, unknown>> = () => {
+const Header: React.FC<
+  Record<string, unknown> & {
+    onTeacherSidebarExpandedChange?: (expanded: boolean) => void;
+  }
+> = ({ onTeacherSidebarExpandedChange }) => {
   const {
     currentUser,
     userData,
@@ -184,6 +188,17 @@ const Header: React.FC<Record<string, unknown>> = () => {
         : "student";
 
   const isTeacherPortal = portal === "teacher";
+  const showTeacherSidebar =
+    location.pathname.startsWith("/teacher") && shellViewport !== "mobile";
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const compactTeacherSidebar = shellViewport !== "desktop" && !sidebarExpanded;
+  useEffect(
+    () => setSidebarExpanded(false),
+    [location.pathname, location.search, shellViewport],
+  );
+  useEffect(() => {
+    onTeacherSidebarExpandedChange?.(showTeacherSidebar && sidebarExpanded);
+  }, [onTeacherSidebarExpandedChange, showTeacherSidebar, sidebarExpanded]);
   const canRenderStudentMenu =
     portal !== "student" ||
     (menuConfigReady &&
@@ -693,69 +708,71 @@ const Header: React.FC<Record<string, unknown>> = () => {
               <span className="logo-story">story</span>
             </Link>
 
-            <nav
-              className={`desktop-nav ml-4 ${!isTeacherPortal ? "student-desktop-nav" : ""}`}
-            >
-              {menuItems.map((item, idx) => {
-                const visibleChildren = getVisibleChildren(item);
-                const resolvedChildren = getResolvedChildUrls(
-                  item.url,
-                  visibleChildren,
-                  portal,
-                );
-                const hasChildren = visibleChildren.length > 0;
-                const active =
-                  isActive(item.url) ||
-                  resolvedChildren.some((child) =>
-                    isChildActive(child.resolvedUrl, resolvedChildren),
+            {!showTeacherSidebar && (
+              <nav
+                className={`desktop-nav ml-4 ${!isTeacherPortal ? "student-desktop-nav" : ""}`}
+              >
+                {menuItems.map((item, idx) => {
+                  const visibleChildren = getVisibleChildren(item);
+                  const resolvedChildren = getResolvedChildUrls(
+                    item.url,
+                    visibleChildren,
+                    portal,
                   );
+                  const hasChildren = visibleChildren.length > 0;
+                  const active =
+                    isActive(item.url) ||
+                    resolvedChildren.some((child) =>
+                      isChildActive(child.resolvedUrl, resolvedChildren),
+                    );
 
-                if (!hasChildren) {
+                  if (!hasChildren) {
+                    const itemTarget = resolveTarget(item.url);
+                    return (
+                      <Link
+                        key={`${item.url}-${idx}`}
+                        to={itemTarget}
+                        className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""}`}
+                      >
+                        {item.name}
+                      </Link>
+                    );
+                  }
+
                   const itemTarget = resolveTarget(item.url);
                   return (
-                    <Link
+                    <div
                       key={`${item.url}-${idx}`}
-                      to={itemTarget}
-                      className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""}`}
+                      className="relative group h-full flex items-center"
                     >
-                      {item.name}
-                    </Link>
-                  );
-                }
-
-                const itemTarget = resolveTarget(item.url);
-                return (
-                  <div
-                    key={`${item.url}-${idx}`}
-                    className="relative group h-full flex items-center"
-                  >
-                    <Link
-                      to={itemTarget}
-                      className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""} flex items-center gap-1`}
-                    >
-                      {item.name}
-                      <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
-                    </Link>
-                    <div className="desktop-submenu-shell absolute left-0 top-[calc(100%-8px)] z-[100] transform pt-1 opacity-0 transition duration-150 group-hover:visible group-hover:opacity-100 invisible">
-                      <div className="rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
-                        {resolvedChildren.map((child, childIdx) => {
-                          const childTarget = child.resolvedUrl;
-                          return (
-                            <Link
-                              key={`${child.url}-${childIdx}`}
-                              to={childTarget}
-                              className={`block whitespace-nowrap rounded-lg px-4 py-3.5 text-[13px] font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"}`}
-                            >
-                              {child.name}
-                            </Link>
-                          );
-                        })}
+                      <Link
+                        to={itemTarget}
+                        className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""} flex items-center gap-1`}
+                      >
+                        {item.name}
+                        <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
+                      </Link>
+                      <div className="desktop-submenu-shell absolute left-0 top-[calc(100%-8px)] z-[100] transform pt-1 opacity-0 transition duration-150 group-hover:visible group-hover:opacity-100 invisible">
+                        <div className="rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
+                          {resolvedChildren.map((child, childIdx) => {
+                            const childTarget = child.resolvedUrl;
+                            return (
+                              <Link
+                                key={`${child.url}-${childIdx}`}
+                                to={childTarget}
+                                className={`block whitespace-nowrap rounded-lg px-4 py-3.5 text-[13px] font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"}`}
+                              >
+                                {child.name}
+                              </Link>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </nav>
+                  );
+                })}
+              </nav>
+            )}
           </div>
 
           <div className="header-right">
@@ -939,44 +956,45 @@ const Header: React.FC<Record<string, unknown>> = () => {
                   </div>
                 )}
               </div>
-              {menuItems.map((item, idx) => {
-                const visibleChildren = getVisibleChildren(item);
-                const resolvedChildren = getResolvedChildUrls(
-                  item.url,
-                  visibleChildren,
-                  portal,
-                );
-                const itemTarget = resolveTarget(item.url);
-                return (
-                  <div key={`${item.url}-mobile-${idx}`}>
-                    <Link
-                      to={itemTarget}
-                      className={`mobile-link ${isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren)) ? "active" : ""}`}
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      {item.name}
-                    </Link>
-                    {visibleChildren.length > 0 && (
-                      <div className="bg-gray-50 border-b border-gray-100 pb-1">
-                        {resolvedChildren.map((child, childIdx) => {
-                          const childTarget = child.resolvedUrl;
-                          return (
-                            <Link
-                              key={`${child.url}-mobile-child-${childIdx}`}
-                              to={childTarget}
-                              className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "text-blue-600 bg-blue-50" : "text-gray-500 hover:text-blue-600 hover:bg-gray-100"}`}
-                              onClick={() => setMobileMenuOpen(false)}
-                            >
-                              <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
-                              {child.name}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {!showTeacherSidebar &&
+                menuItems.map((item, idx) => {
+                  const visibleChildren = getVisibleChildren(item);
+                  const resolvedChildren = getResolvedChildUrls(
+                    item.url,
+                    visibleChildren,
+                    portal,
+                  );
+                  const itemTarget = resolveTarget(item.url);
+                  return (
+                    <div key={`${item.url}-mobile-${idx}`}>
+                      <Link
+                        to={itemTarget}
+                        className={`mobile-link ${isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren)) ? "active" : ""}`}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {item.name}
+                      </Link>
+                      {visibleChildren.length > 0 && (
+                        <div className="bg-gray-50 border-b border-gray-100 pb-1">
+                          {resolvedChildren.map((child, childIdx) => {
+                            const childTarget = child.resolvedUrl;
+                            return (
+                              <Link
+                                key={`${child.url}-mobile-child-${childIdx}`}
+                                to={childTarget}
+                                className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "text-blue-600 bg-blue-50" : "text-gray-500 hover:text-blue-600 hover:bg-gray-100"}`}
+                                onClick={() => setMobileMenuOpen(false)}
+                              >
+                                <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
+                                {child.name}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </>
           )}
         </div>
@@ -997,7 +1015,91 @@ const Header: React.FC<Record<string, unknown>> = () => {
           notificationHost,
         )}
 
-      {activeDesktopSubmenu && (
+      {showTeacherSidebar && (
+        <aside
+          className={`ws-teacher-sidebar ${compactTeacherSidebar ? "is-compact" : ""}`}
+          aria-label="교사 사이드 메뉴"
+        >
+          {shellViewport !== "desktop" && (
+            <button
+              type="button"
+              className="ws-teacher-sidebar__toggle"
+              onClick={() => setSidebarExpanded((value) => !value)}
+              aria-expanded={!compactTeacherSidebar}
+              aria-controls="teacher-sidebar-navigation"
+              aria-label={compactTeacherSidebar ? "메뉴 펼치기" : "메뉴 접기"}
+            >
+              <i
+                className={`fas ${compactTeacherSidebar ? "fa-angles-right" : "fa-angles-left"}`}
+                aria-hidden="true"
+              />
+              <span>{compactTeacherSidebar ? "펼치기" : "메뉴 접기"}</span>
+            </button>
+          )}
+          <nav id="teacher-sidebar-navigation" aria-label="교사 주요 메뉴">
+            {menuItems.map((item, index) => {
+              const children = getResolvedChildUrls(
+                item.url,
+                getVisibleChildren(item),
+                portal,
+              );
+              const active =
+                isActive(item.url) ||
+                children.some((child) =>
+                  isChildActive(child.resolvedUrl, children),
+                );
+              return (
+                <div key={`${item.url}-sidebar-${index}`}>
+                  <Link
+                    to={resolveTarget(item.url)}
+                    className={`ws-teacher-sidebar__link ${active ? "is-active" : ""}`}
+                    title={item.name}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d={item.icon}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span>
+                      {compactTeacherSidebar
+                        ? item.name
+                            .replace(/ 관리$/, "")
+                            .replace("학습 자료", "수업")
+                        : item.name}
+                    </span>
+                  </Link>
+                  {!compactTeacherSidebar && active && children.length > 0 && (
+                    <div className="ws-teacher-sidebar__children">
+                      {children.map((child, childIndex) => (
+                        <Link
+                          key={`${child.resolvedUrl}-${childIndex}`}
+                          to={child.resolvedUrl}
+                          aria-current={
+                            isChildActive(child.resolvedUrl, children)
+                              ? "page"
+                              : undefined
+                          }
+                        >
+                          {child.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </nav>
+        </aside>
+      )}
+      {!showTeacherSidebar && activeDesktopSubmenu && (
         <div className="hidden lg:block">
           <div className={desktopSubmenuContainerClass}>
             <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">

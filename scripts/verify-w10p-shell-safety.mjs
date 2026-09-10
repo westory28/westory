@@ -37,7 +37,7 @@ assert.doesNotMatch(
 );
 assert.match(
   mainLayout,
-  /<Header\s*\/>[\s\S]*?<main[\s\S]*?id="main-content"[\s\S]*?\{children\}[\s\S]*?<Footer\s*\/>/u,
+  /<Header onTeacherSidebarExpandedChange=\{setTeacherSidebarExpanded\}\s*\/>[\s\S]*?<main[\s\S]*?id="main-content"[\s\S]*?\{children\}[\s\S]*?<Footer\s*\/>/u,
   "Production Header/main/Footer order drifted.",
 );
 assert.equal(

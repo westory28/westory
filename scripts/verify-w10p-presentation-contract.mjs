@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const PRESENTATION_BASELINE = "676869fa289d3e7ecef234cbb5cca65c60ec4597";
@@ -72,6 +72,16 @@ const approvedSecurityStateClassExceptions = new Map([
       "text-[11px]",
       "fa-check",
       "fa-clock",
+      // Complete teacher presentation removal explicitly requested next.
+      "z-[70]",
+      "bg-slate-950/80",
+      "backdrop-blur-sm",
+      "h-full",
+      "md:p-4",
+      "rounded-2xl",
+      "border-slate-700",
+      "bg-slate-900/80",
+      "text-slate-100",
     ]),
   ],
   [
@@ -152,15 +162,21 @@ const presentationResults = frozenPresentationFiles.map((path) => {
   };
 });
 
-const teacherPresentation = read(
-  "src/pages/teacher/components/TeacherLessonPresentation.tsx",
+// User explicitly retired the complete teacher presentation surface.
+assert.equal(
+  existsSync(
+    resolve("src/pages/teacher/components/TeacherLessonPresentation.tsx"),
+  ),
+  false,
 );
 assert.doesNotMatch(
-  teacherPresentation,
-  /persistPresentation|setDoc|updateDoc|teacherPresentationStorage|localStorage/u,
+  read("src/pages/teacher/ManageLesson.tsx"),
+  /TeacherLessonPresentation|teacherPreviewOpen|onOpenTeacherPreview/u,
 );
-assert.match(teacherPresentation, /annotationEnabled=\{false\}/u);
-assert.match(teacherPresentation, /mode="teacher-present"/u);
+assert.doesNotMatch(
+  read("src/pages/teacher/components/LessonEditorPanels.tsx"),
+  /onOpenTeacherPreview|교사용 수업 화면/u,
+);
 
 const app = read("src/App.tsx");
 const main = read("src/main.tsx");

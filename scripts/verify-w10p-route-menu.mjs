@@ -239,7 +239,7 @@ assert.doesNotMatch(
   /<AppShell/u,
   "legacy routes still mount AppShell",
 );
-assert.match(mainLayout, /<Header\s*\/>/u, "Production Header mount missing");
+assert.match(mainLayout, /<Header onTeacherSidebarExpandedChange=\{setTeacherSidebarExpanded\}\s*\/>/u, "Header with teacher sidebar layout synchronization missing");
 assert.match(mainLayout, /<Footer\s*\/>/u, "Production Footer mount missing");
 
 const implicitAccessPaths = new Set([

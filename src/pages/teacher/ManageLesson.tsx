@@ -93,11 +93,6 @@ import {
 
 type TreeNode = LessonTreeNode;
 
-const TeacherLessonPresentation = lazyWithRetry(
-  () => import("./components/TeacherLessonPresentation"),
-  "teacher-lesson-presentation",
-);
-
 const TABS: Array<{ id: LessonEditorTab; label: string; icon: string }> = [
   { id: "pdf", label: "PDF 편집", icon: "fa-file-pdf" },
   { id: "student-preview", label: "학생 미리보기", icon: "fa-user-graduate" },
@@ -720,7 +715,6 @@ const ManageLesson: React.FC = () => {
   >(null);
   const [targetNode, setTargetNode] = useState<TreeNode | null>(null);
   const [modalInput, setModalInput] = useState("");
-  const [teacherPreviewOpen, setTeacherPreviewOpen] = useState(false);
   const [lessonSaveState, setLessonSaveState] = useState<
     "saved" | "saving" | "dirty"
   >("saved");
@@ -3106,14 +3100,6 @@ const ManageLesson: React.FC = () => {
     }
   };
 
-  const handleOpenTeacherPreview = () => {
-    if (canEdit) setTeacherPreviewOpen(true);
-  };
-
-  const handleTeacherPreviewClose = () => {
-    setTeacherPreviewOpen(false);
-  };
-
   const TreeCard = ({ node, level }: { node: TreeNode; level: number }) => {
     const isExpanded = expandedIds.has(node.id);
     const isSelected = selectedNodeId === node.id;
@@ -3269,7 +3255,6 @@ const ManageLesson: React.FC = () => {
                   onLessonTitleChange={setLessonTitle}
                   onToggleVisible={setLessonVisibleToStudents}
                   onSave={() => void saveLesson({ source: "header" })}
-                  onOpenTeacherPreview={handleOpenTeacherPreview}
                 />
                 <div className="border-b border-gray-200 bg-white px-4 py-2">
                   <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1">
@@ -3439,7 +3424,6 @@ const ManageLesson: React.FC = () => {
                         lesson={lessonDraft}
                         unitId={selectedNodeId}
                         fallbackTitle={selectedNodeTitle}
-                        onOpenTeacherPreview={handleOpenTeacherPreview}
                       />
                     </>
                   )}
@@ -3510,27 +3494,6 @@ const ManageLesson: React.FC = () => {
         onClose={() => setSourceArchivePickerFootnoteId(null)}
         onSelectAsset={handleSelectSourceArchiveAsset}
       />
-      {teacherPreviewOpen && canEdit && (
-        <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-sm">
-          <div className="h-full overflow-y-auto p-3 md:p-4">
-            <React.Suspense
-              fallback={
-                <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-6 text-center text-sm font-semibold text-slate-100">
-                  교사용 수업 화면을 준비하는 중입니다.
-                </div>
-              }
-            >
-              <TeacherLessonPresentation
-                key={lessonDraft.unitId || "lesson"}
-                lesson={lessonDraft}
-                fallbackTitle={selectedNodeTitle}
-                fullscreenPreview
-                onClosePreview={handleTeacherPreviewClose}
-              />
-            </React.Suspense>
-          </div>
-        </div>
-      )}
       {(screenBusyMessage || pdfExtractionRetryOverlay) && (
         <LoadingOverlay
           message={

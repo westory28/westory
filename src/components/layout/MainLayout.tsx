@@ -45,6 +45,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
   const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const [teacherSidebarExpanded, setTeacherSidebarExpanded] =
+    React.useState(false);
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
     currentUser && isTeacherRoute && isTeacherUser(userData, currentUser.email),
@@ -165,8 +167,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <Header />
+    <div
+      className={`flex min-h-screen flex-col bg-gray-50 ${currentUser && isTeacherRoute ? "ws-teacher-layout" : ""} ${teacherSidebarExpanded ? "ws-teacher-layout--expanded" : ""}`}
+    >
+      <Header onTeacherSidebarExpandedChange={setTeacherSidebarExpanded} />
       {studentEnhancementsReady && (
         <React.Suspense fallback={null}>
           <StudentRankPromotionController />

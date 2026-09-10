@@ -64,7 +64,6 @@ const presentationFiles = new Set([
   "src/pages/teacher/StudentList.tsx",
   "src/pages/teacher/W8TeacherHub.tsx",
   "src/pages/teacher/WisEconomyManager.tsx",
-  "src/pages/teacher/components/TeacherLessonPresentation.tsx",
   "src/pages/w8Domains.css",
   "src/pages/wisEconomy.css",
 ]);

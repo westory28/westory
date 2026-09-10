@@ -50,11 +50,10 @@ writeFileSync(fixturePath, fixtureSource);
 const entry = `
 import React,{useState,Suspense} from 'react'; import {createRoot} from 'react-dom/client';
 import LessonContent from '../src/pages/student/lesson/components/LessonContent';
-import TeacherLessonPresentation from '../src/pages/teacher/components/TeacherLessonPresentation';
 import {lesson,state} from './fixture';
-function App(){const [teacher,setTeacher]=useState(false);const [unit,setUnit]=useState('unit-one');const [key,setKey]=useState(0);return <>
-<div style={{padding:12,background:'#e0f2fe',display:'flex',gap:12,flexWrap:'wrap'}}><strong>로컬 검증 화면 · 실제 데이터 연결 없음</strong><button onClick={()=>setTeacher(!teacher)}>학생/교사 전환</button><button onClick={()=>setKey(key+1)}>다시 열기</button><button onClick={()=>setUnit(unit==='unit-one'?'unit-two':'unit-one')}>단원 전환</button><label><input type="checkbox" onChange={e=>state.fail=e.target.checked}/>저장 실패 재현</label><label><input type="checkbox" onChange={e=>state.slow=e.target.checked}/>느린 저장 재현</label></div>
-<div id="test-toast" role="status" style={{padding:8}}></div><main style={{maxWidth:1200,margin:'auto'}}><Suspense fallback="불러오는 중">{teacher?<TeacherLessonPresentation lesson={lesson}/>:<LessonContent key={key} unitId={unit}/>}</Suspense></main></>};
+function App(){const [unit,setUnit]=useState('unit-one');const [key,setKey]=useState(0);return <>
+<div style={{padding:12,background:'#e0f2fe',display:'flex',gap:12,flexWrap:'wrap'}}><strong>로컬 검증 화면 · 실제 데이터 연결 없음</strong><button onClick={()=>setKey(key+1)}>다시 열기</button><button onClick={()=>setUnit(unit==='unit-one'?'unit-two':'unit-one')}>단원 전환</button><label><input type="checkbox" onChange={e=>state.fail=e.target.checked}/>저장 실패 재현</label><label><input type="checkbox" onChange={e=>state.slow=e.target.checked}/>느린 저장 재현</label></div>
+<div id="test-toast" role="status" style={{padding:8}}></div><main style={{maxWidth:1200,margin:'auto'}}><Suspense fallback="불러오는 중"><LessonContent key={key} unitId={unit}/></Suspense></main></>};
 createRoot(document.getElementById('root')).render(<App/>);
 `;
 writeFileSync(join(output, "entry.tsx"), entry);

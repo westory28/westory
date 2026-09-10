@@ -59,7 +59,6 @@ type LessonEditorHeaderProps = {
   onLessonTitleChange: (value: string) => void;
   onToggleVisible: (value: boolean) => void;
   onSave: () => void;
-  onOpenTeacherPreview: () => void;
 };
 
 type LessonBodyEditorProps = {
@@ -192,7 +191,6 @@ type LessonPreviewLauncherProps = {
   lesson: LessonData;
   unitId: string;
   fallbackTitle?: string;
-  onOpenTeacherPreview: () => void;
 };
 
 function saveBadgeClass(tone: SaveStateTone = "saved") {
@@ -370,7 +368,6 @@ export function LessonEditorHeader({
   onLessonTitleChange,
   onToggleVisible,
   onSave,
-  onOpenTeacherPreview,
 }: LessonEditorHeaderProps) {
   return (
     <div className="border-b border-gray-200 bg-white px-4 py-3 lg:px-5">
@@ -403,14 +400,6 @@ export function LessonEditorHeader({
             className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {saveButtonLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onOpenTeacherPreview}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            <i className="fas fa-chalkboard-teacher text-sm"></i>
-            수업 화면
           </button>
         </div>
       </div>
@@ -1885,7 +1874,6 @@ export function LessonPreviewLauncher({
   lesson,
   unitId,
   fallbackTitle,
-  onOpenTeacherPreview,
 }: LessonPreviewLauncherProps) {
   return (
     <section className="space-y-6">
@@ -1898,14 +1886,6 @@ export function LessonPreviewLauncher({
             현재 학생 화면 확인
           </h3>
         </div>
-        <button
-          type="button"
-          onClick={onOpenTeacherPreview}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          <i className="fas fa-chalkboard-teacher text-sm"></i>
-          교사용 수업 화면 열기
-        </button>
       </div>
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <React.Suspense
