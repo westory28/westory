@@ -48,7 +48,7 @@ window.memoIdentity=(uid,role='teacher')=>{identity={currentUser:uid?{uid,email:
 window.memoFinish=(ok=true)=>{const next=pending.shift();if(!next)throw Error('No pending write');const error=Object.assign(Error(ok==='conflict'?'다른 화면에서 메모가 변경되었습니다.':'Synthetic connection failure'),{state:ok==='uncertain'?'retryable':ok==='conflict'?'conflict':'failed'});ok===true?next.resolve({noteRevision:2}):next.reject(error);};
 export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>identity);
 const showToast=value=>window.memoToasts.push(value);export const useAppToast=()=>({showToast});
-export const subscribeTeacherPatchNotes=(uid,onChange,onError)=>{window.memoSubscribeCount=(window.memoSubscribeCount||0)+1;window.memoLoadError=()=>{onError(Error('Synthetic subscription failure'));onChange([]);};window.memoEmit=(revision=1)=>onChange([{id:'note-a',ownerUid:uid,noteRevision:revision,body:'기존 메모 '+uid,type:'bug',priority:'normal',status:'open',sourcePath:'/teacher'}]);window.memoEmit();return()=>{};};
+export const subscribeTeacherPatchNotes=(uid,onChange,onError,after)=>{window.memoSubscribeCount=(window.memoSubscribeCount||0)+1;window.memoLoadError=()=>{onError(Error('Synthetic subscription failure'));};window.memoEmit=(revision=1)=>onChange([{id:'note-a',ownerUid:uid,noteRevision:revision,body:'기존 메모 '+uid,type:'bug',priority:'normal',status:'open',sourcePath:'/teacher'}],{hasNext:!after,nextCursor:after?null:{ownerUid:uid,snapshot:{id:'boundary'}}});window.memoPageAfter=after;window.memoDeliver=()=>window.memoEmit();if(!window.memoDelayPage)window.memoEmit();return()=>{window.memoOldEmit=window.memoEmit;};};
 export const isPatchNoteResultUncertain=error=>error?.state==='retryable';
 export const isPatchNoteResultConfirmedFailure=error=>error?.state==='conflict';
 const write=(kind,args)=>{window.memoCalls.push({kind,args});return new Promise((resolve,reject)=>pending.push({resolve,reject}));};
@@ -78,6 +78,13 @@ try {
   browser = await chromium.launch({ channel: "chrome", headless: true });
   const page = await browser.newPage();
   page.setDefaultTimeout(8000);
+  const confirmAction = async (accept, action) => {
+    const waiting = page.waitForEvent("dialog");
+    const clicking = action();
+    const dialog = await waiting;
+    await (accept ? dialog.accept() : dialog.dismiss());
+    await clicking;
+  };
   const errors = [];
   page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
   for (const width of [390, 768, 1280, 1440]) {
@@ -91,8 +98,7 @@ try {
     await page.getByRole("button", { name: "패치 메모 닫기", exact: true }).first().click();
     await page.getByRole("button", { name: "패치 메모 열기", exact: true }).click();
     assert.equal(await body.inputValue(), draft); checks++;
-    page.once("dialog", dialog => dialog.dismiss());
-    await page.getByRole("button", { name: /기존 메모 teacher-a/ }).click();
+    await confirmAction(false, () => page.getByRole("button", { name: /기존 메모 teacher-a/ }).click());
     assert.equal(await body.inputValue(), draft); checks++;
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "패치 메모 열기", exact: true }).click();
@@ -118,18 +124,41 @@ try {
     await page.getByRole("button", { name: /기존 메모 teacher-a/ }).waitFor();
     assert.equal(await page.evaluate(() => window.memoSubscribeCount), subscribeCount + 1);
     assert.equal(await body.inputValue(), draft); checks += 3;
-    page.once("dialog", dialog => dialog.accept());
-    await page.getByRole("button", { name: /기존 메모 teacher-a/ }).click();
+    await confirmAction(true, () => page.getByRole("button", { name: /기존 메모 teacher-a/ }).click());
     await body.fill("편집 도중인 메모");
-    page.once("dialog", dialog => dialog.dismiss());
-    await page.getByRole("button", { name: "새 메모", exact: true }).click();
+    await confirmAction(false, () => page.getByRole("button", { name: "새 메모", exact: true }).click());
     assert.equal(await body.inputValue(), "편집 도중인 메모"); checks++;
-    page.once("dialog", dialog => dialog.accept());
-    await page.getByRole("button", { name: "새 메모", exact: true }).click();
+    await confirmAction(true, () => page.getByRole("button", { name: "새 메모", exact: true }).click());
     assert.equal(await body.inputValue(), ""); checks++;
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false); checks++;
     await page.screenshot({ path: join(output, `memo-${width}.png`) });
   }
+  // Page navigation preserves the draft, rejects late old-page callbacks and retries in place.
+  const pageBody = page.getByRole("textbox", { name: "메모", exact: true });
+  await pageBody.fill("쪽을 옮겨도 보존할 초안");
+  await page.evaluate(() => { window.memoDelayPage = true; });
+  await page.getByRole("button", { name: "오래된 메모 보기" }).click();
+  await page.getByRole("status").waitFor();
+  assert.equal(await page.getByRole("button", { name: "오래된 메모 보기" }).isDisabled(), true); checks++;
+  await page.evaluate(() => window.memoOldEmit());
+  assert.equal(await page.getByRole("button", { name: /기존 메모 teacher-a/ }).count(), 0); checks++;
+  await page.evaluate(() => window.memoLoadError());
+  await page.getByRole("alert").waitFor();
+  assert.equal(await pageBody.inputValue(), "쪽을 옮겨도 보존할 초안"); checks++;
+  await page.getByRole("button", { name: "목록 다시 불러오기" }).click();
+  await page.evaluate(() => window.memoDeliver());
+  await page.getByRole("button", { name: /기존 메모 teacher-a/ }).waitFor();
+  await page.getByText(/2쪽 ·/).waitFor();
+  assert.equal(await page.getByRole("button", { name: "오래된 메모 보기" }).isDisabled(), true); checks++;
+  await page.evaluate(() => { window.memoDelayPage = false; });
+  await page.getByRole("button", { name: "이전 쪽" }).click();
+  await page.getByText(/1쪽 ·/).waitFor();
+  assert.equal(await pageBody.inputValue(), "쪽을 옮겨도 보존할 초안"); checks++;
+  await page.getByRole("button", { name: "오래된 메모 보기" }).click();
+  await page.getByText(/2쪽 ·/).waitFor();
+  await page.getByRole("button", { name: "최신 목록" }).click();
+  await page.getByText(/1쪽 ·/).waitFor();
+  assert.equal(await pageBody.inputValue(), "쪽을 옮겨도 보존할 초안"); checks++;
   // A previous account's in-flight response must not erase the new account's draft.
   const body = page.getByRole("textbox", { name: "메모", exact: true });
   await body.fill("결과를 확인할 때까지 잠글 생성 메모");
@@ -178,8 +207,7 @@ try {
   await page.evaluate(() => window.memoFinish("conflict"));
   await page.waitForFunction(() => !document.querySelector("fieldset").disabled);
   assert.equal(await body.inputValue(), "충돌해도 남겨 둘 초안"); checks++;
-  page.once("dialog", dialog => dialog.accept());
-  await page.getByRole("button", { name: /기존 메모 teacher-a/ }).click();
+  await confirmAction(true, () => page.getByRole("button", { name: /기존 메모 teacher-a/ }).click());
   await body.fill("최신 버전을 확인한 수정");
   await page.getByRole("button", { name: "수정 저장" }).click();
   assert.equal(await page.evaluate(() => window.memoCalls.at(-1).args[2]), 2); checks++;

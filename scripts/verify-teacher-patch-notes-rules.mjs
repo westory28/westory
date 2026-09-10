@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs";
+import assert from "node:assert/strict";
 import { resolve } from "node:path";
+import { runInNewContext } from "node:vm";
+import { transformSync } from "esbuild";
+import * as firestore from "firebase/firestore";
 import {
   initializeTestEnvironment,
   assertFails,
@@ -354,6 +358,51 @@ const main = async () => {
   );
 
   await assertFails(deleteDoc(teacherNoteRef));
+
+  // Exercise the actual client cursor helper with > 2 pages under real Rules.
+  // Timestamp ties require the document snapshot's implicit name tiebreaker.
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const batch = firestore.writeBatch(context.firestore());
+    for (let index = 0; index < 205; index++) {
+      batch.set(doc(context.firestore(), "teacherPatchNotes", teacherUid, "notes", `page-${String(index).padStart(3, "0")}`), {
+        ...notePayload(teacherUid),
+        status: index === 0 ? "open" : "done",
+        updatedAt: Timestamp.fromMillis(1000),
+        createdAt: Timestamp.fromMillis(1000),
+        completedAt: null,
+      });
+    }
+    await batch.commit();
+  });
+  const helperModule = { exports: {} };
+  runInNewContext(transformSync(readFileSync("src/lib/teacherPatchNotes.ts", "utf8"), { loader: "ts", format: "cjs" }).code, {
+    module: helperModule, exports: helperModule.exports, console,
+    require: name => name === "firebase/firestore" ? firestore : name === "./firebase" ? { db: teacherDb } : {},
+  });
+  const loadPage = (after, expectedCount) => new Promise((resolve, reject) => {
+    let unsubscribe = () => {};
+    const timer = setTimeout(() => { unsubscribe(); reject(Error("Page subscription timeout")); }, 15000);
+    unsubscribe = helperModule.exports.subscribeTeacherPatchNotes(teacherUid, (notes, page) => {
+      if (notes.length !== expectedCount) return;
+      clearTimeout(timer); unsubscribe(); resolve({ notes, page });
+    }, error => { clearTimeout(timer); unsubscribe(); reject(error); }, after);
+  });
+  const firstPage = await loadPage(undefined, 100);
+  assert.equal(firstPage.page.hasNext, true);
+  assert.equal(firstPage.page.nextCursor.snapshot.id, "page-107");
+  // A deleted cursor document still carries stable ordering values.
+  await testEnv.withSecurityRulesDisabled(context => deleteDoc(doc(context.firestore(), "teacherPatchNotes", teacherUid, "notes", "page-107")));
+  const secondPage = await loadPage(firstPage.page.nextCursor, 100);
+  const lastPage = await loadPage(secondPage.page.nextCursor, 7);
+  assert.equal(lastPage.page.hasNext, false);
+  assert.ok(lastPage.notes.some(note => note.id === "page-000" && note.status === "open"));
+  const ids = [...firstPage.notes, ...secondPage.notes, ...lastPage.notes].map(note => note.id);
+  assert.equal(new Set(ids).size, 207);
+  let crossOwnerError = false;
+  helperModule.exports.subscribeTeacherPatchNotes(otherTeacherUid, () => assert.fail("cross-owner cursor must not subscribe"), () => { crossOwnerError = true; }, firstPage.page.nextCursor);
+  assert.equal(crossOwnerError, true);
+  await assertFails(getDocs(query(teacherNotes, orderBy("updatedAt", "desc"), limit(101))));
+  console.log(JSON.stringify({ pagination: "PASS", readOnlyClient: true, uniqueNotes: 207, pages: 3, oldestOpenReachable: true, timestampTieAndDeletedCursor: true, crossOwnerCursorBlocked: true }));
 
   console.log(
     JSON.stringify(

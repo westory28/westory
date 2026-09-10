@@ -16,6 +16,8 @@ import {
   type TeacherPatchNoteStatus,
   type TeacherPatchNoteTargetRect,
   type TeacherPatchNoteType,
+  type TeacherPatchNotesCursor,
+  type TeacherPatchNotesPage,
 } from "../../lib/teacherPatchNotes";
 import { useAppToast } from "./AppToastProvider";
 import type { PatchNoteCommandResult } from "../../lib/commandGateway";
@@ -289,6 +291,13 @@ const TeacherPatchMemoPanel: React.FC = () => {
   const [notes, setNotes] = useState<TeacherPatchNote[]>([]);
   const [notesError, setNotesError] = useState(false);
   const [reloadNotes, setReloadNotes] = useState(0);
+  const [pageCursors, setPageCursors] = useState<TeacherPatchNotesCursor[]>([]);
+  const [pageInfo, setPageInfo] = useState<TeacherPatchNotesPage>({
+    nextCursor: null,
+    hasNext: false,
+  });
+  const [notesLoading, setNotesLoading] = useState(true);
+  const pageNavigationPending = useRef(false);
   const [filter, setFilter] = useState<FilterKey>("open");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingRevision, setEditingRevision] = useState(0);
@@ -341,27 +350,52 @@ const TeacherPatchMemoPanel: React.FC = () => {
       return undefined;
     }
     let active = true;
+    setNotesLoading(true);
+    setNotesError(false);
+    setNotes([]);
     const unsubscribe = subscribeTeacherPatchNotes(
       uid,
-      (nextNotes) => {
+      (nextNotes, nextPage) => {
         if (!active) return;
         setNotes(nextNotes);
+        setPageInfo(nextPage);
+        setNotesLoading(false);
+        pageNavigationPending.current = false;
       },
       () => {
         if (!active) return;
         setNotesError(true);
+        setNotes([]);
+        setNotesLoading(false);
+        pageNavigationPending.current = false;
         showToast({
           tone: "error",
           title: "패치 메모를 불러오지 못했습니다.",
           message: "연결 상태를 확인한 뒤 목록을 다시 불러와 주세요.",
         });
       },
+      pageCursors[pageCursors.length - 1],
     );
     return () => {
       active = false;
       unsubscribe();
     };
-  }, [canUsePatchMemo, isTeacherRoute, reloadNotes, showToast, uid]);
+  }, [
+    canUsePatchMemo,
+    isTeacherRoute,
+    pageCursors,
+    reloadNotes,
+    showToast,
+    uid,
+  ]);
+
+  const changeNotesPage = (cursors: TeacherPatchNotesCursor[]) => {
+    if (pageNavigationPending.current || controlsLocked) return;
+    pageNavigationPending.current = true;
+    setNotesLoading(true);
+    setNotes([]);
+    setPageCursors(cursors);
+  };
 
   useEffect(() => {
     if (!open) return undefined;
@@ -924,6 +958,53 @@ const TeacherPatchMemoPanel: React.FC = () => {
                 ))}
               </div>
 
+              <p className="mt-2 text-xs text-slate-500">
+                {pageCursors.length + 1}쪽 · 위 건수와 필터는 현재 목록
+                기준입니다. 한 번에 최대 100건을 표시합니다.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={
+                    notesLoading || controlsLocked || !pageCursors.length
+                  }
+                  onClick={() => changeNotesPage([])}
+                  className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 disabled:opacity-50"
+                >
+                  최신 목록
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    notesLoading || controlsLocked || !pageCursors.length
+                  }
+                  onClick={() => changeNotesPage(pageCursors.slice(0, -1))}
+                  className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 disabled:opacity-50"
+                >
+                  이전 쪽
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    notesLoading ||
+                    notesError ||
+                    controlsLocked ||
+                    !pageInfo.hasNext
+                  }
+                  onClick={() => {
+                    if (pageInfo.nextCursor)
+                      changeNotesPage([...pageCursors, pageInfo.nextCursor]);
+                  }}
+                  className="min-h-11 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-700 disabled:opacity-50"
+                >
+                  오래된 메모 보기
+                </button>
+              </div>
+              {notesLoading && (
+                <p role="status" className="mt-3 text-sm text-slate-500">
+                  메모 목록을 불러오는 중입니다.
+                </p>
+              )}
               {notesError && (
                 <div
                   role="alert"
@@ -945,9 +1026,11 @@ const TeacherPatchMemoPanel: React.FC = () => {
                   </button>
                 </div>
               )}
-              {!filteredNotes.length && !notesError && (
+              {!filteredNotes.length && !notesError && !notesLoading && (
                 <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500">
-                  표시할 패치 메모가 없습니다.
+                  이 쪽에 표시할 메모가 없습니다.
+                  {pageInfo.hasNext &&
+                    " 오래된 메모는 다음 쪽에서 확인해 주세요."}
                 </div>
               )}
 

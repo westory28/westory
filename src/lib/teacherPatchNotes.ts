@@ -4,6 +4,9 @@ import {
   onSnapshot,
   orderBy,
   query,
+  startAfter,
+  type DocumentData,
+  type QueryDocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
@@ -52,6 +55,16 @@ export interface TeacherPatchNoteInput extends TeacherPatchNoteTarget {
 }
 
 const TEACHER_PATCH_NOTES_LIMIT = 100;
+
+export interface TeacherPatchNotesCursor {
+  ownerUid: string;
+  snapshot: QueryDocumentSnapshot<DocumentData>;
+}
+
+export interface TeacherPatchNotesPage {
+  nextCursor: TeacherPatchNotesCursor | null;
+  hasNext: boolean;
+}
 
 const getTeacherPatchNotesCollection = (uid: string) =>
   collection(db, "teacherPatchNotes", uid, "notes");
@@ -162,13 +175,25 @@ const buildNoteContent = (input: TeacherPatchNoteInput) => {
 
 export const subscribeTeacherPatchNotes = (
   uid: string,
-  onChange: (notes: TeacherPatchNote[]) => void,
+  onChange: (notes: TeacherPatchNote[], page: TeacherPatchNotesPage) => void,
   onError?: (error: Error) => void,
-): Unsubscribe =>
-  onSnapshot(
+  after?: TeacherPatchNotesCursor,
+): Unsubscribe => {
+  if (
+    after &&
+    (after.ownerUid !== uid ||
+      after.snapshot.ref.parent.path !== `teacherPatchNotes/${uid}/notes`)
+  ) {
+    onError?.(
+      new Error("메모 목록의 계정이 바뀌었습니다. 최신 목록을 열어 주세요."),
+    );
+    return () => {};
+  }
+  return onSnapshot(
     query(
       getTeacherPatchNotesCollection(uid),
       orderBy("updatedAt", "desc"),
+      ...(after ? [startAfter(after.snapshot)] : []),
       limit(TEACHER_PATCH_NOTES_LIMIT),
     ),
     (snapshot) => {
@@ -176,14 +201,19 @@ export const subscribeTeacherPatchNotes = (
         if (a.status !== b.status) return a.status === "open" ? -1 : 1;
         return getTimestampMs(b.updatedAt) - getTimestampMs(a.updatedAt);
       });
-      onChange(notes);
+      // Use the server order, not the UI's status grouping, as the boundary.
+      const last = snapshot.docs[snapshot.docs.length - 1];
+      onChange(notes, {
+        nextCursor: last ? { ownerUid: uid, snapshot: last } : null,
+        hasNext: snapshot.docs.length === TEACHER_PATCH_NOTES_LIMIT,
+      });
     },
     (error) => {
       console.error("Failed to subscribe teacher patch notes:", error);
       onError?.(error);
-      onChange([]);
     },
   );
+};
 
 export const createTeacherPatchNote = async (
   uid: string,
