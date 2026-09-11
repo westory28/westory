@@ -21,6 +21,7 @@ const lessonAnswers = require("./lessonAnswers");
 const lessonManagement = require("./lessonManagement");
 const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
+const historyDictionaryDelete = require("./historyDictionaryDelete");
 const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
 const w8Domains = require("./w8Domains");
@@ -10848,57 +10849,58 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
   async (request) => {
     const manager = await assertHistoryDictionaryWriteManager(request);
     const { year, semester } = assertYearSemester(request.data);
-    const targetUid = String(request.data?.uid || "").trim();
-    const requestId = sanitizeHistoryDictionaryText(
-      request.data?.requestId,
-      100,
-    );
-    const word = sanitizeHistoryDictionaryWord(request.data?.word);
-    const normalizedWord = normalizeHistoryDictionaryWord(
-      request.data?.normalizedWord || word,
-    );
-    const termId =
-      sanitizeHistoryDictionaryText(request.data?.termId, 80) ||
-      (normalizedWord ? buildHistoryDictionaryTermId(normalizedWord) : "");
+    // Validate raw path components before constructing any Admin reference.
+    const target = historyDictionaryDelete.parseTarget(request.data, { year, semester });
+    const { uid: targetUid, requestId, termId } = target;
     const reason = sanitizeHistoryDictionaryText(
       request.data?.reason ||
         "teacher_deleted_inappropriate_history_dictionary_word",
       160,
     );
-    if (!targetUid || !termId) {
-      throw new HttpsError("invalid-argument", "uid and termId are required.");
-    }
-
     const wordRef = db.doc(
       getStudentHistoryDictionaryWordPath(targetUid, termId),
     );
     const requestRef = requestId
       ? db.doc(getHistoryDictionaryRequestPath(requestId))
       : null;
-    const { profile } = await ensureStudentProfile(targetUid);
     const result = await db.runTransaction(async (transaction) => {
-      const [wordSnap, requestSnap] = await Promise.all([
+      const [wordSnap, requestSnap, profileSnap] = await Promise.all([
         transaction.get(wordRef),
         requestRef ? transaction.get(requestRef) : Promise.resolve(null),
+        transaction.get(db.doc(`users/${targetUid}`)),
       ]);
-      const wordData = wordSnap.exists ? wordSnap.data() || {} : {};
-      let reward = { reclaimed: false, amount: 0 };
-      reward = await reclaimHistoryDictionaryRewardIfNeeded({
-        transaction,
-        year,
-        semester,
-        uid: targetUid,
-        profile,
-        termId: String(wordData.rewardTermId || termId),
-        word: wordData.word || word || termId,
-        actorUid: manager.uid,
-        reason,
+      const wordData = wordSnap.exists ? wordSnap.data() || {} : null;
+      const profile = profileSnap.exists ? profileSnap.data() || {} : null;
+      const plan = historyDictionaryDelete.inspectTarget({
+        target, wordData, profile,
+        requestData: requestSnap?.exists ? requestSnap.data() || {} : null,
       });
+      let reward = { reclaimed: false, amount: 0,
+        blockedReason: wordSnap.exists ? "reward_scope_unverified" : "word_not_found" };
+      if (plan.noop) return { response: { termId, requestId, deleted: false, reward }, notify: false };
+
+      if (plan.reclaimAllowed) {
+        const rewardId = getHistoryDictionaryRewardTransactionId(targetUid, plan.rewardTermId);
+        const rewardPath = `${getPointCollectionPath(year, semester, "point_transactions")}/${rewardId}`;
+        const [rewardSnap, reclaimSnap] = await Promise.all([
+          transaction.get(db.doc(rewardPath)),
+          transaction.get(db.doc(`${rewardPath}_reclaim`)),
+        ]);
+        historyDictionaryDelete.assertRewardBinding({
+          reward: rewardSnap.exists ? rewardSnap.data() : null,
+          reclaim: reclaimSnap.exists ? reclaimSnap.data() : null,
+          uid: targetUid, sourceId: getHistoryDictionaryRewardSourceId(plan.rewardTermId),
+        });
+        reward = await reclaimHistoryDictionaryRewardIfNeeded({
+          transaction, year, semester, uid: targetUid, profile,
+          termId: plan.rewardTermId, word: plan.word, actorUid: manager.uid, reason,
+        });
+      }
 
       if (wordSnap.exists) {
         transaction.delete(wordRef);
       }
-      if (requestRef && requestSnap?.exists) {
+      if (plan.rejectRequest && requestSnap?.exists) {
         transaction.set(
           requestRef,
           {
@@ -10910,19 +10912,20 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
           },
           { merge: true },
         );
-      } else if (requestRef) {
-        transaction.set(
+      } else if (plan.recoverRequest) {
+        transaction.create(
           requestRef,
           {
-            word: word || wordData.word || termId,
-            normalizedWord,
+            word: plan.word,
+            normalizedWord: plan.normalizedWord,
             uid: targetUid,
             studentName:
               sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
             grade: sanitizeHistoryDictionaryText(profile.grade, 8),
             class: sanitizeHistoryDictionaryText(profile.class, 8),
             number: sanitizeHistoryDictionaryText(profile.number, 8),
-            memo: "알림 기록에서 복구해 반려한 요청입니다.",
+            memo: sanitizeHistoryDictionaryText(wordData.memo, 240)
+              || "현재 학생 단어장에서 확인해 반려한 요청입니다.",
             status: "rejected",
             matchedTermId: termId,
             resolvedTermId: "",
@@ -10932,30 +10935,27 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
             rejectionReason: reason,
             year,
             semester,
-            createdAt: FieldValue.serverTimestamp(),
+            createdAt: wordData.createdAt || FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
             resolvedAt: null,
           },
-          { merge: true },
         );
       }
 
       return {
-        termId,
-        requestId,
-        deleted: wordSnap.exists,
-        reward,
+        response: { termId, requestId, deleted: wordSnap.exists, reward },
+        notify: true, word: plan.word,
       };
     });
 
-    if (result.reward?.reclaimed) {
+    if (result.response.reward?.reclaimed) {
       await markWisHallOfFameDirtySafely(year, semester);
     }
 
-    await createUserNotification(year, semester, targetUid, {
+    if (result.notify) await createUserNotification(year, semester, targetUid, {
       type: "history_dictionary_rejected",
       title: "역사 사전 단어 삭제",
-      body: `"${word || "요청한 단어"}" 항목이 선생님 확인 후 삭제되었습니다.`,
+      body: `"${result.word || "요청한 단어"}" 항목이 선생님 확인 후 삭제되었습니다.`,
       targetUrl: "/student/lesson/history-dictionary",
       entityType: "history_dictionary_request",
       entityId: requestId || termId,
@@ -10963,11 +10963,11 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
       priority: "normal",
       dedupeKey: `history_dictionary_rejected:${year}:${semester}:${targetUid}:${termId}:${Date.now()}`,
       templateValues: {
-        word: word || "요청한 단어",
+        word: result.word || "요청한 단어",
       },
     });
 
-    return result;
+    return result.response;
   },
 );
 
