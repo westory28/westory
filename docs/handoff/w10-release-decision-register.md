@@ -10,7 +10,7 @@ W9에서 남긴 Release Decision 8개를 현재 코드와 PHASE 4 사용자 결�
 | --- | --- | --- | --- | --- |
 | EX03 | `/teacher/exam` 성적 XLSX 해석·미리보기 | SAFE_CONFIGURABLE_DEFAULT | 브라우저 안에서만 해석하며 `아직 저장되지 않음`을 표시합니다. 영구 write는 0입니다. | W11 Enrollment identity selector |
 | EX06 | 성적 XLSX 공식 저장 | USER_DECISION_REQUIRED | 사용할 수 없음으로 표시합니다. fake success는 없습니다. | 공식 Grade import command·receipt와 ALL_OR_NOTHING/ITEMIZED_PARTIAL 정책 |
-| DIC01 | 역사사전 단건 등록·수정 | ALREADY_DECIDED | 기존 교사 전용 callable을 유지합니다. W9 Draft·Gateway 기능이라고 표시하지 않습니다. | Production 전 W12 Gateway·receipt migration |
+| DIC01 | 역사사전 단건 등록·수정 | ALREADY_DECIDED | 기존 교사 전용 callable에서 요청·학생 단어장 연결 검증과 잘못된 fallback 사전 거절을 적용합니다. W9 Draft·Gateway 기능이라고 표시하지 않습니다. | [요청 연결 보안 범위](../w12-history-dictionary-request-binding.md), Production 전 W12 Gateway·CAS·receipt·배포/알림 migration |
 | DIC02 | 역사사전 XLSX 일괄 등록 | ALREADY_DECIDED | 로컬 해석 뒤 Gateway가 최대 200행을 ALL_OR_NOTHING으로 생성하고 동일 요청의 receipt를 재사용합니다. 이전 직접 callable은 쓰기를 거절합니다. | [DIC02 구현·검증 범위](../w12-history-dictionary-import-gateway.md), 실제 교사 XLSX 수용 및 Production 출시 검증 |
 | MAP01 | 지도 파일 저장 | USER_DECISION_REQUIRED | 조회 전용·EXPLICITLY_UNAVAILABLE입니다. 업로드·삭제·순서 변경을 숨겼습니다. | checksum·owner·TTL·promote·receipt·Archive fence |
 | MAP02 | 지도 태그·지역 편집 | USER_DECISION_REQUIRED | 조회 전용·EXPLICITLY_UNAVAILABLE입니다. 직접 Firestore mutation을 차단했습니다. | W11 map taxonomy와 revision/CAS/provenance 계약 |

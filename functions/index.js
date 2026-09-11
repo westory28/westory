@@ -11201,169 +11201,241 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
   },
 );
 
-const resolveHistoryDictionaryRequestsWithTerm = async ({
-  managerUid,
-  termId,
-  requestId = "",
-  fallbackRequestId = "",
-  fallbackUid = "",
-  year = "",
-  semester = "",
-}) => {
-  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
-  const result = await db.runTransaction(async (transaction) => {
-    const termSnap = await transaction.get(termRef);
-    if (!termSnap.exists) {
-      throw new HttpsError("not-found", "Dictionary term does not exist.");
-    }
-    const term = termSnap.data() || {};
-    if (term.status !== "published" || !String(term.definition || "").trim()) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Dictionary term is not published.",
-      );
-    }
+const failHistoryDictionaryRequestTarget = (reason) => {
+  const message = reason === "HISTORY_DICTIONARY_FALLBACK_UNVERIFIED"
+    ? "현재 학생 단어장에서 요청을 확인할 수 없습니다. 학생이 다시 요청한 뒤 처리해 주세요."
+    : reason === "HISTORY_DICTIONARY_REQUEST_NOT_PENDING"
+      ? "이미 닫힌 요청입니다. 요청 목록을 새로 고쳐 주세요."
+      : "요청의 학생, 단어 또는 학기가 일치하지 않습니다. 요청 목록을 새로 고쳐 주세요.";
+  throw new HttpsError("failed-precondition", message, { reason });
+};
 
-    const normalizedWord = normalizeHistoryDictionaryWord(
-      term.normalizedWord || term.word,
-    );
-    let docs = [];
+const isHistoryDictionaryPathId = (value, maxLength) =>
+  typeof value === "string" && value.length > 0 && value.length <= maxLength
+  && value === value.trim() && !/[\/\\\x00-\x1f\x7f]/.test(value)
+  && value !== "." && value !== "..";
+
+const assertHistoryDictionaryRequestTargetInput = ({
+  termId, normalizedWord, year, semester, requestId = "",
+  fallbackRequestId = "", fallbackUid = "",
+}) => {
+  if (
+    !isHistoryDictionaryPathId(termId, 80)
+    || typeof normalizedWord !== "string" || !normalizedWord
+    || typeof year !== "string" || !/^\d{4}$/.test(year)
+    || !["1", "2"].includes(semester)
+    || (requestId !== "" && !isHistoryDictionaryPathId(requestId, 120))
+    || (fallbackRequestId !== "" && !isHistoryDictionaryPathId(fallbackRequestId, 120))
+    || (fallbackUid !== "" && !isHistoryDictionaryPathId(fallbackUid, 128))
+    || Boolean(fallbackRequestId) !== Boolean(fallbackUid)
+    || (requestId && fallbackRequestId)
+  ) failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_REQUEST_MISMATCH");
+};
+
+const inspectHistoryDictionaryRequestTarget = ({
+  snapshot, termId, normalizedWord, year, semester, expectedUid = "",
+}) => {
+  if (!snapshot.exists) failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_REQUEST_MISMATCH");
+  const data = snapshot.data() || {};
+  if (
+    !isHistoryDictionaryPathId(data.uid, 128)
+    || (expectedUid && data.uid !== expectedUid)
+    || typeof data.normalizedWord !== "string"
+    || normalizeHistoryDictionaryWord(data.normalizedWord) !== normalizedWord
+    || (Object.hasOwn(data, "word") && (typeof data.word !== "string"
+      || normalizeHistoryDictionaryWord(data.word) !== normalizedWord))
+    || String(data.year || "") !== year || String(data.semester || "") !== semester
+  ) failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_REQUEST_MISMATCH");
+  const status = String(data.status || "").trim();
+  if (status === "resolved") {
+    const resolvedTermId = String(data.resolvedTermId || data.matchedTermId || "");
+    if (resolvedTermId !== termId
+      || (data.matchedTermId && data.matchedTermId !== termId)
+      || (data.resolvedTermId && data.resolvedTermId !== termId))
+      failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_REQUEST_MISMATCH");
+    return { snapshot, data, uid: data.uid, pending: false, recovered: false };
+  }
+  if (!["requested", "needs_approval"].includes(status))
+    failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_REQUEST_NOT_PENDING");
+  return { snapshot, data, uid: data.uid, pending: true, recovered: false };
+};
+
+const assertHistoryDictionaryStudentWordBinding = ({
+  snapshot, uid, termId, requestId, normalizedWord, year, semester,
+}) => {
+  if (!snapshot.exists) return;
+  const data = snapshot.data() || {};
+  const expected = { uid, termId, requestId };
+  if (Object.entries(expected).some(([key, value]) =>
+    Object.hasOwn(data, key) && data[key] !== value)
+    || (Object.hasOwn(data, "year") && String(data.year || "") !== year)
+    || (Object.hasOwn(data, "semester") && String(data.semester || "") !== semester)
+    || (Object.hasOwn(data, "normalizedWord") && (typeof data.normalizedWord !== "string"
+      || normalizeHistoryDictionaryWord(data.normalizedWord) !== normalizedWord))
+    || (Object.hasOwn(data, "word") && (typeof data.word !== "string"
+      || normalizeHistoryDictionaryWord(data.word) !== normalizedWord)))
+    failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_REQUEST_MISMATCH");
+};
+
+// This read-only preflight runs both before the first term write and inside
+// request resolution. A public deterministic ID is a binding, never proof that
+// the student currently wants an absent request to be recovered.
+const readHistoryDictionaryFallbackTarget = async ({
+  transaction, termId, normalizedWord, year, semester,
+  fallbackRequestId = "", fallbackUid = "",
+}) => {
+  assertHistoryDictionaryRequestTargetInput({
+    termId, normalizedWord, year, semester, fallbackRequestId, fallbackUid,
+  });
+  if (!fallbackRequestId) return null;
+  const snapshot = await transaction.get(
+    db.doc(getHistoryDictionaryRequestPath(fallbackRequestId)),
+  );
+  if (snapshot.exists) {
+    const target = inspectHistoryDictionaryRequestTarget({
+      snapshot, termId, normalizedWord, year, semester, expectedUid: fallbackUid,
+    });
+    if (!target.pending) return target;
+    const wordSnap = await transaction.get(db.doc(
+      getStudentHistoryDictionaryWordPath(fallbackUid, termId),
+    ));
+    assertHistoryDictionaryStudentWordBinding({
+      snapshot: wordSnap, uid: fallbackUid, termId, requestId: fallbackRequestId,
+      normalizedWord, year, semester,
+    });
+    return { ...target, wordSnap };
+  }
+  if (fallbackRequestId !== buildHistoryDictionaryRequestId(
+    year, semester, fallbackUid, normalizedWord,
+  )) failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_FALLBACK_UNVERIFIED");
+  const [profileSnap, wordSnap] = await Promise.all([
+    transaction.get(db.doc(`users/${fallbackUid}`)),
+    transaction.get(db.doc(getStudentHistoryDictionaryWordPath(fallbackUid, termId))),
+  ]);
+  const profile = profileSnap.data() || {};
+  const word = wordSnap.data() || {};
+  if (
+    !profileSnap.exists || String(profile.role || "").trim() !== "student"
+    || (Object.hasOwn(profile, "uid") && profile.uid !== fallbackUid)
+    || !wordSnap.exists || word.status !== "requested"
+    || word.requestId !== fallbackRequestId
+    || typeof word.normalizedWord !== "string"
+    || normalizeHistoryDictionaryWord(word.normalizedWord) !== normalizedWord
+    || (Object.hasOwn(word, "word") && (typeof word.word !== "string"
+      || normalizeHistoryDictionaryWord(word.word) !== normalizedWord))
+    || String(word.year || "") !== year || String(word.semester || "") !== semester
+    || (Object.hasOwn(word, "uid") && word.uid !== fallbackUid)
+    || (Object.hasOwn(word, "termId") && word.termId !== termId)
+  ) failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_FALLBACK_UNVERIFIED");
+  return {
+    snapshot, uid: fallbackUid, pending: true, recovered: true, wordSnap,
+    data: {
+      word: sanitizeHistoryDictionaryWord(word.word || normalizedWord),
+      normalizedWord, uid: fallbackUid, year, semester,
+      studentName: sanitizeHistoryDictionaryText(word.studentName || profile.name, 40),
+      grade: sanitizeHistoryDictionaryText(word.grade || profile.grade, 8),
+      class: sanitizeHistoryDictionaryText(word.class || profile.class, 8),
+      number: sanitizeHistoryDictionaryText(word.number || profile.number, 8),
+      memo: sanitizeHistoryDictionaryText(word.memo, 240) || "학생 단어장에서 확인해 복구한 요청입니다.",
+      createdAt: word.createdAt || null,
+    },
+  };
+};
+
+const resolveHistoryDictionaryRequestsWithTerm = async ({
+  managerUid, termId, requestId = "", fallbackRequestId = "", fallbackUid = "",
+  year = "", semester = "",
+}) => {
+  // Validate path components before constructing an Admin SDK document reference.
+  assertHistoryDictionaryRequestTargetInput({
+    termId, normalizedWord: "pending-term-read", year, semester,
+    requestId, fallbackRequestId, fallbackUid,
+  });
+  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+  return db.runTransaction(async (transaction) => {
+    const termSnap = await transaction.get(termRef);
+    if (!termSnap.exists) throw new HttpsError("not-found", "Dictionary term does not exist.");
+    const term = termSnap.data() || {};
+    if (term.status !== "published" || !String(term.definition || "").trim())
+      throw new HttpsError("failed-precondition", "Dictionary term is not published.");
+    const normalizedWord = normalizeHistoryDictionaryWord(term.normalizedWord || term.word);
+    assertHistoryDictionaryRequestTargetInput({
+      termId, normalizedWord, year, semester, requestId, fallbackRequestId, fallbackUid,
+    });
+    const fallback = await readHistoryDictionaryFallbackTarget({
+      transaction, termId, normalizedWord, year, semester, fallbackRequestId, fallbackUid,
+    });
+    if (fallback && !fallback.pending) return { termId, normalizedWord, resolved: [] };
+
+    let targets;
     if (requestId) {
-      const requestSnap = await transaction.get(
-        db.doc(getHistoryDictionaryRequestPath(requestId)),
-      );
-      docs = [
-        {
-          ref: requestSnap.ref,
-          exists: requestSnap.exists,
-          data: () => requestSnap.data(),
-        },
-      ];
+      const snapshot = await transaction.get(db.doc(getHistoryDictionaryRequestPath(requestId)));
+      const target = inspectHistoryDictionaryRequestTarget({
+        snapshot, termId, normalizedWord, year, semester,
+      });
+      targets = target.pending ? [target] : [];
     } else {
-      if (!year || !semester) {
-        throw new HttpsError("failed-precondition", "요청을 처리할 학기를 확인해 주세요.");
-      }
       const requestSnap = await transaction.get(
-        db
-          .collection(HISTORY_DICTIONARY_REQUESTS_COLLECTION)
+        db.collection(HISTORY_DICTIONARY_REQUESTS_COLLECTION)
           .where("normalizedWord", "==", normalizedWord)
           .where("year", "==", year)
           .where("semester", "==", semester)
           .where("status", "in", ["requested", "needs_approval"])
           .limit(101),
       );
-      if (requestSnap.docs.length > 100) {
+      if (requestSnap.docs.length > 100)
         throw new HttpsError("resource-exhausted", "미처리 요청이 많습니다. 요청 목록에서 나누어 승인해 주세요.");
-      }
-      docs = requestSnap.docs;
+      targets = requestSnap.docs.map((snapshot) => inspectHistoryDictionaryRequestTarget({
+        snapshot, termId, normalizedWord, year, semester,
+      }));
     }
+    if (fallback && !targets.some((target) => target.snapshot.ref.path === fallback.snapshot.ref.path))
+      targets.push(fallback);
 
+    // Read all word snapshots before staging any request/word writes. In
+    // particular, preserve createdAt and reward/profile metadata on existing rows.
+    const preparedTargets = await Promise.all(targets.map(async (target) => {
+      const wordSnap = target.wordSnap || await transaction.get(
+        db.doc(getStudentHistoryDictionaryWordPath(target.uid, termId)),
+      );
+      assertHistoryDictionaryStudentWordBinding({
+        snapshot: wordSnap, uid: target.uid, termId, requestId: target.snapshot.ref.id,
+        normalizedWord, year, semester,
+      });
+      return { ...target, wordSnap };
+    }));
     const resolved = [];
-    docs.forEach((docSnap) => {
-      if (!docSnap.exists) return;
-      const data = docSnap.data() || {};
-      if (year && String(data.year || "") !== year) return;
-      if (semester && String(data.semester || "") !== semester) return;
-      if (
-        !["requested", "needs_approval"].includes(
-          String(data.status || "").trim(),
-        )
-      )
-        return;
-      const targetUid = String(data.uid || "").trim();
-      if (!targetUid) return;
-      transaction.set(
-        docSnap.ref,
-        {
-          status: "resolved",
-          matchedTermId: termId,
-          resolvedTermId: termId,
-          resolvedBy: managerUid,
-          resolvedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-      transaction.set(
-        db.doc(getStudentHistoryDictionaryWordPath(targetUid, termId)),
-        {
-          termId,
-          word: sanitizeHistoryDictionaryWord(term.word),
-          normalizedWord,
-          definition: sanitizeHistoryDictionaryText(term.definition, 1200),
-          studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
-          tags: sanitizeHistoryDictionaryTags(term.tags),
-          status: "saved",
-          requestId: docSnap.ref.id,
-          updatedAt: FieldValue.serverTimestamp(),
-          createdAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-      resolved.push({
-        uid: targetUid,
-        requestId: docSnap.ref.id,
-        word: sanitizeHistoryDictionaryWord(term.word),
-      });
-    });
-
-    if (fallbackUid && !resolved.some((item) => item.uid === fallbackUid)) {
-      if (fallbackRequestId) {
-        transaction.set(
-          db.doc(getHistoryDictionaryRequestPath(fallbackRequestId)),
-          {
-            word: sanitizeHistoryDictionaryWord(term.word),
-            normalizedWord,
-            uid: fallbackUid,
-            studentName: "",
-            grade: "",
-            class: "",
-            number: "",
-            memo: "알림 기록에서 복구해 처리한 요청입니다.",
-            status: "resolved",
-            matchedTermId: termId,
-            resolvedTermId: termId,
-            resolvedBy: managerUid,
-            year,
-            semester,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-            resolvedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
+    for (const target of preparedTargets) {
+      const resolution = {
+        status: "resolved", matchedTermId: termId, resolvedTermId: termId,
+        resolvedBy: managerUid, resolvedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      if (target.recovered) {
+        transaction.create(target.snapshot.ref, {
+          ...target.data, createdAt: target.data.createdAt || FieldValue.serverTimestamp(),
+          ...resolution,
+        });
+      } else {
+        transaction.set(target.snapshot.ref, resolution, { merge: true });
       }
+      const existingWord = target.wordSnap.data() || {};
       transaction.set(
-        db.doc(getStudentHistoryDictionaryWordPath(fallbackUid, termId)),
+        db.doc(getStudentHistoryDictionaryWordPath(target.uid, termId)),
         {
-          termId,
-          word: sanitizeHistoryDictionaryWord(term.word),
-          normalizedWord,
+          termId, word: sanitizeHistoryDictionaryWord(term.word), normalizedWord,
           definition: sanitizeHistoryDictionaryText(term.definition, 1200),
           studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
-          tags: sanitizeHistoryDictionaryTags(term.tags),
-          status: "saved",
-          requestId: fallbackRequestId,
-          updatedAt: FieldValue.serverTimestamp(),
-          createdAt: FieldValue.serverTimestamp(),
+          tags: sanitizeHistoryDictionaryTags(term.tags), status: "saved",
+          requestId: target.snapshot.ref.id, updatedAt: FieldValue.serverTimestamp(),
+          createdAt: existingWord.createdAt || FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
-      resolved.push({
-        uid: fallbackUid,
-        requestId: fallbackRequestId,
-        word: sanitizeHistoryDictionaryWord(term.word),
-      });
+      resolved.push({ uid: target.uid, requestId: target.snapshot.ref.id, word: sanitizeHistoryDictionaryWord(term.word) });
     }
-
-    return {
-      termId,
-      normalizedWord,
-      resolved,
-    };
+    return { termId, normalizedWord, resolved };
   });
-
-  return result;
 };
 
 exports.saveHistoryDictionaryTermsBulk = onCall(
@@ -11406,14 +11478,9 @@ exports.saveHistoryDictionaryTerm = onCall(
       120,
     );
     const tags = sanitizeHistoryDictionaryTags(request.data?.tags);
-    const fallbackRequestId = sanitizeHistoryDictionaryText(
-      request.data?.fallbackRequestId,
-      120,
-    );
-    const fallbackUid = sanitizeHistoryDictionaryText(
-      request.data?.fallbackUid,
-      80,
-    );
+    // IDs are validated as complete path components, never truncated/coerced.
+    const fallbackRequestId = request.data?.fallbackRequestId ?? "";
+    const fallbackUid = request.data?.fallbackUid ?? "";
 
     if (!word || !normalizedWord) {
       throw new HttpsError("invalid-argument", "A word is required.");
@@ -11424,8 +11491,17 @@ exports.saveHistoryDictionaryTerm = onCall(
 
     const termId = buildHistoryDictionaryTermId(normalizedWord);
     const termRef = db.doc(getHistoryDictionaryTermPath(termId));
-    await db.runTransaction(async (transaction) => {
+    const scoped =
+      getOptionalYearSemester(request.data) ||
+      (await getCurrentConfiguredYearSemester());
+    const alreadyResolvedFallback = await db.runTransaction(async (transaction) => {
       const termSnap = await transaction.get(termRef);
+      const fallback = await readHistoryDictionaryFallbackTarget({
+        transaction, termId, normalizedWord,
+        year: scoped?.year || "", semester: scoped?.semester || "",
+        fallbackRequestId, fallbackUid,
+      });
+      if (fallback && !fallback.pending) return true;
       transaction.set(
         termRef,
         {
@@ -11448,11 +11524,9 @@ exports.saveHistoryDictionaryTerm = onCall(
         },
         { merge: true },
       );
+      return false;
     });
-
-    const scoped =
-      getOptionalYearSemester(request.data) ||
-      (await getCurrentConfiguredYearSemester());
+    if (alreadyResolvedFallback) return { termId, resolvedCount: 0 };
     const resolvedResult = await resolveHistoryDictionaryRequestsWithTerm({
       managerUid: manager.uid,
       termId,
@@ -11495,11 +11569,8 @@ exports.approveHistoryDictionaryTermForRequests = onCall(
   async (request) => {
     const manager = await assertHistoryDictionaryWriteManager(request);
     const { year, semester } = assertYearSemester(request.data);
-    const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
-    const requestId = sanitizeHistoryDictionaryText(
-      request.data?.requestId,
-      100,
-    );
+    const termId = request.data?.termId ?? "";
+    const requestId = request.data?.requestId ?? "";
     if (!termId) {
       throw new HttpsError("invalid-argument", "termId is required.");
     }
