@@ -20,6 +20,7 @@ const assessmentLifecycle = require("./assessmentLifecycle");
 const lessonAnswers = require("./lessonAnswers");
 const lessonManagement = require("./lessonManagement");
 const teacherPatchNotes = require("./teacherPatchNotes");
+const historyDictionaryImport = require("./historyDictionaryImport");
 const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
 const w8Domains = require("./w8Domains");
@@ -11372,98 +11373,17 @@ exports.saveHistoryDictionaryTermsBulk = onCall(
     memory: "512MiB",
   },
   async (request) => {
-    const manager = await assertHistoryDictionaryWriteManager(request);
-    assertYearSemester(request.data);
-    const rawTerms = Array.isArray(request.data?.terms)
-      ? request.data.terms
-      : [];
-    if (!rawTerms.length) {
-      throw new HttpsError("invalid-argument", "Terms are required.");
-    }
-    if (rawTerms.length > MAX_HISTORY_DICTIONARY_BULK_TERMS) {
-      throw new HttpsError(
-        "invalid-argument",
-        `Terms must be ${MAX_HISTORY_DICTIONARY_BULK_TERMS} or fewer.`,
-      );
-    }
-
-    const seenWords = new Set();
-    const terms = rawTerms.map((item, index) => {
-      const word = sanitizeHistoryDictionaryWord(item?.word);
-      const normalizedWord = normalizeHistoryDictionaryWord(word);
-      const definition = sanitizeHistoryDictionaryText(item?.definition, 1200);
-      const studentLevel = sanitizeHistoryDictionaryText(
-        item?.studentLevel || "중학생 수준",
-        80,
-      );
-      const relatedUnitId = sanitizeHistoryDictionaryText(
-        item?.relatedUnitId,
-        120,
-      );
-      const tags = sanitizeHistoryDictionaryTags(item?.tags);
-
-      if (!word || !normalizedWord) {
-        throw new HttpsError(
-          "invalid-argument",
-          `A word is required at row ${index + 1}.`,
-        );
-      }
-      if (!definition || definition.length < 5) {
-        throw new HttpsError(
-          "invalid-argument",
-          `Definition is too short at row ${index + 1}.`,
-        );
-      }
-      if (seenWords.has(normalizedWord)) {
-        throw new HttpsError("invalid-argument", `Duplicate word: ${word}`);
-      }
-      seenWords.add(normalizedWord);
-
-      return {
-        termId: buildHistoryDictionaryTermId(normalizedWord),
-        word,
-        normalizedWord,
-        definition,
-        studentLevel,
-        relatedUnitId,
-        tags,
-      };
-    });
-
-    const termRefs = terms.map((term) =>
-      db.doc(getHistoryDictionaryTermPath(term.termId)),
+    await assertHistoryDictionaryWriteManager(request);
+    // Keep the old deployed callable fail-closed for cached clients. Only the
+    // Gateway path may create terms together with its receipt and audit.
+    throw new HttpsError(
+      "failed-precondition",
+      "이전 일괄 등록 경로는 종료되었습니다. 화면을 새로 고친 뒤 다시 등록해 주세요.",
+      {
+        reason: "LEGACY_DICTIONARY_IMPORT_RETIRED",
+        replacement: "executeCommand/saveHistoryDictionaryTermsBulk",
+      },
     );
-    await db.runTransaction(async (transaction) => {
-      const existingSnaps = await transaction.getAll(...termRefs);
-      if (existingSnaps.some((snapshot) => snapshot.exists)) {
-        throw new HttpsError(
-          "already-exists",
-          "이미 등록된 단어가 있습니다. 목록을 새로 고친 뒤 중복 항목을 제외해 주세요.",
-          { reason: "HISTORY_DICTIONARY_BULK_CONFLICT" },
-        );
-      }
-      terms.forEach((term, index) => {
-        transaction.create(termRefs[index], {
-          word: term.word,
-          normalizedWord: term.normalizedWord,
-          definition: term.definition,
-          studentLevel: term.studentLevel,
-          relatedUnitId: term.relatedUnitId,
-          tags: term.tags,
-          status: "published",
-          createdBy: manager.uid,
-          updatedBy: manager.uid,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-          publishedAt: FieldValue.serverTimestamp(),
-        });
-      });
-    });
-
-    return {
-      savedCount: terms.length,
-      termIds: terms.map((term) => term.termId),
-    };
   },
 );
 
@@ -11705,6 +11625,7 @@ const authorizeCommandGatewayActor = async ({
   const lessonAnswerCommandTypes = Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES);
   const lessonManagementCommandTypes = Object.values(lessonManagement.LESSON_COMMAND_TYPES);
   const patchNoteCommandTypes = Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES);
+  const dictionaryImportCommandTypes = Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES);
   const assessmentCommandTypes = Object.values(
     assessmentLifecycle.ASSESSMENT_COMMAND_TYPES,
   );
@@ -11724,6 +11645,7 @@ const authorizeCommandGatewayActor = async ({
     !lessonAnswerCommandTypes.includes(commandType) &&
     !lessonManagementCommandTypes.includes(commandType) &&
     !patchNoteCommandTypes.includes(commandType) &&
+    !dictionaryImportCommandTypes.includes(commandType) &&
     !gradeCommandTypes.includes(commandType) &&
     !wisCommandTypes.includes(commandType) &&
     !w8CommandTypes.includes(commandType) &&
@@ -11834,6 +11756,12 @@ const authorizeCommandGatewayActor = async ({
         reason: "W11_ADMIN_REQUIRED",
       },
     );
+  }
+  if (dictionaryImportCommandTypes.includes(commandType)) {
+    if (!profileSnapshot.exists || String(profile.role || "").trim() !== "teacher") {
+      throw new HttpsError("permission-denied", "역사 사전을 등록할 교사 권한이 필요합니다.", { reason: "HISTORY_DICTIONARY_IMPORT_TEACHER_REQUIRED" });
+    }
+    return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "history_dictionary:import" };
   }
   if (lessonAnswerCommandTypes.includes(commandType)) {
     if (!profileSnapshot.exists || profile.role !== "student") {
@@ -12131,6 +12059,7 @@ const assessmentCommandAdapter =
 const lessonAnswerCommandAdapter = lessonAnswers.createLessonAnswerCommandAdapter();
 const lessonManagementCommandAdapter = lessonManagement.createLessonCommandAdapter();
 const patchNoteCommandAdapter = teacherPatchNotes.createPatchNoteCommandAdapter();
+const dictionaryImportCommandAdapter = historyDictionaryImport.createHistoryDictionaryImportCommandAdapter();
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
 const w8CommandAdapter = w8Domains.createW8CommandAdapter();
@@ -12146,6 +12075,7 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
+    ...Object.fromEntries(Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).map((commandType) => [commandType, dictionaryImportCommandAdapter])),
     ...Object.fromEntries(Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).map((commandType) => [commandType, patchNoteCommandAdapter])),
     ...Object.fromEntries(Object.values(lessonManagement.LESSON_COMMAND_TYPES).map((commandType) => [commandType, lessonManagementCommandAdapter])),
     ...Object.fromEntries(Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).map((commandType) => [commandType, lessonAnswerCommandAdapter])),

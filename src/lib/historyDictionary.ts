@@ -9,7 +9,12 @@ import {
   where,
   type Unsubscribe,
 } from "firebase/firestore";
-import { db, getHttpsCallable } from "./firebase";
+import { auth, db, getHttpsCallable } from "./firebase";
+import {
+  executeWestoryCommand,
+  hasPendingWestoryCommand,
+  WestoryCommandError,
+} from "./commandGateway";
 import { getYearSemester } from "./semesterScope";
 import type {
   HistoryDictionaryRequest,
@@ -528,21 +533,25 @@ export const saveHistoryDictionaryTerm = async (
   });
 };
 
-export const saveHistoryDictionaryTermsBulk = async (
+type HistoryDictionaryImportInput = {
+  terms: Array<{
+    word: string;
+    definition: string;
+    studentLevel: string;
+    relatedUnitId?: string;
+    tags?: string[];
+  }>;
+};
+
+const buildHistoryDictionaryImportPayload = (
   config: ConfigLike,
-  input: {
-    terms: Array<{
-      word: string;
-      definition: string;
-      studentLevel: string;
-      relatedUnitId?: string;
-      tags?: string[];
-    }>;
-  },
+  input: HistoryDictionaryImportInput,
+  expectedUid: string,
 ) => {
+  if (!expectedUid || auth.currentUser?.uid !== expectedUid)
+    throw new Error("로그인 사용자가 바뀌었습니다. 화면을 다시 열어 주세요.");
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("saveHistoryDictionaryTermsBulk");
-  const result = await callable({
+  const payload = {
     year,
     semester,
     terms: input.terms.map((term) => ({
@@ -550,14 +559,52 @@ export const saveHistoryDictionaryTermsBulk = async (
       definition: term.definition,
       studentLevel: term.studentLevel,
       relatedUnitId: term.relatedUnitId || "",
-      tags: term.tags || [],
+      tags: [...(term.tags || [])],
     })),
-  });
-  return result.data as {
-    savedCount: number;
-    termIds: string[];
   };
+  if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > 750_000)
+    throw new Error(
+      "일괄 등록 데이터가 너무 큽니다. 행 수나 풀이 길이를 줄여 다시 확인해 주세요.",
+    );
+  return payload;
 };
+
+export const hasPendingHistoryDictionaryImport = async (
+  config: ConfigLike,
+  input: HistoryDictionaryImportInput,
+  expectedUid = auth.currentUser?.uid || "",
+) =>
+  hasPendingWestoryCommand(
+    "saveHistoryDictionaryTermsBulk",
+    buildHistoryDictionaryImportPayload(config, input, expectedUid),
+    { expectedUid },
+  );
+
+export const saveHistoryDictionaryTermsBulk = async (
+  config: ConfigLike,
+  input: HistoryDictionaryImportInput,
+  expectedUid = auth.currentUser?.uid || "",
+) => {
+  const payload = buildHistoryDictionaryImportPayload(
+    config,
+    input,
+    expectedUid,
+  );
+  const response = await executeWestoryCommand(
+    "saveHistoryDictionaryTermsBulk",
+    payload,
+    { expectedUid },
+  );
+  return response.result;
+};
+
+export const isHistoryDictionaryImportUncertain = (error: unknown) =>
+  error instanceof WestoryCommandError && error.retryable;
+
+export const isHistoryDictionaryImportConflict = (error: unknown) =>
+  error instanceof WestoryCommandError &&
+  error.outcomeConfirmed &&
+  error.reason === "HISTORY_DICTIONARY_BULK_CONFLICT";
 
 export const approveHistoryDictionaryTermForRequests = async (
   config: ConfigLike,

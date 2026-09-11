@@ -22,6 +22,7 @@ const semesterCutover = require("./semesterCutover");
 const lessonAnswers = require("./lessonAnswers");
 const lessonManagement = require("./lessonManagement");
 const teacherPatchNotes = require("./teacherPatchNotes");
+const historyDictionaryImport = require("./historyDictionaryImport");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -60,6 +61,7 @@ const COMMAND_TYPES = Object.freeze({
   ...lessonAnswers.LESSON_ANSWER_COMMAND_TYPES,
   ...lessonManagement.LESSON_COMMAND_TYPES,
   ...teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES,
+  ...historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -354,6 +356,7 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType)) return historyDictionaryImport.normalizeHistoryDictionaryImportPayload(commandType, payload);
   if (Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType)) return teacherPatchNotes.normalizePatchNotePayload(commandType, payload);
   if (Object.values(lessonManagement.LESSON_COMMAND_TYPES).includes(commandType)) return lessonManagement.normalizeLessonPayload(commandType, payload);
   if (Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).includes(commandType)) {
@@ -989,6 +992,7 @@ const applyBusinessCommand = async ({
   if (
     commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS ||
     Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType) ||
+    Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType) ||
     Object.values(lessonManagement.LESSON_COMMAND_TYPES).includes(commandType) ||
     Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).includes(commandType) ||
     Object.values(semesterCore.SEMESTER_COMMAND_TYPES).includes(commandType) ||
@@ -1199,6 +1203,7 @@ const createCommandGatewayCore = ({
   concreteTimestamp = () => Timestamp.now(),
   projectId = resolveProjectId(),
   getSessionOptions = (commandType) => {
+    if (Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType)) return { recentAuth: false, highRisk: false };
     if (Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType)) return { recentAuth: false, highRisk: false };
     if (Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).includes(commandType)) {
       return { recentAuth: false, highRisk: false };

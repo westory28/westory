@@ -9,6 +9,7 @@ import {
 } from "./stepUpReauth";
 
 export type W2CommandType =
+  | "saveHistoryDictionaryTermsBulk"
   | "createTeacherPatchNote"
   | "updateTeacherPatchNote"
   | "updateTeacherPatchNoteStatus"
@@ -297,6 +298,17 @@ export interface PatchNoteCommandResult {
 }
 
 export interface W2CommandPayloads {
+  saveHistoryDictionaryTermsBulk: {
+    year: string;
+    semester: string;
+    terms: Array<{
+      word: string;
+      definition: string;
+      studentLevel: string;
+      relatedUnitId: string;
+      tags: string[];
+    }>;
+  };
   createTeacherPatchNote: { content: PatchNoteCommandContent };
   updateTeacherPatchNote: {
     noteId: string;
@@ -1001,6 +1013,7 @@ interface WisAccountValuePayload extends WisAccountCommandBase {
 }
 
 export interface W2CommandResults {
+  saveHistoryDictionaryTermsBulk: { savedCount: number; termIds: string[] };
   createTeacherPatchNote: PatchNoteCommandResult;
   updateTeacherPatchNote: PatchNoteCommandResult;
   updateTeacherPatchNoteStatus: PatchNoteCommandResult;
@@ -1712,6 +1725,34 @@ const assertCommandOwner = (ownerUid: string) => {
     );
 };
 
+/** Look up existing recovery metadata without creating or sending a command. */
+export const hasPendingWestoryCommand = async <
+  CommandType extends W2CommandType,
+>(
+  commandType: CommandType,
+  payload: W2CommandPayloads[CommandType],
+  options: { expectedUid?: string } = {},
+) => {
+  const ownerUid = options.expectedUid ?? auth.currentUser?.uid ?? "";
+  assertCommandOwner(ownerUid);
+  const logicalCommandKey = createHighRiskCommandFlightKey(
+    commandType,
+    payload,
+    ownerUid,
+  );
+  const handle = await readPendingCommandHandle(logicalCommandKey);
+  const clientPayloadHash = await digestText(logicalCommandKey);
+  assertCommandOwner(ownerUid);
+  return Boolean(
+    handle &&
+    handle.ownerUid === ownerUid &&
+    handle.commandType === commandType &&
+    handle.projectId === String(auth.app.options.projectId || "") &&
+    handle.clientPayloadHash === clientPayloadHash &&
+    ["pending", "retryable"].includes(handle.lastKnownState),
+  );
+};
+
 const recoverCommittedCommand = async <CommandType extends W2CommandType>(
   commandId: string,
   commandType: CommandType,
@@ -1841,7 +1882,9 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
             normalized.reason,
           ) ||
             (commandType === "saveLessonAnswers" &&
-              normalized.reason === "LESSON_ANSWER_CONFLICT"));
+              normalized.reason === "LESSON_ANSWER_CONFLICT") ||
+            (commandType === "saveHistoryDictionaryTermsBulk" &&
+              normalized.reason === "HISTORY_DICTIONARY_BULK_CONFLICT"));
         // A denial on a later attempt happens before receipt lookup and cannot
         // disprove an earlier commit. Keep its ID through reauthentication.
         if (

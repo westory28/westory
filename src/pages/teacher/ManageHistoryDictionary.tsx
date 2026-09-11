@@ -20,12 +20,16 @@ import {
   loadTeacherStudentHistoryDictionaryWords,
   loadTeacherHistoryDictionaryTerms,
   normalizeHistoryDictionaryWord,
+  hasPendingHistoryDictionaryImport,
+  isHistoryDictionaryImportUncertain,
+  isHistoryDictionaryImportConflict,
   saveHistoryDictionaryTerm,
   saveHistoryDictionaryTermsBulk,
   subscribeTeacherHistoryDictionaryRequests,
   subscribeTeacherHistoryDictionaryTerms,
   updateStudentHistoryDictionaryWordByTeacher,
 } from "../../lib/historyDictionary";
+import { getYearSemester } from "../../lib/semesterScope";
 import { loadNotifications } from "../../lib/notifications";
 import type {
   HistoryDictionaryRequest,
@@ -100,6 +104,17 @@ interface HistoryDictionaryUploadRow {
   errors: string[];
   notices: string[];
 }
+
+const createImportSession = (context: string) => ({
+  context,
+  readVersion: 0,
+  saving: false,
+  pending: null as {
+    config: ReturnType<typeof getYearSemester>;
+    input: Parameters<typeof saveHistoryDictionaryTermsBulk>[1];
+    ownerUid: string;
+  } | null,
+});
 
 const timestampLabel = (value: unknown) => {
   const date =
@@ -245,6 +260,26 @@ const ManageHistoryDictionary: React.FC = () => {
   );
   const [uploadFileName, setUploadFileName] = useState("");
   const [busyMessage, setBusyMessage] = useState("");
+  const [uploadReading, setUploadReading] = useState(false);
+  const scope = getYearSemester(config);
+  const importContext = `${currentUser?.uid || ""}/${scope.year}/${scope.semester}/${canWrite}`;
+  const importSessionRef = useRef(createImportSession(importContext));
+  if (importSessionRef.current.context !== importContext) {
+    importSessionRef.current = createImportSession(importContext);
+  }
+  useEffect(() => {
+    setUploadRows([]);
+    setUploadFileName("");
+    setUploadReading(false);
+    setBusyMessage("");
+  }, [importContext]);
+  useEffect(() => {
+    if (importSessionRef.current.context !== importContext)
+      importSessionRef.current = createImportSession(importContext);
+    return () => {
+      importSessionRef.current = createImportSession("");
+    };
+  }, []);
   const [requestSearch, setRequestSearch] = useState("");
   const [termSearch, setTermSearch] = useState("");
   const [studentWordSearch, setStudentWordSearch] = useState("");
@@ -753,7 +788,10 @@ const ManageHistoryDictionary: React.FC = () => {
   ) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    const session = importSessionRef.current;
+    if (!file || !canWrite || session.saving || session.pending) return;
+    const readVersion = ++session.readVersion;
+    setUploadReading(true);
 
     setActivePanel("upload");
     setSelectedRequestId("");
@@ -763,6 +801,11 @@ const ManageHistoryDictionary: React.FC = () => {
     try {
       const { default: readXlsxFile } = await import("read-excel-file/browser");
       const workbookRows = (await readXlsxFile(file)) as unknown;
+      if (
+        importSessionRef.current !== session ||
+        session.readVersion !== readVersion
+      )
+        return;
       const rows =
         Array.isArray(workbookRows) &&
         workbookRows.length === 1 &&
@@ -838,6 +881,29 @@ const ManageHistoryDictionary: React.FC = () => {
           .filter(Boolean),
       );
 
+      const attempt = {
+        config: { ...scope },
+        ownerUid: currentUser?.uid || "",
+        input: {
+          terms: parsedRows.map((row) => ({
+            word: row.word,
+            definition: row.definition,
+            studentLevel: DEFAULT_STUDENT_LEVEL,
+            relatedUnitId: row.relatedUnitId,
+            tags: [...row.tags],
+          })),
+        },
+      };
+      const recoverPending = await hasPendingHistoryDictionaryImport(
+        attempt.config,
+        attempt.input,
+        attempt.ownerUid,
+      );
+      if (
+        importSessionRef.current !== session ||
+        session.readVersion !== readVersion
+      )
+        return;
       const inspectedRows = parsedRows.map((row) => {
         const errors: string[] = [];
         const notices: string[] = [];
@@ -849,7 +915,11 @@ const ManageHistoryDictionary: React.FC = () => {
         if (normalizedCounts.get(row.normalizedWord) > 1) {
           errors.push("파일 내 중복 단어");
         }
-        if (row.normalizedWord && existingWords.has(row.normalizedWord)) {
+        if (
+          !recoverPending &&
+          row.normalizedWord &&
+          existingWords.has(row.normalizedWord)
+        ) {
           errors.push("이미 등록된 단어");
         }
         if (!row.relatedUnitId) notices.push("관련 단원 빈칸");
@@ -857,14 +927,23 @@ const ManageHistoryDictionary: React.FC = () => {
         return { ...row, errors, notices };
       });
 
+      if (recoverPending && !inspectedRows.some((row) => row.errors.length))
+        session.pending = attempt;
       setUploadFileName(file.name);
       setUploadRows(inspectedRows);
       showToast({
         tone: "success",
         title: "Excel 파일을 불러왔습니다.",
-        message: "미리보기에서 오류와 중복 단어를 확인한 뒤 등록해 주세요.",
+        message: session.pending
+          ? "이전 등록 요청을 찾았습니다. ‘등록 결과 다시 확인’을 눌러 결과를 확인해 주세요."
+          : "미리보기에서 오류와 중복 단어를 확인한 뒤 등록해 주세요.",
       });
     } catch (error) {
+      if (
+        importSessionRef.current !== session ||
+        session.readVersion !== readVersion
+      )
+        return;
       console.error("Failed to parse history dictionary Excel:", error);
       setUploadFileName(file.name);
       setUploadRows([]);
@@ -876,16 +955,34 @@ const ManageHistoryDictionary: React.FC = () => {
             ? error.message
             : "양식 파일인지 확인한 뒤 다시 업로드해 주세요.",
       });
+    } finally {
+      if (
+        importSessionRef.current === session &&
+        session.readVersion === readVersion
+      )
+        setUploadReading(false);
     }
   };
 
   const handleClearUploadPreview = () => {
+    if (importSessionRef.current.pending || importSessionRef.current.saving)
+      return;
+    importSessionRef.current.readVersion += 1;
+    setUploadReading(false);
     setUploadRows([]);
     setUploadFileName("");
   };
 
   const handleRegisterUploadRows = async () => {
-    if (!uploadReadyRows.length || uploadStats.errorCount || busyMessage) {
+    const session = importSessionRef.current;
+    if (
+      !canWrite ||
+      !currentUser?.uid ||
+      session.saving ||
+      uploadReading ||
+      busyMessage ||
+      (!session.pending && (!uploadReadyRows.length || uploadStats.errorCount))
+    ) {
       return;
     }
     const existingWords = new Set(
@@ -900,7 +997,7 @@ const ManageHistoryDictionary: React.FC = () => {
         .filter((row) => existingWords.has(row.normalizedWord))
         .map((row) => row.normalizedWord),
     );
-    if (conflictedWords.size) {
+    if (!session.pending && conflictedWords.size) {
       setUploadRows((prev) =>
         prev.map((row) =>
           conflictedWords.has(row.normalizedWord)
@@ -920,19 +1017,35 @@ const ManageHistoryDictionary: React.FC = () => {
       });
       return;
     }
+    session.saving = true;
     setBusyMessage(
-      `역사 사전 용어 ${uploadReadyRows.length}개를 등록하는 중입니다.`,
+      session.pending
+        ? "이전 일괄 등록 결과를 확인하고 있습니다."
+        : `역사 사전 용어 ${uploadReadyRows.length}개를 등록하는 중입니다.`,
     );
     try {
-      const result = await saveHistoryDictionaryTermsBulk(config, {
-        terms: uploadReadyRows.map((row) => ({
-          word: row.word,
-          definition: row.definition,
-          studentLevel: DEFAULT_STUDENT_LEVEL,
-          relatedUnitId: row.relatedUnitId,
-          tags: row.tags,
-        })),
-      });
+      if (!session.pending)
+        session.pending = {
+          config: { ...scope },
+          ownerUid: currentUser.uid,
+          input: {
+            terms: uploadReadyRows.map((row) => ({
+              word: row.word,
+              definition: row.definition,
+              studentLevel: DEFAULT_STUDENT_LEVEL,
+              relatedUnitId: row.relatedUnitId,
+              tags: [...row.tags],
+            })),
+          },
+        };
+      const attempt = session.pending;
+      const result = await saveHistoryDictionaryTermsBulk(
+        attempt.config,
+        attempt.input,
+        attempt.ownerUid,
+      );
+      if (importSessionRef.current !== session) return;
+      session.pending = null;
       showToast({
         tone: "success",
         title: "역사 사전 용어를 등록했습니다.",
@@ -940,10 +1053,12 @@ const ManageHistoryDictionary: React.FC = () => {
       });
       try {
         const latestTerms = await loadTeacherHistoryDictionaryTerms();
+        if (importSessionRef.current !== session) return;
         setTerms(latestTerms);
         setTermSearch("");
         setActiveInitial(ALL_INITIAL);
       } catch (refreshError) {
+        if (importSessionRef.current !== session) return;
         console.error(
           "Failed to refresh history dictionary terms after Excel upload:",
           refreshError,
@@ -954,18 +1069,31 @@ const ManageHistoryDictionary: React.FC = () => {
           message: "페이지를 새로고침해 등록된 단어 목록을 다시 불러와 주세요.",
         });
       }
-      handleClearUploadPreview();
+      setUploadRows([]);
+      setUploadFileName("");
       setActivePanel("terms");
       setSearchParams({});
     } catch (error) {
+      if (importSessionRef.current !== session) return;
       console.error("Failed to register history dictionary Excel rows:", error);
+      const uncertain = isHistoryDictionaryImportUncertain(error);
+      if (!uncertain) session.pending = null;
       showToast({
         tone: "error",
-        title: "일괄 등록 중 일부 항목을 저장하지 못했습니다.",
-        message: "목록을 새로 확인한 뒤 다시 시도해 주세요.",
+        title: uncertain
+          ? "일괄 등록 결과를 확인해 주세요."
+          : isHistoryDictionaryImportConflict(error)
+            ? "중복 단어로 등록하지 않았습니다."
+            : "일괄 등록을 완료하지 못했습니다.",
+        message: uncertain
+          ? "미리보기는 유지됩니다. ‘등록 결과 다시 확인’을 눌러 이전 요청을 확인해 주세요."
+          : error instanceof Error
+            ? error.message
+            : "미리보기 내용을 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setBusyMessage("");
+      session.saving = false;
+      if (importSessionRef.current === session) setBusyMessage("");
     }
   };
 
@@ -1711,7 +1839,12 @@ const ManageHistoryDictionary: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => uploadInputRef.current?.click()}
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-extrabold text-white transition hover:bg-blue-700"
+                  disabled={
+                    Boolean(busyMessage) ||
+                    Boolean(importSessionRef.current.pending) ||
+                    uploadReading
+                  }
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <i
                     className="fas fa-file-arrow-up text-xs"
@@ -1724,6 +1857,11 @@ const ManageHistoryDictionary: React.FC = () => {
                   type="file"
                   accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   onChange={(event) => void handleExcelUpload(event)}
+                  disabled={
+                    Boolean(busyMessage) ||
+                    Boolean(importSessionRef.current.pending) ||
+                    uploadReading
+                  }
                   className="sr-only"
                   aria-label="역사 사전 용어 Excel 파일 업로드"
                 />
@@ -1971,7 +2109,12 @@ const ManageHistoryDictionary: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleClearUploadPreview}
-                    disabled={!uploadRows.length || Boolean(busyMessage)}
+                    disabled={
+                      !uploadRows.length ||
+                      Boolean(busyMessage) ||
+                      Boolean(importSessionRef.current.pending) ||
+                      uploadReading
+                    }
                     className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-extrabold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     미리보기 비우기
@@ -1981,8 +2124,9 @@ const ManageHistoryDictionary: React.FC = () => {
                     onClick={() => void handleRegisterUploadRows()}
                     disabled={
                       Boolean(busyMessage) ||
-                      !uploadReadyRows.length ||
-                      uploadStats.errorCount > 0
+                      uploadReading ||
+                      (!importSessionRef.current.pending &&
+                        (!uploadReadyRows.length || uploadStats.errorCount > 0))
                     }
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                   >
@@ -1990,7 +2134,9 @@ const ManageHistoryDictionary: React.FC = () => {
                       className="fas fa-database text-xs"
                       aria-hidden="true"
                     ></i>
-                    등록하기
+                    {importSessionRef.current.pending
+                      ? "등록 결과 다시 확인"
+                      : "등록하기"}
                   </button>
                 </div>
               </>
