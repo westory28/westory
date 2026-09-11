@@ -34,7 +34,11 @@ window.delayLesson=false;window.lessonReadCalls=[];const lessonReads=[];
 window.pendingLessonReads=()=>lessonReads.length;
 window.finishLesson=(ok=true,patch={},index=0,code='unavailable')=>{const item=lessonReads.splice(index,1)[0];if(!item)throw Error('No pending lesson read');if(!ok){item.reject(Object.assign(Error('Synthetic lesson read failure'),{code}));return;}item.resolve(patch===null?null:{...item.data,...patch});};
 window.delaySave=false;const answerWrites=[];
-window.finishAnswerSave=(ok=true)=>{const item=answerWrites.shift();if(!item)throw Error('No pending answer save');if(ok)item.resolve(item.result);else item.reject(Error('Synthetic uncertain save'));};
+window.finishAnswerSave=(ok=true)=>{const item=answerWrites.shift();if(!item)throw Error('No pending answer save');if(ok===true)item.resolve(item.result);else item.reject(Object.assign(Error('Synthetic save outcome'),{uncertain:ok===false,conflict:ok==='conflict'}));};
+export const isLessonAnswerSaveUncertain=error=>error?.uncertain===true;
+export const isLessonAnswerSaveConflict=error=>error?.conflict===true;
+export const createLessonAnswerSave=input=>structuredClone(input);
+export const executeLessonAnswerSave=operation=>saveLessonAnswers(operation);
 const progress=new Map(),rewards=new Set(),pending=[],restores=[],overviews=[];
 if(params.has('reward'))progress.set('student-a/unit-a',{corePointFinds:['point-a']});
 window.delayRestore=params.has('restore');window.delayOverview=params.has('overview');window.failOverview=false;
@@ -711,11 +715,15 @@ try {
   });
   await page.getByRole("button", { name: "저장 가능", exact: true }).click();
   await page.evaluate(() => window.finishAnswerSave(false));
-  await page.getByRole("button", { name: "저장 가능", exact: true }).waitFor();
+  await page
+    .getByRole("button", { name: "저장 결과 다시 확인", exact: true })
+    .waitFor();
   await startLessonRefresh();
   await finishLesson();
   await assertDraft();
-  await page.getByRole("button", { name: "저장 가능", exact: true }).click();
+  await page
+    .getByRole("button", { name: "저장 결과 다시 확인", exact: true })
+    .click();
   await page.waitForFunction(() => window.answerSaves.length === 2);
   assert.deepEqual(
     await page.evaluate(() => window.answerSaves[0]),
@@ -723,6 +731,138 @@ try {
   );
   checks++;
   await page.evaluate(() => window.finishAnswerSave());
+  // Unknown A stays separate from newer B, through retry and metadata refresh.
+  for (const width of [320, 768, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await openReadyAnswers();
+    await ownDraft();
+    await page.evaluate(() => {
+      window.delaySave = true;
+    });
+    await page.getByRole("button", { name: "저장 가능", exact: true }).click();
+    await inline(0).fill("새 본문 B");
+    await pdfBlank().fill("새 PDF B");
+    await page.evaluate(() => window.finishAnswerSave(false));
+    await page
+      .getByRole("button", { name: "저장 결과 다시 확인", exact: true })
+      .waitFor();
+    await startLessonRefresh();
+    await finishLesson();
+    await page
+      .getByRole("button", { name: "저장 결과 다시 확인", exact: true })
+      .click();
+    await page.waitForFunction(() => window.answerSaves.length === 2);
+    assert.deepEqual(
+      await page.evaluate(() => window.answerSaves[0]),
+      await page.evaluate(() => window.answerSaves[1]),
+    );
+    await inline(1).fill("재확인 중 입력 B");
+    await page.evaluate(() => window.finishAnswerSave());
+    await page
+      .getByRole("button", { name: "저장 가능", exact: true })
+      .waitFor();
+    assert.equal(await inline(0).inputValue(), "새 본문 B");
+    assert.equal(await inline(1).inputValue(), "재확인 중 입력 B");
+    assert.equal(await pdfBlank().inputValue(), "새 PDF B");
+    assert.equal(
+      await inline(0).evaluate(
+        (node) =>
+          node.classList.contains("correct") ||
+          node.classList.contains("wrong"),
+      ),
+      false,
+    );
+    assert.equal(await page.evaluate(() => window.answerReadCalls.length), 1);
+    checks += 6;
+    await page.getByRole("button", { name: "저장 가능", exact: true }).click();
+    await page.waitForFunction(() => window.answerSaves.length === 3);
+    const newest = await page.evaluate(() => window.answerSaves[2]);
+    assert.equal(newest.expectedAnswerRevision, 8);
+    assert.deepEqual(newest.answers, {
+      0: "새 본문 B",
+      1: "재확인 중 입력 B",
+      "worksheet-a": "새 PDF B",
+    });
+    checks += 2;
+    await page.evaluate(() => window.finishAnswerSave("conflict"));
+    await page
+      .getByText("다른 화면에서 답안이 저장되었습니다.", { exact: false })
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "답안 충돌 확인 필요", exact: true })
+        .isDisabled(),
+      true,
+    );
+    await startLessonRefresh();
+    await finishLesson();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "답안 충돌 확인 필요", exact: true })
+        .isDisabled(),
+      true,
+    );
+    assert.equal(await inline(0).inputValue(), "새 본문 B");
+    assert.equal(await page.evaluate(() => window.answerReadCalls.length), 1);
+    const downloadEvent = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "내 답안 내려받기", exact: true })
+      .click();
+    const download = await downloadEvent;
+    const text = readFileSync(await download.path(), "utf8");
+    assert.ok(
+      text.includes("새 본문 B") &&
+        text.includes("새 PDF B") &&
+        text.includes("재확인 중 입력 B"),
+    );
+    checks += 5;
+    await page.screenshot({
+      path: join(output, `answer-conflict-${width}.png`),
+      fullPage: true,
+    });
+    results.push({
+      width,
+      scenario: "frozen save A, newer B, confirmed conflict draft export",
+      passed: true,
+    });
+  }
+  // A late unknown outcome must not suggest a retry button hidden by material lock.
+  for (const hidden of [false, true]) {
+    await openReadyAnswers();
+    await ownDraft();
+    await page.evaluate(() => {
+      window.delaySave = true;
+    });
+    await page.getByRole("button", { name: "저장 가능", exact: true }).click();
+    await startLessonRefresh();
+    await finishLesson(
+      true,
+      hidden ? { isVisibleToStudents: false } : { contentRevision: 2 },
+    );
+    await page
+      .getByRole("button", { name: "내 답안 내려받기", exact: true })
+      .waitFor();
+    await page.evaluate(() => window.finishAnswerSave(false));
+    await page.waitForFunction(
+      () =>
+        window.coreToasts.at(-1)?.title ===
+        "이전 요청의 결과를 확인하지 못했습니다.",
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "저장 결과 다시 확인", exact: true })
+        .count(),
+      0,
+    );
+    assert.ok(
+      (await page.evaluate(() => window.coreToasts.at(-1)?.message)).includes(
+        "답안을 내려받아",
+      ),
+    );
+    assert.equal(await page.evaluate(() => window.answerSaves.length), 1);
+    checks += 3;
+    await downloadDraft();
+  }
   // Superseded material responses must not lock the current screen.
   await openReadyAnswers();
   await ownDraft();

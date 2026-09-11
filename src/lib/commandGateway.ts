@@ -1693,20 +1693,31 @@ const createPendingCommandHandle = async <CommandType extends W2CommandType>(
 const fetchCommandStatus = async <CommandType extends W2CommandType>(
   commandId: string,
   commandType: CommandType,
+  ownerUid: string,
 ) => {
   const getStatus = await getHttpsCallable<
     GetCommandStatusRequest<CommandType>,
     CommandStatusResponse<W2CommandResults[CommandType], CommandType>
-  >("getCommandStatus");
+  >("getCommandStatus", { expectedUid: ownerUid });
   const response = await getStatus({ commandId, commandType });
+  assertCommandOwner(ownerUid);
   return response.data;
+};
+
+const assertCommandOwner = (ownerUid: string) => {
+  if (!ownerUid || auth.currentUser?.uid !== ownerUid)
+    throw new StepUpReauthError(
+      "IDENTITY_CHANGED",
+      "로그인 사용자가 바뀌어 작업 결과를 적용하지 않았습니다.",
+    );
 };
 
 const recoverCommittedCommand = async <CommandType extends W2CommandType>(
   commandId: string,
   commandType: CommandType,
+  ownerUid: string,
 ) => {
-  const status = await fetchCommandStatus(commandId, commandType);
+  const status = await fetchCommandStatus(commandId, commandType, ownerUid);
   if (status.status === "SUCCEEDED") {
     return status as CommandGatewayResponse<
       W2CommandResults[CommandType],
@@ -1733,17 +1744,18 @@ const recoverCommittedCommand = async <CommandType extends W2CommandType>(
 export const executeWestoryCommand = async <CommandType extends W2CommandType>(
   commandType: CommandType,
   payload: W2CommandPayloads[CommandType],
-  options: { commandId?: string } = {},
+  options: { commandId?: string; expectedUid?: string } = {},
 ): Promise<
   CommandGatewayResponse<W2CommandResults[CommandType], CommandType>
 > => {
-  const ownerUid = auth.currentUser?.uid || "";
+  const ownerUid = options.expectedUid ?? auth.currentUser?.uid ?? "";
   if (!ownerUid) {
     throw new StepUpReauthError(
       "UNAUTHENTICATED",
       "로그인 사용자를 확인할 수 없어 작업을 실행하지 않았습니다.",
     );
   }
+  assertCommandOwner(ownerUid);
   const logicalCommandKey = createHighRiskCommandFlightKey(
     commandType,
     payload,
@@ -1786,14 +1798,16 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
         const execute = await getHttpsCallable<
           ExecuteCommandRequest<CommandType>,
           CommandGatewayResponse<W2CommandResults[CommandType], CommandType>
-        >("executeCommand");
+        >("executeCommand", { expectedUid: ownerUid });
         try {
           const response = await execute({
             commandId: handle.commandId,
             commandType,
             payload,
           });
+          assertCommandOwner(ownerUid);
           await forgetPendingCommandHandle(logicalCommandKey, handle.commandId);
+          assertCommandOwner(ownerUid);
           return response.data;
         } catch (error) {
           if (!isAmbiguousFunctionError(error)) throw error;
@@ -1801,11 +1815,13 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
             const recovered = await recoverCommittedCommand(
               handle.commandId,
               commandType,
+              ownerUid,
             );
             await forgetPendingCommandHandle(
               logicalCommandKey,
               handle.commandId,
             );
+            assertCommandOwner(ownerUid);
             return recovered;
           } catch {
             // Preserve this handle so a later user-initiated retry cannot
@@ -1817,16 +1833,21 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
         const normalized = normalizeCommandError(error);
         // These adapter failures occur after the transaction finds no receipt.
         // Its original revision can no longer commit after a change/deletion.
-        const confirmedPatchRejection =
+        const ownerChanged = auth.currentUser?.uid !== ownerUid;
+        const confirmedRevisionRejection =
+          !ownerChanged &&
           normalized instanceof WestoryCommandError &&
-          ["PATCH_NOTE_CONFLICT", "PATCH_NOTE_NOT_FOUND"].includes(
+          (["PATCH_NOTE_CONFLICT", "PATCH_NOTE_NOT_FOUND"].includes(
             normalized.reason,
-          );
+          ) ||
+            (commandType === "saveLessonAnswers" &&
+              normalized.reason === "LESSON_ANSWER_CONFLICT"));
         // A denial on a later attempt happens before receipt lookup and cannot
         // disprove an earlier commit. Keep its ID through reauthentication.
         if (
-          !confirmedPatchRejection &&
-          (storedHandle ||
+          !confirmedRevisionRejection &&
+          (ownerChanged ||
+            storedHandle ||
             isAmbiguousFunctionError(error) ||
             (normalized instanceof WestoryCommandError && normalized.retryable))
         ) {
@@ -1843,7 +1864,7 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
         } else {
           await forgetPendingCommandHandle(logicalCommandKey, handle.commandId);
         }
-        if (confirmedPatchRejection)
+        if (confirmedRevisionRejection)
           throw new WestoryCommandError(normalized.state, normalized.message, {
             reason: normalized.reason,
             outcomeConfirmed: true,
@@ -1862,8 +1883,10 @@ export const getWestoryCommandStatus = async <
   commandId: string,
   commandType: CommandType,
 ) => {
+  const ownerUid = auth.currentUser?.uid || "";
+  assertCommandOwner(ownerUid);
   if (requiresCommandGatewayStepUpReauthentication(commandType)) {
     await requestStepUpReauthentication(commandType);
   }
-  return fetchCommandStatus(commandId, commandType);
+  return fetchCommandStatus(commandId, commandType, ownerUid);
 };

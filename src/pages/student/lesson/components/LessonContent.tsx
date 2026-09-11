@@ -30,7 +30,12 @@ import {
 } from "../../../../lib/studentLessonReadCache";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
 import { recordLessonCorePointFind } from "../../../../lib/lessonCorePointReward";
-import { saveLessonAnswers } from "../../../../lib/lessonAnswers";
+import {
+  createLessonAnswerSave,
+  executeLessonAnswerSave,
+  isLessonAnswerSaveUncertain,
+  isLessonAnswerSaveConflict,
+} from "../../../../lib/lessonAnswers";
 import {
   requestLegacyLessonCorePointReward,
   resolveLegacyLessonRewardFailure,
@@ -98,6 +103,11 @@ const createAnswerSession = (context: string) => ({
   overviewRequest: 0,
   rewardSettled: false,
   saving: false,
+  pendingSave: null as {
+    operation: ReturnType<typeof createLessonAnswerSave>;
+    editVersion: number;
+  } | null,
+  answerConflict: false,
   restoring: false,
   refreshing: false,
   loadedLesson: null as LessonData | null,
@@ -608,6 +618,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     const session = answerSessionRef.current;
     if (
       session.saving ||
+      session.answerConflict ||
       session.materialChanged ||
       session.materialUnavailable ||
       session.loadedLesson !== lesson
@@ -622,26 +633,33 @@ const LessonContent: React.FC<LessonContentProps> = ({
       });
       return;
     }
-    const answerSnapshot = getAnswerSnapshot({ finalize: true });
-    const editVersion = session.edits;
     session.saving = true;
     setIsSaving(true);
     try {
       emitSessionActivity();
-      const result = await saveLessonAnswers({
-        config,
-        studentUid: currentUser.uid,
-        unitId,
-        expectedContentRevision: lesson.contentRevision ?? 0,
-        expectedAnswerRevision: session.revision,
-        answers: Object.fromEntries(
-          Object.entries(answerSnapshot.answers).map(([key, answer]) => [
-            key,
-            answer.value,
-          ]),
-        ),
-      });
+      if (!session.pendingSave) {
+        const answerSnapshot = getAnswerSnapshot({ finalize: true });
+        session.pendingSave = {
+          editVersion: session.edits,
+          operation: createLessonAnswerSave({
+            config,
+            studentUid: currentUser.uid,
+            unitId,
+            expectedContentRevision: lesson.contentRevision ?? 0,
+            expectedAnswerRevision: session.revision,
+            answers: Object.fromEntries(
+              Object.entries(answerSnapshot.answers).map(([key, answer]) => [
+                key,
+                answer.value,
+              ]),
+            ),
+          }),
+        };
+      }
+      const { operation, editVersion } = session.pendingSave;
+      const result = await executeLessonAnswerSave(operation);
       if (answerSessionRef.current !== session) return;
+      session.pendingSave = null;
       session.revision = result.answerRevision;
       if (session.materialChanged || session.materialUnavailable) {
         setSaveCompletionPopup(null);
@@ -686,13 +704,29 @@ const LessonContent: React.FC<LessonContentProps> = ({
     } catch (saveError) {
       if (answerSessionRef.current !== session) return;
       console.error("Failed to save lesson answers:", saveError);
-      setSaveMessage("저장 실패 · 입력 유지됨");
+      const uncertain = isLessonAnswerSaveUncertain(saveError);
+      const materialLocked =
+        session.materialChanged || session.materialUnavailable;
+      if (!uncertain) session.pendingSave = null;
+      if (isLessonAnswerSaveConflict(saveError)) session.answerConflict = true;
+      setSaveMessage(
+        uncertain
+          ? "저장 결과 확인 필요 · 새 입력 유지됨"
+          : "저장 실패 · 입력 유지됨",
+      );
       setSaveCompletionPopup(null);
       showToast({
         tone: "error",
-        title: "답안을 저장하지 못했습니다.",
-        message:
-          saveError instanceof Error
+        title: uncertain
+          ? materialLocked
+            ? "이전 요청의 결과를 확인하지 못했습니다."
+            : "이전 저장 결과를 확인해 주세요."
+          : "답안을 저장하지 못했습니다.",
+        message: uncertain
+          ? materialLocked
+            ? "현재 자료 확인 안내에 따라 작성한 답안을 내려받아 보관해 주세요."
+            : "‘저장 결과 다시 확인’을 누르면 이전 요청을 확인합니다. 새로 입력한 답안은 화면에 유지됩니다."
+          : saveError instanceof Error
             ? saveError.message
             : "네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
       });
@@ -703,7 +737,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
   };
 
   const handleSaveAction = () => {
-    if (!isSaving && hasUnsavedChanges) {
+    if (
+      !isSaving &&
+      (hasUnsavedChanges || answerSessionRef.current.pendingSave)
+    ) {
       void saveProgressSafely();
     }
   };
@@ -1110,19 +1147,23 @@ const LessonContent: React.FC<LessonContentProps> = ({
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
   const lessonRecoveryNotice =
-    lessonRefresh !== "idle" ? (
+    lessonRefresh !== "idle" || answerSessionRef.current.answerConflict ? (
       <div
         className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-blue-900"
         aria-live="polite"
       >
         <p role="status">
-          {lessonRefresh === "checking"
-            ? "수업 자료를 다시 확인하고 있습니다. 입력은 계속할 수 있습니다."
-            : lessonRefresh === "error"
-              ? "수업 자료를 다시 확인하지 못했습니다. 입력한 내용은 이 화면에 유지됩니다."
-              : lessonRefresh === "changed"
-                ? "수업 자료가 변경되었습니다. 현재 답안을 내려받아 보관한 뒤 수업 목록에서 자료를 다시 열어 주세요."
-                : "현재 수업 자료를 확인할 수 없습니다. 답안을 내려받아 보관한 뒤 수업 목록에서 다시 열어 주세요."}
+          {answerSessionRef.current.answerConflict &&
+          !answerSessionRef.current.materialChanged &&
+          !answerSessionRef.current.materialUnavailable
+            ? "다른 화면에서 답안이 저장되었습니다. 현재 답안을 내려받아 보관한 뒤 수업 목록에서 자료를 다시 열어 주세요."
+            : lessonRefresh === "checking"
+              ? "수업 자료를 다시 확인하고 있습니다. 입력은 계속할 수 있습니다."
+              : lessonRefresh === "error"
+                ? "수업 자료를 다시 확인하지 못했습니다. 입력한 내용은 이 화면에 유지됩니다."
+                : lessonRefresh === "changed"
+                  ? "수업 자료가 변경되었습니다. 현재 답안을 내려받아 보관한 뒤 수업 목록에서 자료를 다시 열어 주세요."
+                  : "현재 수업 자료를 확인할 수 없습니다. 답안을 내려받아 보관한 뒤 수업 목록에서 다시 열어 주세요."}
         </p>
         {lessonRefresh === "error" && (
           <button
@@ -1133,7 +1174,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
             수업 자료 다시 확인
           </button>
         )}
-        {(lessonRefresh === "changed" || lessonRefresh === "unavailable") &&
+        {(lessonRefresh === "changed" ||
+          lessonRefresh === "unavailable" ||
+          answerSessionRef.current.answerConflict) &&
           answerSessionRef.current.loadedLesson && (
             <button
               type="button"
@@ -1574,17 +1617,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
   };
   const floatingSaveButtonLabel = answerSessionRef.current.materialChanged
     ? "자료 확인 필요"
-    : answerRestoreStatus !== "ready"
-      ? answerRestoreStatus === "error"
-        ? "답안 확인 필요"
-        : "답안 확인 중"
-      : isSaving
-        ? "저장 중..."
-        : hasUnsavedChanges
-          ? "저장 가능"
-          : saveMessage === "완료 반영됨"
-            ? "완료 반영됨"
-            : "저장";
+    : answerSessionRef.current.answerConflict
+      ? "답안 충돌 확인 필요"
+      : answerRestoreStatus !== "ready"
+        ? answerRestoreStatus === "error"
+          ? "답안 확인 필요"
+          : "답안 확인 중"
+        : isSaving
+          ? "저장 중..."
+          : answerSessionRef.current.pendingSave
+            ? "저장 결과 다시 확인"
+            : hasUnsavedChanges
+              ? "저장 가능"
+              : saveMessage === "완료 반영됨"
+                ? "완료 반영됨"
+                : "저장";
   const displayedCorePointTotalCount = corePointOverview.loaded
     ? corePointOverview.totalCount
     : currentCorePointIds.length;
@@ -1682,13 +1729,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
           onClick={handleSaveAction}
           disabled={
             answerSessionRef.current.materialChanged ||
+            answerSessionRef.current.answerConflict ||
             answerRestoreStatus !== "ready" ||
             isSaving ||
-            !hasUnsavedChanges
+            (!hasUnsavedChanges && !answerSessionRef.current.pendingSave)
           }
           data-session-action="true"
           className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 ${
             answerSessionRef.current.materialChanged ||
+            answerSessionRef.current.answerConflict ||
             answerRestoreStatus !== "ready"
               ? "cursor-not-allowed bg-slate-100 text-slate-500 focus-visible:ring-slate-100"
               : isSaving
