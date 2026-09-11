@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import PointRankBadge from "./PointRankBadge";
@@ -121,9 +121,9 @@ const getDesktopSubmenuChildren = (
 
 const Header: React.FC<
   Record<string, unknown> & {
-    onTeacherSidebarExpandedChange?: (expanded: boolean) => void;
+    onTeacherContextVisibleChange?: (visible: boolean) => void;
   }
-> = ({ onTeacherSidebarExpandedChange }) => {
+> = ({ onTeacherContextVisibleChange }) => {
   const {
     currentUser,
     userData,
@@ -188,17 +188,11 @@ const Header: React.FC<
         : "student";
 
   const isTeacherPortal = portal === "teacher";
-  const showTeacherSidebar =
-    location.pathname.startsWith("/teacher") && shellViewport !== "mobile";
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const compactTeacherSidebar = shellViewport !== "desktop" && !sidebarExpanded;
+  const [expandedTopMenu, setExpandedTopMenu] = useState<string | null>(null);
   useEffect(
-    () => setSidebarExpanded(false),
-    [location.pathname, location.search, shellViewport],
+    () => setExpandedTopMenu(null),
+    [location.pathname, location.search],
   );
-  useEffect(() => {
-    onTeacherSidebarExpandedChange?.(showTeacherSidebar && sidebarExpanded);
-  }, [onTeacherSidebarExpandedChange, showTeacherSidebar, sidebarExpanded]);
   const canRenderStudentMenu =
     portal !== "student" ||
     (menuConfigReady &&
@@ -335,8 +329,16 @@ const Header: React.FC<
       ({ item, resolvedChildren, active }) =>
         active &&
         resolvedChildren.length > 0 &&
-        desktopSubmenuParentUrls.has(item.url),
+        (isTeacherPortal || desktopSubmenuParentUrls.has(item.url)),
     );
+  const showTeacherSidebar = Boolean(
+    location.pathname.startsWith("/teacher") &&
+    shellViewport !== "mobile" &&
+    activeDesktopSubmenu,
+  );
+  useEffect(() => {
+    onTeacherContextVisibleChange?.(showTeacherSidebar);
+  }, [onTeacherContextVisibleChange, showTeacherSidebar]);
   const desktopSubmenuContainerClass =
     activeDesktopSubmenu?.item.url === "/student/lesson/note"
       ? "mx-auto max-w-[1500px] px-3 pt-6 md:px-5 lg:px-8 xl:px-10"
@@ -700,7 +702,7 @@ const Header: React.FC<
 
   return (
     <>
-      <header>
+      <header className={isTeacherPortal ? "ws-teacher-header" : undefined}>
         <div className="header-container">
           <div className="flex items-center gap-4 h-full">
             <Link to={home} className="logo-text">
@@ -708,9 +710,12 @@ const Header: React.FC<
               <span className="logo-story">story</span>
             </Link>
 
-            {!showTeacherSidebar && (
+            {
               <nav
                 className={`desktop-nav ml-4 ${!isTeacherPortal ? "student-desktop-nav" : ""}`}
+                aria-label={
+                  isTeacherPortal ? "교사 메인 메뉴" : "학생 메인 메뉴"
+                }
               >
                 {menuItems.map((item, idx) => {
                   const visibleChildren = getVisibleChildren(item);
@@ -743,16 +748,63 @@ const Header: React.FC<
                   return (
                     <div
                       key={`${item.url}-${idx}`}
-                      className="relative group h-full flex items-center"
+                      className={`ws-top-menu relative group h-full flex items-center ${expandedTopMenu === item.url ? "is-open" : ""}`}
+                      onPointerEnter={(event) => {
+                        if (event.pointerType === "mouse")
+                          setExpandedTopMenu(item.url);
+                      }}
+                      onPointerLeave={(event) => {
+                        if (event.pointerType === "mouse")
+                          setExpandedTopMenu(null);
+                      }}
+                      onFocus={(event) => {
+                        if ((event.target as HTMLElement).tagName !== "BUTTON")
+                          setExpandedTopMenu(item.url);
+                      }}
+                      onBlur={(event) => {
+                        if (
+                          !event.currentTarget.contains(
+                            event.relatedTarget as Node | null,
+                          )
+                        ) {
+                          setExpandedTopMenu(null);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          setExpandedTopMenu(null);
+                          (
+                            event.currentTarget.querySelector(
+                              "button",
+                            ) as HTMLButtonElement | null
+                          )?.focus();
+                        }
+                      }}
                     >
                       <Link
                         to={itemTarget}
                         className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""} flex items-center gap-1`}
                       >
                         {item.name}
-                        <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
                       </Link>
-                      <div className="desktop-submenu-shell absolute left-0 top-[calc(100%-8px)] z-[100] transform pt-1 opacity-0 transition duration-150 group-hover:visible group-hover:opacity-100 invisible">
+                      <button
+                        type="button"
+                        className="ws-top-menu__toggle"
+                        aria-label={`${item.name} 하위 메뉴`}
+                        aria-expanded={expandedTopMenu === item.url}
+                        aria-controls={`top-submenu-${portal}-${idx}`}
+                        onClick={() =>
+                          setExpandedTopMenu((value) =>
+                            value === item.url ? null : item.url,
+                          )
+                        }
+                      >
+                        <i className="fas fa-chevron-down" aria-hidden="true" />
+                      </button>
+                      <div
+                        id={`top-submenu-${portal}-${idx}`}
+                        className="desktop-submenu-shell ws-top-menu__panel"
+                      >
                         <div className="rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
                           {resolvedChildren.map((child, childIdx) => {
                             const childTarget = child.resolvedUrl;
@@ -772,7 +824,7 @@ const Header: React.FC<
                   );
                 })}
               </nav>
-            )}
+            }
           </div>
 
           <div className="header-right">
@@ -956,45 +1008,44 @@ const Header: React.FC<
                   </div>
                 )}
               </div>
-              {!showTeacherSidebar &&
-                menuItems.map((item, idx) => {
-                  const visibleChildren = getVisibleChildren(item);
-                  const resolvedChildren = getResolvedChildUrls(
-                    item.url,
-                    visibleChildren,
-                    portal,
-                  );
-                  const itemTarget = resolveTarget(item.url);
-                  return (
-                    <div key={`${item.url}-mobile-${idx}`}>
-                      <Link
-                        to={itemTarget}
-                        className={`mobile-link ${isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren)) ? "active" : ""}`}
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        {item.name}
-                      </Link>
-                      {visibleChildren.length > 0 && (
-                        <div className="bg-gray-50 border-b border-gray-100 pb-1">
-                          {resolvedChildren.map((child, childIdx) => {
-                            const childTarget = child.resolvedUrl;
-                            return (
-                              <Link
-                                key={`${child.url}-mobile-child-${childIdx}`}
-                                to={childTarget}
-                                className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "text-blue-600 bg-blue-50" : "text-gray-500 hover:text-blue-600 hover:bg-gray-100"}`}
-                                onClick={() => setMobileMenuOpen(false)}
-                              >
-                                <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
-                                {child.name}
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              {menuItems.map((item, idx) => {
+                const visibleChildren = getVisibleChildren(item);
+                const resolvedChildren = getResolvedChildUrls(
+                  item.url,
+                  visibleChildren,
+                  portal,
+                );
+                const itemTarget = resolveTarget(item.url);
+                return (
+                  <div key={`${item.url}-mobile-${idx}`}>
+                    <Link
+                      to={itemTarget}
+                      className={`mobile-link ${isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren)) ? "active" : ""}`}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {item.name}
+                    </Link>
+                    {visibleChildren.length > 0 && (
+                      <div className="bg-gray-50 border-b border-gray-100 pb-1">
+                        {resolvedChildren.map((child, childIdx) => {
+                          const childTarget = child.resolvedUrl;
+                          return (
+                            <Link
+                              key={`${child.url}-mobile-child-${childIdx}`}
+                              to={childTarget}
+                              className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "text-blue-600 bg-blue-50" : "text-gray-500 hover:text-blue-600 hover:bg-gray-100"}`}
+                              onClick={() => setMobileMenuOpen(false)}
+                            >
+                              <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
+                              {child.name}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </>
           )}
         </div>
@@ -1015,91 +1066,33 @@ const Header: React.FC<
           notificationHost,
         )}
 
-      {showTeacherSidebar && (
-        <aside
-          className={`ws-teacher-sidebar ${compactTeacherSidebar ? "is-compact" : ""}`}
-          aria-label="교사 사이드 메뉴"
-        >
-          {shellViewport !== "desktop" && (
-            <button
-              type="button"
-              className="ws-teacher-sidebar__toggle"
-              onClick={() => setSidebarExpanded((value) => !value)}
-              aria-expanded={!compactTeacherSidebar}
-              aria-controls="teacher-sidebar-navigation"
-              aria-label={compactTeacherSidebar ? "메뉴 펼치기" : "메뉴 접기"}
-            >
-              <i
-                className={`fas ${compactTeacherSidebar ? "fa-angles-right" : "fa-angles-left"}`}
-                aria-hidden="true"
-              />
-              <span>{compactTeacherSidebar ? "펼치기" : "메뉴 접기"}</span>
-            </button>
-          )}
-          <nav id="teacher-sidebar-navigation" aria-label="교사 주요 메뉴">
-            {menuItems.map((item, index) => {
-              const children = getResolvedChildUrls(
-                item.url,
-                getVisibleChildren(item),
-                portal,
-              );
-              const active =
-                isActive(item.url) ||
-                children.some((child) =>
-                  isChildActive(child.resolvedUrl, children),
-                );
-              return (
-                <div key={`${item.url}-sidebar-${index}`}>
-                  <Link
-                    to={resolveTarget(item.url)}
-                    className={`ws-teacher-sidebar__link ${active ? "is-active" : ""}`}
-                    title={item.name}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d={item.icon}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span>
-                      {compactTeacherSidebar
-                        ? item.name
-                            .replace(/ 관리$/, "")
-                            .replace("학습 자료", "수업")
-                        : item.name}
-                    </span>
-                  </Link>
-                  {!compactTeacherSidebar && active && children.length > 0 && (
-                    <div className="ws-teacher-sidebar__children">
-                      {children.map((child, childIndex) => (
-                        <Link
-                          key={`${child.resolvedUrl}-${childIndex}`}
-                          to={child.resolvedUrl}
-                          aria-current={
-                            isChildActive(child.resolvedUrl, children)
-                              ? "page"
-                              : undefined
-                          }
-                        >
-                          {child.name}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      {showTeacherSidebar && activeDesktopSubmenu && (
+        <aside className="ws-teacher-sidebar" aria-label="교사 하위 메뉴">
+          <h2 className="ws-teacher-sidebar__title">
+            {activeDesktopSubmenu.item.name}
+          </h2>
+          <nav aria-label={`${activeDesktopSubmenu.item.name} 하위 메뉴`}>
+            {activeDesktopSubmenu.resolvedChildren.map((child, index) => (
+              <Link
+                key={`${child.resolvedUrl}-${index}`}
+                to={child.resolvedUrl}
+                className="ws-teacher-sidebar__link"
+                aria-current={
+                  isChildActive(
+                    child.resolvedUrl,
+                    activeDesktopSubmenu.resolvedChildren,
+                  )
+                    ? "page"
+                    : undefined
+                }
+              >
+                {child.name}
+              </Link>
+            ))}
           </nav>
         </aside>
       )}
-      {!showTeacherSidebar && activeDesktopSubmenu && (
+      {!isTeacherPortal && activeDesktopSubmenu && (
         <div className="hidden lg:block">
           <div className={desktopSubmenuContainerClass}>
             <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">

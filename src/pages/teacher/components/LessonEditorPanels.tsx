@@ -293,7 +293,7 @@ export function LessonTreePanel({
 
   return (
     <>
-      <div className="hidden w-full max-w-sm lg:block">
+      <div className="ws-lesson-tree-desktop w-full max-w-sm">
         <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-4">
             <div className="min-w-0">

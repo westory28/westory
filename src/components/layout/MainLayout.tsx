@@ -45,7 +45,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
   const isTeacherRoute = location.pathname.startsWith("/teacher");
-  const [teacherSidebarExpanded, setTeacherSidebarExpanded] =
+  const [teacherContextVisible, setTeacherContextVisible] =
     React.useState(false);
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
@@ -168,9 +168,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div
-      className={`flex min-h-screen flex-col bg-gray-50 ${currentUser && isTeacherRoute ? "ws-teacher-layout" : ""} ${teacherSidebarExpanded ? "ws-teacher-layout--expanded" : ""}`}
+      className={`flex min-h-screen flex-col bg-gray-50 ${currentUser && isTeacherRoute && teacherContextVisible ? "ws-teacher-layout" : ""}`}
     >
-      <Header onTeacherSidebarExpandedChange={setTeacherSidebarExpanded} />
+      <Header onTeacherContextVisibleChange={setTeacherContextVisible} />
       {studentEnhancementsReady && (
         <React.Suspense fallback={null}>
           <StudentRankPromotionController />
