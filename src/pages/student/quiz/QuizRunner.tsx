@@ -197,6 +197,8 @@ const QuizRunner: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const persistTimeoutRef = useRef<number | null>(null);
   const persistInFlightRef = useRef(false);
+  const persistQueuedRef = useRef(false);
+  const persistQuizProgressRef = useRef<() => Promise<void>>(async () => {});
   const timeoutHandledRef = useRef(false);
   const unitOrderMapRef = useRef<Record<string, number>>({});
   const authIdentityRef = useRef<{ uid: string; email: string }>({
@@ -890,6 +892,9 @@ const QuizRunner: React.FC = () => {
   };
 
   const persistQuizProgress = async () => {
+    if (persistQuizProgressRef.current !== persistQuizProgress) {
+      return persistQuizProgressRef.current();
+    }
     if (
       !getResolvedStudentUid() ||
       !unitId ||
@@ -901,7 +906,10 @@ const QuizRunner: React.FC = () => {
     ) {
       return;
     }
-    if (persistInFlightRef.current) return;
+    if (persistInFlightRef.current) {
+      persistQueuedRef.current = true;
+      return;
+    }
 
     persistInFlightRef.current = true;
 
@@ -913,7 +921,9 @@ const QuizRunner: React.FC = () => {
         currentItemId: String(selectedQuestions[currentIndex]?.id || ""),
       });
       setCanonicalAttempt((previous) =>
-        previous
+        previous?.attemptId === canonicalAttempt.attemptId &&
+        ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(previous.status) &&
+        previous.revision <= saved.revision
           ? {
               ...previous,
               status: "IN_PROGRESS",
@@ -931,8 +941,14 @@ const QuizRunner: React.FC = () => {
       });
     } finally {
       persistInFlightRef.current = false;
+      if (persistQueuedRef.current) {
+        persistQueuedRef.current = false;
+        schedulePersistQuizProgress();
+      }
     }
   };
+  // Debounced saves must use the committed answer and revision from the latest render.
+  persistQuizProgressRef.current = persistQuizProgress;
 
   const schedulePersistQuizProgress = () => {
     if (view !== "quiz" || finishSubmitting || startingQuiz) return;
