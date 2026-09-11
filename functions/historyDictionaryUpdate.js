@@ -2,6 +2,7 @@
 // of the stored word; the stored word proves the original request connection.
 const crypto = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
+const requestOrigin = require("./historyDictionaryRequestOrigin");
 
 const normalize = (value) => value.trim().replace(/\s+/g, " ").toLowerCase();
 const termIdFor = (word) =>
@@ -72,6 +73,7 @@ const inspectCurrent = ({ target, wordData, profile }) => {
     ? wordData.requestId
     : "";
   if (requestId !== "" && !pathId(requestId, 120)) fail();
+  requestOrigin.readStoredOrigin(wordData, fail);
   if (
     Object.hasOwn(wordData, "rewardTermId") &&
     wordData.rewardTermId !== "" &&
@@ -88,14 +90,8 @@ const inspectCurrent = ({ target, wordData, profile }) => {
   return { requestId, currentWord, preserveUnscoped: !scoped && !requestId };
 };
 
-const inspectRequest = ({
-  target,
-  wordData,
-  binding,
-  requestData,
-  nextTermId = target.termId,
-}) => {
-  if (!binding.requestId) return;
+const inspectRequest = ({ target, wordData, binding, requestData }) => {
+  if (!binding.requestId) return "";
   // Editing must not silently bless an orphaned link or synthesize a request.
   if (!requestData) fail(true);
   if (requestData.uid !== target.uid) fail();
@@ -103,39 +99,16 @@ const inspectRequest = ({
   const requestWord = recordWord(requestData);
   if (!["requested", "needs_approval", "resolved"].includes(requestData.status))
     fail();
-  let originalTermId = target.termId;
-  const movedReference = ["matchedTermId", "resolvedTermId"].some(
-    (key) => requestData[key] && requestData[key] !== target.termId,
-  );
-  // A legacy ID can move to a canonical ID even when only its definition is
-  // edited. Returning to the original spelling also still needs this bridge.
-  if (requestWord !== binding.currentWord || movedReference) {
-    if (
-      wordData.definitionSource !== "teacher_reviewed" ||
-      !pathId(wordData.reviewedBy, 128) ||
-      !wordData.reviewedAt ||
-      !pathId(wordData.rewardTermId, 80)
-    )
-      fail();
-    originalTermId = wordData.rewardTermId;
-  }
-  for (const key of ["matchedTermId", "resolvedTermId"])
-    if (requestData[key] && requestData[key] !== originalTermId) fail();
-  if (
-    !requestData.matchedTermId &&
-    !requestData.resolvedTermId &&
-    originalTermId !== termIdFor(requestWord)
-  )
-    fail();
-  // A student can request a word again after an earlier rewarded rename. Its
-  // request origin can then differ from its reward origin. Preserve definition
-  // edits, but do not move the row and lose the only verified request bridge.
-  if (
-    nextTermId !== target.termId &&
-    wordData.rewardTermId &&
-    wordData.rewardTermId !== originalTermId
-  )
-    fail(true);
+  return requestOrigin.resolveOrigin({
+    targetTermId: target.termId,
+    requestId: binding.requestId,
+    wordData,
+    currentWord: binding.currentWord,
+    requestWord,
+    requestData,
+    canonicalRequestTermId: termIdFor(requestWord),
+    fail,
+  });
 };
 
 module.exports = { parseTarget, inspectCurrent, inspectRequest };

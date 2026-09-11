@@ -317,12 +317,15 @@ test("same spelling with moved legacy ID supports subsequent update and delete",
   );
   checks++;
 });
-test("distinct request and reward origins retain definition edits but refuse ID moves", () => {
+test("distinct origins derive a request origin independently before ID moves", () => {
   const fixture = structuredClone(base);
   fixture.wordData.rewardTermId = "earlier-reward-origin";
   const before = structuredClone(fixture);
   equal(run(fixture).currentWord, "백제");
-  deny(() => run({ ...fixture, nextTermId: term("새 이름") }), true);
+  equal(
+    inspectRequest({ ...fixture, binding: inspectCurrent(fixture) }),
+    target.termId,
+  );
   equal(fixture, before);
   const direct = {
     ...fixture,
@@ -336,7 +339,10 @@ test("distinct request and reward origins retain definition edits but refuse ID 
     wordData: { ...fixture.wordData, termId: "legacy-current" },
     requestData: { ...fixture.requestData, resolvedTermId: "legacy-current" },
   };
-  deny(() => run({ ...legacy, nextTermId: target.termId }), true);
+  equal(
+    inspectRequest({ ...legacy, binding: inspectCurrent(legacy) }),
+    "legacy-current",
+  );
 });
 console.log(
   JSON.stringify(

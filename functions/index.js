@@ -10512,20 +10512,22 @@ exports.requestHistoryDictionaryTerm = onCall(
             ),
           };
         }
+        const isPending = ["requested", "needs_approval"].includes(existingStatus);
+        if (isPending && ["matchedTermId", "resolvedTermId"].some(
+          (key) => existing[key] && existing[key] !== termId,
+        )) failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_REQUEST_MISMATCH");
+        const status = isPending ? existingStatus : nextStatus;
+        const matchedTermId = hasPublishedTerm
+          ? termId : isPending ? String(existing.matchedTermId || "") : "";
         transaction.set(
           requestRef,
           {
             word,
             normalizedWord,
             memo,
-            status:
-              existingStatus === "needs_approval" ||
-              existingStatus === "requested"
-                ? existingStatus
-                : nextStatus,
-            matchedTermId: hasPublishedTerm
-              ? termId
-              : String(existing.matchedTermId || ""),
+            status,
+            matchedTermId,
+            ...(!isPending ? { resolvedTermId: "", resolvedBy: "", resolvedAt: null } : {}),
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },
@@ -10540,6 +10542,7 @@ exports.requestHistoryDictionaryTerm = onCall(
             studentLevel: "",
             status: "requested",
             requestId,
+            requestOriginTermId: termId,
             uid,
             studentName:
               sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
@@ -10558,10 +10561,8 @@ exports.requestHistoryDictionaryTerm = onCall(
           termId,
           created: false,
           alreadyResolved: false,
-          status: existingStatus || nextStatus,
-          matchedTermId: hasPublishedTerm
-            ? termId
-            : String(existing.matchedTermId || ""),
+          status,
+          matchedTermId,
         };
       }
 
@@ -10594,6 +10595,7 @@ exports.requestHistoryDictionaryTerm = onCall(
           studentLevel: "",
           status: "requested",
           requestId,
+          requestOriginTermId: termId,
           uid,
           studentName:
             sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
@@ -10681,6 +10683,7 @@ exports.saveStudentHistoryDictionaryWord = onCall(
           tags: sanitizeHistoryDictionaryTags(term.tags),
           status: "saved",
           requestId: "",
+          requestOriginTermId: "",
           updatedAt: FieldValue.serverTimestamp(),
           createdAt: FieldValue.serverTimestamp(),
         },
@@ -10742,6 +10745,7 @@ exports.saveStudentHistoryDictionaryEntry = onCall(
           studentLevel: "내가 정리한 뜻풀이",
           status: "saved",
           requestId: "",
+          requestOriginTermId: "",
           uid,
           studentName:
             sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
@@ -11146,13 +11150,14 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
       const requestSnap = binding.requestId
         ? await transaction.get(db.doc(getHistoryDictionaryRequestPath(binding.requestId)))
         : null;
-      historyDictionaryUpdate.inspectRequest({
-        target, wordData: existing, binding, nextTermId,
+      const requestOriginTermId = historyDictionaryUpdate.inspectRequest({
+        target, wordData: existing, binding,
         requestData: requestSnap?.exists ? requestSnap.data() || {} : null,
       });
       const payload = {
         ...existing,
         termId: nextTermId,
+        requestOriginTermId,
         word,
         normalizedWord,
         definition,
@@ -11279,6 +11284,8 @@ const assertHistoryDictionaryStudentWordBinding = ({
     Object.hasOwn(data, key) && data[key] !== value)
     || (Object.hasOwn(data, "year") && String(data.year || "") !== year)
     || (Object.hasOwn(data, "semester") && String(data.semester || "") !== semester)
+    || (Object.hasOwn(data, "requestOriginTermId") && data.requestOriginTermId !== ""
+      && (!isHistoryDictionaryPathId(data.requestOriginTermId, 80) || data.requestOriginTermId !== termId))
     || (Object.hasOwn(data, "normalizedWord") && (typeof data.normalizedWord !== "string"
       || normalizeHistoryDictionaryWord(data.normalizedWord) !== normalizedWord))
     || (Object.hasOwn(data, "word") && (typeof data.word !== "string"
@@ -11335,6 +11342,8 @@ const readHistoryDictionaryFallbackTarget = async ({
     || String(word.year || "") !== year || String(word.semester || "") !== semester
     || (Object.hasOwn(word, "uid") && word.uid !== fallbackUid)
     || (Object.hasOwn(word, "termId") && word.termId !== termId)
+    || (Object.hasOwn(word, "requestOriginTermId") && word.requestOriginTermId !== ""
+      && (!isHistoryDictionaryPathId(word.requestOriginTermId, 80) || word.requestOriginTermId !== termId))
   ) failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_FALLBACK_UNVERIFIED");
   return {
     snapshot, uid: fallbackUid, pending: true, recovered: true, wordSnap,
@@ -11437,6 +11446,7 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
           studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
           tags: sanitizeHistoryDictionaryTags(term.tags), status: "saved",
           requestId: target.snapshot.ref.id, updatedAt: FieldValue.serverTimestamp(),
+          requestOriginTermId: termId,
           createdAt: existingWord.createdAt || FieldValue.serverTimestamp(),
         },
         { merge: true },

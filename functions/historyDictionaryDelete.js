@@ -1,6 +1,7 @@
 // Read-only binding checks for the teacher deletion transaction.
 const crypto = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
+const requestOrigin = require("./historyDictionaryRequestOrigin");
 
 const normalize = (value) => value.trim().replace(/\s+/g, " ").toLowerCase();
 const hash = (value) => crypto.createHash("sha1").update(value).digest("hex");
@@ -98,6 +99,7 @@ const inspectTarget = ({ target, wordData, requestData, profile }) => {
     optionalExact(wordData, "requestId", target.requestId);
     wordScoped = scopedRecord(wordData, target);
     currentWord = recordWord(wordData);
+    requestOrigin.readStoredOrigin(wordData, fail);
     if (
       (target.normalizedWord && target.normalizedWord !== currentWord) ||
       !["saved", "requested"].includes(wordData.status) ||
@@ -127,39 +129,22 @@ const inspectTarget = ({ target, wordData, requestData, profile }) => {
         reclaimAllowed: false,
       };
     if (wordData && requestData.status === "rejected") fail();
-    let bindingTermId = target.termId;
-    const movedReference = ["matchedTermId", "resolvedTermId"].some(
-      (key) => requestData[key] && requestData[key] !== target.termId,
-    );
-    // Legacy IDs may move without changing the spelling, or after renaming
-    // back to the original word. The same reviewed origin must prove the link.
-    if (wordData && (requestWord !== currentWord || movedReference)) {
-      if (
-        wordData.definitionSource !== "teacher_reviewed" ||
-        !pathId(wordData.reviewedBy, 128) ||
-        !wordData.reviewedAt ||
-        wordData.requestId !== target.requestId ||
-        !pathId(wordData.rewardTermId, 80) ||
-        (!requestData.matchedTermId &&
-          !requestData.resolvedTermId &&
-          wordData.rewardTermId !== termIdFor(requestWord))
-      )
-        fail();
-      bindingTermId = wordData.rewardTermId;
-    } else if (
+    if (
       !wordData &&
       target.normalizedWord &&
       target.normalizedWord !== requestWord
     )
       fail();
-    for (const key of ["matchedTermId", "resolvedTermId"])
-      if (requestData[key] && requestData[key] !== bindingTermId) fail();
-    if (
-      !requestData.matchedTermId &&
-      !requestData.resolvedTermId &&
-      bindingTermId !== termIdFor(requestWord)
-    )
-      fail();
+    requestOrigin.resolveOrigin({
+      targetTermId: target.termId,
+      requestId: target.requestId,
+      wordData,
+      currentWord,
+      requestWord,
+      requestData,
+      canonicalRequestTermId: termIdFor(requestWord),
+      fail,
+    });
   } else if (target.requestId) {
     // A deterministic ID alone is public information, not recovery proof.
     if (
@@ -168,6 +153,8 @@ const inspectTarget = ({ target, wordData, requestData, profile }) => {
       wordData.uid !== target.uid ||
       wordData.termId !== target.termId ||
       wordData.requestId !== target.requestId ||
+      (wordData.requestOriginTermId &&
+        wordData.requestOriginTermId !== target.termId) ||
       !wordScoped ||
       target.requestId !== requestIdFor(target, currentWord) ||
       target.termId !== termIdFor(currentWord)
