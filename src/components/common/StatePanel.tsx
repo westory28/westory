@@ -1,4 +1,5 @@
 import React from "react";
+import { LoadingOverlay } from "./LoadingState";
 
 export type CommonUiState =
   | "LOADING"
@@ -189,6 +190,14 @@ const StatePanel: React.FC<StatePanelProps> = ({
   headingLevel = 2,
 }) => {
   const preset = DEFAULTS[state];
+  if (state === "LOADING" && !compact) {
+    return (
+      <LoadingOverlay
+        message={title || preset.title}
+        detail={description || preset.description}
+      />
+    );
+  }
   const isUrgent =
     state === "ERROR" ||
     state === "SESSION_EXPIRED" ||
