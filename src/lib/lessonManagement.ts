@@ -7,6 +7,7 @@ import {
 import { getSemesterCollectionPath } from "./semesterScope";
 import type { SystemConfig } from "../types";
 import type { LessonPdfProcessingMeta } from "./lessonPdfExtraction";
+import { lessonWriteRecovery } from "./lessonWriteRecovery";
 
 type Config = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 // Re-extraction uses the same saved asset URL as the lesson viewer. Do not
@@ -68,26 +69,50 @@ export const saveLessonTree = async (
     W2CommandPayloads["saveLessonTree"],
     "semesterId" | "expectedSemesterRevision"
   >,
-) =>
-  (
-    await executeWestoryCommand("saveLessonTree", {
-      ...(await getLessonCommandScope(config)),
-      ...input,
-    })
-  ).result;
+) => {
+  const ownerUid = auth.currentUser?.uid || "";
+  if (!ownerUid) throw new Error("로그인 상태를 확인해 주세요.");
+  return lessonWriteRecovery.run(
+    `${ownerUid}/${config?.year || ""}/${config?.semester || ""}`,
+    { kind: "tree", input },
+    async ({ input: snapshot }) =>
+      (
+        await executeWestoryCommand(
+          "saveLessonTree",
+          {
+            ...(await getLessonCommandScope(config)),
+            ...snapshot,
+          },
+          { expectedUid: ownerUid },
+        )
+      ).result,
+  );
+};
 export const saveLessonDocument = async (
   config: Config,
   input: Omit<
     W2CommandPayloads["saveLessonDocument"],
     "semesterId" | "expectedSemesterRevision"
   >,
-) =>
-  (
-    await executeWestoryCommand("saveLessonDocument", {
-      ...(await getLessonCommandScope(config)),
-      ...input,
-    })
-  ).result;
+) => {
+  const ownerUid = auth.currentUser?.uid || "";
+  if (!ownerUid) throw new Error("로그인 상태를 확인해 주세요.");
+  return lessonWriteRecovery.run(
+    `${ownerUid}/${config?.year || ""}/${config?.semester || ""}`,
+    { kind: "document", input },
+    async ({ input: snapshot }) =>
+      (
+        await executeWestoryCommand(
+          "saveLessonDocument",
+          {
+            ...(await getLessonCommandScope(config)),
+            ...snapshot,
+          },
+          { expectedUid: ownerUid },
+        )
+      ).result,
+  );
+};
 
 export const uploadLessonAsset = async (
   config: Config,

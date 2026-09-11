@@ -16,6 +16,7 @@ import {
   getDoc,
   getDocFromServer,
   getDocs,
+  getDocsFromServer,
   limit,
   orderBy,
   query,
@@ -62,7 +63,16 @@ import {
   type LessonFootnote,
   type NormalizedLessonData,
 } from "../../lib/lessonData";
-import { findLatestLessonTreeSelection } from "../../lib/lessonTreeSelection";
+import {
+  findLatestLessonTreeSelection,
+  findLessonTreeSelectionByUnitId,
+} from "../../lib/lessonTreeSelection";
+import {
+  lessonWriteRecovery,
+  lessonWriteFailureMessage,
+  type LessonWriteRecovery,
+  type LessonWriteOutcome,
+} from "../../lib/lessonWriteRecovery";
 import {
   buildFailedLessonPdfProcessingMeta,
   buildQueuedLessonPdfProcessingMeta,
@@ -749,11 +759,22 @@ const ManageLesson: React.FC = () => {
   const treeLoadIdRef = useRef(0);
   const lessonLoadIdRef = useRef(0);
   const uploadedAssetIdsRef = useRef<string[]>([]);
+  const recoveredAssetIdsRef = useRef<string[]>([]);
+  const editorMountedRef = useRef(true);
+  useEffect(() => {
+    editorMountedRef.current = true;
+    return () => {
+      editorMountedRef.current = false;
+      ++treeLoadIdRef.current;
+      ++lessonLoadIdRef.current;
+    };
+  }, []);
   const editorContext = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}/${selectedNodeId || ""}`;
   const editorSessionRef = useRef({ context: editorContext, saving: false });
   if (editorSessionRef.current.context !== editorContext) {
     editorSessionRef.current = { context: editorContext, saving: false };
     lessonRevisionRef.current = null;
+    recoveredAssetIdsRef.current = [];
   }
   const teacherScope = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`;
   const teacherScopeRef = useRef(teacherScope);
@@ -1257,7 +1278,8 @@ const ManageLesson: React.FC = () => {
         file: new Blob([original], { type: "application/pdf" }),
         originalName: lessonPdfName || "lesson.pdf",
       });
-      if (editorSessionRef.current !== session) return;
+      if (!editorMountedRef.current || editorSessionRef.current !== session)
+        return;
       const result = await saveLessonDocument(config, {
         unitId: selectedNodeId,
         expectedRevision,
@@ -1268,8 +1290,10 @@ const ManageLesson: React.FC = () => {
           pdfUrl: asset.url,
         },
       });
-      if (editorSessionRef.current !== session) return;
+      if (!editorMountedRef.current || editorSessionRef.current !== session)
+        return;
       lessonRevisionRef.current = result.contentRevision;
+      lessonWriteRecovery.acknowledge(lessonWriteRecovery.peek(teacherScope));
       const processing = normalizeLessonPdfProcessingMeta(result.pdfProcessing);
       setLessonPdfStoragePath(asset.storagePath);
       setLessonPdfUrl(asset.url);
@@ -1297,7 +1321,8 @@ const ManageLesson: React.FC = () => {
           "PDF 구조 추출을 다시 요청했습니다. 완료되면 상태가 자동으로 반영됩니다.",
       });
     } catch (error) {
-      if (editorSessionRef.current === session)
+      if (editorMountedRef.current && editorSessionRef.current === session) {
+        lessonWriteRecovery.acknowledge(lessonWriteRecovery.peek(teacherScope));
         setPdfSaveFeedback({
           tone: "error",
           message:
@@ -1305,9 +1330,11 @@ const ManageLesson: React.FC = () => {
               ? error.message
               : "PDF 구조 추출을 요청하지 못했습니다.",
         });
+      }
     } finally {
       session.saving = false;
-      if (editorSessionRef.current === session) setScreenBusyMessage(null);
+      if (editorMountedRef.current && editorSessionRef.current === session)
+        setScreenBusyMessage(null);
     }
   };
 
@@ -1716,16 +1743,60 @@ const ManageLesson: React.FC = () => {
     const requestId = ++treeLoadIdRef.current;
     const lessonLoadId = lessonLoadIdRef.current;
     const isCurrent = () =>
-      teacherScopeRef.current === scope && treeLoadIdRef.current === requestId;
+      editorMountedRef.current &&
+      teacherScopeRef.current === scope &&
+      treeLoadIdRef.current === requestId;
     try {
+      const recovery = lessonWriteRecovery.peek(scope);
+      if (recovery?.pending)
+        setScreenBusyMessage("수업 자료 저장 결과를 확인하는 중입니다...");
+      const outcome = recovery ? await recovery.settled : undefined;
+      if (!isCurrent()) return;
       const applyLoadedTree = async (nextTree: TreeNode[]) => {
         if (!isCurrent()) return;
         setTreeData(nextTree);
         treeLoadedRef.current = true;
         if (selectedNodeId && !resetSelection) return;
 
+        if (recovery?.kind === "document") {
+          const selection = findLessonTreeSelectionByUnitId(
+            nextTree,
+            recovery.input.unitId,
+          );
+          if (selection) {
+            setExpandedIds(new Set(selection.pathIds.slice(0, -1)));
+            setSelectedNodeId(selection.node.id);
+            setSelectedNodeTitle(selection.node.title);
+            setEditorTab("pdf");
+            await loadLessonContent(selection.node.id, selection.node.title, {
+              recovery,
+              outcome: outcome!,
+            });
+            return;
+          }
+          setPdfSaveFeedback({
+            tone: "error",
+            message:
+              "저장하던 수업 자료가 목차에 없습니다. 자료와 목차를 다시 확인해 주세요.",
+          });
+          return;
+        }
+        if (recovery?.kind === "tree") {
+          if (outcome && !outcome.ok) {
+            setTreeData(recovery.input.tree as TreeNode[]);
+            treeRevisionRef.current = recovery.input.expectedRevision;
+            setPdfSaveFeedback({
+              tone: "error",
+              message: lessonWriteFailureMessage(outcome.error),
+            });
+            lessonWriteRecovery.acknowledge(recovery);
+            return;
+          }
+          lessonWriteRecovery.acknowledge(recovery);
+        }
+
         const readRecentLessons = async (collectionPath: string) => {
-          const snap = await getDocs(
+          const snap = await getDocsFromServer(
             query(collection(db, collectionPath), orderBy("updatedAt", "desc")),
           );
           return snap.docs.map((docSnap) => docSnap.data() as LessonData);
@@ -1757,13 +1828,13 @@ const ManageLesson: React.FC = () => {
         setSelectedNodeId(latestSelection.node.id);
         setSelectedNodeTitle(latestSelection.node.title);
         setEditorTab("pdf");
-        void loadLessonContent(
+        await loadLessonContent(
           latestSelection.node.id,
           latestSelection.node.title,
         );
       };
 
-      const scopedDoc = await getDoc(
+      const scopedDoc = await getDocFromServer(
         doc(db, getSemesterDocPath(config, "curriculum", "tree")),
       );
       if (!isCurrent()) return;
@@ -1772,7 +1843,7 @@ const ManageLesson: React.FC = () => {
         await applyLoadedTree(scopedDoc.data().tree);
         return;
       }
-      const legacyDoc = await getDoc(doc(db, "curriculum", "tree"));
+      const legacyDoc = await getDocFromServer(doc(db, "curriculum", "tree"));
       if (!isCurrent()) return;
       treeRevisionRef.current = 0;
       if (legacyDoc.exists() && legacyDoc.data().tree) {
@@ -1784,6 +1855,14 @@ const ManageLesson: React.FC = () => {
       ]);
     } catch (error) {
       console.error(error);
+      if (isCurrent())
+        setPdfSaveFeedback({
+          tone: "error",
+          message:
+            "최신 수업 자료를 불러오지 못했습니다. 연결을 확인한 뒤 화면을 다시 열어 주세요.",
+        });
+    } finally {
+      if (isCurrent()) setScreenBusyMessage(null);
     }
   };
 
@@ -1798,20 +1877,25 @@ const ManageLesson: React.FC = () => {
         expectedRevision: treeRevisionRef.current,
         tree: newTree,
       });
-      if (editorSessionRef.current !== session) return false;
+      if (!editorMountedRef.current || editorSessionRef.current !== session)
+        return false;
+      lessonWriteRecovery.acknowledge(lessonWriteRecovery.peek(teacherScope));
       treeRevisionRef.current = result.contentRevision;
       setTreeData(newTree);
       if (!silent) alert("목차를 저장했습니다.");
       return true;
     } catch (error) {
-      if (editorSessionRef.current === session)
+      if (editorMountedRef.current && editorSessionRef.current === session) {
+        lessonWriteRecovery.acknowledge(lessonWriteRecovery.peek(teacherScope));
         alert(
           error instanceof Error ? error.message : "목차 저장에 실패했습니다.",
         );
+      }
       return false;
     } finally {
       session.saving = false;
-      if (editorSessionRef.current === session) setScreenBusyMessage(null);
+      if (editorMountedRef.current && editorSessionRef.current === session)
+        setScreenBusyMessage(null);
     }
   };
 
@@ -1918,9 +2002,19 @@ const ManageLesson: React.FC = () => {
     }
   };
 
-  const loadLessonContent = async (unitId: string, title: string) => {
+  const loadLessonContent = async (
+    unitId: string,
+    title: string,
+    restored?: { recovery: LessonWriteRecovery; outcome: LessonWriteOutcome },
+  ) => {
     const loadId = ++lessonLoadIdRef.current;
     const loadContext = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}/${unitId}`;
+    // Selection state may not have committed yet when a server read resolves.
+    // Bind the request immediately so a fast response does not leave revision null.
+    if (editorSessionRef.current.context !== loadContext) {
+      editorSessionRef.current = { context: loadContext, saving: false };
+      recoveredAssetIdsRef.current = [];
+    }
     lessonRevisionRef.current = null;
     setLessonTitle(title);
     setLessonVideo("");
@@ -1945,9 +2039,9 @@ const ManageLesson: React.FC = () => {
         where("unitId", "==", unitId),
         limit(1),
       );
-      let snap = await getDocs(scopedQuery);
+      let snap = await getDocsFromServer(scopedQuery);
       if (snap.empty)
-        snap = await getDocs(
+        snap = await getDocsFromServer(
           query(
             collection(db, "lessons"),
             where("unitId", "==", unitId),
@@ -1955,16 +2049,36 @@ const ManageLesson: React.FC = () => {
           ),
         );
       if (
+        !editorMountedRef.current ||
         loadId !== lessonLoadIdRef.current ||
         editorSessionRef.current.context !== loadContext
       )
         return;
-      if (!snap.empty) {
-        const data = normalizeLessonData(snap.docs[0].data(), {
+      if (snap.empty && restored?.outcome.ok)
+        throw new Error("저장 결과를 서버에서 확인하지 못했습니다.");
+      if (!snap.empty || restored?.recovery.kind === "document") {
+        const savedData = normalizeLessonData(snap.docs[0]?.data() || {}, {
           unitId,
           title,
         });
-        lessonRevisionRef.current = data.contentRevision ?? 0;
+        const failedInput =
+          restored?.recovery.kind === "document" && !restored.outcome.ok
+            ? restored.recovery.input
+            : undefined;
+        const data = failedInput
+          ? normalizeLessonData({ ...savedData, ...failedInput.document })
+          : savedData;
+        lessonRevisionRef.current =
+          failedInput?.expectedRevision ?? savedData.contentRevision ?? 0;
+        if (failedInput) {
+          recoveredAssetIdsRef.current = [
+            ...(failedInput.assetUploadIds || []),
+          ];
+          if (failedInput.tree) {
+            setTreeData(failedInput.tree as TreeNode[]);
+            treeRevisionRef.current = failedInput.expectedTreeRevision!;
+          }
+        }
         setLessonTitle(data.title || title);
         setLessonVideo(data.videoUrl);
         setLessonContent(data.contentHtml);
@@ -1990,26 +2104,26 @@ const ManageLesson: React.FC = () => {
         setWorksheetExamHighlights(data.worksheetExamHighlights);
         syncSavedSnapshots({
           selectedNodeId: unitId,
-          lessonTitle: data.title || title,
-          lessonVideo: data.videoUrl,
-          lessonVisibleToStudents: data.isVisibleToStudents,
-          lessonContent: data.contentHtml,
-          lessonFootnotes: data.footnotes,
+          lessonTitle: savedData.title || title,
+          lessonVideo: savedData.videoUrl,
+          lessonVisibleToStudents: savedData.isVisibleToStudents,
+          lessonContent: savedData.contentHtml,
+          lessonFootnotes: savedData.footnotes,
           worksheetFootnoteAnchors: normalizeWorksheetFootnoteAnchors(
-            data.worksheetFootnoteAnchors,
+            savedData.worksheetFootnoteAnchors,
           ),
-          lessonPdfName: data.pdfName,
-          lessonPdfUrl: data.pdfUrl,
-          lessonPdfStoragePath: data.pdfStoragePath,
-          lessonPdfProcessing: data.pdfProcessing,
+          lessonPdfName: savedData.pdfName,
+          lessonPdfUrl: savedData.pdfUrl,
+          lessonPdfStoragePath: savedData.pdfStoragePath,
+          lessonPdfProcessing: savedData.pdfProcessing,
           worksheetPageImages: normalizeWorksheetPageImages(
-            data.worksheetPageImages,
+            savedData.worksheetPageImages,
           ),
           worksheetTextRegions: normalizeWorksheetTextRegions(
-            data.worksheetTextRegions,
+            savedData.worksheetTextRegions,
           ),
-          worksheetBlanks: data.worksheetBlanks,
-          worksheetExamHighlights: data.worksheetExamHighlights,
+          worksheetBlanks: savedData.worksheetBlanks,
+          worksheetExamHighlights: savedData.worksheetExamHighlights,
           selectedPdfFile: null,
           preparedPdf: null,
           footnoteImageDrafts: {},
@@ -2043,10 +2157,34 @@ const ManageLesson: React.FC = () => {
       }
       setLessonSaveState("saved");
       setPdfSaveState("saved");
+      if (restored) {
+        if (!restored.outcome.ok) {
+          setPdfSaveFeedback({
+            tone: "error",
+            message: lessonWriteFailureMessage(restored.outcome.error),
+          });
+        }
+        lessonWriteRecovery.acknowledge(restored.recovery);
+      }
     } catch (error) {
       console.error(error);
+      if (
+        editorMountedRef.current &&
+        loadId === lessonLoadIdRef.current &&
+        editorSessionRef.current.context === loadContext
+      )
+        setPdfSaveFeedback({
+          tone: "error",
+          message:
+            "최신 수업 자료를 불러오지 못했습니다. 연결을 확인한 뒤 화면을 다시 열어 주세요.",
+        });
     }
-    setScreenBusyMessage(null);
+    if (
+      editorMountedRef.current &&
+      loadId === lessonLoadIdRef.current &&
+      editorSessionRef.current.context === loadContext
+    )
+      setScreenBusyMessage(null);
   };
 
   const handleEditorTabChange = (nextTab: LessonEditorTab) => {
@@ -2936,7 +3074,7 @@ const ManageLesson: React.FC = () => {
       ? meta.isVisibleToStudents
       : savedLessonState.isVisibleToStudents;
     session.saving = true;
-    uploadedAssetIdsRef.current = [];
+    uploadedAssetIdsRef.current = [...recoveredAssetIdsRef.current];
     setScreenBusyMessage("파일을 확인하고 수업 자료를 저장하는 중입니다...");
     if (saveMeta) setLessonSaveState("saving");
     if (savePdf) setPdfSaveState("saving");
@@ -2977,7 +3115,7 @@ const ManageLesson: React.FC = () => {
           worksheetExamHighlights: normalized.worksheetExamHighlights,
         });
       }
-      if (editorSessionRef.current !== session)
+      if (!editorMountedRef.current || editorSessionRef.current !== session)
         throw new Error(
           "저장 대상이 변경되었습니다. 원래 화면에서 다시 저장해 주세요.",
         );
@@ -3012,7 +3150,8 @@ const ManageLesson: React.FC = () => {
           ? { tree: nextTree, expectedTreeRevision: treeRevisionRef.current }
           : {}),
       });
-      if (editorSessionRef.current !== session) return;
+      if (!editorMountedRef.current || editorSessionRef.current !== session)
+        return;
       lessonRevisionRef.current = result.contentRevision;
       if (nextTree && result.treeRevision !== null) {
         treeRevisionRef.current = result.treeRevision;
@@ -3084,8 +3223,12 @@ const ManageLesson: React.FC = () => {
         message: "수업 자료를 저장했습니다.",
       });
       if (source === "header") alert("수업 자료를 저장했습니다.");
+      recoveredAssetIdsRef.current = [];
+      lessonWriteRecovery.acknowledge(lessonWriteRecovery.peek(teacherScope));
     } catch (error) {
-      if (editorSessionRef.current !== session) return;
+      if (!editorMountedRef.current || editorSessionRef.current !== session)
+        return;
+      lessonWriteRecovery.acknowledge(lessonWriteRecovery.peek(teacherScope));
       const message =
         error instanceof Error
           ? error.message
@@ -3096,7 +3239,8 @@ const ManageLesson: React.FC = () => {
       if (source === "header") alert(message);
     } finally {
       session.saving = false;
-      if (editorSessionRef.current === session) setScreenBusyMessage(null);
+      if (editorMountedRef.current && editorSessionRef.current === session)
+        setScreenBusyMessage(null);
     }
   };
 
