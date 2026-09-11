@@ -3,6 +3,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { useAppDialog } from "../../components/common/AppDialogProvider";
 import { db } from "../../lib/firebase";
 import MoveClassModal from "./components/MoveClassModal";
+import StudentRegistrationApprovalPanel from "./components/StudentRegistrationApprovalPanel";
 import StudentDetailModal from "./components/StudentDetailModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { canEditStudentList, canManageW8Domains } from "../../lib/permissions";
@@ -11,7 +12,15 @@ import {
   type ArchiveEnrollmentState,
 } from "../../lib/archiveEnrollment";
 import { readSiteSettingDoc } from "../../lib/siteSettings";
-import { deleteStudentData, updateStudentData } from "../../lib/studentData";
+import {
+  deleteStudentData,
+  updateStudentData,
+  loadStudentProfileEditStates,
+  hasPendingStudentProfileUpdate,
+  retryStudentProfileUpdate,
+  studentProfileUpdateError,
+  type StudentProfileEditState,
+} from "../../lib/studentData";
 import {
   W8DomainError,
   getW8DomainState,
@@ -27,6 +36,7 @@ interface Student {
   name: string;
   email: string;
   isTeacherAccount: boolean;
+  editState?: StudentProfileEditState;
 }
 
 interface SchoolClassOption {
@@ -275,6 +285,7 @@ const StudentList: React.FC = () => {
   const [detailInitialTab, setDetailInitialTab] =
     useState<StudentDetailInitialTab>("summary");
   const [moveClassModalOpen, setMoveClassModalOpen] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [deletingStudentIds, setDeletingStudentIds] = useState<Set<string>>(
     new Set(),
@@ -317,7 +328,24 @@ const StudentList: React.FC = () => {
         source: "CURRENT",
         callSite: "StudentList.fetchStudents",
       });
-      const list = await toStudentList(state);
+      let list = await toStudentList(state);
+      if (canEditStudentList(userData, currentUser?.email || "")) {
+        const editStates = await loadStudentProfileEditStates(
+          scopedConfigFromSemesterId(state.semesterId, config),
+          list.map((student) => student.userId),
+        );
+        list = list.map((student) => {
+          const editState = editStates.get(student.userId),
+            profile = editState?.profile;
+          return {
+            ...student,
+            ...(profile
+              ? { ...profile, number: Number(profile.number) || 0 }
+              : {}),
+            editState,
+          };
+        });
+      }
       setSemesterId(state.semesterId);
       const configuredSemesterId =
         config?.year && config?.semester
@@ -589,7 +617,7 @@ const StudentList: React.FC = () => {
   };
 
   const handleBulkPromote = async () => {
-    if (readOnly) return;
+    if (readOnly || promoting) return;
     const confirmed = await confirm({
       title: `선택한 ${selectedIds.size}명을 진급 처리하시겠습니까?`,
       message: "선택한 학생의 학년을 1학년씩 올립니다.",
@@ -616,50 +644,42 @@ const StudentList: React.FC = () => {
           item !== null,
       );
     if (!targets.length) return;
-    const previousStudents = students;
-    const previousFilteredStudents = filteredStudents;
+    setPromoting(true);
+    let completed = 0;
     try {
-      const nextGradeById = new Map(
-        targets.map(({ student, nextGrade }) => [student.id, nextGrade]),
-      );
-      setStudents((current) =>
-        current.map((student) =>
-          nextGradeById.has(student.id)
-            ? {
-                ...student,
-                grade: nextGradeById.get(student.id) || student.grade,
-              }
-            : student,
-        ),
-      );
-      setFilteredStudents((current) =>
-        current.map((student) =>
-          nextGradeById.has(student.id)
-            ? {
-                ...student,
-                grade: nextGradeById.get(student.id) || student.grade,
-              }
-            : student,
-        ),
-      );
       for (const { student, nextGrade } of targets) {
-        await updateStudentData(mutationConfig, {
-          uid: student.userId,
-          grade: nextGrade,
-          class: student.class,
-          number: student.number,
-          name: student.name,
-          email: student.email,
+        if (
+          student.editState &&
+          hasPendingStudentProfileUpdate(student.editState)
+        )
+          await retryStudentProfileUpdate(student.editState);
+        else
+          await updateStudentData(mutationConfig, {
+            uid: student.userId,
+            grade: nextGrade,
+            class: student.class,
+            number: student.number,
+            name: student.name,
+            email: student.email,
+            editState: student.editState,
+            operation: "PROMOTE_GRADE",
+          });
+        completed++;
+        setSelectedIds((current) => {
+          const next = new Set(current);
+          next.delete(student.id);
+          return next;
         });
       }
-      setSelectedIds(new Set());
       void fetchStudents({ silent: true });
     } catch (error) {
       console.error("Bulk promote failed", error);
-      setStudents(previousStudents);
-      setFilteredStudents(previousFilteredStudents);
       void fetchStudents({ silent: true });
-      alert("진급 처리 중 오류가 발생했습니다.");
+      alert(
+        `${completed}명 처리 완료. ${studentProfileUpdateError(error)} 완료하지 못한 학생의 선택을 유지했습니다.`,
+      );
+    } finally {
+      setPromoting(false);
     }
   };
 
@@ -1014,10 +1034,13 @@ const StudentList: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => void handleBulkPromote()}
+                disabled={promoting}
                 className="flex items-center gap-1 rounded-lg px-3 py-2 text-blue-600 transition hover:bg-gray-100"
               >
                 <i className="fas fa-level-up-alt"></i>
-                <span className="text-[11px] font-bold md:text-xs">진급</span>
+                <span className="text-[11px] font-bold md:text-xs">
+                  {promoting ? "처리 중..." : "진급"}
+                </span>
               </button>
               <button
                 onClick={() => setMoveClassModalOpen(true)}
@@ -1049,6 +1072,14 @@ const StudentList: React.FC = () => {
           </div>
         )}
 
+        {!readOnly && semesterId && (
+          <StudentRegistrationApprovalPanel
+            semesterId={semesterId}
+            onApproved={() => {
+              void fetchStudents({ silent: true });
+            }}
+          />
+        )}
         <StudentDetailModal
           isOpen={detailModalOpen}
           onClose={() => setDetailModalOpen(false)}

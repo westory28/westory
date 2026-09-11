@@ -79,6 +79,10 @@ export interface UserData {
   class?: string;
   number?: string;
   role: "teacher" | "student" | "staff";
+  registrationApprovalStatus?:
+    | "PENDING"
+    | "APPROVED_PENDING_ACCOUNT"
+    | "APPROVED";
   staffPermissions?: string[];
   teacherPortalEnabled?: boolean;
   privacyAgreed?: boolean;

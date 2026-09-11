@@ -1361,6 +1361,9 @@ const Login: React.FC = () => {
         userRef,
         {
           ...basePayload,
+          ...(nextRole === "student"
+            ? { registrationApprovalStatus: "PENDING" }
+            : {}),
           grade:
             nextRole === "student" && onboardingResult
               ? onboardingResult.grade
@@ -1718,6 +1721,7 @@ const Login: React.FC = () => {
       }
 
       if (!userDocExists) {
+        updatePayload.registrationApprovalStatus = "PENDING";
         updatePayload.staffPermissions = [];
         updatePayload.teacherPortalEnabled = false;
         updatePayload.createdAt = serverTimestamp();

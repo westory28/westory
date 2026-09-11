@@ -219,7 +219,7 @@ try {
       maintenancePayload(false, { revision: 2 }),
     );
   });
-  for (const key of ["student", "missing", "malformed"]) {
+  for (const key of ["student"]) {
     await succeeds(
       `disabled maintenance restores baseline Firestore access for ${key}`,
       getDoc(lessonRef(clients[key])),
@@ -228,6 +228,13 @@ try {
       `disabled maintenance restores baseline Storage access for ${key}`,
       getBytes(storageRef(clients[key])),
     );
+  }
+
+  // Registration now keeps absent/malformed profiles outside business reads,
+  // independently of the maintenance switch. Own-profile bootstrap stays open.
+  for (const key of ["missing", "malformed"]) {
+    await fails(`registration rejects ${key} Firestore profile`, getDoc(lessonRef(clients[key])));
+    await fails(`registration rejects ${key} Storage profile`, getBytes(storageRef(clients[key])));
   }
 
   await testEnv.withSecurityRulesDisabled(async (context) => {

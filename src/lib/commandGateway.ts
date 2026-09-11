@@ -9,6 +9,8 @@ import {
 } from "./stepUpReauth";
 
 export type W2CommandType =
+  | "approveStudentRegistration"
+  | "updateStudentEnrollmentProfile"
   | "migrateLegacyWisAccount"
   | "requestHistoryDictionaryTerm"
   | "saveStudentHistoryDictionaryWord"
@@ -327,6 +329,43 @@ interface SourceArchiveCommandMetadata {
   source: string;
 }
 export interface W2CommandPayloads {
+  approveStudentRegistration: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    studentUid: string;
+    expectedProfileVersion: string;
+  } & (
+    | {
+        action: "APPROVE";
+        classId: string;
+        expectedClassRevision: number;
+        studentNumber: string;
+        displayName: string;
+        rosterConfirmed: true;
+      }
+    | {
+        action: "PREPARE_ACCOUNT";
+        expectedEnrollmentId: string;
+        expectedEconomyRevision: number;
+      }
+    | {
+        action: "FINALIZE";
+        expectedEnrollmentId: string;
+        expectedAccountRevision: number;
+      }
+  );
+  updateStudentEnrollmentProfile: {
+    semesterId: string;
+    studentUid: string;
+    expectedVersion: string;
+    operation: "EDIT_PROFILE" | "MOVE_CLASS" | "PROMOTE_GRADE";
+    targetClassId: string;
+    expectedTargetClassRevision: number;
+    studentNumber: string;
+    displayName: string;
+    email: string;
+    reason: string;
+  };
   requestHistoryDictionaryTerm: {
     year: string;
     semester: string;
@@ -1148,6 +1187,31 @@ interface WisAccountValuePayload extends WisAccountCommandBase {
 }
 
 export interface W2CommandResults {
+  approveStudentRegistration: {
+    studentUid: string;
+    semesterId?: string;
+    enrollmentId: string;
+    action: "APPROVE" | "PREPARE_ACCOUNT" | "FINALIZE";
+    status: "APPROVED_PENDING_ACCOUNT" | "APPROVED";
+    accountId?: string;
+    accountPrepared?: boolean;
+    replayedAccount?: boolean;
+  };
+  updateStudentEnrollmentProfile: {
+    studentUid: string;
+    semesterId: string;
+    enrollmentId: string;
+    moved: boolean;
+    profile: {
+      grade: string;
+      class: string;
+      number: string;
+      name: string;
+      email: string;
+    };
+    commandId: string;
+    receiptId: string;
+  };
   requestHistoryDictionaryTerm: {
     requestId: string;
     termId: string;

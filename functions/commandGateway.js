@@ -27,6 +27,8 @@ const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
 const historyDictionaryCommands = require("./historyDictionaryCommands");
 const wisLegacyMigration = require("./wisLegacyMigration");
+const studentEnrollmentProfile = require("./studentEnrollmentProfile");
+const studentRegistrationApproval = require("./studentRegistrationApproval");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -70,6 +72,8 @@ const COMMAND_TYPES = Object.freeze({
   ...historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES,
   ...historyDictionaryCommands.HISTORY_DICTIONARY_COMMAND_TYPES,
   MIGRATE_LEGACY_WIS_ACCOUNT: wisLegacyMigration.COMMAND_TYPE,
+  UPDATE_STUDENT_ENROLLMENT_PROFILE: studentEnrollmentProfile.COMMAND_TYPE,
+  APPROVE_STUDENT_REGISTRATION: studentRegistrationApproval.COMMAND_TYPE,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -364,6 +368,8 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (commandType === studentRegistrationApproval.COMMAND_TYPE) return studentRegistrationApproval.normalizeStudentRegistrationApprovalPayload(commandType, payload);
+  if (commandType === studentEnrollmentProfile.COMMAND_TYPE) return studentEnrollmentProfile.normalizeStudentProfilePayload(commandType, payload);
   if (commandType === wisLegacyMigration.COMMAND_TYPE) return wisLegacyMigration.normalizeLegacyWisMigrationPayload(commandType, payload);
   if (Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType)) return historyDictionaryImport.normalizeHistoryDictionaryImportPayload(commandType, payload);
   if (Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType)) return teacherPatchNotes.normalizePatchNotePayload(commandType, payload);
@@ -1006,6 +1012,8 @@ const applyBusinessCommand = async ({
     Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType) ||
     Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType) ||
     commandType === wisLegacyMigration.COMMAND_TYPE ||
+    commandType === studentEnrollmentProfile.COMMAND_TYPE ||
+    commandType === studentRegistrationApproval.COMMAND_TYPE ||
     Object.values(historyDictionaryCommands.HISTORY_DICTIONARY_COMMAND_TYPES).includes(commandType) ||
     Object.values(lessonManagement.LESSON_COMMAND_TYPES).includes(commandType) ||
     Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES).includes(commandType) ||

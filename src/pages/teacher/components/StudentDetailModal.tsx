@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import PointRankBadge from "../../../components/common/PointRankBadge";
 import { useAuth } from "../../../contexts/AuthContext";
 import { formatWisAmount } from "../../../lib/pointFormatters";
@@ -10,7 +10,14 @@ import {
   type StudentLessonProgressSummary,
   type StudentWisSummary,
 } from "../../../lib/studentProgressSummary";
-import { updateStudentData } from "../../../lib/studentData";
+import {
+  updateStudentData,
+  hasPendingStudentProfileUpdate,
+  getPendingStudentProfileDraft,
+  retryStudentProfileUpdate,
+  studentProfileUpdateError,
+  type StudentProfileEditState,
+} from "../../../lib/studentData";
 import {
   formatPerformanceScore,
   loadUserPerformanceScoreRecords,
@@ -26,6 +33,7 @@ interface Student {
   number: number;
   name: string;
   email: string;
+  editState?: StudentProfileEditState;
 }
 
 type DetailTab =
@@ -95,6 +103,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     useState("");
   const [lessonSectionFilter, setLessonSectionFilter] = useState("all");
   const [saving, setSaving] = useState(false);
+  const editSession = useRef("");
   const [formData, setFormData] = useState<Student>({
     id: "",
     grade: "",
@@ -111,8 +120,18 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   }, [initialTab, isOpen]);
 
   useEffect(() => {
+    if (!isOpen) {
+      editSession.current = "";
+      return;
+    }
     if (!student) return;
-    setFormData(student);
+    const key = `${student.editState?.ownerUid || "legacy"}:${student.editState?.semesterId || ""}:${student.id}`;
+    if (editSession.current === key) return;
+    editSession.current = key;
+    setFormData({
+      ...student,
+      ...getPendingStudentProfileDraft(student.editState),
+    });
     setLessonSummary(null);
     setLessonLoading(false);
     setLessonLoadedKey("");
@@ -125,7 +144,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     setPerformanceScores([]);
     setPerformanceScoresLoading(false);
     setPerformanceScoresLoadedKey("");
-  }, [student]);
+  }, [student, isOpen]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== "lesson" || !student?.id) return;
@@ -269,6 +288,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   }, [activeTab, config, isOpen, performanceScoresLoadedKey, student?.id]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (saving || hasPendingStudentProfileUpdate(formData.editState)) return;
     const { name, value } = event.target;
     setFormData((prev) => ({
       ...prev,
@@ -279,20 +299,30 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const handleSave = async () => {
     if (readOnly || !formData.id) return;
     setSaving(true);
+    const session = editSession.current;
     try {
-      await updateStudentData(config, {
-        uid: formData.id,
-        grade: formData.grade,
-        class: formData.class,
-        number: formData.number,
-        name: formData.name,
-        email: formData.email,
-      });
+      if (
+        formData.editState &&
+        hasPendingStudentProfileUpdate(formData.editState)
+      )
+        await retryStudentProfileUpdate(formData.editState);
+      else
+        await updateStudentData(config, {
+          uid: formData.id,
+          grade: formData.grade,
+          class: formData.class,
+          number: formData.number,
+          name: formData.name,
+          email: formData.email,
+          editState: formData.editState,
+          operation: "EDIT_PROFILE",
+        });
+      if (editSession.current !== session) return;
       onUpdate();
       onClose();
     } catch (error) {
       console.error("Failed to update student:", error);
-      alert("학생 정보 저장 중 오류가 발생했습니다.");
+      alert(studentProfileUpdateError(error));
     } finally {
       setSaving(false);
     }
@@ -908,7 +938,11 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       name="grade"
                       value={formData.grade}
                       onChange={handleChange}
-                      disabled={readOnly}
+                      disabled={
+                        readOnly ||
+                        saving ||
+                        hasPendingStudentProfileUpdate(formData.editState)
+                      }
                       className="w-full rounded border p-2 text-center text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50"
                     />
                   </label>
@@ -921,7 +955,11 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       name="class"
                       value={formData.class}
                       onChange={handleChange}
-                      disabled={readOnly}
+                      disabled={
+                        readOnly ||
+                        saving ||
+                        hasPendingStudentProfileUpdate(formData.editState)
+                      }
                       className="w-full rounded border p-2 text-center text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50"
                     />
                   </label>
@@ -934,7 +972,11 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       name="number"
                       value={formData.number}
                       onChange={handleChange}
-                      disabled={readOnly}
+                      disabled={
+                        readOnly ||
+                        saving ||
+                        hasPendingStudentProfileUpdate(formData.editState)
+                      }
                       className="w-full rounded border p-2 text-center text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50"
                     />
                   </label>
@@ -948,20 +990,31 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
-                    disabled={readOnly}
+                    disabled={
+                      readOnly ||
+                      saving ||
+                      hasPendingStudentProfileUpdate(formData.editState)
+                    }
                     className="w-full rounded border p-2 text-sm font-bold focus:border-blue-500 focus:outline-none disabled:bg-gray-50"
                   />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-xs font-bold text-gray-500">
-                    이메일
+                    {formData.editState?.source === "CANONICAL"
+                      ? "이메일 (로그인 계정 · 변경 불가)"
+                      : "이메일"}
                   </span>
                   <input
                     type="text"
                     name="email"
+                    readOnly={formData.editState?.source === "CANONICAL"}
                     value={formData.email}
                     onChange={handleChange}
-                    disabled={readOnly}
+                    disabled={
+                      readOnly ||
+                      saving ||
+                      hasPendingStudentProfileUpdate(formData.editState)
+                    }
                     className="w-full rounded border bg-gray-50 p-2 text-sm focus:border-blue-500 focus:outline-none disabled:text-gray-500"
                   />
                 </label>
@@ -981,7 +1034,11 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     disabled={saving}
                     className="flex-1 rounded bg-blue-600 py-2 font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:bg-blue-300"
                   >
-                    {saving ? "저장 중..." : "저장"}
+                    {saving
+                      ? "저장 중..."
+                      : hasPendingStudentProfileUpdate(formData.editState)
+                        ? "이전 요청 결과 확인"
+                        : "저장"}
                   </button>
                 )}
               </div>

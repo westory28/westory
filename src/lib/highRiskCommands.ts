@@ -24,6 +24,8 @@ const COMMAND_GATEWAY_LOW_RISK_COMMANDS = new Set([
 ]);
 
 const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
+  "approveStudentRegistration",
+  "updateStudentEnrollmentProfile",
   "migrateLegacyWisAccount",
   "saveHistoryDictionaryTerm",
   "approveHistoryDictionaryTermForRequests",

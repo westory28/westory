@@ -123,6 +123,7 @@ const existingStudentDoc = (uid, email) => ({
 const newStudentDoc = (uid, email) => ({
   uid,
   email,
+  registrationApprovalStatus: "PENDING",
   photoURL: "",
   role: "student",
   staffPermissions: [],
@@ -348,7 +349,9 @@ const main = async () => {
     );
   });
 
-  await assertSucceeds(
+  // Official consent and signatures now use the grade Gateway; direct SDK
+  // writes must remain blocked even for the owner with a valid session.
+  await assertFails(
     setDoc(
       doc(
         existingStudent.db,
@@ -370,7 +373,7 @@ const main = async () => {
     ),
   );
 
-  await assertSucceeds(
+  await assertFails(
     setDoc(
       doc(
         existingStudent.db,
@@ -413,8 +416,8 @@ const main = async () => {
           "new student bootstrap create with profileEmojiId passes",
           "unexpected extra key remains blocked",
           "cross-user update remains blocked",
-          "performance score signature requires scoped warning consent",
-          "performance score consent does not authorize another semester",
+          "official score consent requires the grade Gateway",
+          "official score signatures require the grade Gateway in every semester",
         ],
       },
       null,

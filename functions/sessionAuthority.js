@@ -2,8 +2,13 @@ const { randomBytes } = require("node:crypto");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { HttpsError } = require("firebase-functions/v2/https");
 const {
-  onCallWithStudentMaintenance: onCall,
+  onCallWithStudentMaintenance,
 } = require("./studentMaintenance");
+// Session lifecycle is needed before profile creation and while awaiting a
+// teacher. This exception never wraps a business command or query.
+const onCall = (options, handler) => onCallWithStudentMaintenance(
+  options, handler, { registrationBootstrap: true },
+);
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";

@@ -11,6 +11,7 @@ import {
   writeSessionReturnPath,
 } from "../../lib/sessionPolicy";
 import { ProtectedAccessBoundary } from "./ProtectedAccessBoundary";
+import StudentRegistrationPending from "./StudentRegistrationPending";
 
 const ProtectedAccessGate: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -66,7 +67,12 @@ const ProtectedAccessGate: React.FC<{ children: React.ReactNode }> = ({
       decision={decision}
       authenticationError={authenticationError}
     >
-      {children}
+      {userData?.registrationApprovalStatus !== undefined &&
+      userData.registrationApprovalStatus !== "APPROVED" ? (
+        <StudentRegistrationPending />
+      ) : (
+        children
+      )}
     </ProtectedAccessBoundary>
   );
 };

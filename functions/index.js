@@ -27,6 +27,8 @@ const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
 const historyDictionaryCommands = require("./historyDictionaryCommands");
 const wisLegacyMigration = require("./wisLegacyMigration");
+const studentEnrollmentProfile = require("./studentEnrollmentProfile");
+const studentRegistrationApproval = require("./studentRegistrationApproval");
 const historyDictionaryDelete = require("./historyDictionaryDelete");
 const historyDictionaryUpdate = require("./historyDictionaryUpdate");
 const dictionaryNotifications = require("./dictionaryNotifications");
@@ -4727,48 +4729,47 @@ exports.updateStudentData = onCall(
     }
 
     const targetProfile = userSnap.data() || {};
-    const targetEmail = String(targetProfile.email || "")
-      .trim()
-      .toLowerCase();
-    const preserveTeacherRole =
-      String(targetProfile.role || "").trim() === "teacher" ||
-      targetEmail === ADMIN_EMAIL;
     const profilePatch = buildStudentProfileUpdatePatches({
       ...request.data,
       uid: targetUid,
       email: request.data?.email ?? targetProfile.email,
     });
 
-    const [snapshotRefs, rosterSync] = await Promise.all([
-      collectStudentProfileSnapshotRefs(year, semester, targetUid),
-      updateStudentInPerformanceScoreRosters(
-        year,
-        semester,
-        targetUid,
-        profilePatch,
-      ),
-    ]);
-
-    const updateEntries = [
-      {
-        ref: userRef,
-        data: {
-          ...profilePatch.userPatch,
-          ...(preserveTeacherRole
-            ? { role: targetProfile.role || "teacher" }
-            : {}),
-        },
-      },
-      ...snapshotRefs.map((ref) => ({
-        ref,
-        data:
-          ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION
-            ? profilePatch.scorePatch
-            : profilePatch.genericPatch,
-      })),
-    ];
-    const updatedRelatedDocCount =
-      await commitSetEntriesInChunks(updateEntries);
+    const rosterSync = await commandGatewayStore.runTransaction(async (transaction) => {
+      // No pre-check outside this boundary: a concurrent approval/move must
+      // conflict with this read before ANY legacy profile or roster write.
+      await studentEnrollmentProfile.assertLegacyProfileWritable({ transaction,
+        semesterId: `${year}-${semester}`, studentUid: targetUid });
+      const currentUser = await transaction.get(userRef.path);
+      if (!currentUser.exists) throw new HttpsError("not-found", "Student user document does not exist.");
+      const rosters = await transaction.query(`${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ROSTERS_COLLECTION}`, { limit: 301 });
+      if (rosters.length > 300) throw new HttpsError("failed-precondition", "학생 명부 동기화 범위가 너무 큽니다.");
+      const patches = [];
+      let updatedRosterRowCount = 0;
+      for (const roster of rosters) {
+        const rows = Array.isArray(roster.data?.rows) ? roster.data.rows : [];
+        let changed = false;
+        const nextRows = rows.map((row) => {
+          if (String(row?.uid || "").trim() !== targetUid) return row;
+          changed = true; updatedRosterRowCount++;
+          return { ...row, grade: profilePatch.grade, class: profilePatch.classValue,
+            number: profilePatch.number, studentName: profilePatch.name };
+        });
+        if (changed) {
+          const meta = buildPerformanceRosterRowsMeta(roster.data, nextRows);
+          patches.push({ path: roster.path, data: { rows: nextRows, classes: meta.classes, targetClass: meta.targetClass,
+            rowCount: meta.rowCount, matchedCount: meta.matchedCount, unmatchedCount: meta.unmatchedCount,
+            updatedAt: FieldValue.serverTimestamp() } });
+        }
+      }
+      // Current editable legacy roster labels remain synchronized. Financial
+      // originals, academic records, quiz attempts and published grades remain
+      // immutable, including their original name/class snapshots.
+      transaction.set(userRef.path, profilePatch.userPatch, { merge: true });
+      for (const patch of patches) transaction.set(patch.path, patch.data, { merge: true });
+      return { updatedRosterCount: patches.length, updatedRosterRowCount };
+    });
+    const updatedRelatedDocCount = 1 + rosterSync.updatedRosterCount;
 
     console.info("Student data updated.", {
       actorUid: manager.uid,
@@ -11725,6 +11726,8 @@ const authorizeCommandGatewayActor = async ({
     commandType !== commandGateway.GET_SEMESTER_CORE_STATE_COMMAND_TYPE &&
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS &&
     commandType !== wisLegacyMigration.COMMAND_TYPE &&
+    commandType !== studentEnrollmentProfile.COMMAND_TYPE &&
+    commandType !== studentRegistrationApproval.COMMAND_TYPE &&
     !assessmentCommandTypes.includes(commandType) &&
     !lessonAnswerCommandTypes.includes(commandType) &&
     !dictionaryCommandTypes.includes(commandType) &&
@@ -11840,6 +11843,11 @@ const authorizeCommandGatewayActor = async ({
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
   if (commandType === wisLegacyMigration.COMMAND_TYPE) {
     throw new HttpsError("permission-denied", "최고 관리자만 위스 자료를 이전할 수 있습니다.", { reason: "WIS_MIGRATION_ADMIN_REQUIRED" });
+  }
+  if ([studentEnrollmentProfile.COMMAND_TYPE, studentRegistrationApproval.COMMAND_TYPE].includes(commandType)) {
+    if (!profileSnapshot.exists || profile.role !== "teacher")
+      throw new HttpsError("permission-denied", "학생 정보를 수정할 교사 권한이 필요합니다.", { reason: "STUDENT_PROFILE_MANAGER_REQUIRED" });
+    return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "student-profile:manage" };
   }
   if (semesterCutoverCommandTypes.includes(commandType)) {
     throw new HttpsError(
@@ -12203,6 +12211,8 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
+    [studentRegistrationApproval.COMMAND_TYPE]: studentRegistrationApproval.createStudentRegistrationApprovalAdapter({ getAuthUser: (uid) => getAuth().getUser(uid) }),
+    [studentEnrollmentProfile.COMMAND_TYPE]: studentEnrollmentProfile.createStudentProfileAdapter(),
     [wisLegacyMigration.COMMAND_TYPE]: wisLegacyMigration.createLegacyWisMigrationAdapter({ projectId: commandGateway.resolveProjectId() }),
     ...Object.fromEntries(Object.values(historyDictionaryCommands.HISTORY_DICTIONARY_COMMAND_TYPES).map((commandType) => [commandType, dictionaryCommandAdapter])),
     ...Object.fromEntries(Object.values(mapManagement.MAP_COMMAND_TYPES).map((commandType) => [commandType, mapManagementCommandAdapter])),
@@ -12275,6 +12285,18 @@ Object.assign(
   exports,
   commandGateway.createCallableExports({ core: commandGatewayCore }),
 );
+exports.getStudentEnrollmentProfileState = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  const manager = await assertStudentDataManager(request);
+  return commandGatewayStore.runTransaction((transaction) => studentEnrollmentProfile.queryStudentProfiles({
+    transaction, data: request.data || {},
+    actor: { actorUid: manager.uid, actorRole: manager.email === ADMIN_EMAIL ? "admin" : "teacher" },
+  }));
+});
+const studentRegistrationQueryCore = studentRegistrationApproval.createStudentRegistrationApprovalQueryCore({
+  store: commandGatewayStore, assertManager: assertStudentDataManager,
+});
+exports.getStudentRegistrationApprovalState = onCall({ region: REGION, timeoutSeconds: 120 },
+  (request) => studentRegistrationQueryCore.getStudentRegistrationApprovalState(request));
 const archiveEnrollmentQueryCore =
   archiveEnrollment.createArchiveEnrollmentQueryCore({
     store: commandGatewayStore,

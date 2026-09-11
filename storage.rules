@@ -140,11 +140,23 @@ service firebase.storage {
     function canUseWestory() {
       return hasWestoryIdentity()
         && (hasActiveApplicationSession() || hasActiveReauthTransition())
-        && passesStudentMaintenanceFence();
+        && passesStudentMaintenanceFence()
+        && passesStudentRegistrationFence();
+    }
+
+    function passesStudentRegistrationFence() {
+      return request.auth.token.email == "westoria28@gmail.com"
+        || (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+          && approvedRegistrationProfile(firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data));
+    }
+
+    function approvedRegistrationProfile(profile) {
+      return profile.role in ['student', 'teacher', 'staff']
+        && profile.get('registrationApprovalStatus', 'APPROVED') == 'APPROVED';
     }
 
     function isAdmin() {
-      return canUseWestory() && request.auth.token.email == "westoria28@gmail.com";
+      return isSignedIn() && request.auth.token.email == "westoria28@gmail.com" && canUseWestory();
     }
 
     function hasUserProfile() {

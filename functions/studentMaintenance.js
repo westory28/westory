@@ -7,6 +7,7 @@ const {
   HttpsError,
   onCall: firebaseOnCall,
 } = require("firebase-functions/v2/https");
+const { assertStudentRegistrationAccess } = require("./studentRegistrationAccess");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -342,6 +343,12 @@ const createStudentMaintenanceService = ({
     }
   };
 
+  const assertRegistrationAccess = async (request) => {
+    if (!request.auth?.uid || normalizeEmail(request.auth.token?.email) === ADMIN_EMAIL) return;
+    const profile = await readProfile(request.auth.uid);
+    assertStudentRegistrationAccess(profile.data, profile.exists);
+  };
+
   const assertAccess = async (request) => {
     if (!request.auth?.uid) return;
     const config = await readConfig();
@@ -424,7 +431,7 @@ const createStudentMaintenanceService = ({
     return response;
   };
 
-  return { assertAccess, readConfig, readProfile, updateConfig };
+  return { assertAccess, assertRegistrationAccess, readConfig, readProfile, updateConfig };
 };
 
 let defaultService;
@@ -453,7 +460,9 @@ const withStudentMaintenanceGuard = (handler, options = {}) =>
     if (options.adminRecoveryOnly) {
       assertMaintenanceAdmin(request);
     } else {
-      await (options.service || getDefaultService()).assertAccess(request);
+      const service = options.service || getDefaultService();
+      if (!options.registrationBootstrap) await service.assertRegistrationAccess?.(request);
+      await service.assertAccess(request);
     }
     return handler(request);
   };

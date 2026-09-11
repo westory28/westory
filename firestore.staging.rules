@@ -155,14 +155,29 @@ service cloud.firestore {
         );
     }
 
-    function canUseWestory() {
+    function canBootstrapWestory() {
       return hasWestoryIdentity()
         && (hasActiveApplicationSession() || hasActiveReauthTransition())
         && passesStudentMaintenanceFence();
     }
 
+    function passesStudentRegistrationFence() {
+      return request.auth.token.email == "westoria28@gmail.com"
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && approvedRegistrationProfile(get(/databases/$(database)/documents/users/$(request.auth.uid)).data));
+    }
+
+    function approvedRegistrationProfile(profile) {
+      return profile.role in ['student', 'teacher', 'staff']
+        && profile.get('registrationApprovalStatus', 'APPROVED') == 'APPROVED';
+    }
+
+    function canUseWestory() {
+      return canBootstrapWestory() && passesStudentRegistrationFence();
+    }
+
     function isAdmin() {
-      return canUseWestory() && request.auth.token.email == "westoria28@gmail.com";
+      return isSignedIn() && request.auth.token.email == "westoria28@gmail.com" && canUseWestory();
     }
 
     function isRecentlyAuthenticatedAdmin() {
@@ -711,6 +726,7 @@ service cloud.firestore {
         'email',
         'photoURL',
         'role',
+        'registrationApprovalStatus',
         'staffPermissions',
         'teacherPortalEnabled',
         'name',
@@ -761,14 +777,16 @@ service cloud.firestore {
     }
 
     function isValidOwnStudentCreate(userId) {
-      return isOwnUser(userId)
+      return isSignedIn() && request.auth.uid == userId
+        && request.resource.data.get('registrationApprovalStatus', '') == 'PENDING'
         && hasOnlyUserDocKeys()
         && hasValidOwnUserFieldTypes()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.role == 'student'
         && (!request.resource.data.keys().hasAny(['teacherPortalEnabled']) || request.resource.data.teacherPortalEnabled == false)
-        && (!request.resource.data.keys().hasAny(['staffPermissions']) || request.resource.data.staffPermissions.size() == 0);
+        && (!request.resource.data.keys().hasAny(['staffPermissions']) || request.resource.data.staffPermissions.size() == 0)
+        && canBootstrapWestory();
     }
 
     function protectedUserFieldsUnchanged() {
@@ -793,8 +811,7 @@ service cloud.firestore {
     }
 
     function isValidOwnStudentUpdate(userId) {
-      return isOwnUser(userId)
-        && hasValidOwnUserFieldTypes()
+      return isSignedIn() && request.auth.uid == userId
         && protectedUserFieldsUnchanged()
         && (
           changedUserKeys().hasOnly([
@@ -827,7 +844,9 @@ service cloud.firestore {
               'customNameConfirmed'
             ])
           )
-        );
+        )
+        && hasValidOwnUserFieldTypes()
+        && canBootstrapWestory();
     }
 
     function isValidQuizResultCreate() {
@@ -1113,6 +1132,7 @@ service cloud.firestore {
     match /site_settings/{docId} {
       allow get: if docId in ['terms', 'privacy', 'school_config', 'interface_config']
         || (docId == 'student_maintenance' && hasWestoryIdentity())
+        || (docId in ['config', 'menu_config', 'consent'] && canBootstrapWestory())
         || canUseWestory();
       allow list: if canUseWestory();
       allow create, update, delete: if !(docId in [
@@ -1131,7 +1151,7 @@ service cloud.firestore {
       }
 
       match /items/{itemId} {
-        allow read: if canUseWestory();
+        allow read: if canUseWestory() || (docId == 'consent' && canBootstrapWestory());
         allow create: if docId != 'consent'
           && isRecentlyAuthenticatedAdmin();
         allow delete: if docId != 'consent'

@@ -55,6 +55,8 @@ const QUERY_CALLABLES = new Set([
   "getCommandStatus",
   "getSemesterCoreState",
   "getArchiveEnrollmentState",
+  "getStudentEnrollmentProfileState",
+  "getStudentRegistrationApprovalState",
   "previewEnrollmentRoster",
   "listStudentHistoryDictionaryWordsForTeacher",
   "getAssessmentState",
