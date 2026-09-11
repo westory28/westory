@@ -327,8 +327,8 @@ for (const protectedState of [
   assert.equal(late.state.canonicalAttempt.revision, protectedState.revision);
 }
 
-// History Classroom already schedules after committed answers through an effect
-// dependency, so it has no matching event-handler stale-closure defect.
+// History cancels the previous debounce and sends the latest render through its
+// serialized save queue; overlap/revision behavior has its own regression suite.
 let historyEffect;
 const visitHistory = (node) => {
   if (
@@ -337,7 +337,7 @@ const visitHistory = (node) => {
     node.arguments[0]
       ?.getText(history)
       .includes("const timerId = window.setTimeout") &&
-    node.arguments[0]?.getText(history).includes("saveAssessmentProgress")
+    node.arguments[0]?.getText(history).includes("persistCanonicalProgress")
   )
     historyEffect = node;
   ts.forEachChild(node, visitHistory);
@@ -353,13 +353,18 @@ const historyTimers = new Map();
 let historyTimerId = 0;
 const historyWrites = [];
 const effect = (answers) =>
-  instantiate(`return (${historyEffect.arguments[0].getText(history)})();`, {
+  instantiate(`const persistCanonicalProgress = ${initializer(history, "persistCanonicalProgress")}; return (${historyEffect.arguments[0].getText(history)})();`, {
     answers,
     attemptStarted: true,
     canonicalAttempt: { attemptId: "history-owned" },
     completed: false,
     submitting: false,
     isNetworkOffline: false,
+    submittingRef: { current: false },
+    completedRef: { current: false },
+    networkOfflineRef: { current: false },
+    progressSaveTailRef: { current: Promise.resolve() },
+    latestProgressRef: { current: { answers, currentPage: 1 } },
     currentPage: 1,
     canonicalAttemptRef: {
       current: {

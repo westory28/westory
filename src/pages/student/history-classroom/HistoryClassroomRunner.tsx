@@ -267,6 +267,9 @@ const HistoryClassroomRunner: React.FC = () => {
   const [attemptStarted, setAttemptStarted] = useState(false);
   const [startingAttempt, setStartingAttempt] = useState(false);
   const canonicalAttemptRef = useRef<AssessmentAttemptState | null>(null);
+  const progressSaveTailRef = useRef<Promise<unknown>>(Promise.resolve());
+  const latestProgressRef = useRef({ answers, currentPage });
+  latestProgressRef.current = { answers, currentPage };
   const cancellationInFlightRef = useRef(false);
   const exitNavigationAllowedRef = useRef(false);
   const backGuardRearmRef = useRef<(() => void) | null>(null);
@@ -506,9 +509,59 @@ const HistoryClassroomRunner: React.FC = () => {
     }
   };
 
+  const persistCanonicalProgress = (recoverable = false) => {
+    const targetAttemptId = canonicalAttemptRef.current?.attemptId;
+    const snapshot = latestProgressRef.current;
+    const task = progressSaveTailRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const activeAttempt = canonicalAttemptRef.current;
+        if (
+          !activeAttempt ||
+          activeAttempt.attemptId !== targetAttemptId ||
+          !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(
+            activeAttempt.status,
+          )
+        )
+          return null;
+        const saved = await saveAssessmentProgress({
+          attemptId: activeAttempt.attemptId,
+          expectedRevision: activeAttempt.revision,
+          answers: sanitizeHistoryClassroomAnswersForWrite(snapshot.answers),
+          currentItemId: String(snapshot.currentPage),
+        });
+        const current = canonicalAttemptRef.current;
+        if (
+          current?.attemptId === targetAttemptId &&
+          ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(current.status) &&
+          current.revision <= saved.revision
+        ) {
+          const nextAttempt: AssessmentAttemptState = {
+            ...current,
+            status: recoverable ? "RECOVERABLE" : "IN_PROGRESS",
+            revision: saved.revision,
+            answers: snapshot.answers,
+            currentItemId: String(snapshot.currentPage),
+            lastSavedAtIso: saved.savedAtIso,
+          };
+          serverTimeOffsetMsRef.current =
+            Date.parse(saved.savedAtIso) - Date.now();
+          canonicalAttemptRef.current = nextAttempt;
+          setCanonicalAttempt(nextAttempt);
+        }
+        return saved;
+      });
+    progressSaveTailRef.current = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    return task;
+  };
+
   const saveResult = async (options: {
     submitReason: "STUDENT" | "TIMEOUT";
   }) => {
+    await progressSaveTailRef.current;
     const activeAttempt = canonicalAttemptRef.current;
     if (!assignment || !userData || !activeAttempt) return null;
 
@@ -699,24 +752,7 @@ const HistoryClassroomRunner: React.FC = () => {
     const activeAttempt = canonicalAttemptRef.current;
     if (activeAttempt && !networkOfflineRef.current) {
       try {
-        const saved = await saveAssessmentProgress({
-          attemptId: activeAttempt.attemptId,
-          expectedRevision: activeAttempt.revision,
-          answers: sanitizeHistoryClassroomAnswersForWrite(answers),
-          currentItemId: String(currentPage),
-        });
-        serverTimeOffsetMsRef.current =
-          Date.parse(saved.savedAtIso) - Date.now();
-        const recoverableAttempt: AssessmentAttemptState = {
-          ...activeAttempt,
-          status: "RECOVERABLE",
-          revision: saved.revision,
-          answers,
-          currentItemId: String(currentPage),
-          lastSavedAtIso: saved.savedAtIso,
-        };
-        canonicalAttemptRef.current = recoverableAttempt;
-        setCanonicalAttempt(recoverableAttempt);
+        await persistCanonicalProgress(true);
       } catch (saveError) {
         console.error("Failed to preserve recoverable attempt before exit", {
           reason,
@@ -984,34 +1020,18 @@ const HistoryClassroomRunner: React.FC = () => {
       return undefined;
     }
     const timerId = window.setTimeout(() => {
-      const activeAttempt = canonicalAttemptRef.current;
-      if (!activeAttempt || activeAttempt.status === "SUBMITTED") return;
-      void saveAssessmentProgress({
-        attemptId: activeAttempt.attemptId,
-        expectedRevision: activeAttempt.revision,
-        answers: sanitizeHistoryClassroomAnswersForWrite(answers),
-        currentItemId: String(currentPage),
-      })
-        .then((saved) => {
-          serverTimeOffsetMsRef.current =
-            Date.parse(saved.savedAtIso) - Date.now();
-          const nextAttempt: AssessmentAttemptState = {
-            ...activeAttempt,
-            status: "IN_PROGRESS",
-            revision: saved.revision,
-            answers,
-            currentItemId: String(currentPage),
-            lastSavedAtIso: saved.savedAtIso,
-          };
-          canonicalAttemptRef.current = nextAttempt;
-          setCanonicalAttempt(nextAttempt);
-        })
-        .catch((saveError) => {
-          console.error("Failed to save History Classroom progress", saveError);
-          setResultText(
-            "답안을 서버에 저장하지 못했습니다. 연결을 확인한 뒤 다시 입력해 주세요.",
-          );
-        });
+      if (
+        submittingRef.current ||
+        completedRef.current ||
+        networkOfflineRef.current
+      )
+        return;
+      void persistCanonicalProgress().catch((saveError) => {
+        console.error("Failed to save History Classroom progress", saveError);
+        setResultText(
+          "답안을 서버에 저장하지 못했습니다. 연결을 확인한 뒤 다시 입력해 주세요.",
+        );
+      });
     }, 900);
     return () => window.clearTimeout(timerId);
   }, [
