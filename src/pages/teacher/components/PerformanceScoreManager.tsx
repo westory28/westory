@@ -9298,31 +9298,38 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         records: savedScoreRecords,
         reason: `${managerCopy.scoreKindLabel} 점수표 업로드`,
       });
+      // A CREATE retry can replay the first command's roster ID.
+      const savedRosterId = commandResult.rosterId;
+      localRoster.id = savedRosterId;
       localRoster.revision = commandResult.revision;
       const commandRecordMetaByUid = new Map(
         commandResult.records.map((record) => [record.uid, record]),
       );
       const canonicalSavedScoreRecords = savedScoreRecords.map((record) => {
         const commandRecordMeta = commandRecordMetaByUid.get(record.uid);
-        return commandRecordMeta
-          ? {
-              ...record,
-              gradeRecordId: commandRecordMeta.recordId,
-              gradeVersionId: commandRecordMeta.versionId,
-              gradeRecordRevision: commandRecordMeta.revision,
-              gradeRevision: commandRecordMeta.gradeRevision,
-              projectionRevision: commandRecordMeta.projectionRevision,
-            }
-          : record;
+        return {
+          ...record,
+          id: savedRosterId,
+          rosterId: savedRosterId,
+          ...(commandRecordMeta
+            ? {
+                gradeRecordId: commandRecordMeta.recordId,
+                gradeVersionId: commandRecordMeta.versionId,
+                gradeRecordRevision: commandRecordMeta.revision,
+                gradeRevision: commandRecordMeta.gradeRevision,
+                projectionRevision: commandRecordMeta.projectionRevision,
+              }
+            : {}),
+        };
       });
-      invalidateRosterReadCaches(rosterId);
+      invalidateRosterReadCaches(savedRosterId);
       scoreDocumentRecordsByRosterCacheRef.current.set(
-        rosterId,
+        savedRosterId,
         cloneScoreListRecords(canonicalSavedScoreRecords),
       );
       setParsed(null);
-      setScoreListRosterId(rosterId);
-      setScoreListLoadedRosterId(rosterId);
+      setScoreListRosterId(savedRosterId);
+      setScoreListLoadedRosterId(savedRosterId);
       setScoreListLoadError("");
       setScoreEditing(false);
       setScoreEditOriginalRecords([]);
@@ -9335,7 +9342,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       setRosters((current) =>
         sortPerformanceScoreRosters([
           localRoster,
-          ...current.filter((roster) => roster.id !== rosterId),
+          ...current.filter((roster) => roster.id !== savedRosterId),
         ]),
       );
       showToast({

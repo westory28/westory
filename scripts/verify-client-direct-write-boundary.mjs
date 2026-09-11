@@ -73,6 +73,9 @@ const SESSION_CONTROL_CALLABLES = new Set([
 ]);
 const USER_EVENT_COMMAND_CALLABLES = new Map([
   ["uploadLessonAssetContent", { file: "src/lib/lessonManagement.ts", function: "uploadLessonAsset", symbolId: "src/lib/lessonManagement.ts::uploadLessonAsset#1" }],
+  ["uploadMapAssetContent", { file: "src/lib/mapManagement.ts", function: "uploadMapAsset", symbolId: "src/lib/mapManagement.ts::uploadMapAsset#1" }],
+  ["uploadSourceArchiveAsset", { file: "src/lib/sourceArchive.ts", function: "saveSourceArchiveAsset", symbolId: "src/lib/sourceArchive.ts::saveSourceArchiveAsset#1" }],
+  ["cleanupSourceArchiveAsset", { file: "src/lib/sourceArchive.ts", function: "deleteSourceArchiveAsset", symbolId: "src/lib/sourceArchive.ts::deleteSourceArchiveAsset#1" }],
   [
     "executeLessonCorePointCommand",
     {
@@ -348,6 +351,54 @@ const parameterContext = (checker, identifier, functionByNode) => {
   return null;
 };
 
+// Resolve a callable value from its actual arguments, including callbacks in
+// options objects. Merely declaring/passing an object callback is not an edge:
+// this resolver is used only at a real invocation of that callback.
+const resolveCallbackValues = (
+  expression, checker, functionByNode, incomingCalls, path = [], seen = new Set(),
+) => {
+  if (!expression) return [];
+  const identity = `${expression.getSourceFile().fileName}:${expression.pos}:${path.join(".")}`;
+  if (seen.has(identity)) return [];
+  seen = new Set([...seen, identity]);
+  const follow = (value, nextPath = path) => resolveCallbackValues(value, checker, functionByNode, incomingCalls, nextPath, seen);
+  if (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression) || ts.isNonNullExpression(expression) || ts.isSatisfiesExpression(expression)) return follow(expression.expression);
+  if (ts.isConditionalExpression(expression)) return [...follow(expression.whenTrue), ...follow(expression.whenFalse)];
+  if (ts.isPropertyAccessExpression(expression)) return follow(expression.expression, [expression.name.text, ...path]);
+  if (ts.isElementAccessExpression(expression) && ts.isStringLiteral(expression.argumentExpression)) return follow(expression.expression, [expression.argumentExpression.text, ...path]);
+  if (isFunctionNode(expression)) return path.length ? [] : [functionByNode.get(expression)].filter(Boolean);
+  if (ts.isObjectLiteralExpression(expression) && path.length) {
+    const [name, ...rest] = path;
+    const result = [];
+    for (const property of expression.properties) {
+      if (ts.isSpreadAssignment(property)) { result.push(...follow(property.expression)); continue; }
+      if (!property.name || property.name.getText().replaceAll(/["']/g, "") !== name) continue;
+      if (ts.isPropertyAssignment(property)) result.push(...follow(property.initializer, rest));
+      else if (ts.isShorthandPropertyAssignment(property)) {
+        const symbol = checker.getShorthandAssignmentValueSymbol(property);
+        for (const declaration of symbol?.declarations || []) {
+          if (ts.isVariableDeclaration(declaration) && declaration.initializer) result.push(...follow(declaration.initializer, rest));
+          else if (isFunctionNode(declaration)) result.push(...follow(declaration, rest));
+        }
+      } else if (isFunctionNode(property)) result.push(...follow(property, rest));
+    }
+    return result;
+  }
+  if (!ts.isIdentifier(expression)) return [];
+  const symbol = resolveAliasedSymbol(checker, expression);
+  const result = [];
+  for (const declaration of symbol?.declarations || []) {
+    if (ts.isParameter(declaration)) {
+      const owner = functionByNode.get(declaration.parent);
+      const index = declaration.parent.parameters.indexOf(declaration);
+      for (const call of incomingCalls.get(owner?.id) || []) result.push(...follow(call.arguments[index] || declaration.initializer));
+    } else if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+      result.push(...follow(declaration.initializer));
+    } else if (isFunctionNode(declaration)) result.push(...follow(declaration));
+  }
+  return result;
+};
+
 const resolveStringValues = (
   expression,
   checker,
@@ -483,6 +534,7 @@ export const analyzeClientBoundary = ({ rootDir = process.cwd() } = {}) => {
   const queryCallables = [];
   const fetches = [];
   const edgeOrdinals = new Map();
+  const callbackInvocations = [];
 
   const addSeed = (record, trigger, site) => {
     if (!record) return;
@@ -574,6 +626,7 @@ export const analyzeClientBoundary = ({ rootDir = process.cwd() } = {}) => {
         const caller = findContainingFunction(node, functionByNode);
         const callee = resolveCalledFunction(checker, node.expression, functionByNode);
         addEdge(caller, callee, "CALL", sourceFile, node);
+        callbackInvocations.push({ caller, callee, node, sourceFile });
         const origin = importedApi(node.expression, imports);
         if (origin) {
           const mutationSet = DIRECT_MUTATIONS.get(origin.module);
@@ -663,6 +716,26 @@ export const analyzeClientBoundary = ({ rootDir = process.cwd() } = {}) => {
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
+  }
+
+  // Higher-order forwarding may itself reveal new incoming callsites. Iterate
+  // until every statically identified argument/property invocation is linked.
+  const indirectEdges = new Map();
+  let foundCallbackEdge = true;
+  while (foundCallbackEdge) {
+    foundCallbackEdge = false;
+    for (const { caller, callee, node, sourceFile } of callbackInvocations) {
+      if (!caller) continue;
+      for (const target of resolveCallbackValues(node.expression, checker, functionByNode, incomingCalls)) {
+        if (target === callee) continue;
+        const targets = indirectEdges.get(node) || new Set();
+        if (targets.has(target.id)) continue;
+        targets.add(target.id);
+        indirectEdges.set(node, targets);
+        addEdge(caller, target, "INDIRECT_CALLBACK", sourceFile, node);
+        foundCallbackEdge = true;
+      }
+    }
   }
 
   const triggers = new Map();

@@ -9,6 +9,12 @@ import {
 } from "./stepUpReauth";
 
 export type W2CommandType =
+  | "saveMapResources"
+  | "deleteMapResource"
+  | "prepareMapAssetUpload"
+  | "prepareSourceArchiveUpload"
+  | "saveSourceArchiveMetadata"
+  | "deleteSourceArchiveAsset"
   | "saveHistoryDictionaryTermsBulk"
   | "createTeacherPatchNote"
   | "updateTeacherPatchNote"
@@ -297,7 +303,46 @@ export interface PatchNoteCommandResult {
   deleted: boolean;
 }
 
+interface SourceArchiveCommandBase {
+  assetId: string;
+  expectedUpdatedAt: string;
+}
+interface SourceArchiveCommandMetadata {
+  title: string;
+  description: string;
+  era: string;
+  subject: string;
+  unit: string;
+  type: string;
+  tags: string[];
+  source: string;
+}
 export interface W2CommandPayloads {
+  saveMapResources: import("./mapManagement").MapScope & {
+    resources: import("./mapManagement").MapWrite[];
+  };
+  deleteMapResource: import("./mapManagement").MapScope &
+    import("./mapManagement").MapSource;
+  prepareMapAssetUpload: import("./mapManagement").MapScope &
+    import("./mapManagement").MapUploadInput;
+  prepareSourceArchiveUpload: SourceArchiveCommandBase & {
+    metadata: SourceArchiveCommandMetadata;
+    upload: {
+      mediaKind: "image" | "pdf";
+      contentType: string;
+      byteSize: number;
+      sha256: string;
+      originalName: string;
+      originalMimeType: string;
+      originalByteSize: number;
+      originalWidth: number;
+      originalHeight: number;
+    };
+  };
+  saveSourceArchiveMetadata: SourceArchiveCommandBase & {
+    metadata: SourceArchiveCommandMetadata;
+  };
+  deleteSourceArchiveAsset: SourceArchiveCommandBase;
   saveHistoryDictionaryTermsBulk: {
     year: string;
     semester: string;
@@ -1013,6 +1058,24 @@ interface WisAccountValuePayload extends WisAccountCommandBase {
 }
 
 export interface W2CommandResults {
+  saveMapResources: { resources: import("./mapManagement").MapSavedSource[] };
+  deleteMapResource: { mapId: string; deleted: boolean };
+  prepareMapAssetUpload: {
+    uploadId: string;
+    storagePath: string;
+    expiresAtMs: number;
+  };
+  prepareSourceArchiveUpload: {
+    assetId: string;
+    uploadId: string;
+    storagePath: string;
+  };
+  saveSourceArchiveMetadata: { assetId: string };
+  deleteSourceArchiveAsset: {
+    assetId: string;
+    deleted: boolean;
+    cleanupPending: boolean;
+  };
   saveHistoryDictionaryTermsBulk: { savedCount: number; termIds: string[] };
   createTeacherPatchNote: PatchNoteCommandResult;
   updateTeacherPatchNote: PatchNoteCommandResult;

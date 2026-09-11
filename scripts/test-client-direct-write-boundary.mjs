@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import {
   analyzeClientBoundary,
@@ -150,6 +150,66 @@ try {
   });
   assert.throws(() => validateGatewayPurity(gatewayEffect), /explicit user event/);
 
+  const callbackBase = {
+    "lib/commandGateway.ts": `export const executeWestoryCommand = async (_name: string, _payload: unknown) => undefined;`,
+    "lib/work.ts": `
+      export const forward = async (options: { nested: { prepare: () => Promise<void> } }) => options.nested.prepare();
+      export const save = async (preparation: { prepare: () => Promise<void> }) => forward({ nested: preparation });
+    `,
+  };
+  const callbackEvent = fixture({ ...callbackBase, "App.tsx": `
+    import { save } from "./lib/work";
+    import { executeWestoryCommand } from "./lib/commandGateway";
+    export const App = () => {
+      const handleSave = () => save({ prepare: async () => { await executeWestoryCommand("upload", {}); } });
+      return <button onClick={handleSave}>save</button>;
+    };
+  ` });
+  validateGatewayPurity(callbackEvent);
+  assert.deepEqual(callbackEvent.observations.find(item => item.boundary === "GATEWAY").triggers, ["USER_EVENT"]);
+  const callbackAlias = fixture({ ...callbackBase, "App.tsx": `
+    import { save } from "./lib/work";
+    import { executeWestoryCommand } from "./lib/commandGateway";
+    const prepare = async () => executeWestoryCommand("upload", {});
+    const options = { prepare };
+    export const App = () => <button onClick={() => save(options)}>save</button>;
+  ` });
+  validateGatewayPurity(callbackAlias);
+  const unusedCallback = fixture({ ...callbackBase, "App.tsx": `
+    import { executeWestoryCommand } from "./lib/commandGateway";
+    const ignore = (_options: unknown) => undefined;
+    export const App = () => <button onClick={() => ignore({ prepare: async () => executeWestoryCommand("upload", {}) })}>save</button>;
+  ` });
+  assert.throws(() => validateGatewayPurity(unusedCallback), /UNREACHED/);
+  for (const [trigger, invoke] of [
+    ["MOUNT_EFFECT", "useEffect(() => { void save(options); }, [])"],
+    ["TIMER", "setTimeout(() => { void save(options); }, 100)"],
+    ["LISTENER", "window.addEventListener('online', () => { void save(options); })"],
+    ["RENDER", "void save(options)"],
+  ]) {
+    const invalidCallback = fixture({ ...callbackBase, "App.tsx": `
+      import { useEffect } from "react";
+      import { save } from "./lib/work";
+      import { executeWestoryCommand } from "./lib/commandGateway";
+      export const App = () => {
+        const options = { prepare: async () => executeWestoryCommand("upload", {}) };
+        ${invoke};
+        return <button onClick={() => save(options)}>save</button>;
+      };
+    ` });
+    assert.ok(invalidCallback.observations.find(item => item.boundary === "GATEWAY").triggers.includes(trigger));
+    assert.throws(() => validateGatewayPurity(invalidCallback), /explicit user event/, `${trigger} must not be masked by the callback's user-event caller`);
+  }
+  const callbackDeferredMount = fixture({ ...callbackBase,
+    "lib/work.ts": `import { useEffect } from "react"; export const save = (options: { prepare: () => Promise<void> }) => { useEffect(() => { void options.prepare(); }, []); };`,
+    "App.tsx": `
+      import { save } from "./lib/work";
+      import { executeWestoryCommand } from "./lib/commandGateway";
+      export const App = () => <button onClick={() => save({ prepare: async () => executeWestoryCommand("upload", {}) })}>save</button>;
+    `,
+  });
+  assert.throws(() => validateGatewayPurity(callbackDeferredMount), /MOUNT_EFFECT/);
+
   const lessonRewardUserEvent = fixture({
     "lib/firebase.ts": `export const getHttpsCallable = async (name: string) => async () => name;`,
     "lib/lessonCorePointReward.ts": `
@@ -178,6 +238,43 @@ try {
     () => validateUserEventCommandCallablePurity(lessonRewardMount),
     /must never dispatch from render, mount, listener, timer, cleanup, or an implicit\/unreached path/,
   );
+
+  for (const [module, owner, callable] of [
+    ["mapManagement", "uploadMapAsset", "uploadMapAssetContent"],
+    ["sourceArchive", "saveSourceArchiveAsset", "uploadSourceArchiveAsset"],
+    ["sourceArchive", "deleteSourceArchiveAsset", "cleanupSourceArchiveAsset"],
+  ]) {
+    const transportFiles = {
+      "lib/firebase.ts": `export const getHttpsCallable = async (name: string) => async () => name;`,
+      [`lib/${module}.ts`]: `
+        import { getHttpsCallable } from "./firebase";
+        export const ${owner} = async () => (await getHttpsCallable("${callable}"))();
+      `,
+    };
+    const transportEvent = fixture({ ...transportFiles, "App.tsx": `
+      import { ${owner} } from "./lib/${module}";
+      export const App = () => <button onClick={() => void ${owner}()}>save</button>;
+    ` });
+    validateUserEventCommandCallablePurity(transportEvent);
+    const transportMount = fixture({ ...transportFiles, "App.tsx": `
+      import { useEffect } from "react";
+      import { ${owner} } from "./lib/${module}";
+      export const App = () => { useEffect(() => { void ${owner}(); }, []); return null; };
+    ` });
+    assert.throws(() => validateUserEventCommandCallablePurity(transportMount), /must never dispatch/);
+    const wrongOwner = fixture({
+      "lib/firebase.ts": transportFiles["lib/firebase.ts"],
+      "App.tsx": `
+        import { getHttpsCallable } from "./lib/firebase";
+        export const App = () => <button onClick={async () => (await getHttpsCallable("${callable}"))()}>save</button>;
+      `,
+    });
+    assert.throws(() => validateUserEventCommandCallablePurity(wrongOwner), {
+      code: "ERR_ASSERTION",
+      actual: "src/App.tsx",
+      expected: `src/lib/${module}.ts`,
+    });
+  }
 
   const cleanPolicy = buildProposedPolicy(base);
   validatePolicy(cleanPolicy, base);
@@ -223,12 +320,21 @@ try {
         "query callable exclusion",
         "HTTP mutation and dynamic method sensitivity",
         "gateway effect rejection",
+        "higher-order object callback invocation and forwarding",
+        "unused object callbacks remain unreachable",
+        "callback mount/timer/listener/render rejection",
+        "user-event registration cannot hide deferred effect invocation",
         "lesson reward explicit user-event purity",
+        "map/source transports require exact owners and explicit user events",
         "allowlist duplicate stale expiry",
         "28-command manifest exact count",
       ],
     }),
   );
 } finally {
-  for (const root of tempRoots) rmSync(root, { recursive: true, force: true });
+  for (const root of tempRoots) {
+    assert.equal(dirname(resolve(root)), resolve(tmpdir()));
+    assert.ok(basename(root).startsWith("westory-direct-write-"));
+    rmSync(root, { recursive: true, force: true });
+  }
 }

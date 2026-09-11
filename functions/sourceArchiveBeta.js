@@ -1,4 +1,5 @@
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { randomUUID } = require("node:crypto");
 const { getStorage } = require("firebase-admin/storage");
 const { storageBucket } = require("firebase-functions/params");
 const { HttpsError } = require("firebase-functions/v2/https");
@@ -85,10 +86,6 @@ const assertSourceArchiveManager = async (request, options = {}) => {
 
 const buildAssetDocPath = (assetId) =>
   `${SOURCE_ARCHIVE_COLLECTION}/${assetId}`;
-const buildAssetPrefix = (assetId) => `${SOURCE_ARCHIVE_PREFIX}/${assetId}/`;
-const buildAssetRevisionPrefix = (assetId, revision) =>
-  `${SOURCE_ARCHIVE_PREFIX}/${assetId}/${revision}/`;
-
 const parseIncomingPath = (objectName) => {
   const match = normalizeText(objectName).match(
     /^source-archive\/([^/]+)\/incoming\/([^/.]+)(?:\.[^.]+)?$/,
@@ -102,7 +99,7 @@ const parseIncomingPath = (objectName) => {
 };
 
 const deleteFileIfExists = async (file) => {
-  await file.delete({ ignoreNotFound: true }).catch(() => undefined);
+  await file.delete({ ignoreNotFound: true });
 };
 
 const deleteStoragePaths = async (bucket, paths) => {
@@ -111,14 +108,6 @@ const deleteStoragePaths = async (bucket, paths) => {
       deleteFileIfExists(bucket.file(storagePath)),
     ),
   );
-};
-
-const deleteStoragePrefix = async (bucket, prefix) => {
-  const normalizedPrefix = normalizeText(prefix);
-  if (!normalizedPrefix) return;
-
-  const [files] = await bucket.getFiles({ prefix: normalizedPrefix });
-  await Promise.all(files.map((file) => deleteFileIfExists(file)));
 };
 
 const normalizeFailureMessage = (error) => {
@@ -153,21 +142,6 @@ const buildEmptyPdfExtractionFields = () => ({
   parseErrorMessage: "",
   parserKind: "",
 });
-
-const collectAssetStoragePaths = (asset) =>
-  Array.from(
-    new Set(
-      [
-        normalizeText(asset?.file?.storagePath),
-        normalizeText(asset?.search?.artifactPath),
-        normalizeText(asset?.extractedContentPath),
-        normalizeText(asset?.extractedManifestPath),
-        normalizeText(asset?.image?.originalPath),
-        normalizeText(asset?.image?.displayPath),
-        normalizeText(asset?.image?.thumbPath),
-      ].filter(Boolean),
-    ),
-  );
 
 const buildReadyImagePayload = ({
   asset,
@@ -515,34 +489,6 @@ const buildFailedPdfPayload = ({
   };
 };
 
-const cleanupPreviousRevision = async ({
-  bucket,
-  assetId,
-  previousAsset,
-  nextRevision,
-  nextPaths,
-}) => {
-  const previousRevision = normalizeText(
-    previousAsset?.currentRevision ||
-      previousAsset?.file?.revision ||
-      previousAsset?.image?.revision,
-  );
-
-  if (previousRevision && previousRevision !== nextRevision) {
-    await deleteStoragePrefix(
-      bucket,
-      buildAssetRevisionPrefix(assetId, previousRevision),
-    );
-  }
-
-  await deleteStoragePaths(
-    bucket,
-    collectAssetStoragePaths(previousAsset).filter(
-      (storagePath) => !nextPaths.has(storagePath),
-    ),
-  );
-};
-
 exports.processSourceArchiveIncomingUpload = onObjectFinalized(
   {
     region: REGION,
@@ -565,45 +511,137 @@ exports.processSourceArchiveIncomingUpload = onObjectFinalized(
     let generatedPaths = [];
     let asset = null;
     let mediaKind = SOURCE_ARCHIVE_MEDIA_KIND;
+    const leaseId = randomUUID();
+    const ticketRef = db.doc(`source_archive_uploads/${parsed.uploadToken}`);
+    let deleteIncoming = false;
+    const ownsLease = (latest) =>
+      Boolean(
+        latest &&
+        !latest.deletedAt &&
+        getPendingUploadToken(latest) === parsed.uploadToken &&
+        latest.processingLeaseId === leaseId &&
+        normalizeText(latest.currentRevision) ===
+          normalizeText(asset?.currentRevision),
+      );
+    const cleanupAttemptArtifacts = async (keepOriginal = false) => {
+      if (!revisionPaths?.basePath) return;
+      // This prefix includes the invocation's random lease ID, never an older
+      // shared revision. Listing also finds partial PDF writes before an error.
+      const [files] = await bucket.getFiles({
+        prefix: `${revisionPaths.basePath}/`,
+      });
+      const results = await Promise.allSettled(
+        files
+          .filter(
+            (file) => !keepOriginal || file.name !== revisionPaths.originalPath,
+          )
+          .map((file) => file.delete({ ignoreNotFound: true })),
+      );
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
+    };
+    const discardGenerated = async () => {
+      await cleanupAttemptArtifacts();
+      const snapshot = await assetRef.get();
+      const latest = snapshot.data();
+      // A replacement lease for this same incoming object still owns the file.
+      deleteIncoming =
+        !snapshot.exists ||
+        Boolean(latest.deletedAt) ||
+        getPendingUploadToken(latest) !== parsed.uploadToken;
+    };
+    const commitResult = async (build, ticketStatus) =>
+      db.runTransaction(async (transaction) => {
+        const [latestSnap, ticketSnap] = await transaction.getAll(
+          assetRef,
+          ticketRef,
+        );
+        const latest = latestSnap.data();
+        if (!latestSnap.exists || !ownsLease(latest)) return false;
+        transaction.set(
+          assetRef,
+          {
+            ...build(latest),
+            processingLeaseId: "",
+            processingLeaseExpiresAtMs: 0,
+          },
+          { merge: true },
+        );
+        if (ticketSnap.exists)
+          transaction.set(
+            ticketRef,
+            {
+              status: ticketStatus,
+              processedAt: FieldValue.serverTimestamp(),
+              ...(ticketStatus === "COMPLETED"
+                ? { expiresAtMs: FieldValue.delete() }
+                : {}),
+            },
+            { merge: true },
+          );
+        return true;
+      });
 
     try {
-      const assetSnap = await assetRef.get();
-      if (!assetSnap.exists) {
+      const claim = await db.runTransaction(async (transaction) => {
+        const [snapshot, ticketSnap] = await transaction.getAll(
+          assetRef,
+          ticketRef,
+        );
+        const current = snapshot.data();
+        if (
+          !snapshot.exists ||
+          current.deletedAt ||
+          getPendingUploadToken(current) !== parsed.uploadToken
+        )
+          return { stale: true };
+        if (
+          current.processingLeaseId &&
+          current.processingLeaseExpiresAtMs > Date.now()
+        )
+          return { busy: true };
+        const contentType = normalizeText(
+          event.data.contentType ||
+            current.file?.mimeType ||
+            current.image?.originalMime ||
+            current.image?.mime ||
+            "image/jpeg",
+        );
+        const kind = isPdfUpload(current, contentType, objectName)
+          ? SOURCE_ARCHIVE_PDF_MEDIA_KIND
+          : SOURCE_ARCHIVE_MEDIA_KIND;
+        transaction.set(
+          assetRef,
+          {
+            status: "processing",
+            processingStatus: "processing",
+            processingLeaseId: leaseId,
+            processingLeaseExpiresAtMs: Date.now() + 150000,
+            processingError: "",
+            extractionStatus:
+              kind === SOURCE_ARCHIVE_PDF_MEDIA_KIND
+                ? "processing"
+                : "not-applicable",
+            parseErrorMessage: "",
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        if (ticketSnap.exists)
+          transaction.set(ticketRef, { status: "PROCESSING" }, { merge: true });
+        return { asset: current, contentType, kind };
+      });
+      if (claim.stale) {
+        deleteIncoming = true;
         return;
       }
-
-      asset = assetSnap.data() || {};
-      const pendingUploadToken = getPendingUploadToken(asset);
-      if (!pendingUploadToken || pendingUploadToken !== parsed.uploadToken) {
-        return;
-      }
-
-      const contentType = normalizeText(
-        event.data.contentType ||
-          asset.file?.mimeType ||
-          asset.image?.originalMime ||
-          asset.image?.mime ||
-          "image/jpeg",
-      );
-      mediaKind = isPdfUpload(asset, contentType, objectName)
-        ? SOURCE_ARCHIVE_PDF_MEDIA_KIND
-        : SOURCE_ARCHIVE_MEDIA_KIND;
-
-      await assetRef.set(
-        {
-          status: "processing",
-          processingStatus: "processing",
-          processingError: "",
-          extractionStatus:
-            mediaKind === SOURCE_ARCHIVE_PDF_MEDIA_KIND ? "processing" : "not-applicable",
-          parseErrorMessage: "",
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
+      if (claim.busy) return;
+      asset = claim.asset;
+      mediaKind = claim.kind;
+      const contentType = claim.contentType;
 
       const [inputBuffer] = await incomingFile.download();
-      const revision = `v-${Date.now()}`;
+      const revision = `v-${Date.now()}-${leaseId}`;
 
       revisionPaths =
         mediaKind === SOURCE_ARCHIVE_PDF_MEDIA_KIND
@@ -618,13 +656,13 @@ exports.processSourceArchiveIncomingUpload = onObjectFinalized(
               objectName,
             });
 
+      generatedPaths.push(revisionPaths.originalPath);
       originalInfo = await saveOriginalSourceArchiveFile({
         bucket,
         originalPath: revisionPaths.originalPath,
         inputBuffer,
         contentType,
       });
-      generatedPaths.push(revisionPaths.originalPath);
 
       if (mediaKind === SOURCE_ARCHIVE_PDF_MEDIA_KIND) {
         const extractionResult = await saveSourceArchivePdfArtifacts({
@@ -639,39 +677,26 @@ exports.processSourceArchiveIncomingUpload = onObjectFinalized(
         });
         generatedPaths.push(...extractionResult.generatedPaths);
 
-        const latestSnap = await assetRef.get();
-        if (!latestSnap.exists) {
-          await deleteStoragePaths(bucket, generatedPaths);
-          return;
-        }
-
-        const latestAsset = latestSnap.data() || {};
-        if (getPendingUploadToken(latestAsset) !== parsed.uploadToken) {
-          await deleteStoragePaths(bucket, generatedPaths);
-          return;
-        }
-
-        await assetRef.set(
-          buildReadyPdfPayload({
-            asset: latestAsset,
-            revisionPaths,
-            originalInfo,
-            extractionResult,
-          }),
-          { merge: true },
+        const committed = await commitResult(
+          (latest) =>
+            buildReadyPdfPayload({
+              asset: latest,
+              revisionPaths,
+              originalInfo,
+              extractionResult,
+            }),
+          "COMPLETED",
         );
-
-        await cleanupPreviousRevision({
-          bucket,
-          assetId: parsed.assetId,
-          previousAsset: latestAsset,
-          nextRevision: revisionPaths.revision,
-          nextPaths: new Set(generatedPaths),
-        });
+        if (!committed) {
+          await discardGenerated();
+          return;
+        }
+        deleteIncoming = true;
       } else {
         rendered = await renderSourceArchiveVariants({ inputBuffer });
 
-        await Promise.all([
+        generatedPaths.push(revisionPaths.displayPath, revisionPaths.thumbPath);
+        const renderWrites = await Promise.allSettled([
           bucket
             .file(revisionPaths.displayPath)
             .save(rendered.displayResult.data, {
@@ -689,7 +714,10 @@ exports.processSourceArchiveIncomingUpload = onObjectFinalized(
             },
           }),
         ]);
-        generatedPaths.push(revisionPaths.displayPath, revisionPaths.thumbPath);
+        const failedWrite = renderWrites.find(
+          (write) => write.status === "rejected",
+        );
+        if (failedWrite) throw failedWrite.reason;
 
         const searchState = await buildSourceArchiveSearchState({
           bucket,
@@ -702,36 +730,22 @@ exports.processSourceArchiveIncomingUpload = onObjectFinalized(
           generatedPaths.push(normalizeText(searchState.artifactPath));
         }
 
-        const latestSnap = await assetRef.get();
-        if (!latestSnap.exists) {
-          await deleteStoragePaths(bucket, generatedPaths);
-          return;
-        }
-
-        const latestAsset = latestSnap.data() || {};
-        if (getPendingUploadToken(latestAsset) !== parsed.uploadToken) {
-          await deleteStoragePaths(bucket, generatedPaths);
-          return;
-        }
-
-        await assetRef.set(
-          buildReadyImagePayload({
-            asset: latestAsset,
-            revisionPaths,
-            originalInfo,
-            rendered,
-            searchState,
-          }),
-          { merge: true },
+        const committed = await commitResult(
+          (latest) =>
+            buildReadyImagePayload({
+              asset: latest,
+              revisionPaths,
+              originalInfo,
+              rendered,
+              searchState,
+            }),
+          "COMPLETED",
         );
-
-        await cleanupPreviousRevision({
-          bucket,
-          assetId: parsed.assetId,
-          previousAsset: latestAsset,
-          nextRevision: revisionPaths.revision,
-          nextPaths: new Set(generatedPaths),
-        });
+        if (!committed) {
+          await discardGenerated();
+          return;
+        }
+        deleteIncoming = true;
       }
     } catch (error) {
       console.error(
@@ -741,40 +755,30 @@ exports.processSourceArchiveIncomingUpload = onObjectFinalized(
         error,
       );
 
-      if (
-        mediaKind === SOURCE_ARCHIVE_PDF_MEDIA_KIND &&
-        revisionPaths?.originalPath &&
-        generatedPaths.length > 1
-      ) {
-        await deleteStoragePaths(
-          bucket,
-          generatedPaths.filter(
-            (storagePath) => storagePath !== revisionPaths.originalPath,
-          ),
-        ).catch(() => undefined);
-      }
+      await cleanupAttemptArtifacts(Boolean(originalInfo));
 
-      await assetRef
-        .set(
+      const committed = await commitResult(
+        (latest) =>
           mediaKind === SOURCE_ARCHIVE_PDF_MEDIA_KIND
             ? buildFailedPdfPayload({
-                asset: asset || {},
+                asset: latest,
                 revisionPaths,
                 originalInfo,
                 error,
               })
             : buildFailedImagePayload({
-                asset: asset || {},
+                asset: latest,
                 revisionPaths,
                 originalInfo,
                 rendered,
                 error,
               }),
-          { merge: true },
-        )
-        .catch(() => undefined);
+        "FAILED",
+      ).catch(() => false);
+      deleteIncoming = committed;
+      if (!committed) await discardGenerated();
     } finally {
-      await deleteFileIfExists(incomingFile);
+      if (deleteIncoming) await deleteFileIfExists(incomingFile);
     }
   },
 );
@@ -786,26 +790,15 @@ exports.deleteSourceArchiveAsset = onCall(
     memory: "256MiB",
   },
   async (request) => {
-  await assertSourceArchiveManager(request, { recentAuth: true, highRisk: true });
-
-    const assetId = normalizeText(request.data?.assetId);
-    if (!assetId || !/^[a-zA-Z0-9_-]{1,128}$/.test(assetId)) {
-      throw new HttpsError("invalid-argument", "assetId is required.");
-    }
-
-    const bucket = storage.bucket();
-    const docRef = db.doc(buildAssetDocPath(assetId));
-    const [files] = await bucket.getFiles({
-      prefix: buildAssetPrefix(assetId),
+    await assertSourceArchiveManager(request, {
+      recentAuth: true,
+      highRisk: true,
     });
 
-    await Promise.all(files.map((file) => deleteFileIfExists(file)));
-    await docRef.delete().catch(() => undefined);
-
-    return {
-      assetId,
-      deleted: true,
-      fileCount: files.length,
-    };
+    throw new HttpsError(
+      "failed-precondition",
+      "최신 사료 창고 화면에서 삭제해 주세요.",
+      { reason: "SOURCE_ARCHIVE_COMMAND_REQUIRED" },
+    );
   },
 );

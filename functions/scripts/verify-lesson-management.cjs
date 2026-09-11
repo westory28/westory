@@ -270,6 +270,17 @@ const rejected = async (reason, input, mutate, uid) => {
   );
   checks++;
   const tree = setup();
+  const retainedNote = { id: "archive-note", sourceArchiveAssetId: "source-image", sourceArchiveImagePath: "source-archive/source-image/v-old/display.webp", sourceArchiveThumbPath: "source-archive/source-image/v-old/thumb.webp" };
+  const archiveSeed = (data) => {
+    data[lessonPath].footnotes = [retainedNote];
+    data["source_archive/source-image"] = { mediaKind: "image", processingStatus: "processing", image: { displayPath: "source-archive/source-image/v-new/display.webp" } };
+  };
+  const archive = setup(archiveSeed);
+  await archive.execute("saveLessonDocument", { ...payload(), document: { footnotes: [retainedNote] } });
+  assert.deepEqual(archive.store.docs.get(lessonPath).footnotes, [retainedNote]);
+  checks++;
+  await rejected("LESSON_ARCHIVE_ASSET_INVALID", { ...payload(), document: { footnotes: [{ ...retainedNote, sourceArchiveImagePath: "source-archive/source-image/v-other/display.webp" }] } }, archiveSeed);
+  await rejected("LESSON_ARCHIVE_ASSET_INVALID", { ...payload(), document: { footnotes: [retainedNote] } }, (data) => { archiveSeed(data); data["source_archive/source-image"].deletedAt = 123; });
   const treePayload = {
     ...scope,
     expectedRevision: 3,

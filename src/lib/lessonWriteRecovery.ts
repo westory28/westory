@@ -1,4 +1,5 @@
 import type { W2CommandPayloads } from "./commandGateway";
+import type { ProcessedPdfMap } from "./pdfMapProcessor";
 
 type ScopeFields = "semesterId" | "expectedSemesterRevision";
 export type LessonDocumentWrite = Omit<
@@ -9,8 +10,25 @@ export type LessonTreeWrite = Omit<
   W2CommandPayloads["saveLessonTree"],
   ScopeFields
 >;
+export type LessonLocalDraft = {
+  pdfFile: File | null;
+  preparedPdf: ProcessedPdfMap | null;
+  footnotes: Record<string, { file: File | null; removeExisting: boolean }>;
+  general?: { title: string; videoUrl: string; isVisibleToStudents: boolean };
+  uploaded?: boolean;
+};
+export type LessonDocumentSubmission = {
+  preparedInput?: LessonDocumentWrite;
+  payload?: W2CommandPayloads["saveLessonDocument"];
+  unconfirmed?: boolean;
+};
 type Intent =
-  | { kind: "document"; input: LessonDocumentWrite }
+  | {
+      kind: "document";
+      input: LessonDocumentWrite;
+      localDraft?: LessonLocalDraft;
+      submission?: LessonDocumentSubmission;
+    }
   | { kind: "tree"; input: LessonTreeWrite };
 export type LessonWriteOutcome = { ok: true } | { ok: false; error: unknown };
 export const lessonWriteFailureMessage = (error: unknown) => {
@@ -26,15 +44,43 @@ export type LessonWriteRecovery = Intent & {
   pending: boolean;
   settled: Promise<LessonWriteOutcome>;
 };
+export const isLessonDocumentUnconfirmed = (record?: LessonWriteRecovery) =>
+  record?.kind === "document" && record.submission?.unconfirmed === true;
+export const isLessonWriteUncertain = (error: unknown) => {
+  const value = error as { state?: string; retryable?: boolean } | null;
+  return value?.state === "retryable" || value?.retryable === true;
+};
 
 // Tab memory only: no draft content is written to browser storage. A remounted
 // editor waits for the submitted write before reading its revision again.
 export const createLessonWriteRecoveryStore = () => {
   const records = new Map<string, LessonWriteRecovery>();
+  const settle = <T>(record: LessonWriteRecovery, task: Promise<T>) => {
+    record.settled = task.then(
+      () => {
+        record.pending = false;
+        if (record.kind === "document" && record.submission)
+          record.submission.unconfirmed = false;
+        return { ok: true } as const;
+      },
+      (error: unknown) => {
+        record.pending = false;
+        if (record.kind === "document" && record.submission?.payload)
+          record.submission.unconfirmed = isLessonWriteUncertain(error);
+        return { ok: false, error } as const;
+      },
+    );
+    return task;
+  };
   return {
     peek: (scope: string) => records.get(scope),
     acknowledge: (record: LessonWriteRecovery | undefined) => {
-      if (record && records.get(record.scope) === record && !record.pending)
+      if (
+        record &&
+        records.get(record.scope) === record &&
+        !record.pending &&
+        !isLessonDocumentUnconfirmed(record)
+      )
         records.delete(record.scope);
     },
     run: <T, I extends Intent>(
@@ -42,31 +88,36 @@ export const createLessonWriteRecoveryStore = () => {
       intent: I,
       execute: (snapshot: I) => Promise<T>,
     ): Promise<T> => {
-      if (records.get(scope)?.pending)
+      if (
+        records.get(scope)?.pending ||
+        isLessonDocumentUnconfirmed(records.get(scope))
+      )
         return Promise.reject(
           new Error(
             "앞선 수업자료 저장 결과를 확인하고 있습니다. 잠시만 기다려 주세요.",
           ),
         );
       const snapshot = structuredClone(intent);
+      if (snapshot.kind === "document") snapshot.submission ??= {};
       const task = Promise.resolve().then(() => execute(snapshot));
       const record: LessonWriteRecovery = {
         ...snapshot,
         scope,
         pending: true,
-        settled: task.then(
-          () => {
-            record.pending = false;
-            return { ok: true };
-          },
-          (error: unknown) => {
-            record.pending = false;
-            return { ok: false, error };
-          },
-        ),
+        settled: Promise.resolve({ ok: true }),
       };
       records.set(scope, record);
-      return task;
+      return settle(record, task);
+    },
+    retry: <T>(record: LessonWriteRecovery, execute: () => Promise<T>) => {
+      if (
+        records.get(record.scope) !== record ||
+        record.pending ||
+        !isLessonDocumentUnconfirmed(record)
+      )
+        return Promise.reject(new Error("다시 확인할 저장 요청이 없습니다."));
+      record.pending = true;
+      return settle(record, Promise.resolve().then(execute));
     },
   };
 };

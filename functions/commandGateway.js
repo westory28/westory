@@ -21,6 +21,8 @@ const teacherOperations = require("./teacherOperations");
 const semesterCutover = require("./semesterCutover");
 const lessonAnswers = require("./lessonAnswers");
 const lessonManagement = require("./lessonManagement");
+const sourceArchiveManagement = require("./sourceArchiveManagement");
+const mapManagement = require("./mapManagement");
 const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
 
@@ -60,6 +62,8 @@ const COMMAND_TYPES = Object.freeze({
   ...semesterCutover.CUTOVER_COMMAND_TYPES,
   ...lessonAnswers.LESSON_ANSWER_COMMAND_TYPES,
   ...lessonManagement.LESSON_COMMAND_TYPES,
+  ...sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES,
+  ...mapManagement.MAP_COMMAND_TYPES,
   ...teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES,
   ...historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES,
 });
@@ -359,6 +363,8 @@ const normalizePayload = (commandType, payload) => {
   if (Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType)) return historyDictionaryImport.normalizeHistoryDictionaryImportPayload(commandType, payload);
   if (Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType)) return teacherPatchNotes.normalizePatchNotePayload(commandType, payload);
   if (Object.values(lessonManagement.LESSON_COMMAND_TYPES).includes(commandType)) return lessonManagement.normalizeLessonPayload(commandType, payload);
+  if (Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES).includes(commandType)) return sourceArchiveManagement.normalizeSourceArchivePayload(commandType, payload);
+  if (Object.values(mapManagement.MAP_COMMAND_TYPES).includes(commandType)) return mapManagement.normalizeMapPayload(commandType, payload);
   if (Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).includes(commandType)) {
     return lessonAnswers.normalizeLessonAnswerPayload(commandType, payload);
   }
@@ -994,6 +1000,8 @@ const applyBusinessCommand = async ({
     Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType) ||
     Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType) ||
     Object.values(lessonManagement.LESSON_COMMAND_TYPES).includes(commandType) ||
+    Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES).includes(commandType) ||
+    Object.values(mapManagement.MAP_COMMAND_TYPES).includes(commandType) ||
     Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).includes(commandType) ||
     Object.values(semesterCore.SEMESTER_COMMAND_TYPES).includes(commandType) ||
     Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES).includes(
@@ -1124,6 +1132,20 @@ const createFirestoreStore = (db = getFirestore()) => ({
     db.runTransaction(async (firestoreTransaction) => {
       const transaction = {
         native: firestoreTransaction,
+        queryGroup: async (collectionId, filter = {}) => {
+          // Only server adapters supply the collection and filters. Always bound
+          // cross-semester reference checks before permitting shared deletion.
+          if (!/^[a-zA-Z0-9_-]+$/.test(collectionId) ||
+              !Number.isSafeInteger(filter.limit) || filter.limit < 1 || filter.limit > 501)
+            throw new Error("A bounded collection-group query is required.");
+          let query = db.collectionGroup(collectionId);
+          for (const clause of filter.filters || [])
+            query = query.where(clause.field, clause.operator, clause.value);
+          const snapshot = await firestoreTransaction.get(query.limit(filter.limit));
+          return snapshot.docs.map((document) => ({
+            exists: true, data: document.data(), path: document.ref.path,
+          }));
+        },
         get: async (path) => {
           const snapshot = await firestoreTransaction.get(db.doc(path));
           return {

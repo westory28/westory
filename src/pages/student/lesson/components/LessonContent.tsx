@@ -818,12 +818,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
     if (!container) return;
     const handleInput = (event: Event) => {
       const target = event.target as HTMLInputElement | null;
-      if (
-        !target ||
-        (!target.classList.contains("cloze-input") &&
-          !target.classList.contains("worksheet-blank-input"))
-      )
-        return;
+      // Worksheet inputs update through React's onChange. Handling them here
+      // rerenders their controlled value before that handler receives the edit.
+      if (!target?.classList.contains("cloze-input")) return;
       target.classList.remove("correct", "wrong");
       answerSessionRef.current.edits += 1;
       const key = target.dataset.blankId || target.dataset.blankIndex;

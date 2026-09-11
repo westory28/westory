@@ -20,6 +20,12 @@ const COMMAND_GATEWAY_LOW_RISK_COMMANDS = new Set([
 ]);
 
 const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
+  "saveMapResources",
+  "deleteMapResource",
+  "prepareMapAssetUpload",
+  "prepareSourceArchiveUpload",
+  "saveSourceArchiveMetadata",
+  "deleteSourceArchiveAsset",
   "saveLessonDocument",
   "saveLessonTree",
   "prepareLessonAssetUpload",
@@ -103,6 +109,9 @@ const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
 ] as const;
 
 export const HIGH_RISK_COMMANDS = new Set<string>([
+  "uploadMapAssetContent",
+  "uploadSourceArchiveAsset",
+  "cleanupSourceArchiveAsset",
   "uploadLessonAssetContent",
   ...COMMAND_GATEWAY_HIGH_RISK_COMMANDS,
   // Retained direct-callable names that have not yet moved to the gateway.

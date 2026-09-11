@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
+const { getStorage } = require("firebase-admin/storage");
 const {
   getFirestore,
   FieldValue,
@@ -8,6 +9,7 @@ const {
 } = require("firebase-admin/firestore");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 
 initializeApp();
 const studentMaintenance = require("./studentMaintenance");
@@ -19,10 +21,13 @@ const archiveEnrollment = require("./archiveEnrollment");
 const assessmentLifecycle = require("./assessmentLifecycle");
 const lessonAnswers = require("./lessonAnswers");
 const lessonManagement = require("./lessonManagement");
+const sourceArchiveManagement = require("./sourceArchiveManagement");
+const mapManagement = require("./mapManagement");
 const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
 const historyDictionaryDelete = require("./historyDictionaryDelete");
 const historyDictionaryUpdate = require("./historyDictionaryUpdate");
+const dictionaryNotifications = require("./dictionaryNotifications");
 const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
 const w8Domains = require("./w8Domains");
@@ -45,6 +50,22 @@ exports.updateStudentMaintenanceConfig =
 
 const db = getFirestore();
 const REGION = "asia-northeast3";
+const archiveTransportOptions = { region: REGION, enforceAppCheck: true, timeoutSeconds: 120, memory: "512MiB" };
+exports.uploadMapAssetContent = onCall(archiveTransportOptions, (request) =>
+  mapManagement.createMapUploadHandler({ db, bucket: getStorage().bucket(), assertSession: sessionAuthority.assertActiveApplicationSession })(request));
+exports.cleanupExpiredMapUploads = onSchedule({ region: REGION, schedule: "every 60 minutes", timeZone: "Asia/Seoul", timeoutSeconds: 120 }, () =>
+  mapManagement.createExpiredMapUploadCleanup({ db, bucket: getStorage().bucket() })());
+exports.uploadSourceArchiveAsset = onCall(archiveTransportOptions, (request) =>
+  sourceArchiveManagement.createSourceArchiveUploadHandler({ db, bucket: getStorage().bucket(), assertSession: sessionAuthority.assertActiveApplicationSession })(request));
+exports.cleanupSourceArchiveAsset = onCall(archiveTransportOptions, (request) =>
+  sourceArchiveManagement.createSourceArchiveCleanupHandler({ db, bucket: getStorage().bucket(), assertSession: sessionAuthority.assertActiveApplicationSession })(request));
+exports.cleanupExpiredSourceArchiveUploads = onSchedule({ region: REGION, schedule: "every 60 minutes", timeZone: "Asia/Seoul", timeoutSeconds: 120 }, () =>
+  sourceArchiveManagement.cleanupExpiredSourceArchiveUploads({ db, bucket: getStorage().bucket() }));
+// Retire the old unversioned destructive endpoint. Deletion now records a
+// gateway receipt and tombstone before recoverable file cleanup.
+exports.deleteSourceArchiveAsset = onCall({ region: REGION, enforceAppCheck: true }, async () => {
+  throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 사료창고에서 다시 삭제해 주세요.", { reason: "SOURCE_ARCHIVE_COMMAND_REQUIRED" });
+});
 const ADMIN_EMAIL = "westoria28@gmail.com";
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
 const LESSON_CORE_POINT_RESET_TEST_LABEL = "방테스트";
@@ -2757,6 +2778,13 @@ const createUserNotifications = async (
   });
   return results;
 };
+
+const deliverDictionaryNotifications = dictionaryNotifications.createDictionaryNotificationDelivery({
+  db, deliver: createUserNotification, deleteField: () => FieldValue.delete(),
+});
+exports.deliverDictionaryNotification = onDocumentCreated({ region: REGION, document: `${dictionaryNotifications.COLLECTION}/{eventId}`, timeoutSeconds: 120, retry: true }, (event) =>
+  event.data ? deliverDictionaryNotifications([event.data.ref.path]) : undefined);
+exports.retryDictionaryNotifications = onSchedule({ region: REGION, schedule: "every 5 minutes", timeZone: "Asia/Seoul", timeoutSeconds: 300 }, () => deliverDictionaryNotifications());
 
 const getAdminRecipientUids = async () => {
   const snap = await db
@@ -11356,6 +11384,7 @@ const readHistoryDictionaryFallbackTarget = async ({
       number: sanitizeHistoryDictionaryText(word.number || profile.number, 8),
       memo: sanitizeHistoryDictionaryText(word.memo, 240) || "학생 단어장에서 확인해 복구한 요청입니다.",
       createdAt: word.createdAt || null,
+      updatedAt: word.updatedAt || word.createdAt || null,
     },
   };
 };
@@ -11363,6 +11392,7 @@ const readHistoryDictionaryFallbackTarget = async ({
 const resolveHistoryDictionaryRequestsWithTerm = async ({
   managerUid, termId, requestId = "", fallbackRequestId = "", fallbackUid = "",
   year = "", semester = "",
+  transaction: suppliedTransaction = null, termData = null,
 }) => {
   // Validate path components before constructing an Admin SDK document reference.
   assertHistoryDictionaryRequestTargetInput({
@@ -11370,10 +11400,10 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
     requestId, fallbackRequestId, fallbackUid,
   });
   const termRef = db.doc(getHistoryDictionaryTermPath(termId));
-  return db.runTransaction(async (transaction) => {
+  const apply = async (transaction) => {
     const termSnap = await transaction.get(termRef);
-    if (!termSnap.exists) throw new HttpsError("not-found", "Dictionary term does not exist.");
-    const term = termSnap.data() || {};
+    if (!termSnap.exists && !termData) throw new HttpsError("not-found", "Dictionary term does not exist.");
+    const term = termData || termSnap.data() || {};
     if (term.status !== "published" || !String(term.definition || "").trim())
       throw new HttpsError("failed-precondition", "Dictionary term is not published.");
     const normalizedWord = normalizeHistoryDictionaryWord(term.normalizedWord || term.word);
@@ -11451,10 +11481,17 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
         },
         { merge: true },
       );
-      resolved.push({ uid: target.uid, requestId: target.snapshot.ref.id, word: sanitizeHistoryDictionaryWord(term.word) });
+      const notification = dictionaryNotifications.buildResolutionEvent({
+        requestId: target.snapshot.ref.id, requestData: target.data,
+        uid: target.uid, year, semester, word: sanitizeHistoryDictionaryWord(term.word),
+        termId, actorUid: managerUid, timestamp: FieldValue.serverTimestamp(),
+      });
+      transaction.create(db.doc(notification.path), notification.data);
+      resolved.push({ uid: target.uid, requestId: target.snapshot.ref.id, word: sanitizeHistoryDictionaryWord(term.word), notificationPath: notification.path });
     }
     return { termId, normalizedWord, resolved };
-  });
+  };
+  return suppliedTransaction ? apply(suppliedTransaction) : db.runTransaction(apply);
 };
 
 exports.saveHistoryDictionaryTermsBulk = onCall(
@@ -11513,17 +11550,15 @@ exports.saveHistoryDictionaryTerm = onCall(
     const scoped =
       getOptionalYearSemester(request.data) ||
       (await getCurrentConfiguredYearSemester());
-    const alreadyResolvedFallback = await db.runTransaction(async (transaction) => {
+    const resolvedResult = await db.runTransaction(async (transaction) => {
       const termSnap = await transaction.get(termRef);
       const fallback = await readHistoryDictionaryFallbackTarget({
         transaction, termId, normalizedWord,
         year: scoped?.year || "", semester: scoped?.semester || "",
         fallbackRequestId, fallbackUid,
       });
-      if (fallback && !fallback.pending) return true;
-      transaction.set(
-        termRef,
-        {
+      if (fallback && !fallback.pending) return { termId, normalizedWord, resolved: [] };
+      const nextTerm = {
           word,
           normalizedWord,
           definition,
@@ -11540,41 +11575,17 @@ exports.saveHistoryDictionaryTerm = onCall(
             : FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           publishedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-      return false;
+        };
+      // Resolve against this exact definition. All target reads and validation
+      // finish before any writes; a failed fanout rolls back the shared term too.
+      const resolved = await resolveHistoryDictionaryRequestsWithTerm({
+        managerUid: manager.uid, termId, fallbackRequestId, fallbackUid,
+        year: scoped?.year || "", semester: scoped?.semester || "",
+        transaction, termData: nextTerm,
+      });
+      transaction.set(termRef, nextTerm, { merge: true });
+      return resolved;
     });
-    if (alreadyResolvedFallback) return { termId, resolvedCount: 0 };
-    const resolvedResult = await resolveHistoryDictionaryRequestsWithTerm({
-      managerUid: manager.uid,
-      termId,
-      fallbackRequestId,
-      fallbackUid,
-      year: scoped?.year || "",
-      semester: scoped?.semester || "",
-    });
-    if (scoped) {
-      await createUserNotifications(
-        scoped.year,
-        scoped.semester,
-        resolvedResult.resolved.map((item) => item.uid),
-        {
-          type: "history_dictionary_resolved",
-          title: "역사 사전 등록 완료",
-          body: `요청한 "${word}" 뜻풀이가 등록되었습니다.`,
-          targetUrl: "/student/lesson/history-dictionary",
-          entityType: "history_dictionary_term",
-          entityId: termId,
-          actorUid: manager.uid,
-          priority: "normal",
-          dedupeKey: `history_dictionary_resolved:${termId}:${Date.now()}`,
-          templateValues: {
-            word,
-          },
-        },
-      );
-    }
 
     return {
       termId,
@@ -11602,25 +11613,6 @@ exports.approveHistoryDictionaryTermForRequests = onCall(
       semester,
     });
 
-    await createUserNotifications(
-      year,
-      semester,
-      result.resolved.map((item) => item.uid),
-      {
-        type: "history_dictionary_resolved",
-        title: "역사 사전 등록 완료",
-        body: `"${result.resolved[0]?.word || "요청한 단어"}" 뜻풀이가 선생님 승인 후 단어장에 들어왔습니다.`,
-        targetUrl: "/student/lesson/history-dictionary",
-        entityType: "history_dictionary_term",
-        entityId: termId,
-        actorUid: manager.uid,
-        priority: "normal",
-        dedupeKey: `history_dictionary_approved:${year}:${semester}:${termId}:${requestId || "all"}`,
-        templateValues: {
-          word: result.resolved[0]?.word || "요청한 단어",
-        },
-      },
-    );
 
     return {
       termId,
@@ -11714,6 +11706,8 @@ const authorizeCommandGatewayActor = async ({
 }) => {
   const lessonAnswerCommandTypes = Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES);
   const lessonManagementCommandTypes = Object.values(lessonManagement.LESSON_COMMAND_TYPES);
+  const sourceArchiveCommandTypes = Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES);
+  const mapManagementCommandTypes = Object.values(mapManagement.MAP_COMMAND_TYPES);
   const patchNoteCommandTypes = Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES);
   const dictionaryImportCommandTypes = Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES);
   const assessmentCommandTypes = Object.values(
@@ -11734,6 +11728,8 @@ const authorizeCommandGatewayActor = async ({
     !assessmentCommandTypes.includes(commandType) &&
     !lessonAnswerCommandTypes.includes(commandType) &&
     !lessonManagementCommandTypes.includes(commandType) &&
+    !sourceArchiveCommandTypes.includes(commandType) &&
+    !mapManagementCommandTypes.includes(commandType) &&
     !patchNoteCommandTypes.includes(commandType) &&
     !dictionaryImportCommandTypes.includes(commandType) &&
     !gradeCommandTypes.includes(commandType) &&
@@ -11859,9 +11855,13 @@ const authorizeCommandGatewayActor = async ({
     }
     return { actorUid, actorEmail, actorRole: "student", actorCapability: "lesson:save_own_answers" };
   }
-  if (lessonManagementCommandTypes.includes(commandType)) {
+  if (lessonManagementCommandTypes.includes(commandType) || mapManagementCommandTypes.includes(commandType)) {
     if (!profileSnapshot.exists || profile.role !== "teacher") throw new HttpsError("permission-denied", "수업자료 편집 권한이 필요합니다.", { reason: "LESSON_MANAGE_REQUIRED" });
     return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "lesson:manage" };
+  }
+  if (sourceArchiveCommandTypes.includes(commandType)) {
+    if (!profileSnapshot.exists || profile.role !== "teacher") throw new HttpsError("permission-denied", "사료창고 편집 권한이 필요합니다.", { reason: "SOURCE_ARCHIVE_MANAGE_REQUIRED" });
+    return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "source-archive:manage" };
   }
   if (patchNoteCommandTypes.includes(commandType)) {
     if (!profileSnapshot.exists || profile.role !== "teacher") throw new HttpsError("permission-denied", "교사 개인 메모만 저장할 수 있습니다.", { reason: "PATCH_NOTE_TEACHER_REQUIRED" });
@@ -12148,6 +12148,8 @@ const assessmentCommandAdapter =
   assessmentLifecycle.createAssessmentCommandAdapter();
 const lessonAnswerCommandAdapter = lessonAnswers.createLessonAnswerCommandAdapter();
 const lessonManagementCommandAdapter = lessonManagement.createLessonCommandAdapter();
+const sourceArchiveCommandAdapter = sourceArchiveManagement.createSourceArchiveCommandAdapter();
+const mapManagementCommandAdapter = mapManagement.createMapCommandAdapter();
 const patchNoteCommandAdapter = teacherPatchNotes.createPatchNoteCommandAdapter();
 const dictionaryImportCommandAdapter = historyDictionaryImport.createHistoryDictionaryImportCommandAdapter();
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
@@ -12165,6 +12167,8 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
+    ...Object.fromEntries(Object.values(mapManagement.MAP_COMMAND_TYPES).map((commandType) => [commandType, mapManagementCommandAdapter])),
+    ...Object.fromEntries(Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES).map((commandType) => [commandType, sourceArchiveCommandAdapter])),
     ...Object.fromEntries(Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).map((commandType) => [commandType, dictionaryImportCommandAdapter])),
     ...Object.fromEntries(Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).map((commandType) => [commandType, patchNoteCommandAdapter])),
     ...Object.fromEntries(Object.values(lessonManagement.LESSON_COMMAND_TYPES).map((commandType) => [commandType, lessonManagementCommandAdapter])),

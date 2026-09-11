@@ -90,6 +90,7 @@ const setup = (seed = {}, options = {}) => {
     "\nexports.resolve = resolveHistoryDictionaryRequestsWithTerm;",
     {
       exports, db, HttpsError, crypto, REGION: "asia-northeast3",
+      dictionaryNotifications: require("../dictionaryNotifications"),
       HISTORY_DICTIONARY_TERMS_COLLECTION: "history_dictionary_terms",
       HISTORY_DICTIONARY_REQUESTS_COLLECTION: "history_dictionary_requests",
       FieldValue: { serverTimestamp: () => 123 },
@@ -106,6 +107,7 @@ const setup = (seed = {}, options = {}) => {
   );
   return {
     store, writes, notifications,
+    transactionCount: () => transactions,
     run: (extra = {}) => exports.resolve({ managerUid: "teacher", termId, year: "2026", semester: "2", ...extra }),
     save: (extra = {}, uid = "teacher") => exports.saveHistoryDictionaryTerm({
       auth: { uid }, data: { year: "2026", semester: "2", word: "term", definition: "이번에 새로 저장할 풀이입니다.", ...extra },
@@ -167,7 +169,7 @@ const fallback = { fallbackRequestId: fallbackId, fallbackUid: "student-one" };
     assert.equal(request.memo, "학생 원문 메모"); assert.equal(request.studentName, "학생 이름"); assert.equal(request.createdAt, 8);
     const word = test.store.docs.get(wordPath());
     assert.equal(word.createdAt, 10); assert.equal(word.rewardAmount, 15); assert.equal(word.customMetadata, "keep");
-    assert.equal(test.notifications.length, 1);
+    assert.equal(test.notifications.length, 0, "delivery must not delay the business response"); assert.equal([...test.store.docs.keys()].filter(path => path.startsWith("history_dictionary_notification_outbox/")).length, 1);
   });
   for (const bad of [
     { word: "another" }, { normalizedWord: "another" }, { normalizedWord: null },
@@ -319,14 +321,26 @@ const fallback = { fallbackRequestId: fallbackId, fallbackUid: "student-one" };
     assert.deepEqual(results.map((result) => result.resolved.length).sort(), [0, 1]);
     assert.equal(test.store.docs.get(requestPath(fallbackId)).status, "resolved");
   });
-  await check("proof rechecked after first term transaction; partial-term limitation remains explicit", async () => {
-    const test = setup(recoverySeed(), { afterTransaction: (count, store) => {
-      if (count === 1) store.docs.set(wordPath(), { ...store.docs.get(wordPath()), status: "saved", requestId: "" });
-    } });
-    await assert.rejects(test.save(fallback), (error) => error.details?.reason === UNVERIFIED);
-    assert.equal(test.store.docs.has(requestPath(fallbackId)), false);
-    assert.equal(test.store.docs.get(wordPath()).requestId, "");
-    assert.equal(test.store.docs.get(termPath).definition, "이번에 새로 저장할 풀이입니다.");
+  await check("shared definition and fallback fanout commit once with identical content", async () => {
+    const test = setup(recoverySeed());
+    assert.equal((await test.save(fallback)).resolvedCount, 1);
+    assert.equal(test.transactionCount(), 1);
+    assert.equal(test.store.docs.get(requestPath(fallbackId)).status, "resolved");
+    assert.equal(test.store.docs.get(wordPath()).definition, test.store.docs.get(termPath).definition);
+    assert.equal(test.notifications.length, 0, "delivery must not delay the business response"); assert.equal([...test.store.docs.keys()].filter(path => path.startsWith("history_dictionary_notification_outbox/")).length, 1);
+  });
+  await check("invalid ordinary fanout preserves previous shared definition and all requests", async () => {
+    const test = setup({ [requestPath("one")]: pending(), [wordPath()]: { uid: "another-student" } });
+    await rejectsUnchanged(test, () => test.save(), MISMATCH);
+    assert.equal(test.writes.length, 0);
+    assert.equal(test.notifications.length, 0);
+  });
+  await check("101 pending requests do not partially save the shared definition", async () => {
+    const test = setup(Object.fromEntries(Array.from({length:101}, (_,index) => [requestPath(`request-${index}`), pending(`student-${index}`)])));
+    const before = structuredClone([...test.store.docs]);
+    await assert.rejects(test.save(), error => error.code === "resource-exhausted");
+    assert.deepEqual([...test.store.docs], before);
+    assert.equal(test.writes.length, 0);
     assert.equal(test.notifications.length, 0);
   });
   await check("ordinary single save still works without fallback", async () => {
@@ -348,6 +362,6 @@ const fallback = { fallbackRequestId: fallbackId, fallbackUid: "student-one" };
   console.log(JSON.stringify({
     passed: true, scenarios, networkAccess: 0,
     coverage: "actual index sanitizers, path helpers, scope helpers, request resolver, single-save and approval handlers; session/manager/notification I/O isolated; serial atomic store rejects reads after writes",
-    limitations: "No deployed SDK/Rules/Firestore contention test; term and fanout still use separate transactions; global CAS/Gateway/receipt and durable notification delivery remain outside this patch",
+    limitations: "No deployed SDK/Rules/Firestore contention test; global CAS/Gateway/receipt remain outside this patch; outbox delivery is covered separately",
   }));
 })().catch((error) => { console.error(error); process.exitCode = 1; });

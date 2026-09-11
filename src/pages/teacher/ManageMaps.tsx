@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { collection, doc, getDocs, orderBy, query } from "firebase/firestore";
-import { getDownloadURL, ref } from "firebase/storage";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { InlineLoading } from "../../components/common/LoadingState";
 import StatePanel from "../../components/common/StatePanel";
 import MapSidebar from "../../components/common/MapSidebar";
 import MapViewer from "../../components/common/MapViewer";
 import { useAuth } from "../../contexts/AuthContext";
-import { db, getFirebaseStorage } from "../../lib/firebase";
+import { db } from "../../lib/firebase";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import {
   DEFAULT_GOOGLE_MAP_RESOURCE,
@@ -26,15 +25,24 @@ import type { ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
 import { canWriteLessonManagement } from "../../lib/permissions";
 import {
-  LEGACY_LESSON_MANAGEMENT_HASH_ROUTE,
-  buildLegacyLessonManagementHandoffMessage,
-  shouldHandoffLegacyLessonManagementMutation,
-} from "../../lib/legacyLessonManagementHandoff";
+  deleteMapResource,
+  fingerprintMapSource,
+  getAttachedMapUploadIds,
+  mapEditorRecovery,
+  saveMapResources,
+  toMapDocument,
+  uploadMapAsset,
+  type MapSource,
+  type MapSavedSource,
+  type RetainedMapAsset,
+} from "../../lib/mapManagement";
 
 type StorageScope = "semester" | "legacy";
 
 type StoredMapResource = MapResource & {
   storageScope?: StorageScope;
+  sourceExists?: boolean;
+  sourceHash?: string;
 };
 
 interface PendingPdfUpload {
@@ -43,6 +51,15 @@ interface PendingPdfUpload {
   processed: ProcessedPdfMap;
   pageImages: PdfMapPageImage[];
   regions: PdfMapRegion[];
+}
+interface EditorRecoverySnapshot {
+  items: StoredMapResource[];
+  draft: StoredMapResource;
+  selectedFile: File | null;
+  pendingPdfUploads: PendingPdfUpload[];
+  sources: Array<[string, MapSource]>;
+  pendingAssets: Array<[string, RetainedMapAsset[]]>;
+  pendingCommit: StoredMapResource[] | null;
 }
 
 const PdfMapViewer = lazyWithRetry(
@@ -89,8 +106,6 @@ const clonePdfTagSections = (sections: PdfTagSection[]) =>
 const fileNameWithoutExtension = (value: string) =>
   value.replace(/\.[^.]+$/u, "").trim();
 
-const PDF_PAGE_UPLOAD_CACHE_CONTROL = "public,max-age=3600";
-
 const getPreferredMapGroup = <
   T extends { key: string; title: string; items: Array<{ id: string }> },
 >(
@@ -110,28 +125,6 @@ const normalizeErrorMessage = (error: unknown) => {
 
   if (code) return `${code}${message ? `: ${message}` : ""}`;
   return message || "unknown-error";
-};
-
-const withTimeout = async <T,>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  label: string,
-): Promise<T> => {
-  let timeoutId: number | undefined;
-
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = window.setTimeout(() => {
-      reject(new Error(`${label}-timeout`));
-    }, timeoutMs);
-  });
-
-  try {
-    return await Promise.race([promise, timeoutPromise]);
-  } finally {
-    if (timeoutId) {
-      window.clearTimeout(timeoutId);
-    }
-  }
 };
 
 const requestLocalPdfFile = (): Promise<File | null> =>
@@ -192,16 +185,6 @@ const requestLocalPdfFile = (): Promise<File | null> =>
     input.click();
   });
 
-const blobToPdfFile = (
-  blob: Blob,
-  resourceId: string,
-  fileName?: string,
-  mimeType?: string,
-) =>
-  new File([blob], fileName || `${resourceId}.pdf`, {
-    type: blob.type || mimeType || "application/pdf",
-  });
-
 const ManageMaps: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
   const [items, setItems] = useState<StoredMapResource[]>([]);
@@ -226,17 +209,17 @@ const ManageMaps: React.FC = () => {
   >({});
   const [tabRenameSourceKey, setTabRenameSourceKey] = useState("");
   const [tabRenameValue, setTabRenameValue] = useState("");
-  const [handoffAction, setHandoffAction] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const mutationFlight = useRef(false);
+  const sources = useRef(new Map<string, MapSource>());
+  const pendingAssets = useRef(new Map<string, RetainedMapAsset[]>());
+  const uploadOwner = useRef("");
+  const pendingCommit = useRef<StoredMapResource[] | null>(null);
+  const restoredDraft = useRef(false);
+  const mutationSucceeded = useRef(false);
+  const activeRecovery = useRef<ReturnType<typeof mapEditorRecovery.get>>();
+  const recoveryKey = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`;
   const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
-
-  const blockLegacyMapMutationAsync = async <T = never,>(
-    actionLabel: string,
-    ..._ignored: unknown[]
-  ): Promise<T> => {
-    setHandoffAction(actionLabel);
-    throw new Error(buildLegacyLessonManagementHandoffMessage(actionLabel));
-  };
 
   const collectionPath = useMemo(
     () => getSemesterCollectionPath(config, "map_resources"),
@@ -275,21 +258,81 @@ const ManageMaps: React.FC = () => {
       query(collection(db, path), orderBy("sortOrder", "asc")),
     );
 
-    return snapshot.docs.map((docSnap) => ({
-      ...normalizeMapResource(docSnap.id, docSnap.data()),
-      storageScope: scope,
-    }));
+    return Promise.all(
+      snapshot.docs.map(async (docSnap) => {
+        const sourceHash = await fingerprintMapSource(docSnap.data());
+        const item = {
+          ...normalizeMapResource(docSnap.id, docSnap.data()),
+          storageScope: scope,
+          sourceExists: true,
+          sourceHash,
+        };
+        return item;
+      }),
+    );
   };
 
   useEffect(() => {
+    let cancelled = false;
     const loadMaps = async () => {
       setLoading(true);
+      const recovery = mapEditorRecovery.get(recoveryKey);
+      if (recovery?.pending) await recovery.settled;
+      if (cancelled) return;
+      if (recovery && !recovery.succeeded) {
+        const snapshot = recovery.snapshot as EditorRecoverySnapshot;
+        sources.current = new Map(snapshot.sources);
+        pendingAssets.current = new Map(snapshot.pendingAssets);
+        pendingCommit.current = snapshot.pendingCommit;
+        const uploads = snapshot.pendingPdfUploads.map((upload) => ({
+          ...upload,
+          pageImages: upload.processed.pageImages.map((page) => ({
+            page: page.page,
+            imageUrl: URL.createObjectURL(page.blob),
+            width: page.width,
+            height: page.height,
+          })),
+        }));
+        const upload = uploads.find(
+          (item) => item.file.name === snapshot.selectedFile?.name,
+        );
+        restoredDraft.current = true;
+        setItems(snapshot.items);
+        setSelectedId(snapshot.draft.id);
+        setDraft({
+          ...snapshot.draft,
+          ...(upload ? { pdfPageImages: upload.pageImages } : {}),
+        });
+        setSelectedFile(snapshot.selectedFile);
+        setPendingPdfUploads(uploads);
+        setIsSettingsOpen(true);
+        setLoading(false);
+        mapEditorRecovery.delete(recoveryKey);
+        return;
+      }
+      if (recovery) mapEditorRecovery.delete(recoveryKey);
+      sources.current.clear();
+      pendingAssets.current.clear();
 
       try {
         let resourceList = await loadFromScope("semester");
+        if (cancelled) return;
         if (resourceList.length === 0) {
           resourceList = await loadFromScope("legacy");
         }
+        if (cancelled) return;
+        sources.current = new Map(
+          resourceList.map((item) => [
+            item.id,
+            {
+              mapId: item.id,
+              originScope: item.storageScope || "semester",
+              expectedRevision: item.contentRevision || 0,
+              sourceExists: true,
+              sourceHash: item.sourceHash!,
+            },
+          ]),
+        );
 
         const baseScope: StorageScope =
           resourceList[0]?.storageScope || "semester";
@@ -314,6 +357,7 @@ const ManageMaps: React.FC = () => {
         setSelectedId(initial.id);
         setDraft(initial);
       } catch (error) {
+        if (cancelled) return;
         console.error("Failed to load teacher map resources:", error);
         const fallback = [
           { ...DEFAULT_GOOGLE_MAP_RESOURCE, storageScope: "semester" as const },
@@ -326,14 +370,21 @@ const ManageMaps: React.FC = () => {
         setSelectedId(initial.id);
         setDraft(initial);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     void loadMaps();
-  }, [collectionPath]);
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionPath, recoveryKey]);
 
   useEffect(() => {
+    if (restoredDraft.current) {
+      restoredDraft.current = false;
+      return;
+    }
     const next = items.find((item) => item.id === selectedId);
     if (!next) return;
 
@@ -621,7 +672,6 @@ const ManageMaps: React.FC = () => {
   const handleOpenTagManager = (itemId: string) => {
     const target = items.find((item) => item.id === itemId);
     if (!target || target.type !== "pdf") return;
-    setHandoffAction("");
     setSelectedId(itemId);
     setDraft(target);
     setSectionTagInputs({});
@@ -711,7 +761,18 @@ const ManageMaps: React.FC = () => {
     if (files.length === 0) return;
 
     if (draft.type !== "pdf") {
+      if (
+        !["image/png", "image/jpeg", "image/webp"].includes(files[0].type) ||
+        files[0].size > 6 * 1024 * 1024
+      ) {
+        alert("이미지는 PNG, JPEG, WebP 형식의 6MB 이하 파일을 선택해 주세요.");
+        return;
+      }
       setSelectedFile(files[0] || null);
+      return;
+    }
+    if (files.some((file) => file.size > 20 * 1024 * 1024)) {
+      alert("PDF는 파일당 20MB 이하여야 합니다.");
       return;
     }
 
@@ -741,15 +802,20 @@ const ManageMaps: React.FC = () => {
   };
 
   const handleCreateNew = () => {
-    setHandoffAction("");
+    if (mutationFlight.current || pendingCommit.current) return;
+    mapEditorRecovery.delete(recoveryKey);
     setSelectedId("");
     resetFileInput();
-    setDraft(createDraft());
+    setDraft({
+      ...createDraft(),
+      storageScope: items[0]?.storageScope || "semester",
+    });
     setIsSettingsOpen(true);
   };
 
   const handleOpenSettings = (itemId: string) => {
-    setHandoffAction("");
+    if (mutationFlight.current) return;
+    if (!pendingCommit.current) mapEditorRecovery.delete(recoveryKey);
     if (!loading) {
       setSelectedId(itemId);
     }
@@ -757,13 +823,8 @@ const ManageMaps: React.FC = () => {
   };
 
   const handleSaveTagManager = async () => {
-    if (!canEdit || draft.type !== "pdf" || !draft.id) return;
-
-    if (shouldHandoffLegacyLessonManagementMutation()) {
-      setHandoffAction("지도 태그 설정 저장");
-      setIsTagManagerOpen(false);
+    if (!canEdit || draft.type !== "pdf" || !draft.id || !beginMutation())
       return;
-    }
 
     setSaving(true);
     try {
@@ -774,202 +835,153 @@ const ManageMaps: React.FC = () => {
       console.error("Failed to save tag settings:", error);
       alert(`태그 설정 저장에 실패했습니다.\n${normalizeErrorMessage(error)}`);
     } finally {
-      setSaving(false);
+      finishMutation();
     }
   };
 
   const handleOpenTabRename = (groupKey: string) => {
     const targetGroup = displayGroupMap.get(groupKey);
-    setHandoffAction("");
     setTabRenameSourceKey(groupKey);
     setTabRenameValue(targetGroup?.title || "");
     setIsTabRenameOpen(true);
   };
 
-  const persistOrderedItems = async (orderedItems: StoredMapResource[]) => {
-    for (let index = 0; index < orderedItems.length; index += 1) {
-      const item = orderedItems[index];
-      const nextPayload: MapResource = {
-        ...normalizeMapResource(item.id, item),
-        sortOrder: index,
-      };
-      const targetScope = item.storageScope || "semester";
-      await persistToScope(targetScope, nextPayload);
+  const sourceFor = (id: string, scope: StorageScope): MapSource =>
+    sources.current.get(id) || {
+      mapId: id,
+      originScope: scope,
+      expectedRevision: 0,
+      sourceExists: false,
+      sourceHash: "",
+    };
+
+  const rememberSaved = (rows: MapSavedSource[]) => {
+    for (const row of rows) {
+      sources.current.set(row.mapId, {
+        mapId: row.mapId,
+        originScope: row.originScope,
+        expectedRevision: row.contentRevision,
+        sourceExists: true,
+        sourceHash: row.sourceHash,
+      });
+      pendingAssets.current.delete(row.mapId);
     }
   };
 
-  const handleMoveItem = async (itemId: string, direction: "up" | "down") => {
-    if (!canEdit) return;
-    if (shouldHandoffLegacyLessonManagementMutation()) {
-      setHandoffAction("지도 순서 변경");
-      return;
+  const persistBatch = async (resources: StoredMapResource[]) => {
+    const ownerUid = uploadOwner.current || currentUser?.uid;
+    if (!ownerUid) throw new Error("로그인 상태를 확인해 주세요.");
+    if (
+      pendingCommit.current &&
+      JSON.stringify(pendingCommit.current) !== JSON.stringify(resources)
+    )
+      throw new Error(
+        "직전 저장 결과를 먼저 확인해야 합니다. 지도 설정에서 저장을 다시 눌러 주세요.",
+      );
+    pendingCommit.current = structuredClone(resources);
+    if (activeRecovery.current) {
+      const snapshot = activeRecovery.current
+        .snapshot as EditorRecoverySnapshot;
+      snapshot.pendingCommit = pendingCommit.current;
+      snapshot.pendingAssets = [...pendingAssets.current];
+      snapshot.sources = [...sources.current];
     }
-    const currentGroups = groupMapResourcesForDisplay(items);
-    const currentGroupIndex = currentGroups.findIndex(
+    let result;
+    try {
+      result = await saveMapResources(
+        config,
+        resources.map((item) => {
+          const document = toMapDocument(normalizeMapResource(item.id, item));
+          return {
+            ...sourceFor(item.id, item.storageScope || "semester"),
+            document,
+            assetUploadIds: getAttachedMapUploadIds(
+              document,
+              pendingAssets.current.get(item.id) || [],
+            ),
+          };
+        }),
+        ownerUid,
+      );
+    } catch (error) {
+      if (
+        !(error as { retryable?: boolean })?.retryable &&
+        (error as { reason?: string })?.reason !== "COMMAND_OUTCOME_UNCONFIRMED"
+      )
+        pendingCommit.current = null;
+      if (activeRecovery.current)
+        (
+          activeRecovery.current.snapshot as EditorRecoverySnapshot
+        ).pendingCommit = pendingCommit.current;
+      throw error;
+    }
+    pendingCommit.current = null;
+    mutationSucceeded.current = true;
+    rememberSaved(result.resources);
+    return resources.map((item) => {
+      const source = sources.current.get(item.id)!;
+      return {
+        ...item,
+        contentRevision: source.expectedRevision,
+        storageScope: source.originScope,
+        sourceExists: true,
+        sourceHash: source.sourceHash,
+      };
+    });
+  };
+
+  const handleMoveItem = async (itemId: string, direction: "up" | "down") => {
+    if (!canEdit || mutationFlight.current) return;
+    const groups = groupMapResourcesForDisplay(items);
+    const index = groups.findIndex(
       (group) =>
         group.key === itemId.replace(/^map-group:/u, "") ||
         group.items.some((item) => item.id === itemId),
     );
-    if (currentGroupIndex < 0) return;
-
-    const targetGroupIndex =
-      direction === "up" ? currentGroupIndex - 1 : currentGroupIndex + 1;
-    if (targetGroupIndex < 0 || targetGroupIndex >= currentGroups.length)
-      return;
-
-    const nextGroups = [...currentGroups];
-    const [movedGroup] = nextGroups.splice(currentGroupIndex, 1);
-    nextGroups.splice(targetGroupIndex, 0, movedGroup);
-
-    const orderedItems = nextGroups
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (index < 0 || targetIndex < 0 || targetIndex >= groups.length) return;
+    const [moved] = groups.splice(index, 1);
+    groups.splice(targetIndex, 0, moved);
+    const ordered = groups
       .flatMap((group) => group.items)
-      .map((item, index) => ({
-        ...item,
-        sortOrder: index,
-      }));
-
-    setItems(orderedItems);
-    setSelectedId(movedGroup.items[0]?.id || selectedId);
-
+      .map((item, sortOrder) => ({ ...item, sortOrder }));
+    if (!beginMutation()) return;
     try {
-      await persistOrderedItems(orderedItems);
+      setItems(await persistBatch(ordered));
+      setSelectedId(moved.items[0]?.id || selectedId);
     } catch (error) {
-      console.error("Failed to reorder map resources:", error);
       alert(
         `지도 순서를 변경하지 못했습니다.\n${normalizeErrorMessage(error)}`,
       );
+    } finally {
+      finishMutation();
     }
-  };
-
-  const persistToScope = async (scope: StorageScope, payload: MapResource) => {
-    const path = scope === "semester" ? collectionPath : legacyCollectionPath;
-
-    await blockLegacyMapMutationAsync(
-      "지도 자료 저장",
-      doc(db, `${path}/${payload.id}`),
-      {
-        ...payload,
-      },
-      { merge: true },
-    );
-  };
-
-  const uploadProcessedPdfPages = async (
-    resourceId: string,
-    processed: ProcessedPdfMap,
-    previousPages: Array<{ page?: number }> = [],
-  ) => {
-    const uploadedPages = [];
-    const uploadedPagePaths = new Set<string>();
-    const storage = await getFirebaseStorage();
-    const { getPdfPageImageExtension } =
-      await import("../../lib/pdfMapProcessor");
-
-    for (const page of processed.pageImages) {
-      const pageExtension = getPdfPageImageExtension(page.blob);
-      const pagePath = `map-resources/${resourceId}/page-${page.page}.${pageExtension}`;
-      const pageRef = ref(storage, pagePath);
-      await withTimeout(
-        blockLegacyMapMutationAsync(
-          "지도 PDF 페이지 업로드",
-          pageRef,
-          page.blob,
-          {
-            contentType: page.blob.type || "image/png",
-            cacheControl: PDF_PAGE_UPLOAD_CACHE_CONTROL,
-          },
-        ),
-        20000,
-        `storage-upload-page-${page.page}`,
-      );
-      uploadedPagePaths.add(pagePath);
-      const pageUrl = await withTimeout(
-        getDownloadURL(pageRef),
-        10000,
-        `storage-page-url-${page.page}`,
-      );
-      uploadedPages.push({
-        page: page.page,
-        imageUrl: pageUrl,
-        width: page.width,
-        height: page.height,
-      });
-    }
-
-    const previousMaxPage = Math.max(
-      0,
-      ...previousPages.map((page) => Number(page.page || 0)),
-    );
-    if (previousMaxPage > 0) {
-      const nextPages = new Set(uploadedPages.map((page) => page.page));
-      const cleanupPaths: string[] = [];
-      for (let page = 1; page <= previousMaxPage; page += 1) {
-        cleanupPaths.push(`map-resources/${resourceId}/page-${page}.png`);
-        if (!nextPages.has(page)) {
-          cleanupPaths.push(`map-resources/${resourceId}/page-${page}.webp`);
-        }
-      }
-      void Promise.all(
-        Array.from(new Set(cleanupPaths)).map(async (path) => {
-          if (uploadedPagePaths.has(path)) return;
-          try {
-            await blockLegacyMapMutationAsync(
-              "이전 지도 PDF 페이지 정리",
-              ref(storage, path),
-            );
-          } catch {
-            // Missing old page objects are fine; cleanup is best effort.
-          }
-        }),
-      );
-    }
-
-    return uploadedPages;
   };
 
   const persistMapPayload = async (
     payload: MapResource,
     preferredScope: StorageScope,
   ) => {
-    const fallbackScope: StorageScope =
-      preferredScope === "semester" ? "legacy" : "semester";
-    let resolvedScope = preferredScope;
-
-    try {
-      await persistToScope(preferredScope, payload);
-    } catch (primaryError) {
-      console.error(
-        `Failed to save map resource to ${preferredScope}:`,
-        primaryError,
-      );
-      await persistToScope(fallbackScope, payload);
-      resolvedScope = fallbackScope;
-    }
-
+    const [saved] = await persistBatch([
+      { ...payload, storageScope: preferredScope },
+    ]);
     const merged = mergeMapResources([
       ...items.filter((item) => item.id !== payload.id),
-      { ...payload, storageScope: resolvedScope },
-    ]).map((item) => {
-      const existing = items.find((resource) => resource.id === item.id);
-      if (item.id === payload.id) {
-        return { ...item, storageScope: resolvedScope };
-      }
-      return { ...item, storageScope: existing?.storageScope || resolvedScope };
-    });
-
+      saved,
+    ]).map((item) => ({
+      ...item,
+      storageScope:
+        item.id === saved.id
+          ? saved.storageScope
+          : items.find((existing) => existing.id === item.id)?.storageScope ||
+            preferredScope,
+    }));
     setItems(merged);
-    setSelectedId(payload.id);
-    setDraft({ ...payload, storageScope: resolvedScope });
+    setSelectedId(saved.id);
+    setDraft(saved);
     resetFileInput();
     setIsSettingsOpen(false);
-
-    if (resolvedScope === preferredScope) {
-      alert("지도 자료를 저장했습니다.");
-    } else {
-      alert(
-        "지도 자료를 저장했습니다. 기본 저장 경로에 실패해 대체 경로에 저장했습니다.",
-      );
-    }
+    alert("지도 자료를 저장했습니다.");
   };
 
   const uploadSelectedFile = async (
@@ -977,9 +989,8 @@ const ManageMaps: React.FC = () => {
     fileOverride?: File | null,
     processedOverride?: ProcessedPdfMap | null,
   ) => {
-    const targetFile = fileOverride ?? selectedFile;
-
-    if (!targetFile) {
+    const file = fileOverride ?? selectedFile;
+    if (!file)
       return {
         fileUrl: draft.fileUrl || "",
         imageUrl: draft.imageUrl || "",
@@ -989,65 +1000,75 @@ const ManageMaps: React.FC = () => {
         pdfPageImages: draft.pdfPageImages || [],
         pdfRegions: draft.pdfRegions || [],
       };
-    }
-
-    const extension = targetFile.name.includes(".")
-      ? `.${targetFile.name.split(".").pop()}`
-      : "";
-    const storage = await getFirebaseStorage();
-    const objectRef = ref(
-      storage,
-      `map-resources/${resourceId}/${Date.now()}${extension}`,
+    const ownerUid = uploadOwner.current;
+    if (!ownerUid) throw new Error("로그인 상태를 확인해 주세요.");
+    const source = sourceFor(resourceId, draft.storageScope || "semester");
+    const main = await uploadMapAsset(
+      config,
+      source,
+      file,
+      draft.type === "pdf" ? "PDF" : "IMAGE",
+      ownerUid,
+      "",
+      0,
+      file.name,
     );
-
-    await withTimeout(
-      blockLegacyMapMutationAsync("지도 파일 업로드", objectRef, targetFile, {
-        contentType: targetFile.type || undefined,
-      }),
-      20000,
-      "storage-upload",
-    );
-
-    const fileUrl = await withTimeout(
-      getDownloadURL(objectRef),
-      10000,
-      "storage-download-url",
-    );
-
+    const uploadAssets: RetainedMapAsset[] = [
+      { ...main, kind: draft.type === "pdf" ? "PDF" : "IMAGE" },
+    ];
+    const pages: PdfMapPageImage[] = [];
+    let regions: PdfMapRegion[] = [];
     if (draft.type === "pdf") {
-      let processed = processedOverride;
-      if (!processed) {
-        const { processPdfMapFile } = await import("../../lib/pdfMapProcessor");
-        processed = await processPdfMapFile(targetFile);
+      const processed =
+        processedOverride ||
+        (await (
+          await import("../../lib/pdfMapProcessor")
+        ).processPdfMapFile(file));
+      if (
+        processed.pageImages.length > 150 ||
+        processed.pageImages.reduce(
+          (sum, page) => sum + page.blob.size,
+          file.size,
+        ) >
+          100 * 1024 * 1024
+      )
+        throw new Error("PDF는 150쪽, 전체 업로드는 100MB 이하여야 합니다.");
+      for (const page of processed.pageImages) {
+        const uploaded = await uploadMapAsset(
+          config,
+          source,
+          page.blob,
+          "PAGE",
+          ownerUid,
+          main.uploadId,
+          page.page,
+        );
+        uploadAssets.push({
+          ...uploaded,
+          kind: "PAGE",
+          sourceUploadId: main.uploadId,
+        });
+        pages.push({
+          page: page.page,
+          imageUrl: uploaded.url,
+          width: uploaded.width!,
+          height: uploaded.height!,
+        });
       }
-      const uploadedPages = await uploadProcessedPdfPages(
-        resourceId,
-        processed,
-        draft.pdfPageImages || [],
-      );
-
-      return {
-        fileUrl,
-        imageUrl: "",
-        storagePath: objectRef.fullPath,
-        fileName: targetFile.name,
-        mimeType: targetFile.type || "",
-        pdfPageImages: uploadedPages,
-        pdfRegions: processed.regions,
-      };
+      regions = processed.regions;
     }
-
+    pendingAssets.current.set(resourceId, uploadAssets);
     return {
-      fileUrl,
-      imageUrl: draft.type === "image" ? fileUrl : "",
-      storagePath: objectRef.fullPath,
-      fileName: targetFile.name,
-      mimeType: targetFile.type || "",
-      pdfPageImages: [],
-      pdfRegions: [],
+      fileUrl: main.url,
+      imageUrl: draft.type === "image" ? main.url : "",
+      storagePath: main.storagePath,
+      fileName: file.name,
+      mimeType:
+        file.type || (draft.type === "pdf" ? "application/pdf" : "image/png"),
+      pdfPageImages: pages,
+      pdfRegions: regions,
     };
   };
-
   const handleTypeChange = (nextType: MapResourceType) => {
     resetFileInput();
 
@@ -1067,28 +1088,86 @@ const ManageMaps: React.FC = () => {
     }));
   };
 
-  const handleSave = async () => {
-    if (!canEdit) return;
-    const resourceId = draft.id || `map-${Date.now()}`;
-    const payloadBase = normalizeMapResource(resourceId, draft);
+  const beginMutation = () => {
+    if (!canEdit || mutationFlight.current) return false;
+    mutationFlight.current = true;
+    uploadOwner.current = currentUser?.uid || "";
+    setSaving(true);
+    mutationSucceeded.current = false;
+    let settle!: () => void;
+    const record = {
+      snapshot: {
+        items,
+        draft,
+        selectedFile,
+        pendingPdfUploads,
+        sources: [...sources.current],
+        pendingAssets: [...pendingAssets.current],
+        pendingCommit: pendingCommit.current,
+      } as EditorRecoverySnapshot,
+      pending: true,
+      succeeded: false,
+      settled: new Promise<void>((resolve) => {
+        settle = resolve;
+      }),
+      finish: (succeeded: boolean) => {
+        record.pending = false;
+        record.succeeded = succeeded;
+        settle();
+      },
+    };
+    mapEditorRecovery.set(recoveryKey, record);
+    activeRecovery.current = record;
+    return true;
+  };
+  const finishMutation = () => {
+    activeRecovery.current?.finish(mutationSucceeded.current);
+    if (mutationSucceeded.current) mapEditorRecovery.delete(recoveryKey);
+    mutationFlight.current = false;
+    uploadOwner.current = "";
+    setSaving(false);
+  };
 
-    if (!payloadBase.title || !payloadBase.category) {
+  const handleSave = async () => {
+    if (!canEdit || mutationFlight.current) return;
+    if (pendingCommit.current) {
+      if (!beginMutation()) return;
+      try {
+        const saved = await persistBatch(pendingCommit.current);
+        setItems([
+          ...items.filter((item) => !saved.some((row) => row.id === item.id)),
+          ...saved,
+        ]);
+        setSelectedId(saved[0].id);
+        setDraft(saved[0]);
+        resetFileInput();
+        setIsSettingsOpen(false);
+        alert("직전 지도 저장 결과를 확인했습니다.");
+      } catch (error) {
+        alert(
+          `지도 저장 결과를 확인하지 못했습니다.\n${normalizeErrorMessage(error)}`,
+        );
+      } finally {
+        finishMutation();
+      }
+      return;
+    }
+    if (!draft.title.trim() || !draft.category.trim()) {
       alert("지도 제목과 분류를 입력해 주세요.");
       return;
     }
-
+    const resourceId = draft.id || `map-${crypto.randomUUID()}`;
+    const payloadBase = normalizeMapResource(resourceId, draft);
     if (payloadBase.type === "iframe" && !payloadBase.embedUrl) {
       alert("iframe 지도를 사용하려면 iframe URL을 입력해 주세요.");
       return;
     }
-
     if (payloadBase.type === "google" && !payloadBase.googleQuery) {
       alert("구글 지도를 사용하려면 검색어를 입력해 주세요.");
       return;
     }
-
     if (
-      (payloadBase.type === "image" || payloadBase.type === "pdf") &&
+      ["image", "pdf"].includes(payloadBase.type) &&
       !selectedFile &&
       !(payloadBase.type === "image"
         ? payloadBase.imageUrl
@@ -1101,352 +1180,157 @@ const ManageMaps: React.FC = () => {
       );
       return;
     }
-
-    if (shouldHandoffLegacyLessonManagementMutation()) {
-      setHandoffAction(
-        draft.id ? "지도 자료 수정 저장" : "새 지도 자료 등록 저장",
-      );
-      setIsSettingsOpen(false);
-      return;
-    }
-
-    setSaving(true);
-
+    if (!beginMutation()) return;
     try {
       if (payloadBase.type === "pdf" && pendingPdfUploads.length > 1) {
-        const createdPayloads: Array<
-          MapResource & { storageScope?: StorageScope }
-        > = [];
-        const preferredScope = draft.storageScope || "semester";
-        const fallbackScope: StorageScope =
-          preferredScope === "semester" ? "legacy" : "semester";
-
-        for (let index = 0; index < pendingPdfUploads.length; index += 1) {
-          const upload = pendingPdfUploads[index];
-          const nextResourceId = `map-${Date.now()}-${index}`;
-          const payloadSeed = normalizeMapResource(nextResourceId, {
-            ...draft,
-            id: nextResourceId,
-            title: fileNameWithoutExtension(upload.file.name),
-            fileName: upload.file.name,
-            mimeType: upload.file.type || "application/pdf",
-            pdfRegions: upload.regions,
-            pdfPageImages: upload.pageImages,
-          });
-          const fileInfo = await uploadSelectedFile(
-            nextResourceId,
+        const created: StoredMapResource[] = [];
+        const totalBytes = pendingPdfUploads.reduce(
+          (sum, upload) =>
+            sum +
+            upload.file.size +
+            upload.processed.pageImages.reduce(
+              (size, page) => size + page.blob.size,
+              0,
+            ),
+          0,
+        );
+        if (pendingPdfUploads.length > 100 || totalBytes > 100 * 1024 * 1024)
+          throw new Error(
+            "한 번에 저장할 지도는 100개, 전체 파일은 100MB 이하여야 합니다.",
+          );
+        for (const upload of pendingPdfUploads) {
+          const id = `map-${crypto.randomUUID()}`;
+          const info = await uploadSelectedFile(
+            id,
             upload.file,
             upload.processed,
           );
-          const payload: MapResource = {
-            ...payloadSeed,
-            ...fileInfo,
-            imageUrl: "",
-            fileUrl: fileInfo.fileUrl || "",
-            storagePath: fileInfo.storagePath || "",
-            fileName: fileInfo.fileName || upload.file.name,
-            mimeType: fileInfo.mimeType || upload.file.type || "",
-            pdfPageImages: fileInfo.pdfPageImages || [],
-            pdfRegions: fileInfo.pdfRegions || [],
-          };
-
-          let resolvedScope = preferredScope;
-          try {
-            await persistToScope(preferredScope, payload);
-          } catch (primaryError) {
-            console.error(
-              `Failed to save map resource to ${preferredScope}:`,
-              primaryError,
-            );
-            await persistToScope(fallbackScope, payload);
-            resolvedScope = fallbackScope;
-          }
-
-          createdPayloads.push({ ...payload, storageScope: resolvedScope });
+          created.push({
+            ...normalizeMapResource(id, {
+              ...draft,
+              title: fileNameWithoutExtension(upload.file.name),
+            }),
+            ...info,
+            storageScope: draft.storageScope || "semester",
+          });
         }
-
-        const merged = mergeMapResources([...items, ...createdPayloads]).map(
-          (item) => {
-            const created = createdPayloads.find(
-              (payload) => payload.id === item.id,
-            );
-            const existing = items.find((resource) => resource.id === item.id);
-            return {
-              ...item,
-              storageScope:
-                created?.storageScope ||
-                existing?.storageScope ||
-                preferredScope,
-            };
-          },
+        const saved = await persistBatch(created);
+        setItems(
+          mergeMapResources([...items, ...saved]).map((item) => ({
+            ...item,
+            storageScope:
+              saved.find((row) => row.id === item.id)?.storageScope ||
+              items.find((row) => row.id === item.id)?.storageScope ||
+              "semester",
+          })),
         );
-
-        setItems(merged);
-        if (createdPayloads[0]) {
-          setSelectedId(createdPayloads[0].id);
-          setDraft(createdPayloads[0]);
-        }
+        setSelectedId(saved[0].id);
+        setDraft(saved[0]);
         resetFileInput();
         setIsSettingsOpen(false);
-        alert(`${createdPayloads.length}개의 PDF 지도를 한 번에 저장했습니다.`);
-        return;
-      }
-
-      const fileInfo = await uploadSelectedFile(resourceId);
-      const payload: MapResource = {
-        ...payloadBase,
-        ...fileInfo,
-        imageUrl:
-          payloadBase.type === "image"
-            ? fileInfo.imageUrl || payloadBase.imageUrl
-            : "",
-        fileUrl:
-          payloadBase.type === "image" || payloadBase.type === "pdf"
-            ? fileInfo.fileUrl || payloadBase.fileUrl
-            : "",
-        storagePath:
-          payloadBase.type === "image" || payloadBase.type === "pdf"
-            ? fileInfo.storagePath || payloadBase.storagePath
-            : "",
-        fileName:
-          payloadBase.type === "image" || payloadBase.type === "pdf"
-            ? fileInfo.fileName || payloadBase.fileName
-            : "",
-        mimeType:
-          payloadBase.type === "image" || payloadBase.type === "pdf"
-            ? fileInfo.mimeType || payloadBase.mimeType
-            : "",
-        embedUrl: payloadBase.type === "iframe" ? payloadBase.embedUrl : "",
-        googleQuery:
-          payloadBase.type === "google" ? payloadBase.googleQuery : "",
-        pdfPageImages:
-          payloadBase.type === "pdf"
-            ? fileInfo.pdfPageImages || payloadBase.pdfPageImages || []
-            : [],
-        pdfRegions:
-          payloadBase.type === "pdf"
-            ? fileInfo.pdfRegions || payloadBase.pdfRegions || []
-            : [],
-      };
-
-      await persistMapPayload(payload, draft.storageScope || "semester");
-      return;
-
-      const preferredScope: StorageScope = draft.storageScope || "semester";
-      const fallbackScope: StorageScope =
-        preferredScope === "semester" ? "legacy" : "semester";
-      let resolvedScope = preferredScope;
-
-      try {
-        await persistToScope(preferredScope, payload);
-      } catch (primaryError) {
-        console.error(
-          `Failed to save map resource to ${preferredScope}:`,
-          primaryError,
-        );
-        await persistToScope(fallbackScope, payload);
-        resolvedScope = fallbackScope;
-      }
-
-      const merged = mergeMapResources([
-        ...items.filter((item) => item.id !== payload.id),
-        { ...payload, storageScope: resolvedScope },
-      ]).map((item) => {
-        const existing = items.find((resource) => resource.id === item.id);
-        if (item.id === payload.id) {
-          return { ...item, storageScope: resolvedScope };
-        }
-        return {
-          ...item,
-          storageScope: existing?.storageScope || resolvedScope,
-        };
-      });
-
-      setItems(merged);
-      setSelectedId(payload.id);
-      setDraft({ ...payload, storageScope: resolvedScope });
-      resetFileInput();
-      setIsSettingsOpen(false);
-
-      if (resolvedScope === preferredScope) {
-        alert("?轅붽틓???????????????μ떝?롧땟?삵맪??????");
+        alert(`${saved.length}개의 PDF 지도를 한 번에 저장했습니다.`);
       } else {
-        alert(
-          "?轅붽틓???????????????μ떝?롧땟?삵맪?????? ???????틯 ?嶺???????β뼯援????る쑏????????????????β뼯爰????癲ル슢???с궘?????녾낮?녔틦?쀂???????????낆젵.",
-        );
+        const info = await uploadSelectedFile(resourceId);
+        const payload = { ...payloadBase, ...info };
+        await persistMapPayload(payload, draft.storageScope || "semester");
       }
     } catch (error) {
-      console.error("Failed to save map resource:", error);
-      const message = normalizeErrorMessage(error);
-      const storageHint =
-        message.includes("storage-upload-timeout") ||
-        message.includes("storage-download-url-timeout")
-          ? "\nFirebase Storage 응답이 지연되고 있습니다. 잠시 후 다시 시도하거나 파일 크기를 줄여 보세요."
-          : "";
-      alert(`지도 저장에 실패했습니다.\n${message}${storageHint}`);
+      alert(`지도 저장에 실패했습니다.\n${normalizeErrorMessage(error)}`);
     } finally {
-      setSaving(false);
+      finishMutation();
     }
   };
 
   const handleReprocessPdf = async () => {
-    if (!canEdit) return;
-    if (draft.type !== "pdf" || !draft.id) return;
-
-    if (shouldHandoffLegacyLessonManagementMutation()) {
-      setHandoffAction("지도 PDF 재처리");
-      setIsSettingsOpen(false);
+    if (!canEdit || mutationFlight.current || draft.type !== "pdf" || !draft.id)
       return;
-    }
-
-    let sourceFile = selectedFile;
-    if (!sourceFile) {
+    let file = selectedFile;
+    if (!file) {
       alert("PDF 재처리를 위해 같은 PDF 파일을 다시 선택해 주세요.");
-      sourceFile = await requestLocalPdfFile();
-      if (!sourceFile) {
-        return;
-      }
-      setSelectedFile(sourceFile);
+      file = await requestLocalPdfFile();
+      if (!file) return;
+      setSelectedFile(file);
     }
-
-    setSaving(true);
-
+    if (!beginMutation()) return;
     try {
-      const { processPdfMapFile } = await import("../../lib/pdfMapProcessor");
-      const processed = await processPdfMapFile(sourceFile);
-      const uploadedPages = await uploadProcessedPdfPages(
-        draft.id,
-        processed,
-        draft.pdfPageImages || [],
+      // Reprocessing attaches the selected original and its derived pages in
+      // one command, so an unrelated old PDF cannot remain as their source.
+      const info = await uploadSelectedFile(draft.id, file);
+      await persistMapPayload(
+        { ...normalizeMapResource(draft.id, draft), ...info },
+        draft.storageScope || "semester",
       );
-      const payload: MapResource = {
-        ...normalizeMapResource(draft.id, draft),
-        pdfPageImages: uploadedPages,
-        pdfRegions: processed.regions,
-      };
-
-      await persistMapPayload(payload, draft.storageScope || "semester");
     } catch (error) {
-      console.error("Failed to reprocess PDF map:", error);
       alert(`PDF 재처리에 실패했습니다.\n${normalizeErrorMessage(error)}`);
     } finally {
-      setSaving(false);
+      finishMutation();
     }
   };
 
   const handleDelete = async () => {
-    if (!canEdit) return;
-    if (!draft.id) return;
-
+    if (!canEdit || mutationFlight.current || !draft.id) return;
     if (draft.id === GOOGLE_MAP_RESOURCE_ID) {
       alert("구글 지도 기본 항목은 삭제할 수 없습니다.");
       return;
     }
-
-    if (!window.confirm(`'${draft.title}' 지도를 삭제하시겠습니까?`)) {
+    if (
+      !window.confirm(`'${draft.title}' 지도를 삭제하시겠습니까?`) ||
+      !beginMutation()
+    )
       return;
-    }
-
-    if (shouldHandoffLegacyLessonManagementMutation()) {
-      setHandoffAction("지도 자료 삭제");
-      setIsSettingsOpen(false);
-      return;
-    }
-
     try {
-      const preferredScope: StorageScope = draft.storageScope || "semester";
-      const fallbackScope: StorageScope =
-        preferredScope === "semester" ? "legacy" : "semester";
-      const primaryPath =
-        preferredScope === "semester" ? collectionPath : legacyCollectionPath;
-      const fallbackPath =
-        fallbackScope === "semester" ? collectionPath : legacyCollectionPath;
-
-      try {
-        await blockLegacyMapMutationAsync(
-          "지도 자료 삭제",
-          doc(db, `${primaryPath}/${draft.id}`),
-        );
-      } catch (primaryError) {
-        console.error(
-          `Failed to delete map resource from ${primaryPath}:`,
-          primaryError,
-        );
-        await blockLegacyMapMutationAsync(
-          "지도 자료 삭제",
-          doc(db, `${fallbackPath}/${draft.id}`),
-        );
-      }
-
-      const nextItems = mergeMapResources(
+      await deleteMapResource(
+        config,
+        sourceFor(draft.id, draft.storageScope || "semester"),
+        uploadOwner.current,
+      );
+      mutationSucceeded.current = true;
+      sources.current.delete(draft.id);
+      pendingAssets.current.delete(draft.id);
+      const next = mergeMapResources(
         items.filter((item) => item.id !== draft.id),
-      ).map((item) => {
-        const existing = items.find((resource) => resource.id === item.id);
-        return { ...item, storageScope: existing?.storageScope || "semester" };
-      });
-
-      setItems(nextItems);
-      setSelectedId(nextItems[0]?.id || "");
-      setDraft(nextItems[0] || createDraft());
+      ).map((item) => ({
+        ...item,
+        storageScope:
+          items.find((row) => row.id === item.id)?.storageScope || "semester",
+      }));
+      setItems(next);
+      setSelectedId(next[0]?.id || "");
+      setDraft(next[0] || createDraft());
       resetFileInput();
       setIsSettingsOpen(false);
     } catch (error) {
-      console.error("Failed to delete map resource:", error);
       alert(`지도 삭제에 실패했습니다.\n${normalizeErrorMessage(error)}`);
+    } finally {
+      finishMutation();
     }
   };
 
   const handleSaveTabRename = async () => {
-    if (!canEdit) return;
-    const nextTabGroup = tabRenameValue.trim();
-    if (!tabRenameSourceKey || !nextTabGroup) {
+    if (!canEdit || mutationFlight.current) return;
+    const name = tabRenameValue.trim();
+    if (!tabRenameSourceKey || !name) {
       alert("지도 탭 이름을 입력해 주세요.");
       return;
     }
-
-    if (shouldHandoffLegacyLessonManagementMutation()) {
-      setHandoffAction("지도 탭 이름 변경");
-      setIsTabRenameOpen(false);
-      return;
-    }
-
-    const targetGroup = displayGroupMap.get(tabRenameSourceKey);
-    if (!targetGroup?.items.length) {
-      setIsTabRenameOpen(false);
-      return;
-    }
-
+    const group = displayGroupMap.get(tabRenameSourceKey);
+    if (!group?.items.length || !beginMutation()) return;
     try {
-      const nextItems = items.map((item) => {
-        if (!targetGroup.items.some((groupItem) => groupItem.id === item.id))
-          return item;
-        return { ...item, tabGroup: nextTabGroup };
-      });
-
-      for (const item of nextItems) {
-        const existing = items.find((current) => current.id === item.id);
-        if (!existing || existing.tabGroup === item.tabGroup) continue;
-        await persistToScope(item.storageScope || "semester", {
-          ...normalizeMapResource(item.id, item),
-          tabGroup: nextTabGroup,
-        });
-      }
-
-      setItems(nextItems);
-      setDraft((prev) =>
-        targetGroup.items.some((item) => item.id === prev.id)
-          ? { ...prev, tabGroup: nextTabGroup }
-          : prev,
+      const saved = await persistBatch(
+        group.items.map((item) => ({ ...item, tabGroup: name })),
+      );
+      setItems(
+        items.map((item) => saved.find((row) => row.id === item.id) || item),
       );
       setIsTabRenameOpen(false);
     } catch (error) {
-      console.error("Failed to rename map tab:", error);
       alert(
         `지도 탭 이름을 변경하지 못했습니다.\n${normalizeErrorMessage(error)}`,
       );
+    } finally {
+      finishMutation();
     }
   };
-
   const selectedPreview = draft.id ? draft : null;
   const displayGroups = useMemo(
     () => groupMapResourcesForDisplay(items),
@@ -1476,7 +1360,7 @@ const ManageMaps: React.FC = () => {
       })),
     [displayGroups],
   );
-  const acceptsFile = draft.type === "pdf";
+  const acceptsFile = draft.type === "pdf" || draft.type === "image";
   const currentSettingsTabGroup = (
     draft.tabGroup ||
     draft.category ||
@@ -1640,20 +1524,6 @@ const ManageMaps: React.FC = () => {
               title="지도 자료는 읽기 전용입니다."
               description="현재 계정은 저장 권한이 없어 지도 자료를 조회만 할 수 있습니다."
               readOnly
-              compact
-            />
-          )}
-          {handoffAction && (
-            <StatePanel
-              state="DISABLED"
-              title={`${handoffAction}은 학습 운영에서 진행해 주세요.`}
-              description={buildLegacyLessonManagementHandoffMessage(
-                handoffAction,
-              )}
-              action={{
-                label: "학습 운영으로 이동",
-                href: LEGACY_LESSON_MANAGEMENT_HASH_ROUTE,
-              }}
               compact
             />
           )}
@@ -1858,6 +1728,8 @@ const ManageMaps: React.FC = () => {
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                     >
                       <option value="pdf">PDF</option>
+                      <option value="image">이미지</option>
+                      <option value="iframe">iframe 지도</option>
                       <option value="google">구글 지도</option>
                     </select>
                   </div>
@@ -1897,12 +1769,18 @@ const ManageMaps: React.FC = () => {
                   <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
                     <div>
                       <label className="mb-1 block text-xs font-bold text-gray-500">
-                        PDF 파일 업로드
+                        {draft.type === "pdf"
+                          ? "PDF 파일 업로드"
+                          : "이미지 파일 업로드"}
                       </label>
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept=".pdf,application/pdf"
+                        accept={
+                          draft.type === "pdf"
+                            ? ".pdf,application/pdf"
+                            : ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                        }
                         multiple={draft.type === "pdf"}
                         onClick={(e) => {
                           (e.currentTarget as HTMLInputElement).value = "";

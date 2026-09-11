@@ -7,7 +7,14 @@ import {
 import { getSemesterCollectionPath } from "./semesterScope";
 import type { SystemConfig } from "../types";
 import type { LessonPdfProcessingMeta } from "./lessonPdfExtraction";
-import { lessonWriteRecovery } from "./lessonWriteRecovery";
+import {
+  lessonWriteRecovery,
+  type LessonLocalDraft,
+  type LessonDocumentWrite,
+  type LessonDocumentSubmission,
+  type LessonWriteRecovery,
+  isLessonDocumentUnconfirmed,
+} from "./lessonWriteRecovery";
 
 type Config = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 // Re-extraction uses the same saved asset URL as the lesson viewer. Do not
@@ -94,22 +101,111 @@ export const saveLessonDocument = async (
     W2CommandPayloads["saveLessonDocument"],
     "semesterId" | "expectedSemesterRevision"
   >,
+  preparation?: {
+    localDraft: LessonLocalDraft;
+    prepare: (
+      ownerUid: string,
+    ) => Promise<Pick<LessonDocumentWrite, "document" | "assetUploadIds">>;
+  },
 ) => {
   const ownerUid = auth.currentUser?.uid || "";
   if (!ownerUid) throw new Error("로그인 상태를 확인해 주세요.");
   return lessonWriteRecovery.run(
     `${ownerUid}/${config?.year || ""}/${config?.semester || ""}`,
-    { kind: "document", input },
-    async ({ input: snapshot }) =>
+    {
+      kind: "document",
+      input,
+      localDraft: preparation?.localDraft,
+      submission: {} as LessonDocumentSubmission,
+    },
+    async (snapshot) => {
+      const { localDraft } = snapshot;
+      let preparedInput = snapshot.input;
+      if (preparation) {
+        const prepared = await preparation.prepare(ownerUid);
+        // Only attachment/document fields are replaceable. The unit and its
+        // original revision remain those accepted before any reauthentication.
+        preparedInput = { ...snapshot.input, ...prepared };
+        if (localDraft) localDraft.uploaded = true;
+      }
+      snapshot.submission!.preparedInput = structuredClone(preparedInput);
+      preparedInput = {
+        ...preparedInput,
+        assetUploadIds: await retainUsedLessonAssets(preparedInput),
+      };
+      snapshot.submission!.preparedInput = structuredClone(preparedInput);
+      const payload = {
+        ...(await getLessonCommandScope(config)),
+        ...preparedInput,
+      };
+      snapshot.submission!.payload = structuredClone(payload);
+      return (
+        await executeWestoryCommand("saveLessonDocument", payload, {
+          expectedUid: ownerUid,
+        })
+      ).result;
+    },
+  );
+};
+
+// A recovered draft can subsequently replace its PDF or delete an image.
+// Keep only tickets consumed by the final document; the server still validates
+// ownership, revision, status, expiry, kind, and every retained reference.
+const retainUsedLessonAssets = async (input: LessonDocumentWrite) => {
+  const snapshots = await Promise.all(
+    input.assetUploadIds.map(async (id) => ({
+      id,
+      snapshot: await getDocFromServer(doc(db, "lesson_asset_uploads", id)),
+    })),
+  );
+  const document = input.document;
+  return snapshots
+    .filter(({ snapshot }) => {
+      if (!snapshot.exists())
+        throw new Error(
+          "업로드 기록을 확인할 수 없습니다. 다시 저장해 주세요.",
+        );
+      const asset = snapshot.data();
+      if (asset.kind === "PDF")
+        return (
+          document.pdfStoragePath === asset.storagePath &&
+          document.pdfUrl === asset.url
+        );
+      if (asset.kind === "PAGE")
+        return document.worksheetPageImages?.some(
+          (page) => page.imageUrl === asset.url,
+        );
+      if (asset.kind === "FOOTNOTE")
+        return document.footnotes?.some(
+          (note) =>
+            note.imageStoragePath === asset.storagePath &&
+            note.imageUrl === asset.url,
+        );
+      throw new Error("업로드한 파일의 종류를 확인할 수 없습니다.");
+    })
+    .map(({ id }) => id);
+};
+
+export const retryLessonDocumentSave = async (record: LessonWriteRecovery) => {
+  if (
+    record.kind !== "document" ||
+    !record.submission?.payload ||
+    !isLessonDocumentUnconfirmed(record)
+  )
+    throw new Error("다시 확인할 저장 요청이 없습니다.");
+  const ownerUid = record.scope.split("/")[0];
+  if (!ownerUid || auth.currentUser?.uid !== ownerUid)
+    throw new Error(
+      "로그인 사용자가 바뀌었습니다. 원래 계정에서 저장 결과를 확인해 주세요.",
+    );
+  const payload = structuredClone(record.submission.payload);
+  return lessonWriteRecovery.retry(
+    record,
+    async () =>
       (
-        await executeWestoryCommand(
-          "saveLessonDocument",
-          {
-            ...(await getLessonCommandScope(config)),
-            ...snapshot,
-          },
-          { expectedUid: ownerUid },
-        )
+        await executeWestoryCommand("saveLessonDocument", payload, {
+          expectedUid: ownerUid,
+        })
       ).result,
   );
 };
@@ -122,10 +218,13 @@ export const uploadLessonAsset = async (
     kind: "PDF" | "PAGE" | "FOOTNOTE";
     file: Blob;
     originalName?: string;
+    expectedUid?: string;
   },
 ) => {
-  const ownerUid = auth.currentUser?.uid;
+  const ownerUid = input.expectedUid || auth.currentUser?.uid;
   if (!ownerUid) throw new Error("로그인 상태를 확인해 주세요.");
+  if (auth.currentUser?.uid !== ownerUid)
+    throw new Error("로그인 사용자가 바뀌어 업로드를 중단했습니다.");
   const hash = await crypto.subtle.digest(
     "SHA-256",
     await input.file.arrayBuffer(),
@@ -147,6 +246,7 @@ export const uploadLessonAsset = async (
       sha256,
       originalName: input.originalName || "",
     },
+    { expectedUid: ownerUid },
   );
   if (auth.currentUser?.uid !== ownerUid)
     throw new Error("로그인 사용자가 바뀌어 업로드를 중단했습니다.");
@@ -163,7 +263,7 @@ export const uploadLessonAsset = async (
       const upload = await getHttpsCallable<
         { uploadId: string; contentBase64: string },
         { accepted: boolean }
-      >("uploadLessonAssetContent");
+      >("uploadLessonAssetContent", { expectedUid: ownerUid });
       await upload({ uploadId: ticket.uploadId, contentBase64: btoa(binary) });
     } catch (error) {
       // A lost upload acknowledgement may race the finalizer. Poll the ticket

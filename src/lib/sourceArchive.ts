@@ -1,15 +1,18 @@
 import {
   collection,
-  doc,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
-  setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { db, getFirebaseStorage, getHttpsCallable } from "./firebase";
+import { getDownloadURL, ref } from "firebase/storage";
+import { auth, db, getFirebaseStorage, getHttpsCallable } from "./firebase";
+import { executeWestoryCommand, WestoryCommandError } from "./commandGateway";
+import {
+  createStableLegacyMutationActionKey,
+  getOrCreateLegacyWisMutationIntent,
+  forgetLegacyWisMutationIntent,
+} from "./legacyWisMutationIntent";
 import type {
   SourceArchiveAsset,
   SourceArchiveAssetType,
@@ -26,6 +29,59 @@ import type { PreparedSourceArchiveUpload } from "./sourceArchiveImage";
 import type { PreparedSourceArchivePdfUpload } from "./sourceArchivePdf";
 
 export const SOURCE_ARCHIVE_COLLECTION = "source_archive";
+export type SourceArchiveManagedAsset = SourceArchiveAsset & {
+  deleteCommandId?: string;
+  deletionStatus?: string;
+};
+export type SourceArchiveEditorSnapshot = {
+  draft: SourceArchiveDraft;
+  selectedFile: File | null;
+  tagInput: string;
+  panelMode: "create" | "edit";
+};
+type SourceArchiveWriteOutcome =
+  | { ok: true; assetId: string }
+  | { ok: false; error: unknown };
+type SourceArchiveEditorRecovery = SourceArchiveEditorSnapshot & {
+  pending: boolean;
+  settled: Promise<SourceArchiveWriteOutcome>;
+};
+// Raw files and draft text remain in this tab's memory across step-up remounts.
+const editorRecoveries = new Map<string, SourceArchiveEditorRecovery>();
+export const sourceArchiveEditorRecovery = {
+  peek: (ownerUid: string) => editorRecoveries.get(ownerUid),
+  acknowledge: (ownerUid: string, record: SourceArchiveEditorRecovery) => {
+    if (editorRecoveries.get(ownerUid) === record && !record.pending)
+      editorRecoveries.delete(ownerUid);
+  },
+  run: (
+    ownerUid: string,
+    snapshot: SourceArchiveEditorSnapshot,
+    execute: (snapshot: SourceArchiveEditorSnapshot) => Promise<string>,
+  ) => {
+    if (editorRecoveries.get(ownerUid)?.pending)
+      throw new Error(
+        "앞선 사료 저장 결과를 확인하고 있습니다. 잠시만 기다려 주세요.",
+      );
+    const task = Promise.resolve().then(() => execute(snapshot));
+    const record: SourceArchiveEditorRecovery = {
+      ...snapshot,
+      pending: true,
+      settled: task.then(
+        (assetId) => {
+          record.pending = false;
+          return { ok: true, assetId };
+        },
+        (error: unknown) => {
+          record.pending = false;
+          return { ok: false, error };
+        },
+      ),
+    };
+    editorRecoveries.set(ownerUid, record);
+    return record;
+  },
+};
 export const SOURCE_ARCHIVE_RENDER_PAGE_SIZE = 12;
 export const SOURCE_ARCHIVE_SCHEMA_VERSION = 3;
 export const SOURCE_ARCHIVE_MEDIA_KIND: SourceArchiveMediaKind = "image";
@@ -326,72 +382,6 @@ const normalizeSourceArchiveSearch = (
   };
 };
 
-const buildSourceArchiveFilePayload = (
-  image: SourceArchiveImageMeta,
-  file?: Partial<SourceArchiveFileMeta> | null,
-  mediaKind: SourceArchiveMediaKind = "image",
-): SourceArchiveFileMeta => {
-  const next = file && typeof file === "object" ? file : {};
-  const storagePath =
-    normalizeText(next.storagePath) || image.originalPath || image.displayPath;
-
-  return {
-    ...EMPTY_SOURCE_ARCHIVE_FILE,
-    storagePath,
-    originalName: normalizeText(next.originalName) || image.originalName || "",
-    mimeType:
-      normalizeText(next.mimeType) || image.originalMime || image.mime || "",
-    byteSize:
-      Number(next.byteSize) ||
-      image.originalByteSize ||
-      image.displayByteSize ||
-      image.byteSize ||
-      0,
-    width:
-      Number(next.width) ||
-      image.originalWidth ||
-      image.displayWidth ||
-      image.width ||
-      0,
-    height:
-      Number(next.height) ||
-      image.originalHeight ||
-      image.displayHeight ||
-      image.height ||
-      0,
-    revision:
-      normalizeText(next.revision) ||
-      image.revision ||
-      getRevisionFromPath(storagePath),
-    originalAvailable:
-      next.originalAvailable === true ||
-      Boolean(image.originalPath) ||
-      (mediaKind === "pdf" && Boolean(storagePath)),
-    legacyPreviewOnly:
-      next.legacyPreviewOnly === true ||
-      (!image.originalPath && Boolean(image.displayPath)),
-    pendingUploadToken: normalizeText(next.pendingUploadToken),
-    pendingUploadPath: normalizeText(next.pendingUploadPath),
-  };
-};
-
-const buildSourceArchiveSearchPayload = (
-  searchText: string,
-  search?: Partial<SourceArchiveSearchMeta> | null,
-): SourceArchiveSearchMeta => {
-  const next = search && typeof search === "object" ? search : {};
-
-  return {
-    ...EMPTY_SOURCE_ARCHIVE_SEARCH,
-    status: normalizeSearchStatus(
-      next.status || (searchText ? "metadata-only" : "pending"),
-    ),
-    artifactPath: normalizeText(next.artifactPath),
-    previewText: normalizeText(next.previewText),
-    updatedAt: next.updatedAt,
-  };
-};
-
 export const buildSourceArchiveSearchText = (
   draft: Pick<
     SourceArchiveDraft,
@@ -494,9 +484,11 @@ export const buildSourceArchiveDraft = (
 export const normalizeSourceArchiveAsset = (
   id: string,
   raw: unknown,
-): SourceArchiveAsset => {
+): SourceArchiveManagedAsset => {
   const source =
-    raw && typeof raw === "object" ? (raw as Partial<SourceArchiveAsset>) : {};
+    raw && typeof raw === "object"
+      ? (raw as Partial<SourceArchiveManagedAsset>)
+      : {};
   const type = normalizeSourceArchiveType(source.type);
   const tags = normalizeSourceArchiveTags(source.tags);
 
@@ -542,6 +534,8 @@ export const normalizeSourceArchiveAsset = (
 
   return {
     id,
+    deleteCommandId: normalizeText(source.deleteCommandId),
+    deletionStatus: normalizeText(source.deletionStatus),
     schemaVersion:
       Number(source.schemaVersion) || SOURCE_ARCHIVE_SCHEMA_VERSION,
     mediaKind,
@@ -583,7 +577,7 @@ export const normalizeSourceArchiveAsset = (
 };
 
 export const subscribeSourceArchiveAssets = (
-  onChange: (items: SourceArchiveAsset[]) => void,
+  onChange: (items: SourceArchiveManagedAsset[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe =>
   onSnapshot(
@@ -593,43 +587,15 @@ export const subscribeSourceArchiveAssets = (
     ),
     (snapshot) => {
       onChange(
-        snapshot.docs.map((item) =>
-          normalizeSourceArchiveAsset(item.id, item.data()),
-        ),
+        snapshot.docs
+          .filter((item) => item.data().deletionStatus !== "COMPLETED")
+          .map((item) => normalizeSourceArchiveAsset(item.id, item.data())),
       );
     },
     (error) => {
       onError?.(error as Error);
     },
   );
-
-const buildIncomingUploadPath = (
-  assetId: string,
-  uploadToken: string,
-  extension: string,
-) => `source-archive/${assetId}/incoming/${uploadToken}.${extension}`;
-
-const buildCombinedSearchText = (searchText: string, previewText: string) =>
-  [normalizeText(searchText), normalizeText(previewText)]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-const isImageUpload = (
-  upload:
-    | PreparedSourceArchiveUpload
-    | PreparedSourceArchivePdfUpload
-    | null
-    | undefined,
-): upload is PreparedSourceArchiveUpload => upload?.kind === "image";
-
-const isPdfUpload = (
-  upload:
-    | PreparedSourceArchiveUpload
-    | PreparedSourceArchivePdfUpload
-    | null
-    | undefined,
-): upload is PreparedSourceArchivePdfUpload => upload?.kind === "pdf";
 
 export const getSourceArchiveDownloadUrl = async (storagePath: string) => {
   const normalizedPath = normalizeText(storagePath);
@@ -640,6 +606,36 @@ export const getSourceArchiveDownloadUrl = async (storagePath: string) => {
   return getDownloadURL(ref(storage, normalizedPath));
 };
 
+const archiveVersion = (value: unknown) => {
+  const timestamp = value as { seconds?: number; nanoseconds?: number } | null;
+  return timestamp &&
+    Number.isSafeInteger(timestamp.seconds) &&
+    Number.isSafeInteger(timestamp.nanoseconds)
+    ? `${timestamp.seconds}:${timestamp.nanoseconds}`
+    : "";
+};
+
+const archiveMetadata = (draft: SourceArchiveDraft) => ({
+  title: normalizeText(draft.title),
+  description: normalizeText(draft.description),
+  era: normalizeText(draft.era),
+  subject: normalizeText(draft.subject),
+  unit: normalizeText(draft.unit),
+  type: normalizeSourceArchiveType(draft.type),
+  tags: normalizeSourceArchiveTags(draft.tags),
+  source: normalizeText(draft.source),
+});
+
+const forgetConfirmedFailure = (intentKey: string, error: unknown) => {
+  if (
+    error instanceof WestoryCommandError &&
+    error.outcomeConfirmed &&
+    ["failed", "conflict", "unauthorized"].includes(error.state)
+  ) {
+    forgetLegacyWisMutationIntent(intentKey);
+  }
+};
+
 export const saveSourceArchiveAsset = async (params: {
   draft: SourceArchiveDraft;
   actorUid: string;
@@ -648,312 +644,133 @@ export const saveSourceArchiveAsset = async (params: {
     | PreparedSourceArchivePdfUpload
     | null;
 }) => {
-  const requestedMediaKind = normalizeSourceArchiveMediaKind(
-    params.draft.mediaKind,
-    {
-      mimeType: params.draft.file?.mimeType,
-      storagePath: params.draft.file?.storagePath,
-    },
-  );
-  const assetUpload = params.fileUpload || null;
-  const nextMediaKind = assetUpload?.kind || requestedMediaKind;
-  const normalizedImage =
-    nextMediaKind === "pdf"
-      ? { ...EMPTY_SOURCE_ARCHIVE_IMAGE }
-      : normalizeSourceArchiveImage(params.draft.image);
-
-  const normalizedDraft: SourceArchiveDraft = {
-    ...createEmptySourceArchiveDraft(),
-    ...params.draft,
-    id: normalizeText(params.draft.id) || undefined,
-    schemaVersion: SOURCE_ARCHIVE_SCHEMA_VERSION,
-    mediaKind: nextMediaKind,
-    status: normalizeProcessingStatus(params.draft.status),
-    currentRevision: normalizeText(params.draft.currentRevision),
-    title: normalizeText(params.draft.title),
-    description: normalizeText(params.draft.description),
-    era: normalizeText(params.draft.era),
-    subject: normalizeText(params.draft.subject),
-    unit: normalizeText(params.draft.unit),
-    type: normalizeSourceArchiveType(params.draft.type),
-    tags: normalizeSourceArchiveTags(params.draft.tags),
-    source: normalizeText(params.draft.source),
-    searchText: normalizeText(params.draft.searchText).toLowerCase(),
-    previewText: normalizeText(params.draft.previewText),
-    pageCount: Number(params.draft.pageCount) || 0,
-    file: buildSourceArchiveFilePayload(
-      normalizedImage,
-      params.draft.file,
-      nextMediaKind,
-    ),
-    search: buildSourceArchiveSearchPayload(
-      normalizeText(params.draft.searchText).toLowerCase(),
-      params.draft.search,
-    ),
-    processingStatus: normalizeProcessingStatus(params.draft.processingStatus),
-    extractionStatus: normalizeExtractionStatus(
-      params.draft.extractionStatus,
-      nextMediaKind,
-      normalizeProcessingStatus(params.draft.processingStatus),
-    ),
-    extractionVersion: normalizeText(params.draft.extractionVersion),
-    extractedContentPath: normalizeText(params.draft.extractedContentPath),
-    extractedManifestPath: normalizeText(params.draft.extractedManifestPath),
-    parserKind: normalizeText(params.draft.parserKind),
-    parseErrorMessage: normalizeText(params.draft.parseErrorMessage),
-    processingError: normalizeText(params.draft.processingError),
-    image: normalizedImage,
-  };
-
-  if (!normalizedDraft.title) {
-    throw new Error("제목을 입력해 주세요.");
-  }
-  if (
-    !normalizedDraft.era &&
-    !normalizedDraft.subject &&
-    !normalizedDraft.unit
-  ) {
+  if (!params.actorUid || params.actorUid !== auth.currentUser?.uid)
+    throw new Error("로그인 상태를 확인해 주세요.");
+  const metadata = archiveMetadata(params.draft);
+  if (!metadata.title) throw new Error("제목을 입력해 주세요.");
+  if (!metadata.era && !metadata.subject && !metadata.unit)
     throw new Error("시대, 주제, 단원 중 하나 이상을 입력해 주세요.");
-  }
-
-  const searchText = buildSourceArchiveSearchText(normalizedDraft);
-  const assetRef = normalizedDraft.id
-    ? doc(db, SOURCE_ARCHIVE_COLLECTION, normalizedDraft.id)
-    : doc(collection(db, SOURCE_ARCHIVE_COLLECTION));
-  const uploadToken = assetUpload ? crypto.randomUUID() : "";
-  const incomingUploadPath = assetUpload
-    ? buildIncomingUploadPath(assetRef.id, uploadToken, assetUpload.extension)
-    : "";
-  const nextImage = isImageUpload(assetUpload)
-    ? {
-        ...normalizeSourceArchiveImage(normalizedDraft.image),
-        originalName:
-          assetUpload.originalName || normalizedDraft.image?.originalName || "",
-        originalMime:
-          assetUpload.originalMimeType ||
-          normalizedDraft.image?.originalMime ||
-          "",
-        originalWidth:
-          assetUpload.originalWidth ||
-          normalizedDraft.image?.originalWidth ||
-          0,
-        originalHeight:
-          assetUpload.originalHeight ||
-          normalizedDraft.image?.originalHeight ||
-          0,
-        originalByteSize:
-          assetUpload.originalByteSize ||
-          normalizedDraft.image?.originalByteSize ||
-          0,
-        pendingUploadToken: uploadToken,
-        pendingUploadPath: incomingUploadPath,
-      }
-    : {
-        ...EMPTY_SOURCE_ARCHIVE_IMAGE,
-        ...(nextMediaKind === "image"
-          ? normalizeSourceArchiveImage(normalizedDraft.image)
-          : {}),
-      };
-  const nextFile = {
-    ...buildSourceArchiveFilePayload(
-      nextImage,
-      normalizedDraft.file,
-      nextMediaKind,
-    ),
-    originalName:
-      assetUpload?.originalName ||
-      normalizedDraft.file?.originalName ||
-      nextImage.originalName ||
-      "",
-    mimeType:
-      assetUpload?.originalMimeType ||
-      normalizedDraft.file?.mimeType ||
-      nextImage.originalMime ||
-      "",
-    byteSize:
-      assetUpload?.originalByteSize ||
-      normalizedDraft.file?.byteSize ||
-      nextImage.originalByteSize ||
-      0,
-    width: isImageUpload(assetUpload)
-      ? assetUpload.originalWidth ||
-        normalizedDraft.file?.width ||
-        nextImage.originalWidth ||
-        0
-      : nextMediaKind === "pdf"
-        ? 0
-        : normalizedDraft.file?.width || nextImage.originalWidth || 0,
-    height: isImageUpload(assetUpload)
-      ? assetUpload.originalHeight ||
-        normalizedDraft.file?.height ||
-        nextImage.originalHeight ||
-        0
-      : nextMediaKind === "pdf"
-        ? 0
-        : normalizedDraft.file?.height || nextImage.originalHeight || 0,
-    originalAvailable: Boolean(
-      normalizedDraft.file?.storagePath || nextImage.originalPath,
-    ),
-    legacyPreviewOnly:
-      Boolean(normalizedDraft.file?.legacyPreviewOnly) &&
-      nextMediaKind === "image",
-    pendingUploadToken: isPdfUpload(assetUpload) ? uploadToken : "",
-    pendingUploadPath: isPdfUpload(assetUpload) ? incomingUploadPath : "",
+  const base = {
+    assetId: params.draft.id || "",
+    expectedUpdatedAt: archiveVersion(params.draft.updatedAt),
+    metadata,
   };
-  const nextSearch = {
-    ...buildSourceArchiveSearchPayload(searchText, normalizedDraft.search),
-    status: assetUpload
-      ? "pending"
-      : buildSourceArchiveSearchPayload(searchText, normalizedDraft.search)
-          .status,
-    previewText: assetUpload
-      ? ""
-      : normalizedDraft.previewText ||
-        normalizedDraft.search?.previewText ||
-        "",
-  } satisfies SourceArchiveSearchMeta;
-
+  const upload = params.fileUpload;
+  if (!upload) {
+    if (!base.assetId) throw new Error("이미지나 PDF를 선택해 주세요.");
+    const intentKey = createStableLegacyMutationActionKey(
+      `source-archive:${params.actorUid}:metadata`,
+      base,
+    );
+    const intent = getOrCreateLegacyWisMutationIntent(intentKey, () => base);
+    try {
+      const response = await executeWestoryCommand(
+        "saveSourceArchiveMetadata",
+        intent.payload,
+        { commandId: intent.commandId, expectedUid: params.actorUid },
+      );
+      forgetLegacyWisMutationIntent(intentKey);
+      return response.result.assetId;
+    } catch (error) {
+      forgetConfirmedFailure(intentKey, error);
+      throw error;
+    }
+  }
+  const bytes = new Uint8Array(await upload.blob.arrayBuffer());
   if (
-    !assetUpload &&
-    nextMediaKind === "image" &&
-    !nextImage.displayPath &&
-    !nextImage.thumbPath &&
-    !nextFile.storagePath
-  ) {
-    throw new Error("이미지를 선택해 주세요.");
-  }
-  if (!assetUpload && nextMediaKind === "pdf" && !nextFile.storagePath) {
-    throw new Error("PDF를 선택해 주세요.");
-  }
-
-  await setDoc(
-    assetRef,
-    {
-      schemaVersion: SOURCE_ARCHIVE_SCHEMA_VERSION,
-      mediaKind: nextMediaKind,
-      status: assetUpload ? "uploading" : normalizedDraft.status,
-      currentRevision: normalizedDraft.currentRevision,
-      title: normalizedDraft.title,
-      description: normalizedDraft.description,
-      era: normalizedDraft.era,
-      subject: normalizedDraft.subject,
-      unit: normalizedDraft.unit,
-      type: normalizedDraft.type,
-      tags: normalizedDraft.tags,
-      source: normalizedDraft.source,
-      searchText: assetUpload
-        ? searchText
-        : buildCombinedSearchText(
-            searchText,
-            normalizedDraft.previewText || nextSearch.previewText,
-          ),
-      previewText: assetUpload ? "" : normalizedDraft.previewText,
-      pageCount:
-        assetUpload && nextMediaKind === "pdf" ? 0 : normalizedDraft.pageCount,
-      file: nextFile,
-      search: nextSearch,
-      processingStatus: assetUpload
-        ? "uploading"
-        : normalizedDraft.processingStatus,
-      extractionStatus:
-        assetUpload && nextMediaKind === "pdf"
-          ? "queued"
-          : normalizedDraft.extractionStatus,
-      extractionVersion: assetUpload
-        ? EMPTY_EXTRACTION_VERSION
-        : normalizedDraft.extractionVersion,
-      extractedContentPath: assetUpload
-        ? EMPTY_EXTRACTION_PATH
-        : normalizedDraft.extractedContentPath,
-      extractedManifestPath: assetUpload
-        ? EMPTY_EXTRACTION_PATH
-        : normalizedDraft.extractedManifestPath,
-      parserKind: assetUpload ? EMPTY_PARSER_KIND : normalizedDraft.parserKind,
-      parseErrorMessage: assetUpload ? "" : normalizedDraft.parseErrorMessage,
-      processingError: assetUpload ? "" : normalizedDraft.processingError,
-      image: nextImage,
-      updatedAt: serverTimestamp(),
-      updatedBy: params.actorUid,
-      ...(normalizedDraft.id
-        ? {}
-        : {
-            createdAt: serverTimestamp(),
-            createdBy: params.actorUid,
-          }),
+    !bytes.length ||
+    bytes.length > (upload.kind === "pdf" ? 20 : 4.5) * 1024 * 1024
+  )
+    throw new Error(
+      upload.kind === "pdf"
+        ? "PDF는 20MB 이하여야 합니다."
+        : "이미지는 4.5MB 이하여야 합니다.",
+    );
+  const sha256 = Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+    (value) => value.toString(16).padStart(2, "0"),
+  ).join("");
+  const payload = {
+    ...base,
+    upload: {
+      mediaKind: upload.kind,
+      contentType: upload.mimeType,
+      byteSize: bytes.length,
+      sha256,
+      originalName: upload.originalName,
+      originalMimeType: upload.originalMimeType,
+      originalByteSize: upload.originalByteSize,
+      originalWidth: upload.originalWidth,
+      originalHeight: upload.originalHeight,
     },
-    { merge: true },
+  };
+  const intentKey = createStableLegacyMutationActionKey(
+    `source-archive:${params.actorUid}:upload`,
+    payload,
   );
-
-  if (!assetUpload || !incomingUploadPath) {
-    return assetRef.id;
-  }
-
+  const intent = getOrCreateLegacyWisMutationIntent(intentKey, () => payload);
   try {
-    const storage = await getFirebaseStorage();
-    await uploadBytes(ref(storage, incomingUploadPath), assetUpload.blob, {
-      contentType: assetUpload.mimeType,
-      cacheControl: "private,no-store,max-age=0",
+    const prepared = await executeWestoryCommand(
+      "prepareSourceArchiveUpload",
+      intent.payload,
+      { commandId: intent.commandId, expectedUid: params.actorUid },
+    );
+    if (auth.currentUser?.uid !== params.actorUid)
+      throw new Error(
+        "로그인 사용자가 바뀌었습니다. 파일은 다시 로그인한 뒤 올려 주세요.",
+      );
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000)
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    const callable = await getHttpsCallable("uploadSourceArchiveAsset");
+    await callable({
+      uploadId: prepared.result.uploadId,
+      contentBase64: btoa(binary),
     });
-
-    await setDoc(
-      assetRef,
-      {
-        status: "queued",
-        processingStatus: "queued",
-        extractionStatus:
-          nextMediaKind === "pdf" ? "queued" : normalizedDraft.extractionStatus,
-        updatedAt: serverTimestamp(),
-        updatedBy: params.actorUid,
-      },
-      { merge: true },
-    );
-
-    return assetRef.id;
+    forgetLegacyWisMutationIntent(intentKey);
+    return prepared.result.assetId;
   } catch (error) {
-    const message = String(
-      (error as { message?: string })?.message || "upload-failed",
-    );
-    await setDoc(
-      assetRef,
-      {
-        status: "failed",
-        processingStatus: "failed",
-        extractionStatus:
-          nextMediaKind === "pdf" ? "failed" : normalizedDraft.extractionStatus,
-        parseErrorMessage:
-          nextMediaKind === "pdf" ? message : normalizedDraft.parseErrorMessage,
-        processingError: message,
-        previewText: nextMediaKind === "pdf" ? "" : normalizedDraft.previewText,
-        search: {
-          ...nextSearch,
-          status: "failed",
-          previewText: nextMediaKind === "pdf" ? "" : nextSearch.previewText,
-        },
-        file: {
-          ...nextFile,
-          pendingUploadToken: "",
-          pendingUploadPath: "",
-        },
-        image: {
-          ...nextImage,
-          pendingUploadToken: "",
-          pendingUploadPath: "",
-        },
-        updatedAt: serverTimestamp(),
-        updatedBy: params.actorUid,
-      },
-      { merge: true },
-    );
+    forgetConfirmedFailure(intentKey, error);
     throw error;
   }
 };
 
-export const deleteSourceArchiveAsset = async (assetId: string) => {
-  const callable = await getHttpsCallable("deleteSourceArchiveAsset");
-  const result = await callable({ assetId: normalizeText(assetId) });
-  return result.data as {
-    assetId: string;
-    deleted: boolean;
-    fileCount: number;
+export const deleteSourceArchiveAsset = async (
+  asset: SourceArchiveManagedAsset,
+) => {
+  const actorUid = auth.currentUser?.uid;
+  if (!actorUid) throw new Error("로그인 상태를 확인해 주세요.");
+  const payload = {
+    assetId: asset.id,
+    expectedUpdatedAt: archiveVersion(asset.updatedAt),
   };
+  const intentKey = createStableLegacyMutationActionKey(
+    `source-archive:${actorUid}:delete`,
+    { assetId: asset.id },
+  );
+  const intent = getOrCreateLegacyWisMutationIntent(intentKey, () => payload);
+  try {
+    // After a reload a visible tombstone offers the same cleanup retry, without
+    // issuing another logical delete against the already-deleted document.
+    const deleteCommandId =
+      asset.deleteCommandId ||
+      (
+        await executeWestoryCommand(
+          "deleteSourceArchiveAsset",
+          intent.payload,
+          { commandId: intent.commandId, expectedUid: actorUid },
+        )
+      ).commandId;
+    if (auth.currentUser?.uid !== actorUid)
+      throw new Error(
+        "로그인 사용자가 바뀌었습니다. 다시 로그인한 뒤 삭제를 이어서 진행해 주세요.",
+      );
+    const callable = await getHttpsCallable("cleanupSourceArchiveAsset");
+    const result = await callable({ assetId: asset.id, deleteCommandId });
+    forgetLegacyWisMutationIntent(intentKey);
+    return result.data as { assetId: string; deleted: boolean };
+  } catch (error) {
+    forgetConfirmedFailure(intentKey, error);
+    throw error;
+  }
 };

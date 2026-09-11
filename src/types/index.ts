@@ -305,6 +305,15 @@ export interface HistoryDictionaryRequest {
 
 export type StudentHistoryDictionaryWordStatus = "requested" | "saved";
 
+export interface HistoryDictionaryRewardOrigin {
+  ledgerKind: "legacy-point";
+  uid: string;
+  termId: string;
+  year: string;
+  semester: string;
+  transactionId: string;
+}
+
 export interface StudentHistoryDictionaryWord {
   id: string;
   uid?: string;
@@ -330,6 +339,8 @@ export interface StudentHistoryDictionaryWord {
   rewardTransactionId?: string;
   rewardAmount?: number;
   rewardAwardedAt?: any;
+  /** Server-verified original ledger scopes; independent of the word's scope. */
+  rewardOrigins?: HistoryDictionaryRewardOrigin[];
   createdAt?: any;
   updatedAt?: any;
 }

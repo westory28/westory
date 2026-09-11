@@ -471,7 +471,7 @@ const saveSourceArchivePdfArtifacts = async ({
     storagePath: revisionPaths.extractedManifestPath,
     data: extraction.manifest,
   });
-  await Promise.all(
+  const pageWrites = await Promise.allSettled(
     extraction.pageArtifacts.map((pageArtifact) =>
       saveJsonStorageFile({
         bucket,
@@ -480,6 +480,10 @@ const saveSourceArchivePdfArtifacts = async ({
       }),
     ),
   );
+  const failedPageWrite = pageWrites.find(
+    (result) => result.status === "rejected",
+  );
+  if (failedPageWrite) throw failedPageWrite.reason;
 
   return {
     parserKind: extraction.parserKind,

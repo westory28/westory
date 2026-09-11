@@ -349,7 +349,7 @@
       "idempotency": "NATURALLY_IDEMPOTENT",
       "disposition": "DOMAIN_WAVE",
       "ownerWave": "W4A",
-      "clientMode": "LEGACY_CALLABLE",
+      "clientMode": "GATEWAY",
       "dispatchName": "deleteSourceArchiveAsset"
     }
   ]

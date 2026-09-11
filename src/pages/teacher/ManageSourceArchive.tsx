@@ -1,4 +1,10 @@
-import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+import React, {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import StorageImage from "../../components/common/StorageImage";
 import StatePanel from "../../components/common/StatePanel";
 import { useAuth } from "../../contexts/AuthContext";
@@ -13,15 +19,18 @@ import {
   buildSourceArchiveDraft,
   createEmptySourceArchiveDraft,
   getSourceArchiveDownloadUrl,
+  saveSourceArchiveAsset,
+  deleteSourceArchiveAsset,
+  sourceArchiveEditorRecovery,
+  type SourceArchiveManagedAsset as SourceArchiveAsset,
   subscribeSourceArchiveAssets,
 } from "../../lib/sourceArchive";
-import { isSourceArchivePdfFile } from "../../lib/sourceArchivePdf";
 import {
-  LEGACY_LESSON_MANAGEMENT_HASH_ROUTE,
-  buildLegacyLessonManagementHandoffMessage,
-} from "../../lib/legacyLessonManagementHandoff";
+  isSourceArchivePdfFile,
+  buildSourceArchivePdfUpload,
+} from "../../lib/sourceArchivePdf";
+import { buildSourceArchiveUpload } from "../../lib/sourceArchiveImage";
 import type {
-  SourceArchiveAsset,
   SourceArchiveAssetType,
   SourceArchiveDraft,
   SourceArchiveMediaKind,
@@ -255,7 +264,9 @@ const ManageSourceArchive: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [openingOriginalId, setOpeningOriginalId] = useState("");
-  const [handoffAction, setHandoffAction] = useState("");
+  const mountedRef = useRef(false);
+  const activeOwnerRef = useRef(currentUser?.uid || "");
+  activeOwnerRef.current = currentUser?.uid || "";
   const deferredSearchText = useDeferredValue(searchText);
   const selectedAsset = useMemo(
     () => assets.find((item) => item.id === selectedId) || null,
@@ -378,12 +389,15 @@ const ManageSourceArchive: React.FC = () => {
   };
 
   const confirmDiscardIfDirty = () =>
-    !isEditorDirty ? true : window.confirm(UI.discardConfirm);
+    saving || deleting
+      ? false
+      : !isEditorDirty
+        ? true
+        : window.confirm(UI.discardConfirm);
 
   const openCreate = () => {
     if (!confirmDiscardIfDirty()) return;
     resetEditor();
-    setHandoffAction("");
     setMessage("");
     setErrorMessage("");
     setPanelMode("create");
@@ -394,7 +408,6 @@ const ManageSourceArchive: React.FC = () => {
     clearPreview();
     const nextDraft = buildSourceArchiveDraft(asset);
     applyEditorState(nextDraft, asset.tags.join(", "));
-    setHandoffAction("");
     setMessage("");
     setErrorMessage("");
     setPanelMode("edit");
@@ -442,22 +455,82 @@ const ManageSourceArchive: React.FC = () => {
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canWrite || !currentUser?.uid) return;
+    if (!canWrite || !currentUser?.uid || saving || deleting) return;
+    if (sourceArchiveEditorRecovery.peek(currentUser.uid)?.pending) return;
     setMessage("");
     setErrorMessage("");
-    setHandoffAction(
-      panelMode === "edit" ? "사료 수정 저장" : "사료 등록 저장",
+    setSaving(true);
+    const ownerUid = currentUser.uid;
+    const record = sourceArchiveEditorRecovery.run(
+      ownerUid,
+      {
+        draft: {
+          ...draft,
+          tags: tagInput
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+        },
+        selectedFile,
+        tagInput,
+        panelMode: panelMode === "edit" ? "edit" : "create",
+      },
+      async (snapshot) => {
+        const fileUpload = snapshot.selectedFile
+          ? await (isSourceArchivePdfFile(snapshot.selectedFile)
+              ? buildSourceArchivePdfUpload(snapshot.selectedFile)
+              : buildSourceArchiveUpload(snapshot.selectedFile))
+          : null;
+        return saveSourceArchiveAsset({
+          draft: snapshot.draft,
+          actorUid: ownerUid,
+          fileUpload,
+        });
+      },
     );
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const outcome = await record.settled;
+    if (!mountedRef.current || activeOwnerRef.current !== ownerUid) return;
+    setSaving(false);
+    if (outcome.ok) {
+      setSelectedId(outcome.assetId);
+      resetEditor();
+      setPanelMode("view");
+      setMessage(
+        record.selectedFile
+          ? isSourceArchivePdfFile(record.selectedFile)
+            ? UI.savePdfProcessing
+            : UI.saveProcessing
+          : UI.saveDone,
+      );
+    } else {
+      setErrorMessage(
+        outcome.error instanceof Error
+          ? outcome.error.message
+          : "사료를 저장하지 못했습니다. 편집 내용은 유지됩니다.",
+      );
+    }
+    sourceArchiveEditorRecovery.acknowledge(ownerUid, record);
   };
 
   const handleDelete = async (asset: SourceArchiveAsset) => {
-    if (!canWrite) return;
+    if (!canWrite || saving || deleting) return;
     if (!window.confirm(`"${asset.title}" 사료를 삭제할까요?`)) return;
     setMessage("");
     setErrorMessage("");
-    setHandoffAction("사료 삭제");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setDeleting(true);
+    try {
+      await deleteSourceArchiveAsset(asset);
+      setSelectedId("");
+      setMessage(UI.deleteDone);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "사료를 삭제하지 못했습니다. 다시 시도해 주세요.",
+      );
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleOpenOriginal = async (asset: SourceArchiveAsset) => {
@@ -475,6 +548,47 @@ const ManageSourceArchive: React.FC = () => {
       setOpeningOriginalId("");
     }
   };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let active = true;
+    const ownerUid = currentUser?.uid || "";
+    const record = sourceArchiveEditorRecovery.peek(ownerUid);
+    if (!record) {
+      resetEditor();
+      setPanelMode("view");
+      setSaving(false);
+    }
+    if (record) {
+      setSaving(true);
+      void record.settled.then((outcome) => {
+        if (!active) return;
+        setSaving(false);
+        if (outcome.ok) {
+          setSelectedId(outcome.assetId);
+          setPanelMode("view");
+          setMessage(UI.saveDone);
+        } else {
+          applyEditorState(record.draft, record.tagInput);
+          setSelectedFile(record.selectedFile);
+          if (
+            record.selectedFile &&
+            !isSourceArchivePdfFile(record.selectedFile)
+          )
+            setPreviewUrl(URL.createObjectURL(record.selectedFile));
+          setPanelMode(record.panelMode);
+          setErrorMessage(
+            `${outcome.error instanceof Error ? outcome.error.message : "저장을 완료하지 못했습니다."} 편집 내용과 선택한 파일을 복구했습니다.`,
+          );
+        }
+        sourceArchiveEditorRecovery.acknowledge(ownerUid, record);
+      });
+    }
+    return () => {
+      active = false;
+      mountedRef.current = false;
+    };
+  }, [currentUser?.uid]);
 
   if (!canRead) {
     return (
@@ -519,20 +633,6 @@ const ManageSourceArchive: React.FC = () => {
           title="사료 창고는 읽기 전용입니다."
           description={UI.readOnly}
           readOnly
-          compact
-          className="mt-4"
-        />
-      )}
-
-      {handoffAction && (
-        <StatePanel
-          state="DISABLED"
-          title={`${handoffAction}은 학습 운영에서 진행해 주세요.`}
-          description={buildLegacyLessonManagementHandoffMessage(handoffAction)}
-          action={{
-            label: "학습 운영으로 이동",
-            href: LEGACY_LESSON_MANAGEMENT_HASH_ROUTE,
-          }}
           compact
           className="mt-4"
         />
@@ -1042,6 +1142,7 @@ const ManageSourceArchive: React.FC = () => {
                   자료 파일
                 </span>
                 <input
+                  disabled={saving}
                   type="file"
                   accept="image/*,application/pdf"
                   onChange={handleFileChange}
@@ -1058,6 +1159,7 @@ const ManageSourceArchive: React.FC = () => {
                   제목
                 </span>
                 <input
+                  disabled={saving}
                   value={draft.title}
                   onChange={(event) =>
                     setDraft((current) => ({
@@ -1076,6 +1178,7 @@ const ManageSourceArchive: React.FC = () => {
                     유형
                   </span>
                   <select
+                    disabled={saving}
                     value={draft.type}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1099,6 +1202,7 @@ const ManageSourceArchive: React.FC = () => {
                     출처
                   </span>
                   <input
+                    disabled={saving}
                     value={draft.source}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1118,6 +1222,7 @@ const ManageSourceArchive: React.FC = () => {
                     시대
                   </span>
                   <input
+                    disabled={saving}
                     value={draft.era}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1134,6 +1239,7 @@ const ManageSourceArchive: React.FC = () => {
                     주제
                   </span>
                   <input
+                    disabled={saving}
                     value={draft.subject}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1150,6 +1256,7 @@ const ManageSourceArchive: React.FC = () => {
                     단원
                   </span>
                   <input
+                    disabled={saving}
                     value={draft.unit}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1168,6 +1275,7 @@ const ManageSourceArchive: React.FC = () => {
                   태그
                 </span>
                 <input
+                  disabled={saving}
                   value={tagInput}
                   onChange={(event) => setTagInput(event.target.value)}
                   placeholder="태그를 쉼표로 구분해 입력"
@@ -1179,6 +1287,7 @@ const ManageSourceArchive: React.FC = () => {
                   설명
                 </span>
                 <textarea
+                  disabled={saving}
                   value={draft.description}
                   onChange={(event) =>
                     setDraft((current) => ({

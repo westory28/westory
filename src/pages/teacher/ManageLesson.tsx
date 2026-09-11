@@ -9,6 +9,7 @@ import {
   saveLessonTree,
   uploadLessonAsset,
   downloadLessonPdfReference,
+  retryLessonDocumentSave,
 } from "../../lib/lessonManagement";
 import {
   collection,
@@ -70,6 +71,7 @@ import {
 import {
   lessonWriteRecovery,
   lessonWriteFailureMessage,
+  isLessonDocumentUnconfirmed,
   type LessonWriteRecovery,
   type LessonWriteOutcome,
 } from "../../lib/lessonWriteRecovery";
@@ -269,6 +271,11 @@ type FootnoteImageDraft = {
   file: File | null;
   previewUrl: string;
   removeExisting: boolean;
+};
+type LessonUploadContext = {
+  expectedRevision: number;
+  expectedUid: string;
+  assetUploadIds: string[];
 };
 
 type PendingLessonPdfUpload = {
@@ -758,8 +765,9 @@ const ManageLesson: React.FC = () => {
   const treeLoadedRef = useRef(false);
   const treeLoadIdRef = useRef(0);
   const lessonLoadIdRef = useRef(0);
-  const uploadedAssetIdsRef = useRef<string[]>([]);
   const recoveredAssetIdsRef = useRef<string[]>([]);
+  const [unconfirmedWrite, setUnconfirmedWrite] =
+    useState<LessonWriteRecovery | null>(null);
   const editorMountedRef = useRef(true);
   useEffect(() => {
     editorMountedRef.current = true;
@@ -1270,26 +1278,46 @@ const ManageLesson: React.FC = () => {
       "원본 PDF를 확인하고 구조 추출을 다시 요청하는 중입니다...",
     );
     try {
-      const original = await downloadLessonPdfReference(lessonPdfUrl, path);
-      const asset = await uploadLessonAsset(config, {
-        unitId: selectedNodeId,
-        expectedRevision,
-        kind: "PDF",
-        file: new Blob([original], { type: "application/pdf" }),
-        originalName: lessonPdfName || "lesson.pdf",
-      });
-      if (!editorMountedRef.current || editorSessionRef.current !== session)
-        return;
-      const result = await saveLessonDocument(config, {
-        unitId: selectedNodeId,
-        expectedRevision,
-        assetUploadIds: [asset.uploadId],
-        document: {
-          pdfName: lessonPdfName,
-          pdfStoragePath: asset.storagePath,
-          pdfUrl: asset.url,
+      let asset = { storagePath: path, url: lessonPdfUrl };
+      const result = await saveLessonDocument(
+        config,
+        {
+          unitId: selectedNodeId,
+          expectedRevision,
+          assetUploadIds: [],
+          document: {
+            pdfName: lessonPdfName,
+            pdfStoragePath: path,
+            pdfUrl: lessonPdfUrl,
+          },
         },
-      });
+        {
+          localDraft: { pdfFile: null, preparedPdf: null, footnotes: {} },
+          prepare: async (ownerUid) => {
+            const original = await downloadLessonPdfReference(
+              lessonPdfUrl,
+              path,
+            );
+            const uploaded = await uploadLessonAsset(config, {
+              unitId: selectedNodeId,
+              expectedRevision,
+              expectedUid: ownerUid,
+              kind: "PDF",
+              file: new Blob([original], { type: "application/pdf" }),
+              originalName: lessonPdfName || "lesson.pdf",
+            });
+            asset = uploaded;
+            return {
+              assetUploadIds: [uploaded.uploadId],
+              document: {
+                pdfName: lessonPdfName,
+                pdfStoragePath: uploaded.storagePath,
+                pdfUrl: uploaded.url,
+              },
+            };
+          },
+        },
+      );
       if (!editorMountedRef.current || editorSessionRef.current !== session)
         return;
       lessonRevisionRef.current = result.contentRevision;
@@ -1322,7 +1350,10 @@ const ManageLesson: React.FC = () => {
       });
     } catch (error) {
       if (editorMountedRef.current && editorSessionRef.current === session) {
-        lessonWriteRecovery.acknowledge(lessonWriteRecovery.peek(teacherScope));
+        const recovery = lessonWriteRecovery.peek(teacherScope);
+        if (isLessonDocumentUnconfirmed(recovery))
+          setUnconfirmedWrite(recovery!);
+        else lessonWriteRecovery.acknowledge(recovery);
         setPdfSaveFeedback({
           tone: "error",
           message:
@@ -1752,6 +1783,10 @@ const ManageLesson: React.FC = () => {
         setScreenBusyMessage("수업 자료 저장 결과를 확인하는 중입니다...");
       const outcome = recovery ? await recovery.settled : undefined;
       if (!isCurrent()) return;
+      if (isLessonDocumentUnconfirmed(recovery)) {
+        setUnconfirmedWrite(recovery!);
+        return;
+      }
       const applyLoadedTree = async (nextTree: TreeNode[]) => {
         if (!isCurrent()) return;
         setTreeData(nextTree);
@@ -2063,11 +2098,18 @@ const ManageLesson: React.FC = () => {
         });
         const failedInput =
           restored?.recovery.kind === "document" && !restored.outcome.ok
-            ? restored.recovery.input
+            ? restored.recovery.submission?.preparedInput ||
+              restored.recovery.input
             : undefined;
-        const data = failedInput
+        const localDraft =
+          restored?.recovery.kind === "document"
+            ? restored.recovery.localDraft
+            : undefined;
+        let data = failedInput
           ? normalizeLessonData({ ...savedData, ...failedInput.document })
           : savedData;
+        if (localDraft?.general)
+          data = normalizeLessonData({ ...data, ...localDraft.general });
         lessonRevisionRef.current =
           failedInput?.expectedRevision ?? savedData.contentRevision ?? 0;
         if (failedInput) {
@@ -2102,6 +2144,31 @@ const ManageLesson: React.FC = () => {
         );
         setWorksheetBlanks(data.worksheetBlanks);
         setWorksheetExamHighlights(data.worksheetExamHighlights);
+        if (failedInput && localDraft && !localDraft.uploaded) {
+          setSelectedPdfFile(localDraft.pdfFile);
+          setPreparedPdf(localDraft.preparedPdf);
+          if (localDraft.preparedPdf) {
+            setWorksheetPageImages(
+              localDraft.preparedPdf.pageImages.map((page) => ({
+                page: page.page,
+                width: page.width,
+                height: page.height,
+                imageUrl: URL.createObjectURL(page.blob),
+              })),
+            );
+          }
+          setFootnoteImageDrafts(
+            Object.fromEntries(
+              Object.entries(localDraft.footnotes).map(([id, item]) => [
+                id,
+                {
+                  ...item,
+                  previewUrl: item.file ? URL.createObjectURL(item.file) : "",
+                },
+              ]),
+            ),
+          );
+        }
         syncSavedSnapshots({
           selectedNodeId: unitId,
           lessonTitle: savedData.title || title,
@@ -2416,6 +2483,7 @@ const ManageLesson: React.FC = () => {
 
   const uploadWorksheetAssets = async (
     unitId: string,
+    context: LessonUploadContext,
   ): Promise<UploadedWorksheetAssets> => {
     if (!selectedPdfFile || !preparedPdf)
       return {
@@ -2427,18 +2495,17 @@ const ManageLesson: React.FC = () => {
         pdfProcessing: lessonPdfProcessing,
         pendingIncomingUpload: null,
       };
-    const expectedRevision = lessonRevisionRef.current;
-    if (expectedRevision === null)
-      throw new Error("수업자료를 불러온 뒤 다시 저장해 주세요.");
+    const { expectedRevision, expectedUid } = context;
     const pageImages: LessonWorksheetPageImage[] = [];
     for (const page of preparedPdf.pageImages) {
       const asset = await uploadLessonAsset(config, {
         unitId,
         expectedRevision,
+        expectedUid,
         kind: "PAGE",
         file: page.blob,
       });
-      uploadedAssetIdsRef.current.push(asset.uploadId);
+      context.assetUploadIds.push(asset.uploadId);
       pageImages.push({
         page: page.page,
         imageUrl: asset.url,
@@ -2449,11 +2516,12 @@ const ManageLesson: React.FC = () => {
     const original = await uploadLessonAsset(config, {
       unitId,
       expectedRevision,
+      expectedUid,
       kind: "PDF",
       file: selectedPdfFile,
       originalName: selectedPdfFile.name,
     });
-    uploadedAssetIdsRef.current.push(original.uploadId);
+    context.assetUploadIds.push(original.uploadId);
     return {
       pdfName: selectedPdfFile.name,
       pdfUrl: original.url,
@@ -2945,6 +3013,7 @@ const ManageLesson: React.FC = () => {
   const uploadFootnoteAssets = async (
     unitId: string,
     footnotes: LessonFootnote[],
+    context: LessonUploadContext,
   ) => {
     const nextFootnotes: LessonFootnote[] = [];
     const staleAssetPathsToDelete: string[] = [];
@@ -2956,20 +3025,19 @@ const ManageLesson: React.FC = () => {
       // Publish only the selected archive image as a lesson-owned attachment.
       // Students never receive permission to browse the teacher archive.
       if (footnote.sourceArchiveImagePath && !draft?.file) {
-        if (lessonRevisionRef.current === null)
-          throw new Error("수업자료를 다시 열어 주세요.");
         const file = await getBlob(
           ref(await getFirebaseStorage(), footnote.sourceArchiveImagePath),
           6 * 1024 * 1024,
         );
         const asset = await uploadLessonAsset(config, {
           unitId,
-          expectedRevision: lessonRevisionRef.current,
+          expectedRevision: context.expectedRevision,
+          expectedUid: context.expectedUid,
           kind: "FOOTNOTE",
           file,
           originalName: footnote.sourceArchiveTitle || "",
         });
-        uploadedAssetIdsRef.current.push(asset.uploadId);
+        context.assetUploadIds.push(asset.uploadId);
         nextFootnote = {
           ...nextFootnote,
           contentType: "image",
@@ -2983,16 +3051,15 @@ const ManageLesson: React.FC = () => {
       }
 
       if (draft?.file) {
-        if (lessonRevisionRef.current === null)
-          throw new Error("수업자료를 다시 열어 주세요.");
         const asset = await uploadLessonAsset(config, {
           unitId,
-          expectedRevision: lessonRevisionRef.current,
+          expectedRevision: context.expectedRevision,
+          expectedUid: context.expectedUid,
           kind: "FOOTNOTE",
           file: draft.file,
           originalName: draft.file.name,
         });
-        uploadedAssetIdsRef.current.push(asset.uploadId);
+        context.assetUploadIds.push(asset.uploadId);
         const uploadedAsset = {
           imageUrl: asset.url,
           imageStoragePath: asset.storagePath,
@@ -3073,16 +3140,11 @@ const ManageLesson: React.FC = () => {
     const visible = saveMeta
       ? meta.isVisibleToStudents
       : savedLessonState.isVisibleToStudents;
-    session.saving = true;
-    uploadedAssetIdsRef.current = [...recoveredAssetIdsRef.current];
-    setScreenBusyMessage("파일을 확인하고 수업 자료를 저장하는 중입니다...");
-    if (saveMeta) setLessonSaveState("saving");
-    if (savePdf) setPdfSaveState("saving");
-    try {
-      emitSessionActivity();
-      let draft: ReturnType<typeof buildNormalizedPdfEditorDraft> | null = null;
-      if (savePdf) {
-        const normalized = buildNormalizedPdfEditorDraft({
+    const expectedRevision = lessonRevisionRef.current;
+    const expectedTreeRevision = treeRevisionRef.current;
+    const retainedAssetIds = [...recoveredAssetIdsRef.current];
+    const normalized = savePdf
+      ? buildNormalizedPdfEditorDraft({
           lessonContent: committed?.lessonContent ?? lessonContent,
           lessonFootnotes: committed?.lessonFootnotes ?? lessonFootnotes,
           worksheetFootnoteAnchors:
@@ -3095,61 +3157,98 @@ const ManageLesson: React.FC = () => {
           worksheetTextRegions,
           worksheetBlanks,
           worksheetExamHighlights,
-        });
-        const worksheet = await uploadWorksheetAssets(selectedNodeId);
-        const notes = await uploadFootnoteAssets(
-          selectedNodeId,
-          normalized.footnotes,
-        );
-        draft = buildNormalizedPdfEditorDraft({
-          lessonContent: normalized.contentHtml,
-          lessonFootnotes: notes.footnotes,
-          worksheetFootnoteAnchors: normalized.worksheetFootnoteAnchors,
-          lessonPdfName: worksheet.pdfName,
-          lessonPdfUrl: worksheet.pdfUrl,
-          lessonPdfStoragePath: worksheet.pdfStoragePath,
-          lessonPdfProcessing: worksheet.pdfProcessing,
-          worksheetPageImages: worksheet.pageImages,
-          worksheetTextRegions: worksheet.textRegions,
-          worksheetBlanks: normalized.worksheetBlanks,
-          worksheetExamHighlights: normalized.worksheetExamHighlights,
-        });
-      }
-      if (!editorMountedRef.current || editorSessionRef.current !== session)
-        throw new Error(
-          "저장 대상이 변경되었습니다. 원래 화면에서 다시 저장해 주세요.",
-        );
-      const nextTree =
-        saveMeta && title !== selectedNodeTitle
-          ? replaceNodeTitle(treeData, selectedNodeId, title)
-          : undefined;
-      const result = await saveLessonDocument(config, {
-        unitId: selectedNodeId,
-        expectedRevision: lessonRevisionRef.current!,
-        assetUploadIds: uploadedAssetIdsRef.current,
-        document: {
-          title,
-          videoUrl,
-          isVisibleToStudents: visible,
-          ...(draft
-            ? {
-                contentHtml: draft.contentHtml,
-                pdfName: draft.pdfName,
-                pdfUrl: draft.pdfUrl,
-                pdfStoragePath: draft.pdfStoragePath,
-                worksheetPageImages: draft.worksheetPageImages,
-                worksheetTextRegions: draft.worksheetTextRegions,
-                worksheetBlanks: draft.worksheetBlanks,
-                worksheetExamHighlights: draft.worksheetExamHighlights,
-                worksheetFootnoteAnchors: draft.worksheetFootnoteAnchors,
-                footnotes: draft.footnotes,
-              }
-            : {}),
+        })
+      : null;
+    const nextTree =
+      saveMeta && title !== selectedNodeTitle
+        ? replaceNodeTitle(treeData, selectedNodeId, title)
+        : undefined;
+    const documentFor = (pdf: typeof normalized) => ({
+      title,
+      videoUrl,
+      isVisibleToStudents: visible,
+      ...(pdf
+        ? {
+            contentHtml: pdf.contentHtml,
+            pdfName: pdf.pdfName,
+            pdfUrl: pdf.pdfUrl,
+            pdfStoragePath: pdf.pdfStoragePath,
+            worksheetPageImages: pdf.worksheetPageImages,
+            worksheetTextRegions: pdf.worksheetTextRegions,
+            worksheetBlanks: pdf.worksheetBlanks,
+            worksheetExamHighlights: pdf.worksheetExamHighlights,
+            worksheetFootnoteAnchors: pdf.worksheetFootnoteAnchors,
+            footnotes: pdf.footnotes,
+          }
+        : {}),
+    });
+    session.saving = true;
+    setScreenBusyMessage("파일을 확인하고 수업 자료를 저장하는 중입니다...");
+    if (saveMeta) setLessonSaveState("saving");
+    if (savePdf) setPdfSaveState("saving");
+    try {
+      emitSessionActivity();
+      let draft = normalized;
+      const result = await saveLessonDocument(
+        config,
+        {
+          unitId: selectedNodeId,
+          expectedRevision,
+          assetUploadIds: retainedAssetIds,
+          document: documentFor(normalized),
+          ...(nextTree ? { tree: nextTree, expectedTreeRevision } : {}),
         },
-        ...(nextTree
-          ? { tree: nextTree, expectedTreeRevision: treeRevisionRef.current }
-          : {}),
-      });
+        normalized
+          ? {
+              localDraft: {
+                pdfFile: selectedPdfFile,
+                preparedPdf,
+                footnotes: Object.fromEntries(
+                  Object.entries(footnoteImageDrafts).map(([id, item]) => [
+                    id,
+                    { file: item.file, removeExisting: item.removeExisting },
+                  ]),
+                ),
+                ...(!saveMeta && hasUnsavedMetaChanges
+                  ? { general: meta }
+                  : {}),
+              },
+              prepare: async (ownerUid) => {
+                const context = {
+                  expectedRevision,
+                  expectedUid: ownerUid,
+                  assetUploadIds: [...retainedAssetIds],
+                };
+                const worksheet = await uploadWorksheetAssets(
+                  selectedNodeId,
+                  context,
+                );
+                const notes = await uploadFootnoteAssets(
+                  selectedNodeId,
+                  normalized.footnotes,
+                  context,
+                );
+                draft = buildNormalizedPdfEditorDraft({
+                  lessonContent: normalized.contentHtml,
+                  lessonFootnotes: notes.footnotes,
+                  worksheetFootnoteAnchors: normalized.worksheetFootnoteAnchors,
+                  lessonPdfName: worksheet.pdfName,
+                  lessonPdfUrl: worksheet.pdfUrl,
+                  lessonPdfStoragePath: worksheet.pdfStoragePath,
+                  lessonPdfProcessing: worksheet.pdfProcessing,
+                  worksheetPageImages: worksheet.pageImages,
+                  worksheetTextRegions: worksheet.textRegions,
+                  worksheetBlanks: normalized.worksheetBlanks,
+                  worksheetExamHighlights: normalized.worksheetExamHighlights,
+                });
+                return {
+                  document: documentFor(draft),
+                  assetUploadIds: context.assetUploadIds,
+                };
+              },
+            }
+          : undefined,
+      );
       if (!editorMountedRef.current || editorSessionRef.current !== session)
         return;
       lessonRevisionRef.current = result.contentRevision;
@@ -3228,7 +3327,9 @@ const ManageLesson: React.FC = () => {
     } catch (error) {
       if (!editorMountedRef.current || editorSessionRef.current !== session)
         return;
-      lessonWriteRecovery.acknowledge(lessonWriteRecovery.peek(teacherScope));
+      const recovery = lessonWriteRecovery.peek(teacherScope);
+      if (isLessonDocumentUnconfirmed(recovery)) setUnconfirmedWrite(recovery!);
+      else lessonWriteRecovery.acknowledge(recovery);
       const message =
         error instanceof Error
           ? error.message
@@ -3241,6 +3342,39 @@ const ManageLesson: React.FC = () => {
       session.saving = false;
       if (editorMountedRef.current && editorSessionRef.current === session)
         setScreenBusyMessage(null);
+    }
+  };
+
+  const retryUnconfirmedWrite = async () => {
+    const recovery = unconfirmedWrite;
+    if (!recovery || recovery.scope !== teacherScope || recovery.pending)
+      return;
+    setScreenBusyMessage("처음 요청한 저장 결과를 다시 확인하는 중입니다...");
+    try {
+      await retryLessonDocumentSave(recovery);
+    } catch (error) {
+      if (
+        teacherScopeRef.current === recovery.scope &&
+        editorMountedRef.current
+      )
+        setPdfSaveFeedback({
+          tone: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "저장 결과를 다시 확인해 주세요.",
+        });
+    } finally {
+      if (
+        teacherScopeRef.current === recovery.scope &&
+        editorMountedRef.current
+      ) {
+        setScreenBusyMessage(null);
+        if (!isLessonDocumentUnconfirmed(recovery)) {
+          setUnconfirmedWrite(null);
+          await loadTree(true);
+        }
+      }
     }
   };
 
@@ -3329,9 +3463,45 @@ const ManageLesson: React.FC = () => {
     );
   };
 
+  if (unconfirmedWrite?.scope === teacherScope)
+    return (
+      <div key="unconfirmed" className="min-h-screen bg-gray-50 p-4 md:p-6">
+        <div className="mx-auto max-w-xl rounded-xl border border-blue-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-800">
+            저장 결과 확인이 필요합니다.
+          </h2>
+          <p role="status" className="mt-3 text-sm leading-6 text-gray-600">
+            처음 요청한 내용과 파일을 보관하고 있습니다. 저장 결과를 확인한 뒤
+            편집을 이어갈 수 있습니다.
+          </p>
+          {pdfSaveFeedback?.tone === "error" && (
+            <p className="mt-3 text-sm text-red-600">
+              {pdfSaveFeedback.message}
+            </p>
+          )}
+          <button
+            type="button"
+            autoFocus
+            disabled={unconfirmedWrite.pending}
+            onClick={() => void retryUnconfirmedWrite()}
+            className="mt-4 min-h-11 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {unconfirmedWrite.pending
+              ? "저장 결과 확인 중..."
+              : "저장 결과 다시 확인"}
+          </button>
+        </div>
+      </div>
+    );
+
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <div className="relative flex flex-1 flex-col px-4 py-6 lg:px-6 xl:px-8">
+    <div key="editor" className="flex min-h-screen flex-col bg-gray-50">
+      <div
+        ref={(node) => {
+          if (node) node.inert = Boolean(screenBusyMessage);
+        }}
+        className="relative flex flex-1 flex-col px-4 py-6 lg:px-6 xl:px-8"
+      >
         <div className="mb-4 flex items-center">
           <h2 className="text-xl font-bold text-gray-800 lg:text-2xl">
             <i className="fas fa-sitemap mr-2 text-blue-500"></i>수업 자료 관리

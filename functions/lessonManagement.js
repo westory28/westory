@@ -426,14 +426,19 @@ const createLessonCommandAdapter = ({ now = () => Date.now() } = {}) => ({
         `source_archive/${note.sourceArchiveAssetId}`,
       );
       const image = source.data?.image;
+      const retained = (current.data.footnotes || []).some((previous) =>
+        previous.sourceArchiveAssetId === note.sourceArchiveAssetId &&
+        previous.sourceArchiveImagePath === note.sourceArchiveImagePath &&
+        (previous.sourceArchiveThumbPath || "") === (note.sourceArchiveThumbPath || ""));
       if (
         !source.exists ||
-        source.data?.processingStatus !== "ready" ||
+        source.data?.deletedAt ||
+        (!retained && (source.data?.processingStatus !== "ready" ||
         source.data?.mediaKind === "pdf" ||
         !image ||
         note.sourceArchiveImagePath !==
           (image.displayPath || image.thumbPath || image.originalPath) ||
-        (note.sourceArchiveThumbPath || "") !== (image.thumbPath || "")
+        (note.sourceArchiveThumbPath || "") !== (image.thumbPath || "")))
       )
         fail(
           "permission-denied",
