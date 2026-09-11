@@ -113,6 +113,9 @@ export interface CalendarEvent {
   eventType: string;
   targetType: "all" | "common" | "class";
   targetClass?: string;
+  targetClassIds?: string[];
+  targetUserIds?: string[];
+  targetClassLabel?: string;
   dDay?: number;
 }
 

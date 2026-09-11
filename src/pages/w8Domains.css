@@ -1,6 +1,7 @@
 .w8-domain-page {
   --w8-control-min: calc(var(--space-10) + var(--space-1));
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
   min-width: 0;
   color: var(--ws-text);
@@ -96,6 +97,7 @@
 .w8-timeline li > div,
 .w8-attendance-list li > div {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
 }
@@ -104,6 +106,7 @@
 .w8-attendance-layout,
 .w8-today-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
   min-width: 0;
   align-items: start;
@@ -350,6 +353,7 @@
 
 .w8-form label {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
   min-width: 0;
   color: var(--ws-text);
@@ -361,6 +365,8 @@
 .w8-form select,
 .w8-attendance-list select {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: var(--w8-control-min);
   box-sizing: border-box;
   border: 1px solid var(--ws-border);
@@ -379,6 +385,7 @@
 .w8-form__row,
 .w8-form--inline {
   display: grid;
+  min-width: 0;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
@@ -732,6 +739,13 @@
 
   .w8-panel--wide {
     grid-column: 1 / -1;
+  }
+}
+
+/* The workspace becomes two columns before each editor can fit two dates. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .w8-domain-page--teacher .w8-workspace .w8-form__row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

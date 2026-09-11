@@ -149,7 +149,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.28fr)_minmax(360px,0.92fr)]">
+    <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.28fr)_minmax(360px,0.92fr)]">
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 bg-gray-50 p-5">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
@@ -339,17 +339,17 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         {!selectedWallet ? (
           <div className="py-16 text-center text-gray-400">
             왼쪽 목록에서 학생을 선택해 주세요.
           </div>
         ) : (
           <>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-xl font-extrabold text-gray-900">
+            <div className="flex min-w-0 flex-col items-start justify-between gap-4 sm:flex-row">
+              <div className="min-w-0 max-w-full">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 className="min-w-0 max-w-full text-xl font-extrabold text-gray-900 [overflow-wrap:anywhere]">
                     {selectedWallet.studentName || "(이름 없음)"}
                   </h3>
                   <PointRankBadge
@@ -362,11 +362,11 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                     })}
                   />
                 </div>
-                <div className="mt-1 text-sm text-gray-500">
+                <div className="mt-1 text-sm text-gray-500 [overflow-wrap:anywhere]">
                   {formatPointStudentLabel(selectedWallet) || "소속 정보 없음"}
                 </div>
               </div>
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-right">
+              <div className="shrink-0 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-right">
                 <div className="text-xs font-bold text-blue-500">
                   현재 보유 위스
                 </div>
@@ -398,7 +398,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
             </div>
 
             <div className="mt-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="font-bold text-gray-800">최근 거래 내역</div>
                 {canManage && (
                   <div className="text-[11px] font-bold text-gray-400">
@@ -441,8 +441,8 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                         }
                         className={`w-full text-left ${isEditable ? "cursor-pointer" : "cursor-default"}`}
                       >
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
+                        <div className="flex min-w-0 items-center justify-between gap-4">
+                          <div className="min-w-0 [overflow-wrap:anywhere]">
                             <div className="font-bold text-gray-800">
                               {transaction.sourceLabel || label}
                             </div>
@@ -455,12 +455,12 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                             </div>
                           </div>
                           <div
-                            className={`text-sm font-extrabold ${getPointDeltaToneClass(transaction.delta)}`}
+                            className={`shrink-0 whitespace-nowrap text-sm font-extrabold ${getPointDeltaToneClass(transaction.delta)}`}
                           >
                             {formatWisDelta(transaction.delta)}
                           </div>
                         </div>
-                        <div className="mt-1 whitespace-nowrap text-[11px] text-gray-500">{`잔액 ${formatWisAmount(transaction.balanceAfter)} · ${formatPointDateTime(transaction.createdAt)}`}</div>
+                        <div className="mt-1 text-[11px] text-gray-500 [overflow-wrap:anywhere]">{`잔액 ${formatWisAmount(transaction.balanceAfter)} · ${formatPointDateTime(transaction.createdAt)}`}</div>
                       </button>
                       {isSelected && isEditable && (
                         <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3">

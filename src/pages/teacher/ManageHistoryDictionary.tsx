@@ -2018,7 +2018,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
             className="mb-4"
           />
         )}
-        <div className="grid gap-4 xl:grid-cols-[13rem_minmax(30rem,1.25fr)_minmax(24rem,0.95fr)]">
+        <div className="grid gap-4 2xl:grid-cols-[13rem_minmax(30rem,1.25fr)_minmax(24rem,0.95fr)]">
           <aside className="self-start overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <nav
               className="divide-y divide-slate-200"

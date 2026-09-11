@@ -12,6 +12,15 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { isAdminUser } from "../../lib/permissions";
 import { executeWestoryCommand } from "../../lib/commandGateway";
+import { getArchiveEnrollmentState } from "../../lib/archiveEnrollment";
+import {
+  buildScheduleClassOptions,
+  projectScheduleTargets,
+  resolveScheduleTargets,
+  PRESERVE_SCHEDULE_TARGETS,
+  type ScheduleClassOption,
+  type ScheduleTargets,
+} from "../../lib/scheduleClassTargets";
 import {
   W8DomainError,
   createScheduleEvent,
@@ -38,12 +47,19 @@ interface CalendarEvent {
     | "holiday";
   targetType: "common" | "class";
   targetClass?: string;
+  targetClassIds?: string[];
+  targetUserIds?: string[];
+  targetClassLabel?: string;
   description?: string;
   revision?: number;
   sourceDomain?: string;
   sourceReference?: string;
   provenance?: string;
   readOnly?: boolean;
+  originalSchedule?: Pick<
+    W8ScheduleEvent,
+    "startAt" | "endAt" | "allDay" | "period" | "eventType" | "description"
+  >;
 }
 
 type ScheduleFormData = Omit<
@@ -54,13 +70,27 @@ type ScheduleFormData = Omit<
   | "sourceReference"
   | "provenance"
   | "readOnly"
+  | "targetClassIds"
+  | "targetUserIds"
+  | "targetClassLabel"
+  | "originalSchedule"
 >;
 
-interface SelectedEventIdentity {
+interface SelectedEventIdentity extends ScheduleTargets {
   revision: number;
   sourceDomain: string;
   sourceReference: string;
   readOnly: boolean;
+  targetClassLabel: string;
+  semesterId: string;
+  originalSchedule: NonNullable<CalendarEvent["originalSchedule"]>;
+  formSnapshot: {
+    start: string;
+    end: string;
+    endEnabled: boolean;
+    eventType: CalendarEvent["eventType"];
+    description: string;
+  };
 }
 
 const LEGACY_EVENT_TYPES = new Set<CalendarEvent["eventType"]>([
@@ -112,32 +142,14 @@ const sourceReferenceForEventType = (
   return sourceReference || `legacy-calendar:${eventType}:${sourceKey}`;
 };
 
-const w8ClassIdForLegacyClass = async (
-  semesterId: string,
-  legacyClass: string,
-) => {
-  if (!/^\d+-\d+$/u.test(legacyClass)) return legacyClass;
-  const [grade, classNumber] = legacyClass
-    .split("-")
-    .map((item) => item.normalize("NFKC").trim().toLowerCase());
-  if (!grade || !classNumber || !globalThis.crypto?.subtle) {
-    return legacyClass;
-  }
-  const digest = await globalThis.crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(`${semesterId}\n${grade}::${classNumber}`),
-  );
-  const hash = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-  return `class_${hash.slice(0, 32)}`;
-};
-
 const ManageSchedule = () => {
   const { currentUser, userData, config, configReady } = useAuth();
   const { showToast } = useAppToast();
   const [events, setEvents] = useState<any[]>([]);
   const [domainState, setDomainState] = useState<W8DomainState | null>(null);
+  const [scheduleClasses, setScheduleClasses] = useState<ScheduleClassOption[]>(
+    [],
+  );
   const [currentConfig, setCurrentConfig] = useState<{
     year: string;
     semester: string;
@@ -155,13 +167,15 @@ const ManageSchedule = () => {
     end: "",
     eventType: "performance",
     targetType: "common",
-    targetClass: "2-1",
+    targetClass: "",
     description: "",
   });
   const [endEnabled, setEndEnabled] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedEventIdentity, setSelectedEventIdentity] =
     useState<SelectedEventIdentity | null>(null);
+  const [targetSelectionChanged, setTargetSelectionChanged] = useState(false);
+  const [dateSelectionChanged, setDateSelectionChanged] = useState(false);
   const [createSourceKey, setCreateSourceKey] = useState(newScheduleSourceKey);
   const [holidaySyncing, setHolidaySyncing] = useState(false);
   const calendarRef = useRef<FullCalendar>(null);
@@ -218,12 +232,25 @@ const ManageSchedule = () => {
   const fetchEvents = async () => {
     if (!configReady || !config) return;
     try {
-      const nextState = await getW8DomainState({
-        config,
-        domain: "SCHEDULE",
-        audience: "teacher",
-        source: "CURRENT",
-      });
+      const [nextState, enrollmentState] = await Promise.all([
+        getW8DomainState({
+          config,
+          domain: "SCHEDULE",
+          audience: "teacher",
+          source: "CURRENT",
+        }),
+        getArchiveEnrollmentState({
+          source: "CURRENT",
+          callSite: "ManageSchedule.scheduleClasses",
+        }),
+      ]);
+      if (enrollmentState.semesterId !== nextState.semesterId)
+        throw new Error("학기가 바뀌었습니다. 일정을 다시 불러와 주세요.");
+      const classes = buildScheduleClassOptions(
+        nextState.semesterId,
+        enrollmentState.classes,
+      );
+      setScheduleClasses(classes);
       setDomainState(nextState);
       const [year, semester] = nextState.semesterId.split("-");
       const nextConfig = {
@@ -232,18 +259,6 @@ const ManageSchedule = () => {
       };
       setCurrentConfig(nextConfig);
       const loadedEvents: CalendarEvent[] = [];
-      const legacyClasses = [...Array(12)].map((_, index) => `2-${index + 1}`);
-      const classIdPairs = await Promise.all(
-        legacyClasses.map(
-          async (legacyClass) =>
-            [
-              await w8ClassIdForLegacyClass(nextState.semesterId, legacyClass),
-              legacyClass,
-            ] as const,
-        ),
-      );
-      const legacyClassByW8Id = new Map(classIdPairs);
-
       nextState.scheduleEvents
         .filter((scheduleEvent) => scheduleEvent.status === "ACTIVE")
         .forEach((scheduleEvent) => {
@@ -258,16 +273,25 @@ const ManageSchedule = () => {
               toW8LocalDateTimeInput(scheduleEvent.endAt).split("T")[0] ||
               toDateKey(scheduleEvent.endAt),
             eventType,
-            targetType: scheduleEvent.classIds.length ? "class" : "common",
-            targetClass:
-              legacyClassByW8Id.get(scheduleEvent.classIds[0]) ||
-              scheduleEvent.classIds[0],
+            ...projectScheduleTargets(
+              scheduleEvent.classIds,
+              scheduleEvent.targetUserIds,
+              classes,
+            ),
             description: scheduleEvent.description,
             revision: scheduleEvent.revision,
             sourceDomain: scheduleEvent.sourceDomain,
             sourceReference: scheduleEvent.sourceReference,
             provenance: scheduleEvent.provenance,
             readOnly: nextState.readOnly,
+            originalSchedule: {
+              startAt: scheduleEvent.startAt,
+              endAt: scheduleEvent.endAt,
+              allDay: scheduleEvent.allDay,
+              period: scheduleEvent.period,
+              eventType: scheduleEvent.eventType,
+              description: scheduleEvent.description,
+            },
           };
 
           let isVisible = true;
@@ -275,8 +299,10 @@ const ManageSchedule = () => {
             if (filter === "common") {
               if (d.targetType !== "common") isVisible = false;
             } else {
-              // Filter is a specific class like '2-1'
-              if (d.targetType === "class" && d.targetClass !== filter)
+              if (
+                d.targetType === "class" &&
+                !(d.targetClassIds || []).includes(filter)
+              )
                 isVisible = false;
             }
           }
@@ -316,10 +342,7 @@ const ManageSchedule = () => {
       showToast({
         tone: "error",
         title: "학사 일정을 불러오지 못했습니다.",
-        message:
-          e instanceof W8DomainError
-            ? e.message
-            : "잠시 후 다시 시도해 주세요.",
+        message: e instanceof Error ? e.message : "잠시 후 다시 시도해 주세요.",
       });
     }
   };
@@ -387,6 +410,10 @@ const ManageSchedule = () => {
       return;
     }
     if (eventData) {
+      if (!eventData.originalSchedule) {
+        alert("일정의 원본 시각을 확인할 수 없습니다. 다시 불러와 주세요.");
+        return;
+      }
       setIsEditMode(true);
       setSelectedEventId(eventData.id);
       setSelectedEventIdentity({
@@ -394,6 +421,23 @@ const ManageSchedule = () => {
         sourceDomain: String(eventData.sourceDomain || ""),
         sourceReference: String(eventData.sourceReference || ""),
         readOnly: Boolean(eventData.readOnly),
+        semesterId: domainState?.semesterId || "",
+        targetClassIds: [
+          ...(eventData.targetClassIds ||
+            (eventData.targetClass ? [eventData.targetClass] : [])),
+        ],
+        targetUserIds: [...(eventData.targetUserIds || [])],
+        targetClassLabel: eventData.targetClassLabel || "기존 대상",
+        originalSchedule: { ...eventData.originalSchedule },
+        formSnapshot: {
+          start: eventData.start,
+          end: eventData.end || "",
+          endEnabled: Boolean(
+            eventData.end && eventData.end !== eventData.start,
+          ),
+          eventType: eventData.eventType || "performance",
+          description: eventData.description || "",
+        },
       });
       setFormData({
         title: eventData.title,
@@ -401,7 +445,13 @@ const ManageSchedule = () => {
         end: eventData.end || "",
         eventType: eventData.eventType || "performance",
         targetType: eventData.targetType || "common",
-        targetClass: eventData.targetClass || "2-1",
+        targetClass:
+          eventData.targetType === "class"
+            ? eventData.targetClassIds?.length === 1 &&
+              !eventData.targetUserIds?.length
+              ? eventData.targetClassIds[0]
+              : PRESERVE_SCHEDULE_TARGETS
+            : "",
         description: eventData.description || "",
       });
       setEndEnabled(
@@ -418,27 +468,33 @@ const ManageSchedule = () => {
         end: "",
         eventType: "performance",
         targetType: "common",
-        targetClass: "2-1",
+        targetClass: "",
         description: "",
       });
       setEndEnabled(false);
     }
+    setTargetSelectionChanged(false);
+    setDateSelectionChanged(false);
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
     setSelectedEventIdentity(null);
+    setTargetSelectionChanged(false);
+    setDateSelectionChanged(false);
   };
 
   useEffect(() => {
     if (!modalOpen || formData.eventType !== "exam" || endEnabled) return;
+    if (selectedEventIdentity?.formSnapshot.eventType === formData.eventType)
+      return;
     setEndEnabled(true);
     setFormData((prev) => ({
       ...prev,
       end: prev.end || prev.start || "",
     }));
-  }, [modalOpen, formData.eventType, endEnabled]);
+  }, [modalOpen, formData.eventType, endEnabled, selectedEventIdentity]);
 
   const handleSave = async () => {
     if (!formData.title || !formData.start) {
@@ -468,25 +524,67 @@ const ManageSchedule = () => {
       formData.eventType,
       createSourceKey,
     );
-    const targetClassId =
-      formData.targetType === "class" && formData.targetClass
-        ? await w8ClassIdForLegacyClass(
-            domainState.semesterId,
-            formData.targetClass,
-          )
-        : "";
+    let targets: ScheduleTargets;
+    try {
+      if (
+        selectedEventIdentity &&
+        selectedEventIdentity.semesterId !== domainState.semesterId
+      )
+        throw new Error("학기가 바뀌었습니다. 일정을 다시 열어 주세요.");
+      targets = resolveScheduleTargets({
+        original: selectedEventIdentity,
+        selectionChanged: targetSelectionChanged,
+        targetType: formData.targetType,
+        targetClass: formData.targetClass,
+        classes: scheduleClasses,
+      });
+      if (
+        selectedEventIdentity &&
+        targetSelectionChanged &&
+        formData.targetType === "common" &&
+        (selectedEventIdentity.targetClassIds.length ||
+          selectedEventIdentity.targetUserIds.length) &&
+        !confirm(
+          "기존 학급·개별 대상 제한을 해제하고 전체 공통 일정으로 변경하시겠습니까?",
+        )
+      )
+        return;
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : "일정 대상을 확인해 주세요.",
+      );
+      return;
+    }
+    const original = selectedEventIdentity?.originalSchedule;
+    const formSnapshot = selectedEventIdentity?.formSnapshot;
+    const preserveTime =
+      original &&
+      formSnapshot &&
+      !dateSelectionChanged &&
+      formData.start === formSnapshot.start &&
+      (formData.end || "") === formSnapshot.end &&
+      endEnabled === formSnapshot.endEnabled;
     const commandPayload = {
       semesterId: domainState.semesterId,
       expectedSemesterRevision: domainState.manifestRevision,
-      eventType: w8EventTypeFromLegacy(formData.eventType),
+      eventType:
+        original && formData.eventType === formSnapshot?.eventType
+          ? original.eventType
+          : w8EventTypeFromLegacy(formData.eventType),
       title: formData.title,
-      description: formData.description || "",
-      startAt: toW8ServerDateTime(`${formData.start}T00:00`),
-      endAt: toW8ServerDateTime(`${finalEnd}T00:00`),
-      allDay: true,
-      period: "",
-      targetClassIds: targetClassId ? [targetClassId] : [],
-      targetUserIds: [],
+      description:
+        original && (formData.description || "") === formSnapshot?.description
+          ? original.description
+          : formData.description || "",
+      startAt: preserveTime
+        ? original.startAt
+        : toW8ServerDateTime(`${formData.start}T00:00`),
+      endAt: preserveTime
+        ? original.endAt
+        : toW8ServerDateTime(`${finalEnd}T00:00`),
+      allDay: preserveTime ? original.allDay : true,
+      period: original?.period || "",
+      ...targets,
       sourceDomain: selectedEventIdentity?.sourceDomain || "USER",
       sourceReference,
     };
@@ -566,9 +664,9 @@ const ManageSchedule = () => {
             >
               <option value="all">전체 일정</option>
               <option value="common">공통 일정만</option>
-              {[...Array(12)].map((_, i) => (
-                <option key={i} value={`2-${i + 1}`}>
-                  2-{i + 1}반
+              {scheduleClasses.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -686,6 +784,7 @@ const ManageSchedule = () => {
                     className="block w-full max-w-full min-w-0 border rounded p-1.5 text-[10px] md:text-sm"
                     value={formData.start}
                     onChange={(e) => {
+                      setDateSelectionChanged(true);
                       const nextStart = e.target.value;
                       setFormData((prev) => ({
                         ...prev,
@@ -704,14 +803,16 @@ const ManageSchedule = () => {
                       type="date"
                       className="block w-full max-w-full min-w-0 border rounded p-1.5 text-[10px] md:text-sm"
                       value={formData.end}
-                      onChange={(e) =>
-                        setFormData({ ...formData, end: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setDateSelectionChanged(true);
+                        setFormData({ ...formData, end: e.target.value });
+                      }}
                     />
                   ) : (
                     <button
                       type="button"
                       onClick={() => {
+                        setDateSelectionChanged(true);
                         setEndEnabled(true);
                         setFormData((prev) => ({
                           ...prev,
@@ -727,6 +828,7 @@ const ManageSchedule = () => {
                     <button
                       type="button"
                       onClick={() => {
+                        setDateSelectionChanged(true);
                         setEndEnabled(false);
                         setFormData((prev) => ({ ...prev, end: "" }));
                       }}
@@ -771,9 +873,10 @@ const ManageSchedule = () => {
                       name="targetType"
                       value="common"
                       checked={formData.targetType === "common"}
-                      onChange={() =>
-                        setFormData({ ...formData, targetType: "common" })
-                      }
+                      onChange={() => {
+                        setTargetSelectionChanged(true);
+                        setFormData({ ...formData, targetType: "common" });
+                      }}
                       className="w-4 h-4 text-blue-600"
                     />
                     <span className="ml-2 text-sm font-bold">전체 공통</span>
@@ -784,9 +887,12 @@ const ManageSchedule = () => {
                       name="targetType"
                       value="class"
                       checked={formData.targetType === "class"}
-                      onChange={() =>
-                        setFormData({ ...formData, targetType: "class" })
-                      }
+                      onChange={() => {
+                        setTargetSelectionChanged(
+                          formData.targetClass !== PRESERVE_SCHEDULE_TARGETS,
+                        );
+                        setFormData({ ...formData, targetType: "class" });
+                      }}
                       className="w-4 h-4 text-blue-600"
                     />
                     <span className="ml-2 text-sm font-bold">반 선택</span>
@@ -796,16 +902,44 @@ const ManageSchedule = () => {
                   className="w-full border rounded p-2 text-sm bg-gray-50 disabled:opacity-50"
                   disabled={formData.targetType !== "class"}
                   value={formData.targetClass}
-                  onChange={(e) =>
-                    setFormData({ ...formData, targetClass: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setTargetSelectionChanged(
+                      e.target.value !== PRESERVE_SCHEDULE_TARGETS,
+                    );
+                    setFormData({ ...formData, targetClass: e.target.value });
+                  }}
                 >
-                  {[...Array(12)].map((_, i) => (
-                    <option key={i} value={`2-${i + 1}`}>
-                      2-{i + 1}반
+                  <option value="" disabled>
+                    학급 선택
+                  </option>
+                  {selectedEventIdentity &&
+                    (selectedEventIdentity.targetClassIds.length > 0 ||
+                      selectedEventIdentity.targetUserIds.length > 0) && (
+                      <option value={PRESERVE_SCHEDULE_TARGETS}>
+                        기존 대상 유지
+                      </option>
+                    )}
+                  {scheduleClasses.map((item) => (
+                    <option
+                      key={item.value}
+                      value={item.value}
+                      disabled={!item.selectable}
+                    >
+                      {item.label}
+                      {!item.selectable ? " (선택 불가)" : ""}
                     </option>
                   ))}
                 </select>
+                {selectedEventIdentity &&
+                  (selectedEventIdentity.targetClassIds.length > 1 ||
+                    selectedEventIdentity.targetUserIds.length > 0) && (
+                    <p className="mt-2 text-xs text-gray-500">
+                      기존 대상: {selectedEventIdentity.targetClassLabel}.
+                      대상을 바꾸지 않으면 그대로 유지합니다.
+                      {selectedEventIdentity.targetUserIds.length > 0 &&
+                        " 학급만 변경해도 기존 개별 대상은 유지합니다."}
+                    </p>
+                  )}
               </div>
 
               <div>

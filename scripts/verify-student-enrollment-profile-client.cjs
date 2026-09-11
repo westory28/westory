@@ -31,7 +31,108 @@ const config = { year: "2026", semester: "2" };
 const input = editState => ({ uid: "student-a", grade: "2", class: "1", number: 8, name: "새 이름", email: "student@example.com", editState });
 async function stateFor(h) { return (await h.api.loadStudentProfileEditStates(config, ["student-a"])).get("student-a"); }
 async function test(name, run) { await run(); count++; console.log(`PASS ${name}`); }
+function modalHarness() {
+  const file = "src/pages/teacher/components/StudentDetailModal.tsx";
+  const compiled = ts.transpileModule(fs.readFileSync(file, "utf8"), { fileName: file,
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText;
+  const slots = [], effects = [], calls = [];
+  let cursor = 0, dirty = false;
+  const context = { config: { year: "2026", semester: "2" }, currentUser: { uid: "teacher-a" } };
+  const pending = { value: false, draft: null };
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat(Infinity) }),
+    useState: initial => { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial;
+      return [slots[i], value => { slots[i] = typeof value === "function" ? value(slots[i]) : value; dirty = true; }]; },
+    useRef: initial => { const i = cursor++; return slots[i] || (slots[i] = { current: initial }); },
+    useMemo: fn => { cursor++; return fn(); },
+    useEffect: (fn, deps) => { const i = cursor++, previous = slots[i];
+      if (!previous || deps.some((value, index) => value !== previous[index])) { slots[i] = deps; effects.push(fn); } },
+  };
+  const exports = {};
+  vm.runInNewContext(compiled, { exports, console, Map, Set, Promise, Error, JSON, alert: () => {}, require: name => {
+    if (name === "react") return { ...react, default: react };
+    if (name.includes("AuthContext")) return { useAuth: () => context };
+    if (name.endsWith("/studentData")) return {
+      getPendingStudentProfileDraft: () => pending.draft,
+      hasPendingStudentProfileUpdate: () => pending.value,
+      updateStudentData: async (...args) => { calls.push({ kind: "save", args }); },
+      retryStudentProfileUpdate: async (...args) => { calls.push({ kind: "retry", args }); },
+      studentProfileUpdateError: error => error.message,
+    };
+    return {};
+  } });
+  let props;
+  const render = (next, settle = true) => {
+    props = next || props;
+    let tree;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      cursor = 0; dirty = false; tree = exports.default(props);
+      if (!settle) break;
+      while (effects.length) effects.shift()();
+      if (!dirty) break;
+    }
+    return tree;
+  };
+  const nodes = tree => !tree || typeof tree !== "object" ? [] : [tree, ...(tree.children || []).flatMap(nodes)];
+  const label = node => typeof node === "string" ? node : node && typeof node === "object" ? (node.children || []).map(label).join("") : "";
+  const fields = tree => nodes(tree).filter(node => node.type === "input");
+  const save = tree => nodes(tree).find(node => node.type === "button" && ["저장", "이전 요청 결과 확인", "저장 중..."].includes(label(node)));
+  return { render, fields, save, nodes, label, calls, context, pending };
+}
+const modalStudent = (source = "CANONICAL") => ({ id: "student-a", userId: "student-a", grade: "2", class: "1", number: 7,
+  name: "학생", email: "student@example.com", editState: { studentUid: "student-a", ownerUid: "teacher-a", semesterId: "2026-2",
+    source, expectedVersion: source === "CANONICAL" ? "a".repeat(64) : null, error: source === "BLOCKED" ? "학적을 확인해 주세요." : undefined, classes: [] } });
+const modalProps = student => ({ student, isOpen: true, initialTab: "profile", onClose: () => {}, onUpdate: () => {} });
 (async () => {
+  await test("modal blocks initial, absent and BLOCKED edit states while preserving displayed email", async () => {
+    for (const source of ["CANONICAL", "BLOCKED", "ABSENT"]) {
+      const h = modalHarness(), student = modalStudent(source);
+      if (source === "ABSENT") delete student.editState;
+      const props = modalProps(student), initial = h.render(props, false);
+      assert(h.save(initial).props.disabled); assert(h.fields(initial).every(field => field.props.disabled));
+      h.save(initial).props.onClick(); assert.equal(h.calls.length, 0);
+      const settled = h.render(props);
+      assert.equal(h.fields(settled).find(field => field.props.name === "email").props.value, student.email);
+      if (source !== "CANONICAL") {
+        assert(h.save(settled).props.disabled); assert(h.fields(settled).every(field => field.props.disabled));
+        assert(h.nodes(settled).some(node => node.props.role === "status"));
+        h.save(settled).props.onClick(); assert.equal(h.calls.length, 0);
+      } else assert.equal(h.save(settled).props.disabled, false);
+    }
+  });
+  await test("modal preserves normal legacy editing and canonical email readonly", async () => {
+    for (const source of ["CANONICAL", "LEGACY"]) {
+      const h = modalHarness(), tree = h.render(modalProps(modalStudent(source)));
+      const email = h.fields(tree).find(field => field.props.name === "email");
+      assert.equal(email.props.readOnly, source === "CANONICAL"); assert.equal(email.props.disabled, false);
+      h.save(tree).props.onClick(); assert.equal(h.calls.length, 1);
+      assert.equal(h.calls[0].args[1].email, "student@example.com");
+    }
+  });
+  await test("modal rejects stale student, owner, semester and newly blocked snapshots", async () => {
+    for (const change of ["student", "owner", "semester", "blocked"]) {
+      const h = modalHarness(), props = modalProps(modalStudent()); h.render(props);
+      if (change === "student") props.student = { ...props.student, id: "student-b", userId: "student-b", editState: { ...props.student.editState, studentUid: "student-b" } };
+      if (change === "owner") h.context.currentUser.uid = "teacher-b";
+      if (change === "semester") h.context.config.semester = "1";
+      if (change === "blocked") props.student = modalStudent("BLOCKED");
+      const tree = h.render(props, false); assert(h.save(tree).props.disabled);
+      h.save(tree).props.onClick(); assert.equal(h.calls.length, 0);
+    }
+  });
+  await test("modal keeps original draft and CAS during refresh and retries uncertain request", async () => {
+    const h = modalHarness(), student = modalStudent(), props = modalProps(student);
+    let tree = h.render(props);
+    h.fields(tree).find(field => field.props.name === "name").props.onChange({ target: { name: "name", value: "입력 보존" } });
+    const refreshed = { ...student, name: "서버의 다른 이름", editState: { ...student.editState, expectedVersion: "b".repeat(64) } };
+    tree = h.render({ ...props, student: refreshed });
+    assert.equal(h.fields(tree).find(field => field.props.name === "name").props.value, "입력 보존");
+    h.save(tree).props.onClick(); assert.equal(h.calls[0].args[1].editState.expectedVersion, "a".repeat(64));
+    const retry = modalHarness(); retry.pending.value = true; retry.pending.draft = { name: "미확인 입력", email: "student@example.com" };
+    tree = retry.render(props); assert(retry.fields(tree).every(field => field.props.disabled));
+    assert.equal(retry.save(tree).props.disabled, false); retry.save(tree).props.onClick();
+    assert.equal(retry.calls[0].kind, "retry");
+  });
   await test("CAS is captured at load and save does not refresh it", async () => {
     const h = harness(), state = await stateFor(h); await h.api.updateStudentData(config, input(state));
     assert.equal(h.queries.length, 1); assert.equal(h.calls.length, 1); assert.equal(h.calls[0].name, "updateStudentEnrollmentProfile");

@@ -7,6 +7,7 @@ import {
 import { getScheduleCategoryMeta } from "../../lib/scheduleCategories";
 import type { ScheduleCategory } from "../../lib/scheduleCategories";
 import type { CalendarEvent } from "../../types";
+import { formatScheduleTargetLabel } from "../../lib/scheduleClassTargets";
 
 export interface ScheduleMorePopoverAnchor {
   top: number;
@@ -54,19 +55,7 @@ const formatDateTitle = (date: string) => {
   }).format(parsed);
 };
 
-const formatTargetLabel = (event: CalendarEvent) => {
-  if (
-    event.eventType === "holiday" ||
-    event.targetType === "all" ||
-    event.targetType === "common"
-  ) {
-    return "전체 공통";
-  }
-
-  const [gradeValue, classValue] = String(event.targetClass || "").split("-");
-  if (gradeValue && classValue) return `${gradeValue}학년 ${classValue}반`;
-  return "반별 지정";
-};
+const formatTargetLabel = formatScheduleTargetLabel;
 
 const getPopoverPosition = (anchorRect: ScheduleMorePopoverAnchor) => {
   if (typeof window === "undefined") {

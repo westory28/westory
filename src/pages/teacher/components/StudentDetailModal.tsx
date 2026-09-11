@@ -56,6 +56,10 @@ interface StudentDetailModalProps {
 }
 
 const EMPTY_SUMMARY_TEXT = "-";
+const studentEditKey = (student: Student | null) =>
+  student
+    ? `${student.editState?.ownerUid || "legacy"}:${student.editState?.semesterId || ""}:${student.id}`
+    : "";
 
 const normalizeInitialTab = (
   initialTab: StudentDetailInitialTab = "overview",
@@ -79,7 +83,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   readOnly = false,
   initialTab = "overview",
 }) => {
-  const { config } = useAuth();
+  const { config, currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<DetailTab>(
     normalizeInitialTab(initialTab),
   );
@@ -125,7 +129,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       return;
     }
     if (!student) return;
-    const key = `${student.editState?.ownerUid || "legacy"}:${student.editState?.semesterId || ""}:${student.id}`;
+    const key = studentEditKey(student);
     if (editSession.current === key) return;
     editSession.current = key;
     setFormData({
@@ -287,8 +291,38 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     };
   }, [activeTab, config, isOpen, performanceScoresLoadedKey, student?.id]);
 
+  const profileState = formData.editState;
+  const profilePrepared = Boolean(
+    isOpen &&
+    student?.editState &&
+    profileState &&
+    studentEditKey(student) === studentEditKey(formData) &&
+    editSession.current === studentEditKey(student) &&
+    profileState.studentUid === formData.id &&
+    profileState.ownerUid === currentUser?.uid &&
+    (!config?.year ||
+      !config?.semester ||
+      profileState.semesterId === `${config.year}-${config.semester}`),
+  );
+  const profileBlockedReason = readOnly
+    ? "현재 계정은 학생 정보를 수정할 수 없습니다."
+    : !profilePrepared
+      ? "수정 기준을 확인하지 못했습니다. 창을 닫고 명단을 새로고침해 주세요."
+      : student?.editState?.source === "BLOCKED" ||
+          profileState?.source === "BLOCKED"
+        ? student?.editState?.error ||
+          profileState?.error ||
+          "현재 학생 정보를 수정할 수 없습니다. 명단을 새로고침해 주세요."
+        : profileState?.source === "CANONICAL" && !profileState.expectedVersion
+          ? "수정 기준이 없습니다. 창을 닫고 명단을 새로고침해 주세요."
+          : "";
+  const profileInputsDisabled =
+    Boolean(profileBlockedReason) ||
+    saving ||
+    hasPendingStudentProfileUpdate(profileState);
+
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (saving || hasPendingStudentProfileUpdate(formData.editState)) return;
+    if (profileInputsDisabled) return;
     const { name, value } = event.target;
     setFormData((prev) => ({
       ...prev,
@@ -297,7 +331,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   };
 
   const handleSave = async () => {
-    if (readOnly || !formData.id) return;
+    if (profileBlockedReason || saving || !formData.id) return;
     setSaving(true);
     const session = editSession.current;
     try {
@@ -922,9 +956,12 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <h4 className="border-b border-gray-100 pb-3 text-lg font-extrabold text-gray-800">
                 학생 정보 수정
               </h4>
-              {readOnly && (
-                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700">
-                  현재 계정은 학생 정보를 수정할 수 없습니다.
+              {profileBlockedReason && (
+                <div
+                  role="status"
+                  className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700"
+                >
+                  {profileBlockedReason}
                 </div>
               )}
               <div className="mt-4 space-y-4">
@@ -938,11 +975,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       name="grade"
                       value={formData.grade}
                       onChange={handleChange}
-                      disabled={
-                        readOnly ||
-                        saving ||
-                        hasPendingStudentProfileUpdate(formData.editState)
-                      }
+                      disabled={profileInputsDisabled}
                       className="w-full rounded border p-2 text-center text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50"
                     />
                   </label>
@@ -955,11 +988,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       name="class"
                       value={formData.class}
                       onChange={handleChange}
-                      disabled={
-                        readOnly ||
-                        saving ||
-                        hasPendingStudentProfileUpdate(formData.editState)
-                      }
+                      disabled={profileInputsDisabled}
                       className="w-full rounded border p-2 text-center text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50"
                     />
                   </label>
@@ -972,11 +1001,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       name="number"
                       value={formData.number}
                       onChange={handleChange}
-                      disabled={
-                        readOnly ||
-                        saving ||
-                        hasPendingStudentProfileUpdate(formData.editState)
-                      }
+                      disabled={profileInputsDisabled}
                       className="w-full rounded border p-2 text-center text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50"
                     />
                   </label>
@@ -990,11 +1015,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
-                    disabled={
-                      readOnly ||
-                      saving ||
-                      hasPendingStudentProfileUpdate(formData.editState)
-                    }
+                    disabled={profileInputsDisabled}
                     className="w-full rounded border p-2 text-sm font-bold focus:border-blue-500 focus:outline-none disabled:bg-gray-50"
                   />
                 </label>
@@ -1010,11 +1031,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     readOnly={formData.editState?.source === "CANONICAL"}
                     value={formData.email}
                     onChange={handleChange}
-                    disabled={
-                      readOnly ||
-                      saving ||
-                      hasPendingStudentProfileUpdate(formData.editState)
-                    }
+                    disabled={profileInputsDisabled}
                     className="w-full rounded border bg-gray-50 p-2 text-sm focus:border-blue-500 focus:outline-none disabled:text-gray-500"
                   />
                 </label>
@@ -1031,7 +1048,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => void handleSave()}
-                    disabled={saving}
+                    disabled={Boolean(profileBlockedReason) || saving}
                     className="flex-1 rounded bg-blue-600 py-2 font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:bg-blue-300"
                   >
                     {saving

@@ -3364,7 +3364,7 @@ const ManageHistoryClassroom: React.FC = () => {
       </div>
 
       <section className="mb-5 px-1 py-2">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
               <DashboardIcon name="calendar" className="h-6 w-6" />
@@ -3410,12 +3410,12 @@ const ManageHistoryClassroom: React.FC = () => {
       </section>
 
       <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-3 shadow-sm xl:p-3.5">
-        <div className="grid gap-2 md:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)_auto] md:items-center lg:grid-cols-[12.5rem_minmax(14rem,1fr)_auto_auto] xl:grid-cols-[15rem_minmax(12rem,18rem)_auto_auto] xl:justify-between xl:gap-2.5">
+        <div className="grid gap-2 md:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)_auto] md:items-center 2xl:grid-cols-[15rem_minmax(12rem,18rem)_auto_auto] 2xl:justify-between xl:gap-2.5">
           <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-700 xl:h-12 xl:px-4">
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
             {dashboardDateRangeLabel}
           </div>
-          <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 md:col-span-2 lg:col-span-1 xl:h-12 xl:px-4">
+          <div className="flex h-11 min-w-0 items-center gap-3 rounded-2xl border border-gray-200 px-3 md:col-span-2 2xl:col-span-1 xl:h-12 xl:px-4">
             <input
               value={dashboardSearch}
               onChange={(event) => setDashboardSearch(event.target.value)}
@@ -3424,7 +3424,7 @@ const ManageHistoryClassroom: React.FC = () => {
             />
             <DashboardIcon name="search" className="h-5 w-5 text-gray-400" />
           </div>
-          <div className="flex flex-nowrap gap-1.5 md:col-span-2 lg:col-span-1 xl:gap-2">
+          <div className="flex flex-wrap gap-1.5 md:col-span-2 2xl:col-span-1 xl:gap-2">
             {[
               ["all", "전체"],
               ["published", "공개"],

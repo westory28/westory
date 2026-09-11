@@ -1,11 +1,15 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifySystemConfigUpdated } from "../../../lib/appEvents";
 import { executeWestoryCommand } from "../../../lib/commandGateway";
-import { db } from "../../../lib/firebase";
+import { auth, db } from "../../../lib/firebase";
+import {
+  requestStepUpReauthentication,
+  StepUpReauthError,
+} from "../../../lib/stepUpReauth";
 import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
 import {
   getServerSemesterCoreState,
@@ -46,6 +50,9 @@ type SemesterReadinessView = {
 };
 
 const DEFAULT_YEAR = "2026";
+const isReadinessReauthRequired = (error: unknown) =>
+  (error as { details?: { reason?: string } })?.details?.reason ===
+  "RECENT_AUTH_REQUIRED";
 const DEFAULT_SEMESTER = "1";
 const DEFAULT_CONFIG: SettingsConfigState = {
   year: DEFAULT_YEAR,
@@ -312,7 +319,7 @@ const getSemesterCommandErrorMessage = (error: unknown) => {
 };
 
 const SettingsGeneral: React.FC = () => {
-  const { refreshConfig } = useAuth();
+  const { refreshConfig, currentUser } = useAuth();
   const { showToast } = useAppToast();
   const [config, setConfig] = useState<SettingsConfigState>(DEFAULT_CONFIG);
   const [activeSemester, setActiveSemester] = useState<SemesterSelectionState>({
@@ -350,6 +357,56 @@ const SettingsGeneral: React.FC = () => {
   );
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [readinessError, setReadinessError] = useState("");
+  const [readinessNeedsReauth, setReadinessNeedsReauth] = useState(false);
+  const [readinessReauthBusy, setReadinessReauthBusy] = useState(false);
+  const readinessContext = useRef({
+    ownerUid: "",
+    selection: "",
+    mounted: true,
+  });
+  const readinessReauthFlight = useRef(false);
+  readinessContext.current.ownerUid = currentUser?.uid || "";
+  readinessContext.current.selection = `${config.year}-${config.semester}`;
+  useEffect(() => {
+    readinessContext.current.mounted = true;
+    return () => {
+      readinessContext.current.mounted = false;
+    };
+  }, []);
+
+  const handleReadinessReauthentication = async () => {
+    if (readinessReauthFlight.current) return;
+    const { ownerUid, selection } = readinessContext.current;
+    if (!ownerUid || auth.currentUser?.uid !== ownerUid) return;
+    const isCurrent = () =>
+      readinessContext.current.mounted &&
+      readinessContext.current.ownerUid === ownerUid &&
+      auth.currentUser?.uid === ownerUid &&
+      readinessContext.current.selection === selection;
+    readinessReauthFlight.current = true;
+    setReadinessReauthBusy(true);
+    try {
+      await requestStepUpReauthentication("getSemesterCoreState", {
+        force: true,
+      });
+      if (!isCurrent()) return;
+      const snapshot = await loadSemesterCoreSnapshot();
+      if (!isCurrent()) return;
+      // Refresh server evidence without replacing the unsaved settings form.
+      setCoreSnapshot(snapshot);
+    } catch (error) {
+      if (!isCurrent()) return;
+      setReadinessNeedsReauth(true);
+      setReadinessError(
+        error instanceof StepUpReauthError
+          ? `${error.message} 본인 확인을 마친 뒤 준비 현황을 다시 조회해 주세요.`
+          : "본인 확인 후 준비 현황을 다시 불러오지 못했습니다. 다시 시도해 주세요.",
+      );
+    } finally {
+      readinessReauthFlight.current = false;
+      if (readinessContext.current.mounted) setReadinessReauthBusy(false);
+    }
+  };
 
   const syncSemesterPresentation = (
     snapshot: SemesterCoreSnapshot,
@@ -453,6 +510,8 @@ const SettingsGeneral: React.FC = () => {
     setReadiness(null);
     setReadinessLoading(true);
     setReadinessError("");
+    setReadinessNeedsReauth(false);
+    const queryOwnerUid = currentUser?.uid || "";
 
     const manifest = coreSnapshot.manifests.find(
       (item) => item.schoolYear === year && item.term === semester,
@@ -468,7 +527,7 @@ const SettingsGeneral: React.FC = () => {
 
     void getServerSemesterCoreState(manifest.semesterId)
       .then((serverState) => {
-        if (!isMounted) return;
+        if (!isMounted || auth.currentUser?.uid !== queryOwnerUid) return;
         const canonicalCurrent =
           isReadinessCurrent(manifest, report) &&
           serverState.error === null &&
@@ -487,10 +546,14 @@ const SettingsGeneral: React.FC = () => {
       })
       .catch((error) => {
         console.error("Failed to load semester readiness:", error);
-        if (!isMounted) return;
+        if (!isMounted || auth.currentUser?.uid !== queryOwnerUid) return;
         setReadiness(buildReadinessView(report, false));
+        const needsReauth = isReadinessReauthRequired(error);
+        setReadinessNeedsReauth(needsReauth);
         setReadinessError(
-          "준비 현황을 불러오지 못했습니다. 네트워크와 접근 권한을 확인해 주세요.",
+          needsReauth
+            ? "준비 현황을 확인하려면 본인 확인이 필요합니다. 다시 인증한 뒤 조회해 주세요."
+            : "준비 현황을 불러오지 못했습니다. 네트워크와 접근 권한을 확인해 주세요.",
         );
       })
       .finally(() => {
@@ -501,7 +564,7 @@ const SettingsGeneral: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [loading, config.year, config.semester, coreSnapshot]);
+  }, [loading, config.year, config.semester, coreSnapshot, currentUser?.uid]);
 
   const yearOptions = useMemo(() => {
     const years = new Set(availableSemesters.map((item) => item.year));
@@ -1176,6 +1239,16 @@ const SettingsGeneral: React.FC = () => {
             >
               {semesterStateError || readinessError}
             </div>
+          )}
+          {readinessNeedsReauth && (
+            <button
+              type="button"
+              onClick={() => void handleReadinessReauthentication()}
+              disabled={readinessReauthBusy || readinessLoading}
+              className="mt-3 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {readinessReauthBusy ? "본인 확인 중..." : "다시 인증 후 조회"}
+            </button>
           )}
 
           {!readinessLoading && readiness && (

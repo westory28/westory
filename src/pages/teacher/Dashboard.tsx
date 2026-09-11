@@ -34,6 +34,12 @@ import {
   type W8ScheduleEvent,
 } from "../../lib/w8Domains";
 import type { CalendarEvent, SystemConfig } from "../../types";
+import { getArchiveEnrollmentState } from "../../lib/archiveEnrollment";
+import {
+  buildScheduleClassOptions,
+  projectScheduleTargets,
+  type ScheduleClassOption,
+} from "../../lib/scheduleClassTargets";
 
 const TeacherCalendarSection = lazyWithRetry(
   () => import("./components/TeacherCalendarSection"),
@@ -54,7 +60,8 @@ const getVisibleCalendarEvents = (
     return (
       isCommon ||
       isHoliday ||
-      (event.targetType === "class" && targetClass === filterClass)
+      (event.targetType === "class" &&
+        (event.targetClassIds || [targetClass]).includes(filterClass))
     );
   });
 
@@ -72,48 +79,9 @@ const legacyEventTypeFromW8 = (event: W8ScheduleEvent) => {
 const toLegacyDate = (value: string) =>
   toW8LocalDateTimeInput(value).split("T")[0] || value.split("T")[0] || "";
 
-const w8ClassIdForLegacyClass = async (
-  semesterId: string,
-  legacyClass: string,
-) => {
-  const [grade, classNumber] = legacyClass.split("-");
-  if (!grade || !classNumber || !globalThis.crypto?.subtle) return legacyClass;
-  const digest = await globalThis.crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(
-      `${semesterId}\n${grade.normalize("NFKC").toLowerCase()}::${classNumber
-        .normalize("NFKC")
-        .toLowerCase()}`,
-    ),
-  );
-  const hash = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-  return `class_${hash.slice(0, 32)}`;
-};
-
-const buildLegacyClassByW8Id = async (semesterId: string) => {
-  const legacyClasses = Array.from({ length: 3 }, (_, gradeIndex) =>
-    Array.from(
-      { length: 12 },
-      (_, classIndex) => `${gradeIndex + 1}-${classIndex + 1}`,
-    ),
-  ).flat();
-  const pairs = await Promise.all(
-    legacyClasses.map(
-      async (legacyClass) =>
-        [
-          await w8ClassIdForLegacyClass(semesterId, legacyClass),
-          legacyClass,
-        ] as const,
-    ),
-  );
-  return new Map(pairs);
-};
-
 const projectScheduleEvent = (
   event: W8ScheduleEvent,
-  legacyClassByW8Id: Map<string, string>,
+  classes: ScheduleClassOption[],
 ): CalendarEvent => ({
   id: event.eventId,
   title: event.title,
@@ -122,10 +90,7 @@ const projectScheduleEvent = (
   end: toLegacyDate(event.endAt),
   period: event.period,
   eventType: legacyEventTypeFromW8(event),
-  targetType: event.classIds.length ? "class" : "common",
-  targetClass: event.classIds.length
-    ? legacyClassByW8Id.get(event.classIds[0]) || event.classIds[0]
-    : undefined,
+  ...projectScheduleTargets(event.classIds, event.targetUserIds, classes),
 });
 
 const getCategoryLabel = (category?: string) => {
@@ -367,6 +332,9 @@ const TeacherDashboard: React.FC = () => {
   const { config, configReady, currentUser, userData } = useAuth();
   const navigate = useNavigate();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [scheduleClasses, setScheduleClasses] = useState<ScheduleClassOption[]>(
+    [],
+  );
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
   const [filterClass, setFilterClass] = useState("all");
@@ -397,12 +365,20 @@ const TeacherDashboard: React.FC = () => {
         audience: "teacher",
         source: "CURRENT",
       });
-      const legacyClassByW8Id = await buildLegacyClassByW8Id(
+      const enrollmentState = await getArchiveEnrollmentState({
+        source: "CURRENT",
+        callSite: "TeacherDashboard.scheduleClasses",
+      });
+      if (enrollmentState.semesterId !== nextState.semesterId)
+        throw new Error("학기가 바뀌었습니다. 일정을 다시 불러와 주세요.");
+      const classes = buildScheduleClassOptions(
         nextState.semesterId,
+        enrollmentState.classes,
       );
+      setScheduleClasses(classes);
       const projectedEvents = nextState.scheduleEvents
         .filter((event) => event.status === "ACTIVE")
-        .map((event) => projectScheduleEvent(event, legacyClassByW8Id));
+        .map((event) => projectScheduleEvent(event, classes));
       const year = nextState.semesterId.split("-")[0] || config?.year || "";
       try {
         const holidays = await getKoreanPublicHolidays(year);
@@ -436,13 +412,21 @@ const TeacherDashboard: React.FC = () => {
     const targets = new Set<string>();
     events.forEach((event) => {
       if (event.targetType !== "class") return;
-      const targetClass = String(event.targetClass || "").trim();
-      if (targetClass) targets.add(targetClass);
+      (event.targetClassIds || [event.targetClass || ""]).forEach((id) => {
+        if (id) targets.add(id);
+      });
     });
     return Array.from(targets).sort((left, right) =>
       left.localeCompare(right, "ko", { numeric: true }),
     );
   }, [events]);
+  const classTargetLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        scheduleClasses.map((item) => [item.value, item.label]),
+      ),
+    [scheduleClasses],
+  );
   const effectiveFilterClass = useMemo(() => {
     if (filterClass === "all" || filterClass === "common") return filterClass;
     return availableClassTargets.includes(filterClass) ? filterClass : "all";
@@ -555,6 +539,7 @@ const TeacherDashboard: React.FC = () => {
               calendarRef={calendarRef}
               filterClass={effectiveFilterClass}
               availableClassTargets={availableClassTargets}
+              classTargetLabels={classTargetLabels}
               onFilterChange={setFilterClass}
               selectedDate={selectedDate}
             />

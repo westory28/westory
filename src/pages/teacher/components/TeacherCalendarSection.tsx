@@ -17,6 +17,7 @@ import {
 import { CalendarEvent } from "../../../types";
 import ScheduleMorePopover from "../../../components/common/ScheduleMorePopover";
 import type { ScheduleMorePopoverAnchor } from "../../../components/common/ScheduleMorePopover";
+import { formatScheduleTargetLabel } from "../../../lib/scheduleClassTargets";
 
 interface TeacherCalendarSectionProps {
   events: CalendarEvent[];
@@ -28,6 +29,7 @@ interface TeacherCalendarSectionProps {
   calendarRef: React.RefObject<FullCalendar>;
   filterClass: string;
   availableClassTargets: string[];
+  classTargetLabels?: Record<string, string>;
   onFilterChange: (cls: string) => void;
   selectedDate?: string | null;
 }
@@ -187,6 +189,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   calendarRef,
   filterClass,
   availableClassTargets,
+  classTargetLabels,
   onFilterChange,
   selectedDate,
 }) => {
@@ -304,20 +307,19 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   }, []);
 
   const classTargets = useMemo(() => {
-    return availableClassTargets.map((value) => {
-      const [gradeValue, classValue] = value.split("-");
-      const gradeLabel =
-        gradeOptions.find((item) => item.value === gradeValue)?.label ||
-        (gradeValue ? `${gradeValue}학년` : "");
-      const classLabel =
-        classOptions.find((item) => item.value === classValue)?.label ||
-        (classValue ? `${classValue}반` : "");
-      return {
-        value,
-        label: `${gradeLabel} ${classLabel}`.trim() || value,
-      };
-    });
-  }, [availableClassTargets, classOptions, gradeOptions]);
+    return availableClassTargets.map((value) => ({
+      value,
+      label: formatScheduleTargetLabel(
+        {
+          eventType: "event",
+          targetType: "class",
+          targetClass: value,
+          targetClassLabel: classTargetLabels?.[value],
+        },
+        { gradeOptions, classOptions },
+      ),
+    }));
+  }, [availableClassTargets, classTargetLabels, classOptions, gradeOptions]);
 
   const formatEventTargetLabel = (event?: CalendarEvent) => {
     if (
@@ -329,14 +331,11 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
       return "전체";
     }
 
-    const [gradeValue, classValue] = String(event.targetClass || "").split("-");
-    const gradeLabel =
-      gradeOptions.find((item) => item.value === gradeValue)?.label ||
-      (gradeValue ? `${gradeValue}학년` : "");
-    const classLabel =
-      classOptions.find((item) => item.value === classValue)?.label ||
-      (classValue ? `${classValue}반` : "");
-    return `${gradeLabel} ${classLabel}`.trim() || "전체";
+    return formatScheduleTargetLabel(event, {
+      commonLabel: "전체",
+      gradeOptions,
+      classOptions,
+    });
   };
 
   const toLocalYmd = (date: Date) => {
