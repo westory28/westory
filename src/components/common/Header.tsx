@@ -189,6 +189,7 @@ const Header: React.FC<
 
   const isTeacherPortal = portal === "teacher";
   const [expandedTopMenu, setExpandedTopMenu] = useState<string | null>(null);
+  const topMenuTouchRef = useRef(false);
   useEffect(
     () => setExpandedTopMenu(null),
     [location.pathname, location.search],
@@ -757,10 +758,6 @@ const Header: React.FC<
                         if (event.pointerType === "mouse")
                           setExpandedTopMenu(null);
                       }}
-                      onFocus={(event) => {
-                        if ((event.target as HTMLElement).tagName !== "BUTTON")
-                          setExpandedTopMenu(item.url);
-                      }}
                       onBlur={(event) => {
                         if (
                           !event.currentTarget.contains(
@@ -772,35 +769,45 @@ const Header: React.FC<
                       }}
                       onKeyDown={(event) => {
                         if (event.key === "Escape") {
-                          setExpandedTopMenu(null);
                           (
                             event.currentTarget.querySelector(
-                              "button",
-                            ) as HTMLButtonElement | null
+                              ".nav-link",
+                            ) as HTMLAnchorElement | null
                           )?.focus();
+                          setExpandedTopMenu(null);
                         }
                       }}
                     >
                       <Link
                         to={itemTarget}
                         className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""} flex items-center gap-1`}
+                        aria-expanded={expandedTopMenu === item.url}
+                        aria-controls={`top-submenu-${portal}-${idx}`}
+                        onPointerDown={(event) => {
+                          topMenuTouchRef.current =
+                            event.pointerType === "touch";
+                        }}
+                        onClick={(event) => {
+                          if (
+                            topMenuTouchRef.current &&
+                            expandedTopMenu !== item.url
+                          ) {
+                            event.preventDefault();
+                            setExpandedTopMenu(item.url);
+                          } else {
+                            setExpandedTopMenu(null);
+                          }
+                          topMenuTouchRef.current = false;
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "ArrowDown" || event.key === " ") {
+                            event.preventDefault();
+                            setExpandedTopMenu(item.url);
+                          }
+                        }}
                       >
                         {item.name}
                       </Link>
-                      <button
-                        type="button"
-                        className="ws-top-menu__toggle"
-                        aria-label={`${item.name} 하위 메뉴`}
-                        aria-expanded={expandedTopMenu === item.url}
-                        aria-controls={`top-submenu-${portal}-${idx}`}
-                        onClick={() =>
-                          setExpandedTopMenu((value) =>
-                            value === item.url ? null : item.url,
-                          )
-                        }
-                      >
-                        <i className="fas fa-chevron-down" aria-hidden="true" />
-                      </button>
                       <div
                         id={`top-submenu-${portal}-${idx}`}
                         className="desktop-submenu-shell ws-top-menu__panel"
@@ -812,6 +819,7 @@ const Header: React.FC<
                               <Link
                                 key={`${child.url}-${childIdx}`}
                                 to={childTarget}
+                                onClick={() => setExpandedTopMenu(null)}
                                 className={`block whitespace-nowrap rounded-lg px-4 py-3.5 text-[13px] font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"}`}
                               >
                                 {child.name}

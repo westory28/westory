@@ -15,6 +15,7 @@ import { StepUpReauthProvider } from "./components/auth/StepUpReauthProvider";
 import ProtectedAccessGate from "./components/auth/ProtectedAccessGate";
 import StudentMaintenanceGate from "./components/auth/StudentMaintenanceGate";
 import StatePanel from "./components/common/StatePanel";
+import { LoadingOverlay } from "./components/common/LoadingState";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
@@ -174,13 +175,7 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
 };
 
 const RouteContentFallback: React.FC<{ message?: string }> = ({ message }) => (
-  <div className="ws-route-fallback">
-    <StatePanel
-      state="LOADING"
-      title={message || "화면을 준비하고 있습니다."}
-      compact
-    />
-  </div>
+  <LoadingOverlay message={message || "자료를 불러오는 중입니다."} />
 );
 
 const renderWithLayout = (children: React.ReactNode, message?: string) => (

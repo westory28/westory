@@ -4291,16 +4291,14 @@ button.lesson-core-point-floating-status:disabled {
     width: calc(100% - var(--ws-teacher-sidebar-width) - var(--space-6));
   }
 }
-.ws-top-menu__toggle {
-  display: inline-flex;
+.desktop-nav {
   align-items: center;
-  justify-content: center;
-  min-width: calc(var(--space-10) + var(--space-1));
-  min-height: calc(var(--space-10) + var(--space-1));
-  color: var(--ws-text-muted);
-  border-radius: var(--radius-md);
 }
-.ws-top-menu__toggle:focus-visible {
+.desktop-nav > .nav-link,
+.ws-top-menu > .nav-link {
+  min-height: calc(var(--space-10) + var(--space-1));
+}
+.ws-top-menu > .nav-link:focus-visible {
   outline: 2px solid var(--ws-ring);
 }
 .ws-top-menu__panel {
