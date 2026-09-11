@@ -29,6 +29,13 @@ import {
   subscribeTeacherHistoryDictionaryRequests,
   subscribeTeacherHistoryDictionaryTerms,
   updateStudentHistoryDictionaryWordByTeacher,
+  getHistoryDictionaryWriteVersion,
+  hasPendingHistoryDictionaryMutation,
+  isHistoryDictionaryMutationBusy,
+  subscribeHistoryDictionaryMutation,
+  retryHistoryDictionaryMutation,
+  historyDictionaryMutationMessage,
+  getPendingHistoryDictionaryDraft,
 } from "../../lib/historyDictionary";
 import { getYearSemester } from "../../lib/semesterScope";
 import { loadNotifications } from "../../lib/notifications";
@@ -364,6 +371,26 @@ const ManageHistoryDictionaryContent: React.FC = () => {
     useState<DictionaryEditorSource | null>(null);
   const [editorSourceChanged, setEditorSourceChanged] = useState(false);
   const [editorRefresh, setEditorRefresh] = useState(0);
+  const [, refreshMutation] = useState(0);
+  useEffect(
+    () =>
+      subscribeHistoryDictionaryMutation(() =>
+        refreshMutation((value) => value + 1),
+      ),
+    [],
+  );
+  const mutationPending = hasPendingHistoryDictionaryMutation(
+    currentUser?.uid || "",
+  );
+  const mutationBusy = isHistoryDictionaryMutationBusy(currentUser?.uid || "");
+  useEffect(() => {
+    const pending = getPendingHistoryDictionaryDraft(currentUser?.uid || "");
+    if (!pending) return;
+    setWord(pending.word);
+    setDefinition(pending.definition);
+    setRelatedUnitId(pending.relatedUnitId);
+    setTags(pending.tags);
+  }, [currentUser?.uid]);
   editorSessionRef.current.draft = {
     word,
     definition,
@@ -796,13 +823,14 @@ const ManageHistoryDictionaryContent: React.FC = () => {
         request.resolvedTermId,
         requestScope?.year,
         requestScope?.semester,
-        getTimestampMs(request.updatedAt),
+        request.writeVersion,
+        request.wordWriteVersion,
       ],
       term: (term || requestTerm) && [
         (term || requestTerm)?.id,
         (term || requestTerm)?.normalizedWord,
         (term || requestTerm)?.status,
-        getTimestampMs((term || requestTerm)?.updatedAt),
+        getHistoryDictionaryWriteVersion(term || requestTerm),
       ],
       studentWord: studentWord && [
         studentWord.id,
@@ -813,11 +841,20 @@ const ManageHistoryDictionaryContent: React.FC = () => {
         studentWord.semester,
         studentWord.normalizedWord,
         studentWord.status,
-        getTimestampMs(studentWord.updatedAt),
+        getHistoryDictionaryWriteVersion(studentWord),
       ],
       missing,
     });
-    return { key, kind, request, term, studentWord, draft, signature, missing };
+    return {
+      key,
+      kind,
+      request,
+      term: term || requestTerm,
+      studentWord,
+      draft,
+      signature,
+      missing,
+    };
   }, [
     activePanel,
     selectedRequestId,
@@ -892,7 +929,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
 
   useEffect(() => {
     const session = editorSessionRef.current;
-    if (!session.active) return;
+    if (!session.active || mutationPending || mutationBusy) return;
     if (session.targetKey !== liveEditorSource.key) {
       applyEditorSource(liveEditorSource);
     } else if (session.deleted) {
@@ -957,16 +994,24 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       setSelectedRequestId(liveEditorSource.request.id);
     if (liveEditorSource.studentWord && !selectedStudentWordId)
       setSelectedStudentWordId(liveEditorSource.studentWord.id);
-  }, [liveEditorSource, editorRefresh]);
+  }, [liveEditorSource, editorRefresh, mutationPending, mutationBusy]);
 
   const editorMutationBlocked =
+    mutationPending ||
+    mutationBusy ||
     editorSourceChanged ||
     !editorSource ||
     editorSource.missing ||
     (selectedRequest && !OPEN_REQUEST_STATUSES.has(selectedRequest.status));
   const confirmEditorTransition = (nextKey?: string) => {
     const session = editorSessionRef.current;
-    if (session.saving || importSessionRef.current.saving || busyMessage)
+    if (
+      session.saving ||
+      importSessionRef.current.saving ||
+      busyMessage ||
+      mutationPending ||
+      mutationBusy
+    )
       return false;
     if (nextKey === session.targetKey) return true;
     return (
@@ -978,6 +1023,8 @@ const ManageHistoryDictionaryContent: React.FC = () => {
     const session = editorSessionRef.current;
     if (
       session.saving ||
+      mutationPending ||
+      mutationBusy ||
       busyMessage ||
       liveEditorSource.missing ||
       session.deleted
@@ -1576,16 +1623,14 @@ const ManageHistoryDictionaryContent: React.FC = () => {
           studentLevel: DEFAULT_STUDENT_LEVEL,
           relatedUnitId: operation.draft.relatedUnitId,
           tags: operation.draft.tags,
-          fallbackRequestId:
-            targetRequest &&
-            !requests.some((item) => item.id === targetRequest.id)
-              ? targetRequest.id
-              : undefined,
-          fallbackUid:
-            targetRequest &&
-            !requests.some((item) => item.id === targetRequest.id)
-              ? targetRequest.uid
-              : undefined,
+          expectedTermVersion:
+            operation.source.term?.normalizedWord ===
+            normalizeHistoryDictionaryWord(operation.draft.word)
+              ? getHistoryDictionaryWriteVersion(operation.source.term)
+              : null,
+          expectedRequestVersion: targetRequest?.writeVersion,
+          fallbackRequestId: targetRequest?.id,
+          fallbackUid: targetRequest?.uid,
         },
         operation.ownerUid,
       );
@@ -1602,7 +1647,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       showToast({
         tone: "error",
         title: "역사 사전 저장에 실패했습니다.",
-        message: "입력 내용을 확인한 뒤 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       finishEditorMutation(operation);
@@ -1637,6 +1682,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
           definition: operation.draft.definition,
           year: targetWord.year,
           semester: targetWord.semester,
+          expectedWordVersion: getHistoryDictionaryWriteVersion(targetWord),
         },
         operation.ownerUid,
       );
@@ -1712,6 +1758,15 @@ const ManageHistoryDictionaryContent: React.FC = () => {
           ),
       );
       setSelectedStudentWordId(nextId);
+      // A successful write establishes a new baseline; never manufacture a
+      // timestamp token from the optimistic client clock.
+      void loadTeacherStudentHistoryDictionaryWords(operation.scope)
+        .then((items) => {
+          if (isCurrentEditorMutation(operation)) setStudentWords(items);
+        })
+        .catch(() => {
+          /* The current draft remains until a later reload. */
+        });
       showToast({
         tone: "success",
         title: "학생 등록 단어를 수정했습니다.",
@@ -1723,7 +1778,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       showToast({
         tone: "error",
         title: "학생 등록 단어 수정에 실패했습니다.",
-        message: "단어 중복 여부와 입력 내용을 확인한 뒤 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       finishEditorMutation(operation);
@@ -1734,7 +1789,8 @@ const ManageHistoryDictionaryContent: React.FC = () => {
     if (!matchingTerm || busyMessage) return;
     const operation = beginEditorMutation();
     if (!operation) return;
-    const targetTermId = matchingTerm.id;
+    const targetTerm = operation.source.term || matchingTerm;
+    const targetTermId = targetTerm.id;
     setBusyMessage("기존 뜻풀이를 승인하고 학생 단어장에 반영하는 중입니다.");
     try {
       await approveHistoryDictionaryTermForRequests(
@@ -1742,6 +1798,11 @@ const ManageHistoryDictionaryContent: React.FC = () => {
         {
           termId: targetTermId,
           requestId,
+          requestUid: operation.source.request?.uid,
+          expectedTermVersion: getHistoryDictionaryWriteVersion(targetTerm),
+          expectedRequestVersion: requestId
+            ? operation.source.request?.writeVersion
+            : null,
         },
         operation.ownerUid,
       );
@@ -1759,7 +1820,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       showToast({
         tone: "error",
         title: "뜻풀이 승인에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       finishEditorMutation(operation);
@@ -1786,6 +1847,8 @@ const ManageHistoryDictionaryContent: React.FC = () => {
           word: targetRequest.word,
           normalizedWord: targetRequest.normalizedWord,
           reason: "teacher_rejected_history_dictionary_word",
+          expectedWordVersion: targetRequest.wordWriteVersion,
+          expectedRequestVersion: targetRequest.writeVersion,
         },
         operation.ownerUid,
       );
@@ -1807,7 +1870,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       showToast({
         tone: "error",
         title: "요청 단어 삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       finishEditorMutation(operation);
@@ -1846,6 +1909,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
           word: targetWord.word,
           normalizedWord: targetWord.normalizedWord,
           reason: "teacher_deleted_insufficient_history_dictionary_word",
+          expectedWordVersion: getHistoryDictionaryWriteVersion(targetWord),
           year: targetWord.year,
           semester: targetWord.semester,
         },
@@ -1874,10 +1938,40 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       showToast({
         tone: "error",
         title: "학생 등록 단어 삭제에 실패했습니다.",
-        message: "권한 또는 위스 회수 상태를 확인한 뒤 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       finishEditorMutation(operation);
+    }
+  };
+
+  const handleRetryMutation = async () => {
+    if (mutationBusy || busyMessage || !currentUser?.uid) return;
+    const ownerUid = currentUser.uid;
+    setBusyMessage("이전 요청 결과를 확인하는 중입니다.");
+    try {
+      await retryHistoryDictionaryMutation(ownerUid);
+      if (!editorSessionRef.current.active) return;
+      editorSessionRef.current.changed = true;
+      setEditorSourceChanged(true);
+      const items = await loadTeacherStudentHistoryDictionaryWords(scope);
+      if (!editorSessionRef.current.active) return;
+      setStudentWords(items);
+      showToast({
+        tone: "success",
+        title: "이전 요청을 완료했습니다.",
+        message:
+          "작성한 입력은 유지됩니다. 최신 내용을 다시 불러와 확인해 주세요.",
+      });
+    } catch (error) {
+      if (editorSessionRef.current.active)
+        showToast({
+          tone: "error",
+          title: "이전 요청 결과를 확인해 주세요.",
+          message: historyDictionaryMutationMessage(error),
+        });
+    } finally {
+      if (editorSessionRef.current.active) setBusyMessage("");
     }
   };
 
@@ -1897,6 +1991,23 @@ const ManageHistoryDictionaryContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
+        {mutationPending && (
+          <StatePanel
+            state="ERROR"
+            title="이전 요청 결과를 확인해 주세요."
+            description="작성한 입력은 유지됩니다. 같은 요청의 결과를 확인한 뒤 계속할 수 있습니다."
+            compact
+            className="mb-4"
+            action={
+              mutationBusy || busyMessage
+                ? undefined
+                : {
+                    label: "이전 요청 결과 확인",
+                    onClick: () => void handleRetryMutation(),
+                  }
+            }
+          />
+        )}
         {!canWrite && (
           <StatePanel
             state="PERMISSION"

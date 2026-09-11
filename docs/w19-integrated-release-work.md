@@ -26,3 +26,29 @@
 - 검증된 Staging 후보의 백업/복원과 전환 리허설, 구체적인 운영 배포/복구안을 준비합니다. Production 접근 금지와 main 미병합 원칙은 유지합니다.
 
 작은 수정·단위검사·커밋·중간 배포는 작업 종료 기준이 아닙니다. 배포 후보 및 운영 전환안을 준비할 때까지 같은 실행 묶음으로 이어갑니다.
+
+## 첫 통합 Staging 배포와 실제 연결 확인
+
+- 커밋 `57cb272805ce67684c06b7d77f70d020c88262bd`, tree `f1287a17c3edf90577363117052b8c9bea42a7dd`를 기능 브랜치에 푸시했습니다. 원본/main/Production은 변경하지 않았습니다.
+- 중간 Staging 빌드 1회와 Functions 14개 배포, Hosting 배포를 완료했습니다. Hosting version `654134fafce6000e`, 원격 파일 133개 및 루트 문서 총 134개 비교에서 불일치 0입니다. 최종 후보의 독립 빌드 검증과 구분합니다.
+- 실제 SDK/Auth/App Check를 사용한 지도 이미지·PDF 준비/업로드/연결/학생 조회/교사 수정/CAS/중복 요청/삭제가 통과했습니다. `batch2-maparchive-mtwv8nhi-6440bb8f0d-result.json`의 지도 항목이 근거입니다. 같은 실행의 사료 항목은 실패했으므로 파일 전체를 PASS로 해석하지 않습니다.
+- 실제 사료 transport가 검증된 `_session` 필드를 일반 업무 필드로 잘못 거절하는 결합 오류를 발견했습니다. 인증 이후 두 transport의 허용 목록에 `_session`만 추가하고 58개 검사를 통과했습니다. 위 커밋의 고정 Functions snapshot에 수정한 `sourceArchiveManagement.js`만 반영해 업로드·정리 함수 2개를 별도 배포했습니다. 해당 파일 SHA-256은 `34f4faa7bbd704e1918675e9dbf627168c689d5c310dee8d93057f8985d17d2f`입니다.
+- `batch2-maparchive-mtwvouak-35ae3ac074-result.json`: 사료 이미지·PDF 실제 처리/원본 hash/교사 조회/학생 직접 조회·쓰기 거부/수정/CAS/원래 receipt 재시도/수업 참조 삭제 차단/삭제 및 파일 정리 PASS입니다. 첫 실패 실행이 남긴 정확한 합성 tombstone도 정리했습니다.
+- 합성 계정은 비활성화·토큰 폐기했고 임시 App Check 등록은 삭제했습니다. 실제 사용자 알림 호출 0, Production 접근 0입니다. 실행 기록은 `C:/westory-w10p-provenance-runtime`에 있습니다.
+
+사전 8개 쓰기의 Gateway·CAS·결과 복구, legacy/canonical 보상 출처와 원장 연결, 구매 메모 저장은 다음 소스 묶음에서 통합 검증 중입니다. 아직 배포 후보 완료로 판정하지 않았습니다.
+
+## 두 번째 통합 소스 — 사전·위스·전환 보호
+
+- 사전 8개 쓰기를 서버 Gateway·동시 수정 버전 검사·원래 요청 결과 재확인으로 연결했습니다. 학생 입력과 교사 수정은 계정별 메모리 초안으로 보존합니다. 기존 callable은 새 화면 사용을 안내하며 쓰기를 거절합니다.
+- 공식 뜻풀이와 학생 요청·알림 outbox를 같은 transaction에 저장합니다. 거절 후 재요청도 알림을 다시 만들고, 같은 commandId 재전송은 추가 전달을 만들지 않습니다. 최초 저장일은 재저장 시 보존합니다. 실제 사용자에게 알림을 보내는 검사는 수행하지 않았습니다.
+- 과거 사전 보상은 실제 지급 학기·원장을 확인합니다. 현재 보상은 canonical Wis에 지급하며, 과거 잔액이 이전된 경우에는 원본을 보존하고 원래 canonical 계좌에 결정적 LEGACY_RECLAIM을 기록합니다. 일반 회수와 같은 계좌의 누계에 함께 반영합니다.
+- 같은 학기의 legacy 잔액 이전은 원본 hash, UID, 거래별 잔액 흐름, 잔액·획득·순위·소비·조정 누계와 미처리 주문을 검사합니다. 빈 canonical 계좌에만 opening을 기록하고 marker 재실행은 입금하지 않습니다. 초기 지급을 추가로 요구하거나 두 번 지급하지 않도록 초기화 집계를 함께 갱신합니다. 현재 이전 adapter의 프로젝트 허용 범위는 Staging/demo뿐입니다.
+- 이전 control은 일반 Wis, 수업 보상, 사전 보상과 legacy 학생 자료 정리의 같은 transaction에서 확인합니다. 이전 완료된 legacy 금융 원본은 학생 프로필 갱신·정리에서도 감사 근거로 보존하고, 나머지 학생 자료 처리는 계속합니다. 관리용 Admin SDK 정비 스크립트를 임의로 실행하는 것까지 차단한 근거는 아닙니다.
+- 구매 메모의 서버 저장·학생/교사 조회·원래 payload 재시도를 연결했습니다. 기존 메모 없는 receipt의 hash 계약은 유지합니다.
+- Staging 지도 설정을 별도로 준비했습니다. Maps Embed API만 허용하며 Staging의 firebaseapp.com/web.app 두 도메인으로 제한합니다. 기존 Firebase 공개 설정은 바꾸지 않았습니다. Maps 설정 SHA-256은 `c8a37bc3416e3bf4230cf4f291a43e47a7cca1d32ef75595c243af98af0c2061`입니다. 결제 설정 변경과 Production 접근은 0입니다.
+- 색인 CLI 배포가 Rules 검사 서비스의 503으로 두 번 실패하여, Firestore 관리 API로 검토한 색인 3개만 생성 요청했습니다. 기존 색인 삭제와 Rules 변경은 하지 않았습니다. 완료 상태와 실제 조회는 배포 후 확인합니다.
+
+검증 근거: Functions 기본 검사 통과, 사전 Gateway 통합 186개, legacy 보상 172개, canonical 보상 296개, 잔액 이전 59개, 이전/rebuild 통합 170개, legacy 정리 fence 7개 통과입니다. 교사 실제 React 편집 화면의 격리 브라우저 1,204개 검사와 가져오기 복구 150개 검사도 통과했습니다. 격리 브라우저는 실제 Firebase 연결 근거와 구분합니다. 클라이언트 쓰기 경계는 143개 승인·UNKNOWN 0·기존 fixture 17개 통과이며, 상세 검토는 `w10p-batch3-client-write-boundary-review.md`에 있습니다.
+
+아직 필요한 작업: 새 배포의 실제 사전 지급·회수·합성 알림 및 지도 표시 확인, 전체 업무 흐름 중 실제 사용 미확인 항목 검증, Staging 백업·복원·잔액 이전 리허설, 출시 후보 독립 빌드와 전환·복구안입니다. 운영 데이터 조회·이전·배포는 실행하지 않았습니다.

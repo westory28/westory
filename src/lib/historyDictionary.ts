@@ -1,6 +1,9 @@
 import {
   collection,
   collectionGroup,
+  doc,
+  documentId,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -14,6 +17,8 @@ import {
   executeWestoryCommand,
   hasPendingWestoryCommand,
   WestoryCommandError,
+  type W2CommandPayloads,
+  type W2CommandResults,
 } from "./commandGateway";
 import { getYearSemester } from "./semesterScope";
 import type {
@@ -29,6 +34,218 @@ const TERMS_COLLECTION = "history_dictionary_terms";
 const REQUESTS_COLLECTION = "history_dictionary_requests";
 const TEACHER_TERMS_LIMIT = 500;
 
+export type HistoryDictionaryWriteVersion = string | null;
+export const getHistoryDictionaryWriteVersion = (
+  record: { updatedAt?: unknown; writeVersion?: string } | null | undefined,
+): HistoryDictionaryWriteVersion => {
+  if (!record) return null;
+  if (record.writeVersion) return record.writeVersion;
+  const timestamp = record.updatedAt as
+    | { seconds?: number; nanoseconds?: number }
+    | undefined;
+  return Number.isSafeInteger(timestamp?.seconds) &&
+    Number.isSafeInteger(timestamp?.nanoseconds)
+    ? `${timestamp!.seconds}:${timestamp!.nanoseconds}`
+    : "legacy";
+};
+
+type DictionaryCommand =
+  | "requestHistoryDictionaryTerm"
+  | "saveStudentHistoryDictionaryWord"
+  | "saveStudentHistoryDictionaryEntry"
+  | "deleteStudentHistoryDictionaryWord"
+  | "deleteStudentHistoryDictionaryWordByTeacher"
+  | "updateStudentHistoryDictionaryWordByTeacher"
+  | "saveHistoryDictionaryTerm"
+  | "approveHistoryDictionaryTermForRequests";
+// Memory only: preserve the original owner's intent through reauthentication
+// remounts without putting student drafts in browser storage.
+const dictionaryPending = new Map<
+  string,
+  {
+    commandType: DictionaryCommand;
+    payload: W2CommandPayloads[DictionaryCommand];
+  }
+>();
+const dictionaryFlights = new Map<string, Promise<unknown>>();
+const dictionaryListeners = new Set<() => void>();
+const emitDictionaryPending = () =>
+  dictionaryListeners.forEach((listener) => listener());
+export const subscribeHistoryDictionaryMutation = (listener: () => void) => {
+  dictionaryListeners.add(listener);
+  return () => {
+    dictionaryListeners.delete(listener);
+  };
+};
+export const hasPendingHistoryDictionaryMutation = (uid: string) =>
+  dictionaryPending.has(uid);
+export const getPendingHistoryDictionaryDraft = (uid: string) => {
+  if (auth.currentUser?.uid !== uid) return null;
+  const pending = dictionaryPending.get(uid);
+  if (!pending) return null;
+  const value = pending.payload as unknown as Record<string, unknown>;
+  return {
+    word: typeof value.word === "string" ? value.word : "",
+    definition: typeof value.definition === "string" ? value.definition : "",
+    memo: typeof value.memo === "string" ? value.memo : "",
+    relatedUnitId:
+      typeof value.relatedUnitId === "string" ? value.relatedUnitId : "",
+    tags: Array.isArray(value.tags) ? ([...value.tags] as string[]) : [],
+  };
+};
+export const isHistoryDictionaryMutationBusy = (uid: string) =>
+  dictionaryFlights.has(uid);
+export const historyDictionaryMutationMessage = (error: unknown) =>
+  error instanceof WestoryCommandError && error.retryable
+    ? "이전 요청의 결과를 확인하지 못했습니다. ‘이전 요청 결과 확인’을 눌러 주세요."
+    : error instanceof Error
+      ? error.message
+      : "입력 내용을 확인한 뒤 다시 시도해 주세요.";
+
+const sendDictionaryPending = async (ownerUid: string) => {
+  assertHistoryDictionaryEditorOwner(ownerUid);
+  const pending = dictionaryPending.get(ownerUid);
+  if (!pending) throw new Error("확인할 이전 요청이 없습니다.");
+  try {
+    let response;
+    switch (pending.commandType) {
+      case "requestHistoryDictionaryTerm":
+        response = await executeWestoryCommand<DictionaryCommand>(
+          "requestHistoryDictionaryTerm",
+          pending.payload,
+          { expectedUid: ownerUid },
+        );
+        break;
+      case "saveStudentHistoryDictionaryWord":
+        response = await executeWestoryCommand<DictionaryCommand>(
+          "saveStudentHistoryDictionaryWord",
+          pending.payload,
+          { expectedUid: ownerUid },
+        );
+        break;
+      case "saveStudentHistoryDictionaryEntry":
+        response = await executeWestoryCommand<DictionaryCommand>(
+          "saveStudentHistoryDictionaryEntry",
+          pending.payload,
+          { expectedUid: ownerUid },
+        );
+        break;
+      case "deleteStudentHistoryDictionaryWord":
+        response = await executeWestoryCommand<DictionaryCommand>(
+          "deleteStudentHistoryDictionaryWord",
+          pending.payload,
+          { expectedUid: ownerUid },
+        );
+        break;
+      case "deleteStudentHistoryDictionaryWordByTeacher":
+        response = await executeWestoryCommand<DictionaryCommand>(
+          "deleteStudentHistoryDictionaryWordByTeacher",
+          pending.payload,
+          { expectedUid: ownerUid },
+        );
+        break;
+      case "updateStudentHistoryDictionaryWordByTeacher":
+        response = await executeWestoryCommand<DictionaryCommand>(
+          "updateStudentHistoryDictionaryWordByTeacher",
+          pending.payload,
+          { expectedUid: ownerUid },
+        );
+        break;
+      case "saveHistoryDictionaryTerm":
+        response = await executeWestoryCommand<DictionaryCommand>(
+          "saveHistoryDictionaryTerm",
+          pending.payload,
+          { expectedUid: ownerUid },
+        );
+        break;
+      case "approveHistoryDictionaryTermForRequests":
+        response = await executeWestoryCommand<DictionaryCommand>(
+          "approveHistoryDictionaryTermForRequests",
+          pending.payload,
+          { expectedUid: ownerUid },
+        );
+        break;
+    }
+    dictionaryPending.delete(ownerUid);
+    return { commandType: pending.commandType, result: response.result };
+  } catch (error) {
+    if (
+      !(error instanceof WestoryCommandError && error.retryable) &&
+      !(await hasPendingWestoryCommand(pending.commandType, pending.payload, {
+        expectedUid: ownerUid,
+      }).catch(() => true))
+    )
+      dictionaryPending.delete(ownerUid);
+    throw error;
+  } finally {
+    emitDictionaryPending();
+  }
+};
+export const retryHistoryDictionaryMutation = (ownerUid: string) => {
+  const flight = dictionaryFlights.get(ownerUid);
+  if (flight) return flight;
+  const next = sendDictionaryPending(ownerUid).finally(() => {
+    dictionaryFlights.delete(ownerUid);
+    emitDictionaryPending();
+  });
+  dictionaryFlights.set(ownerUid, next);
+  emitDictionaryPending();
+  return next;
+};
+const runDictionaryMutation = <C extends DictionaryCommand>(
+  commandType: C,
+  prepare: () => Promise<W2CommandPayloads[C]> | W2CommandPayloads[C],
+  ownerUid: string,
+): Promise<W2CommandResults[C]> => {
+  assertHistoryDictionaryEditorOwner(ownerUid);
+  if (dictionaryPending.has(ownerUid) || dictionaryFlights.has(ownerUid))
+    return Promise.reject(new Error("이전 요청 결과를 먼저 확인해 주세요."));
+  const flight = Promise.resolve()
+    .then(prepare)
+    .then(async (payload) => {
+      assertHistoryDictionaryEditorOwner(ownerUid);
+      dictionaryPending.set(ownerUid, {
+        commandType,
+        payload: JSON.parse(JSON.stringify(payload)),
+      });
+      emitDictionaryPending();
+      return (await sendDictionaryPending(ownerUid))
+        .result as W2CommandResults[C];
+    })
+    .finally(() => {
+      dictionaryFlights.delete(ownerUid);
+      emitDictionaryPending();
+    });
+  dictionaryFlights.set(ownerUid, flight);
+  emitDictionaryPending();
+  return flight;
+};
+
+const dictionaryHash = async (value: string) =>
+  Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-1", new TextEncoder().encode(value)),
+    ),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+const dictionaryTermId = async (word: string) =>
+  `term_${await dictionaryHash(normalizeHistoryDictionaryWord(word))}`;
+const readRequestVersion = async (uid: string, requestId: string) => {
+  if (!requestId) return null;
+  // The uid constraint proves ownership even when the queried document is absent.
+  const snapshot = await getDocs(
+    query(
+      collection(db, REQUESTS_COLLECTION),
+      where("uid", "==", uid),
+      where(documentId(), "==", requestId),
+      limit(1),
+    ),
+  );
+  return snapshot.empty
+    ? null
+    : getHistoryDictionaryWriteVersion(snapshot.docs[0].data());
+};
+
 export const normalizeHistoryDictionaryWord = (value: string) =>
   String(value || "")
     .trim()
@@ -38,7 +255,12 @@ export const normalizeHistoryDictionaryWord = (value: string) =>
 const mapDoc = <T extends { id: string }>(docSnap: {
   id: string;
   data: () => Record<string, unknown>;
-}) => ({ id: docSnap.id, ...docSnap.data() }) as T;
+}) =>
+  ({
+    id: docSnap.id,
+    ...docSnap.data(),
+    writeVersion: getHistoryDictionaryWriteVersion(docSnap.data()),
+  }) as unknown as T;
 
 const getTimestampMs = (value: unknown) => {
   if (!value) return 0;
@@ -78,6 +300,7 @@ const mapStudentWordRequestDoc = (docSnap: {
     createdAt: data.createdAt || data.updatedAt || null,
     updatedAt: data.updatedAt || data.createdAt || null,
     resolvedAt: null,
+    wordWriteVersion: getHistoryDictionaryWriteVersion(data) || "legacy",
   };
 };
 
@@ -117,6 +340,7 @@ const mapTeacherStudentWordDoc = (docSnap: {
     rewardAwardedAt: data.rewardAwardedAt || null,
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
+    writeVersion: getHistoryDictionaryWriteVersion(data) || "legacy",
   };
 };
 
@@ -159,6 +383,7 @@ const mapTeacherStudentWordData = (
   rewardAmount: Number(data.rewardAmount || 0),
   createdAt: timestampFromMs(data.createdAtMs),
   updatedAt: timestampFromMs(data.updatedAtMs),
+  writeVersion: String(data.writeVersion || ""),
 });
 
 const mergeHistoryDictionaryRequests = (
@@ -226,6 +451,20 @@ export const subscribeStudentHistoryDictionaryWords = (
       onChange([]);
     },
   );
+
+export const loadStudentHistoryDictionaryWord = async (
+  uid: string,
+  termId: string,
+) => {
+  assertHistoryDictionaryEditorOwner(uid);
+  const snapshot = await getDoc(
+    doc(db, `users/${uid}/history_dictionary_words/${termId}`),
+  );
+  assertHistoryDictionaryEditorOwner(uid);
+  return snapshot.exists()
+    ? mapDoc<StudentHistoryDictionaryWord>(snapshot)
+    : null;
+};
 
 export const subscribeTeacherHistoryDictionaryRequests = (
   onChange: (requests: HistoryDictionaryRequest[]) => void,
@@ -373,68 +612,90 @@ export const requestHistoryDictionaryTerm = async (
     word: string;
     memo: string;
     warningAccepted: boolean;
+    expectedWordVersion: HistoryDictionaryWriteVersion;
+    expectedRequestVersion?: HistoryDictionaryWriteVersion;
   },
+  expectedUid = auth.currentUser?.uid || "",
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("requestHistoryDictionaryTerm");
-  await callable({
-    year,
-    semester,
-    word: input.word,
-    memo: input.memo,
-    warningAccepted: input.warningAccepted,
-  });
+  return runDictionaryMutation(
+    "requestHistoryDictionaryTerm",
+    async () => ({
+      year,
+      semester,
+      word: input.word,
+      memo: input.memo.replace(/\s+/g, " ").trim().slice(0, 240),
+      warningAccepted: input.warningAccepted,
+      expectedWordVersion: input.expectedWordVersion,
+      expectedRequestVersion:
+        input.expectedRequestVersion !== undefined
+          ? input.expectedRequestVersion
+          : await readRequestVersion(
+              expectedUid,
+              `req_${await dictionaryHash(`${year}:${semester}:${expectedUid}:${normalizeHistoryDictionaryWord(input.word)}`)}`,
+            ),
+    }),
+    expectedUid,
+  );
 };
 
-export const saveStudentHistoryDictionaryWord = async (termId: string) => {
-  const callable = await getHttpsCallable("saveStudentHistoryDictionaryWord");
-  await callable({ termId });
-};
-
-export const saveStudentHistoryDictionaryEntry = async (input: {
-  config?: ConfigLike;
-  word: string;
-  definition: string;
-}) => {
-  const { year, semester } = getYearSemester(input.config);
-  const callable = await getHttpsCallable("saveStudentHistoryDictionaryEntry");
-  const result = await callable({
-    year,
-    semester,
-    word: input.word,
-    definition: input.definition,
-  });
-  return result.data as {
+export const saveStudentHistoryDictionaryWord = async (
+  config: ConfigLike,
+  input: {
     termId: string;
-    saved: boolean;
-    reward?: {
-      awarded?: boolean;
-      amount?: number;
-      blockedReason?: string;
-    };
-  };
+    expectedWordVersion: HistoryDictionaryWriteVersion;
+    expectedTermVersion: HistoryDictionaryWriteVersion;
+  },
+  expectedUid = auth.currentUser?.uid || "",
+) => {
+  const { year, semester } = getYearSemester(config);
+  return runDictionaryMutation(
+    "saveStudentHistoryDictionaryWord",
+    () => ({ year, semester, ...input }),
+    expectedUid,
+  );
+};
+
+export const saveStudentHistoryDictionaryEntry = async (
+  input: {
+    config?: ConfigLike;
+    word: string;
+    definition: string;
+    expectedWordVersion: HistoryDictionaryWriteVersion;
+  },
+  expectedUid = auth.currentUser?.uid || "",
+) => {
+  const { year, semester } = getYearSemester(input.config);
+  return runDictionaryMutation(
+    "saveStudentHistoryDictionaryEntry",
+    () => ({
+      year,
+      semester,
+      word: input.word,
+      definition: input.definition,
+      expectedWordVersion: input.expectedWordVersion,
+    }),
+    expectedUid,
+  );
 };
 
 export const deleteStudentHistoryDictionaryWord = async (
   config: ConfigLike,
   termId: string,
+  expectedWordVersion: HistoryDictionaryWriteVersion,
+  expectedUid = auth.currentUser?.uid || "",
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("deleteStudentHistoryDictionaryWord");
-  const result = await callable({
-    year,
-    semester,
-    termId,
-  });
-  return result.data as {
-    termId: string;
-    deleted: boolean;
-    reward?: {
-      reclaimed?: boolean;
-      amount?: number;
-      blockedReason?: string;
-    };
-  };
+  return runDictionaryMutation(
+    "deleteStudentHistoryDictionaryWord",
+    () => ({
+      year,
+      semester,
+      termId,
+      expectedWordVersion,
+    }),
+    expectedUid,
+  );
 };
 
 const assertHistoryDictionaryEditorOwner = (expectedUid: string) => {
@@ -453,36 +714,48 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
     reason?: string;
     year?: string;
     semester?: string;
+    expectedWordVersion?: HistoryDictionaryWriteVersion;
+    expectedRequestVersion?: HistoryDictionaryWriteVersion;
   },
   expectedUid = auth.currentUser?.uid || "",
 ) => {
   assertHistoryDictionaryEditorOwner(expectedUid);
   const { year, semester } = getYearSemester(config);
-  const payload = {
-    year: input.year || year,
-    semester: input.semester || semester,
-    uid: input.uid,
-    termId: input.termId || "",
-    requestId: input.requestId || "",
-    word: input.word || "",
-    normalizedWord: input.normalizedWord || "",
-    reason: input.reason || "",
-  };
-  const callable = await getHttpsCallable(
+  return runDictionaryMutation(
     "deleteStudentHistoryDictionaryWordByTeacher",
-    { expectedUid },
+    async () => {
+      const termId =
+        input.termId ||
+        (await dictionaryTermId(input.normalizedWord || input.word || ""));
+      const wordSnapshot =
+        input.expectedWordVersion === undefined
+          ? await getDoc(
+              doc(db, `users/${input.uid}/history_dictionary_words/${termId}`),
+            )
+          : null;
+      return {
+        year: input.year || year,
+        semester: input.semester || semester,
+        uid: input.uid,
+        termId,
+        requestId: input.requestId || "",
+        word: input.word || "",
+        normalizedWord: input.normalizedWord || "",
+        reason: input.reason || "",
+        expectedWordVersion:
+          input.expectedWordVersion !== undefined
+            ? input.expectedWordVersion
+            : getHistoryDictionaryWriteVersion(
+                wordSnapshot?.exists() ? wordSnapshot.data() : null,
+              ),
+        expectedRequestVersion:
+          input.expectedRequestVersion !== undefined
+            ? input.expectedRequestVersion
+            : await readRequestVersion(input.uid, input.requestId || ""),
+      };
+    },
+    expectedUid,
   );
-  const result = await callable(payload);
-  return result.data as {
-    termId: string;
-    requestId?: string;
-    deleted: boolean;
-    reward?: {
-      reclaimed?: boolean;
-      amount?: number;
-      blockedReason?: string;
-    };
-  };
 };
 
 export const updateStudentHistoryDictionaryWordByTeacher = async (
@@ -494,6 +767,7 @@ export const updateStudentHistoryDictionaryWordByTeacher = async (
     definition: string;
     year?: string;
     semester?: string;
+    expectedWordVersion: HistoryDictionaryWriteVersion;
   },
   expectedUid = auth.currentUser?.uid || "",
 ) => {
@@ -506,17 +780,13 @@ export const updateStudentHistoryDictionaryWordByTeacher = async (
     termId: input.termId,
     word: input.word,
     definition: input.definition,
+    expectedWordVersion: input.expectedWordVersion,
   };
-  const callable = await getHttpsCallable(
+  return runDictionaryMutation(
     "updateStudentHistoryDictionaryWordByTeacher",
-    { expectedUid },
+    () => payload,
+    expectedUid,
   );
-  const result = await callable(payload);
-  return result.data as {
-    termId: string;
-    previousTermId: string;
-    updated: boolean;
-  };
 };
 
 export const saveHistoryDictionaryTerm = async (
@@ -529,26 +799,36 @@ export const saveHistoryDictionaryTerm = async (
     tags?: string[];
     fallbackRequestId?: string;
     fallbackUid?: string;
+    expectedTermVersion: HistoryDictionaryWriteVersion;
+    expectedRequestVersion?: HistoryDictionaryWriteVersion;
   },
   expectedUid = auth.currentUser?.uid || "",
 ) => {
   assertHistoryDictionaryEditorOwner(expectedUid);
   const { year, semester } = getYearSemester(config);
-  const payload = {
-    year,
-    semester,
-    word: input.word,
-    definition: input.definition,
-    studentLevel: input.studentLevel,
-    relatedUnitId: input.relatedUnitId || "",
-    tags: [...(input.tags || [])],
-    fallbackRequestId: input.fallbackRequestId || "",
-    fallbackUid: input.fallbackUid || "",
-  };
-  const callable = await getHttpsCallable("saveHistoryDictionaryTerm", {
+  return runDictionaryMutation(
+    "saveHistoryDictionaryTerm",
+    async () => ({
+      year,
+      semester,
+      word: input.word,
+      definition: input.definition,
+      studentLevel: input.studentLevel,
+      relatedUnitId: input.relatedUnitId || "",
+      tags: [...(input.tags || [])],
+      fallbackRequestId: input.fallbackRequestId || "",
+      fallbackUid: input.fallbackUid || "",
+      expectedTermVersion: input.expectedTermVersion,
+      expectedRequestVersion:
+        input.expectedRequestVersion !== undefined
+          ? input.expectedRequestVersion
+          : await readRequestVersion(
+              input.fallbackUid || "",
+              input.fallbackRequestId || "",
+            ),
+    }),
     expectedUid,
-  });
-  await callable(payload);
+  );
 };
 
 type HistoryDictionaryImportInput = {
@@ -629,20 +909,30 @@ export const approveHistoryDictionaryTermForRequests = async (
   input: {
     termId: string;
     requestId?: string;
+    expectedTermVersion: HistoryDictionaryWriteVersion;
+    expectedRequestVersion?: HistoryDictionaryWriteVersion;
+    requestUid?: string;
   },
   expectedUid = auth.currentUser?.uid || "",
 ) => {
   assertHistoryDictionaryEditorOwner(expectedUid);
   const { year, semester } = getYearSemester(config);
-  const payload = {
-    year,
-    semester,
-    termId: input.termId,
-    requestId: input.requestId || "",
-  };
-  const callable = await getHttpsCallable(
+  return runDictionaryMutation(
     "approveHistoryDictionaryTermForRequests",
-    { expectedUid },
+    async () => ({
+      year,
+      semester,
+      termId: input.termId,
+      requestId: input.requestId || "",
+      expectedTermVersion: input.expectedTermVersion,
+      expectedRequestVersion:
+        input.expectedRequestVersion !== undefined
+          ? input.expectedRequestVersion
+          : await readRequestVersion(
+              input.requestUid || "",
+              input.requestId || "",
+            ),
+    }),
+    expectedUid,
   );
-  await callable(payload);
 };

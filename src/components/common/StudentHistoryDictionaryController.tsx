@@ -9,6 +9,14 @@ import {
   saveStudentHistoryDictionaryEntry,
   saveStudentHistoryDictionaryWord,
   subscribeStudentHistoryDictionaryWords,
+  getHistoryDictionaryWriteVersion,
+  hasPendingHistoryDictionaryMutation,
+  isHistoryDictionaryMutationBusy,
+  subscribeHistoryDictionaryMutation,
+  retryHistoryDictionaryMutation,
+  historyDictionaryMutationMessage,
+  loadStudentHistoryDictionaryWord,
+  getPendingHistoryDictionaryDraft,
 } from "../../lib/historyDictionary";
 import type {
   HistoryDictionaryTerm,
@@ -47,6 +55,19 @@ const StudentHistoryDictionaryController: React.FC = () => {
   const [teacherChecked, setTeacherChecked] = useState(false);
   const [term, setTerm] = useState<HistoryDictionaryTerm | null>(null);
   const [words, setWords] = useState<StudentHistoryDictionaryWord[]>([]);
+  const [editingWord, setEditingWord] =
+    useState<StudentHistoryDictionaryWord | null>(null);
+  const [, refreshMutation] = useState(0);
+  useEffect(
+    () =>
+      subscribeHistoryDictionaryMutation(() =>
+        refreshMutation((value) => value + 1),
+      ),
+    [],
+  );
+  const ownerUid = currentUser?.uid || "";
+  const mutationPending = hasPendingHistoryDictionaryMutation(ownerUid);
+  const mutationBusy = isHistoryDictionaryMutationBusy(ownerUid);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -55,15 +76,8 @@ const StudentHistoryDictionaryController: React.FC = () => {
     !location.pathname.startsWith("/student/lesson/history-dictionary");
   const currentWord = word.trim();
   const normalizedCurrentWord = normalizeHistoryDictionaryWord(currentWord);
-  const currentSavedWord = useMemo(
-    () =>
-      words.find(
-        (item) =>
-          item.normalizedWord === normalizedCurrentWord &&
-          item.status === "saved",
-      ) || null,
-    [normalizedCurrentWord, words],
-  );
+  const currentSavedWord =
+    editingWord?.normalizedWord === normalizedCurrentWord ? editingWord : null;
   const hasRequestedCurrentWord = useMemo(
     () =>
       words.some(
@@ -75,6 +89,16 @@ const StudentHistoryDictionaryController: React.FC = () => {
   );
 
   useEffect(() => {
+    setEditingWord(null);
+    setWord("");
+    setDefinition("");
+    setMemo("");
+    const pending = getPendingHistoryDictionaryDraft(currentUser?.uid || "");
+    if (pending) {
+      setWord(pending.word);
+      setDefinition(pending.definition);
+      setMemo(pending.memo);
+    }
     if (!currentUser?.uid || !isStudentRoute) {
       setWords([]);
       return undefined;
@@ -102,10 +126,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
     setTeacherChecked(false);
     setTerm(null);
     setWarningAccepted(false);
-    if (currentSavedWord?.definition) {
-      setDefinition(currentSavedWord.definition);
-    }
-  }, [currentSavedWord?.definition, word]);
+  }, [word]);
 
   if (!currentUser || !isStudentRoute) return null;
 
@@ -113,11 +134,21 @@ const StudentHistoryDictionaryController: React.FC = () => {
     if (!currentWord || definition.trim().length < 2 || loading) return;
     setLoading(true);
     try {
-      const result = await saveStudentHistoryDictionaryEntry({
-        config,
-        word: currentWord,
-        definition: definition.trim(),
-      });
+      const result = await saveStudentHistoryDictionaryEntry(
+        {
+          config,
+          word: currentWord,
+          definition: definition.trim(),
+          expectedWordVersion:
+            getHistoryDictionaryWriteVersion(currentSavedWord),
+        },
+        ownerUid,
+      );
+      const savedWord = await loadStudentHistoryDictionaryWord(
+        ownerUid,
+        result.termId,
+      ).catch(() => null);
+      if (savedWord) setEditingWord(savedWord);
       showToast({
         tone: "success",
         title: "내 역사 사전에 저장했습니다.",
@@ -130,7 +161,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       showToast({
         tone: "error",
         title: "단어를 저장하지 못했습니다.",
-        message: "단어와 뜻풀이를 확인한 뒤 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       setLoading(false);
@@ -148,8 +179,11 @@ const StudentHistoryDictionaryController: React.FC = () => {
       const result = await deleteStudentHistoryDictionaryWord(
         config,
         currentSavedWord.termId,
+        getHistoryDictionaryWriteVersion(currentSavedWord),
+        ownerUid,
       );
       setWord("");
+      setEditingWord(null);
       setDefinition("");
       setMemo("");
       showToast({
@@ -164,7 +198,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       showToast({
         tone: "error",
         title: "단어 삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       setLoading(false);
@@ -192,8 +226,22 @@ const StudentHistoryDictionaryController: React.FC = () => {
     if (!term || loading) return;
     setLoading(true);
     try {
-      await saveStudentHistoryDictionaryWord(term.id);
+      await saveStudentHistoryDictionaryWord(
+        config,
+        {
+          termId: term.id,
+          expectedTermVersion: getHistoryDictionaryWriteVersion(term),
+          expectedWordVersion:
+            getHistoryDictionaryWriteVersion(currentSavedWord),
+        },
+        ownerUid,
+      );
       setDefinition(term.definition);
+      const savedWord = await loadStudentHistoryDictionaryWord(
+        ownerUid,
+        term.id,
+      ).catch(() => null);
+      if (savedWord) setEditingWord(savedWord);
       showToast({
         tone: "success",
         title: "선생님 뜻풀이를 저장했습니다.",
@@ -204,7 +252,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       showToast({
         tone: "error",
         title: "선생님 뜻풀이 저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       setLoading(false);
@@ -221,11 +269,22 @@ const StudentHistoryDictionaryController: React.FC = () => {
       ]
         .filter(Boolean)
         .join("\n");
-      await requestHistoryDictionaryTerm(config, {
-        word: currentWord,
-        memo: composedMemo,
-        warningAccepted,
-      });
+      const result = await requestHistoryDictionaryTerm(
+        config,
+        {
+          word: currentWord,
+          memo: composedMemo,
+          warningAccepted,
+          expectedWordVersion:
+            getHistoryDictionaryWriteVersion(currentSavedWord),
+        },
+        ownerUid,
+      );
+      const savedWord = await loadStudentHistoryDictionaryWord(
+        ownerUid,
+        result.termId,
+      ).catch(() => null);
+      if (savedWord) setEditingWord(savedWord);
       setMemo("");
       setWarningAccepted(false);
       setRequestDialogOpen(false);
@@ -239,7 +298,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       showToast({
         tone: "error",
         title: "요청을 보내지 못했습니다.",
-        message: "단어를 확인한 뒤 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       setLoading(false);
@@ -250,6 +309,26 @@ const StudentHistoryDictionaryController: React.FC = () => {
     if (!currentWord || hasRequestedCurrentWord || loading) return;
     setWarningAccepted(false);
     setRequestDialogOpen(true);
+  };
+  const handleRetryMutation = async () => {
+    if (loading || mutationBusy) return;
+    setLoading(true);
+    try {
+      await retryHistoryDictionaryMutation(ownerUid);
+      showToast({
+        tone: "success",
+        title: "이전 요청을 완료했습니다.",
+        message: "단어를 다시 입력해 최신 내용을 확인해 주세요.",
+      });
+    } catch (error) {
+      showToast({
+        tone: "error",
+        title: "이전 요청 결과를 확인해 주세요.",
+        message: historyDictionaryMutationMessage(error),
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -299,6 +378,24 @@ const StudentHistoryDictionaryController: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-4">
+              {mutationPending && (
+                <div
+                  role="status"
+                  className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-slate-800"
+                >
+                  <p>
+                    이전 요청의 결과를 확인해 주세요. 작성한 내용은 유지됩니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryMutation()}
+                    disabled={loading || mutationBusy}
+                    className="mt-2 min-h-11 rounded-lg border border-slate-300 bg-white px-3 font-semibold disabled:opacity-50"
+                  >
+                    이전 요청 결과 확인
+                  </button>
+                </div>
+              )}
               <section className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
                 <label className="block">
                   <span className="text-sm font-extrabold text-slate-800">
@@ -308,7 +405,19 @@ const StudentHistoryDictionaryController: React.FC = () => {
                     ref={inputRef}
                     type="text"
                     value={word}
-                    onChange={(event) => setWord(event.target.value)}
+                    disabled={loading || mutationPending}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const observed =
+                        words.find(
+                          (item) =>
+                            item.normalizedWord ===
+                            normalizeHistoryDictionaryWord(value),
+                        ) || null;
+                      setWord(value);
+                      setEditingWord(observed);
+                      if (observed) setDefinition(observed.definition || "");
+                    }}
                     maxLength={40}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                     placeholder="예: 율령"
@@ -320,6 +429,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
                   </span>
                   <textarea
                     value={definition}
+                    disabled={loading || mutationPending}
                     onChange={(event) => setDefinition(event.target.value)}
                     maxLength={1200}
                     className="mt-1 min-h-[7rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"

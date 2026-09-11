@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const wis = require("../wisEconomy");
 const archiveEnrollment = require("../archiveEnrollment");
+const gateway = require("../commandGateway");
 
 class MemoryTransaction {
   constructor(seed = {}) {
@@ -473,6 +474,7 @@ const run = async () => {
     active: true,
     reason: "재고 등록",
   });
+  const orderReplayTx = new MemoryTransaction(Object.fromEntries(tx.documents));
   const order = await apply(
     "placeWisOrder",
     {
@@ -482,10 +484,55 @@ const run = async () => {
       expectedInventoryRevision: 1,
       expectedAccountRevision: 4,
       quantity: 1,
+      memo: "  파란색/검은색 중\n파란색으로 부탁드립니다.  ",
     },
     student,
   );
   assert.equal(order.result.balance, 400);
+  assert.equal((await tx.get(`semester_wis_orders/${order.result.orderId}`)).data.memo,
+    "파란색/검은색 중\n파란색으로 부탁드립니다.");
+  const memoPayload = { ...common, expectedEconomyRevision: 3,
+    inventoryId: inventory.result.inventoryId, expectedInventoryRevision: 1,
+    expectedAccountRevision: 4, quantity: 1 };
+  assert.deepEqual(wis.normalizeWisPayload("placeWisOrder", memoPayload), memoPayload,
+    "pre-memo payload hashes must remain unchanged");
+  const replayCore = gateway.createCommandGatewayCore({
+    store: { runTransaction: (callback) => callback(orderReplayTx) },
+    assertSession: async () => ({ uid: student.actorUid }),
+    authorizeCommand: async () => student,
+    commandAdapters: { placeWisOrder: adapter },
+    serverTimestamp: () => "2026-09-11T01:00:00.000Z",
+    concreteTimestamp: () => "2026-09-11T01:00:00.000Z",
+    projectId: "demo-westory-session-wis-memo",
+  });
+  const replayRequest = { auth: { uid: student.actorUid }, data: {
+    commandId: "a0000000-0000-4000-8000-000000000001", commandType: "placeWisOrder",
+    payload: { ...memoPayload, memo: "원래 구매 메모" }, _testDropResponseAfterCommit: true,
+  } };
+  await assert.rejects(() => replayCore.execute(replayRequest), (error) => error.code === "unavailable");
+  const replayedOrder = await replayCore.execute(replayRequest);
+  assert.equal(replayedOrder.replayed, true);
+  assert.equal((await orderReplayTx.query("semester_wis_orders")).length, 1);
+  const replayOrderPath = `semester_wis_orders/${replayedOrder.result.orderId}`;
+  assert.equal((await orderReplayTx.get(replayOrderPath)).data.memo, "원래 구매 메모");
+  await assert.rejects(() => replayCore.execute({ ...replayRequest, data: { ...replayRequest.data,
+    payload: { ...memoPayload, memo: "변경된 메모" } } }),
+    (error) => error.details?.reason === "COMMAND_ID_CONFLICT");
+  assert.equal((await orderReplayTx.get(replayOrderPath)).data.memo, "원래 구매 메모");
+  const oldCommandId = "a0000000-0000-4000-8000-000000000002";
+  orderReplayTx.create(`${gateway.RECEIPT_COLLECTION}/${gateway.buildReceiptId(student.actorUid, "placeWisOrder", oldCommandId)}`, {
+    payloadHash: gateway.sha256(gateway.canonicalize(memoPayload)), status: "SUCCEEDED", result: { orderId: "pre-memo-order" },
+  });
+  const oldReplay = await replayCore.execute({ auth: replayRequest.auth, data: {
+    commandId: oldCommandId, commandType: "placeWisOrder", payload: memoPayload,
+  } });
+  assert.equal(oldReplay.replayed, true);
+  assert.equal(oldReplay.result.orderId, "pre-memo-order");
+  assert.equal(wis.normalizeWisPayload("placeWisOrder", { ...memoPayload, memo: "가".repeat(500) }).memo.length, 500);
+  for (const memo of ["가".repeat(501), null, 12, {}, []]) {
+    assert.throws(() => wis.normalizeWisPayload("placeWisOrder", { ...memoPayload, memo }),
+      (error) => error.details?.reason === "WIS_PAYLOAD_INVALID" && error.details?.field === "memo");
+  }
   assert.equal(
     (await tx.get(`semester_wis_accounts/${accountId}`)).data.spentTotal,
     100,
@@ -548,6 +595,8 @@ const run = async () => {
     reason: "합성 반려",
   });
   assert.equal(rejected.result.balance, 500);
+  assert.equal((await tx.get(`semester_wis_orders/${order.result.orderId}`)).data.memo,
+    "파란색/검은색 중\n파란색으로 부탁드립니다.", "review must preserve the purchase memo");
   assert.equal(
     (await tx.get(`semester_wis_accounts/${accountId}`)).data.spentTotal,
     0,
@@ -772,12 +821,25 @@ const run = async () => {
     displayName: "노출되면 안 되는 학생",
     balance: 999999,
   });
+  for (const [index, activityType] of ["history_dictionary", "history_dictionary_reclaim", "private-internal-type"].entries()) {
+    const path = `semester_wis_ledger/${newestLedgerEntries[index]}`;
+    tx.set(path, { ...(await tx.get(path)).data, activityType });
+  }
+  const activityById = new Map(newestLedgerEntries.map((id, index) => [id,
+    ["history_dictionary", "history_dictionary_reclaim", "private-internal-type"][index]]));
+  const accountWithRecent = (await tx.get(`semester_wis_accounts/${accountId}`)).data;
+  tx.set(`semester_wis_accounts/${accountId}`, { ...accountWithRecent,
+    recentLedgerEntries: accountWithRecent.recentLedgerEntries.map((entry) => ({ ...entry,
+      ...(activityById.has(entry.ledgerEntryId) ? { activityType: activityById.get(entry.ledgerEntryId) } : {}) })),
+  });
   const studentState = await queryCore.getWisEconomyState({
     auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
     data: { audience: "student", semesterId: "2026-2", source: "CURRENT" },
   });
   assert.equal(studentState.account.accountId, accountId);
   assert.equal(studentState.writeCount, 0);
+  assert.deepEqual(studentState.ledger.slice(0, 3).map((entry) => entry.activityType),
+    ["history_dictionary", "history_dictionary_reclaim", undefined]);
   assert.equal(studentState.rankings.length, 1);
   assert.equal(studentState.rankings[0].studentUid, "student-1");
   assert.deepEqual(
@@ -1040,6 +1102,7 @@ const run = async () => {
       studentUid: orderStudentUid,
       productId: "product-order-fixture",
       productName: "순서 검증 상품",
+      memo: `요청 메모 ${orderId}`,
       quantity: 1,
       unitPrice: 10,
       totalPrice: 10,
@@ -1167,6 +1230,7 @@ const run = async () => {
       },
     });
   const newestOrderPage = await teacherOrderRequest();
+  assert.equal(newestOrderPage.orders[0].memo, "요청 메모 order-hash-z");
   assert.deepEqual(
     newestOrderPage.orders.map((order) => order.orderId),
     ["order-hash-z", "order-hash-a"],
@@ -1198,6 +1262,7 @@ const run = async () => {
     studentOrders.orders.map((order) => order.orderId),
     ["order-hash-z", "order-hash-a"],
   );
+  assert.equal(studentOrders.orders[0].memo, "요청 메모 order-hash-z");
   assert.doesNotMatch(
     JSON.stringify(studentOrders.orders),
     /private-teacher-uid|reviewedBy|studentUid|accountId/u,
@@ -1443,7 +1508,7 @@ const run = async () => {
     (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
   );
 
-  console.log(JSON.stringify({ passed: true, cases: 38, productionAccess: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 44, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility"], productionAccess: 0 }));
 };
 
 run().catch((error) => {

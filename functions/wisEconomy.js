@@ -112,6 +112,17 @@ const optionalText = (value, label, max = 500) =>
   value === undefined || value === null || value === ""
     ? ""
     : text(value, label, max);
+const normalizeOrderMemo = (value) => {
+  if (value === undefined) return "";
+  if (typeof value !== "string" || value.trim().length > 500)
+    fail(
+      "invalid-argument",
+      "구매 메모는 500자 이내로 입력해 주세요.",
+      "WIS_PAYLOAD_INVALID",
+      { field: "memo" },
+    );
+  return value.trim();
+};
 const integer = (value, label, { min = 0, max = 1_000_000 } = {}) => {
   if (!Number.isSafeInteger(value) || value < min || value > max)
     fail("invalid-argument", `${label} is invalid.`, "WIS_PAYLOAD_INVALID", {
@@ -768,6 +779,7 @@ const normalizeWisPayload = (commandType, raw) => {
         "expectedInventoryRevision",
         "expectedAccountRevision",
         "quantity",
+        "memo",
       ],
       "placeWisOrder payload",
     );
@@ -791,6 +803,10 @@ const normalizeWisPayload = (commandType, raw) => {
         "expectedAccountRevision",
       ),
       quantity: integer(payload.quantity, "quantity", { min: 1, max: 99 }),
+      // Preserve the canonical payload hash of pre-memo receipts.
+      ...(payload.memo === undefined
+        ? {}
+        : { memo: normalizeOrderMemo(payload.memo) }),
     };
   }
   if (commandType === WIS_COMMAND_TYPES.REVIEW_WIS_ORDER) {
@@ -1092,6 +1108,19 @@ const totalsFromLedgerEntries = (entries) => {
     normalized.map((entry) => [String(entry.ledgerEntryId || ""), entry]),
   );
   return normalized.reduce((totals, entry) => {
+    if (entry.type === "LEGACY_OPENING" || entry.type === "LEGACY_RECLAIM") {
+      const contribution = entry.type === "LEGACY_OPENING" ? entry.openingTotals : entry.totalsContribution;
+      if (!contribution || !Object.keys(zeroAccountTotals()).every(key => Number.isSafeInteger(contribution[key])) ||
+          !Number.isSafeInteger(entry.delta) ||
+          (entry.type === "LEGACY_OPENING" && (entry.delta < 0 || contribution.balance !== entry.delta ||
+            ["earnedTotal", "rankEarnedTotal", "spentTotal"].some(key => contribution[key] < 0) ||
+            normalized.filter(row => row.type === "LEGACY_OPENING").length !== 1)) ||
+          (entry.type === "LEGACY_RECLAIM" && (entry.delta >= 0 || contribution.earnedTotal !== entry.delta ||
+            contribution.rankEarnedTotal !== entry.delta || contribution.spentTotal !== 0 || contribution.adjustedTotal !== 0 ||
+            !entry.sourceOriginalRewardPath || !entry.legacyMigrationId || !entry.openingLedgerEntryId)))
+        fail("failed-precondition", "Legacy Wis ledger totals are invalid.", "WIS_LEGACY_LEDGER_INVALID");
+      return addAccountTotals(totals, contribution);
+    }
     if (entry.type !== "REVERSAL") {
       return addAccountTotals(
         totals,
@@ -1112,6 +1141,44 @@ const totalsFromLedgerEntries = (entries) => {
       ),
     );
   }, zeroAccountTotals());
+};
+const assertLegacyLedgerProvenance = async (transaction, entries, account) => {
+  const migration = require("./wisLegacyMigration");
+  const rows = entries.map(row => row.data || row);
+  const legacyRows = rows.filter(row => ["LEGACY_OPENING", "LEGACY_RECLAIM"].includes(row.type));
+  if (!legacyRows.length && !account.legacyMigrationId) return;
+  const invalid = () => fail("failed-precondition", "Legacy Wis ledger provenance is invalid.", "WIS_LEGACY_LEDGER_INVALID");
+  const paths = migration.pathsFor(account.semesterId, account.studentUid);
+  const markerSnapshot = await transaction.get(paths.marker);
+  const marker = markerSnapshot.data || {};
+  const openingRows = rows.filter(row => row.type === "LEGACY_OPENING");
+  const opening = openingRows[0];
+  if (!markerSnapshot.exists || marker.status !== "MIGRATED" || marker.policyVersion !== migration.POLICY_VERSION ||
+      marker.migrationId !== paths.migrationId || marker.accountId !== account.accountId ||
+      marker.semesterId !== account.semesterId || marker.studentUid !== account.studentUid ||
+      marker.openingLedgerEntryId !== paths.openingId || account.legacyMigrationId !== paths.migrationId ||
+      openingRows.length !== 1 || opening.ledgerEntryId !== paths.openingId || opening.sourceId !== paths.migrationId ||
+      opening.legacyHash !== marker.legacyHash || !/^[a-f0-9]{64}$/.test(marker.legacyHash || "") ||
+      migration.canonical(opening.openingTotals) !== migration.canonical(marker.totals) ||
+      opening.balanceBefore !== 0 || opening.balanceAfter !== opening.delta) invalid();
+  const sourcePaths = new Set();
+  for (const row of legacyRows) {
+    if (row.accountId !== account.accountId || row.studentUid !== account.studentUid || row.semesterId !== account.semesterId) invalid();
+    if (row.type !== "LEGACY_RECLAIM") continue;
+    if (row.legacyMigrationId !== paths.migrationId || row.openingLedgerEntryId !== paths.openingId ||
+        typeof row.sourceOriginalRewardPath !== "string" ||
+        !row.sourceOriginalRewardPath.startsWith(paths.transactions + "/") ||
+        row.sourceOriginalRewardPath.slice(paths.transactions.length + 1).includes("/") ||
+        sourcePaths.has(row.sourceOriginalRewardPath)) invalid();
+    sourcePaths.add(row.sourceOriginalRewardPath);
+    const sourceId = `legacy-reclaim:${sha256(`${paths.migrationId}\n${row.sourceOriginalRewardPath}`)}`;
+    if (row.sourceId !== sourceId || row.ledgerEntryId !== ledgerIdFor(account.semesterId, account.accountId, "LEGACY_RECLAIM", sourceId) ||
+        row.legacyHash !== marker.legacyHash) invalid();
+    const original = await transaction.get(row.sourceOriginalRewardPath);
+    if (!original.exists || original.data?.uid !== account.studentUid || original.data?.type !== "history_dictionary" ||
+        !Number.isSafeInteger(original.data?.delta) || original.data.delta <= 0 || original.data.delta !== -row.delta ||
+        original.data.reclaimed === true) invalid();
+  }
 };
 const postLedger = async ({
   transaction,
@@ -1211,6 +1278,7 @@ const createWisCommandAdapter = () => ({
     actor,
   }) => {
     const projectionTimestamp = concreteTimestamp || timestamp;
+    await require("./wisMigrationFence").assertWisWriteAllowed(transaction, payload.semesterId);
     const manifest = await assertManifest(
       transaction,
       payload,
@@ -1481,7 +1549,7 @@ const createWisCommandAdapter = () => ({
       if (
         commandType === WIS_COMMAND_TYPES.GRANT_INITIAL_WIS &&
         (economy.status !== "ACTIVE_INITIALIZING" ||
-          account.initialGrantLedgerEntryId)
+          account.initialGrantLedgerEntryId || account.legacyMigrationId)
       )
         fail(
           "failed-precondition",
@@ -1644,6 +1712,7 @@ const createWisCommandAdapter = () => ({
           "WIS_REBUILD_LEDGER_LIMIT_EXCEEDED",
           { limit: WIS_REBUILD_LEDGER_LIMIT },
         );
+      await assertLegacyLedgerProvenance(transaction, entries, account);
       const balance = entries.reduce(
         (sum, entry) => sum + Number(entry.data?.delta || 0),
         0,
@@ -2038,6 +2107,7 @@ const createWisCommandAdapter = () => ({
         quantity: payload.quantity,
         unitPrice: inventory.price,
         totalPrice,
+        memo: payload.memo || "",
         debitLedgerEntryId: posted.ledgerEntryId,
         revision: 1,
         status: "REQUESTED",
@@ -2535,6 +2605,11 @@ const projectStudentLedgerEntry = (entry) => ({
   balanceAfter: Number(entry?.balanceAfter || 0),
   reason: String(entry?.reason || ""),
   createdAt: entry?.createdAt || null,
+  ...(["history_dictionary", "history_dictionary_reclaim"].includes(
+    entry?.activityType,
+  )
+    ? { activityType: entry.activityType }
+    : {}),
   ...(String(entry?.sourceId || "") === "lesson-core-points-all"
     ? { sourceId: "lesson-core-points-all" }
     : {}),
@@ -2551,6 +2626,7 @@ const projectStudentOrder = (order) => ({
   revision: Number(order?.revision || 0),
   status: String(order?.status || ""),
   reviewReason: String(order?.reviewReason || ""),
+  memo: String(order?.memo || ""),
   createdAt: order?.createdAt || null,
   reviewedAt: order?.reviewedAt || null,
   updatedAt: order?.updatedAt || null,

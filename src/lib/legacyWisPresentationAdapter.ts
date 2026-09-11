@@ -240,6 +240,13 @@ export const hydrateLegacyStudentWisOwnProjection = (
 const mapLedgerType = (entry: WisLedgerEntry): PointTransactionType => {
   if (entry.type === "ORDER_DEBIT") return "purchase_hold";
   if (entry.type === "ORDER_REFUND") return "purchase_cancel";
+  if (entry.type === "GRANT" && entry.activityType === "history_dictionary")
+    return "history_dictionary";
+  if (
+    (entry.type === "REVERSAL" || entry.type === "LEGACY_RECLAIM") &&
+    entry.activityType === "history_dictionary_reclaim"
+  )
+    return "history_dictionary_reclaim";
   if (entry.type === "GRANT" && entry.sourceId === "lesson-core-points-all")
     return "lesson_core_points";
   if (entry.type === "DEDUCT") return "manual_reclaim";
@@ -354,7 +361,7 @@ const mapOrders = (state: WisEconomyState): PointOrder[] => {
       requestedAt: order.createdAt,
       reviewedAt: order.reviewedAt,
       reviewedBy: order.reviewedBy,
-      memo: order.reviewReason,
+      memo: order.reviewReason || order.memo || "",
     };
   });
 };
@@ -503,11 +510,6 @@ export const requestLegacyStudentWisPurchase = async (input: {
   requestKey: string;
   context?: LegacyWisQueryContext;
 }) => {
-  if (input.memo.trim()) {
-    throw new LegacyWisPresentationError(
-      "새 위스 원장은 구매 메모를 저장하지 않습니다. 메모를 비운 뒤 다시 요청해 주세요.",
-    );
-  }
   const intentKey = [
     "student-order",
     semesterKey(input.config),
@@ -571,6 +573,7 @@ export const requestLegacyStudentWisPurchase = async (input: {
     expectedInventoryRevision: inventory.revision,
     expectedAccountRevision: state.account!.revision,
     quantity: 1,
+    memo: input.memo.trim(),
   }));
   try {
     const result = await placeWisOrder(intent.payload, {

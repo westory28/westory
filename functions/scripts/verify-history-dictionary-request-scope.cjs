@@ -14,7 +14,7 @@ const slice = (startText, endText) => {
 const actualSanitizers = slice("const normalizeHistoryDictionaryWord =", "const MAX_HISTORY_DICTIONARY_BULK_TERMS");
 const actualScope = slice("const assertYearSemester =", "const resolveHallOfFameTargetYearSemester");
 const actualResolver = slice("const failHistoryDictionaryRequestTarget =", "exports.saveHistoryDictionaryTermsBulk =");
-const actualCallables = slice("exports.saveHistoryDictionaryTerm =", "exports.updateStudentProfileIcon =");
+const actualOperations = slice("const saveHistoryDictionaryTermOperation =", "exports.updateStudentProfileIcon =");
 const termId = "term_" + crypto.createHash("sha1").update("term").digest("hex");
 const termPath = "history_dictionary_terms/" + termId;
 const wordPath = (uid = "student-one") => "users/" + uid + "/history_dictionary_words/" + termId;
@@ -86,8 +86,8 @@ const setup = (seed = {}, options = {}) => {
     },
   };
   runInNewContext(
-    actualSanitizers + actualScope + actualResolver + actualCallables +
-    "\nexports.resolve = resolveHistoryDictionaryRequestsWithTerm;",
+    actualSanitizers + actualScope + actualResolver + actualOperations +
+    "\nexports.resolve = resolveHistoryDictionaryRequestsWithTerm; exports.operations = {saveHistoryDictionaryTermOperation, approveHistoryDictionaryTermForRequestsOperation};",
     {
       exports, db, HttpsError, crypto, REGION: "asia-northeast3",
       dictionaryNotifications: require("../dictionaryNotifications"),
@@ -105,16 +105,23 @@ const setup = (seed = {}, options = {}) => {
       },
     },
   );
+  const invokeOperation = async (name, data, uid) => {
+    // Gateway authenticates before business execution. Keep the former role
+    // rejection tests while exercising the actual moved operation functions.
+    if (uid !== "teacher") throw new HttpsError("permission-denied", "teacher required");
+    return db.runTransaction(native => exports.operations[name]({ data }, {
+      identity: { uid }, timestamp: 123, transaction: { native },
+      runTransaction: callback => callback(native),
+    }));
+  };
   return {
     store, writes, notifications,
     transactionCount: () => transactions,
     run: (extra = {}) => exports.resolve({ managerUid: "teacher", termId, year: "2026", semester: "2", ...extra }),
-    save: (extra = {}, uid = "teacher") => exports.saveHistoryDictionaryTerm({
-      auth: { uid }, data: { year: "2026", semester: "2", word: "term", definition: "이번에 새로 저장할 풀이입니다.", ...extra },
-    }),
-    approve: (extra = {}, uid = "teacher") => exports.approveHistoryDictionaryTermForRequests({
-      auth: { uid }, data: { year: "2026", semester: "2", termId, ...extra },
-    }),
+    save: (extra = {}, uid = "teacher") => invokeOperation("saveHistoryDictionaryTermOperation",
+      { year: "2026", semester: "2", word: "term", definition: "이번에 새로 저장할 풀이입니다.", ...extra }, uid),
+    approve: (extra = {}, uid = "teacher") => invokeOperation("approveHistoryDictionaryTermForRequestsOperation",
+      { year: "2026", semester: "2", termId, ...extra }, uid),
   };
 };
 let scenarios = 0;

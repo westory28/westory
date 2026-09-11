@@ -416,7 +416,8 @@ const createSourceArchiveUploadHandler =
   }) =>
   async (request) => {
     const uid = await assertCallableActor(db, assertSession, request);
-    exact(request.data, ["uploadId", "contentBase64"]);
+    // assertCallableActor already validated this callable's session proof.
+    exact(request.data, ["uploadId", "contentBase64", "_session"]);
     const { uploadId, contentBase64 } = request.data;
     if (
       !key(uploadId) ||
@@ -549,7 +550,8 @@ const createSourceArchiveCleanupHandler =
   ({ db, bucket, assertSession, now = Date.now }) =>
   async (request) => {
     await assertCallableActor(db, assertSession, request);
-    exact(request.data, ["assetId", "deleteCommandId"]);
+    // Keep session infrastructure separate from the exact business fields.
+    exact(request.data, ["assetId", "deleteCommandId", "_session"]);
     const { assetId, deleteCommandId } = request.data;
     if (!key(assetId) || !key(deleteCommandId)) invalid();
     const assetRef = db.doc(`source_archive/${assetId}`);

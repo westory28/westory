@@ -67,6 +67,21 @@ const assertSession = async (req) => ({
   uid: req.auth.uid,
   email: req.auth.token.email,
 });
+const transportSessionProof = {
+  authorityGeneration: "w1r2-2026-08-09",
+  protocolVersion: 2,
+  revision: "a".repeat(64),
+};
+const assertTransportSession = async (req, options) => {
+  assert.deepEqual(options, { recentAuth: true, highRisk: true });
+  if (JSON.stringify(req.data?._session) !== JSON.stringify(transportSessionProof)) {
+    throw Object.assign(new Error("Invalid fixture session proof"), {
+      code: "unauthenticated",
+      details: { reason: "SESSION_PROOF_INVALID" },
+    });
+  }
+  return assertSession(req);
+};
 const setup = (seed = {}) => {
   const store = new Store({
     [path]: oldAsset(),
@@ -394,23 +409,35 @@ const loadProcessor = (db, bucket, onRender = () => {}, failPdf = false) => {
   const handler = archive.createSourceArchiveUploadHandler({
     db,
     bucket,
-    assertSession,
+    assertSession: assertTransportSession,
     now: () => 1000,
     imageMetadata: async () => ({ format: "jpeg", width: 10, height: 10 }),
   });
   const uploadRequest = request({
     uploadId: prepared.result.uploadId,
     contentBase64: bytes.toString("base64"),
+    _session: transportSessionProof,
   });
+  for (const proof of [undefined, { ...transportSessionProof, revision: "invalid" }]) {
+    await assert.rejects(handler(request({ ...uploadRequest.data, _session: proof })),
+      (error) => error.code === "unauthenticated" && error.details?.reason === "SESSION_PROOF_INVALID");
+    assert.equal(bucket.objects.size, 0);
+    checks++;
+  }
+  await assert.rejects(handler(request({ ...uploadRequest.data, ownerUid: "teacher" })),
+    (error) => error.details?.reason === "SOURCE_ARCHIVE_PAYLOAD_INVALID");
+  checks++;
   await handler(uploadRequest);
   await handler(uploadRequest);
   assert.equal(bucket.objects.size, 1);
   checks++;
+  store.docs.set("users/other", { role: "teacher" });
   await assert.rejects(
     handler({
       ...uploadRequest,
       auth: { uid: "other", token: { email: "other@yongshin-ms.ms.kr" } },
     }),
+    (error) => error.code === "permission-denied" && error.details?.reason === "SOURCE_ARCHIVE_UPLOAD_NOT_OWNED",
   );
   checks++;
   await assert.rejects(
@@ -552,13 +579,31 @@ const loadProcessor = (db, bucket, onRender = () => {}, failPdf = false) => {
   const cleanup = archive.createSourceArchiveCleanupHandler({
     db: nativeDb(deletion.store),
     bucket: deletionBucket,
-    assertSession,
+    assertSession: assertTransportSession,
     now: () => 2000,
   });
   const cleanupRequest = request({
     assetId: "existing",
     deleteCommandId: deleted.commandId,
+    _session: transportSessionProof,
   });
+  for (const proof of [undefined, { ...transportSessionProof, revision: "invalid" }]) {
+    await assert.rejects(cleanup(request({ ...cleanupRequest.data, _session: proof })),
+      (error) => error.code === "unauthenticated" && error.details?.reason === "SESSION_PROOF_INVALID");
+    assert.equal(deletionBucket.objects.size, 1);
+    assert.equal(deletion.store.docs.get(path).deletionStatus, "PENDING");
+    checks++;
+  }
+  await assert.rejects(cleanup(request({ ...cleanupRequest.data, storagePath: "other-owner/file" })),
+    (error) => error.details?.reason === "SOURCE_ARCHIVE_PAYLOAD_INVALID");
+  await assert.rejects(cleanup(request({ ...cleanupRequest.data, deleteCommandId: "foreign-delete-command" })),
+    (error) => error.details?.reason === "SOURCE_ARCHIVE_DELETE_NOT_PREPARED");
+  deletion.store.docs.set("users/other", { role: "student" });
+  await assert.rejects(cleanup({ ...cleanupRequest,
+    auth: { uid: "other", token: { email: "other@yongshin-ms.ms.kr" } } }),
+    (error) => error.code === "permission-denied" && error.details?.reason === "SOURCE_ARCHIVE_MANAGER_REQUIRED");
+  assert.equal(deletionBucket.objects.size, 1);
+  checks += 3;
   deletionBucket.failDelete(oldAsset().image.originalPath);
   await assert.rejects(
     cleanup(cleanupRequest),

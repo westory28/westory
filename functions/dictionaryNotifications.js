@@ -1,5 +1,12 @@
 const { createHash, randomUUID } = require("node:crypto");
 const COLLECTION = "history_dictionary_notification_outbox";
+const buildCommandEvent = ({ commandId, kind, uid, year, semester, notification, timestamp }) => {
+  const id = createHash("sha256").update(JSON.stringify([commandId, kind, uid])).digest("hex");
+  return { path: `${COLLECTION}/${id}`, data: { id, uid, year, semester, status: "PENDING", attempts: 0,
+    nextAttemptAtMs: 0, createdAt: timestamp,
+    notification: { ...notification, dedupeKey: `history_dictionary_event:${id}` },
+  } };
+};
 
 // Called inside the business transaction, after all target reads. The key uses
 // the pending request's stored version so a reopened request is a new event.
@@ -54,4 +61,4 @@ const createDictionaryNotificationDelivery = ({ db, deliver, now = Date.now, del
   return { delivered, deferred };
 };
 
-module.exports = { COLLECTION, buildResolutionEvent, createDictionaryNotificationDelivery };
+module.exports = { COLLECTION, buildResolutionEvent, buildCommandEvent, createDictionaryNotificationDelivery };

@@ -97,6 +97,12 @@ export const loadTeacherStudentHistoryDictionaryWords=async(config)=>{window.edi
 export const loadTeacherHistoryDictionaryTerms=async()=>clone(data.terms);
 export const loadNotifications=async()=>[];
 export const normalizeHistoryDictionaryWord=value=>String(value||'').trim().replace(/\\s+/g,' ').toLowerCase();
+export const getHistoryDictionaryWriteVersion=value=>value?(value.writeVersion||'legacy'):null;
+export const hasPendingHistoryDictionaryMutation=()=>false,isHistoryDictionaryMutationBusy=()=>false;
+export const subscribeHistoryDictionaryMutation=()=>()=>{};
+export const retryHistoryDictionaryMutation=async()=>{};
+export const historyDictionaryMutationMessage=error=>error?.message||'입력 내용을 확인해 주세요.';
+export const getPendingHistoryDictionaryDraft=()=>null;
 const pending=[];
 const mutation=(type,config,input,...options)=>{const index=window.editorCalls.length;window.editorCalls.push(clone({type,config,input,options,actor:identity.currentUser?.uid}));return new Promise((resolve,reject)=>pending.push({index,type,resolve,reject,input:clone(input)}));};
 export const saveHistoryDictionaryTerm=(...args)=>mutation('save',...args);

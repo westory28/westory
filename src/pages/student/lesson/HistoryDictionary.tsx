@@ -15,6 +15,14 @@ import {
   saveStudentHistoryDictionaryEntry,
   saveStudentHistoryDictionaryWord,
   subscribeStudentHistoryDictionaryWords,
+  getHistoryDictionaryWriteVersion,
+  hasPendingHistoryDictionaryMutation,
+  isHistoryDictionaryMutationBusy,
+  subscribeHistoryDictionaryMutation,
+  retryHistoryDictionaryMutation,
+  historyDictionaryMutationMessage,
+  loadStudentHistoryDictionaryWord,
+  getPendingHistoryDictionaryDraft,
 } from "../../../lib/historyDictionary";
 import type {
   HistoryDictionaryTerm,
@@ -128,16 +136,26 @@ const HistoryDictionary: React.FC = () => {
   const [scrollActiveInitial, setScrollActiveInitial] = useState(ALL_INITIAL);
   const [sortMode, setSortMode] = useState<"alpha" | "recent">("alpha");
   const [selectedWordId, setSelectedWordId] = useState("");
+  const [editingWord, setEditingWord] =
+    useState<StudentHistoryDictionaryWord | null>(null);
+  const [, refreshMutation] = useState(0);
+  useEffect(
+    () =>
+      subscribeHistoryDictionaryMutation(() =>
+        refreshMutation((value) => value + 1),
+      ),
+    [],
+  );
+  const ownerUid = currentUser?.uid || "";
+  const mutationPending = hasPendingHistoryDictionaryMutation(ownerUid);
+  const mutationBusy = isHistoryDictionaryMutationBusy(ownerUid);
 
   const currentWord = word.trim();
   const normalizedCurrentWord = normalizeHistoryDictionaryWord(currentWord);
-  const selectedWord = useMemo(
-    () =>
-      words.find((item) => item.id === selectedWordId) ||
-      words.find((item) => item.normalizedWord === normalizedCurrentWord) ||
-      null,
-    [normalizedCurrentWord, selectedWordId, words],
-  );
+  const selectedWord =
+    editingWord && editingWord.normalizedWord === normalizedCurrentWord
+      ? editingWord
+      : null;
   const hasRequestedCurrentWord = selectedWord?.status === "requested";
   const selectedUpdatedAt = formatTimestamp(
     selectedWord?.updatedAt || selectedWord?.createdAt,
@@ -233,6 +251,17 @@ const HistoryDictionary: React.FC = () => {
   }, [activeInitial, groupedVisibleWords]);
 
   useEffect(() => {
+    setEditingWord(null);
+    setSelectedWordId("");
+    setWord("");
+    setDefinition("");
+    setMemo("");
+    const pending = getPendingHistoryDictionaryDraft(currentUser?.uid || "");
+    if (pending) {
+      setWord(pending.word);
+      setDefinition(pending.definition);
+      setMemo(pending.memo);
+    }
     if (!currentUser?.uid) {
       setWords([]);
       return undefined;
@@ -244,20 +273,21 @@ const HistoryDictionary: React.FC = () => {
     setTeacherChecked(false);
     setTeacherTerm(null);
     setWarningAccepted(false);
-    if (selectedWord?.definition) {
-      setDefinition(selectedWord.definition);
-    }
-  }, [selectedWord?.definition, word]);
+  }, [word]);
 
   useEffect(() => {
-    if (selectedWordId || word.trim() || !visibleWords[0]) return;
+    if (selectedWordId || word.trim() || !visibleWords[0] || mutationPending)
+      return;
     const firstWord = visibleWords[0];
+    setEditingWord(firstWord);
     setSelectedWordId(firstWord.id);
     setWord(firstWord.word);
     setDefinition(firstWord.definition || "");
   }, [selectedWordId, visibleWords, word]);
 
   const handleSelectWord = (item: StudentHistoryDictionaryWord) => {
+    if (busy || mutationBusy || mutationPending) return;
+    setEditingWord(item);
     setSelectedWordId(item.id);
     setWord(item.word);
     setDefinition(item.definition || "");
@@ -265,6 +295,8 @@ const HistoryDictionary: React.FC = () => {
   };
 
   const handleNewEntry = () => {
+    if (mutationBusy || mutationPending) return;
+    setEditingWord(null);
     setSelectedWordId("");
     setWord("");
     setDefinition("");
@@ -278,11 +310,20 @@ const HistoryDictionary: React.FC = () => {
     if (!currentWord || definition.trim().length < 2 || busy) return;
     setBusy(true);
     try {
-      const result = await saveStudentHistoryDictionaryEntry({
-        config,
-        word: currentWord,
-        definition: definition.trim(),
-      });
+      const result = await saveStudentHistoryDictionaryEntry(
+        {
+          config,
+          word: currentWord,
+          definition: definition.trim(),
+          expectedWordVersion: getHistoryDictionaryWriteVersion(selectedWord),
+        },
+        ownerUid,
+      );
+      const savedWord = await loadStudentHistoryDictionaryWord(
+        ownerUid,
+        result.termId,
+      ).catch(() => null);
+      if (savedWord) setEditingWord(savedWord);
       showToast({
         tone: "success",
         title: "내 역사 사전에 저장했습니다.",
@@ -295,7 +336,7 @@ const HistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "단어 저장에 실패했습니다.",
-        message: "단어와 뜻풀이를 확인한 뒤 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       setBusy(false);
@@ -313,6 +354,8 @@ const HistoryDictionary: React.FC = () => {
       const result = await deleteStudentHistoryDictionaryWord(
         config,
         selectedWord.termId,
+        getHistoryDictionaryWriteVersion(selectedWord),
+        ownerUid,
       );
       handleNewEntry();
       showToast({
@@ -327,7 +370,7 @@ const HistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "단어 삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       setBusy(false);
@@ -354,8 +397,21 @@ const HistoryDictionary: React.FC = () => {
     if (!teacherTerm || busy) return;
     setBusy(true);
     try {
-      await saveStudentHistoryDictionaryWord(teacherTerm.id);
+      await saveStudentHistoryDictionaryWord(
+        config,
+        {
+          termId: teacherTerm.id,
+          expectedWordVersion: getHistoryDictionaryWriteVersion(selectedWord),
+          expectedTermVersion: getHistoryDictionaryWriteVersion(teacherTerm),
+        },
+        ownerUid,
+      );
       setDefinition(teacherTerm.definition);
+      const savedWord = await loadStudentHistoryDictionaryWord(
+        ownerUid,
+        teacherTerm.id,
+      ).catch(() => null);
+      if (savedWord) setEditingWord(savedWord);
       showToast({
         tone: "success",
         title: "선생님 뜻풀이를 저장했습니다.",
@@ -366,7 +422,7 @@ const HistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "선생님 뜻풀이 저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       setBusy(false);
@@ -383,11 +439,21 @@ const HistoryDictionary: React.FC = () => {
       ]
         .filter(Boolean)
         .join("\n");
-      await requestHistoryDictionaryTerm(config, {
-        word: currentWord,
-        memo: composedMemo,
-        warningAccepted,
-      });
+      const result = await requestHistoryDictionaryTerm(
+        config,
+        {
+          word: currentWord,
+          memo: composedMemo,
+          warningAccepted,
+          expectedWordVersion: getHistoryDictionaryWriteVersion(selectedWord),
+        },
+        ownerUid,
+      );
+      const savedWord = await loadStudentHistoryDictionaryWord(
+        ownerUid,
+        result.termId,
+      ).catch(() => null);
+      if (savedWord) setEditingWord(savedWord);
       setMemo("");
       setWarningAccepted(false);
       setRequestDialogOpen(false);
@@ -401,7 +467,7 @@ const HistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "요청을 보내지 못했습니다.",
-        message: "단어를 확인한 뒤 다시 시도해 주세요.",
+        message: historyDictionaryMutationMessage(error),
       });
     } finally {
       setBusy(false);
@@ -414,9 +480,46 @@ const HistoryDictionary: React.FC = () => {
     setRequestDialogOpen(true);
   };
 
+  const handleRetryMutation = async () => {
+    if (busy || mutationBusy) return;
+    setBusy(true);
+    try {
+      await retryHistoryDictionaryMutation(ownerUid);
+      showToast({
+        tone: "success",
+        title: "이전 요청을 완료했습니다.",
+        message: "목록에서 단어를 다시 선택해 최신 내용을 확인해 주세요.",
+      });
+    } catch (error) {
+      showToast({
+        tone: "error",
+        title: "이전 요청 결과를 확인해 주세요.",
+        message: historyDictionaryMutationMessage(error),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)] bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
+        {mutationPending && (
+          <div
+            role="status"
+            className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800"
+          >
+            <p>이전 요청의 결과를 확인해 주세요. 작성한 내용은 유지됩니다.</p>
+            <button
+              type="button"
+              onClick={() => void handleRetryMutation()}
+              disabled={busy || mutationBusy}
+              className="mt-2 min-h-11 rounded-lg border border-slate-300 bg-white px-4 font-semibold disabled:opacity-50"
+            >
+              이전 요청 결과 확인
+            </button>
+          </div>
+        )}
         <div className="grid gap-4 lg:grid-cols-[6.25rem_minmax(28rem,1.18fr)_minmax(22rem,0.95fr)]">
           <aside className="order-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm lg:order-1">
             <div className="grid grid-cols-5 gap-2 lg:grid-cols-1">
@@ -601,6 +704,7 @@ const HistoryDictionary: React.FC = () => {
                 <input
                   type="text"
                   value={word}
+                  disabled={busy || mutationPending}
                   onChange={(event) => {
                     setWord(event.target.value);
                     setSelectedWordId("");
@@ -617,6 +721,7 @@ const HistoryDictionary: React.FC = () => {
                 </span>
                 <textarea
                   value={definition}
+                  disabled={busy || mutationPending}
                   onChange={(event) => setDefinition(event.target.value)}
                   maxLength={1200}
                   className="mt-2 min-h-[10rem] w-full resize-y rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"

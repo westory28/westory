@@ -25,6 +25,8 @@ const sourceArchiveManagement = require("./sourceArchiveManagement");
 const mapManagement = require("./mapManagement");
 const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
+const historyDictionaryCommands = require("./historyDictionaryCommands");
+const wisLegacyMigration = require("./wisLegacyMigration");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -66,6 +68,8 @@ const COMMAND_TYPES = Object.freeze({
   ...mapManagement.MAP_COMMAND_TYPES,
   ...teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES,
   ...historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES,
+  ...historyDictionaryCommands.HISTORY_DICTIONARY_COMMAND_TYPES,
+  MIGRATE_LEGACY_WIS_ACCOUNT: wisLegacyMigration.COMMAND_TYPE,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -360,10 +364,12 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (commandType === wisLegacyMigration.COMMAND_TYPE) return wisLegacyMigration.normalizeLegacyWisMigrationPayload(commandType, payload);
   if (Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType)) return historyDictionaryImport.normalizeHistoryDictionaryImportPayload(commandType, payload);
   if (Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType)) return teacherPatchNotes.normalizePatchNotePayload(commandType, payload);
   if (Object.values(lessonManagement.LESSON_COMMAND_TYPES).includes(commandType)) return lessonManagement.normalizeLessonPayload(commandType, payload);
   if (Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES).includes(commandType)) return sourceArchiveManagement.normalizeSourceArchivePayload(commandType, payload);
+  if (Object.values(historyDictionaryCommands.HISTORY_DICTIONARY_COMMAND_TYPES).includes(commandType)) return historyDictionaryCommands.normalizeHistoryDictionaryPayload(commandType, payload);
   if (Object.values(mapManagement.MAP_COMMAND_TYPES).includes(commandType)) return mapManagement.normalizeMapPayload(commandType, payload);
   if (Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).includes(commandType)) {
     return lessonAnswers.normalizeLessonAnswerPayload(commandType, payload);
@@ -999,6 +1005,8 @@ const applyBusinessCommand = async ({
     commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS ||
     Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType) ||
     Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType) ||
+    commandType === wisLegacyMigration.COMMAND_TYPE ||
+    Object.values(historyDictionaryCommands.HISTORY_DICTIONARY_COMMAND_TYPES).includes(commandType) ||
     Object.values(lessonManagement.LESSON_COMMAND_TYPES).includes(commandType) ||
     Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES).includes(commandType) ||
     Object.values(mapManagement.MAP_COMMAND_TYPES).includes(commandType) ||
@@ -1226,6 +1234,7 @@ const createCommandGatewayCore = ({
   projectId = resolveProjectId(),
   getSessionOptions = (commandType) => {
     if (Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType)) return { recentAuth: false, highRisk: false };
+    if (historyDictionaryCommands.STUDENT_COMMAND_TYPES.has(commandType)) return { recentAuth: false, highRisk: false };
     if (Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType)) return { recentAuth: false, highRisk: false };
     if (Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES).includes(commandType)) {
       return { recentAuth: false, highRisk: false };

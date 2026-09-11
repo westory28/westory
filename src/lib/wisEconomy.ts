@@ -44,6 +44,7 @@ export interface WisLedgerEntry {
   accountId: string;
   studentUid: string;
   type: string;
+  activityType?: "history_dictionary" | "history_dictionary_reclaim";
   delta: number;
   balanceBefore: number;
   balanceAfter: number;
@@ -92,6 +93,7 @@ export interface WisOrder {
   revision: number;
   status: "REQUESTED" | "APPROVED" | "REJECTED" | "FULFILLED";
   reviewReason: string;
+  memo?: string;
   reviewedBy: string;
   createdAt: unknown;
   reviewedAt: unknown;
@@ -314,6 +316,10 @@ export const getWisEconomyState = async (input: {
         accountId: string(item.accountId),
         studentUid: string(item.studentUid),
         type: string(item.type),
+        ...(item.activityType === "history_dictionary" ||
+        item.activityType === "history_dictionary_reclaim"
+          ? { activityType: item.activityType }
+          : {}),
         delta: number(item.delta),
         balanceBefore: number(item.balanceBefore),
         balanceAfter: number(item.balanceAfter),
@@ -359,6 +365,7 @@ export const getWisEconomyState = async (input: {
         revision: number(item.revision),
         status: string(item.status) as WisOrder["status"],
         reviewReason: string(item.reviewReason),
+        memo: string(item.memo),
         reviewedBy: string(item.reviewedBy),
         createdAt: item.createdAt ?? null,
         reviewedAt: item.reviewedAt ?? null,

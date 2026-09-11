@@ -263,6 +263,7 @@ export interface WestoryNotificationInbox {
 export type HistoryDictionaryTermStatus = "draft" | "published" | "hidden";
 
 export interface HistoryDictionaryTerm {
+  writeVersion?: string;
   id: string;
   word: string;
   normalizedWord: string;
@@ -285,6 +286,8 @@ export type HistoryDictionaryRequestStatus =
   | "rejected";
 
 export interface HistoryDictionaryRequest {
+  writeVersion?: string;
+  wordWriteVersion?: string;
   id: string;
   word: string;
   normalizedWord: string;
@@ -315,6 +318,7 @@ export interface HistoryDictionaryRewardOrigin {
 }
 
 export interface StudentHistoryDictionaryWord {
+  writeVersion?: string;
   id: string;
   uid?: string;
   studentName?: string;

@@ -25,6 +25,8 @@ const sourceArchiveManagement = require("./sourceArchiveManagement");
 const mapManagement = require("./mapManagement");
 const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
+const historyDictionaryCommands = require("./historyDictionaryCommands");
+const wisLegacyMigration = require("./wisLegacyMigration");
 const historyDictionaryDelete = require("./historyDictionaryDelete");
 const historyDictionaryUpdate = require("./historyDictionaryUpdate");
 const dictionaryNotifications = require("./dictionaryNotifications");
@@ -3696,12 +3698,26 @@ const commitDeleteRefsInChunks = async (refs) => {
   const uniqueRefs = Array.from(
     new Map(refs.filter(Boolean).map((ref) => [ref.path, ref])).values(),
   );
+  let committedCount = 0;
   for (let index = 0; index < uniqueRefs.length; index += 400) {
+    const chunk = uniqueRefs.slice(index, index + 400);
+    const fence = require("./wisMigrationFence");
+    const scopes = [...new Set(chunk.map(ref => fence.legacyScopeForPath(ref.path)).filter(Boolean))];
+    if (scopes.length) {
+      committedCount += await db.runTransaction(async transaction => {
+        for (const scope of scopes) await fence.assertNativeWisWriteAllowed(db, transaction, scope);
+        const mutable = await fence.filterMutableLegacyRefs(db, transaction, chunk);
+        mutable.forEach(ref => transaction.delete(ref));
+        return mutable.length;
+      });
+      continue;
+    }
     const batch = db.batch();
     uniqueRefs.slice(index, index + 400).forEach((ref) => batch.delete(ref));
     await batch.commit();
+    committedCount += chunk.length;
   }
-  return uniqueRefs.length;
+  return committedCount;
 };
 
 const commitSetEntriesInChunks = async (entries) => {
@@ -3721,14 +3737,28 @@ const commitSetEntriesInChunks = async (entries) => {
       }, new Map())
       .values(),
   );
+  let committedCount = 0;
   for (let index = 0; index < uniqueEntries.length; index += 400) {
+    const chunk = uniqueEntries.slice(index, index + 400);
+    const fence = require("./wisMigrationFence");
+    const scopes = [...new Set(chunk.map(entry => fence.legacyScopeForPath(entry.ref.path)).filter(Boolean))];
+    if (scopes.length) {
+      committedCount += await db.runTransaction(async transaction => {
+        for (const scope of scopes) await fence.assertNativeWisWriteAllowed(db, transaction, scope);
+        const mutable = new Set((await fence.filterMutableLegacyRefs(db, transaction, chunk.map(entry => entry.ref))).map(ref => ref.path));
+        chunk.filter(entry => mutable.has(entry.ref.path)).forEach(entry => transaction.set(entry.ref, entry.data, { merge: true }));
+        return mutable.size;
+      });
+      continue;
+    }
     const batch = db.batch();
     uniqueEntries.slice(index, index + 400).forEach((entry) => {
       batch.set(entry.ref, entry.data, { merge: true });
     });
     await batch.commit();
+    committedCount += chunk.length;
   }
-  return uniqueEntries.length;
+  return committedCount;
 };
 
 const getStudentProfileClearPatch = () => ({
@@ -5888,6 +5918,7 @@ const executeLessonCorePointBusinessCommand = async ({
   }
 
   const accountId = wisEconomy.accountIdFor(semesterId, actor.uid);
+  await require("./wisMigrationFence").assertNativeWisWriteAllowed(db, transaction, semesterId);
   const economyRef = db.doc(
     `${wisEconomy.WIS_ECONOMY_COLLECTION}/${semesterId}`,
   );
@@ -10479,10 +10510,8 @@ const reclaimHistoryDictionaryRewardIfNeeded = async ({
   };
 };
 
-exports.requestHistoryDictionaryTerm = onCall(
-  { region: REGION },
-  async (request) => {
-    const { uid } = await assertAllowedWestoryUser(request);
+const requestHistoryDictionaryTermOperation = async (request, context) => {
+    const { uid } = context.identity;
     const { year, semester } = assertYearSemester(request.data);
     const word = sanitizeHistoryDictionaryWord(request.data?.word);
     const normalizedWord = normalizeHistoryDictionaryWord(word);
@@ -10502,7 +10531,7 @@ exports.requestHistoryDictionaryTerm = onCall(
       );
     }
 
-    const { profile } = await ensureStudentProfile(uid);
+    const { profile } = { profile: context.profile };
     const termId = buildHistoryDictionaryTermId(normalizedWord);
     const requestId = buildHistoryDictionaryRequestId(
       year,
@@ -10514,7 +10543,7 @@ exports.requestHistoryDictionaryTerm = onCall(
     const requestRef = db.doc(getHistoryDictionaryRequestPath(requestId));
     const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
 
-    const result = await db.runTransaction(async (transaction) => {
+    const result = await context.runTransaction(async (transaction) => {
       const [termSnap, requestSnap] = await Promise.all([
         transaction.get(termRef),
         transaction.get(requestRef),
@@ -10556,7 +10585,7 @@ exports.requestHistoryDictionaryTerm = onCall(
             status,
             matchedTermId,
             ...(!isPending ? { resolvedTermId: "", resolvedBy: "", resolvedAt: null } : {}),
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: context.timestamp,
           },
           { merge: true },
         );
@@ -10580,7 +10609,7 @@ exports.requestHistoryDictionaryTerm = onCall(
             memo,
             year,
             semester,
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: context.timestamp,
           },
           { merge: true },
         );
@@ -10588,6 +10617,7 @@ exports.requestHistoryDictionaryTerm = onCall(
           requestId,
           termId,
           created: false,
+          reopened: !isPending,
           alreadyResolved: false,
           status,
           matchedTermId,
@@ -10609,8 +10639,8 @@ exports.requestHistoryDictionaryTerm = onCall(
         resolvedBy: "",
         year,
         semester,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: context.timestamp,
+        updatedAt: context.timestamp,
         resolvedAt: null,
       });
       transaction.set(
@@ -10633,8 +10663,8 @@ exports.requestHistoryDictionaryTerm = onCall(
           memo,
           year,
           semester,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: context.timestamp,
+          updatedAt: context.timestamp,
         },
         { merge: true },
       );
@@ -10648,9 +10678,9 @@ exports.requestHistoryDictionaryTerm = onCall(
       };
     });
 
-    if (result.created) {
-      const recipients = await resolveHistoryDictionaryManagerRecipientUids();
-      await createUserNotifications(year, semester, recipients, {
+    if (result.created || result.reopened) {
+      const recipients = context.managerRecipients;
+      for (const recipient of recipients) context.queueNotification(recipient, {
         type: "history_dictionary_requested",
         title: "역사 사전 요청",
         body: `${profile.name || "학생"} 학생이 ${word} 뜻풀이를 요청했습니다.`,
@@ -10664,17 +10694,15 @@ exports.requestHistoryDictionaryTerm = onCall(
           studentName: profile.name || "학생",
           word,
         },
-      });
+      }, "requested");
     }
 
     return result;
-  },
-);
+  };
+exports.requestHistoryDictionaryTerm = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
-exports.saveStudentHistoryDictionaryWord = onCall(
-  { region: REGION },
-  async (request) => {
-    const { uid } = await assertAllowedWestoryUser(request);
+const saveStudentHistoryDictionaryWordOperation = async (request, context) => {
+    const { uid } = context.identity;
     const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
     if (!termId) {
       throw new HttpsError("invalid-argument", "termId is required.");
@@ -10682,8 +10710,10 @@ exports.saveStudentHistoryDictionaryWord = onCall(
 
     const termRef = db.doc(getHistoryDictionaryTermPath(termId));
     const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
-    return db.runTransaction(async (transaction) => {
-      const termSnap = await transaction.get(termRef);
+    return context.runTransaction(async (transaction) => {
+      const [termSnap, wordSnap] = await Promise.all([
+        transaction.get(termRef), transaction.get(wordRef),
+      ]);
       if (!termSnap.exists) {
         throw new HttpsError("not-found", "Dictionary term does not exist.");
       }
@@ -10712,20 +10742,18 @@ exports.saveStudentHistoryDictionaryWord = onCall(
           status: "saved",
           requestId: "",
           requestOriginTermId: "",
-          updatedAt: FieldValue.serverTimestamp(),
-          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: context.timestamp,
+          createdAt: wordSnap.data()?.createdAt || context.timestamp,
         },
         { merge: true },
       );
       return { termId, saved: true };
     });
-  },
-);
+  };
+exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
-exports.saveStudentHistoryDictionaryEntry = onCall(
-  { region: REGION },
-  async (request) => {
-    const { uid } = await assertAllowedWestoryUser(request);
+const saveStudentHistoryDictionaryEntryOperation = async (request, context) => {
+    const { uid } = context.identity;
     const word = sanitizeHistoryDictionaryWord(request.data?.word);
     const normalizedWord = normalizeHistoryDictionaryWord(word);
     const definition = sanitizeHistoryDictionaryText(
@@ -10745,12 +10773,12 @@ exports.saveStudentHistoryDictionaryEntry = onCall(
 
     const termId = buildHistoryDictionaryTermId(normalizedWord);
     const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
-    const { profile } = await ensureStudentProfile(uid);
-    const result = await db.runTransaction(async (transaction) => {
+    const { profile } = { profile: context.profile };
+    const result = await context.runTransaction(async (transaction) => {
       const wordSnap = await transaction.get(wordRef);
       let reward = { awarded: false, amount: 0 };
       if (scoped) {
-        reward = await awardHistoryDictionaryRewardIfEligible({
+        reward = await context.award({
           transaction,
           year: scoped.year,
           semester: scoped.semester,
@@ -10783,21 +10811,15 @@ exports.saveStudentHistoryDictionaryEntry = onCall(
           year: scoped?.year || "",
           semester: scoped?.semester || "",
           definitionSource: "student",
-          rewardTermId: reward.awarded
-            ? termId
-            : existingWord.rewardTermId || termId,
-          rewardTransactionId:
-            reward.transactionId || existingWord.rewardTransactionId || "",
-          rewardAmount: reward.awarded
-            ? reward.amount
-            : Number(existingWord.rewardAmount || 0),
-          rewardAwardedAt: reward.awarded
-            ? FieldValue.serverTimestamp()
-            : existingWord.rewardAwardedAt || null,
-          updatedAt: FieldValue.serverTimestamp(),
+          ...context.rewardFields,
+          rewardTermId: existingWord.rewardTermId || "",
+          rewardTransactionId: existingWord.rewardTransactionId || "",
+          rewardAmount: Number(existingWord.rewardAmount || 0),
+          rewardAwardedAt: existingWord.rewardAwardedAt || null,
+          updatedAt: context.timestamp,
           createdAt: wordSnap.exists
-            ? existingWord.createdAt || FieldValue.serverTimestamp()
-            : FieldValue.serverTimestamp(),
+            ? existingWord.createdAt || context.timestamp
+            : context.timestamp,
         },
         { merge: true },
       );
@@ -10806,7 +10828,7 @@ exports.saveStudentHistoryDictionaryEntry = onCall(
     });
 
     if (result.awarded && scoped) {
-      await markWisHallOfFameDirtySafely(scoped.year, scoped.semester);
+      await context.markWisDirty(scoped.year, scoped.semester);
     }
 
     return {
@@ -10814,13 +10836,11 @@ exports.saveStudentHistoryDictionaryEntry = onCall(
       saved: true,
       reward: result,
     };
-  },
-);
+  };
+exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
-exports.deleteStudentHistoryDictionaryWord = onCall(
-  { region: REGION },
-  async (request) => {
-    const { uid } = await assertAllowedWestoryUser(request);
+const deleteStudentHistoryDictionaryWordOperation = async (request, context) => {
+    const { uid } = context.identity;
     const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
     const scoped =
       getOptionalYearSemester(request.data) ||
@@ -10830,8 +10850,8 @@ exports.deleteStudentHistoryDictionaryWord = onCall(
     }
 
     const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
-    const { profile } = await ensureStudentProfile(uid);
-    const result = await db.runTransaction(async (transaction) => {
+    const { profile } = { profile: context.profile };
+    const result = await context.runTransaction(async (transaction) => {
       const wordSnap = await transaction.get(wordRef);
       if (!wordSnap.exists) {
         return {
@@ -10848,7 +10868,7 @@ exports.deleteStudentHistoryDictionaryWord = onCall(
       const wordData = wordSnap.data() || {};
       let reward = { reclaimed: false, amount: 0 };
       if (scoped) {
-        reward = await reclaimHistoryDictionaryRewardIfNeeded({
+        reward = await context.reclaim({
           transaction,
           year: scoped.year,
           semester: scoped.semester,
@@ -10870,17 +10890,15 @@ exports.deleteStudentHistoryDictionaryWord = onCall(
     });
 
     if (result.reward?.reclaimed && scoped) {
-      await markWisHallOfFameDirtySafely(scoped.year, scoped.semester);
+      await context.markWisDirty(scoped.year, scoped.semester);
     }
 
     return result;
-  },
-);
+  };
+exports.deleteStudentHistoryDictionaryWord = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
-exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
-  { region: REGION },
-  async (request) => {
-    const manager = await assertHistoryDictionaryWriteManager(request);
+const deleteStudentHistoryDictionaryWordByTeacherOperation = async (request, context) => {
+    const manager = context.identity;
     const { year, semester } = assertYearSemester(request.data);
     // Validate raw path components before constructing any Admin reference.
     const target = historyDictionaryDelete.parseTarget(request.data, { year, semester });
@@ -10896,7 +10914,7 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
     const requestRef = requestId
       ? db.doc(getHistoryDictionaryRequestPath(requestId))
       : null;
-    const result = await db.runTransaction(async (transaction) => {
+    const result = await context.runTransaction(async (transaction) => {
       const [wordSnap, requestSnap, profileSnap] = await Promise.all([
         transaction.get(wordRef),
         requestRef ? transaction.get(requestRef) : Promise.resolve(null),
@@ -10912,23 +10930,7 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
         blockedReason: wordSnap.exists ? "reward_scope_unverified" : "word_not_found" };
       if (plan.noop) return { response: { termId, requestId, deleted: false, reward }, notify: false };
 
-      if (plan.reclaimAllowed) {
-        const rewardId = getHistoryDictionaryRewardTransactionId(targetUid, plan.rewardTermId);
-        const rewardPath = `${getPointCollectionPath(year, semester, "point_transactions")}/${rewardId}`;
-        const [rewardSnap, reclaimSnap] = await Promise.all([
-          transaction.get(db.doc(rewardPath)),
-          transaction.get(db.doc(`${rewardPath}_reclaim`)),
-        ]);
-        historyDictionaryDelete.assertRewardBinding({
-          reward: rewardSnap.exists ? rewardSnap.data() : null,
-          reclaim: reclaimSnap.exists ? reclaimSnap.data() : null,
-          uid: targetUid, sourceId: getHistoryDictionaryRewardSourceId(plan.rewardTermId),
-        });
-        reward = await reclaimHistoryDictionaryRewardIfNeeded({
-          transaction, year, semester, uid: targetUid, profile,
-          termId: plan.rewardTermId, word: plan.word, actorUid: manager.uid, reason,
-        });
-      }
+      if (wordSnap.exists) reward = await context.reclaim();
 
       if (wordSnap.exists) {
         transaction.delete(wordRef);
@@ -10939,9 +10941,9 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
           {
             status: "rejected",
             rejectedBy: manager.uid,
-            rejectedAt: FieldValue.serverTimestamp(),
+            rejectedAt: context.timestamp,
             rejectionReason: reason,
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: context.timestamp,
           },
           { merge: true },
         );
@@ -10964,12 +10966,12 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
             resolvedTermId: "",
             resolvedBy: "",
             rejectedBy: manager.uid,
-            rejectedAt: FieldValue.serverTimestamp(),
+            rejectedAt: context.timestamp,
             rejectionReason: reason,
             year,
             semester,
-            createdAt: wordData.createdAt || FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            createdAt: wordData.createdAt || context.timestamp,
+            updatedAt: context.timestamp,
             resolvedAt: null,
           },
         );
@@ -10982,10 +10984,10 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
     });
 
     if (result.response.reward?.reclaimed) {
-      await markWisHallOfFameDirtySafely(year, semester);
+      await context.markWisDirty(year, semester);
     }
 
-    if (result.notify) await createUserNotification(year, semester, targetUid, {
+    if (result.notify) context.queueNotification(targetUid, {
       type: "history_dictionary_rejected",
       title: "역사 사전 단어 삭제",
       body: `"${result.word || "요청한 단어"}" 항목이 선생님 확인 후 삭제되었습니다.`,
@@ -10994,15 +10996,15 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
       entityId: requestId || termId,
       actorUid: manager.uid,
       priority: "normal",
-      dedupeKey: `history_dictionary_rejected:${year}:${semester}:${targetUid}:${termId}:${Date.now()}`,
+      dedupeKey: `history_dictionary_rejected:${year}:${semester}:${targetUid}:${termId}:${context.commandId}`,
       templateValues: {
         word: result.word || "요청한 단어",
       },
-    });
+    }, "rejected");
 
     return result.response;
-  },
-);
+  };
+exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
 exports.listStudentHistoryDictionaryWordsForTeacher = onCall(
   { region: REGION },
@@ -11100,6 +11102,7 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall(
             120,
           ),
           rewardAmount: Number(data.rewardAmount || 0),
+          writeVersion: historyDictionaryCommands.versionFor(data),
           createdAtMs: timestampMs(data.createdAt),
           updatedAtMs: timestampMs(data.updatedAt),
         };
@@ -11116,10 +11119,8 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall(
   },
 );
 
-exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
-  { region: REGION },
-  async (request) => {
-    const manager = await assertHistoryDictionaryWriteManager(request);
+const updateStudentHistoryDictionaryWordByTeacherOperation = async (request, context) => {
+    const manager = context.identity;
     const { year, semester } = assertYearSemester(request.data);
     const target = historyDictionaryUpdate.parseTarget(request.data, { year, semester });
     const { uid: targetUid, termId: previousTermId } = target;
@@ -11150,7 +11151,7 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
     const nextRef = db.doc(
       getStudentHistoryDictionaryWordPath(targetUid, nextTermId),
     );
-    await db.runTransaction(async (transaction) => {
+    await context.runTransaction(async (transaction) => {
       const [previousSnap, nextSnap, profileSnap] = await Promise.all([
         transaction.get(previousRef),
         nextTermId === previousTermId
@@ -11220,13 +11221,13 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
         ),
         definitionSource: "teacher_reviewed",
         reviewedBy: manager.uid,
-        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedAt: context.timestamp,
         rewardTermId: sanitizeHistoryDictionaryText(
           binding.preserveUnscoped ? "" : existing.rewardTermId || previousTermId,
           80,
         ),
-        updatedAt: FieldValue.serverTimestamp(),
-        createdAt: existing.createdAt || FieldValue.serverTimestamp(),
+        updatedAt: context.timestamp,
+        createdAt: existing.createdAt || context.timestamp,
       };
 
       transaction.set(nextRef, payload, { merge: true });
@@ -11240,8 +11241,8 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
       previousTermId,
       updated: true,
     };
-  },
-);
+  };
+exports.updateStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
 const failHistoryDictionaryRequestTarget = (reason) => {
   const message = reason === "HISTORY_DICTIONARY_FALLBACK_UNVERIFIED"
@@ -11515,10 +11516,8 @@ exports.saveHistoryDictionaryTermsBulk = onCall(
   },
 );
 
-exports.saveHistoryDictionaryTerm = onCall(
-  { region: REGION },
-  async (request) => {
-    const manager = await assertHistoryDictionaryWriteManager(request);
+const saveHistoryDictionaryTermOperation = async (request, context) => {
+    const manager = context.identity;
     const word = sanitizeHistoryDictionaryWord(request.data?.word);
     const normalizedWord = normalizeHistoryDictionaryWord(word);
     const definition = sanitizeHistoryDictionaryText(
@@ -11550,7 +11549,7 @@ exports.saveHistoryDictionaryTerm = onCall(
     const scoped =
       getOptionalYearSemester(request.data) ||
       (await getCurrentConfiguredYearSemester());
-    const resolvedResult = await db.runTransaction(async (transaction) => {
+    const resolvedResult = await context.runTransaction(async (transaction) => {
       const termSnap = await transaction.get(termRef);
       const fallback = await readHistoryDictionaryFallbackTarget({
         transaction, termId, normalizedWord,
@@ -11571,10 +11570,10 @@ exports.saveHistoryDictionaryTerm = onCall(
             : manager.uid,
           updatedBy: manager.uid,
           createdAt: termSnap.exists
-            ? termSnap.data()?.createdAt || FieldValue.serverTimestamp()
-            : FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-          publishedAt: FieldValue.serverTimestamp(),
+            ? termSnap.data()?.createdAt || context.timestamp
+            : context.timestamp,
+          updatedAt: context.timestamp,
+          publishedAt: context.timestamp,
         };
       // Resolve against this exact definition. All target reads and validation
       // finish before any writes; a failed fanout rolls back the shared term too.
@@ -11591,13 +11590,11 @@ exports.saveHistoryDictionaryTerm = onCall(
       termId,
       resolvedCount: resolvedResult.resolved.length,
     };
-  },
-);
+  };
+exports.saveHistoryDictionaryTerm = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
-exports.approveHistoryDictionaryTermForRequests = onCall(
-  { region: REGION },
-  async (request) => {
-    const manager = await assertHistoryDictionaryWriteManager(request);
+const approveHistoryDictionaryTermForRequestsOperation = async (request, context) => {
+    const manager = context.identity;
     const { year, semester } = assertYearSemester(request.data);
     const termId = request.data?.termId ?? "";
     const requestId = request.data?.requestId ?? "";
@@ -11606,6 +11603,7 @@ exports.approveHistoryDictionaryTermForRequests = onCall(
     }
 
     const result = await resolveHistoryDictionaryRequestsWithTerm({
+      transaction: context.transaction.native,
       managerUid: manager.uid,
       termId,
       requestId,
@@ -11618,8 +11616,8 @@ exports.approveHistoryDictionaryTermForRequests = onCall(
       termId,
       resolvedCount: result.resolved.length,
     };
-  },
-);
+  };
+exports.approveHistoryDictionaryTermForRequests = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
 exports.updateStudentProfileIcon = onCall(
   { region: REGION },
@@ -11705,6 +11703,7 @@ const authorizeCommandGatewayActor = async ({
   commandType,
 }) => {
   const lessonAnswerCommandTypes = Object.values(lessonAnswers.LESSON_ANSWER_COMMAND_TYPES);
+  const dictionaryCommandTypes = Object.values(historyDictionaryCommands.HISTORY_DICTIONARY_COMMAND_TYPES);
   const lessonManagementCommandTypes = Object.values(lessonManagement.LESSON_COMMAND_TYPES);
   const sourceArchiveCommandTypes = Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES);
   const mapManagementCommandTypes = Object.values(mapManagement.MAP_COMMAND_TYPES);
@@ -11725,8 +11724,10 @@ const authorizeCommandGatewayActor = async ({
   if (
     commandType !== commandGateway.GET_SEMESTER_CORE_STATE_COMMAND_TYPE &&
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS &&
+    commandType !== wisLegacyMigration.COMMAND_TYPE &&
     !assessmentCommandTypes.includes(commandType) &&
     !lessonAnswerCommandTypes.includes(commandType) &&
+    !dictionaryCommandTypes.includes(commandType) &&
     !lessonManagementCommandTypes.includes(commandType) &&
     !sourceArchiveCommandTypes.includes(commandType) &&
     !mapManagementCommandTypes.includes(commandType) &&
@@ -11759,6 +11760,9 @@ const authorizeCommandGatewayActor = async ({
     });
   }
   if (actorEmail === ADMIN_EMAIL) {
+    if (historyDictionaryCommands.STUDENT_COMMAND_TYPES.has(commandType)) {
+      throw new HttpsError("permission-denied", "학생 계정으로 사전을 저장해 주세요.", { reason: "HISTORY_DICTIONARY_ROLE_REQUIRED" });
+    }
     if (lessonAnswerCommandTypes.includes(commandType)) {
       throw new HttpsError("permission-denied", "학생 계정으로 답안을 저장해 주세요.", { reason: "LESSON_STUDENT_REQUIRED" });
     }
@@ -11834,6 +11838,9 @@ const authorizeCommandGatewayActor = async ({
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (commandType === wisLegacyMigration.COMMAND_TYPE) {
+    throw new HttpsError("permission-denied", "최고 관리자만 위스 자료를 이전할 수 있습니다.", { reason: "WIS_MIGRATION_ADMIN_REQUIRED" });
+  }
   if (semesterCutoverCommandTypes.includes(commandType)) {
     throw new HttpsError(
       "permission-denied",
@@ -11848,6 +11855,12 @@ const authorizeCommandGatewayActor = async ({
       throw new HttpsError("permission-denied", "역사 사전을 등록할 교사 권한이 필요합니다.", { reason: "HISTORY_DICTIONARY_IMPORT_TEACHER_REQUIRED" });
     }
     return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "history_dictionary:import" };
+  }
+  if (dictionaryCommandTypes.includes(commandType)) {
+    const role = historyDictionaryCommands.STUDENT_COMMAND_TYPES.has(commandType) ? "student" : "teacher";
+    if (!profileSnapshot.exists || profile.role !== role)
+      throw new HttpsError("permission-denied", "이 작업을 할 수 있는 계정으로 로그인해 주세요.", { reason: "HISTORY_DICTIONARY_ROLE_REQUIRED" });
+    return { actorUid, actorEmail, actorRole: role, actorCapability: `history_dictionary:${role}` };
   }
   if (lessonAnswerCommandTypes.includes(commandType)) {
     if (!profileSnapshot.exists || profile.role !== "student") {
@@ -12152,6 +12165,29 @@ const sourceArchiveCommandAdapter = sourceArchiveManagement.createSourceArchiveC
 const mapManagementCommandAdapter = mapManagement.createMapCommandAdapter();
 const patchNoteCommandAdapter = teacherPatchNotes.createPatchNoteCommandAdapter();
 const dictionaryImportCommandAdapter = historyDictionaryImport.createHistoryDictionaryImportCommandAdapter();
+const dictionaryLegacyRewards = require("./historyDictionaryLegacyReward").createHistoryDictionaryLegacyReward({
+  db, loadPolicy, ensureWallet, getCurrentRankEarnedTotal, buildWalletBase, buildWalletRankState, createTransactionPayload,
+});
+const dictionaryWisRewards = require("./historyDictionaryWisReward").createHistoryDictionaryWisReward({
+  db, wisEconomy, sha256: commandGateway.sha256, loadPolicy, getKstDateKey,
+});
+const dictionaryRuntime = require("./historyDictionaryRuntime").createHistoryDictionaryRuntime({
+  db, semesterCore, archiveEnrollment, legacyRewards: dictionaryLegacyRewards,
+  wisRewards: dictionaryWisRewards, dictionaryNotifications, getWisHallOfFamePath,
+});
+const dictionaryCommandAdapter = historyDictionaryCommands.createHistoryDictionaryCommandAdapter({
+  db, prepareContext: dictionaryRuntime.prepare,
+  operations: {
+    requestHistoryDictionaryTerm: requestHistoryDictionaryTermOperation,
+    saveStudentHistoryDictionaryWord: saveStudentHistoryDictionaryWordOperation,
+    saveStudentHistoryDictionaryEntry: saveStudentHistoryDictionaryEntryOperation,
+    deleteStudentHistoryDictionaryWord: deleteStudentHistoryDictionaryWordOperation,
+    deleteStudentHistoryDictionaryWordByTeacher: deleteStudentHistoryDictionaryWordByTeacherOperation,
+    updateStudentHistoryDictionaryWordByTeacher: updateStudentHistoryDictionaryWordByTeacherOperation,
+    saveHistoryDictionaryTerm: saveHistoryDictionaryTermOperation,
+    approveHistoryDictionaryTermForRequests: approveHistoryDictionaryTermForRequestsOperation,
+  },
+});
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
 const w8CommandAdapter = w8Domains.createW8CommandAdapter();
@@ -12167,6 +12203,8 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
+    [wisLegacyMigration.COMMAND_TYPE]: wisLegacyMigration.createLegacyWisMigrationAdapter({ projectId: commandGateway.resolveProjectId() }),
+    ...Object.fromEntries(Object.values(historyDictionaryCommands.HISTORY_DICTIONARY_COMMAND_TYPES).map((commandType) => [commandType, dictionaryCommandAdapter])),
     ...Object.fromEntries(Object.values(mapManagement.MAP_COMMAND_TYPES).map((commandType) => [commandType, mapManagementCommandAdapter])),
     ...Object.fromEntries(Object.values(sourceArchiveManagement.SOURCE_ARCHIVE_COMMAND_TYPES).map((commandType) => [commandType, sourceArchiveCommandAdapter])),
     ...Object.fromEntries(Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).map((commandType) => [commandType, dictionaryImportCommandAdapter])),

@@ -107,7 +107,18 @@ for (const method of methods) {
       );
       const helpers = load(helperCode, {
         "firebase/firestore": {},
-        "./commandGateway": {},
+        "./commandGateway": {
+          WestoryCommandError: class extends Error {},
+          hasPendingWestoryCommand: async () => false,
+          executeWestoryCommand: async (name, payload, options) => {
+            optionsSeen.push({ name, ...options });
+            const callable = await actual.getHttpsCallable(
+              "executeCommand",
+              options,
+            );
+            return { result: (await callable(payload)).data };
+          },
+        },
         "./semesterScope": {
           getYearSemester: (config) => ({
             year: config.year,
@@ -138,6 +149,9 @@ for (const method of methods) {
         year: "2026",
         semester: "1",
         reason: "teacher_review",
+        expectedWordVersion: "42:123456789",
+        expectedTermVersion: "42:123456789",
+        expectedRequestVersion: "42:123456789",
       };
       const pending = helpers[method](config, input, "teacher-a").then(
         (value) => ({ value }),

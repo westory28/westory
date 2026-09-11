@@ -9,6 +9,15 @@ import {
 } from "./stepUpReauth";
 
 export type W2CommandType =
+  | "migrateLegacyWisAccount"
+  | "requestHistoryDictionaryTerm"
+  | "saveStudentHistoryDictionaryWord"
+  | "saveStudentHistoryDictionaryEntry"
+  | "deleteStudentHistoryDictionaryWord"
+  | "deleteStudentHistoryDictionaryWordByTeacher"
+  | "updateStudentHistoryDictionaryWordByTeacher"
+  | "saveHistoryDictionaryTerm"
+  | "approveHistoryDictionaryTermForRequests"
   | "saveMapResources"
   | "deleteMapResource"
   | "prepareMapAssetUpload"
@@ -318,6 +327,86 @@ interface SourceArchiveCommandMetadata {
   source: string;
 }
 export interface W2CommandPayloads {
+  requestHistoryDictionaryTerm: {
+    year: string;
+    semester: string;
+    word: string;
+    memo: string;
+    warningAccepted: boolean;
+    expectedWordVersion: string | null;
+    expectedRequestVersion: string | null;
+  };
+  saveStudentHistoryDictionaryWord: {
+    year: string;
+    semester: string;
+    termId: string;
+    expectedWordVersion: string | null;
+    expectedTermVersion: string | null;
+  };
+  saveStudentHistoryDictionaryEntry: {
+    year: string;
+    semester: string;
+    word: string;
+    definition: string;
+    expectedWordVersion: string | null;
+  };
+  deleteStudentHistoryDictionaryWord: {
+    year: string;
+    semester: string;
+    termId: string;
+    expectedWordVersion: string | null;
+  };
+  deleteStudentHistoryDictionaryWordByTeacher: {
+    year: string;
+    semester: string;
+    uid: string;
+    termId: string;
+    requestId?: string;
+    word?: string;
+    normalizedWord?: string;
+    reason?: string;
+    expectedWordVersion: string | null;
+    expectedRequestVersion?: string | null;
+  };
+  updateStudentHistoryDictionaryWordByTeacher: {
+    year: string;
+    semester: string;
+    uid: string;
+    termId: string;
+    word: string;
+    definition: string;
+    expectedWordVersion: string | null;
+  };
+  saveHistoryDictionaryTerm: {
+    year: string;
+    semester: string;
+    word: string;
+    definition: string;
+    studentLevel: string;
+    relatedUnitId?: string;
+    tags?: string[];
+    fallbackRequestId?: string;
+    fallbackUid?: string;
+    expectedTermVersion: string | null;
+    expectedRequestVersion?: string | null;
+  };
+  migrateLegacyWisAccount: {
+    semesterId: string;
+    studentUid: string;
+    expectedSemesterRevision: number;
+    expectedEconomyRevision: number;
+    expectedAccountRevision: number;
+    expectedLegacyHash: string;
+    reason: string;
+  };
+  approveHistoryDictionaryTermForRequests: {
+    year: string;
+    semester: string;
+    termId: string;
+    requestId?: string;
+    expectedTermVersion: string | null;
+    expectedRequestVersion?: string | null;
+  };
   saveMapResources: import("./mapManagement").MapScope & {
     resources: import("./mapManagement").MapWrite[];
   };
@@ -720,6 +809,7 @@ export interface W2CommandPayloads {
     expectedInventoryRevision: number;
     expectedAccountRevision: number;
     quantity: number;
+    memo?: string;
   };
   reviewWisOrder: {
     semesterId: string;
@@ -1058,6 +1148,51 @@ interface WisAccountValuePayload extends WisAccountCommandBase {
 }
 
 export interface W2CommandResults {
+  requestHistoryDictionaryTerm: {
+    requestId: string;
+    termId: string;
+    created: boolean;
+    alreadyResolved: boolean;
+    status: string;
+    matchedTermId: string;
+  };
+  saveStudentHistoryDictionaryWord: { termId: string; saved: boolean };
+  saveStudentHistoryDictionaryEntry: {
+    termId: string;
+    saved: boolean;
+    reward: { awarded?: boolean; amount?: number; blockedReason?: string };
+  };
+  deleteStudentHistoryDictionaryWord: {
+    termId: string;
+    deleted: boolean;
+    reward: { reclaimed?: boolean; amount?: number; blockedReason?: string };
+  };
+  deleteStudentHistoryDictionaryWordByTeacher: {
+    termId: string;
+    requestId?: string;
+    deleted: boolean;
+    reward: { reclaimed?: boolean; amount?: number; blockedReason?: string };
+  };
+  updateStudentHistoryDictionaryWordByTeacher: {
+    termId: string;
+    previousTermId: string;
+    updated: boolean;
+  };
+  saveHistoryDictionaryTerm: { termId: string; resolvedCount: number };
+  migrateLegacyWisAccount: {
+    migrationId: string;
+    accountId: string;
+    migrated: boolean;
+    alreadyMigrated: boolean;
+    addedBalance: number;
+    openingLedgerEntryId?: string;
+    accountRevision?: number;
+    economyRevision?: number;
+  };
+  approveHistoryDictionaryTermForRequests: {
+    termId: string;
+    resolvedCount: number;
+  };
   saveMapResources: { resources: import("./mapManagement").MapSavedSource[] };
   deleteMapResource: { mapId: string; deleted: boolean };
   prepareMapAssetUpload: {
@@ -1947,7 +2082,8 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
             (commandType === "saveLessonAnswers" &&
               normalized.reason === "LESSON_ANSWER_CONFLICT") ||
             (commandType === "saveHistoryDictionaryTermsBulk" &&
-              normalized.reason === "HISTORY_DICTIONARY_BULK_CONFLICT"));
+              normalized.reason === "HISTORY_DICTIONARY_BULK_CONFLICT") ||
+            normalized.reason === "HISTORY_DICTIONARY_VERSION_CONFLICT");
         // A denial on a later attempt happens before receipt lookup and cannot
         // disprove an earlier commit. Keep its ID through reauthentication.
         if (
