@@ -61,6 +61,24 @@ const DEFAULT_CONFIG: SettingsConfigState = {
   showScore: true,
   showLesson: true,
 };
+type SettingsReadinessDraft = {
+  ownerUid: string;
+  activeSemesterId: string;
+  config: SettingsConfigState;
+  newSemester: SemesterSelectionState;
+  expiresAt: number;
+  completed: Promise<void>;
+};
+// One in-memory recovery only: no browser persistence or cross-account draft.
+const settingsReadinessRecovery: { draft: SettingsReadinessDraft | null } = {
+  draft: null,
+};
+const getSettingsReadinessDraft = (ownerUid: string) => {
+  const draft = settingsReadinessRecovery.draft;
+  if (draft && (draft.ownerUid !== ownerUid || draft.expiresAt <= Date.now()))
+    settingsReadinessRecovery.draft = null;
+  return settingsReadinessRecovery.draft;
+};
 
 const normalizeYear = (value: unknown) => {
   const next = String(value || "").trim();
@@ -365,6 +383,7 @@ const SettingsGeneral: React.FC = () => {
     mounted: true,
   });
   const readinessReauthFlight = useRef(false);
+  const configLoadFlight = useRef(false);
   readinessContext.current.ownerUid = currentUser?.uid || "";
   readinessContext.current.selection = `${config.year}-${config.semester}`;
   useEffect(() => {
@@ -385,6 +404,20 @@ const SettingsGeneral: React.FC = () => {
       readinessContext.current.selection === selection;
     readinessReauthFlight.current = true;
     setReadinessReauthBusy(true);
+    let completeRecovery = () => {};
+    const retained: SettingsReadinessDraft = {
+      ownerUid,
+      activeSemesterId:
+        coreSnapshot.activePointer?.semesterId ||
+        `${activeSemester.year}-${activeSemester.semester}`,
+      config: { ...config },
+      newSemester: { ...newSemester },
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      completed: new Promise<void>((resolve) => {
+        completeRecovery = resolve;
+      }),
+    };
+    settingsReadinessRecovery.draft = retained;
     try {
       await requestStepUpReauthentication("getSemesterCoreState", {
         force: true,
@@ -403,6 +436,12 @@ const SettingsGeneral: React.FC = () => {
           : "본인 확인 후 준비 현황을 다시 불러오지 못했습니다. 다시 시도해 주세요.",
       );
     } finally {
+      completeRecovery();
+      if (
+        settingsReadinessRecovery.draft === retained &&
+        (readinessContext.current.mounted || auth.currentUser?.uid !== ownerUid)
+      )
+        settingsReadinessRecovery.draft = null;
       readinessReauthFlight.current = false;
       if (readinessContext.current.mounted) setReadinessReauthBusy(false);
     }
@@ -460,28 +499,63 @@ const SettingsGeneral: React.FC = () => {
   };
 
   const loadConfig = async () => {
+    if (configLoadFlight.current) return;
+    configLoadFlight.current = true;
+    const ownerUid = auth.currentUser?.uid || "";
+    const isCurrent = () =>
+      readinessContext.current.mounted && auth.currentUser?.uid === ownerUid;
     setLoading(true);
     setLoadError("");
     try {
+      const recovery = getSettingsReadinessDraft(ownerUid);
+      if (recovery) await recovery.completed;
+      if (!isCurrent()) return;
       const [docSnap, snapshot] = await Promise.all([
         getDoc(doc(db, "site_settings", "config")),
         loadSemesterCoreSnapshot(),
       ]);
+      if (!isCurrent()) return;
       const data = docSnap.exists() ? docSnap.data() : {};
       const fallbackActive = {
         year: normalizeYear(data.year),
         semester: normalizeSemester(data.semester),
       };
 
-      setConfig({
+      const serverConfig = {
         ...fallbackActive,
         showQuiz: data.showQuiz !== false,
         showScore: data.showScore !== false,
         showLesson: data.showLesson !== false,
-      });
-      setNewSemester(fallbackActive);
-      syncSemesterPresentation(snapshot, fallbackActive, fallbackActive);
+      };
+      const retained = getSettingsReadinessDraft(ownerUid);
+      const restore =
+        retained === recovery &&
+        retained &&
+        retained.activeSemesterId ===
+          (snapshot.activePointer?.semesterId ||
+            `${fallbackActive.year}-${fallbackActive.semester}`) &&
+        snapshot.manifests.some(
+          (manifest) =>
+            manifest.schoolYear === retained.config.year &&
+            manifest.term === retained.config.semester &&
+            !["CLOSED", "ARCHIVED", "QUARANTINED"].includes(manifest.status),
+        );
+      const restoredConfig = restore ? retained.config : serverConfig;
+      setConfig(restoredConfig);
+      setNewSemester(restore ? retained.newSemester : fallbackActive);
+      syncSemesterPresentation(snapshot, fallbackActive, restoredConfig);
+      if (restore)
+        setFeedback(
+          "본인 확인 전 입력을 복원했습니다. 학기 준비 현황을 다시 확인합니다.",
+        );
+      else if (recovery)
+        setFeedback(
+          "학기 상태가 바뀌었거나 보관 시간이 지나 이전 입력을 자동 복원하지 않았습니다. 설정을 다시 확인해 주세요.",
+        );
+      if (settingsReadinessRecovery.draft === recovery)
+        settingsReadinessRecovery.draft = null;
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Failed to load config:", error);
       setLoadError(
         "기본 설정을 불러오지 못했습니다. 네트워크와 접근 권한을 확인한 뒤 다시 시도해 주세요.",
@@ -492,7 +566,8 @@ const SettingsGeneral: React.FC = () => {
         message: "네트워크와 접근 권한을 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setLoading(false);
+      configLoadFlight.current = false;
+      if (isCurrent()) setLoading(false);
     }
   };
 
@@ -534,13 +609,13 @@ const SettingsGeneral: React.FC = () => {
           serverState.requested?.semesterId === manifest.semesterId &&
           serverState.readiness?.current === true;
         setReadiness(buildReadinessView(report, canonicalCurrent));
-        if (!report) {
-          setReadinessError(
-            "아직 준비 상태를 확인하지 않았습니다. 설정을 저장하기 전에 필수 항목을 확인해 주세요.",
-          );
-        } else if (serverState.error) {
+        if (serverState.error) {
           setReadinessError(
             "서버의 최신 학기 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          );
+        } else if (!report) {
+          setReadinessError(
+            "아직 준비 상태를 확인하지 않았습니다. 설정을 저장하기 전에 필수 항목을 확인해 주세요.",
           );
         }
       })
