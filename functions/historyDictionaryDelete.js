@@ -128,7 +128,12 @@ const inspectTarget = ({ target, wordData, requestData, profile }) => {
       };
     if (wordData && requestData.status === "rejected") fail();
     let bindingTermId = target.termId;
-    if (wordData && requestWord !== currentWord) {
+    const movedReference = ["matchedTermId", "resolvedTermId"].some(
+      (key) => requestData[key] && requestData[key] !== target.termId,
+    );
+    // Legacy IDs may move without changing the spelling, or after renaming
+    // back to the original word. The same reviewed origin must prove the link.
+    if (wordData && (requestWord !== currentWord || movedReference)) {
       if (
         wordData.definitionSource !== "teacher_reviewed" ||
         !pathId(wordData.reviewedBy, 128) ||

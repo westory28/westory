@@ -22,6 +22,7 @@ const lessonManagement = require("./lessonManagement");
 const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
 const historyDictionaryDelete = require("./historyDictionaryDelete");
+const historyDictionaryUpdate = require("./historyDictionaryUpdate");
 const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
 const w8Domains = require("./w8Domains");
@@ -11088,11 +11089,11 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
   async (request) => {
     const manager = await assertHistoryDictionaryWriteManager(request);
     const { year, semester } = assertYearSemester(request.data);
-    const targetUid = String(request.data?.uid || "").trim();
-    const previousTermId = sanitizeHistoryDictionaryText(
-      request.data?.termId,
-      80,
-    );
+    const target = historyDictionaryUpdate.parseTarget(request.data, { year, semester });
+    const { uid: targetUid, termId: previousTermId } = target;
+    if (typeof request.data?.word !== "string" || typeof request.data?.definition !== "string") {
+      throw new HttpsError("invalid-argument", "Word and definition must be text.");
+    }
     const word = sanitizeHistoryDictionaryWord(request.data?.word);
     const normalizedWord = normalizeHistoryDictionaryWord(word);
     const definition = sanitizeHistoryDictionaryText(
@@ -11117,14 +11118,13 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
     const nextRef = db.doc(
       getStudentHistoryDictionaryWordPath(targetUid, nextTermId),
     );
-    const { profile } = await ensureStudentProfile(targetUid);
-
     await db.runTransaction(async (transaction) => {
-      const [previousSnap, nextSnap] = await Promise.all([
+      const [previousSnap, nextSnap, profileSnap] = await Promise.all([
         transaction.get(previousRef),
         nextTermId === previousTermId
           ? Promise.resolve(null)
           : transaction.get(nextRef),
+        transaction.get(db.doc(`users/${targetUid}`)),
       ]);
 
       if (!previousSnap.exists) {
@@ -11141,6 +11141,15 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
       }
 
       const existing = previousSnap.data() || {};
+      const profile = profileSnap.exists ? profileSnap.data() || {} : null;
+      const binding = historyDictionaryUpdate.inspectCurrent({ target, wordData: existing, profile });
+      const requestSnap = binding.requestId
+        ? await transaction.get(db.doc(getHistoryDictionaryRequestPath(binding.requestId)))
+        : null;
+      historyDictionaryUpdate.inspectRequest({
+        target, wordData: existing, binding, nextTermId,
+        requestData: requestSnap?.exists ? requestSnap.data() || {} : null,
+      });
       const payload = {
         ...existing,
         termId: nextTermId,
@@ -11171,16 +11180,16 @@ exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
           existing.number || profile.number,
           8,
         ),
-        year: sanitizeHistoryDictionaryText(existing.year || year, 8),
+        year: binding.preserveUnscoped ? "" : sanitizeHistoryDictionaryText(existing.year || year, 8),
         semester: sanitizeHistoryDictionaryText(
-          existing.semester || semester,
+          binding.preserveUnscoped ? "" : existing.semester || semester,
           8,
         ),
         definitionSource: "teacher_reviewed",
         reviewedBy: manager.uid,
         reviewedAt: FieldValue.serverTimestamp(),
         rewardTermId: sanitizeHistoryDictionaryText(
-          existing.rewardTermId || previousTermId,
+          binding.preserveUnscoped ? "" : existing.rewardTermId || previousTermId,
           80,
         ),
         updatedAt: FieldValue.serverTimestamp(),
