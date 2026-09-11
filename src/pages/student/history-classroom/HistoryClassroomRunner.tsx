@@ -1708,7 +1708,7 @@ const HistoryClassroomRunner: React.FC = () => {
       )}
       {resultSummary && resultDialogOpen && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="history-classroom-result-title"
@@ -1746,7 +1746,7 @@ const HistoryClassroomRunner: React.FC = () => {
                     setResultDialogOpen(false);
                     setResultText("");
                   }}
-                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                  className="shrink-0 whitespace-nowrap rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
                 >
                   닫기
                 </button>
