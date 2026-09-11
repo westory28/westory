@@ -587,8 +587,8 @@ const assertContentRevision = (snapshot, expectedRevision, label) => {
   return currentRevision;
 };
 
-const createAssessmentCommandAdapter = ({ now = () => new Date() } = {}) => ({
-  apply: async ({ transaction, commandId, commandType, payload, payloadHash, receiptId, timestamp, actor }) => {
+const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = null } = {}) => ({
+  apply: async ({ transaction, commandId, commandType, payload, payloadHash, receiptId, timestamp, concreteTimestamp, actor }) => {
     if (commandType === ASSESSMENT_COMMAND_TYPES.UPSERT_QUIZ_QUESTION) {
       assertTeacherActor(actor);
       await assertAssessmentSemesterWritable(transaction, payload.semesterId);
@@ -872,9 +872,18 @@ const createAssessmentCommandAdapter = ({ now = () => new Date() } = {}) => ({
       const attemptSnapshot = await transaction.get(path);
       if (!attemptSnapshot.exists) fail("not-found", "Assessment attempt was not found.", "ASSESSMENT_ATTEMPT_NOT_FOUND");
       const attempt = attemptSnapshot.data || {};
+      if (attempt.attemptId !== payload.attemptId) fail("failed-precondition", "Assessment attempt identity is inconsistent.", "ASSESSMENT_ATTEMPT_INVALID");
       if (attempt.studentUid !== actor.actorUid) fail("permission-denied", "Assessment attempt belongs to another student.", "ASSESSMENT_ATTEMPT_FORBIDDEN");
       if (attempt.status === "SUBMITTED") {
-        return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, attempt.submissionRef, attempt.resultRef] }, sourceHash: attempt.sourceHash || null, result: { attemptId: attempt.attemptId, status: "SUBMITTED", resultRef: attempt.resultRef, submissionRef: attempt.submissionRef, replayedSubmission: true } };
+        if (attempt.resultRef !== resultPath(attempt.attemptId)) fail("failed-precondition", "Assessment result reference is inconsistent.", "ASSESSMENT_RESULT_INVALID");
+        const resultDoc = await transaction.get(attempt.resultRef);
+        const result = resultDoc.data || {};
+        if (!resultDoc.exists || result.studentUid !== actor.actorUid || result.semesterId !== attempt.semesterId || result.attemptId !== attempt.attemptId)
+          fail("failed-precondition", "Assessment result is inconsistent.", "ASSESSMENT_RESULT_INVALID");
+        const reward = result.reward || { status: "NOT_RECORDED", awarded: false, duplicate: false, amount: 0, bonusAwarded: false,
+          bonusAmount: 0, totalAwarded: 0, blockedReason: "reward_not_recorded", blockedMessage: "이전 제출의 보상 확인 기록이 없습니다.", ledgerEntryIds: [] };
+        return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, attempt.submissionRef, attempt.resultRef] }, sourceHash: attempt.sourceHash || null, result: { attemptId: attempt.attemptId, status: "SUBMITTED", resultRef: attempt.resultRef, submissionRef: attempt.submissionRef,
+          score: result.score, total: result.total, percent: result.percent, answerChecks: result.answerChecks, reward, replayedSubmission: true } };
       }
       if (!Array.isArray(attempt.gradingSnapshot) || !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status)) fail("failed-precondition", "Assessment attempt cannot be submitted.", "ASSESSMENT_ATTEMPT_NOT_SUBMITTABLE");
       if (Number(attempt.revision || 0) !== payload.expectedRevision) fail("aborted", "Assessment attempt revision changed.", "ASSESSMENT_ATTEMPT_REVISION_CONFLICT", { currentRevision: Number(attempt.revision || 0) });
@@ -891,6 +900,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date() } = {}) => ({
       const immutableSubmissionPath = submissionPath(attempt.attemptId);
       const immutableResultPath = resultPath(attempt.attemptId);
       const submittedAtIso = nowDate.toISOString();
+      if (!wisRewards || typeof wisRewards.prepare !== "function") fail("failed-precondition", "Assessment reward adapter is unavailable.", "ASSESSMENT_WIS_ADAPTER_REQUIRED");
+      const rewardPlan = await wisRewards.prepare({ transaction, attempt, percent, commandId, receiptId, nowDate, concreteTimestamp });
+      // No reads below this point: score, reward ledger/projections and receipt
+      // are committed together, or none of them are committed.
       transaction.create(immutableSubmissionPath, {
         schemaVersion: ASSESSMENT_SCHEMA_VERSION,
         policyVersion: ASSESSMENT_POLICY_VERSION,
@@ -925,11 +938,13 @@ const createAssessmentCommandAdapter = ({ now = () => new Date() } = {}) => ({
         sourceHash: attempt.sourceHash,
         submittedAtIso,
         submissionRef: immutableSubmissionPath,
+        reward: rewardPlan.result,
         receiptId,
         createdAt: timestamp,
       });
       transaction.set(path, { status: "SUBMITTED", revision: nextRevision, answers: effectiveAnswers, submittedAtIso, submissionRef: immutableSubmissionPath, resultRef: immutableResultPath, submitReason: payload.submitReason, updatedAt: timestamp }, { merge: true });
-      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, answerChecks: checks, resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, replayedSubmission: false } };
+      rewardPlan.apply();
+      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, answerChecks: checks, resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPTS_BY_CLASS) {

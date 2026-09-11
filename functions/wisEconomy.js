@@ -31,6 +31,7 @@ const WIS_HALL_ACCOUNT_LIMIT = 2_000;
 const WIS_REBUILD_LEDGER_LIMIT = 400;
 const WIS_INTEGRITY_VERSION = "w10p-aggregate-v1";
 const WIS_MANUAL_REVERSIBLE_TYPES = new Set(["GRANT", "DEDUCT", "ADJUST"]);
+const ASSESSMENT_REWARD_ACTIVITIES = new Set(["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus"]);
 
 const WIS_COMMAND_TYPES = Object.freeze({
   CREATE_SEMESTER_ECONOMY: "createSemesterEconomy",
@@ -1046,14 +1047,14 @@ const zeroAccountTotals = () => ({
   spentTotal: 0,
   adjustedTotal: 0,
 });
-const ledgerTotalsContribution = (type, delta) => {
+const ledgerTotalsContribution = (type, delta, activityType = "") => {
   const contribution = zeroAccountTotals();
   if (type === "INITIAL_GRANT" && delta > 0) {
     contribution.earnedTotal = delta;
   } else if (type === "GRANT" && delta > 0) {
     contribution.earnedTotal = delta;
     contribution.rankEarnedTotal = delta;
-    contribution.adjustedTotal = delta;
+    contribution.adjustedTotal = ["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus"].includes(activityType) ? 0 : delta;
   } else if (type === "DEDUCT") {
     contribution.adjustedTotal = delta;
   } else if (type === "ADJUST") {
@@ -1124,7 +1125,7 @@ const totalsFromLedgerEntries = (entries) => {
     if (entry.type !== "REVERSAL") {
       return addAccountTotals(
         totals,
-        ledgerTotalsContribution(entry.type, Number(entry.delta || 0)),
+        ledgerTotalsContribution(entry.type, Number(entry.delta || 0), entry.activityType),
       );
     }
     const source = byId.get(String(entry.sourceId || "")) || {};
@@ -1137,7 +1138,7 @@ const totalsFromLedgerEntries = (entries) => {
     return addAccountTotals(
       totals,
       negateAccountTotals(
-        ledgerTotalsContribution(reversedType, reversedDelta),
+        ledgerTotalsContribution(reversedType, reversedDelta, entry.reversedActivityType || source.activityType),
       ),
     );
   }, zeroAccountTotals());
@@ -1263,6 +1264,142 @@ const postLedger = async ({
     { merge: true },
   );
   return { ledgerEntryId: entryId, balance: after, accountRevision };
+};
+
+// Internal submit dependency only. Reads/validates everything before returning a
+// write-only closure; the assessment result and Gateway receipt share its commit.
+const createAssessmentWisRewardAdapter = ({ loadPolicy, resolveActivityReward } = {}) => {
+  if (typeof loadPolicy !== "function" || typeof resolveActivityReward !== "function")
+    throw new TypeError("Assessment reward policy dependencies are required.");
+  const rewardFailure = (reason, message = "평가 보상 계좌를 확인하지 못했습니다. 제출 내용을 유지한 채 다시 시도해 주세요.") =>
+    fail("failed-precondition", message, `ASSESSMENT_WIS_${reason}`);
+  const safe = (value, minimum = 0) => Number.isSafeInteger(value) && value >= minimum;
+  const emptyReward = (status, blockedReason, blockedMessage, extra = {}) => ({
+    status, awarded: false, duplicate: status === "DUPLICATE", amount: 0,
+    bonusAwarded: false, bonusAmount: 0, totalAwarded: 0,
+    blockedReason, blockedMessage, ledgerEntryIds: [], ...extra,
+  });
+  return {
+    prepare: async ({ transaction, attempt, percent, commandId, receiptId, nowDate, concreteTimestamp }) => {
+      const scope = semesterId(attempt.semesterId), uid = text(attempt.studentUid, "studentUid", 180);
+      const activityType = attempt.assessmentKind === "QUIZ" ? "quiz"
+        : attempt.assessmentKind === "HISTORY_CLASSROOM" ? "history_classroom" : "";
+      if (!activityType || !safe(percent) || percent > 100 || !safe(nowDate?.getTime()) || !concreteTimestamp) rewardFailure("RESULT_INVALID");
+      const accountId = accountIdFor(scope, uid);
+      const migrationFence = require("./wisMigrationFence");
+      const [pointerDoc, manifestDoc, economyDoc, accountDoc, profileDoc, identityDoc, slotDoc, fenceDoc] = await transaction.getAll([
+        semesterCore.ACTIVE_SEMESTER_POINTER_PATH, manifestPath(scope), economyPath(scope), accountPath(accountId),
+        `users/${uid}`, `student_identities/${uid}`, enrollmentSlotPath(scope, uid), migrationFence.controlPath(scope),
+      ]);
+      migrationFence.assertControl(fenceDoc.data);
+      const manifest = manifestDoc.data || {}, economy = economyDoc.data || {}, account = accountDoc.data || {};
+      if (!pointerDoc.exists || pointerDoc.data?.semesterId !== scope || !manifestDoc.exists || manifest.semesterId !== scope ||
+          manifest.status !== "ACTIVE" || manifest.readOnly === true || !safe(manifest.revision, 1) || pointerDoc.data?.revision !== manifest.revision)
+        rewardFailure("SEMESTER_INACTIVE");
+      if (!profileDoc.exists || profileDoc.data?.role !== "student" ||
+          (Object.hasOwn(profileDoc.data, "registrationApprovalStatus") && profileDoc.data.registrationApprovalStatus !== "APPROVED") ||
+          !identityDoc.exists || identityDoc.data?.studentUid !== uid ||
+          (identityDoc.data.accountStatus !== undefined && identityDoc.data.accountStatus !== "ACTIVE"))
+        rewardFailure("STUDENT_INACTIVE");
+      if (!slotDoc.exists || slotDoc.data?.semesterId !== scope || slotDoc.data?.studentUid !== uid ||
+          (slotDoc.data.status !== undefined && slotDoc.data.status !== "ACTIVE") || !slotDoc.data.activeEnrollmentId)
+        rewardFailure("ENROLLMENT_INVALID");
+      const enrollmentDoc = await transaction.get(enrollmentPath(slotDoc.data.activeEnrollmentId));
+      const enrollment = enrollmentDoc.data || {};
+      if (!enrollmentDoc.exists || enrollment.enrollmentId !== slotDoc.data.activeEnrollmentId || enrollment.semesterId !== scope ||
+          enrollment.studentUid !== uid || enrollment.enrollmentStatus !== "ACTIVE" || enrollment.readOnly === true ||
+          enrollment.enrollmentId !== attempt.enrollmentId || enrollment.classId !== attempt.classId)
+        rewardFailure("ENROLLMENT_CHANGED");
+      const classDoc = await transaction.get(classPath(enrollment.classId));
+      if (!classDoc.exists || classDoc.data?.semesterId !== scope || classDoc.data.status !== "ACTIVE" || classDoc.data.readOnly === true) rewardFailure("CLASS_INACTIVE");
+      if (!economyDoc.exists || economy.semesterId !== scope || economy.status !== "ACTIVE_OPEN" || economy.readOnly === true ||
+          !safe(economy.revision, 1) || !safe(economy.ledgerEntryCount)) rewardFailure("ECONOMY_CLOSED");
+      if (!accountDoc.exists || account.schemaVersion !== WIS_SCHEMA_VERSION || account.policyVersion !== WIS_POLICY_VERSION ||
+          account.accountId !== accountId || account.studentUid !== uid || account.semesterId !== scope || account.status !== "ACTIVE" ||
+          account.readOnly === true || account.enrollmentId !== enrollment.enrollmentId || account.classId !== enrollment.classId ||
+          !safe(account.revision, 1) || !["balance", "earnedTotal", "rankEarnedTotal", "spentTotal"].every(key => safe(account[key])) ||
+          !Number.isSafeInteger(account.adjustedTotal) || !Array.isArray(account.recentLedgerEntries)) rewardFailure("ACCOUNT_INVALID");
+
+      const policy = await loadPolicy(transaction, scope);
+      const sourceId = `assessment:${attempt.attemptId}`;
+      const plan = resolveActivityReward({ policy, activityType, sourceId,
+        sourceLabel: activityType === "quiz" ? "문제 풀이" : "역사교실 제출 완료", score: percent });
+      if (!Array.isArray(plan.items) || plan.items.some(item => ![activityType, `${activityType}_bonus`].includes(item.type) ||
+          item.sourceId !== sourceId || !safe(item.amount)) || new Set(plan.items.map(item => item.type)).size !== plan.items.length)
+        rewardFailure("POLICY_INVALID");
+      const items = plan.items.filter(item => item.amount > 0);
+      const base = emptyReward("DISABLED", "reward_disabled", "현재 정책에서 지급할 평가 보상이 없습니다.", { balance: account.balance });
+      if (!items.length) return { result: base, refs: [], apply() {} };
+      const posts = items.map(item => {
+        const entrySource = `${sourceId}:${item.type}`;
+        return { item, sourceId: entrySource, id: ledgerIdFor(scope, accountId, "GRANT", entrySource) };
+      });
+      const existing = await transaction.getAll(posts.map(post => ledgerPath(post.id)));
+      // Only a committed immutable result can replay a reward. Orphan/partial
+      // ledger evidence must be reconciled, never supplemented by a new submit.
+      if (existing.some(doc => doc.exists)) rewardFailure("SOURCE_ALREADY_POSTED");
+
+      if (activityType === "history_classroom") {
+        const [year, term] = scope.split("-");
+        const limit = 1000;
+        const [legacyRows, canonicalRows] = await Promise.all([
+          transaction.query(`years/${year}/semesters/${term}/point_transactions`, {
+            filters: [{ field: "uid", operator: "==", value: uid }, { field: "type", operator: "==", value: activityType }], limit: limit + 1,
+          }),
+          transaction.query(WIS_LEDGER_COLLECTION, { filters: [
+            { field: "semesterId", operator: "==", value: scope }, { field: "studentUid", operator: "==", value: uid },
+            { field: "type", operator: "==", value: "GRANT" }, { field: "activityType", operator: "==", value: activityType },
+          ], limit: limit + 1 }),
+        ]);
+        if (legacyRows.length > limit || canonicalRows.length > limit) rewardFailure("HISTORY_LIMIT_EXCEEDED");
+        const rows = [...legacyRows, ...canonicalRows];
+        const rule = policy.rewardPolicy?.historyClassroom || {};
+        const maxClaims = Number(rule.maxClaims || 0), cooldownHours = Math.max(1, Number(rule.cooldownHours || 24));
+        if (!safe(maxClaims) || !Number.isFinite(cooldownHours)) rewardFailure("POLICY_INVALID");
+        if (maxClaims > 0 && rows.length >= maxClaims) return { refs: [], apply() {}, result:
+          emptyReward("NOT_ELIGIBLE", "max_claims_reached", `누적 최대 ${maxClaims}회까지 적립됩니다.`, { balance: account.balance }) };
+        const times = rows.map(row => {
+          const value = row.data?.createdAt;
+          const milliseconds = typeof value?.toMillis === "function" ? value.toMillis()
+            : Number(value?.seconds || 0) * 1000 + Math.floor(Number(value?.nanoseconds || 0) / 1000000);
+          if (!safe(milliseconds, 1)) rewardFailure("HISTORY_TIMESTAMP_INVALID");
+          return milliseconds;
+        });
+        const nextEligibleAtMs = times.length ? Math.max(...times) + cooldownHours * 3600000 : 0;
+        if (!safe(nextEligibleAtMs)) rewardFailure("POLICY_INVALID");
+        if (nextEligibleAtMs > nowDate.getTime()) return { refs: [], apply() {}, result:
+          emptyReward("NOT_ELIGIBLE", "cooldown_active", `${cooldownHours}시간마다 1회만 적립됩니다.`,
+            { balance: account.balance, nextEligibleAt: new Date(nextEligibleAtMs).toISOString() }) };
+      }
+      const totalAwarded = items.reduce((total, item) => total + item.amount, 0);
+      const amount = items.find(item => item.type === activityType)?.amount || 0, bonusAmount = totalAwarded - amount;
+      const balance = account.balance + totalAwarded;
+      const totals = { earnedTotal: account.earnedTotal + totalAwarded, rankEarnedTotal: account.rankEarnedTotal + totalAwarded,
+        spentTotal: account.spentTotal, adjustedTotal: account.adjustedTotal };
+      if (!safe(totalAwarded, 1) || !safe(balance) || !safe(totals.earnedTotal) || !safe(totals.rankEarnedTotal) ||
+          !safe(account.revision + 1, 1) || !safe(economy.revision + 1, 1) || !safe(economy.ledgerEntryCount + posts.length)) rewardFailure("AMOUNT_OVERFLOW");
+      let runningBalance = account.balance;
+      const ledgers = posts.map(post => {
+        const before = runningBalance; runningBalance += post.item.amount;
+        return { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, ledgerEntryId: post.id,
+          semesterId: scope, accountId, studentUid: uid, type: "GRANT", activityType: post.item.type,
+          delta: post.item.amount, balanceBefore: before, balanceAfter: runningBalance, sourceId: post.sourceId,
+          sourceResultId: attempt.attemptId, reason: post.item.sourceLabel, actorUid: "system:assessment-reward", actorRole: "system",
+          initiatedByUid: uid, commandId, receiptId, createdAt: concreteTimestamp,
+          targetDate: new Date(nowDate.getTime() + 9 * 3600000).toISOString().slice(0, 10) };
+      });
+      const refs = [accountPath(accountId), balancePath(accountId), rankingPath(accountId), economyPath(scope), ...posts.map(post => ledgerPath(post.id))];
+      return { refs, result: { status: "AWARDED", awarded: true, duplicate: false, amount, bonusAwarded: bonusAmount > 0,
+        bonusAmount, totalAwarded, balance, blockedReason: "", blockedMessage: "", ledgerEntryIds: posts.map(post => post.id) },
+      apply() {
+        writeProjection(transaction, account, balance, concreteTimestamp, "system:assessment-reward", totals,
+          [...ledgers].reverse().concat(account.recentLedgerEntries).slice(0, WIS_RECENT_LEDGER_LIMIT));
+        for (const ledger of ledgers) transaction.create(ledgerPath(ledger.ledgerEntryId), ledger);
+        transaction.set(economyPath(scope), { revision: economy.revision + 1, ledgerEntryCount: economy.ledgerEntryCount + posts.length,
+          updatedAt: concreteTimestamp, updatedBy: "system:assessment-reward" }, { merge: true });
+      } };
+    },
+  };
 };
 
 const createWisCommandAdapter = () => ({
@@ -2605,7 +2742,7 @@ const projectStudentLedgerEntry = (entry) => ({
   balanceAfter: Number(entry?.balanceAfter || 0),
   reason: String(entry?.reason || ""),
   createdAt: entry?.createdAt || null,
-  ...(["history_dictionary", "history_dictionary_reclaim"].includes(
+  ...(["history_dictionary", "history_dictionary_reclaim", ...ASSESSMENT_REWARD_ACTIVITIES].includes(
     entry?.activityType,
   )
     ? { activityType: entry.activityType }
@@ -3498,6 +3635,7 @@ module.exports = {
   accountIdFor,
   createWisCallableExports,
   createWisCommandAdapter,
+  createAssessmentWisRewardAdapter,
   createWisQueryCore,
   createWisReadinessAdapter,
   getWisCommandSessionOptions,

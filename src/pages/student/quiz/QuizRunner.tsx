@@ -32,7 +32,6 @@ import {
   normalizeMockExamRound,
 } from "../../../lib/mockExamRounds";
 import { db } from "../../../lib/firebase";
-import { claimPointActivityReward } from "../../../lib/points";
 import {
   getQuizSubmissionDeadlineMs,
   normalizeQuizSubmissionDoc,
@@ -49,7 +48,10 @@ import {
   startAssessmentAttempt,
   submitAssessmentAttempt,
 } from "../../../lib/assessmentLifecycle";
-import type { AssessmentAttemptState } from "../../../lib/commandGateway";
+import type {
+  AssessmentAttemptState,
+  AssessmentRewardResult,
+} from "../../../lib/commandGateway";
 import {
   readStudentCurriculumTree,
   type StudentCurriculumTreeItem,
@@ -888,6 +890,8 @@ const QuizRunner: React.FC = () => {
       resultId: submitted.attemptId,
       finalScore: submitted.percent,
       resultDetails,
+      reward: submitted.reward,
+      replayedSubmission: submitted.replayedSubmission,
     };
   };
 
@@ -1529,6 +1533,82 @@ const QuizRunner: React.FC = () => {
     schedulePersistQuizProgress();
   };
 
+  const applyQuizPointReward = (
+    pointResult: AssessmentRewardResult | undefined,
+    replayedSubmission: boolean,
+  ) => {
+    if (!pointResult || pointResult.status === "NOT_RECORDED") {
+      setPointNotice("이전 제출에는 보상 내역이 기록되어 있지 않습니다.");
+      return;
+    }
+    if (
+      pointResult.status === "DISABLED" ||
+      pointResult.status === "NOT_ELIGIBLE"
+    ) {
+      setPointNotice(
+        pointResult.blockedMessage ||
+          "이번 문제 풀이에 지급할 위스가 없습니다.",
+      );
+      return;
+    }
+    if (replayedSubmission || pointResult.status === "DUPLICATE") {
+      setPointNotice(
+        pointResult.blockedMessage ||
+          "이번 문제 풀이 위스는 이미 반영되었습니다.",
+      );
+      return;
+    }
+    try {
+      if (
+        pointResult.awarded &&
+        (pointResult.totalAwarded || pointResult.amount)
+      ) {
+        notifyPointsUpdated();
+      }
+      if ((pointResult.totalAwarded || pointResult.amount) > 0) {
+        const totalAwarded = Number(
+          pointResult.totalAwarded || pointResult.amount || 0,
+        );
+        if (pointResult.bonusAwarded && pointResult.bonusAmount) {
+          setPointNotice(
+            `문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`,
+          );
+          showToast({
+            tone: "success",
+            title: "문제 풀이 완료",
+            message: `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
+          });
+        } else {
+          setPointNotice(
+            `문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`,
+          );
+          showToast({
+            tone: "success",
+            title: "문제 풀이 완료",
+            message: `+${totalAwarded}위스가 반영되었습니다.`,
+          });
+        }
+      } else if (pointResult.duplicate) {
+        setPointNotice("이번 문제 풀이 위스는 이미 반영되었습니다.");
+        showToast({
+          tone: "info",
+          title: "문제 풀이 위스가 이미 반영되었습니다.",
+        });
+      }
+    } catch (pointError) {
+      console.error(
+        "Failed to display confirmed quiz point reward",
+        pointError,
+      );
+      setPointNotice("문제 풀이 위스를 바로 반영하지 못했습니다.");
+      showToast({
+        tone: "warning",
+        title: "문제 풀이 결과는 저장되었습니다.",
+        message: "위스 반영 상태를 바로 확인하지 못했습니다.",
+      });
+    }
+  };
+
   const finishQuiz = async (isTimeout = false) => {
     if (finishSubmitting) return;
     if (!isTimeout) {
@@ -1553,58 +1633,7 @@ const QuizRunner: React.FC = () => {
       const finalized = await finalizeQuizAttempt({ isTimeout });
       setFinalizedResultId(finalized.resultId);
 
-      try {
-        const pointResult = await claimPointActivityReward({
-          config,
-          activityType: "quiz",
-          sourceId: `quiz-result-${finalized.resultId}`,
-          sourceLabel: title || "문제 풀이 완료",
-        });
-        if (
-          pointResult.awarded &&
-          (pointResult.totalAwarded || pointResult.amount)
-        ) {
-          notifyPointsUpdated();
-        }
-        if ((pointResult.totalAwarded || pointResult.amount) > 0) {
-          const totalAwarded = Number(
-            pointResult.totalAwarded || pointResult.amount || 0,
-          );
-          if (pointResult.bonusAwarded && pointResult.bonusAmount) {
-            setPointNotice(
-              `문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`,
-            );
-            showToast({
-              tone: "success",
-              title: "문제 풀이 완료",
-              message: `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
-            });
-          } else {
-            setPointNotice(
-              `문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`,
-            );
-            showToast({
-              tone: "success",
-              title: "문제 풀이 완료",
-              message: `+${totalAwarded}위스가 반영되었습니다.`,
-            });
-          }
-        } else if (pointResult.duplicate) {
-          setPointNotice("이번 문제 풀이 위스는 이미 반영되었습니다.");
-          showToast({
-            tone: "info",
-            title: "문제 풀이 위스가 이미 반영되었습니다.",
-          });
-        }
-      } catch (pointError) {
-        console.error("Failed to claim quiz point reward", pointError);
-        setPointNotice("문제 풀이 위스를 바로 반영하지 못했습니다.");
-        showToast({
-          tone: "warning",
-          title: "문제 풀이 결과는 저장되었습니다.",
-          message: "위스 반영 상태를 바로 확인하지 못했습니다.",
-        });
-      }
+      applyQuizPointReward(finalized.reward, finalized.replayedSubmission);
 
       setView("result");
     } catch (error) {

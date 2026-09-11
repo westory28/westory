@@ -1676,6 +1676,26 @@ export interface AssessmentAttemptState {
   resumed: boolean;
 }
 
+export interface AssessmentRewardResult {
+  status:
+    | "AWARDED"
+    | "DUPLICATE"
+    | "DISABLED"
+    | "NOT_ELIGIBLE"
+    | "NOT_RECORDED";
+  awarded: boolean;
+  duplicate: boolean;
+  amount: number;
+  bonusAwarded: boolean;
+  bonusAmount: number;
+  totalAwarded: number;
+  blockedReason: string;
+  blockedMessage: string;
+  ledgerEntryIds: string[];
+  balance?: number;
+  nextEligibleAt?: string;
+}
+
 export interface AssessmentSubmissionResult {
   attemptId: string;
   status: "SUBMITTED";
@@ -1687,6 +1707,7 @@ export interface AssessmentSubmissionResult {
   resultRef: string;
   submissionRef: string;
   replayedSubmission: boolean;
+  reward?: AssessmentRewardResult;
 }
 
 export type WestoryCommandClientState =

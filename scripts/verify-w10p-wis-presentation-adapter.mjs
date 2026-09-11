@@ -123,6 +123,38 @@ assert.equal(mapLedgerType({ type: "REVERSAL", delta: -10, activityType: "histor
 assert.equal(mapLedgerType({ type: "DEDUCT", delta: -10, activityType: "history_dictionary" }), "manual_reclaim");
 assert.equal(mapLedgerType({ type: "GRANT", delta: 10, activityType: "history_dictionary_reclaim" }), "manual_adjust");
 assert.equal(mapLedgerType({ type: "GRANT", delta: 10, activityType: "internal-type" }), "manual_adjust");
+const assessmentActivities = ["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus"];
+for (const activityType of assessmentActivities) {
+  assert.equal(mapLedgerType({ type: "GRANT", delta: 10, activityType }), activityType);
+  assert.equal(mapLedgerType({ type: "REVERSAL", delta: -10, activityType }), "manual_reclaim");
+}
+// Exercise the real query normalization, not just the presentation mapper.
+const wisQueryModule = { exports: {} };
+const wisQueryCode = ts.transpileModule(readFileSync(resolve("src/lib/wisEconomy.ts"), "utf8"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
+}).outputText;
+new Function("require", "module", "exports", wisQueryCode)((name) => {
+  if (name === "./commandGateway") return { executeWestoryCommand: () => assert.fail("A query may not write") };
+  if (name === "./semesterScope") return { getYearSemester: (config) => config };
+  if (name === "./firebase") return { getHttpsCallable: async (callable) => {
+    assert.equal(callable, "getWisEconomyState");
+    return async (input) => {
+      assert.equal(input.audience, "student");
+      assert.equal(input.semesterId, "2026-2");
+      return { data: { semesterId: "2026-2", status: "CONTENT", ledger:
+        [...assessmentActivities, "history_dictionary", "unapproved-type"].map((activityType, index) => ({
+          ledgerEntryId: `ledger-${index}`, type: "GRANT", activityType, delta: index + 1,
+        })),
+      } };
+    };
+  } };
+  assert.fail(`Unexpected dependency: ${name}`);
+}, wisQueryModule, wisQueryModule.exports);
+const normalizedRewards = await wisQueryModule.exports.getWisEconomyState({ config: { year: "2026", semester: "2" }, audience: "student", projection: "student-core" });
+assert.deepEqual(normalizedRewards.ledger.slice(0, 4).map((entry) => mapLedgerType(entry)), assessmentActivities);
+assert.deepEqual(normalizedRewards.ledger.slice(0, 4).map((entry) => entry.delta), [1, 2, 3, 4]);
+assert.equal(normalizedRewards.ledger[4].activityType, "history_dictionary");
+assert.equal(normalizedRewards.ledger[5].activityType, undefined);
 const mapOrders = loadAdapterFunction("mapOrders", { parseSchoolIdentity: () => ({}), mapOrderStatus: (status) => status });
 assert.equal(mapOrders({ accounts: [], orders: [{ memo: "구매 요청", reviewReason: "" }] })[0].memo, "구매 요청");
 assert.equal(mapOrders({ accounts: [], orders: [{ memo: "구매 요청", reviewReason: "처리 메모" }] })[0].memo, "처리 메모");
@@ -166,7 +198,7 @@ console.log(
       (entry) => entry.sourceId === "lesson-core-points-all",
     ).length,
     orderRows: visibleOrders.length,
-    addedChecks: ["dictionary activity/type mapping", "purchase and review memo display", "purchase memo dispatch", "response-loss original memo replay"],
+    addedChecks: ["dictionary activity/type mapping", "assessment base/bonus activity normalization and labels", "unknown activity filtering and reversal classification", "purchase and review memo display", "purchase memo dispatch", "response-loss original memo replay"],
     productionAccess: 0,
   }),
 );

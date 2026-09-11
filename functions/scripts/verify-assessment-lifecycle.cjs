@@ -152,6 +152,9 @@ const store = new MemoryStore(seed);
 let nowMs = Date.parse("2026-08-11T00:00:00.000Z");
 const adapter = assessment.createAssessmentCommandAdapter({
   now: () => new Date(nowMs),
+  // Reward integration has its own real Wis/production-planner suite. Keep this
+  // lifecycle fixture isolated from financial setup, with an explicit test double.
+  wisRewards: { prepare: async () => ({ refs: [], result: { status: "DISABLED", awarded: false, amount: 0, bonusAmount: 0, totalAwarded: 0 }, apply() {} }) },
 });
 const core = commandGateway.createCommandGatewayCore({
   store,

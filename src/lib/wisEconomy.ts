@@ -44,7 +44,13 @@ export interface WisLedgerEntry {
   accountId: string;
   studentUid: string;
   type: string;
-  activityType?: "history_dictionary" | "history_dictionary_reclaim";
+  activityType?:
+    | "history_dictionary"
+    | "history_dictionary_reclaim"
+    | "quiz"
+    | "quiz_bonus"
+    | "history_classroom"
+    | "history_classroom_bonus";
   delta: number;
   balanceBefore: number;
   balanceAfter: number;
@@ -317,7 +323,11 @@ export const getWisEconomyState = async (input: {
         studentUid: string(item.studentUid),
         type: string(item.type),
         ...(item.activityType === "history_dictionary" ||
-        item.activityType === "history_dictionary_reclaim"
+        item.activityType === "history_dictionary_reclaim" ||
+        item.activityType === "quiz" ||
+        item.activityType === "quiz_bonus" ||
+        item.activityType === "history_classroom" ||
+        item.activityType === "history_classroom_bonus"
           ? { activityType: item.activityType }
           : {}),
         delta: number(item.delta),

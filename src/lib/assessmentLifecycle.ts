@@ -135,6 +135,9 @@ const executeStudentAssessmentCommand = async <T>(
   try {
     const response = await execute({ commandId, commandType, payload });
     forgetPendingCommandId(key);
+    if (commandType === "submitAssessmentAttempt" && response.data.replayed) {
+      return { ...response.data.result, replayedSubmission: true };
+    }
     return response.data.result;
   } catch (error) {
     if (!isAmbiguous(error)) {
@@ -149,6 +152,9 @@ const executeStudentAssessmentCommand = async <T>(
       const status = await getStatus({ commandId, commandType });
       if (status.data.status === "SUCCEEDED" && status.data.result) {
         forgetPendingCommandId(key);
+        if (commandType === "submitAssessmentAttempt") {
+          return { ...status.data.result, replayedSubmission: true };
+        }
         return status.data.result;
       }
     } catch {

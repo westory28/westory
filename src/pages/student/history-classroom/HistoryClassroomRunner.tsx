@@ -26,10 +26,6 @@ import {
 } from "../../../lib/historyClassroom";
 import { normalizeMapResource } from "../../../lib/mapResources";
 import {
-  buildHistoryClassroomRewardSourceId,
-  claimPointActivityReward,
-} from "../../../lib/points";
-import {
   readLocalOnly,
   removeStorage,
   writeLocalOnly,
@@ -47,7 +43,10 @@ import {
   startAssessmentAttempt,
   submitAssessmentAttempt,
 } from "../../../lib/assessmentLifecycle";
-import type { AssessmentAttemptState } from "../../../lib/commandGateway";
+import type {
+  AssessmentAttemptState,
+  AssessmentRewardResult,
+} from "../../../lib/commandGateway";
 
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
 const HISTORY_CLASSROOM_ATTEMPT_PREFIX = "westoryHistoryClassroomAttempt";
@@ -561,21 +560,37 @@ const HistoryClassroomRunner: React.FC = () => {
       resultId: submitted.attemptId,
       resultCollectionPath: submitted.resultRef,
       usedLegacyResultFallback: false,
+      reward: submitted.reward,
+      replayedSubmission: submitted.replayedSubmission,
     };
   };
 
-  const applyHistoryClassroomPointReward = async (
-    resultId: string,
-    percent: number,
+  const applyHistoryClassroomPointReward = (
+    pointResult: AssessmentRewardResult | undefined,
+    replayedSubmission: boolean,
   ) => {
     try {
-      const pointResult = await claimPointActivityReward({
-        config,
-        activityType: "history_classroom",
-        sourceId: buildHistoryClassroomRewardSourceId(resultId),
-        score: percent,
-        sourceLabel: assignment?.title || "역사교실 제출 완료",
-      });
+      if (!pointResult || pointResult.status === "NOT_RECORDED") {
+        setPointNotice("이전 제출에는 보상 내역이 기록되어 있지 않습니다.");
+        return;
+      }
+      if (
+        pointResult.status === "DISABLED" ||
+        pointResult.status === "NOT_ELIGIBLE"
+      ) {
+        setPointNotice(
+          pointResult.blockedMessage ||
+            "이번 역사교실에 지급할 위스가 없습니다.",
+        );
+        return;
+      }
+      if (replayedSubmission || pointResult.status === "DUPLICATE") {
+        setPointNotice(
+          pointResult.blockedMessage ||
+            "이번 역사교실 위스는 이미 반영되었습니다.",
+        );
+        return;
+      }
 
       if (
         pointResult.awarded &&
@@ -633,7 +648,7 @@ const HistoryClassroomRunner: React.FC = () => {
       }
     } catch (pointError) {
       console.error(
-        "Failed to claim history classroom point reward:",
+        "Failed to display confirmed history classroom point reward:",
         pointError,
       );
       setPointNotice("역사교실 위스를 바로 반영하지 못했습니다.");
@@ -1047,7 +1062,10 @@ const HistoryClassroomRunner: React.FC = () => {
       setResultText("");
       submittingRef.current = false;
       setSubmitting(false);
-      void applyHistoryClassroomPointReward(result.resultId, result.percent);
+      applyHistoryClassroomPointReward(
+        result.reward,
+        result.replayedSubmission,
+      );
     } catch (submitError) {
       console.error(submitError);
       setResultText(
@@ -1385,7 +1403,10 @@ const HistoryClassroomRunner: React.FC = () => {
       setResultText("");
       submittingRef.current = false;
       setSubmitting(false);
-      void applyHistoryClassroomPointReward(result.resultId, result.percent);
+      applyHistoryClassroomPointReward(
+        result.reward,
+        result.replayedSubmission,
+      );
     } catch (submitError) {
       console.error(submitError);
       if (networkOfflineRef.current) {

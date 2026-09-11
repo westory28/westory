@@ -12166,7 +12166,18 @@ const semesterCoreCommandAdapter =
 const archiveEnrollmentCommandAdapter =
   archiveEnrollment.createArchiveEnrollmentCommandAdapter();
 const assessmentCommandAdapter =
-  assessmentLifecycle.createAssessmentCommandAdapter();
+  assessmentLifecycle.createAssessmentCommandAdapter({
+    wisRewards: wisEconomy.createAssessmentWisRewardAdapter({
+      loadPolicy: async (transaction, semesterId) => {
+        const [year, semester] = semesterId.split("-");
+        return loadPolicy({ get: async (ref) => {
+          const snapshot = await transaction.get(ref.path);
+          return { exists: snapshot.exists, data: () => snapshot.data };
+        } }, year, semester);
+      },
+      resolveActivityReward,
+    }),
+  });
 const lessonAnswerCommandAdapter = lessonAnswers.createLessonAnswerCommandAdapter();
 const lessonManagementCommandAdapter = lessonManagement.createLessonCommandAdapter();
 const sourceArchiveCommandAdapter = sourceArchiveManagement.createSourceArchiveCommandAdapter();
