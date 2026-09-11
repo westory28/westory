@@ -437,6 +437,11 @@ export const deleteStudentHistoryDictionaryWord = async (
   };
 };
 
+const assertHistoryDictionaryEditorOwner = (expectedUid: string) => {
+  if (!expectedUid || auth.currentUser?.uid !== expectedUid)
+    throw new Error("로그인 사용자가 바뀌었습니다. 화면을 다시 열어 주세요.");
+};
+
 export const deleteStudentHistoryDictionaryWordByTeacher = async (
   config: ConfigLike,
   input: {
@@ -449,12 +454,11 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
     year?: string;
     semester?: string;
   },
+  expectedUid = auth.currentUser?.uid || "",
 ) => {
+  assertHistoryDictionaryEditorOwner(expectedUid);
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
-    "deleteStudentHistoryDictionaryWordByTeacher",
-  );
-  const result = await callable({
+  const payload = {
     year: input.year || year,
     semester: input.semester || semester,
     uid: input.uid,
@@ -463,7 +467,12 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
     word: input.word || "",
     normalizedWord: input.normalizedWord || "",
     reason: input.reason || "",
-  });
+  };
+  const callable = await getHttpsCallable(
+    "deleteStudentHistoryDictionaryWordByTeacher",
+    { expectedUid },
+  );
+  const result = await callable(payload);
   return result.data as {
     termId: string;
     requestId?: string;
@@ -486,19 +495,23 @@ export const updateStudentHistoryDictionaryWordByTeacher = async (
     year?: string;
     semester?: string;
   },
+  expectedUid = auth.currentUser?.uid || "",
 ) => {
+  assertHistoryDictionaryEditorOwner(expectedUid);
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
-    "updateStudentHistoryDictionaryWordByTeacher",
-  );
-  const result = await callable({
+  const payload = {
     year: input.year || year,
     semester: input.semester || semester,
     uid: input.uid,
     termId: input.termId,
     word: input.word,
     definition: input.definition,
-  });
+  };
+  const callable = await getHttpsCallable(
+    "updateStudentHistoryDictionaryWordByTeacher",
+    { expectedUid },
+  );
+  const result = await callable(payload);
   return result.data as {
     termId: string;
     previousTermId: string;
@@ -517,20 +530,25 @@ export const saveHistoryDictionaryTerm = async (
     fallbackRequestId?: string;
     fallbackUid?: string;
   },
+  expectedUid = auth.currentUser?.uid || "",
 ) => {
+  assertHistoryDictionaryEditorOwner(expectedUid);
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("saveHistoryDictionaryTerm");
-  await callable({
+  const payload = {
     year,
     semester,
     word: input.word,
     definition: input.definition,
     studentLevel: input.studentLevel,
     relatedUnitId: input.relatedUnitId || "",
-    tags: input.tags || [],
+    tags: [...(input.tags || [])],
     fallbackRequestId: input.fallbackRequestId || "",
     fallbackUid: input.fallbackUid || "",
+  };
+  const callable = await getHttpsCallable("saveHistoryDictionaryTerm", {
+    expectedUid,
   });
+  await callable(payload);
 };
 
 type HistoryDictionaryImportInput = {
@@ -612,15 +630,19 @@ export const approveHistoryDictionaryTermForRequests = async (
     termId: string;
     requestId?: string;
   },
+  expectedUid = auth.currentUser?.uid || "",
 ) => {
+  assertHistoryDictionaryEditorOwner(expectedUid);
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
-    "approveHistoryDictionaryTermForRequests",
-  );
-  await callable({
+  const payload = {
     year,
     semester,
     termId: input.termId,
     requestId: input.requestId || "",
-  });
+  };
+  const callable = await getHttpsCallable(
+    "approveHistoryDictionaryTermForRequests",
+    { expectedUid },
+  );
+  await callable(payload);
 };

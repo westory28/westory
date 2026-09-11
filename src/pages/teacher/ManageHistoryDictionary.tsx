@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -93,6 +94,85 @@ const INITIAL_FILTERS = [
 
 type ActiveDictionaryPanel = "terms" | "studentWords" | "requests" | "upload";
 
+type DictionaryEditorDraft = {
+  word: string;
+  definition: string;
+  relatedUnitId: string;
+  tags: string[];
+  tagInput: string;
+};
+
+type DictionaryEditorSource = {
+  key: string;
+  kind: "new" | "term" | "request" | "studentWord" | "upload";
+  request: HistoryDictionaryRequest | null;
+  term: HistoryDictionaryTerm | null;
+  studentWord: StudentHistoryDictionaryWord | null;
+  draft: DictionaryEditorDraft;
+  signature: string;
+  missing: boolean;
+};
+
+const emptyEditorDraft = (): DictionaryEditorDraft => ({
+  word: "",
+  definition: "",
+  relatedUnitId: "",
+  tags: [],
+  tagInput: "",
+});
+const copyEditorDraft = (
+  draft: DictionaryEditorDraft,
+): DictionaryEditorDraft => ({
+  ...draft,
+  tags: [...draft.tags],
+});
+const equalEditorDraft = (a: DictionaryEditorDraft, b: DictionaryEditorDraft) =>
+  JSON.stringify(a) === JSON.stringify(b);
+
+const editorSourceTarget = (source: DictionaryEditorSource) => {
+  const request = source.request as
+    | (HistoryDictionaryRequest & { year?: unknown; semester?: unknown })
+    | null;
+  const studentWord = source.studentWord;
+  return JSON.stringify({
+    key: source.key,
+    kind: source.kind,
+    request: request && [
+      request.id,
+      request.uid,
+      request.normalizedWord,
+      String(request.year ?? ""),
+      String(request.semester ?? ""),
+    ],
+    term: source.term && [source.term.id, source.term.normalizedWord],
+    studentWord: studentWord && [
+      studentWord.id,
+      studentWord.uid,
+      studentWord.termId,
+      studentWord.requestId,
+      studentWord.normalizedWord,
+      studentWord.status,
+      String(studentWord.year ?? ""),
+      String(studentWord.semester ?? ""),
+    ],
+  });
+};
+
+const createEditorSession = () => ({
+  active: true,
+  saving: false,
+  targetKey: "",
+  signature: "",
+  source: null as DictionaryEditorSource | null,
+  baseline: emptyEditorDraft(),
+  draft: emptyEditorDraft(),
+  changed: false,
+  deleted: false,
+  acknowledged: null as DictionaryEditorDraft | null,
+  acknowledgedTarget: null as string | null,
+  optimisticStudentWord: null as StudentHistoryDictionaryWord | null,
+});
+
 interface HistoryDictionaryUploadRow {
   id: string;
   rowNumber: number;
@@ -142,6 +222,18 @@ const getTimestampMs = (value: unknown) => {
       : null;
   return date?.getTime() || 0;
 };
+
+const dictionaryRecordSnapshot = (word: object) =>
+  JSON.stringify(
+    Object.entries(word)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => [
+        key,
+        value && typeof value.toDate === "function"
+          ? getTimestampMs(value)
+          : value,
+      ]),
+  );
 
 const getWordInitial = (value: string) => {
   const first = String(value || "")
@@ -228,7 +320,7 @@ const mergeRequestSources = (
   return Array.from(new Set(byKey.values()));
 };
 
-const ManageHistoryDictionary: React.FC = () => {
+const ManageHistoryDictionaryContent: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
   const canRead = canReadLessonManagement(userData, currentUser?.email || "");
   const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
@@ -240,13 +332,25 @@ const ManageHistoryDictionary: React.FC = () => {
   const studentWordListRef = useRef<HTMLDivElement>(null);
   const studentWordSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [requests, setRequests] = useState<HistoryDictionaryRequest[]>([]);
+  const requestsRef = useRef(requests);
   const [notificationRequests, setNotificationRequests] = useState<
     HistoryDictionaryRequest[]
   >([]);
+  const notificationRequestsRef = useRef(notificationRequests);
   const [terms, setTerms] = useState<HistoryDictionaryTerm[]>([]);
-  const [studentWords, setStudentWords] = useState<
+  const [studentWords, setStudentWordsState] = useState<
     StudentHistoryDictionaryWord[]
   >([]);
+  const studentWordsRef = useRef(studentWords);
+  const setStudentWords = useCallback(
+    (next: React.SetStateAction<StudentHistoryDictionaryWord[]>) => {
+      const updated =
+        typeof next === "function" ? next(studentWordsRef.current) : next;
+      studentWordsRef.current = updated;
+      setStudentWordsState(updated);
+    },
+    [],
+  );
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [selectedTermId, setSelectedTermId] = useState("");
   const [selectedStudentWordId, setSelectedStudentWordId] = useState("");
@@ -255,6 +359,28 @@ const ManageHistoryDictionary: React.FC = () => {
   const [relatedUnitId, setRelatedUnitId] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const editorSessionRef = useRef(createEditorSession());
+  const [editorSource, setEditorSource] =
+    useState<DictionaryEditorSource | null>(null);
+  const [editorSourceChanged, setEditorSourceChanged] = useState(false);
+  const [editorRefresh, setEditorRefresh] = useState(0);
+  editorSessionRef.current.draft = {
+    word,
+    definition,
+    relatedUnitId,
+    tags,
+    tagInput,
+  };
+  useLayoutEffect(() => {
+    const session = editorSessionRef.current;
+    session.active = true;
+    if (importSessionRef.current.context !== importContext)
+      importSessionRef.current = createImportSession(importContext);
+    return () => {
+      session.active = false;
+      importSessionRef.current = createImportSession("");
+    };
+  }, []);
   const [uploadRows, setUploadRows] = useState<HistoryDictionaryUploadRow[]>(
     [],
   );
@@ -294,11 +420,21 @@ const ManageHistoryDictionary: React.FC = () => {
 
   useEffect(() => {
     if (!canRead) return undefined;
-    const unsubscribeRequests =
-      subscribeTeacherHistoryDictionaryRequests(setRequests);
+    let active = true;
+    const unsubscribeRequests = subscribeTeacherHistoryDictionaryRequests(
+      (items) => {
+        if (active && editorSessionRef.current.active) {
+          requestsRef.current = items;
+          setRequests(items);
+        }
+      },
+    );
     const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
-      setTerms,
+      (items) => {
+        if (active && editorSessionRef.current.active) setTerms(items);
+      },
       () => {
+        if (!active || !editorSessionRef.current.active) return;
         showToast({
           tone: "error",
           title: "등록된 단어 목록을 불러오지 못했습니다.",
@@ -308,6 +444,7 @@ const ManageHistoryDictionary: React.FC = () => {
       },
     );
     return () => {
+      active = false;
       unsubscribeRequests();
       unsubscribeTerms();
     };
@@ -323,13 +460,14 @@ const ManageHistoryDictionary: React.FC = () => {
     const loadStudentWords = async () => {
       try {
         const words = await loadTeacherStudentHistoryDictionaryWords(config);
-        if (!cancelled) setStudentWords(words);
+        if (!cancelled && editorSessionRef.current.active)
+          setStudentWords(words);
       } catch (error) {
         console.error(
           "Failed to load student history dictionary words:",
           error,
         );
-        if (!cancelled) {
+        if (!cancelled && editorSessionRef.current.active) {
           setStudentWords([]);
           showToast({
             tone: "error",
@@ -349,6 +487,7 @@ const ManageHistoryDictionary: React.FC = () => {
 
   useEffect(() => {
     if (!canRead || !config || !currentUser?.uid) {
+      notificationRequestsRef.current = [];
       setNotificationRequests([]);
       return;
     }
@@ -357,18 +496,21 @@ const ManageHistoryDictionary: React.FC = () => {
     const loadFallbackRequests = async () => {
       try {
         const notifications = await loadNotifications(config, currentUser.uid);
-        if (cancelled) return;
-        setNotificationRequests(
-          notifications
-            .map(mapNotificationToHistoryDictionaryRequest)
-            .filter((item): item is HistoryDictionaryRequest => Boolean(item)),
-        );
+        if (cancelled || !editorSessionRef.current.active) return;
+        const fallbackRequests = notifications
+          .map(mapNotificationToHistoryDictionaryRequest)
+          .filter((item): item is HistoryDictionaryRequest => Boolean(item));
+        notificationRequestsRef.current = fallbackRequests;
+        setNotificationRequests(fallbackRequests);
       } catch (error) {
         console.error(
           "Failed to load history dictionary request notifications:",
           error,
         );
-        if (!cancelled) setNotificationRequests([]);
+        if (!cancelled && editorSessionRef.current.active) {
+          notificationRequestsRef.current = [];
+          setNotificationRequests([]);
+        }
       }
     };
 
@@ -377,33 +519,6 @@ const ManageHistoryDictionary: React.FC = () => {
       cancelled = true;
     };
   }, [canRead, config?.semester, config?.year, currentUser?.uid]);
-
-  useEffect(() => {
-    const panel = searchParams.get("panel");
-    const requestId = searchParams.get("requestId");
-    if (panel === "upload" && canWrite) {
-      setActivePanel("upload");
-      setSelectedRequestId("");
-      setSelectedTermId("");
-      setSelectedStudentWordId("");
-    }
-    if (panel === "studentWords") {
-      setActivePanel("studentWords");
-      setSelectedRequestId("");
-      setSelectedTermId("");
-    }
-    if (panel === "requests") {
-      setActivePanel("requests");
-      setSelectedTermId("");
-      setSelectedStudentWordId("");
-    }
-    if (requestId) {
-      setActivePanel("requests");
-      setSelectedTermId("");
-      setSelectedStudentWordId("");
-      setSelectedRequestId(requestId);
-    }
-  }, [canWrite, searchParams]);
 
   const mergedRequests = useMemo(
     () => mergeRequestSources(requests, notificationRequests),
@@ -606,20 +721,119 @@ const ManageHistoryDictionary: React.FC = () => {
     );
   }, [activeStudentWordInitial, groupedVisibleStudentWords]);
 
-  const selectedRequest =
-    (selectedRequestId
-      ? openRequests.find((item) => item.id === selectedRequestId)
-      : null) ||
-    (activePanel === "requests" && !selectedTermId ? openRequests[0] : null) ||
-    mergedRequests.find((item) => item.id === selectedRequestId) ||
-    null;
-
-  const selectedTerm = terms.find((item) => item.id === selectedTermId) || null;
-  const selectedStudentWord = selectedStudentWordId
-    ? studentWords.find((item) => item.id === selectedStudentWordId) || null
-    : activePanel === "studentWords" && !selectedRequestId && !selectedTermId
-      ? visibleStudentWords[0] || null
+  const liveEditorSource = useMemo<DictionaryEditorSource>(() => {
+    const request =
+      activePanel === "requests"
+        ? selectedRequestId
+          ? mergedRequests.find((item) => item.id === selectedRequestId) || null
+          : openRequests[0] || null
+        : null;
+    const studentWord =
+      activePanel === "studentWords"
+        ? selectedStudentWordId
+          ? studentWords.find((item) => item.id === selectedStudentWordId) ||
+            null
+          : visibleStudentWords[0] || null
+        : null;
+    const term =
+      activePanel === "terms"
+        ? terms.find((item) => item.id === selectedTermId) || null
+        : null;
+    const requestTerm = request
+      ? terms.find(
+          (item) =>
+            item.normalizedWord === request.normalizedWord &&
+            item.status === "published",
+        ) || null
       : null;
+    const kind =
+      activePanel === "requests"
+        ? "request"
+        : activePanel === "studentWords"
+          ? "studentWord"
+          : activePanel === "upload"
+            ? "upload"
+            : selectedTermId && selectedTermId !== "__new__"
+              ? "term"
+              : "new";
+    const key =
+      kind === "request"
+        ? `request:${selectedRequestId || request?.id || ""}`
+        : kind === "studentWord"
+          ? `studentWord:${selectedStudentWordId || studentWord?.id || ""}`
+          : kind === "term"
+            ? `term:${selectedTermId}`
+            : kind;
+    const content = studentWord || term || requestTerm;
+    const draft: DictionaryEditorDraft = {
+      word: request?.word || studentWord?.word || term?.word || "",
+      definition: content?.definition || "",
+      relatedUnitId: studentWord
+        ? ""
+        : (term || requestTerm)?.relatedUnitId || "",
+      tags: [...(content?.tags || [])],
+      tagInput: "",
+    };
+    const missing =
+      kind === "request"
+        ? !request
+        : kind === "studentWord"
+          ? !studentWord
+          : kind === "term"
+            ? !term
+            : false;
+    const requestScope = request as
+      | (HistoryDictionaryRequest & { year?: unknown; semester?: unknown })
+      | null;
+    const signature = JSON.stringify({
+      draft,
+      request: request && [
+        request.id,
+        request.uid,
+        request.normalizedWord,
+        request.status,
+        request.matchedTermId,
+        request.resolvedTermId,
+        requestScope?.year,
+        requestScope?.semester,
+        getTimestampMs(request.updatedAt),
+      ],
+      term: (term || requestTerm) && [
+        (term || requestTerm)?.id,
+        (term || requestTerm)?.normalizedWord,
+        (term || requestTerm)?.status,
+        getTimestampMs((term || requestTerm)?.updatedAt),
+      ],
+      studentWord: studentWord && [
+        studentWord.id,
+        studentWord.uid,
+        studentWord.termId,
+        studentWord.requestId,
+        studentWord.year,
+        studentWord.semester,
+        studentWord.normalizedWord,
+        studentWord.status,
+        getTimestampMs(studentWord.updatedAt),
+      ],
+      missing,
+    });
+    return { key, kind, request, term, studentWord, draft, signature, missing };
+  }, [
+    activePanel,
+    selectedRequestId,
+    selectedTermId,
+    selectedStudentWordId,
+    mergedRequests,
+    openRequests,
+    terms,
+    studentWords,
+    visibleStudentWords,
+  ]);
+  const liveEditorSourceRef = useRef(liveEditorSource);
+  liveEditorSourceRef.current = liveEditorSource;
+  const selectedRequest = editorSource?.request || null;
+  const selectedTerm = editorSource?.term || null;
+  const selectedStudentWord = editorSource?.studentWord || null;
   const normalizedEditorWord = normalizeHistoryDictionaryWord(word);
   const matchingTerm = useMemo(() => {
     const target = selectedRequest?.normalizedWord || normalizedEditorWord;
@@ -655,42 +869,166 @@ const ManageHistoryDictionary: React.FC = () => {
     [uploadRows],
   );
 
+  const applyEditorSource = (source: DictionaryEditorSource) => {
+    const session = editorSessionRef.current;
+    if (session.targetKey !== source.key) session.deleted = false;
+    session.targetKey = source.key;
+    session.signature = source.signature;
+    session.source = source;
+    session.baseline = copyEditorDraft(source.draft);
+    session.draft = copyEditorDraft(source.draft);
+    session.changed = false;
+    session.acknowledged = null;
+    session.acknowledgedTarget = null;
+    session.optimisticStudentWord = null;
+    setEditorSource(source);
+    setEditorSourceChanged(false);
+    setWord(source.draft.word);
+    setDefinition(source.draft.definition);
+    setRelatedUnitId(source.draft.relatedUnitId);
+    setTags([...source.draft.tags]);
+    setTagInput(source.draft.tagInput);
+  };
+
   useEffect(() => {
-    if (!selectedRequest) return;
-    setSelectedRequestId(selectedRequest.id);
-    setSelectedTermId("");
-    setWord(selectedRequest.word);
-    const term = terms.find(
-      (item) =>
-        item.normalizedWord === selectedRequest.normalizedWord &&
-        item.status === "published",
+    const session = editorSessionRef.current;
+    if (!session.active) return;
+    if (session.targetKey !== liveEditorSource.key) {
+      applyEditorSource(liveEditorSource);
+    } else if (session.deleted) {
+      return;
+    } else if (liveEditorSource.missing) {
+      if (!session.source?.missing) {
+        session.changed = true;
+        setEditorSourceChanged(true);
+      }
+    } else if (
+      session.signature !== liveEditorSource.signature ||
+      (session.acknowledged &&
+        session.optimisticStudentWord &&
+        liveEditorSource.studentWord !== session.optimisticStudentWord)
+    ) {
+      const acknowledged = session.acknowledged;
+      const matchesAcknowledged =
+        acknowledged &&
+        session.source &&
+        (session.acknowledgedTarget || editorSourceTarget(session.source)) ===
+          editorSourceTarget(liveEditorSource) &&
+        equalEditorDraft(
+          { ...liveEditorSource.draft, tagInput: "" },
+          { ...acknowledged, tagInput: "" },
+        );
+      if (!session.saving && matchesAcknowledged) {
+        session.signature = liveEditorSource.signature;
+        session.source = liveEditorSource;
+        session.baseline = copyEditorDraft(liveEditorSource.draft);
+        if (
+          !session.optimisticStudentWord ||
+          liveEditorSource.studentWord !== session.optimisticStudentWord
+        ) {
+          session.acknowledged = null;
+          session.acknowledgedTarget = null;
+          session.optimisticStudentWord = null;
+        }
+        session.changed = false;
+        setEditorSource(liveEditorSource);
+        setEditorSourceChanged(false);
+      } else if (session.changed) {
+        return;
+      } else if (
+        session.saving ||
+        !equalEditorDraft(session.draft, session.baseline) ||
+        (session.source &&
+          !session.source.missing &&
+          editorSourceTarget(session.source) !==
+            editorSourceTarget(liveEditorSource)) ||
+        (session.source?.studentWord &&
+          liveEditorSource.studentWord &&
+          session.source.studentWord.status !==
+            liveEditorSource.studentWord.status)
+      ) {
+        session.changed = true;
+        setEditorSourceChanged(true);
+      } else {
+        applyEditorSource(liveEditorSource);
+      }
+    }
+    if (liveEditorSource.request && !selectedRequestId)
+      setSelectedRequestId(liveEditorSource.request.id);
+    if (liveEditorSource.studentWord && !selectedStudentWordId)
+      setSelectedStudentWordId(liveEditorSource.studentWord.id);
+  }, [liveEditorSource, editorRefresh]);
+
+  const editorMutationBlocked =
+    editorSourceChanged ||
+    !editorSource ||
+    editorSource.missing ||
+    (selectedRequest && !OPEN_REQUEST_STATUSES.has(selectedRequest.status));
+  const confirmEditorTransition = (nextKey?: string) => {
+    const session = editorSessionRef.current;
+    if (session.saving || importSessionRef.current.saving || busyMessage)
+      return false;
+    if (nextKey === session.targetKey) return true;
+    return (
+      equalEditorDraft(session.draft, session.baseline) ||
+      window.confirm("저장하지 않은 입력을 버리고 이동할까요?")
     );
-    setDefinition(term?.definition || "");
-    setRelatedUnitId(term?.relatedUnitId || "");
-    setTags(term?.tags || []);
-    setTagInput("");
-  }, [selectedRequest?.id, terms]);
+  };
+  const handleReloadEditor = () => {
+    const session = editorSessionRef.current;
+    if (
+      session.saving ||
+      busyMessage ||
+      liveEditorSource.missing ||
+      session.deleted
+    )
+      return;
+    if (
+      !equalEditorDraft(session.draft, session.baseline) &&
+      !window.confirm("작성 중인 입력을 버리고 최신 내용을 다시 불러올까요?")
+    )
+      return;
+    applyEditorSource(liveEditorSource);
+  };
 
+  const acceptedSearchRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!selectedTerm) return;
-    setWord(selectedTerm.word);
-    setDefinition(selectedTerm.definition || "");
-    setRelatedUnitId(selectedTerm.relatedUnitId || "");
-    setTags(selectedTerm.tags || []);
-    setTagInput("");
-  }, [selectedTerm]);
-
-  useEffect(() => {
-    if (!selectedStudentWord) return;
-    setSelectedStudentWordId(selectedStudentWord.id);
-    setWord(selectedStudentWord.word);
-    setDefinition(selectedStudentWord.definition || "");
-    setRelatedUnitId("");
-    setTags(selectedStudentWord.tags || []);
-    setTagInput("");
-  }, [selectedStudentWord]);
+    const nextSearch = searchParams.toString();
+    if (acceptedSearchRef.current === nextSearch) return;
+    const panel = searchParams.get("panel");
+    const requestId = searchParams.get("requestId");
+    const nextPanel: ActiveDictionaryPanel =
+      requestId || panel === "requests"
+        ? "requests"
+        : panel === "studentWords"
+          ? "studentWords"
+          : panel === "upload" && canWrite
+            ? "upload"
+            : "terms";
+    const nextKey = requestId
+      ? `request:${requestId}`
+      : nextPanel === activePanel
+        ? editorSessionRef.current.targetKey
+        : undefined;
+    if (
+      acceptedSearchRef.current !== null &&
+      !confirmEditorTransition(nextKey)
+    ) {
+      setSearchParams(new URLSearchParams(acceptedSearchRef.current), {
+        replace: true,
+      });
+      return;
+    }
+    acceptedSearchRef.current = nextSearch;
+    setActivePanel(nextPanel);
+    if (nextPanel !== "requests") setSelectedRequestId("");
+    if (nextPanel !== "terms") setSelectedTermId("");
+    if (nextPanel !== "studentWords") setSelectedStudentWordId("");
+    if (requestId) setSelectedRequestId(requestId);
+  }, [searchParams, canWrite]);
 
   const handleSelectRequest = (requestId: string) => {
+    if (!confirmEditorTransition(`request:${requestId}`)) return;
     setActivePanel("requests");
     setSelectedRequestId(requestId);
     setSelectedTermId("");
@@ -699,6 +1037,7 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleSelectTerm = (term: HistoryDictionaryTerm) => {
+    if (!confirmEditorTransition(`term:${term.id}`)) return;
     setActivePanel("terms");
     setSelectedTermId(term.id);
     setSelectedRequestId("");
@@ -707,6 +1046,7 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleSelectStudentWord = (item: StudentHistoryDictionaryWord) => {
+    if (!confirmEditorTransition(`studentWord:${item.id}`)) return;
     setActivePanel("studentWords");
     setSelectedStudentWordId(item.id);
     setSelectedRequestId("");
@@ -715,6 +1055,7 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleNewTerm = () => {
+    if (!canWrite || !confirmEditorTransition()) return;
     setActivePanel("terms");
     setSelectedRequestId("");
     setSelectedTermId("__new__");
@@ -725,6 +1066,17 @@ const ManageHistoryDictionary: React.FC = () => {
     setRelatedUnitId("");
     setTags([]);
     setTagInput("");
+    const draft = emptyEditorDraft();
+    applyEditorSource({
+      key: "new",
+      kind: "new",
+      request: null,
+      term: null,
+      studentWord: null,
+      draft,
+      signature: "new",
+      missing: false,
+    });
   };
 
   const handleAddTag = () => {
@@ -1097,35 +1449,155 @@ const ManageHistoryDictionary: React.FC = () => {
     }
   };
 
+  const beginEditorMutation = () => {
+    const session = editorSessionRef.current;
+    if (
+      !canWrite ||
+      !currentUser?.uid ||
+      !session.active ||
+      session.saving ||
+      importSessionRef.current.saving ||
+      busyMessage ||
+      session.changed ||
+      session.deleted ||
+      editorMutationBlocked ||
+      session.targetKey !== liveEditorSource.key ||
+      session.signature !== liveEditorSource.signature ||
+      !session.source
+    )
+      return null;
+    session.saving = true;
+    return {
+      session,
+      key: session.targetKey,
+      source: session.source,
+      draft: copyEditorDraft(session.draft),
+      scope: { ...scope },
+      ownerUid: currentUser.uid,
+    };
+  };
+  type EditorMutation = NonNullable<ReturnType<typeof beginEditorMutation>>;
+  const isCurrentEditorMutation = (operation: EditorMutation) =>
+    editorSessionRef.current === operation.session &&
+    operation.session.active &&
+    operation.session.targetKey === operation.key;
+  const finishEditorMutation = (operation: EditorMutation) => {
+    operation.session.saving = false;
+    if (isCurrentEditorMutation(operation)) {
+      setBusyMessage("");
+      setEditorRefresh((value) => value + 1);
+    }
+  };
+  const acknowledgeEditorSave = (
+    operation: EditorMutation,
+    studentOnly = false,
+    expectedSource = operation.source,
+  ) => {
+    const baseline = operation.session.baseline;
+    const saved = studentOnly
+      ? {
+          ...baseline,
+          word: operation.draft.word.trim(),
+          definition: operation.draft.definition.trim(),
+        }
+      : {
+          ...operation.draft,
+          word: operation.draft.word.trim(),
+          definition: operation.draft.definition.trim(),
+          tagInput: baseline.tagInput,
+        };
+    operation.session.baseline = copyEditorDraft(saved);
+    operation.session.acknowledged = copyEditorDraft(saved);
+    operation.session.acknowledgedTarget = editorSourceTarget(expectedSource);
+  };
+  const isOriginalStudentSourceCurrent = (operation: EditorMutation) => {
+    const currentSource = liveEditorSourceRef.current;
+    const targetWord = operation.source.studentWord;
+    const currentWord = studentWordsRef.current.find(
+      (item) => item.id === targetWord?.id,
+    );
+    return Boolean(
+      !operation.session.changed &&
+      !currentSource.missing &&
+      currentSource.signature === operation.source.signature &&
+      editorSourceTarget(currentSource) ===
+        editorSourceTarget(operation.source) &&
+      currentWord &&
+      targetWord &&
+      dictionaryRecordSnapshot(currentWord) ===
+        dictionaryRecordSnapshot(targetWord),
+    );
+  };
+  const isOriginalRequestSourceCurrent = (operation: EditorMutation) => {
+    const currentSource = liveEditorSourceRef.current;
+    const originalRequest = operation.source.request;
+    const currentRequest = mergeRequestSources(
+      requestsRef.current,
+      notificationRequestsRef.current,
+    ).find((item) => item.id === originalRequest?.id);
+    return Boolean(
+      !operation.session.changed &&
+      !currentSource.missing &&
+      currentSource.signature === operation.source.signature &&
+      editorSourceTarget(currentSource) ===
+        editorSourceTarget(operation.source) &&
+      originalRequest &&
+      currentRequest &&
+      dictionaryRecordSnapshot(originalRequest) ===
+        dictionaryRecordSnapshot(currentRequest),
+    );
+  };
+  const markEditorDeleted = (
+    operation: EditorMutation,
+    originalSourceUnchanged: boolean,
+  ) => {
+    operation.session.deleted = originalSourceUnchanged;
+    operation.session.changed = true;
+    operation.session.acknowledged = null;
+    operation.session.acknowledgedTarget = null;
+    operation.session.optimisticStudentWord = null;
+    setEditorSourceChanged(true);
+  };
+
   const handleSaveTerm = async () => {
-    if (!word.trim() || definition.trim().length < 5 || busyMessage) return;
+    if (!word.trim() || definition.trim().length < 5) return;
+    const operation = beginEditorMutation();
+    if (!operation) return;
+    const targetRequest = operation.source.request;
     setBusyMessage(
       "역사 사전 풀이를 저장하고 요청 학생에게 배포하는 중입니다.",
     );
     try {
-      await saveHistoryDictionaryTerm(config, {
-        word,
-        definition,
-        studentLevel: DEFAULT_STUDENT_LEVEL,
-        relatedUnitId,
-        tags,
-        fallbackRequestId:
-          selectedRequest &&
-          !requests.some((item) => item.id === selectedRequest.id)
-            ? selectedRequest.id
-            : undefined,
-        fallbackUid:
-          selectedRequest &&
-          !requests.some((item) => item.id === selectedRequest.id)
-            ? selectedRequest.uid
-            : undefined,
-      });
+      await saveHistoryDictionaryTerm(
+        operation.scope,
+        {
+          word: operation.draft.word,
+          definition: operation.draft.definition,
+          studentLevel: DEFAULT_STUDENT_LEVEL,
+          relatedUnitId: operation.draft.relatedUnitId,
+          tags: operation.draft.tags,
+          fallbackRequestId:
+            targetRequest &&
+            !requests.some((item) => item.id === targetRequest.id)
+              ? targetRequest.id
+              : undefined,
+          fallbackUid:
+            targetRequest &&
+            !requests.some((item) => item.id === targetRequest.id)
+              ? targetRequest.uid
+              : undefined,
+        },
+        operation.ownerUid,
+      );
+      if (!isCurrentEditorMutation(operation)) return;
+      acknowledgeEditorSave(operation);
       showToast({
         tone: "success",
         title: "역사 사전에 등록했습니다.",
         message: "같은 단어를 요청한 학생 단어장에 반영했습니다.",
       });
     } catch (error) {
+      if (!isCurrentEditorMutation(operation)) return;
       console.error("Failed to save history dictionary term:", error);
       showToast({
         tone: "error",
@@ -1133,7 +1605,7 @@ const ManageHistoryDictionary: React.FC = () => {
         message: "입력 내용을 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setBusyMessage("");
+      finishEditorMutation(operation);
     }
   };
 
@@ -1147,34 +1619,92 @@ const ManageHistoryDictionary: React.FC = () => {
     ) {
       return;
     }
+    const operation = beginEditorMutation();
+    if (!operation || !operation.source.studentWord) return;
+    const targetWord = operation.source.studentWord;
+    if (!targetWord.uid) {
+      finishEditorMutation(operation);
+      return;
+    }
     setBusyMessage("학생 등록 단어를 수정해 학생 단어장에 반영하는 중입니다.");
     try {
-      const result = await updateStudentHistoryDictionaryWordByTeacher(config, {
-        uid: selectedStudentWord.uid,
-        termId: selectedStudentWord.termId,
-        word,
-        definition,
-        year: selectedStudentWord.year,
-        semester: selectedStudentWord.semester,
-      });
-      const nextId = `${selectedStudentWord.uid}:${result.termId}`;
-      const now = {
-        toDate: () => new Date(),
-        toMillis: () => Date.now(),
+      const result = await updateStudentHistoryDictionaryWordByTeacher(
+        operation.scope,
+        {
+          uid: targetWord.uid,
+          termId: targetWord.termId,
+          word: operation.draft.word,
+          definition: operation.draft.definition,
+          year: targetWord.year,
+          semester: targetWord.semester,
+        },
+        operation.ownerUid,
+      );
+      if (!isCurrentEditorMutation(operation)) return;
+      const nextId = `${targetWord.uid}:${result.termId}`;
+      const savedSource: DictionaryEditorSource = {
+        ...operation.source,
+        key: `studentWord:${nextId}`,
+        studentWord: {
+          ...targetWord,
+          id: nextId,
+          termId: result.termId,
+          normalizedWord: normalizeHistoryDictionaryWord(operation.draft.word),
+          status: "saved",
+        },
       };
+      const currentWord = studentWordsRef.current.find(
+        (item) => item.id === targetWord.id,
+      );
+      const canMergeSavedWord =
+        isOriginalStudentSourceCurrent(operation) &&
+        currentWord &&
+        (nextId === targetWord.id ||
+          !studentWordsRef.current.some((item) => item.id === nextId));
+      acknowledgeEditorSave(operation, true, savedSource);
+      if (!canMergeSavedWord) {
+        operation.session.changed = true;
+        setEditorSourceChanged(true);
+        showToast({
+          tone: "success",
+          title: "학생 등록 단어 수정 요청을 완료했습니다.",
+          message:
+            "목록이 변경되어 입력을 유지했습니다. 최신 내용을 다시 확인해 주세요.",
+        });
+        return;
+      }
+      const savedAt = Date.now();
+      const now = {
+        toDate: () => new Date(savedAt),
+        toMillis: () => savedAt,
+      };
+      const updatedWord: StudentHistoryDictionaryWord = {
+        ...currentWord,
+        id: nextId,
+        termId: result.termId,
+        word: operation.draft.word.trim(),
+        normalizedWord: normalizeHistoryDictionaryWord(operation.draft.word),
+        definition: operation.draft.definition.trim(),
+        definitionSource: "teacher_reviewed",
+        status: "saved",
+        updatedAt: now,
+      };
+      operation.session.optimisticStudentWord = updatedWord;
+      if (nextId !== targetWord.id) {
+        operation.key = `studentWord:${nextId}`;
+        operation.session.targetKey = operation.key;
+        const nextSource = {
+          ...operation.source,
+          key: operation.key,
+          studentWord: updatedWord,
+        };
+        operation.session.source = nextSource;
+        setEditorSource(nextSource);
+      }
       setStudentWords((prev) =>
         prev
-          .filter((item) => item.id !== selectedStudentWord.id)
-          .concat({
-            ...selectedStudentWord,
-            id: nextId,
-            termId: result.termId,
-            word: word.trim(),
-            normalizedWord: normalizeHistoryDictionaryWord(word),
-            definition: definition.trim(),
-            definitionSource: "teacher_reviewed",
-            updatedAt: now,
-          })
+          .filter((item) => item.id !== targetWord.id)
+          .concat(updatedWord)
           .sort(
             (a, b) =>
               getTimestampMs(b.updatedAt || b.createdAt) -
@@ -1188,6 +1718,7 @@ const ManageHistoryDictionary: React.FC = () => {
         message: "학생 단어장에 교사 확인 내용이 반영되었습니다.",
       });
     } catch (error) {
+      if (!isCurrentEditorMutation(operation)) return;
       console.error("Failed to update student history dictionary word:", error);
       showToast({
         tone: "error",
@@ -1195,18 +1726,26 @@ const ManageHistoryDictionary: React.FC = () => {
         message: "단어 중복 여부와 입력 내용을 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setBusyMessage("");
+      finishEditorMutation(operation);
     }
   };
 
   const handleApproveExisting = async (requestId?: string) => {
     if (!matchingTerm || busyMessage) return;
+    const operation = beginEditorMutation();
+    if (!operation) return;
+    const targetTermId = matchingTerm.id;
     setBusyMessage("기존 뜻풀이를 승인하고 학생 단어장에 반영하는 중입니다.");
     try {
-      await approveHistoryDictionaryTermForRequests(config, {
-        termId: matchingTerm.id,
-        requestId,
-      });
+      await approveHistoryDictionaryTermForRequests(
+        operation.scope,
+        {
+          termId: targetTermId,
+          requestId,
+        },
+        operation.ownerUid,
+      );
+      if (!isCurrentEditorMutation(operation)) return;
       showToast({
         tone: "success",
         title: "뜻풀이를 승인했습니다.",
@@ -1215,6 +1754,7 @@ const ManageHistoryDictionary: React.FC = () => {
           : "같은 단어의 대기 요청을 함께 처리했습니다.",
       });
     } catch (error) {
+      if (!isCurrentEditorMutation(operation)) return;
       console.error("Failed to approve history dictionary term:", error);
       showToast({
         tone: "error",
@@ -1222,7 +1762,7 @@ const ManageHistoryDictionary: React.FC = () => {
         message: "잠시 후 다시 시도해 주세요.",
       });
     } finally {
-      setBusyMessage("");
+      finishEditorMutation(operation);
     }
   };
 
@@ -1232,30 +1772,37 @@ const ManageHistoryDictionary: React.FC = () => {
       `"${selectedRequest.word}" 요청 단어를 삭제할까요?\n부적절하거나 내용이 부족한 단어라면 학생 단어장에서 삭제되고, 지급된 역사 사전 위스가 있으면 함께 회수됩니다.`,
     );
     if (!confirmed) return;
+    const operation = beginEditorMutation();
+    if (!operation || !operation.source.request) return;
+    const targetRequest = operation.source.request;
     setBusyMessage("요청 단어를 삭제하고 지급된 위스를 확인하는 중입니다.");
     try {
-      const result = await deleteStudentHistoryDictionaryWordByTeacher(config, {
-        uid: selectedRequest.uid,
-        requestId: selectedRequest.id,
-        termId: selectedRequest.matchedTermId || selectedRequest.resolvedTermId,
-        word: selectedRequest.word,
-        normalizedWord: selectedRequest.normalizedWord,
-        reason: "teacher_rejected_history_dictionary_word",
-      });
+      const result = await deleteStudentHistoryDictionaryWordByTeacher(
+        operation.scope,
+        {
+          uid: targetRequest.uid,
+          requestId: targetRequest.id,
+          termId: targetRequest.matchedTermId || targetRequest.resolvedTermId,
+          word: targetRequest.word,
+          normalizedWord: targetRequest.normalizedWord,
+          reason: "teacher_rejected_history_dictionary_word",
+        },
+        operation.ownerUid,
+      );
+      if (!isCurrentEditorMutation(operation)) return;
+      const originalSourceUnchanged = isOriginalRequestSourceCurrent(operation);
+      markEditorDeleted(operation, originalSourceUnchanged);
       showToast({
         tone: "success",
         title: "요청 단어를 삭제했습니다.",
-        message: result.reward?.reclaimed
-          ? `지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
-          : "요청을 반려하고 학생 단어장 항목을 정리했습니다.",
+        message: !originalSourceUnchanged
+          ? "삭제 요청은 완료했습니다. 목록이 변경되어 입력을 유지했습니다. 최신 내용을 확인해 주세요."
+          : result.reward?.reclaimed
+            ? `지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
+            : "요청을 반려하고 학생 단어장 항목을 정리했습니다.",
       });
-      setSelectedRequestId("");
-      setWord("");
-      setDefinition("");
-      setRelatedUnitId("");
-      setTags([]);
-      setTagInput("");
     } catch (error) {
+      if (!isCurrentEditorMutation(operation)) return;
       console.error("Failed to reject history dictionary request:", error);
       showToast({
         tone: "error",
@@ -1263,7 +1810,7 @@ const ManageHistoryDictionary: React.FC = () => {
         message: "잠시 후 다시 시도해 주세요.",
       });
     } finally {
-      setBusyMessage("");
+      finishEditorMutation(operation);
     }
   };
 
@@ -1279,37 +1826,50 @@ const ManageHistoryDictionary: React.FC = () => {
       `"${selectedStudentWord.word}" 학생 등록 단어를 삭제할까요?\n내용이 부족하거나 부적절한 단어라면 학생 단어장에서 삭제되고, 지급된 역사 사전 위스가 있으면 함께 회수됩니다.`,
     );
     if (!confirmed) return;
+    const operation = beginEditorMutation();
+    if (!operation || !operation.source.studentWord) return;
+    const targetWord = operation.source.studentWord;
+    if (!targetWord.uid) {
+      finishEditorMutation(operation);
+      return;
+    }
     setBusyMessage(
       "학생 등록 단어를 삭제하고 지급된 위스를 확인하는 중입니다.",
     );
     try {
-      const result = await deleteStudentHistoryDictionaryWordByTeacher(config, {
-        uid: selectedStudentWord.uid,
-        requestId: selectedStudentWord.requestId,
-        termId: selectedStudentWord.termId,
-        word: selectedStudentWord.word,
-        normalizedWord: selectedStudentWord.normalizedWord,
-        reason: "teacher_deleted_insufficient_history_dictionary_word",
-        year: selectedStudentWord.year,
-        semester: selectedStudentWord.semester,
-      });
-      setStudentWords((prev) =>
-        prev.filter((item) => item.id !== selectedStudentWord.id),
+      const result = await deleteStudentHistoryDictionaryWordByTeacher(
+        operation.scope,
+        {
+          uid: targetWord.uid,
+          requestId: targetWord.requestId,
+          termId: targetWord.termId,
+          word: targetWord.word,
+          normalizedWord: targetWord.normalizedWord,
+          reason: "teacher_deleted_insufficient_history_dictionary_word",
+          year: targetWord.year,
+          semester: targetWord.semester,
+        },
+        operation.ownerUid,
       );
-      setSelectedStudentWordId("");
-      setWord("");
-      setDefinition("");
-      setRelatedUnitId("");
-      setTags([]);
-      setTagInput("");
+      if (!isCurrentEditorMutation(operation)) return;
+      const originalSourceUnchanged = isOriginalStudentSourceCurrent(operation);
+      markEditorDeleted(operation, originalSourceUnchanged);
+      if (originalSourceUnchanged) {
+        setStudentWords((prev) =>
+          prev.filter((item) => item.id !== targetWord.id),
+        );
+      }
       showToast({
         tone: "success",
         title: "학생 등록 단어를 삭제했습니다.",
-        message: result.reward?.reclaimed
-          ? `지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
-          : "학생 단어장에서 항목을 삭제했습니다.",
+        message: !originalSourceUnchanged
+          ? "삭제 요청은 완료했습니다. 목록이 변경되어 입력을 유지했습니다. 최신 내용을 확인해 주세요."
+          : result.reward?.reclaimed
+            ? `지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
+            : "학생 단어장에서 항목을 삭제했습니다.",
       });
     } catch (error) {
+      if (!isCurrentEditorMutation(operation)) return;
       console.error("Failed to delete student history dictionary word:", error);
       showToast({
         tone: "error",
@@ -1317,7 +1877,7 @@ const ManageHistoryDictionary: React.FC = () => {
         message: "권한 또는 위스 회수 상태를 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setBusyMessage("");
+      finishEditorMutation(operation);
     }
   };
 
@@ -1382,7 +1942,13 @@ const ManageHistoryDictionary: React.FC = () => {
                     <button
                       key={item.id}
                       type="button"
+                      disabled={Boolean(busyMessage)}
                       onClick={() => {
+                        if (
+                          activePanel === item.id ||
+                          !confirmEditorTransition()
+                        )
+                          return;
                         setActivePanel(item.id);
                         if (item.id === "terms") {
                           setSelectedRequestId("");
@@ -1440,7 +2006,7 @@ const ManageHistoryDictionary: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleNewTerm}
-                  disabled={!canWrite}
+                  disabled={!canWrite || Boolean(busyMessage)}
                   className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 text-xs font-extrabold text-blue-700 transition hover:bg-blue-100"
                 >
                   <i className="fas fa-plus text-[11px]" aria-hidden="true"></i>
@@ -1527,6 +2093,7 @@ const ManageHistoryDictionary: React.FC = () => {
                                   key={item.id}
                                   type="button"
                                   onClick={() => handleSelectTerm(item)}
+                                  disabled={Boolean(busyMessage)}
                                   className={`block w-full rounded-lg border px-3 py-3 text-left transition ${
                                     active
                                       ? "border-blue-500 bg-blue-50 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
@@ -1681,6 +2248,7 @@ const ManageHistoryDictionary: React.FC = () => {
                                   key={item.id}
                                   type="button"
                                   onClick={() => handleSelectStudentWord(item)}
+                                  disabled={Boolean(busyMessage)}
                                   className={`block w-full rounded-lg border px-3 py-3 text-left transition ${
                                     active
                                       ? "border-blue-500 bg-blue-50 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
@@ -1770,6 +2338,7 @@ const ManageHistoryDictionary: React.FC = () => {
                         key={item.id}
                         type="button"
                         onClick={() => handleSelectRequest(item.id)}
+                        disabled={Boolean(busyMessage)}
                         className={`block w-full rounded-lg border px-3 py-3 text-left transition ${
                           active
                             ? "border-blue-500 bg-blue-50 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
@@ -1910,7 +2479,12 @@ const ManageHistoryDictionary: React.FC = () => {
           )}
 
           <fieldset
-            disabled={!canWrite}
+            disabled={
+              !canWrite ||
+              Boolean(busyMessage) ||
+              (activePanel !== "upload" &&
+                (!editorSource || editorSource.missing))
+            }
             className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm disabled:opacity-75 lg:p-7"
           >
             {activePanel === "upload" ? (
@@ -2142,6 +2716,35 @@ const ManageHistoryDictionary: React.FC = () => {
               </>
             ) : (
               <>
+                {(editorSourceChanged ||
+                  editorSource?.missing ||
+                  (selectedRequest &&
+                    !OPEN_REQUEST_STATUSES.has(selectedRequest.status))) && (
+                  <StatePanel
+                    state="STALE"
+                    title={
+                      liveEditorSource.missing ||
+                      editorSessionRef.current.deleted
+                        ? "선택한 항목을 목록에서 확인할 수 없습니다."
+                        : selectedRequest &&
+                            !OPEN_REQUEST_STATUSES.has(selectedRequest.status)
+                          ? "이미 처리된 요청입니다."
+                          : "목록의 내용이 변경되었습니다."
+                    }
+                    description="입력은 유지했습니다. 현재 항목에 저장·승인·삭제할 수 없습니다."
+                    action={
+                      !liveEditorSource.missing &&
+                      !editorSessionRef.current.deleted
+                        ? {
+                            label: "최신 내용 다시 불러오기",
+                            onClick: handleReloadEditor,
+                          }
+                        : undefined
+                    }
+                    compact
+                    className="mb-4"
+                  />
+                )}
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -2210,7 +2813,10 @@ const ManageHistoryDictionary: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => void handleDeleteStudentWord()}
-                          disabled={Boolean(busyMessage)}
+                          disabled={
+                            Boolean(busyMessage) ||
+                            Boolean(editorMutationBlocked)
+                          }
                           className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-rose-100 bg-white px-3 text-xs font-extrabold text-rose-600 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <i
@@ -2222,7 +2828,7 @@ const ManageHistoryDictionary: React.FC = () => {
                       </div>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-emerald-900">
-                      학생 단어장에만 반영됩니다. 공식 역사 사전 등록 단어는
+                      단어와 풀이만 학생 단어장에 반영됩니다. 공식 역사 사전은
                       바뀌지 않습니다.
                     </p>
                   </section>
@@ -2248,7 +2854,10 @@ const ManageHistoryDictionary: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => void handleRejectRequestWord()}
-                          disabled={Boolean(busyMessage)}
+                          disabled={
+                            Boolean(busyMessage) ||
+                            Boolean(editorMutationBlocked)
+                          }
                           className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-rose-100 bg-white px-3 text-xs font-extrabold text-rose-600 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <i
@@ -2289,7 +2898,10 @@ const ManageHistoryDictionary: React.FC = () => {
                             onClick={() =>
                               void handleApproveExisting(selectedRequest.id)
                             }
-                            disabled={Boolean(busyMessage)}
+                            disabled={
+                              Boolean(busyMessage) ||
+                              Boolean(editorMutationBlocked)
+                            }
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <i className="fas fa-check text-[11px]"></i>이
@@ -2298,7 +2910,10 @@ const ManageHistoryDictionary: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => void handleApproveExisting()}
-                            disabled={Boolean(busyMessage)}
+                            disabled={
+                              Boolean(busyMessage) ||
+                              Boolean(editorMutationBlocked)
+                            }
                             className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-100 bg-white px-3 py-2 text-xs font-extrabold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             같은 단어 모두 승인
@@ -2465,7 +3080,9 @@ const ManageHistoryDictionary: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void handleApproveExisting()}
-                      disabled={Boolean(busyMessage)}
+                      disabled={
+                        Boolean(busyMessage) || Boolean(editorMutationBlocked)
+                      }
                       className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-5 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     >
                       <i
@@ -2484,6 +3101,7 @@ const ManageHistoryDictionary: React.FC = () => {
                     }
                     disabled={
                       Boolean(busyMessage) ||
+                      Boolean(editorMutationBlocked) ||
                       !word.trim() ||
                       definition.trim().length < (selectedStudentWord ? 2 : 5)
                     }
@@ -2507,6 +3125,15 @@ const ManageHistoryDictionary: React.FC = () => {
       {busyMessage && <LoadingOverlay message={busyMessage} />}
     </div>
   );
+};
+
+const ManageHistoryDictionary: React.FC = () => {
+  const { config, currentUser, userData } = useAuth();
+  const scope = getYearSemester(config);
+  const canRead = canReadLessonManagement(userData, currentUser?.email || "");
+  const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
+  const context = `${currentUser?.uid || ""}/${scope.year}/${scope.semester}/${canRead}/${canWrite}`;
+  return <ManageHistoryDictionaryContent key={context} />;
 };
 
 export default ManageHistoryDictionary;
