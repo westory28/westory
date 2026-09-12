@@ -244,7 +244,8 @@ const mapLedgerType = (entry: WisLedgerEntry): PointTransactionType => {
     return "history_dictionary";
   if (
     entry.type === "GRANT" &&
-    (entry.activityType === "quiz" ||
+    (entry.activityType === "map_tag" ||
+      entry.activityType === "quiz" ||
       entry.activityType === "quiz_bonus" ||
       entry.activityType === "history_classroom" ||
       entry.activityType === "history_classroom_bonus")
