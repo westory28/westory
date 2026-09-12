@@ -961,7 +961,10 @@ const main = async () => {
       sourceSnapshotBeforeArchive,
     );
     await verifyArchiveTeacherPrivacy("ARCHIVED");
-    assert.equal(archivePrivacyReadCount, 12);
+    assert.equal(archivePrivacyReadCount, 8);
+    assert.equal(archivedLearningDirectCallDenials, 4);
+    assert.equal(delegatedArchivedLearningDenials, 2);
+    assert.equal(delegatedLearningPreservationCases, 1);
     assert.deepEqual([...archiveLifecycleStatusesVerified].sort(), [
       "ARCHIVED",
       "CLOSED",
