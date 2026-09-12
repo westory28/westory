@@ -155,3 +155,10 @@ Staging 후보 확인과 Production 적용 완료는 구분한다. 이 시점의
 - 최종 판정: `C:/westory-w10p-provenance-runtime/batch11-final-release.json`. 지도 지급/재전송 근거는 `b3ui-mtxsp048-0a266945b6b3de96-batch11-map-qa.json`, 최종 화면은 `batch11-final-wallet.png`와 `batch11-final-wallet-dom.txt`다. 초기 실패·보정·재검증 기록도 같은 runtime 폴더에 남긴다.
 
 고정 가중치 진행률은 **75 → 79 / 100 XP**다. 지도 보상 2 XP와 타입 오류 해소 2 XP를 반영했다. 공식 휴일 API 1 XP, 운영 읽기 점검 5 XP, 실자료·백업·복원 7 XP, 운영 적용·최종 확인 8 XP가 남는다. 공식 휴일 API는 Firebase Hosting 서버 연결이 없으며, 확인한 Staging 함수 설정에도 관련 키 참조가 없었다. 자동 생성 달력과 공식 최신 휴일 조회 성공은 구분한다. 다음 단계는 기존 A/B/C 승인 경계에 따른 **A 운영 읽기 전용 사전 확인**이다.
+
+## 2026-09-12 추가 수정 — 공휴일 토요일 날짜 색상
+
+- 소스 `25d3af98bbe3416b60efce0677460fb7e5f397da`. 토요일 파란색 선택자 5곳에 `:not(.fc-day-holiday)`를 적용했습니다. 학생 달력·학생/교사 대시보드의 공유 스타일과 교사 일정 화면에 동일한 우선순위를 적용합니다.
+- 빌드 및 변경 TSX 포맷 검사 통과. 독립 빌드 2회/정적 133개 일치, Staging 원격 134건 대조 불일치 0. 배포 근거: `C:/westory-w10p-provenance-runtime/firebase-candidate-25d3af9/remote-receipt.json`.
+- westoria28 Chrome 교사 대시보드(1920px)에서 수정 전 공휴일 토요일이 파란색인 것을 재현했습니다. 새 배포 및 재로그인 후 9월 26일·10월 3일은 `rgb(239, 68, 68)`, 일반 토요일 9월 5일·12일·19일은 `rgb(59, 130, 246)`으로 확인했습니다. 학생 계정 및 다른 폭의 화면은 이번 소규모 수정에서 별도로 재검증하지 않았습니다.
+- 공휴일 데이터/API 및 서버·Rules 변경 없음. Production 접근·배포 0. 기존 79 XP와 A/B/C 승인 경계 유지.

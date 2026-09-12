@@ -6,7 +6,7 @@
 
 - 구현 checkout: `C:/westory-w10p`, 기능 브랜치 `codex/phase6-w10p-presentation-freeze`. 원본 `C:/westory`와 main은 변경하지 않습니다.
 - 검증 대상: `westory-staging-177587430482`, Hosting `https://westory-staging-177587430482.firebaseapp.com`.
-- 최신 Staging 화면 소스는 `899f2bfe832e00bafe7c46835844e114c4b1c072`, Hosting version `90e2ed7143e2e40c`, release `1789183358499000`입니다. 독립 빌드 2회/정적 133개 일치, 최종 원격 파일·루트 134건 불일치 0입니다. executeCommand는 `d62b68c`, getWisEconomyState는 `41b9e4d`이며 다른 함수와 Rules는 기존 배포를 유지합니다. 기존 평가 검증과 새 지도 보상·타입 오류 0·최종 거래 내역 근거는 [통합 작업 기록](../w19-integrated-release-work.md)의 Batch11에 연결했습니다. 이후 문서 HEAD를 앱 배포 소스로 오인하지 않습니다.
+- 최신 Staging 화면 소스는 `25d3af98bbe3416b60efce0677460fb7e5f397da`, Hosting version `730ebb62f3f69666`, release `1789184540350000`입니다. 독립 빌드 2회/정적 133개 일치, 최종 원격 파일·루트 134건 불일치 0입니다. Batch11 이후 공휴일 토요일 날짜를 빨간색으로 표시하는 스타일 수정만 추가했습니다. executeCommand는 `d62b68c`, getWisEconomyState는 `41b9e4d`이며 다른 함수와 Rules는 기존 배포를 유지합니다. 기존 평가 검증과 새 지도 보상·타입 오류 0·최종 거래 내역 근거는 [통합 작업 기록](../w19-integrated-release-work.md)의 Batch11에 연결했습니다. 이후 문서 HEAD를 앱 배포 소스로 오인하지 않습니다.
 - 사용자가 요구한 기존 화면 구조와 기능을 유지합니다. 상단 메인 메뉴·떠 있는 왼쪽 보조 메뉴·중앙 로딩 표시, 빈칸 저장·정오답 효과·각주·링크·핵심포인트 보상은 출시 범위입니다. 교사용 수업 제시 화면과 판서는 제거 상태를 유지합니다.
 - 운영의 현재 Hosting 서비스, 활성 학기, maintenance, 배포 revision, 자료 수량은 이번 실행에서 조회하지 않았습니다. 과거 문서의 값은 현재값으로 사용하지 않습니다.
 - 이 준비안의 인계 상태는 **Production 접근·실행 0**입니다. 운영 조회·백업·이전·배포·알림·복구 성공 증거는 없으며, Staging 성공만 인계합니다. 아래 승인이 실제로 내려지기 전까지 이 상태를 유지합니다.
