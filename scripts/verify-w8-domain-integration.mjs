@@ -1113,18 +1113,23 @@ const main = async () => {
       }),
       "W8_STUDENT_SCOPE_FORBIDDEN",
     );
-    const legacy = (
-      await queryW8(student, {
-        domain: "LEARNING",
-        audience: "student",
-        semesterId,
-        source: "LEGACY",
-      })
-    ).data;
-    assert.equal(legacy.writeCount, 0);
-    assert.equal(legacy.readOnly, true);
-    assert.equal(legacy.provenance, "LEGACY");
-    assert.equal(legacy.contents.length, 0);
+    const beforeStudentScopeDenials = await businessCounts(testEnv);
+    let studentSemesterQueryDenials = 0;
+    for (const domain of ["LEARNING", "SCHEDULE", "ATTENDANCE", "COMMUNICATION", "DASHBOARD"]) {
+      for (const scope of [
+        { source: "LEGACY", semesterId },
+        { source: "ARCHIVE", semesterId: archiveSemesterId },
+        { source: "EXPLICIT", semesterId: archiveSemesterId },
+        { source: "CURRENT", semesterId: archiveSemesterId },
+      ]) {
+        await expectReason(
+          queryW8(student, { domain, audience: "student", ...scope }),
+          "W8_STUDENT_CURRENT_SEMESTER_REQUIRED",
+        );
+        studentSemesterQueryDenials += 1;
+      }
+    }
+    assert.deepEqual(await businessCounts(testEnv), beforeStudentScopeDenials);
     const archive = (
       await queryW8(teacher, {
         domain: "DASHBOARD",
@@ -1198,6 +1203,7 @@ const main = async () => {
         thinkCloudDelegatedReadMode: "ALL_READ_ONLY",
         archiveWrites: 0,
         legacySilentFallback: 0,
+        studentSemesterQueryDenials,
         queryWrites: 0,
         productionAccess: 0,
       }),
