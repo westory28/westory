@@ -1,4 +1,5 @@
 const { HttpsError } = require("firebase-functions/v2/https");
+const { createHash } = require("node:crypto");
 const semester = require("./semesterCore");
 const archive = require("./archiveEnrollment");
 const migrationFence = require("./wisMigrationFence");
@@ -76,7 +77,11 @@ const createAdapter = ({ wis, writeProjection, ledgerIdFor, loadPolicy }) => ({
       status, awarded: false, duplicate: status === "DUPLICATE" || status === "NOT_ELIGIBLE",
       amount: 0, totalAwarded: 0, balance: account.balance, blockedReason: reason, blockedMessage: message, ...extra,
     });
-    const done = result => ({ target: { kind: "map-tag-reward", id: ledgerId, refs: [accountPath, ledgerPath] }, result });
+    const sourceHash = createHash("sha256").update(JSON.stringify({
+      semesterId: scope, mapId: payload.mapId, tag: payload.tag,
+      contentRevision: resource.data.contentRevision ?? 0, tags: [...new Set(tags)].sort(),
+    })).digest("hex");
+    const done = result => ({ target: { kind: "map-tag-reward", id: ledgerId, refs: [accountPath, ledgerPath] }, sourceHash, result });
     if (prior.exists) {
       const data = prior.data || {};
       if (data.accountId !== accountId || data.studentUid !== uid || data.semesterId !== scope || data.sourceId !== sourceId ||

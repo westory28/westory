@@ -23,6 +23,11 @@ const policyRuntime = vm.runInNewContext(declarations.join("\n") + "\n({loadPoli
   getPointPolicyPath: (year, term) => "years/" + year + "/semesters/" + term + "/point_policies/current",
 });
 const clone = value => structuredClone(value);
+const assertFirestoreValue = (value, path = "document") => {
+  assert.notEqual(value, undefined, "Undefined Firestore value: " + path);
+  if (value && typeof value === "object")
+    for (const [key, child] of Object.entries(value)) assertFirestoreValue(child, path + "." + key);
+};
 class Store {
   constructor(seed) { this.documents = new Map(Object.entries(clone(seed))); this.queue = Promise.resolve(); this.failCreate = ""; }
   snapshot(path, docs = this.documents) { return { path, exists: docs.has(path), data: docs.has(path) ? clone(docs.get(path)) : null }; }
@@ -38,8 +43,8 @@ class Store {
         return [...docs.keys()].filter(path => path.startsWith(collection + "/") && !path.slice(collection.length + 1).includes("/"))
           .map(read).filter(row => clauses.every(c => row.data[c.field] === c.value)).slice(0, filter.limit || Infinity);
       },
-      create: (path, value) => { writes = true; if (path === this.failCreate) throw Error("injected atomic abort"); assert(!docs.has(path)); docs.set(path, clone(value)); },
-      set: (path, value, options) => { writes = true; docs.set(path, options?.merge ? { ...docs.get(path), ...clone(value) } : clone(value)); },
+      create: (path, value) => { assertFirestoreValue(value, path); writes = true; if (path === this.failCreate) throw Error("injected atomic abort"); assert(!docs.has(path)); docs.set(path, clone(value)); },
+      set: (path, value, options) => { assertFirestoreValue(value, path); writes = true; docs.set(path, options?.merge ? { ...docs.get(path), ...clone(value) } : clone(value)); },
       delete: path => { writes = true; docs.delete(path); },
     };
     try { const result = await run(transaction); this.documents = docs; return result; } finally { release(); }
@@ -71,7 +76,7 @@ function harness() {
   }, ...scope.split("-")) });
   const core = gateway.createCommandGatewayCore({ store, projectId: "demo-map-wis", serverTimestamp: timestamp, concreteTimestamp: timestamp,
     assertSession: async request => ({ uid: request.auth.uid, email: "student@example.test", sessionId: "session-one", schemaVersion: 2, revision: 1, expiresAtMs: nowMs + 3600000 }),
-    authorizeCommand: async ({ request }) => ({ actorUid: request.auth.uid, actorRole: request.auth.uid === "teacher-one" ? "teacher" : "student", actorCapability: "test" }),
+    authorizeCommand: async ({ request }) => ({ actorUid: request.auth.uid, actorEmail: "student@example.test", actorRole: request.auth.uid === "teacher-one" ? "teacher" : "student", actorCapability: "test" }),
     commandAdapters: { claimMapTagReward: adapter } });
   const payload = () => ({ semesterId: scope, mapId: "map_one", tag: "고구려", interactionId: randomUUID() });
   const claim = (data = payload(), commandId = randomUUID(), actorUid = uid) =>
@@ -93,6 +98,8 @@ async function rejected(h, fn) { const before = JSON.stringify([...h.store.docum
       assert.equal(h.store.documents.get(collection + "/" + accountId).balance, 10);
     assert.equal(h.store.documents.get(economyPath).ledgerEntryCount, 1);
     assert.equal(h.ledger()[0].activityType, "map_tag");
+    const receipts = [...h.store.documents].filter(([path]) => path.startsWith("command_receipts/"));
+    assert.equal(receipts.length, 1); assert.match(receipts[0][1].sourceHash, /^[a-f0-9]{64}$/);
   });
   await test("receipt replay and same interaction with new command never repay", async () => {
     const h = harness(), payload = h.payload(), command = randomUUID(); await h.claim(payload, command);
