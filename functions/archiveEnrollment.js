@@ -919,7 +919,7 @@ const validateRoster = async ({ reader, payload }) => {
   const orphanStudentCount = userDocuments.filter(
     (document) =>
       !document.exists ||
-      String(document.data?.role || "student") === "teacher",
+      document.data?.role !== "student",
   ).length;
   const orphanTeacherCount = teacherDocuments.filter(
     (document) =>

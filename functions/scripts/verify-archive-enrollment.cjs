@@ -300,8 +300,42 @@ const main = async () => {
   const writesBeforePreview = store.writeCount;
   const preview = await queries.previewEnrollmentRoster(queryRequest(roster));
   assert.equal(preview.passed, true);
+  assert.equal(preview.summary.orphanStudentCount, 0);
   assert.equal(preview.summary.orphanTeacherCount, 0);
   assert.equal(store.writeCount, writesBeforePreview);
+  // A valid administrator/receipt does not make a non-student roster entry
+  // valid. Recheck the target profile at import even after a valid preview.
+  const originalStudentProfile = store.data("users/student-1");
+  const nonStudentProfiles = [
+    ["teacher", { ...originalStudentProfile, role: "teacher" }],
+    ["staff", { ...originalStudentProfile, role: "staff" }],
+    ["missing-role", { studentName: originalStudentProfile.studentName }],
+  ];
+  for (const [index, [label, profile]] of nonStudentProfiles.entries()) {
+    store.documents.set("users/student-1", profile);
+    const beforeDocuments = clone([...store.documents]);
+    const beforeWrites = store.writeCount;
+    try {
+      const rejectedPreview = await queries.previewEnrollmentRoster(
+        queryRequest(roster),
+      );
+      assert.equal(rejectedPreview.passed, false, `${label} preview must fail`);
+      assert.equal(rejectedPreview.summary.orphanStudentCount, 1);
+      assert.equal(
+        await reasonFrom(() => gateway.execute(requestFor({
+          commandId: commandId(100 + index),
+          commandType: COMMAND_TYPES.IMPORT_ENROLLMENT_ROSTER,
+          payload: { ...roster, validationHash: preview.validationHash },
+        }))),
+        "ROSTER_VALIDATION_FAILED",
+        `${label} import must fail despite an earlier valid preview`,
+      );
+      assert.equal(store.writeCount, beforeWrites);
+      assert.deepEqual([...store.documents], beforeDocuments);
+    } finally {
+      store.documents.set("users/student-1", originalStudentProfile);
+    }
+  }
   const invalidPreview = await queries.previewEnrollmentRoster(
     queryRequest({
       ...roster,
@@ -849,6 +883,8 @@ const main = async () => {
       passed: true,
       cases: [
         "ROSTER_PREVIEW_QUERY_ZERO_WRITE",
+        "ROSTER_EXPLICIT_STUDENT_ROLE_REQUIRED_PREVIEW_AND_IMPORT",
+        "ROSTER_NON_STUDENT_ROLE_CHANGE_AFTER_PREVIEW_ZERO_WRITE",
         "ROSTER_DUPLICATE_ORPHAN_MISSING_DRY_RUN_FAIL",
         "ROSTER_CONCURRENT_REPLAY_EFFECT_ONCE",
         "ROSTER_SOURCE_REPLAY_NO_DUPLICATE_BUSINESS_DOCS",
