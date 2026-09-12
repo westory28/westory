@@ -10,13 +10,13 @@ const code = ts.transpileModule(declarations.map((declaration) => `const ${decla
 let checks = 0;
 for (const [environment, crossOrigin, local, redirect] of [
   ["staging", true, false, false], ["staging", false, false, true],
-  ["production", false, false, true], ["production", true, false, true],
+  ["production", false, false, true], ["production", true, false, false],
   ["local", false, true, false],
 ]) {
   const policy = runInNewContext(code, { runtimeEnvironment: environment, hasCrossOriginAuthDomain: () => crossOrigin, isLocalAuthHost: () => local, window: { location: { protocol: "https:" } }, isSafariBrowser: () => false, isIOSDevice: () => false, isAndroidDevice: () => false, isPopupFallbackError: () => true });
   assert.equal(policy.shouldPreferRedirectLogin(), redirect); checks++;
   for (const code of ["auth/popup-blocked", "auth/popup-closed-by-user", "auth/network-request-failed"]) {
-    assert.equal(policy.shouldFallbackToRedirectLogin({ code }), environment === "staging" && crossOrigin ? false : local ? code === "auth/popup-blocked" : true); checks++;
+    assert.equal(policy.shouldFallbackToRedirectLogin({ code }), crossOrigin ? false : local ? code === "auth/popup-blocked" : true); checks++;
   }
 }
 console.log(JSON.stringify({ suite: "staging-login-transport", passed: true, checks, networkAccess: 0 }));

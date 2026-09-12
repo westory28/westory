@@ -447,9 +447,8 @@ const isLocalAuthHost = (): boolean => {
 const shouldPreferRedirectLogin = (): boolean => {
   if (isLocalAuthHost()) return false;
   // Cross-site redirect results can be lost under browser storage partitioning.
-  // Staging uses Firebase's hosted auth helper, so keep the opener via popup.
-  if (runtimeEnvironment === "staging" && hasCrossOriginAuthDomain())
-    return false;
+  // Keep the opener for every cross-site helper, including Production candidates.
+  if (hasCrossOriginAuthDomain()) return false;
   if (typeof window !== "undefined" && window.location.protocol === "https:") {
     // Some embedded desktop browsers do not preserve the popup opener state,
     // which can leave Firebase's auth helper page open instead of returning.
@@ -616,8 +615,7 @@ const isPopupFallbackError = (error: unknown): boolean => {
 };
 
 const shouldFallbackToRedirectLogin = (error: unknown): boolean => {
-  if (runtimeEnvironment === "staging" && hasCrossOriginAuthDomain())
-    return false;
+  if (hasCrossOriginAuthDomain()) return false;
   const code = (error as Partial<AuthError>)?.code || "";
   if (!isLocalAuthHost()) return isPopupFallbackError(error);
   return (
