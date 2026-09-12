@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import wis from "../functions/wisEconomy.js";
 
 import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { deleteApp, initializeApp } from "firebase/app";
@@ -31,6 +32,7 @@ import {
 
 const projectId = process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w6a";
 const region = "asia-northeast3";
+const firestorePort = Number(process.env.FIRESTORE_EMULATOR_HOST?.split(":").at(-1) || 8080);
 const rules = readFileSync(resolve("firestore.rules"), "utf8");
 const apps = [];
 const firebaseConfig = {
@@ -48,7 +50,7 @@ const makeClient = (name) => {
   const auth = getAuth(app);
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   const db = getFirestore(app);
-  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectFirestoreEmulator(db, "127.0.0.1", firestorePort);
   const functions = getFunctions(app, region);
   connectFunctionsEmulator(functions, "127.0.0.1", 5001);
   return { app, auth, db, functions, proof: null, user: null, sessionAuthTime: 0 };
@@ -121,7 +123,9 @@ const readDocument = (testEnv, path) =>
     return snapshot.exists() ? snapshot.data() : null;
   });
 
-const waitForDocument = async (testEnv, path, timeoutMs = 5_000) => {
+// The signal is emitted after the Functions emulator cold start. Waiting for
+// that marker keeps the race deterministic even on a constrained CPU.
+const waitForDocument = async (testEnv, path, timeoutMs = 30_000) => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const value = await readDocument(testEnv, path);
@@ -156,7 +160,7 @@ const reopenExpiredStudentSession = async (client, email, loginPassword) => {
 const main = async () => {
   const testEnv = await initializeTestEnvironment({
     projectId,
-    firestore: { host: "127.0.0.1", port: 8080, rules },
+    firestore: { host: "127.0.0.1", port: firestorePort, rules },
   });
   const admin = makeClient("w6a-admin");
   const student = makeClient("w6a-student");
@@ -208,6 +212,22 @@ const main = async () => {
         }),
         setDoc(doc(db, "users", student.user.uid), { role: "student" }),
         setDoc(doc(db, "users", outsider.user.uid), { role: "student" }),
+        // Assessment submission now commits its Wis reward in the same
+        // transaction. Seed the canonical identity and zero-balance account.
+        setDoc(doc(db, "student_identities", student.user.uid), {
+          studentUid: student.user.uid, accountStatus: "ACTIVE",
+        }),
+        setDoc(doc(db, wis.WIS_ECONOMY_COLLECTION, "2026-2"), {
+          semesterId: "2026-2", status: "ACTIVE_OPEN", revision: 1, ledgerEntryCount: 0,
+        }),
+        setDoc(doc(db, wis.WIS_ACCOUNT_COLLECTION, wis.accountIdFor("2026-2", student.user.uid)), {
+          schemaVersion: wis.WIS_SCHEMA_VERSION, policyVersion: wis.WIS_POLICY_VERSION,
+          accountId: wis.accountIdFor("2026-2", student.user.uid),
+          studentUid: student.user.uid, semesterId: "2026-2", enrollmentId: "enrollment-student",
+          classId: "class-one", status: "ACTIVE", revision: 1, displayName: "합성학생",
+          grade: "3", classNumber: "1", balance: 0, earnedTotal: 0, rankEarnedTotal: 0,
+          adjustedTotal: 0, spentTotal: 0, recentLedgerEntries: [],
+        }),
         setDoc(doc(db, "users", unauthorizedTeacher.user.uid), {
           role: "teacher",
           teacherPortalEnabled: true,
@@ -729,6 +749,14 @@ const main = async () => {
     ).data;
     assert.equal(recovered.status, "SUCCEEDED");
     assert.ok([50, 100].includes(recovered.result.percent));
+    assert.equal(recovered.result.reward.awarded, true);
+    assert.ok(recovered.result.reward.totalAwarded > 0);
+    const rewardStateBeforeReplay = {
+      ledger: await readCollection(testEnv, wis.WIS_LEDGER_COLLECTION),
+      account: await readDocument(testEnv, `${wis.WIS_ACCOUNT_COLLECTION}/${wis.accountIdFor("2026-2", student.user.uid)}`),
+    };
+    assert.equal(rewardStateBeforeReplay.account.balance, recovered.result.reward.totalAwarded);
+    assert.equal(rewardStateBeforeReplay.ledger.length, recovered.result.reward.ledgerEntryIds.length);
 
     // A06: retrying the same submit command returns the existing result.
     const retriedSubmit = (
@@ -737,6 +765,11 @@ const main = async () => {
       })
     ).data.result;
     assert.equal(retriedSubmit.resultRef, recovered.result.resultRef);
+    assert.deepEqual(retriedSubmit.reward, recovered.result.reward);
+    assert.deepEqual({
+      ledger: await readCollection(testEnv, wis.WIS_LEDGER_COLLECTION),
+      account: await readDocument(testEnv, `${wis.WIS_ACCOUNT_COLLECTION}/${wis.accountIdFor("2026-2", student.user.uid)}`),
+    }, rewardStateBeforeReplay);
 
     // A05: a fresh app instance for the same UID recovers the canonical attempt.
     const recoveredState = (

@@ -38,6 +38,7 @@ assert.match(
   "W2A integration may only target an approved demo emulator project.",
 );
 const region = "asia-northeast3";
+const firestorePort = Number(process.env.FIRESTORE_EMULATOR_HOST?.split(":").at(-1) || 8080);
 const adminEmail = "westoria28@gmail.com";
 const year = "2026";
 const semester = "2";
@@ -62,7 +63,7 @@ const makeClient = (name) => {
     disableWarnings: true,
   });
   const db = getFirestore(app);
-  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectFirestoreEmulator(db, "127.0.0.1", firestorePort);
   const functions = getFunctions(app, region);
   connectFunctionsEmulator(functions, "127.0.0.1", 5001);
   return { app, auth, db, functions, proof: null, authTime: 0, user: null };
@@ -212,7 +213,7 @@ const consentItems = (testEnv) =>
 const main = async () => {
   const testEnv = await initializeTestEnvironment({
     projectId,
-    firestore: { host: "127.0.0.1", port: 8080, rules },
+    firestore: { host: "127.0.0.1", port: firestorePort, rules },
   });
 
   try {
@@ -769,6 +770,44 @@ const main = async () => {
     );
     assert.deepEqual(await snapshotCommandState(testEnv), legacyCallableState);
 
+    // Separate registration approval from capability authorization. An Auth
+    // account without a profile, or a new pending student, must stop before
+    // business writes; an approved student must still lack teacher powers.
+    for (const registrationApprovalStatus of [null, "PENDING"]) {
+      if (registrationApprovalStatus) {
+        await withAdminDb(testEnv, (db) =>
+          setDoc(doc(db, "users", negative.user.uid), {
+            role: "student",
+            registrationApprovalStatus,
+          }),
+        );
+      }
+      const unapprovedState = await snapshotCommandState(testEnv);
+      const unapprovedProfile = await withAdminDb(testEnv, (db) =>
+        readDocument(db, `users/${negative.user.uid}`),
+      );
+      await expectReason(
+        () =>
+          executeCommand(negative, {
+            ...pointEnvelope,
+            commandId: randomUUID(),
+          }),
+        "STUDENT_REGISTRATION_APPROVAL_REQUIRED",
+      );
+      assert.deepEqual(await snapshotCommandState(testEnv), unapprovedState);
+      assert.deepEqual(
+        await withAdminDb(testEnv, (db) =>
+          readDocument(db, `users/${negative.user.uid}`),
+        ),
+        unapprovedProfile,
+      );
+    }
+    await withAdminDb(testEnv, (db) =>
+      setDoc(doc(db, "users", negative.user.uid), {
+        role: "student",
+        registrationApprovalStatus: "APPROVED",
+      }),
+    );
     const unauthorizedPointState = await snapshotCommandState(testEnv);
     await expectReason(
       () =>
@@ -852,6 +891,8 @@ const main = async () => {
           "HOLIDAY_ORDINARY_EVENT_PRESERVED",
           "HOLIDAY_UNREGISTERED_SCOPE_REJECTED",
           "POINT_ADJUST_GATEWAY_RETIRED_ZERO_WRITE",
+          "MISSING_STUDENT_PROFILE_PRE_BUSINESS_ZERO_WRITE",
+          "PENDING_STUDENT_APPROVAL_PRE_BUSINESS_ZERO_WRITE",
           "POINT_ADJUST_UNAUTHORIZED_PRE_BUSINESS_ZERO_WRITE",
           "LEGACY_POINT_CALLABLE_RETIRED_ZERO_WRITE",
         ],

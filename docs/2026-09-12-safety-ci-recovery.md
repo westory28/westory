@@ -21,6 +21,8 @@
 
 `firebase-storage-runtime-framing.cjs`는 이 버전의 Storage runtime이 시작한 rules JAR stdout에만 UTF-8 줄 단위 처리를 적용합니다. 운영 Rules, 원본 경고·오류, 다른 프로세스는 바꾸지 않습니다. CI의 에뮬레이터 실행 단계 두 곳에만 preload를 적용하며, 체크아웃 단계에는 적용하지 않습니다. CLI 버전 변경 시 보정을 다시 검토하도록 명시적으로 실패합니다. 분할·합쳐진 응답, 한글·이모지 경계, 마지막 응답, 크기 초과와 무관한 spawn을 자동 검증합니다. Windows의 Rules 문자열 대조는 줄바꿈만 정규화합니다.
 
+다음 실행 34674678400 (`c51bfd6`)에서는 수업자료 Rules 74개 검사가 통과했습니다. 이후 W2A의 profile 없는 합성 계정이 신규 등록 승인 gate에서 먼저 차단돼 과거 capability 기대값과 달랐습니다. 누락/PENDING profile은 승인 차단과 무변경을 확인하고, APPROVED 합성 학생에는 기존 교사 권한 차단 검사를 그대로 수행하도록 분리했습니다. W6A 제출 fixture에는 현재 원자 보상 계약이 요구하는 identity·경제·0원 계좌를 시드하고, 실제 지급 및 재시도 시 계좌/원장 불변을 검사합니다. 운영 권한은 변경하지 않았습니다. 두 integration 검사는 에뮬레이터가 지정한 Firestore 포트를 사용하므로 Windows의 예약 포트 충돌을 피할 수 있습니다.
+
 원격 실행과 최종 배포 결과 기록: `C:/westory-w10p-provenance-runtime/safety-ci-final.json`. 이 파일이 아직 없으면 최종 판정은 미완료입니다. 원래 실패 로그와 로컬 중단 로그도 같은 runtime 폴더에 보존합니다.
 
 Vercel 웹 대시보드의 `westoria28-8028` 로그인은 확인했습니다. 기존 알림함의 최근 배포 실패는 8월 26일 Staging authDomain 설정 불일치였으며, `a6a07ec`의 Vercel 상태는 `Canceled by Ignored Build Step`/success입니다. 현재 Firebase 테스트 사이트의 성공을 Vercel 배포 성공으로 표현하지 않습니다. CLI 인증의 유효성은 이번 웹 로그인 확인과 별개입니다.
