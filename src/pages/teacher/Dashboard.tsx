@@ -15,6 +15,7 @@ import StatePanel from "../../components/common/StatePanel";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
 import { useAuth } from "../../contexts/AuthContext";
 import { runAfterNextPaint } from "../../lib/browserTasks";
+import { db } from "../../lib/firebase";
 import {
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
@@ -22,7 +23,14 @@ import {
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { canManageW8Domains, canReadPoints } from "../../lib/permissions";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
-import { getYearSemester } from "../../lib/semesterScope";
+import {
+  getSemesterCollectionPath,
+  getYearSemester,
+} from "../../lib/semesterScope";
+import {
+  loadVisibleNotices,
+  type VisibleNotice,
+} from "../../lib/visibleSchedule";
 import {
   W8DomainError,
   getW8DomainState,
@@ -31,7 +39,7 @@ import {
   type W8ScheduleEvent,
   type W8DomainState,
 } from "../../lib/w8Domains";
-import type { CalendarEvent } from "../../types";
+import type { CalendarEvent, SystemConfig } from "../../types";
 import TeacherCalendarEventModal from "./components/TeacherCalendarEventModal";
 import SearchModal from "../student/components/SearchModal";
 import { getArchiveEnrollmentState } from "../../lib/archiveEnrollment";
@@ -92,6 +100,113 @@ const projectScheduleEvent = (
   eventType: legacyEventTypeFromW8(event),
   ...projectScheduleTargets(event.classIds, event.targetUserIds, classes),
 });
+
+// The dashboard image carousel is independent of the retired notice-board editor.
+// It performs one scoped read and never blocks the calendar or ranking queries.
+const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
+  config,
+}) => {
+  const [images, setImages] = useState<VisibleNotice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const { year, semester } = getYearSemester(config);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setFailed(false);
+    setImages([]);
+    setActiveIndex(0);
+    void loadVisibleNotices(db, getSemesterCollectionPath(config, "notices"))
+      .then((notices) => {
+        if (active)
+          setImages(notices.filter((notice) => Boolean(notice.imageUrl)));
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [year, semester]);
+
+  useEffect(() => {
+    if (paused || images.length < 2) return;
+    const timer = window.setInterval(
+      () => setActiveIndex((index) => (index + 1) % images.length),
+      5000,
+    );
+    return () => window.clearInterval(timer);
+  }, [images.length, paused]);
+
+  const image = images[activeIndex];
+  return (
+    <section
+      className="teacher-dashboard-banner rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+      aria-label="학교 배너"
+    >
+      <h2 className="mb-3 text-lg font-extrabold text-gray-900">학교 배너</h2>
+      <div className="teacher-dashboard-banner__image">
+        {loading ? (
+          <InlineLoading message="배너를 불러오는 중입니다." />
+        ) : image ? (
+          <img
+            src={image.imageUrl}
+            alt={image.content || "학교 안내 배너"}
+            decoding="async"
+          />
+        ) : (
+          <p className="text-sm text-gray-500">
+            {failed
+              ? "배너를 불러오지 못했습니다."
+              : "등록된 배너 이미지가 없습니다."}
+          </p>
+        )}
+      </div>
+      {images.length > 1 && (
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            className="min-h-11 min-w-11 rounded-lg border border-gray-200 text-blue-700"
+            aria-label="이전 배너"
+            onClick={() =>
+              setActiveIndex(
+                (index) => (index + images.length - 1) % images.length,
+              )
+            }
+          >
+            ‹
+          </button>
+          <span className="text-sm text-gray-600">
+            {activeIndex + 1} / {images.length}
+          </span>
+          <button
+            type="button"
+            className="min-h-11 min-w-11 rounded-lg border border-gray-200 px-3 text-blue-700"
+            onClick={() => setPaused((value) => !value)}
+          >
+            {paused ? "자동 넘김 재생" : "자동 넘김 정지"}
+          </button>
+          <button
+            type="button"
+            className="min-h-11 min-w-11 rounded-lg border border-gray-200 text-blue-700"
+            aria-label="다음 배너"
+            onClick={() =>
+              setActiveIndex((index) => (index + 1) % images.length)
+            }
+          >
+            ›
+          </button>
+        </div>
+      )}
+    </section>
+  );
+};
 
 const TeacherDashboard: React.FC = () => {
   const { config, configReady, currentUser, userData } = useAuth();
@@ -295,19 +410,19 @@ const TeacherDashboard: React.FC = () => {
       data-patch-target="teacher-dashboard"
       data-patch-label="교사 대시보드"
     >
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="rounded-full bg-blue-600 px-5 py-2 text-2xl font-extrabold text-white shadow-sm md:text-3xl">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="rounded-full bg-blue-600 px-4 py-1 text-xl font-extrabold text-white shadow-sm">
           {year}학년도 {semester}학기
         </h1>
       </div>
 
       <div
-        className="teacher-dashboard-grid flex flex-col gap-4 lg:grid lg:grid-cols-5"
+        className="teacher-dashboard-grid"
         data-patch-target="teacher-dashboard-grid"
         data-patch-label="교사 첫 화면 주요 영역"
       >
         <div
-          className="teacher-dashboard-calendar min-w-0 lg:col-span-3"
+          className="teacher-dashboard-calendar min-w-0"
           data-patch-target="teacher-dashboard-calendar"
           data-patch-label="대시보드 학사 일정"
         >
@@ -368,24 +483,34 @@ const TeacherDashboard: React.FC = () => {
           </React.Suspense>
         </div>
 
-        <div
-          className="teacher-dashboard-ranking min-w-0 lg:col-span-2"
-          data-patch-target="teacher-dashboard-ranking"
-          data-patch-label="대시보드 위스 순위"
-        >
-          <div className="min-h-[260px] h-full">
-            {secondaryPanelsReady ? (
-              <WisRankingPanel
-                config={config}
-                hallOfFamePath={
-                  canOpenPoints ? "/teacher/points?tab=hall-of-fame" : undefined
-                }
-              />
-            ) : (
-              <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-blue-100 bg-white p-4 text-sm font-semibold text-blue-700/70 shadow-sm">
-                위스 순위를 준비 중입니다.
-              </div>
-            )}
+        <div className="teacher-dashboard-side">
+          {configReady && (
+            <TeacherDashboardBanner
+              key={`${year}:${semester}`}
+              config={config}
+            />
+          )}
+          <div
+            className="teacher-dashboard-ranking min-w-0"
+            data-patch-target="teacher-dashboard-ranking"
+            data-patch-label="대시보드 위스 순위"
+          >
+            <div className="teacher-dashboard-ranking-content">
+              {secondaryPanelsReady ? (
+                <WisRankingPanel
+                  config={config}
+                  hallOfFamePath={
+                    canOpenPoints
+                      ? "/teacher/points?tab=hall-of-fame"
+                      : undefined
+                  }
+                />
+              ) : (
+                <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-blue-100 bg-white p-4 text-sm font-semibold text-blue-700/70 shadow-sm">
+                  위스 순위를 준비 중입니다.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

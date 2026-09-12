@@ -2185,7 +2185,9 @@ button.lesson-core-point-floating-status:disabled {
   color: #ef4444 !important;
 }
 
-.student-calendar-section .fc-day-sat:not(.fc-day-holiday) .student-calendar-day-label {
+.student-calendar-section
+  .fc-day-sat:not(.fc-day-holiday)
+  .student-calendar-day-label {
   color: #3b82f6 !important;
 }
 
@@ -2961,88 +2963,82 @@ button.lesson-core-point-floating-status:disabled {
   font-weight: 900;
 }
 
+/* Teacher home owns its card sizes; the calendar must not stretch the ranking. */
+.teacher-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.teacher-dashboard-side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.teacher-dashboard-banner__image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--ws-surface-subtle);
+}
+
+.teacher-dashboard-banner__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.teacher-dashboard-ranking-content .wis-ranking-panel {
+  height: auto;
+  min-height: calc(var(--space-16) * 4);
+  max-height: calc(var(--space-16) * 6);
+  overflow: hidden;
+}
+
+.teacher-dashboard-ranking-content .wis-ranking-list {
+  overflow-y: auto;
+}
+
+.teacher-dashboard-calendar .student-calendar-shell {
+  height: auto;
+  min-height: 0;
+}
+
+.teacher-dashboard-calendar .student-calendar-shell__body {
+  flex: none;
+  height: calc(var(--space-16) * 8);
+  min-height: 0;
+}
+
+.teacher-dashboard-calendar
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-body
+  tr {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
 @media (min-width: 768px) {
   .teacher-dashboard-container {
     max-width: min(96rem, calc(100vw - 2rem));
     padding-inline: clamp(1.5rem, 2.6vw, 2.5rem);
   }
+}
 
+@media (min-width: 1024px) {
   .teacher-dashboard-grid {
-    height: auto !important;
-    min-height: clamp(
-      50rem,
-      calc(100dvh - 8.75rem - env(safe-area-inset-bottom, 0px)),
-      58rem
-    ) !important;
-    grid-template-rows:
-      minmax(23rem, 0.96fr)
-      minmax(24rem, 1.04fr) !important;
-    align-items: stretch;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 
-  .teacher-dashboard-notice {
-    overflow: hidden;
-  }
-
-  .teacher-dashboard-ranking {
-    overflow: visible;
-  }
-
-  .teacher-dashboard-calendar .student-calendar-section,
-  .teacher-dashboard-calendar .student-calendar-shell {
-    min-height: 100%;
-  }
-
-  .teacher-dashboard-calendar
-    .student-calendar-shell__body[data-calendar-view="dayGridMonth"] {
-    height: auto;
-    min-height: clamp(37rem, calc(100dvh - 16rem), 43rem);
-  }
-
-  .teacher-dashboard-calendar
-    .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
-    .fc
-    .fc-daygrid-body
-    tr {
-    flex-basis: clamp(6.8rem, calc((100dvh - 18rem) / 5), 8rem);
-    min-height: 6.8rem;
-  }
-
-  .teacher-dashboard-calendar
-    .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
-    .fc
-    .fc-daygrid-day-frame {
-    grid-template-rows: minmax(2.15rem, auto) minmax(0, 1fr) auto;
-  }
-
-  .teacher-dashboard-calendar
-    .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
-    .fc
-    .fc-daygrid-day-top {
-    position: relative;
-    z-index: 8;
-  }
-
-  .teacher-dashboard-calendar
-    .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
-    .fc
-    .fc-daygrid-day-events {
-    margin-top: 0;
-    padding: 0 0.18rem 0.2rem;
-  }
-
-  .teacher-dashboard-ranking,
-  .teacher-dashboard-ranking > .min-h-\[260px\],
-  .teacher-dashboard-ranking .wis-ranking-panel {
-    min-height: 24rem;
-  }
-
-  .teacher-dashboard-ranking .wis-ranking-panel {
-    overflow: visible;
-  }
-
-  .teacher-dashboard-ranking .wis-ranking-list {
-    overflow: visible;
+  .teacher-dashboard-calendar .student-calendar-shell__body {
+    height: calc(var(--space-16) * 9);
   }
 }
 
@@ -3581,50 +3577,6 @@ button.lesson-core-point-floating-status:disabled {
   }
 }
 
-@media (min-width: 768px) and (max-width: 1280px) and (max-height: 900px) {
-  .dashboard-container.teacher-dashboard-container {
-    padding-top: 1rem;
-    padding-bottom: 1.25rem;
-  }
-
-  .teacher-dashboard-container > .mb-6 {
-    margin-bottom: 0.75rem;
-  }
-
-  .teacher-dashboard-grid {
-    height: auto !important;
-    min-height: clamp(
-      48rem,
-      calc(100dvh - 7.75rem - env(safe-area-inset-bottom, 0px)),
-      56rem
-    ) !important;
-    grid-template-rows:
-      minmax(22.5rem, 0.96fr)
-      minmax(23.5rem, 1.04fr) !important;
-    align-items: stretch;
-  }
-
-  .teacher-dashboard-notice,
-  .teacher-dashboard-calendar,
-  .teacher-dashboard-ranking {
-    min-height: 0;
-  }
-
-  .teacher-dashboard-ranking > .min-h-\[260px\] {
-    min-height: 0 !important;
-  }
-
-  .teacher-dashboard-calendar .student-calendar-shell {
-    min-height: 0;
-  }
-
-  .teacher-dashboard-calendar
-    .student-calendar-shell__body[data-calendar-view="dayGridMonth"] {
-    min-height: clamp(36rem, calc(100dvh - 14.5rem), 41rem);
-    height: auto;
-  }
-}
-
 @media (min-width: 768px) {
   .dashboard-container {
     padding: 24px 40px;
@@ -3961,36 +3913,6 @@ button.lesson-core-point-floating-status:disabled {
 
   .student-calendar-section .student-calendar-event-label__text {
     font-size: 0.68rem;
-  }
-}
-
-@media (max-width: 1023px) {
-  .teacher-dashboard-calendar
-    .student-calendar-shell__body[data-calendar-view="dayGridMonth"] {
-    min-height: clamp(32rem, 112vw, 40rem);
-    height: clamp(32rem, 112vw, 40rem);
-  }
-
-  .teacher-dashboard-calendar
-    .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
-    .fc
-    .fc-daygrid-body
-    tr {
-    min-height: 5.8rem;
-  }
-
-  .teacher-dashboard-ranking,
-  .teacher-dashboard-ranking > .min-h-\[260px\],
-  .teacher-dashboard-ranking .wis-ranking-panel {
-    min-height: 22rem;
-  }
-
-  .teacher-dashboard-ranking .wis-ranking-panel {
-    overflow: visible;
-  }
-
-  .teacher-dashboard-ranking .wis-ranking-list {
-    overflow: visible;
   }
 }
 
@@ -4351,4 +4273,26 @@ button.lesson-core-point-floating-status:disabled {
   .ws-top-menu__panel {
     transition: none;
   }
+}
+
+.ws-page-read-loading {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  padding: var(--space-4);
+  border: 0;
+  background: transparent;
+}
+.ws-page-read-loading[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ws-page-read-loading::backdrop {
+  background: var(--ws-overlay);
+  backdrop-filter: blur(4px);
 }

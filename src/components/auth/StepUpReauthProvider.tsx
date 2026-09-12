@@ -105,6 +105,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
   const firestorePausedRef = useRef(false);
   const releaseAuthenticationReadsRef = useRef<(() => void) | null>(null);
   const protectedContentRef = useRef<HTMLDivElement | null>(null);
+  const topLayerRef = useRef<HTMLDialogElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
   const {
     authenticationStatus,
@@ -156,6 +157,23 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [assertCurrentRequest],
   );
+
+  useEffect(() => {
+    const dialog = topLayerRef.current;
+    if (!pending || !dialog) return;
+    const opener = document.activeElement;
+    // An operation may already be inside a native modal. Reauthentication
+    // needs its own top-layer entry; a higher CSS z-index cannot reach it.
+    dialog.showModal();
+    return () => {
+      dialog.close();
+      // Wait until the protected-content effect removes inert before restoring
+      // focus. The underlying operation and its draft remain mounted.
+      window.requestAnimationFrame(() => {
+        if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+      });
+    };
+  }, [pending]);
 
   useEffect(() => {
     const protectedContent = protectedContentRef.current;
@@ -532,15 +550,14 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         {children}
       </div>
       {pending && (
-        <div
-          className="fixed inset-0 z-[280] flex items-center justify-center bg-stone-950 p-4"
-          role="presentation"
+        <dialog
+          ref={topLayerRef}
+          className="fixed inset-0 z-[280] m-0 flex h-full w-full max-h-none max-w-none items-center justify-center border-0 bg-stone-950 p-4"
+          aria-labelledby="step-up-title"
+          onCancel={(event) => event.preventDefault()}
         >
           <section
             ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="step-up-title"
             tabIndex={-1}
             className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl"
           >
@@ -617,7 +634,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
               취소
             </button>
           </section>
-        </div>
+        </dialog>
       )}
     </>
   );

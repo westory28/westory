@@ -1,4 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 
 const DEFAULT_WARNING =
   "자료를 불러오는 중에는 새로고침하거나 다른 화면으로 이동하지 마세요.";
@@ -88,17 +94,83 @@ export const InlineLoading: React.FC<LoadingStateProps> = ({
   </div>
 );
 
-/** Shared initial page-read indicator. Navigation remains available while
- * protected data and controls stay behind their page's loading boundary. */
+const pageReadOwners = new Set<symbol>();
+const pageReadListeners = new Set<() => void>();
+let originalBodyOverflow = "";
+let originalPageFocus: HTMLElement | null = null;
+const subscribeToPageReads = (listener: () => void) => {
+  pageReadListeners.add(listener);
+  return () => {
+    pageReadListeners.delete(listener);
+  };
+};
+const notifyPageReads = () =>
+  pageReadListeners.forEach((listener) => listener());
+
+const BlockingPageRead: React.FC = () => {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    dialog.showModal();
+    return () => {
+      dialog.close();
+    };
+  }, []);
+  return createPortal(
+    <dialog
+      ref={dialogRef}
+      className="ws-page-read-loading"
+      aria-label="자료를 불러오는 중입니다."
+      aria-busy="true"
+      onCancel={(event) => event.preventDefault()}
+    >
+      <LoadingCard message="자료를 불러오는 중입니다." />
+    </dialog>,
+    document.body,
+  );
+};
+
+const SharedPageRead: React.FC = () => {
+  const owner = useRef(Symbol("page-read"));
+  const presenter = useSyncExternalStore(
+    subscribeToPageReads,
+    () => pageReadOwners.values().next().value,
+    () => undefined,
+  );
+  useEffect(() => {
+    const token = owner.current;
+    if (!pageReadOwners.size) {
+      originalBodyOverflow = document.body.style.overflow;
+      originalPageFocus =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      document.body.style.overflow = "hidden";
+    }
+    pageReadOwners.add(token);
+    notifyPageReads();
+    return () => {
+      pageReadOwners.delete(token);
+      if (!pageReadOwners.size) {
+        document.body.style.overflow = originalBodyOverflow;
+        const opener = originalPageFocus;
+        queueMicrotask(() => {
+          if (!pageReadOwners.size && opener?.isConnected) opener.focus();
+        });
+      }
+      notifyPageReads();
+    };
+  }, []);
+  return presenter === owner.current ? <BlockingPageRead /> : null;
+};
+
+/** Page reads block background pointer and keyboard input once shown. */
 export const PageDataLoading: React.FC<LoadingStateProps> = () => {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(true), 150);
     return () => window.clearTimeout(timer);
   }, []);
-  return visible ? (
-    <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center px-4">
-      <LoadingCard message="자료를 불러오는 중입니다." />
-    </div>
-  ) : null;
+  return visible ? <SharedPageRead /> : null;
 };

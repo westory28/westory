@@ -14,7 +14,7 @@ import {
   adjustLegacyTeacherWis as adjustPoints,
   deleteLegacyTeacherPointProduct as deletePointProduct,
   getLegacyTeacherPointPolicy as getPointPolicy,
-  getLegacyTeacherPointSchoolOptions as getPointSchoolOptions,
+  getLegacyTeacherPointOverview as getPointOverview,
   getLegacyTeacherRankEarnedPointsMap as getPointRankManualAdjustEarnedPointsMap,
   getLegacyTeacherWisHallOfFameState,
   listLegacyTeacherPointOrders as listPointOrders,
@@ -713,6 +713,7 @@ const ManagePointsScope: React.FC = () => {
       // the records they actually render, rather than the entire economy.
       if (activeTab === "hall-of-fame") return;
       const needsWallets = activeTab === "overview" || activeTab === "grant";
+      const overviewRequest = needsWallets ? getPointOverview(config) : null;
       const [
         nextWallets,
         nextSchoolOptions,
@@ -720,14 +721,18 @@ const ManagePointsScope: React.FC = () => {
         nextProducts,
         nextOrders,
       ] = await Promise.all([
-        needsWallets ? listPointWallets(config) : Promise.resolve([]),
-        needsWallets
-          ? getPointSchoolOptions(config)
+        overviewRequest
+          ? overviewRequest.then((overview) => overview.wallets)
+          : Promise.resolve([]),
+        overviewRequest
+          ? overviewRequest.then((overview) => overview.schoolOptions)
           : Promise.resolve({
               grades: grantGradeOptions,
               classes: grantClassOptions,
             }),
-        getPointPolicy(config),
+        overviewRequest
+          ? overviewRequest.then((overview) => overview.policy)
+          : getPointPolicy(config),
         activeTab === "products"
           ? listPointProducts(config, false)
           : Promise.resolve([]),

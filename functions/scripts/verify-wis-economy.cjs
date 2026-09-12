@@ -1172,6 +1172,111 @@ const run = async () => {
       email: request.auth.token.email,
     }),
   });
+  // Exercise the real query core with a full school cohort and a bounded
+  // lookahead row. Canonical roster joins, permissions and writes stay fenced.
+  const createOverviewCohort = (count) => {
+    const seed = Object.fromEntries([
+      "semester_manifests/2026-2",
+      "semester_wis_economies/2026-2",
+      "users/large-reader",
+      "semester_classes/large-class",
+    ].map((path) => [path, structuredClone(largeSeed[path])]));
+    seed["users/cohort-student"] = { role: "student" };
+    for (let index = 0; index < count; index += 1) {
+      const suffix = String(index).padStart(3, "0");
+      const studentUid = `cohort-${suffix}`;
+      const enrollmentId = `cohort-enrollment-${suffix}`;
+      seed[`semester_enrollments/${enrollmentId}`] = {
+        ...largeSeed["semester_enrollments/enrollment-000"],
+        enrollmentId,
+        studentUid,
+        displayName: `검증 학생 ${suffix}`,
+        studentNumber: String(index + 1),
+      };
+      seed[`semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", studentUid)}`] = {
+        semesterId: "2026-2", studentUid, activeEnrollmentId: enrollmentId,
+      };
+      seed[`semester_wis_accounts/cohort-account-${suffix}`] = {
+        ...largeSeed["semester_wis_accounts/account-000"],
+        accountId: `cohort-account-${suffix}`,
+        studentUid,
+        enrollmentId: "stale-enrollment",
+        classId: "stale-class",
+        grade: "9", classNumber: "9", studentNumber: "999",
+        balance: 500,
+      };
+    }
+    const cohortTx = new MemoryTransaction(seed);
+    const before = structuredClone(cohortTx.documents);
+    let writes = 0;
+    cohortTx.set = cohortTx.delete = () => {
+      writes += 1;
+      throw new Error("Teacher overview must not write.");
+    };
+    const core = wis.createWisQueryCore({
+      store: {
+        get: (path) => cohortTx.get(path),
+        runTransaction: (callback) => callback(cohortTx),
+      },
+      assertSession: async (request) => ({ uid: request.auth.uid, email: request.auth.token.email }),
+    });
+    const request = (overrides = {}, actorUid = "large-reader") => core.getWisEconomyState({
+      auth: { uid: actorUid, token: { email: `${actorUid}@yongshin-ms.ms.kr` } },
+      data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT", projection: "overview", limit: 500, ...overrides },
+    });
+    return {
+      request,
+      transaction: cohortTx,
+      assertUnchanged: () => {
+        assert.equal(writes, 0);
+        assert.deepEqual(cohortTx.documents, before);
+      },
+    };
+  };
+  const cohort321 = createOverviewCohort(321);
+  const cohort321Page = await cohort321.request();
+  assert.equal(cohort321Page.accounts.length, 321);
+  assert.equal(cohort321Page.nextCursor, "");
+  assert.equal(cohort321Page.writeCount, 0);
+  assert.equal(cohort321Page.readOnly, true);
+  assert.equal(cohort321.transaction.readStats.queryCalls, 1);
+  assert.equal(cohort321.transaction.readStats.queryDocuments, 321);
+  assert.deepEqual(
+    [cohort321Page.accounts[0].grade, cohort321Page.accounts[0].classNumber, cohort321Page.accounts[0].studentNumber],
+    ["2", "3", "1"],
+  );
+  assert.equal(cohort321Page.accounts[0].enrollmentId, "cohort-enrollment-000");
+  const invalidLimit = (error) => error.code === "invalid-argument" && error.details?.field === "limit";
+  await assert.rejects(() => cohort321.request({ limit: 501 }), invalidLimit);
+  for (const projection of ["summary", "account", "orders", "catalog", "hall-of-fame"]) {
+    await assert.rejects(() => cohort321.request({ projection, limit: 201 }), invalidLimit);
+  }
+  for (const projection of ["summary", "student-core", "orders", "catalog", "hall-of-fame"]) {
+    await assert.rejects(
+      () => cohort321.request({ audience: "student", projection, limit: 201 }, "cohort-student"),
+      invalidLimit,
+    );
+  }
+  await assert.rejects(
+    () => cohort321.request({}, "cohort-student"),
+    (error) => error.code === "permission-denied" && error.details?.reason === "WIS_MANAGE_REQUIRED",
+  );
+  assert.equal(cohort321.transaction.readStats.queryCalls, 1, "Invalid or unauthorized requests must not query cohort data.");
+  cohort321.assertUnchanged();
+
+  const cohort501 = createOverviewCohort(501);
+  const cohortFirst = await cohort501.request();
+  const cohortLast = await cohort501.request({ cursor: cohortFirst.nextCursor });
+  assert.equal(cohortFirst.accounts.length, 500);
+  assert.equal(cohortFirst.nextCursor, "cohort-account-499");
+  assert.deepEqual(cohortLast.accounts.map((account) => account.accountId), ["cohort-account-500"]);
+  assert.equal(cohortLast.nextCursor, "");
+  assert.equal(new Set([...cohortFirst.accounts, ...cohortLast.accounts].map((account) => account.accountId)).size, 501);
+  assert.equal(cohort501.transaction.readStats.queryCalls, 2);
+  assert.equal(cohort501.transaction.readStats.maxQueryDocuments, 501);
+  assert.equal(cohortFirst.writeCount + cohortLast.writeCount, 0);
+  cohort501.assertUnchanged();
+
   const largeRequest = (cursor = "") =>
     largeQueryCore.getWisEconomyState({
       auth: {
@@ -1552,7 +1657,7 @@ const run = async () => {
     (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
   );
 
-  console.log(JSON.stringify({ passed: true, cases: 44, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility"], productionAccess: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 44, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes"], productionAccess: 0 }));
 };
 
 run().catch((error) => {

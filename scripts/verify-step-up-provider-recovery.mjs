@@ -37,9 +37,11 @@ export const writeSessionDeadline=()=>true;export const clearSessionTiming=()=>{
 window.switchIdentity=()=>{auth.currentUser={...user,uid:'synthetic-b'};};
 `);
 const bundle = await build({
-  stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {StepUpReauthProvider} from './src/components/auth/StepUpReauthProvider';import {requestStepUpReauthentication} from './src/lib/stepUpReauth';
-  window.startRequest=()=>{requestStepUpReauthentication('updateAccessSettings',{force:true}).then(()=>window.outcomes.push('success'),e=>window.outcomes.push(e.code));};
-  const root=createRoot(document.getElementById('root'));window.unmountProvider=()=>root.unmount();root.render(<StepUpReauthProvider><button onClick={()=>window.startRequest()}>보호 작업</button></StepUpReauthProvider>);`, resolveDir: root, loader: "tsx" },
+  stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {StepUpReauthProvider} from './src/components/auth/StepUpReauthProvider';import {requestStepUpReauthentication} from './src/lib/stepUpReauth';import ModalSurface from './src/components/common/ModalSurface';
+  const notify=outcome=>{window.outcomes.push(outcome);window.dispatchEvent(new CustomEvent('fixture-outcome',{detail:outcome}));};
+  window.startRequest=()=>{requestStepUpReauthentication('updateAccessSettings',{force:true}).then(()=>notify('success'),e=>notify(e.code));};
+  function NestedFixture(){const [open,setOpen]=React.useState(false),[draft,setDraft]=React.useState('보존할 합성 입력'),[outcome,setOutcome]=React.useState('아직 실행하지 않음');React.useEffect(()=>{const onOutcome=e=>setOutcome(e.detail);window.addEventListener('fixture-outcome',onOutcome);return()=>window.removeEventListener('fixture-outcome',onOutcome);},[]);return <main className='p-6'><p>실제 서버 변경 0회 · 합성 재인증 검증</p><button onClick={()=>setOpen(true)}>업무 팝업 열기</button><ModalSurface open={open} title='합성 업무 팝업' onClose={()=>setOpen(false)}><label>보존할 입력<input aria-label='보존할 입력' value={draft} onChange={e=>setDraft(e.target.value)}/></label><button onClick={()=>window.startRequest()}>보호 작업</button><p role='status'>재인증 결과: {outcome}</p></ModalSurface></main>;}
+  const root=createRoot(document.getElementById('root'));window.unmountProvider=()=>root.unmount();root.render(<StepUpReauthProvider>{new URLSearchParams(location.search).has('nested')?<NestedFixture/>:<button onClick={()=>window.startRequest()}>보호 작업</button>}</StepUpReauthProvider>);`, resolveDir: root, loader: "tsx" },
   bundle: true, write: false, platform: "browser", format: "iife", metafile: true,
   define: { "process.env.NODE_ENV": '"development"', "import.meta.env": "{}" },
   plugins: [{ name: "synthetic-step-up-adapters", setup(api) {
@@ -48,13 +50,17 @@ const bundle = await build({
 });
 assert.ok(!Object.keys(bundle.metafile.inputs).some(path => path.includes("node_modules/@firebase/")));
 const cssName = readdirSync("dist/assets").find(name => /^main-.*\.css$/.test(name));
-const css = readFileSync(join("dist/assets", cssName));
+const css = readFileSync(join("dist/assets", cssName), "utf8") + "\n" + readFileSync("src/assets/index.css", "utf8");
 const server = createServer((req, res) => {
   res.setHeader("Content-Security-Policy", "default-src 'self';connect-src 'none';style-src 'self' 'unsafe-inline';font-src 'none';img-src 'self' data:;script-src 'self'");
   res.setHeader("Content-Type", req.url === "/app.js" ? "text/javascript" : req.url === "/app.css" ? "text/css" : "text/html");
   res.end(req.url === "/app.js" ? bundle.outputFiles[0].contents : req.url === "/app.css" ? css : '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><div id="root"></div><script src="/app.js"></script></html>');
 });
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+if (process.argv.includes("--serve-only")) {
+  console.log(JSON.stringify({ url: `http://127.0.0.1:${server.address().port}/?nested=1`, output, syntheticOnly: true, realWrites: 0, network: "connect-src none", browserAutomation: false }));
+  await new Promise(() => {});
+}
 let browser;
 const results = [];
 try {

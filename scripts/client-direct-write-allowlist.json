@@ -208,7 +208,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "4d90c6f0da781e820d9182fa"
+      "callGraphHash": "d2376b681c9247a796bafd06"
     },
     {
       "id": "DW-008",
@@ -688,7 +688,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "2ba85f55d2a68bbe9378b943"
+      "callGraphHash": "a61b0197b25ee82fc01225f1"
     },
     {
       "id": "DW-051",
@@ -708,7 +708,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "70a8c77e36930184020de45e"
+      "callGraphHash": "be39dcf60c8cdb39bdf2a752"
     },
     {
       "id": "GW-PATCH-CREATE",
@@ -2134,7 +2134,7 @@
       "owner": "W8 Domains",
       "testOwner": "W8 command safety",
       "rootCount": 1,
-      "callGraphHash": "3da4f43ff778a099bd59fe62"
+      "callGraphHash": "bf6a4de38b19b16839677a9b"
     },
     {
       "id": "DW-218",
@@ -2915,7 +2915,7 @@
       "owner": "westory-maintainers",
       "testOwner": "student-registration-enrollment-safety",
       "rootCount": 1,
-      "callGraphHash": "0540cf19e17331fdb06e3d3e"
+      "callGraphHash": "4a77b2b05a4244146d1a1e69"
     },
     {
       "id": "DW-245",

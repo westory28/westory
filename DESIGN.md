@@ -200,6 +200,7 @@ Icon-only controls:
 ### Modals and Panels
 
 - Backdrop: `--ws-overlay`.
+- Page-read loading uses a native modal dialog with the same backdrop and 4px blur (the existing `backdrop-blur-sm` value). While visible it blocks pointer, keyboard and background scrolling; fast reads retain the 150ms indicator delay.
 - Surface: `--ws-surface`.
 - Radius: `--radius-xl`.
 - Shadow: `--shadow-xl`.

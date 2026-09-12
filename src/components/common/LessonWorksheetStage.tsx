@@ -2596,7 +2596,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             <section
               key={pageImage.page}
               className={
-                isStudentSolveMode
+                isStudentSolveMode || isTeacherEditMode
                   ? "bg-transparent"
                   : "rounded-[2rem] border border-gray-200 bg-white p-3 shadow-sm md:p-4"
               }

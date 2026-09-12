@@ -162,7 +162,7 @@ const queryAllPages = async (
   for (let page = 0; page < 100; page += 1) {
     const state = await queryCurrentTeacherState(config, {
       projection,
-      limit: 200,
+      limit: projection === "overview" ? 500 : 200,
       ...(cursor ? { cursor } : {}),
     });
     states.push(state);
@@ -611,13 +611,7 @@ export const listLegacyTeacherPointWallets = async (config: ConfigLike) => {
   return state.accounts.map((account) => mapWallet(state, account));
 };
 
-export const getLegacyTeacherPointSchoolOptions = async (
-  config: ConfigLike,
-): Promise<{
-  grades: LegacySchoolOption[];
-  classes: LegacySchoolOption[];
-}> => {
-  const state = await queryAllPages(config, "overview");
+const schoolOptionsFromState = (state: WisEconomyState) => {
   const identities = state.accounts.map(parseSchoolIdentity);
   const grades = Array.from(
     new Set(identities.map((identity) => identity.grade).filter(Boolean)),
@@ -634,6 +628,21 @@ export const getLegacyTeacherPointSchoolOptions = async (
       ? classes
       : Array.from({ length: 12 }, (_, index) => String(index + 1))
     ).map((value) => ({ value, label: `${value}반` })),
+  };
+};
+
+export const getLegacyTeacherPointSchoolOptions = async (
+  config: ConfigLike,
+): Promise<{ grades: LegacySchoolOption[]; classes: LegacySchoolOption[] }> =>
+  schoolOptionsFromState(await queryAllPages(config, "overview"));
+
+/** The overview already contains policy and canonical roster labels. */
+export const getLegacyTeacherPointOverview = async (config: ConfigLike) => {
+  const state = await queryAllPages(config, "overview");
+  return {
+    wallets: state.accounts.map((account) => mapWallet(state, account)),
+    schoolOptions: schoolOptionsFromState(state),
+    policy: compatibilityPolicy(state),
   };
 };
 

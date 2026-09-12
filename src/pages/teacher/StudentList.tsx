@@ -268,6 +268,8 @@ const StudentListScope: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [profilesLoading, setProfilesLoading] = useState(false);
+  const [profilesError, setProfilesError] = useState("");
   const listRequestRef = useRef(0);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -291,6 +293,8 @@ const StudentListScope: React.FC = () => {
   const [detailInitialTab, setDetailInitialTab] =
     useState<StudentDetailInitialTab>("summary");
   const [moveClassModalOpen, setMoveClassModalOpen] = useState(false);
+  const [registrationApprovalOpen, setRegistrationApprovalOpen] =
+    useState(false);
   const [promoting, setPromoting] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [deletingStudentIds, setDeletingStudentIds] = useState<Set<string>>(
@@ -303,6 +307,8 @@ const StudentListScope: React.FC = () => {
   const [loadError, setLoadError] = useState("");
   const readOnly =
     scopeReadOnly || !canEditStudentList(userData, currentUser?.email || "");
+  const profileActionsDisabled =
+    loading || profilesLoading || Boolean(profilesError);
   const canResetCorePoints =
     !readOnly && canManageW8Domains(userData, currentUser?.email || "");
   const mutationConfig = scopedConfigFromSemesterId(semesterId, config);
@@ -326,17 +332,47 @@ const StudentListScope: React.FC = () => {
     applyFilters();
   }, [normalizedStudents, gradeFilter, classFilter, searchQuery]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [gradeFilter, classFilter, searchQuery]);
+
   const fetchStudents = async (options: { silent?: boolean } = {}) => {
     const requestId = ++listRequestRef.current;
     if (!options.silent) setLoading(true);
     setLoadError("");
+    setProfilesError("");
+    setProfilesLoading(false);
+    let rosterDisplayed = false;
     try {
       const state = await getArchiveEnrollmentState({
         source: "CURRENT",
         callSite: "StudentList.fetchStudents",
       });
+      if (requestId !== listRequestRef.current) return;
+      const applyScope = () => {
+        setSemesterId(state.semesterId);
+        const configuredSemesterId =
+          config?.year && config?.semester
+            ? `${config.year}-${config.semester}`
+            : state.semesterId;
+        setScopeReadOnly(
+          state.readOnly || configuredSemesterId !== state.semesterId,
+        );
+      };
       let list: Student[];
       if (canEditStudentList(userData, currentUser?.email || "")) {
+        if (!state.legacy && state.provenance === "CURRENT") {
+          // Canonical enrollment snapshots are enough to display the roster.
+          // Emails and mutation versions arrive separately; never use these
+          // preview rows to write a profile or fall back to a legacy mutation.
+          const roster = await toStudentList(state, new Map());
+          if (requestId !== listRequestRef.current) return;
+          applyScope();
+          setStudents(sortStudents(roster));
+          setProfilesLoading(true);
+          setLoading(false);
+          rosterDisplayed = true;
+        }
         const editStates = await loadStudentProfileEditStates(
           scopedConfigFromSemesterId(state.semesterId, config),
           state.enrollments
@@ -366,63 +402,64 @@ const StudentListScope: React.FC = () => {
         });
       } else list = await toStudentList(state);
       if (requestId !== listRequestRef.current) return;
-      setSemesterId(state.semesterId);
-      const configuredSemesterId =
-        config?.year && config?.semester
-          ? `${config.year}-${config.semester}`
-          : state.semesterId;
-      setScopeReadOnly(
-        state.readOnly || configuredSemesterId !== state.semesterId,
-      );
-
-      list.sort((a, b) => {
-        const aCanonicalGrade = toCanonicalOptionValue(a.grade, gradeOptions);
-        const bCanonicalGrade = toCanonicalOptionValue(b.grade, gradeOptions);
-        const aGradeOrder =
-          gradeOrderMap[aCanonicalGrade] ?? Number.MAX_SAFE_INTEGER;
-        const bGradeOrder =
-          gradeOrderMap[bCanonicalGrade] ?? Number.MAX_SAFE_INTEGER;
-        if (aGradeOrder !== bGradeOrder) return aGradeOrder - bGradeOrder;
-
-        if (aCanonicalGrade !== bCanonicalGrade) {
-          return aCanonicalGrade.localeCompare(bCanonicalGrade, "ko");
-        }
-
-        const aClass = classSortValue(
-          toCanonicalOptionValue(a.class, classOptions),
-        );
-        const bClass = classSortValue(
-          toCanonicalOptionValue(b.class, classOptions),
-        );
-        if (aClass.numeric && bClass.numeric) {
-          const classGap = Number(aClass.value) - Number(bClass.value);
-          if (classGap !== 0) return classGap;
-        } else {
-          const classGap = String(aClass.value).localeCompare(
-            String(bClass.value),
-            "ko",
-          );
-          if (classGap !== 0) return classGap;
-        }
-
-        return a.number - b.number;
-      });
-
-      setStudents(list);
-      setFilteredStudents(list);
+      applyScope();
+      setStudents(sortStudents(list));
     } catch (error) {
       if (requestId !== listRequestRef.current) return;
       console.error("Error fetching students:", error);
-      setStudents([]);
-      setFilteredStudents([]);
-      setScopeReadOnly(true);
-      setLoadError(
-        "현재 학기 학생 명단을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
+      if (rosterDisplayed) {
+        setProfilesError(
+          "명단은 불러왔지만 이메일과 수정 정보를 확인하지 못했습니다. 새로고침해 주세요.",
+        );
+      } else {
+        setStudents([]);
+        setFilteredStudents([]);
+        setScopeReadOnly(true);
+        setLoadError(
+          "현재 학기 학생 명단을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
+      }
     } finally {
-      if (requestId === listRequestRef.current) setLoading(false);
+      if (requestId === listRequestRef.current) {
+        setLoading(false);
+        setProfilesLoading(false);
+      }
     }
   };
+
+  const sortStudents = (list: Student[]) =>
+    list.sort((a, b) => {
+      const aCanonicalGrade = toCanonicalOptionValue(a.grade, gradeOptions);
+      const bCanonicalGrade = toCanonicalOptionValue(b.grade, gradeOptions);
+      const aGradeOrder =
+        gradeOrderMap[aCanonicalGrade] ?? Number.MAX_SAFE_INTEGER;
+      const bGradeOrder =
+        gradeOrderMap[bCanonicalGrade] ?? Number.MAX_SAFE_INTEGER;
+      if (aGradeOrder !== bGradeOrder) return aGradeOrder - bGradeOrder;
+
+      if (aCanonicalGrade !== bCanonicalGrade) {
+        return aCanonicalGrade.localeCompare(bCanonicalGrade, "ko");
+      }
+
+      const aClass = classSortValue(
+        toCanonicalOptionValue(a.class, classOptions),
+      );
+      const bClass = classSortValue(
+        toCanonicalOptionValue(b.class, classOptions),
+      );
+      if (aClass.numeric && bClass.numeric) {
+        const classGap = Number(aClass.value) - Number(bClass.value);
+        if (classGap !== 0) return classGap;
+      } else {
+        const classGap = String(aClass.value).localeCompare(
+          String(bClass.value),
+          "ko",
+        );
+        if (classGap !== 0) return classGap;
+      }
+
+      return a.number - b.number;
+    });
 
   const loadSchoolConfig = async () => {
     try {
@@ -537,7 +574,6 @@ const StudentListScope: React.FC = () => {
     }
 
     setFilteredStudents(result);
-    setCurrentPage(1);
   };
 
   const handleSelectAll = (checked: boolean) => {
@@ -568,7 +604,7 @@ const StudentListScope: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (readOnly) return;
+    if (readOnly || profileActionsDisabled) return;
     const target = students.find((student) => student.id === id);
     if (!target) return;
     const confirmed = await confirm({
@@ -604,7 +640,7 @@ const StudentListScope: React.FC = () => {
   };
 
   const handleBulkDelete = async () => {
-    if (readOnly) return;
+    if (readOnly || profileActionsDisabled) return;
     const confirmed = await confirm({
       title: `선택한 ${selectedIds.size}명을 삭제하시겠습니까?`,
       message: "삭제한 학생 정보는 복구할 수 없습니다.",
@@ -641,7 +677,7 @@ const StudentListScope: React.FC = () => {
   };
 
   const handleBulkPromote = async () => {
-    if (readOnly || promoting) return;
+    if (readOnly || profileActionsDisabled || promoting) return;
     const confirmed = await confirm({
       title: `선택한 ${selectedIds.size}명을 진급 처리하시겠습니까?`,
       message: "선택한 학생의 학년을 1학년씩 올립니다.",
@@ -708,7 +744,12 @@ const StudentListScope: React.FC = () => {
   };
 
   const handleResetCorePoints = async (student: Student) => {
-    if (!canResetCorePoints || !isBangTestStudent(student)) return;
+    if (
+      !canResetCorePoints ||
+      profileActionsDisabled ||
+      !isBangTestStudent(student)
+    )
+      return;
     const confirmed = await confirm({
       title: "핵심포인트 기록을 초기화하시겠습니까?",
       message: `${student.name || getStudentIdentityLabel(student)} 학생의 현재 학기 학습 진행 기록을 초기화합니다. 저장한 답안은 유지됩니다.`,
@@ -802,6 +843,17 @@ const StudentListScope: React.FC = () => {
                 ({filteredStudents.length}명)
               </span>
             </h2>
+            {!readOnly && semesterId && (
+              <button
+                type="button"
+                onClick={() => setRegistrationApprovalOpen(true)}
+                disabled={loading}
+                aria-haspopup="dialog"
+                className="min-h-[44px] rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                신규 학생 등록 승인
+              </button>
+            )}
           </div>
 
           <div className="flex flex-col items-center justify-between gap-3 border-b border-gray-100 p-5 md:flex-row">
@@ -863,6 +915,23 @@ const StudentListScope: React.FC = () => {
             </div>
           </div>
 
+          {profilesLoading && (
+            <p
+              role="status"
+              className="border-b border-gray-100 px-5 py-3 text-sm text-gray-600"
+            >
+              명단을 먼저 표시했습니다. 이메일과 수정 정보를 확인하고 있습니다.
+              {searchQuery.trim() && " 이메일 검색 결과는 확인 후 반영됩니다."}
+            </p>
+          )}
+          {profilesError && (
+            <p
+              role="alert"
+              className="border-b border-gray-100 px-5 py-3 text-sm text-red-700"
+            >
+              {profilesError}
+            </p>
+          )}
           <div className="flex-1 overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
@@ -952,19 +1021,25 @@ const StudentListScope: React.FC = () => {
                         </button>
                       </td>
                       <td className="hidden p-4 font-mono text-xs text-gray-500 lg:table-cell">
-                        {student.email}
+                        {student.email ||
+                          (profilesLoading
+                            ? "확인 중"
+                            : profilesError
+                              ? "확인 필요"
+                              : "")}
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex flex-wrap justify-center gap-1">
                           {!readOnly && (
                             <>
                               <button
+                                disabled={profileActionsDisabled}
                                 onClick={() => {
                                   setSelectedStudent(student);
                                   setDetailInitialTab("profile");
                                   setDetailModalOpen(true);
                                 }}
-                                className="flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
+                                className="flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 title="수정"
                               >
                                 <i className="fas fa-edit"></i>
@@ -972,7 +1047,10 @@ const StudentListScope: React.FC = () => {
                               </button>
                               <button
                                 onClick={() => void handleDelete(student.id)}
-                                disabled={deletingStudentIds.has(student.id)}
+                                disabled={
+                                  profileActionsDisabled ||
+                                  deletingStudentIds.has(student.id)
+                                }
                                 className="flex items-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 title={
                                   student.isTeacherAccount
@@ -989,9 +1067,12 @@ const StudentListScope: React.FC = () => {
                                     onClick={() =>
                                       void handleResetCorePoints(student)
                                     }
-                                    disabled={resettingCorePointStudentIds.has(
-                                      student.id,
-                                    )}
+                                    disabled={
+                                      profileActionsDisabled ||
+                                      resettingCorePointStudentIds.has(
+                                        student.id,
+                                      )
+                                    }
                                     className="flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                                     title="방테스트 핵심포인트 클릭 기록 초기화"
                                   >
@@ -1059,8 +1140,8 @@ const StudentListScope: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => void handleBulkPromote()}
-                disabled={promoting}
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-blue-600 transition hover:bg-gray-100"
+                disabled={profileActionsDisabled || promoting}
+                className="flex items-center gap-1 rounded-lg px-3 py-2 text-blue-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <i className="fas fa-level-up-alt"></i>
                 <span className="text-[11px] font-bold md:text-xs">
@@ -1068,8 +1149,9 @@ const StudentListScope: React.FC = () => {
                 </span>
               </button>
               <button
+                disabled={profileActionsDisabled}
                 onClick={() => setMoveClassModalOpen(true)}
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-green-600 transition hover:bg-gray-100"
+                className="flex items-center gap-1 rounded-lg px-3 py-2 text-green-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <i className="fas fa-exchange-alt"></i>
                 <span className="text-[11px] font-bold md:text-xs">
@@ -1078,7 +1160,7 @@ const StudentListScope: React.FC = () => {
               </button>
               <button
                 onClick={() => void handleBulkDelete()}
-                disabled={deletingStudentIds.size > 0}
+                disabled={profileActionsDisabled || deletingStudentIds.size > 0}
                 className="flex items-center gap-1 rounded-lg px-3 py-2 text-red-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <i className="fas fa-trash"></i>
@@ -1097,9 +1179,10 @@ const StudentListScope: React.FC = () => {
           </div>
         )}
 
-        {!readOnly && semesterId && (
+        {!readOnly && semesterId && registrationApprovalOpen && (
           <StudentRegistrationApprovalPanel
             semesterId={semesterId}
+            onClose={() => setRegistrationApprovalOpen(false)}
             onApproved={() => {
               void fetchStudents({ silent: true });
             }}
@@ -1110,12 +1193,14 @@ const StudentListScope: React.FC = () => {
           onClose={() => setDetailModalOpen(false)}
           student={selectedStudent}
           onUpdate={fetchStudents}
-          readOnly={readOnly}
+          readOnly={
+            readOnly || profileActionsDisabled || !selectedStudent?.editState
+          }
           initialTab={detailInitialTab}
         />
 
         <MoveClassModal
-          isOpen={!readOnly && moveClassModalOpen}
+          isOpen={!readOnly && !profileActionsDisabled && moveClassModalOpen}
           onClose={() => setMoveClassModalOpen(false)}
           selectedIds={selectedIds}
           students={students}

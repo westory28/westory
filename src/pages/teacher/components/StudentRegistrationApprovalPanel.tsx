@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import ModalSurface from "../../../components/common/ModalSurface";
 import { useAuth } from "../../../contexts/AuthContext";
 import { auth } from "../../../lib/firebase";
 import { WestoryCommandError } from "../../../lib/commandGateway";
@@ -12,6 +13,7 @@ import {
 interface Props {
   semesterId: string;
   onApproved?: () => void;
+  onClose?: () => void;
 }
 interface Flight {
   payload: StudentRegistrationApprovalInput;
@@ -21,6 +23,7 @@ interface Flight {
 const StudentRegistrationApprovalPanel: React.FC<Props> = ({
   semesterId,
   onApproved,
+  onClose,
 }) => {
   const { user } = useAuth();
   const [state, setState] = useState<RegistrationApprovalState | null>(null);
@@ -264,19 +267,25 @@ const StudentRegistrationApprovalPanel: React.FC<Props> = ({
   const disabled = busy || unconfirmed;
   const controlClass =
     "min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-gray-100";
-  return (
+  const content = (
     <section
-      className="mb-6 rounded-xl border border-gray-200 bg-white p-4 md:p-6"
-      aria-labelledby="registration-approval-title"
+      className={
+        onClose
+          ? undefined
+          : "mb-6 rounded-xl border border-gray-200 bg-white p-4 md:p-6"
+      }
+      aria-labelledby={onClose ? undefined : "registration-approval-title"}
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2
-            id="registration-approval-title"
-            className="text-lg font-bold text-gray-800"
-          >
-            신규 학생 등록 승인
-          </h2>
+          {!onClose && (
+            <h2
+              id="registration-approval-title"
+              className="text-lg font-bold text-gray-800"
+            >
+              신규 학생 등록 승인
+            </h2>
+          )}
           <p className="mt-1 text-sm text-gray-600">
             {semesterId}학기 명부와 신청 정보를 대조한 뒤 승인해 주세요.
           </p>
@@ -488,6 +497,19 @@ const StudentRegistrationApprovalPanel: React.FC<Props> = ({
         </div>
       )}
     </section>
+  );
+  return onClose ? (
+    <ModalSurface
+      open
+      title="신규 학생 등록 승인"
+      onClose={onClose}
+      dismissible={!disabled}
+      size="wide"
+    >
+      {content}
+    </ModalSurface>
+  ) : (
+    content
   );
 };
 export default StudentRegistrationApprovalPanel;

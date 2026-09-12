@@ -78,6 +78,8 @@ const approvedSecurityStateClassExceptions = new Map([
     "md:row-span-2", "order-3", "md:order-3",
   ])],
   ["src/pages/teacher/Dashboard.tsx", new Set([
+    // Follow-up request: compact semester badge and calendar + banner/ranking columns.
+    "mb-6", "flex-col", "text-2xl", "md:text-3xl", "gap-4",
     "md:flex-row", "shrink-0", "text-gray-900", "tracking-tight", "py-1", "text-xs",
     "md:text-sm", "shadow-md", "md:grid", "md:grid-cols-5", "md:grid-rows-2", "h-auto",
     "md:h-[calc(100vh-140px)]", "min-h-[500px]", "teacher-dashboard-notice", "order-1",
@@ -124,6 +126,10 @@ const approvedSecurityStateClassExceptions = new Map([
   [
     "src/pages/teacher/ManageLesson.tsx",
     new Set([
+      // 2026-09-12: user removed the auxiliary editor below the PDF.
+      "overflow-y-auto", "border-slate-200", "list-none", "justify-between",
+      "gap-3", "text-slate-800", "[&::-webkit-details-marker]:hidden",
+      "text-slate-500", "border-t",
       "mt-4",
       "rounded-3xl",
       "uppercase",
@@ -291,7 +297,10 @@ for (const dashboard of [teacherDashboard, studentDashboard]) {
   assert.match(dashboard, /domain:\s*"SCHEDULE"/u, "Dashboard reads must be scoped to the visible calendar");
   assert.match(dashboard, /<WisRankingPanel/u, "The existing Wis panel must remain available");
 }
-assert.match(teacherDashboard, /<h1[^>]*text-2xl[^>]*md:text-3xl[^>]*>[\s\S]*?\{year\}학년도 \{semester\}학기[\s\S]*?<\/h1>/u);
+assert.match(teacherDashboard, /<h1[^>]*text-xl[^>]*>[\s\S]*?\{year\}학년도 \{semester\}학기[\s\S]*?<\/h1>/u);
+assert.match(teacherDashboard, /className="teacher-dashboard-side"[\s\S]*?<TeacherDashboardBanner[\s\S]*?teacher-dashboard-ranking/u, "The restored image banner must precede the compact ranking in its own column");
+assert.match(teacherDashboard, /loadVisibleNotices\(db, getSemesterCollectionPath\(config, "notices"\)\)/u, "The image banner reads only visible notices in the selected semester");
+assert.doesNotMatch(teacherDashboard, /onOpenCommunication|\/teacher\/communication|subscribeVisibleNotices/u, "Restoring the read-only image banner must not revive the retired board editor or subscriptions");
 assert.doesNotMatch(teacherDashboard, /<h1[^>]*>\s*대시보드/u);
 assert.match(teacherDashboard, /<TeacherCalendarEventModal/u);
 assert.match(teacherDashboard, /onDateDoubleClick=/u);

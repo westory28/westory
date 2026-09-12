@@ -18,6 +18,7 @@ export const useAuth = () => ({config:{year:'2026',semester:'2'},configReady:tru
 export const db = {}; export const doc = () => ({});
 export const getDoc = async () => ({exists:()=>false});
 export const onSnapshot = (_ref, next) => {queueMicrotask(()=>next({exists:()=>false}));return ()=>{};};
+export const loadVisibleNotices = async () => { await wait(30); return scenario()==='empty' ? [] : [{id:'synthetic-banner',content:'학교 안내 합성 배너',imageUrl:'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"%3E%3Crect width="640" height="360" fill="%23eff6ff"/%3E%3Ctext x="320" y="185" text-anchor="middle" font-size="36" fill="%232563eb"%3EWestory%3C/text%3E%3C/svg%3E'}]; };
 export class W8DomainError extends Error { constructor(kind,message){super(message);this.kind=kind;} }
 export const toW8LocalDateTimeInput = value => {const date=new Date(value);return new Date(date.getTime()+9*60*60*1000).toISOString().slice(0,16);};
 export const toW8ServerDateTime = value => new Date(value+'+09:00').toISOString();
@@ -42,7 +43,7 @@ const result = await build({
   write: false, platform: "browser", format: "iife", metafile: true,
   define: { "process.env.NODE_ENV": '"development"', "import.meta.env": "{}" },
   plugins: [{ name: "synthetic-calendar-only", setup(api) {
-    api.onResolve({ filter: /AuthContext$|\/firebase$|firebase\/firestore$|\/archiveEnrollment$|\/w8Domains$|\/koreanPublicHolidays$|\/WisRankingPanel$/ }, () => ({ path: mock }));
+    api.onResolve({ filter: /AuthContext$|\/firebase$|firebase\/firestore$|\/archiveEnrollment$|\/w8Domains$|\/koreanPublicHolidays$|\/WisRankingPanel$|\/visibleSchedule$/ }, () => ({ path: mock }));
   } }],
 });
 const inputs = Object.keys(result.metafile.inputs);

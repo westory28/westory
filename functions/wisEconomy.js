@@ -26,6 +26,9 @@ const WIS_LEGACY_ISSUE_COLLECTION = "wis_legacy_issues";
 const WIS_HALL_OF_FAME_CONFIG_PATH = "site_settings/interface_config";
 const WIS_QUERY_DEFAULT_LIMIT = 100;
 const WIS_QUERY_MAX_LIMIT = 200;
+// A teacher roster overview can cover one school cohort without another callable.
+// Student projections and all other teacher queries retain the smaller bound.
+const WIS_TEACHER_OVERVIEW_MAX_LIMIT = 500;
 const WIS_RECENT_LEDGER_LIMIT = 100;
 const WIS_HALL_ACCOUNT_LIMIT = 2_000;
 const WIS_REBUILD_LEDGER_LIMIT = 400;
@@ -2524,7 +2527,13 @@ const normalizeQuery = (raw) => {
     limit:
       value.limit === undefined
         ? WIS_QUERY_DEFAULT_LIMIT
-        : integer(value.limit, "limit", { min: 1, max: WIS_QUERY_MAX_LIMIT }),
+        : integer(value.limit, "limit", {
+            min: 1,
+            max:
+              audience === "teacher" && projection === "overview"
+                ? WIS_TEACHER_OVERVIEW_MAX_LIMIT
+                : WIS_QUERY_MAX_LIMIT,
+          }),
   };
 };
 const projectTeacherRosterFields = async (transaction, accounts, scope) => {

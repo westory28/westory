@@ -47,6 +47,8 @@ jobs:
       - run: node scripts/verify-lesson-initial-load.mjs
       - run: node scripts/verify-session-query-cache.mjs
       - run: node scripts/verify-student-profile-batching.mjs
+      - run: node scripts/verify-student-roster-progressive-loading.mjs
+      - run: node scripts/verify-wis-overview-loading.mjs
       - run: node scripts/verify-teacher-navigation-preload.mjs
       - run: node scripts/verify-enrollment-roster-form.mjs
       - run: node scripts/verify-semester-transition-guide.mjs

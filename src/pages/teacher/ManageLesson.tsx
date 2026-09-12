@@ -95,7 +95,7 @@ import { emitSessionActivity } from "../../lib/sessionActivity";
 import type { SourceArchiveAsset } from "../../types";
 import LessonSourceArchivePickerModal from "./components/LessonSourceArchivePickerModal";
 import {
-  LessonBodyEditor,
+  FootnoteEditorDialog,
   LessonEditorHeader,
   LessonPdfSection,
   LessonPreviewLauncher,
@@ -670,7 +670,6 @@ const ManageLesson: React.FC = () => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editorTab, setEditorTab] = useState<LessonEditorTab>("pdf");
-  const [bodyEditorOpen, setBodyEditorOpen] = useState(false);
   const [lessonTitle, setLessonTitle] = useState("");
   const [lessonVideo, setLessonVideo] = useState("");
   const [lessonContent, setLessonContent] = useState("");
@@ -3616,7 +3615,7 @@ const ManageLesson: React.FC = () => {
                     ))}
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-3 lg:p-4">
+                <div className="min-w-0 flex-1 p-3 lg:p-4">
                   {editorTab === "pdf" && (
                     <div className="space-y-4">
                       <LessonPdfSection
@@ -3693,74 +3692,33 @@ const ManageLesson: React.FC = () => {
                           pdfSaveState === "saving"
                         }
                       />
-                      <details
-                        className="rounded-xl border border-slate-200 bg-white"
-                        open={bodyEditorOpen || Boolean(footnoteEditorSession)}
-                        onToggle={(event) =>
-                          setBodyEditorOpen(event.currentTarget.open)
-                        }
-                      >
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-slate-800 [&::-webkit-details-marker]:hidden">
-                          <span>본문/각주 보조 편집</span>
-                          <span className="text-xs font-semibold text-slate-500">
-                            각주 {lessonFootnotes.length}개
-                          </span>
-                        </summary>
-                        <div className="border-t border-slate-200 p-4">
-                          <LessonBodyEditor
-                            lessonContent={lessonContent}
-                            onLessonContentChange={setLessonContent}
-                            bodyInsertMessage={bodyInsertMessage}
-                            footnotes={lessonFootnotes}
-                            footnoteUsageMap={footnoteUsageMap}
-                            footnoteAnchorCountMap={footnoteAnchorCountMap}
-                            selectedFootnoteId={activeFootnoteId}
-                            onBodySelectionChange={handleBodySelectionChange}
-                            onAddFootnote={handleAddFootnote}
-                            onAddFootnoteAndInsert={handleAddFootnoteAndInsert}
-                            onOpenFootnoteEditor={openEditFootnoteEditor}
-                            onFootnoteDraftChange={
-                              handleFootnoteEditorDraftChange
-                            }
-                            onSaveFootnoteEditor={handleSaveFootnoteEditor}
-                            onCloseFootnoteEditor={handleCloseFootnoteEditor}
-                            onMoveFootnote={handleMoveFootnote}
-                            onDeleteFootnote={handleDeleteFootnote}
-                            onInsertFootnoteToken={
-                              insertFootnoteTokenIntoContent
-                            }
-                            footnoteEditorSession={
-                              footnoteEditorSession
-                                ? {
-                                    mode: footnoteEditorSession.mode,
-                                    draft: footnoteEditorSession.draft,
-                                    pendingAnchorPlacement:
-                                      footnoteEditorSession.pendingAnchorPlacement
-                                        ? {
-                                            page: footnoteEditorSession
-                                              .pendingAnchorPlacement.page,
-                                          }
-                                        : null,
-                                    insertIntoBody:
-                                      footnoteEditorSession.insertIntoBody,
-                                  }
-                                : null
-                            }
-                            onSelectFootnoteImage={handleSelectFootnoteImage}
-                            onRemoveFootnoteImage={handleRemoveFootnoteImage}
-                            onOpenSourceArchivePicker={
-                              handleOpenSourceArchivePicker
-                            }
-                            onClearSourceArchiveImage={
-                              handleClearSourceArchiveImage
-                            }
-                            getFootnotePreviewUrl={getFootnotePreviewUrl}
-                            sourceArchivePickerOpen={Boolean(
-                              sourceArchivePickerFootnoteId,
-                            )}
-                          />
-                        </div>
-                      </details>
+                      {footnoteEditorSession && (
+                        <FootnoteEditorDialog
+                          session={footnoteEditorSession}
+                          footnotes={lessonFootnotes}
+                          footnoteUsageMap={footnoteUsageMap}
+                          footnoteAnchorCountMap={footnoteAnchorCountMap}
+                          onFootnoteDraftChange={
+                            handleFootnoteEditorDraftChange
+                          }
+                          onSaveFootnoteEditor={handleSaveFootnoteEditor}
+                          onCloseFootnoteEditor={handleCloseFootnoteEditor}
+                          onMoveFootnote={handleMoveFootnote}
+                          onDeleteFootnote={handleDeleteFootnote}
+                          onSelectFootnoteImage={handleSelectFootnoteImage}
+                          onRemoveFootnoteImage={handleRemoveFootnoteImage}
+                          onOpenSourceArchivePicker={
+                            handleOpenSourceArchivePicker
+                          }
+                          onClearSourceArchiveImage={
+                            handleClearSourceArchiveImage
+                          }
+                          getFootnotePreviewUrl={getFootnotePreviewUrl}
+                          isNestedModalOpen={Boolean(
+                            sourceArchivePickerFootnoteId,
+                          )}
+                        />
+                      )}
                     </div>
                   )}
                   {editorTab === "student-preview" && (
