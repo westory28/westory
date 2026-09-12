@@ -23,6 +23,7 @@ const lessonAnswers = require("./lessonAnswers");
 const lessonManagement = require("./lessonManagement");
 const sourceArchiveManagement = require("./sourceArchiveManagement");
 const mapManagement = require("./mapManagement");
+const mapTagWisReward = require("./mapTagWisReward");
 const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
 const historyDictionaryCommands = require("./historyDictionaryCommands");
@@ -50,6 +51,7 @@ const COMMAND_ID_PATTERN =
   /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[47][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9A-HJKMNP-TV-Z]{26})$/i;
 const MAX_CANONICAL_PAYLOAD_BYTES = 750_000;
 const COMMAND_TYPES = Object.freeze({
+  CLAIM_MAP_TAG_REWARD: mapTagWisReward.COMMAND_TYPE,
   UPDATE_TERMS_SETTINGS: "updateTermsSettings",
   ADD_CONSENT_ITEM: "addConsentItem",
   UPDATE_CONSENT_ITEM: "updateConsentItem",
@@ -368,6 +370,7 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (commandType === mapTagWisReward.COMMAND_TYPE) return mapTagWisReward.normalizePayload(commandType, payload);
   if (commandType === studentRegistrationApproval.COMMAND_TYPE) return studentRegistrationApproval.normalizeStudentRegistrationApprovalPayload(commandType, payload);
   if (commandType === studentEnrollmentProfile.COMMAND_TYPE) return studentEnrollmentProfile.normalizeStudentProfilePayload(commandType, payload);
   if (commandType === wisLegacyMigration.COMMAND_TYPE) return wisLegacyMigration.normalizeLegacyWisMigrationPayload(commandType, payload);
@@ -1009,6 +1012,7 @@ const applyBusinessCommand = async ({
 
   if (
     commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS ||
+    commandType === mapTagWisReward.COMMAND_TYPE ||
     Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType) ||
     Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType) ||
     commandType === wisLegacyMigration.COMMAND_TYPE ||
@@ -1241,6 +1245,7 @@ const createCommandGatewayCore = ({
   concreteTimestamp = () => Timestamp.now(),
   projectId = resolveProjectId(),
   getSessionOptions = (commandType) => {
+    if (commandType === mapTagWisReward.COMMAND_TYPE) return { recentAuth: false, highRisk: false };
     if (Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType)) return { recentAuth: false, highRisk: false };
     if (historyDictionaryCommands.STUDENT_COMMAND_TYPES.has(commandType)) return { recentAuth: false, highRisk: false };
     if (Object.values(teacherPatchNotes.PATCH_NOTE_COMMAND_TYPES).includes(commandType)) return { recentAuth: false, highRisk: false };

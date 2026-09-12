@@ -34,10 +34,12 @@ const PERIOD_OPTION_BY_VALUE = new Map(
 const LEGACY_PERIOD_VALUE_BY_LABEL = new Map<string, SchedulePeriodValue>([
   [SCHEDULE_ALL_DAY_PERIOD_VALUE, SCHEDULE_ALL_DAY_PERIOD_VALUE],
   ["\uD558\uB8E8\uC885\uC77C", SCHEDULE_ALL_DAY_PERIOD_VALUE],
-  ...SCHEDULE_PERIOD_OPTIONS.flatMap((option) => [
-    [option.label, option.value],
-    [option.value, option.value],
-  ]),
+  ...SCHEDULE_PERIOD_OPTIONS.flatMap<[string, SchedulePeriodValue]>(
+    (option) => [
+      [option.label, option.value],
+      [option.value, option.value],
+    ],
+  ),
 ]);
 
 export const normalizeSchedulePeriod = (
@@ -48,8 +50,12 @@ export const normalizeSchedulePeriod = (
   return LEGACY_PERIOD_VALUE_BY_LABEL.get(rawValue) || fallback;
 };
 
+const getSchedulePeriodOption = (value: unknown) =>
+  PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)) ??
+  SCHEDULE_PERIOD_OPTIONS[2];
+
 export const getSchedulePeriodLabel = (value: unknown) => {
-  return PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)).label;
+  return getSchedulePeriodOption(value).label;
 };
 
 export const getSchedulePeriodRangeLabel = (
@@ -72,7 +78,7 @@ export const getSchedulePeriodRangeLabel = (
 };
 
 export const getSchedulePeriodOrder = (value: unknown) => {
-  return PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)).order;
+  return getSchedulePeriodOption(value).order;
 };
 
 export const compareSchedulePeriod = (
@@ -105,3 +111,23 @@ export const compareCalendarSchedule = <
   if (leftDate !== rightDate) return leftDate.localeCompare(rightDate);
   return compareSchedulePeriod(left, right);
 };
+
+const getCalendarEventPeriodFields = (event: unknown) => {
+  const props =
+    event && typeof event === "object" && "extendedProps" in event
+      ? event.extendedProps
+      : null;
+  if (!props || typeof props !== "object") return {};
+  return {
+    startPeriod: "startPeriod" in props ? props.startPeriod : undefined,
+    period: "period" in props ? props.period : undefined,
+    title:
+      "title" in props && typeof props.title === "string" ? props.title : "",
+  };
+};
+
+export const compareCalendarEventPeriod = (left: unknown, right: unknown) =>
+  compareSchedulePeriod(
+    getCalendarEventPeriodFields(left),
+    getCalendarEventPeriodFields(right),
+  );

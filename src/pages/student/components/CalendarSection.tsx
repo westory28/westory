@@ -6,7 +6,7 @@ import listPlugin from "@fullcalendar/list";
 import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
 import {
   compareCalendarSchedule,
-  compareSchedulePeriod,
+  compareCalendarEventPeriod,
   getSchedulePeriodOrder,
 } from "../../../lib/schedulePeriods";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
@@ -146,7 +146,7 @@ const getPopoverAnchor = (element: HTMLElement): ScheduleMorePopoverAnchor => {
   };
 };
 
-const resolveMoreLinkAnchor = (event: MouseEvent) => {
+const resolveMoreLinkAnchor = (event: UIEvent) => {
   if (event.currentTarget instanceof HTMLElement) return event.currentTarget;
   const target = event.target;
   const element =
@@ -297,7 +297,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     return new Date(date.getTime() - offset).toISOString().split("T")[0];
   };
 
-  const handleMoreLinkClick = (arg: { date: Date; jsEvent: MouseEvent }) => {
+  const handleMoreLinkClick = (arg: { date: Date; jsEvent: UIEvent }) => {
     arg.jsEvent.preventDefault();
     arg.jsEvent.stopPropagation();
     const anchorElement = resolveMoreLinkAnchor(arg.jsEvent);
@@ -532,12 +532,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           displayEventTime={false}
           headerToolbar={false}
           events={fcEvents}
-          eventOrder={(left, right) =>
-            compareSchedulePeriod(
-              left.extendedProps as CalendarEvent,
-              right.extendedProps as CalendarEvent,
-            )
-          }
+          eventOrder={compareCalendarEventPeriod}
           datesSet={(arg) => {
             setMorePopover(null);
             setCurrentViewType(arg.view.type as CalendarViewType);

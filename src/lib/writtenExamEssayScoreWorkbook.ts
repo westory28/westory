@@ -538,7 +538,9 @@ const parseWrittenExamObjectiveScoreWorkbook = (
   const layout = findObjectiveScoreLayout(rows);
   if (!layout) return null;
 
-  const items = layout.questionColumns.map((column) => ({
+  const items = layout.questionColumns.map<
+    ParsedWrittenExamEssayScoreUpload["items"][number]
+  >((column) => ({
     name: `서답형 ${column.questionNumber}번`,
     shortName: `${column.questionNumber}번`,
     itemKey: `objective-${column.questionNumber}`,
@@ -581,31 +583,33 @@ const parseWrittenExamObjectiveScoreWorkbook = (
         classNumber.classValue || normalizeSchoolValue(params.fallbackClass);
       const rowNumber = classNumber.numberValue;
       const studentName = getCellText(row, layout.nameIndex);
-      const rowItems = layout.questionColumns.map((column) => {
-        const parsed = parseObjectiveItemScore(
-          getCell(row, column.index),
-          column.correctAnswer,
-          column.maxScore,
-        );
-        return {
-          name: `서답형 ${column.questionNumber}번`,
-          shortName: `${column.questionNumber}번`,
-          itemKey: `objective-${column.questionNumber}`,
-          groupKey: "objective",
-          groupLabel: "서답형",
-          examSection: WRITTEN_EXAM_SECTION_OBJECTIVE,
-          questionNumber: column.questionNumber,
-          correctAnswer: column.correctAnswer,
-          studentAnswer: parsed.studentAnswer,
-          answerCorrect: parsed.answerCorrect,
-          answerStatus: parsed.answerStatus,
-          answerChoices: OBJECTIVE_ANSWER_CHOICES,
-          score: parsed.score,
-          maxScore: column.maxScore,
-          scoreEntered: parsed.scoreEntered,
-          feedback: "",
-        };
-      });
+      const rowItems = layout.questionColumns.map<PerformanceScoreItem>(
+        (column) => {
+          const parsed = parseObjectiveItemScore(
+            getCell(row, column.index),
+            column.correctAnswer,
+            column.maxScore,
+          );
+          return {
+            name: `서답형 ${column.questionNumber}번`,
+            shortName: `${column.questionNumber}번`,
+            itemKey: `objective-${column.questionNumber}`,
+            groupKey: "objective",
+            groupLabel: "서답형",
+            examSection: WRITTEN_EXAM_SECTION_OBJECTIVE,
+            questionNumber: column.questionNumber,
+            correctAnswer: column.correctAnswer,
+            studentAnswer: parsed.studentAnswer,
+            answerCorrect: parsed.answerCorrect,
+            answerStatus: parsed.answerStatus,
+            answerChoices: OBJECTIVE_ANSWER_CHOICES,
+            score: parsed.score,
+            maxScore: column.maxScore,
+            scoreEntered: parsed.scoreEntered,
+            feedback: "",
+          };
+        },
+      );
       const calculatedTotal = roundScore(
         rowItems.reduce(
           (sum, item) =>
@@ -739,9 +743,11 @@ export const parseWrittenExamEssayScoreWorkbook = (
   if (!criterionColumns.length && legacyMaxScore <= 0) {
     throw new Error("논술형 만점을 먼저 입력해 주세요.");
   }
-  const items =
+  const items: ParsedWrittenExamEssayScoreUpload["items"] =
     criterionColumns.length > 0
-      ? criterionColumns.map((column) => ({
+      ? criterionColumns.map<
+          ParsedWrittenExamEssayScoreUpload["items"][number]
+        >((column) => ({
           name: column.header,
           shortName: column.itemKey,
           itemKey: column.itemKey,
@@ -785,8 +791,8 @@ export const parseWrittenExamEssayScoreWorkbook = (
       const parsedFeedback = parseEssayFeedback(
         getCell(row, indexes.feedbackIndex),
       );
-      const rowItems = criterionColumns.length
-        ? criterionColumns.map((column) => {
+      const rowItems: PerformanceScoreItem[] = criterionColumns.length
+        ? criterionColumns.map<PerformanceScoreItem>((column) => {
             const score = toFiniteScore(getCell(row, column.index));
             return {
               name: column.header,

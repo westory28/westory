@@ -23,6 +23,7 @@ const lessonAnswers = require("./lessonAnswers");
 const lessonManagement = require("./lessonManagement");
 const sourceArchiveManagement = require("./sourceArchiveManagement");
 const mapManagement = require("./mapManagement");
+const mapTagWisReward = require("./mapTagWisReward");
 const teacherPatchNotes = require("./teacherPatchNotes");
 const historyDictionaryImport = require("./historyDictionaryImport");
 const historyDictionaryCommands = require("./historyDictionaryCommands");
@@ -11728,6 +11729,7 @@ const authorizeCommandGatewayActor = async ({
     commandType !== wisLegacyMigration.COMMAND_TYPE &&
     commandType !== studentEnrollmentProfile.COMMAND_TYPE &&
     commandType !== studentRegistrationApproval.COMMAND_TYPE &&
+    commandType !== mapTagWisReward.COMMAND_TYPE &&
     !assessmentCommandTypes.includes(commandType) &&
     !lessonAnswerCommandTypes.includes(commandType) &&
     !dictionaryCommandTypes.includes(commandType) &&
@@ -11875,6 +11877,11 @@ const authorizeCommandGatewayActor = async ({
       throw new HttpsError("permission-denied", "학생 계정으로 답안을 저장해 주세요.", { reason: "LESSON_STUDENT_REQUIRED" });
     }
     return { actorUid, actorEmail, actorRole: "student", actorCapability: "lesson:save_own_answers" };
+  }
+  if (commandType === mapTagWisReward.COMMAND_TYPE) {
+    if (!profileSnapshot.exists || profile.role !== "student")
+      throw new HttpsError("permission-denied", "학생 계정으로 지도 태그를 탐색해 주세요.", { reason: "MAP_REWARD_STUDENT_REQUIRED" });
+    return { actorUid, actorEmail, actorRole: "student", actorCapability: "map:claim_own_reward" };
   }
   if (lessonManagementCommandTypes.includes(commandType) || mapManagementCommandTypes.includes(commandType)) {
     if (!profileSnapshot.exists || profile.role !== "teacher") throw new HttpsError("permission-denied", "수업자료 편집 권한이 필요합니다.", { reason: "LESSON_MANAGE_REQUIRED" });
@@ -12222,6 +12229,15 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
+    [mapTagWisReward.COMMAND_TYPE]: wisEconomy.createMapTagWisRewardAdapter({
+      loadPolicy: async (transaction, scope) => {
+        const [year, term] = scope.split("-");
+        return loadPolicy({ get: async (ref) => {
+          const snapshot = await transaction.get(ref.path);
+          return { exists: snapshot.exists, data: () => snapshot.data };
+        } }, year, term);
+      },
+    }),
     [studentRegistrationApproval.COMMAND_TYPE]: studentRegistrationApproval.createStudentRegistrationApprovalAdapter({ getAuthUser: (uid) => getAuth().getUser(uid) }),
     [studentEnrollmentProfile.COMMAND_TYPE]: studentEnrollmentProfile.createStudentProfileAdapter(),
     [wisLegacyMigration.COMMAND_TYPE]: wisLegacyMigration.createLegacyWisMigrationAdapter({ projectId: commandGateway.resolveProjectId() }),

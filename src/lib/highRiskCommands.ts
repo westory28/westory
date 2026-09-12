@@ -1,4 +1,5 @@
 const COMMAND_GATEWAY_LOW_RISK_COMMANDS = new Set([
+  "claimMapTagReward",
   "requestHistoryDictionaryTerm",
   "saveStudentHistoryDictionaryWord",
   "saveStudentHistoryDictionaryEntry",

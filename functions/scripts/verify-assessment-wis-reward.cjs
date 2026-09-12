@@ -226,13 +226,17 @@ async function rejectsNoWrites(h, run, reason) {
       timestamp: h.timestamp(), concreteTimestamp: h.timestamp(), actor: { actorUid: uid, actorRole: "student" },
       payload: { semesterId: scope, expectedSemesterRevision: 7, expectedEconomyRevision: 2, expectedAccountRevision: 1, accountId, amount: 999, sourceId: "fake", reason: "fake" } })), "WIS_MANAGE_REQUIRED");
   });
-  await test("student ledger projection exposes only the four safe activity labels", () => {
+  await test("student ledger projection preserves safe automatic activity labels", () => {
     const wisSource = fs.readFileSync(require.resolve("../wisEconomy"), "utf8");
     const wisAst = ts.createSourceFile("wisEconomy.js", wisSource, ts.ScriptTarget.Latest, true);
-    let projection;
-    function visit(node) { if (ts.isVariableDeclaration(node) && node.name.getText(wisAst) === "projectStudentLedgerEntry") projection = node.initializer.getText(wisAst); ts.forEachChild(node, visit); }
-    visit(wisAst); const project = vm.runInNewContext(`(${projection})`, { ASSESSMENT_REWARD_ACTIVITIES: new Set(["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus"]) });
-    for (const activityType of ["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus"]) {
+    let projection, activities;
+    function visit(node) {
+      if (ts.isVariableDeclaration(node) && node.name.getText(wisAst) === "projectStudentLedgerEntry") projection = node.initializer.getText(wisAst);
+      if (ts.isVariableDeclaration(node) && node.name.getText(wisAst) === "AUTOMATIC_REWARD_ACTIVITIES") activities = node.initializer.getText(wisAst);
+      ts.forEachChild(node, visit);
+    }
+    visit(wisAst); const project = vm.runInNewContext(`const AUTOMATIC_REWARD_ACTIVITIES = ${activities}; (${projection})`);
+    for (const activityType of ["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus", "map_tag"]) {
       const value = project({ type: "GRANT", activityType, sourceId: "assessment:private", sourceResultId: "private", actorUid: "system:assessment-reward" });
       assert.equal(value.activityType, activityType); assert(!Object.hasOwn(value, "sourceId")); assert(!Object.hasOwn(value, "sourceResultId")); assert(!Object.hasOwn(value, "actorUid"));
     }

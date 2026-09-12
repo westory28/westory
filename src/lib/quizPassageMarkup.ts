@@ -106,7 +106,8 @@ export const stripQuizPassageMarkup = (value: string | null | undefined) =>
     .replace(INLINE_MARK_TOKEN_PATTERN, (_match, tokenName, text) =>
       tokenName === "blank" ? "____" : text,
     )
-    .replaceAll(BULLET_TOKEN, "");
+    .split(BULLET_TOKEN)
+    .join("");
 
 const findLineStart = (value: string, index: number) =>
   value.lastIndexOf("\n", Math.max(0, index - 1)) + 1;

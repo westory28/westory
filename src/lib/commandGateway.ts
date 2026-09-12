@@ -9,6 +9,7 @@ import {
 } from "./stepUpReauth";
 
 export type W2CommandType =
+  | "claimMapTagReward"
   | "approveStudentRegistration"
   | "updateStudentEnrollmentProfile"
   | "migrateLegacyWisAccount"
@@ -329,6 +330,12 @@ interface SourceArchiveCommandMetadata {
   source: string;
 }
 export interface W2CommandPayloads {
+  claimMapTagReward: {
+    semesterId: string;
+    mapId: string;
+    tag: string;
+    interactionId: string;
+  };
   approveStudentRegistration: {
     semesterId: string;
     expectedSemesterRevision: number;
@@ -1187,6 +1194,20 @@ interface WisAccountValuePayload extends WisAccountCommandBase {
 }
 
 export interface W2CommandResults {
+  claimMapTagReward: {
+    status: "AWARDED" | "DUPLICATE" | "NOT_ELIGIBLE" | "DISABLED";
+    awarded: boolean;
+    duplicate: boolean;
+    amount: number;
+    totalAwarded: number;
+    balance: number;
+    blockedReason: string;
+    blockedMessage: string;
+    nextEligibleAt?: string;
+    claimCount?: number;
+    maxClaims?: number;
+    ledgerEntryId?: string;
+  };
   approveStudentRegistration: {
     studentUid: string;
     semesterId?: string;

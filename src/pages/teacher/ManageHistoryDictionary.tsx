@@ -1165,10 +1165,9 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       ],
       {
         columns: [{ width: 18 }, { width: 54 }, { width: 26 }, { width: 32 }],
-        fileName: "westory_history_dictionary_template.xlsx",
         sheet: "역사 사전 업로드",
       },
-    );
+    ).toFile("westory_history_dictionary_template.xlsx");
   };
 
   const parseUploadTags = (value: unknown) =>
@@ -1311,7 +1310,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
         if (row.definition && row.definition.length < 5) {
           errors.push("풀이 5자 미만");
         }
-        if (normalizedCounts.get(row.normalizedWord) > 1) {
+        if ((normalizedCounts.get(row.normalizedWord) ?? 0) > 1) {
           errors.push("파일 내 중복 단어");
         }
         if (

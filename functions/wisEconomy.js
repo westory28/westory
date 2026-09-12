@@ -31,7 +31,7 @@ const WIS_HALL_ACCOUNT_LIMIT = 2_000;
 const WIS_REBUILD_LEDGER_LIMIT = 400;
 const WIS_INTEGRITY_VERSION = "w10p-aggregate-v1";
 const WIS_MANUAL_REVERSIBLE_TYPES = new Set(["GRANT", "DEDUCT", "ADJUST"]);
-const ASSESSMENT_REWARD_ACTIVITIES = new Set(["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus"]);
+const AUTOMATIC_REWARD_ACTIVITIES = new Set(["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus", "map_tag"]);
 
 const WIS_COMMAND_TYPES = Object.freeze({
   CREATE_SEMESTER_ECONOMY: "createSemesterEconomy",
@@ -1054,7 +1054,7 @@ const ledgerTotalsContribution = (type, delta, activityType = "") => {
   } else if (type === "GRANT" && delta > 0) {
     contribution.earnedTotal = delta;
     contribution.rankEarnedTotal = delta;
-    contribution.adjustedTotal = ["quiz", "quiz_bonus", "history_classroom", "history_classroom_bonus"].includes(activityType) ? 0 : delta;
+    contribution.adjustedTotal = AUTOMATIC_REWARD_ACTIVITIES.has(activityType) ? 0 : delta;
   } else if (type === "DEDUCT") {
     contribution.adjustedTotal = delta;
   } else if (type === "ADJUST") {
@@ -2742,7 +2742,7 @@ const projectStudentLedgerEntry = (entry) => ({
   balanceAfter: Number(entry?.balanceAfter || 0),
   reason: String(entry?.reason || ""),
   createdAt: entry?.createdAt || null,
-  ...(["history_dictionary", "history_dictionary_reclaim", ...ASSESSMENT_REWARD_ACTIVITIES].includes(
+  ...(["history_dictionary", "history_dictionary_reclaim", ...AUTOMATIC_REWARD_ACTIVITIES].includes(
     entry?.activityType,
   )
     ? { activityType: entry.activityType }
@@ -3636,6 +3636,9 @@ module.exports = {
   createWisCallableExports,
   createWisCommandAdapter,
   createAssessmentWisRewardAdapter,
+  createMapTagWisRewardAdapter: (options) => require("./mapTagWisReward").createAdapter({
+    ...options, wis: module.exports, writeProjection, ledgerIdFor,
+  }),
   createWisQueryCore,
   createWisReadinessAdapter,
   getWisCommandSessionOptions,

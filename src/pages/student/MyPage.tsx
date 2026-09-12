@@ -74,6 +74,9 @@ const LazyChart = lazyWithRetry(
 type MainMenu = "profile" | "score" | "wrong_note";
 type CategoryTab = "all" | "diagnostic" | "formative" | "exam_prep";
 
+// 기존 성적 화면은 비활성으로 유지하되 내부 데이터 가드는 계속 검사합니다.
+const isLegacyScoreViewEnabled = (): boolean => false;
+
 interface UserProfileDoc {
   name?: string;
   grade?: string;
@@ -1732,7 +1735,7 @@ const MyPage: React.FC = () => {
       showToast({
         tone: "error",
         title: "목표 저장에 실패했습니다.",
-        description: "잠시 후 다시 시도해 주세요.",
+        message: "잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setSavingGoal(false);
@@ -3764,7 +3767,7 @@ const MyPage: React.FC = () => {
               </div>
             )}
 
-            {menu === "score" && false && (
+            {menu === "score" && isLegacyScoreViewEnabled() && (
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold text-gray-800">
                   나의 성적표
@@ -4014,7 +4017,7 @@ const MyPage: React.FC = () => {
               </div>
             )}
 
-            {menu === "score" && false && (
+            {menu === "score" && isLegacyScoreViewEnabled() && (
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold text-gray-800">
                   나의 성적표

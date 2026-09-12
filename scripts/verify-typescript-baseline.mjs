@@ -10,6 +10,7 @@ const baseline = JSON.parse(
 );
 
 let output = "";
+let compilerFailure = false;
 const tscPath = fileURLToPath(
   new URL("../node_modules/typescript/bin/tsc", import.meta.url),
 );
@@ -20,6 +21,7 @@ try {
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
 } catch (error) {
+  compilerFailure = true;
   output = `${error.stdout || ""}${error.stderr || ""}`;
 }
 
@@ -47,6 +49,9 @@ const diagnostics = output
 const files = new Set(
   diagnostics.map((diagnostic) => diagnostic.file),
 );
+if (compilerFailure && diagnostics.length === 0) {
+  throw new Error("TypeScript compiler failed without readable diagnostics; validation cannot pass.");
+}
 const actualCounts = new Map();
 for (const diagnostic of diagnostics) {
   const signature = `${diagnostic.file}|${diagnostic.code}|${diagnostic.message}`;

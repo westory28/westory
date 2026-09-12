@@ -237,7 +237,7 @@ const normalizeSchoolOptions = (
     kind === "grade"
       ? ["1", "2", "3"]
       : Array.from({ length: 12 }, (_, index) => String(index + 1));
-  const sourceValues =
+  const sourceValues: SchoolOptionShape[] =
     Array.isArray(values) && values.length > 0
       ? values
       : fallbackValues.map((value) => ({ value }));

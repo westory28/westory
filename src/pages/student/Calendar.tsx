@@ -11,7 +11,7 @@ import {
 import { loadLegacyStudentScheduleProjection } from "../../lib/legacyStudentScheduleAdapter";
 import { W8DomainError } from "../../lib/w8Domains";
 import {
-  compareSchedulePeriod,
+  compareCalendarEventPeriod,
   getSchedulePeriodRangeLabel,
   getSchedulePeriodOrder,
 } from "../../lib/schedulePeriods";
@@ -270,12 +270,7 @@ const Calendar = () => {
                 right: "dayGridMonth,listMonth",
               }}
               events={events}
-              eventOrder={(left, right) =>
-                compareSchedulePeriod(
-                  left.extendedProps as CalendarEvent,
-                  right.extendedProps as CalendarEvent,
-                )
-              }
+              eventOrder={compareCalendarEventPeriod}
               dateClick={handleDateClick}
               eventClick={handleEventClick}
               eventDidMount={(arg) => {

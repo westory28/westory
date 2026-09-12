@@ -607,7 +607,7 @@ const buildWrittenExamStatsGroups = (
     };
     const maxScore = getFiniteNumber(item.maxScore) ?? 0;
     group.items.push({
-      item: item as PerformanceScoreItem,
+      item,
       index,
       label: meta.label,
       fullLabel: meta.fullLabel,
@@ -640,9 +640,9 @@ const getObjectiveOmrItems = (
       correctAnswer: item.correctAnswer || "",
       studentAnswer: item.studentAnswer || "",
       correct: item.answerCorrect,
-      score: item.score,
+      score: "score" in item ? item.score : undefined,
       maxScore: item.maxScore,
-      scoreEntered: item.scoreEntered,
+      scoreEntered: "scoreEntered" in item ? item.scoreEntered : undefined,
       invalid: item.answerStatus === "invalid",
     }))
     .sort(
@@ -1084,7 +1084,7 @@ interface WrittenExamStatsGroup {
   key: WrittenExamStatsGroupKey;
   label: string;
   items: Array<{
-    item: PerformanceScoreItem;
+    item: ObjectiveOmrSourceItem;
     index: number;
     label: string;
     fullLabel: string;
@@ -2851,7 +2851,11 @@ const getRecordItemsForRoster = (
       answerChoices: existing?.answerChoices || item.answerChoices,
       maxScore: existingMaxScore === null ? item.maxScore : existing?.maxScore,
       ratio,
-      feedback: existing?.feedback || item.feedback,
+      feedback:
+        existing?.feedback ||
+        ("feedback" in item && typeof item.feedback === "string"
+          ? item.feedback
+          : undefined),
     });
     return {
       ...baseItem,
@@ -5599,7 +5603,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const scoreStatsSecondRoster = scoreListSummaryRosters.secondRoster;
   const writtenExamStatsGroups = useMemo(() => {
     if (!isWrittenExamMode) return [];
-    const byKey = new Map<string, PerformanceScoreItem>();
+    const byKey = new Map<string, PerformanceScoreRoster["items"][number]>();
     rosters.forEach((roster) => {
       (roster.items || []).forEach((item, index) => {
         const meta = getWrittenExamItemMeta(item, index);
@@ -6025,10 +6029,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   );
   const scoreListDisplayItems = useMemo(() => {
     if (selectedScoreRoster) return selectedScoreRoster.items || [];
-    const byName = new Map<
-      string,
-      NonNullable<PerformanceScoreRecord["items"]>[number]
-    >();
+    const byName = new Map<string, ObjectiveOmrSourceItem>();
     rosters.forEach((roster) => {
       (roster.items || []).forEach((item, index) => {
         const key = item.name || item.shortName || `item-${index}`;

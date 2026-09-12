@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "currentWave": "W11",
-  "approvedEntryCount": 145,
+  "approvedEntryCount": 146,
   "entries": [
+    {
+      "id": "DW-246",
+      "file": "src/lib/mapTagReward.ts",
+      "function": "performMapTagReward",
+      "symbolId": "src/lib/mapTagReward.ts::performMapTagReward#1",
+      "boundary": "GATEWAY",
+      "api": "westory#executeWestoryCommand",
+      "callable": "claimMapTagReward",
+      "triggers": ["USER_EVENT"],
+      "reason": "학생의 PDF 지도 모달 태그 클릭만 현재 UID·학기에 묶어 서버 정책 검증 및 원자적 위스 지급 명령으로 전달; 재시도는 같은 interactionId와 commandId 유지",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "westory-maintainers",
+      "testOwner": "map-tag-reward-safety",
+      "rootCount": 1,
+      "callGraphHash": "94e1a146eac7794e405a471a"
+    },
     {
       "id": "DW-001",
       "file": "src/components/auth/StepUpReauthProvider.tsx",
@@ -168,7 +186,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "3d0c3952e4ea741a3360e846"
+      "callGraphHash": "637f873ed38d471aa84513a7"
     },
     {
       "id": "DW-008",

@@ -722,7 +722,7 @@ const cloneMapResourceBlanks = (
   mapResource: MapResource | null,
 ): HistoryClassroomBlank[] =>
   (mapResource?.pdfBlanks || [])
-    .map((blank) => ({
+    .map<HistoryClassroomBlank>((blank) => ({
       id:
         String(blank.id || "").trim() ||
         `blank-${blank.page}-${blank.left}-${blank.top}`,
@@ -3975,16 +3975,32 @@ const ManageHistoryClassroom: React.FC = () => {
 
                     {expanded && (
                       <div className="mt-4 grid gap-3 xl:grid-cols-4">
-                        {[
-                          ["통과", row.statusGroups.passed, "text-emerald-700"],
-                          ["미통과", row.statusGroups.failed, "text-rose-700"],
-                          ["미제출", row.statusGroups.pending, "text-gray-700"],
+                        {(
                           [
-                            "자동 종료",
-                            row.statusGroups.cancelled,
-                            "text-amber-700",
-                          ],
-                        ].map(([label, students, toneClassName]) => (
+                            [
+                              "통과",
+                              row.statusGroups.passed,
+                              "text-emerald-700",
+                            ],
+                            [
+                              "미통과",
+                              row.statusGroups.failed,
+                              "text-rose-700",
+                            ],
+                            [
+                              "미제출",
+                              row.statusGroups.pending,
+                              "text-gray-700",
+                            ],
+                            [
+                              "자동 종료",
+                              row.statusGroups.cancelled,
+                              "text-amber-700",
+                            ],
+                          ] satisfies Array<
+                            [string, typeof row.studentSummaries, string]
+                          >
+                        ).map(([label, students, toneClassName]) => (
                           <div
                             key={label}
                             className="rounded-2xl border border-gray-200 bg-white p-3"
@@ -3995,27 +4011,25 @@ const ManageHistoryClassroom: React.FC = () => {
                               {label}
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
-                              {(students as typeof row.studentSummaries).map(
-                                (student) => (
-                                  <span
-                                    key={`${row.assignment.id}-${label}-${student.uid}`}
-                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
-                                  >
-                                    {student.name}
-                                    <span className="ml-2 font-semibold text-gray-500">
-                                      {student.classLabel}{" "}
-                                      {student.number && `${student.number}번`}{" "}
-                                      {student.attemptLabel !== "시도 없음" &&
-                                        student.attemptLabel}
-                                    </span>
-                                    {student.reason && (
-                                      <span className="ml-2 font-semibold text-blue-600">
-                                        {student.reason}
-                                      </span>
-                                    )}
+                              {students.map((student) => (
+                                <span
+                                  key={`${row.assignment.id}-${label}-${student.uid}`}
+                                  className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
+                                >
+                                  {student.name}
+                                  <span className="ml-2 font-semibold text-gray-500">
+                                    {student.classLabel}{" "}
+                                    {student.number && `${student.number}번`}{" "}
+                                    {student.attemptLabel !== "시도 없음" &&
+                                      student.attemptLabel}
                                   </span>
-                                ),
-                              )}
+                                  {student.reason && (
+                                    <span className="ml-2 font-semibold text-blue-600">
+                                      {student.reason}
+                                    </span>
+                                  )}
+                                </span>
+                              ))}
                               {!(students as typeof row.studentSummaries)
                                 .length && (
                                 <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-400">

@@ -1,14 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import MapSidebar from "../../../components/common/MapSidebar";
 import MapViewer from "../../../components/common/MapViewer";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
-import {
-  buildMapTagRewardSourceId,
-  claimPointActivityReward,
-} from "../../../lib/points";
+import { claimMapTagReward } from "../../../lib/mapTagReward";
 import {
   groupMapResourcesForDisplay,
   getGoogleMapsExternalUrl,
@@ -32,7 +29,7 @@ const StudentMaps: React.FC = () => {
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [googleSearchQuery, setGoogleSearchQuery] = useState("");
-  const [mapRewardPending, setMapRewardPending] = useState(false);
+  const mapRewardPending = useRef(false);
 
   const displayGroups = useMemo(
     () => groupMapResourcesForDisplay(items),
@@ -124,19 +121,20 @@ const StudentMaps: React.FC = () => {
       : selectedItem?.externalUrl || selectedItem?.fileUrl || "";
 
   const handleModalTagClick = async (tag: string) => {
-    if (!selectedItem || mapRewardPending) return;
-    setMapRewardPending(true);
+    if (
+      !selectedItem ||
+      selectedItem.type !== "pdf" ||
+      mapRewardPending.current
+    )
+      return;
+    mapRewardPending.current = true;
     try {
-      const pointResult = await claimPointActivityReward({
+      const pointResult = await claimMapTagReward({
         config,
-        activityType: "map_tag",
-        sourceId: buildMapTagRewardSourceId(selectedItem.id, tag),
-        sourceLabel: `${currentGroup?.title || selectedItem.title} · ${tag} 태그 탐색`,
+        mapId: selectedItem.id,
+        tag,
       });
-      if (
-        pointResult.awarded &&
-        (pointResult.totalAwarded || pointResult.amount)
-      ) {
+      if (pointResult.awarded || pointResult.status === "DUPLICATE") {
         notifyPointsUpdated();
       }
       if ((pointResult.totalAwarded || pointResult.amount) > 0) {
@@ -165,7 +163,7 @@ const StudentMaps: React.FC = () => {
         message: "위스 반영 상태를 바로 확인하지 못했습니다.",
       });
     } finally {
-      setMapRewardPending(false);
+      mapRewardPending.current = false;
     }
   };
 
@@ -247,11 +245,7 @@ const StudentMaps: React.FC = () => {
                       ? setGoogleSearchQuery
                       : undefined
                   }
-                  onModalTagClick={
-                    selectedItem.type === "pdf"
-                      ? handleModalTagClick
-                      : undefined
-                  }
+                  onModalTagClick={handleModalTagClick}
                   showShell={false}
                 />
               </div>

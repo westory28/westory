@@ -45,6 +45,7 @@ export interface WisLedgerEntry {
   studentUid: string;
   type: string;
   activityType?:
+    | "map_tag"
     | "history_dictionary"
     | "history_dictionary_reclaim"
     | "quiz"
@@ -322,7 +323,8 @@ export const getWisEconomyState = async (input: {
         accountId: string(item.accountId),
         studentUid: string(item.studentUid),
         type: string(item.type),
-        ...(item.activityType === "history_dictionary" ||
+        ...(item.activityType === "map_tag" ||
+        item.activityType === "history_dictionary" ||
         item.activityType === "history_dictionary_reclaim" ||
         item.activityType === "quiz" ||
         item.activityType === "quiz_bonus" ||
