@@ -68,6 +68,9 @@ for (const filename of ["firestore.rules", "firestore.staging.rules"]) {
         if (!path.startsWith("dictionary_students/")) await setDoc(doc(db, path), data);
       }
       await setDoc(doc(db, "users/student/history_dictionary_words/word"), { uid: "student" });
+      for (const id of ["2026_1", "2026_2", "malformed"]) {
+        await setDoc(doc(db, `users/student/academic_records/${id}`), { scores: { plan_0: "10" } });
+      }
       await setDoc(doc(db, "users/student/performance_scores/current"), { academicYear: "2026", semester: "2" });
       await setDoc(doc(db, "users/student/performance_scores/prior"), { academicYear: "2026", semester: "1" });
       await setDoc(doc(db, "users/student/performance_scores/unscoped"), {});
@@ -96,6 +99,26 @@ for (const filename of ["firestore.rules", "firestore.staging.rules"]) {
     await fails(getDoc(doc(clients.staff, `${second}/dictionary_students/student/history_dictionary_words/word`)));
     await succeeds(getDoc(doc(clients.teacher, `${second}/lessons/unit`)));
     await succeeds(getDoc(doc(clients.admin, `${second}/lessons/unit`)));
+    const currentAcademic = "users/student/academic_records/2026_2";
+    const priorAcademic = "users/student/academic_records/2026_1";
+    await succeeds(getDoc(doc(clients.student, currentAcademic)));
+    await succeeds(setDoc(doc(clients.student, currentAcademic), { scores: { plan_0: "11" } }));
+    await succeeds(deleteDoc(doc(clients.student, currentAcademic)));
+    await succeeds(setDoc(doc(clients.student, currentAcademic), { scores: { plan_0: "12" } }));
+    for (const path of [priorAcademic, "users/student/academic_records/malformed"]) {
+      await fails(getDoc(doc(clients.student, path)));
+      await fails(setDoc(doc(clients.student, path), { scores: {} }));
+      await fails(deleteDoc(doc(clients.student, path)));
+    }
+    await fails(getDocs(collection(clients.student, "users/student/academic_records")));
+    await fails(getDoc(doc(clients.other, currentAcademic)));
+    await fails(setDoc(doc(clients.other, currentAcademic), { scores: {} }));
+    await fails(deleteDoc(doc(clients.other, currentAcademic)));
+    await fails(getDoc(doc(clients.teacher, priorAcademic)));
+    await succeeds(getDoc(doc(clients.admin, priorAcademic)));
+    await succeeds(getDoc(doc(clients.admin, currentAcademic)));
+    await succeeds(deleteDoc(doc(clients.admin, priorAcademic)));
+    await fails(setDoc(doc(clients.admin, currentAcademic), { scores: {} }));
     await succeeds(getDoc(doc(clients.student, "users/student/performance_scores/current")));
     await succeeds(getDocs(query(collection(clients.student, "users/student/performance_scores"), where("academicYear", "==", "2026"), where("semester", "==", "2"))));
     await succeeds(getDoc(doc(clients.student, "users/student/performance_scores/current/confirmations/one")));
@@ -129,6 +152,9 @@ for (const filename of ["firestore.rules", "firestore.staging.rules"]) {
         await setDoc(doc(db, "semester_manifests/2026-2"), { semesterId: "2026-2", revision: 4, status: "ACTIVE" });
         if (value === null) await deleteDoc(doc(db, path)); else await setDoc(doc(db, path), value);
       });
+      await fails(getDoc(doc(clients.student, currentAcademic)));
+      await fails(setDoc(doc(clients.student, currentAcademic), { scores: {} }));
+      await fails(deleteDoc(doc(clients.student, currentAcademic)));
       await fails(getDoc(doc(clients.student, `${second}/lessons/unit`)));
       await fails(getDoc(doc(clients.admin, `${second}/lessons/unit`)));
     }

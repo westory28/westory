@@ -165,19 +165,19 @@ try {
         },
       ),
       setDoc(doc(db, "site_settings", "config"), {
-        year: "2026",
-        semester: "1",
-        activeSemesterId: "2026-1",
+        year: "2027",
+        semester: "2",
+        activeSemesterId: semesterId,
       }),
       setDoc(doc(db, "site_settings", "semester_active"), {
-        semesterId: "2026-1",
-        revision: 1,
+        semesterId,
+        revision: 3,
       }),
       setDoc(doc(db, "semester_manifests", semesterId), {
         semesterId,
         schoolYear: "2027",
         term: "2",
-        status: "READY",
+        status: "ACTIVE",
         revision: 3,
       }),
       setDoc(doc(db, "semester_readiness_reports", semesterId), {
@@ -575,6 +575,8 @@ try {
       deleteDoc(doc(db, "site_settings", "semester_active")),
     ]);
   });
+  // Removing authoritative scope cannot leave instructional metadata readable.
+  await assertFails(getDoc(semesterMetaRef(adminDb, "grading_plans_meta")));
   await assertFails(setDoc(configRef, { year: "2027", semester: "2" }));
   await assertFails(
     setDoc(activePointerRef, {

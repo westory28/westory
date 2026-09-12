@@ -193,6 +193,12 @@ service cloud.firestore {
         && manifest.revision == pointer.revision;
     }
 
+    function isCurrentAcademicRecord(recordId) {
+      let config = get(/databases/$(database)/documents/site_settings/config).data;
+      return recordId == config.year + '_' + config.semester
+        && isCurrentSemesterScope(config.year, config.semester);
+    }
+
     function isAdmin() {
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com" && canUseWestory();
     }
@@ -1080,13 +1086,16 @@ service cloud.firestore {
       allow delete: if isRecentlyAuthenticatedAdmin();
 
       match /academic_records/{recordId} {
-        allow read: if canUseWestory() && (isOwnUser(userId) || isAdmin());
+        allow read: if canUseWestory() && (request.auth.token.email == "westoria28@gmail.com"
+          || (request.auth.uid == userId && isCurrentAcademicRecord(recordId)));
         allow create, update: if canUseWestory()
-          && isOwnUser(userId)
+          && request.auth.uid == userId
+          && (request.auth.token.email == "westoria28@gmail.com" || isCurrentAcademicRecord(recordId))
           && request.resource.data.keys().hasOnly(['scores', 'updatedAt'])
           && request.resource.data.scores is map
           && request.resource.data.scores.keys().size() <= 500;
-        allow delete: if canUseWestory() && (isOwnUser(userId) || isAdmin());
+        allow delete: if canUseWestory() && (request.auth.token.email == "westoria28@gmail.com"
+          || (request.auth.uid == userId && isCurrentAcademicRecord(recordId)));
       }
 
       match /performance_score_consents/{consentId} {

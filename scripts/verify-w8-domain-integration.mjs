@@ -1136,6 +1136,15 @@ const main = async () => {
     assert.equal(archive.writeCount, 0);
     assert.equal(archive.readOnly, true);
     assert.equal(archive.provenance, "ARCHIVE");
+    assert.deepEqual(archive.contents, []);
+    assert.deepEqual(archive.progress, []);
+    assert.deepEqual(archive.dashboard.upcomingLearning, []);
+    await expectReason(
+      queryW8(teacher, {
+        domain: "LEARNING", audience: "teacher", semesterId: archiveSemesterId, source: "ARCHIVE",
+      }),
+      "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED",
+    );
     const beforeArchiveWrite = await businessCounts(testEnv);
     await expectReason(
       execute(teacher, "createScheduleEvent", {

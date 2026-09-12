@@ -79,6 +79,9 @@ try {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
+    await setDoc(doc(db, "site_settings/config"), { year: "2026", semester: "2", activeSemesterId: "2026-2" });
+    await setDoc(doc(db, "site_settings/semester_active"), { semesterId: "2026-2", revision: 4 });
+    await setDoc(doc(db, "semester_manifests/2026-2"), { semesterId: "2026-2", status: "ACTIVE", revision: 4 });
     await Promise.all([
       setDoc(doc(db, "users", adminUid), {
         role: "admin",
@@ -109,6 +112,8 @@ try {
           studentUid,
           ownerUid: studentUid,
           rosterId: "legacy-score",
+          academicYear: "2026",
+          semester: "2",
           scoreKind: "performance",
           marker: "seed",
         }),
@@ -187,8 +192,8 @@ try {
     ),
   );
   deniedOperations += 4;
-  await assertSucceeds(getDoc(doc(teacherDb, "exam_config/legacy-config")));
-  await assertSucceeds(getDoc(doc(adminDb, "exam_config/legacy-config")));
+  await assertFails(getDoc(doc(teacherDb, "exam_config/legacy-config")));
+  await assertFails(getDoc(doc(adminDb, "exam_config/legacy-config")));
   await assertSucceeds(
     getDoc(
       doc(
@@ -205,7 +210,9 @@ try {
       ),
     ),
   );
-  await assertSucceeds(getDoc(doc(teacherDb, "performance_score_rosters/legacy-roster")));
+  await assertFails(getDoc(doc(teacherDb, "performance_score_rosters/legacy-roster")));
+  deniedOperations += 3;
+  await assertSucceeds(getDoc(doc(teacherDb, "years/2026/semesters/2/performance_score_rosters/legacy-roster")));
   await assertSucceeds(
     getDoc(
       doc(
@@ -226,7 +233,7 @@ try {
         "LEGACY_SCORE_CONFIRMATION_CONSENT_WRITES_DENIED",
         "LEGACY_PLAN_CONFIG_ROSTER_WRITES_DENIED_ROOT_AND_SCOPED",
         "LEGACY_REQUEST_AND_OBJECTION_WRITES_DENIED",
-        "LEGACY_READ_ONLY_PROJECTION_PRESERVED",
+        "CURRENT_SEMESTER_READ_ONLY_PROJECTION_PRESERVED_AND_GLOBAL_READ_DENIED",
         "EXAM_ANSWER_CONFIG_STUDENT_GET_LIST_DENIED",
         "EXAM_ANSWER_CONFIG_TEACHER_ADMIN_READ_ALLOWED",
         "ADMIN_TEACHER_STUDENT_ANONYMOUS_DIRECT_SDK_BYPASS_DENIED",

@@ -257,6 +257,11 @@ const main = async () => {
         }),
         setDoc(doc(db, "users", student.user.uid), { role: "student" }),
         setDoc(doc(db, "users", outsider.user.uid), { role: "student" }),
+        setDoc(doc(db, "site_settings", "config"), {
+          year: "2026",
+          semester: "2",
+          activeSemesterId: semesterId,
+        }),
         setDoc(doc(db, "site_settings", "semester_active"), {
           semesterId,
           revision: 1,
@@ -559,7 +564,7 @@ const main = async () => {
         source: "ARCHIVE",
         scoreKind: "performance",
       }),
-      "GRADE_PROVENANCE_MISMATCH",
+      "GRADE_STUDENT_CURRENT_SEMESTER_REQUIRED",
     );
 
     await expectReason(
@@ -1490,7 +1495,7 @@ const main = async () => {
       { status: "PASS", ownerWave: "W6B", required: true },
     );
 
-    // Archived and legacy projections are explicit read-only states; mutations fail closed.
+    // Teachers can inspect archives; students cannot read old grades or populate the legacy placeholder.
     await withAdminDb(testEnv, async (db) => {
       await setDoc(
         doc(db, "semester_manifests", semesterId),
@@ -1501,10 +1506,22 @@ const main = async () => {
       );
     });
     const archiveCountsBefore = await countBusinessAndGatewayDocuments(testEnv);
+    for (const source of ["CURRENT", "ARCHIVE"]) {
+      await expectReason(
+        queryGrade(student, {
+          mode: "MY_GRADES",
+          audience: "student",
+          semesterId,
+          source,
+          scoreKind: "performance",
+        }),
+        "GRADE_STUDENT_CURRENT_SEMESTER_REQUIRED",
+      );
+    }
     const archiveProjection = (
-      await queryGrade(student, {
-        mode: "MY_GRADES",
-        audience: "student",
+      await queryGrade(teacher, {
+        mode: "TEACHER_QUEUE",
+        audience: "teacher",
         semesterId,
         source: "ARCHIVE",
         scoreKind: "performance",
@@ -1524,6 +1541,8 @@ const main = async () => {
       })
     ).data;
     assert.equal(legacyProjection.status, "LEGACY");
+    assert.deepEqual(legacyProjection.records, []);
+    assert.equal(legacyProjection.detail, null);
     assert.equal(legacyProjection.readOnly, true);
     assert.equal(legacyProjection.writeCount, 0);
     assert.deepEqual(await countBusinessAndGatewayDocuments(testEnv), archiveCountsBefore);
@@ -1583,7 +1602,7 @@ const main = async () => {
           "QUERY_CALLABLE_ZERO_WRITE",
           "STUDENT_OWNERSHIP_PROJECTION",
           "DIRECT_CANONICAL_READ_DENIED",
-          "ARCHIVE_AND_LEGACY_READ_ONLY",
+          "TEACHER_ARCHIVE_READ_ONLY_STUDENT_ARCHIVE_DENIED_LEGACY_EMPTY",
           "ARCHIVE_COMMAND_FAIL_CLOSED",
           "EXPIRED_SESSION_QUERY_DENIED",
           "W6A_SOURCE_UNCHANGED",

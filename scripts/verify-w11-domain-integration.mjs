@@ -358,6 +358,8 @@ const main = async () => {
           revision: sourceManifest.revision,
         }),
         setDoc(doc(db, "site_settings", "config"), {
+          year: "2026",
+          semester: "1",
           activeSemesterId: sourceSemesterId,
           activeSemesterRevision: sourceManifest.revision,
           semesterLifecycleStatus: "ACTIVE",
@@ -444,6 +446,8 @@ const main = async () => {
     ]);
     let delegatedNonLearningDirectCallDenials = 0;
     let delegatedLearningPreservationCases = 0;
+    let delegatedArchivedLearningDenials = 0;
+    let archivedLearningDirectCallDenials = 0;
     const assertLessonReaderNonLearningDenied = async (source, domain) => {
       await expectReason(
         queryFunction(lessonReader, "getW8DomainState", {
@@ -457,6 +461,16 @@ const main = async () => {
       delegatedNonLearningDirectCallDenials += 1;
     };
     const assertLessonReaderLearningPreserved = async (source) => {
+      if (source === "ARCHIVE") {
+        await expectReason(
+          queryFunction(lessonReader, "getW8DomainState", {
+            domain: "LEARNING", audience: "teacher", semesterId: sourceSemesterId, source,
+          }),
+          "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED",
+        );
+        delegatedArchivedLearningDenials += 1;
+        return;
+      }
       const state = (
         await queryFunction(lessonReader, "getW8DomainState", {
           domain: "LEARNING",
@@ -826,6 +840,18 @@ const main = async () => {
         archiveAttendanceRecord,
       );
       for (const archiveReadCase of archiveReadCases) {
+        if (archiveReadCase.domain === "LEARNING") {
+          await expectReason(
+            queryFunction(teacher, "getW8DomainState", {
+              domain: archiveReadCase.domain, audience: "teacher",
+              semesterId: sourceSemesterId, source: archiveReadCase.source,
+              studentUid: student.user.uid, sessionId: archiveAttendanceSessionId,
+            }),
+            "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED",
+          );
+          archivedLearningDirectCallDenials += 1;
+          continue;
+        }
         const archivedState = (
           await queryFunction(teacher, "getW8DomainState", {
             domain: archiveReadCase.domain,
@@ -841,7 +867,7 @@ const main = async () => {
           archivedState.contents.some(
             (content) => content.contentId === archiveSourceContentId,
           ),
-          archiveReadCase.domain !== "ATTENDANCE",
+          false,
         );
         assert.equal(
           archivedState.contents.every(
@@ -854,6 +880,7 @@ const main = async () => {
         assert.equal(archivedState.enrollment, null);
         assert.equal(archivedState.enrollmentId, null);
         assert.deepEqual(archivedState.progress, []);
+        assert.deepEqual(archivedState.dashboard.upcomingLearning, []);
         assert.deepEqual(archivedState.exemptions, []);
         assert.deepEqual(archivedState.exemptionRequests, []);
         assert.deepEqual(archivedState.sessions, []);
@@ -1509,6 +1536,8 @@ const main = async () => {
             .length * archiveLifecycleStatusesVerified.size,
         delegatedNonLearningDirectCallDenials,
         delegatedLearningPreservationCases,
+        delegatedArchivedLearningDenials,
+        archivedLearningDirectCallDenials,
         crossSemesterLeakageCount: 0,
         queryWriteCount: 0,
         readinessRegistryDerived: true,

@@ -233,6 +233,11 @@ const main = async () => {
           teacherPortalEnabled: true,
           staffPermissions: [],
         }),
+        setDoc(doc(db, "site_settings", "config"), {
+          year: "2026",
+          semester: "2",
+          activeSemesterId: "2026-2",
+        }),
         setDoc(doc(db, "site_settings", "semester_active"), {
           semesterId: "2026-2",
           revision: 1,

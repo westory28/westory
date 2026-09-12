@@ -1067,12 +1067,9 @@ const MyPage: React.FC = () => {
       };
     }
 
-    let treeSnap = await getDoc(
+    const treeSnap = await getDoc(
       doc(db, getSemesterCollectionPath(config, "curriculum"), "tree"),
     );
-    if (!treeSnap.exists()) {
-      treeSnap = await getDoc(doc(db, "curriculum", "tree"));
-    }
 
     const map: Record<string, string> = { exam_prep: "모의고사" };
     const parentMap: Record<string, UnitParentMeta> = {};
