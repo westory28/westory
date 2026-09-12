@@ -19,7 +19,10 @@ const teacherAssessmentSources = [
   ["Quiz settings", read("src/pages/teacher/components/QuizSettingsModal.tsx")],
   ["Quiz editor", read("src/pages/teacher/components/QuizEditor.tsx")],
   ["Quiz bank", read("src/pages/teacher/components/QuizBankTab.tsx")],
-  ["History Classroom manager", read("src/pages/teacher/ManageHistoryClassroom.tsx")],
+  [
+    "History Classroom manager",
+    read("src/pages/teacher/ManageHistoryClassroom.tsx"),
+  ],
 ];
 
 for (const [label, source] of [
@@ -68,9 +71,10 @@ for (const [label, source] of teacherAssessmentSources) {
     `${label} must use the command gateway for teacher mutations.`,
   );
 }
-const historyManager = teacherAssessmentSources.find(
-  ([label]) => label === "History Classroom manager",
-)?.[1] || "";
+const historyManager =
+  teacherAssessmentSources.find(
+    ([label]) => label === "History Classroom manager",
+  )?.[1] || "";
 assert(
   /legacyAssignmentIds\.has/.test(historyManager) &&
     /legacyMapIds\.has/.test(historyManager) &&
@@ -95,9 +99,14 @@ assert(
 );
 assert(
   /const confirmPendingExit[\s\S]*await handleForcedCancel/.test(history) &&
-    /handleForcedCancel[\s\S]*await saveAssessmentProgress[\s\S]*navigate\(/.test(history),
+    /handleForcedCancel[\s\S]*await persistCanonicalProgress\(true\)[\s\S]*navigate\(/.test(
+      history,
+    ),
   "Route navigation must wait for the recoverable progress save path.",
 );
+// Exercise the actual extracted handlers: source shape alone cannot prove that
+// failed/offline saves keep route/back/reload navigation blocked.
+await import("./verify-history-progress-serialization.mjs");
 assert(
   /addEventListener\("offline", markOffline\)/.test(history) &&
     /writeLocalOnly\([\s\S]*getAttemptProgressKey/.test(history) &&
@@ -132,7 +141,10 @@ for (const token of [
   "assertAssessmentDefinitionSemesterWritable",
   "TEST_FAULT_INJECTION_FORBIDDEN",
 ]) {
-  assert(server.includes(token), `Assessment server contract is missing ${token}.`);
+  assert(
+    server.includes(token),
+    `Assessment server contract is missing ${token}.`,
+  );
 }
 
 assert(
@@ -141,10 +153,26 @@ assert(
 );
 
 assert(
-  (rules.match(/match \/quiz_questions\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g) || []).length >= 2 &&
-    (rules.match(/match \/history_classrooms\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g) || []).length >= 2 &&
-    (rules.match(/match \/assessment_config\/\{docId\}[\s\S]*?docId != 'settings'/g) || []).length >= 2 &&
-    (rules.match(/match \/map_resources\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g) || []).length >= 2,
+  (
+    rules.match(
+      /match \/quiz_questions\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g,
+    ) || []
+  ).length >= 2 &&
+    (
+      rules.match(
+        /match \/history_classrooms\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g,
+      ) || []
+    ).length >= 2 &&
+    (
+      rules.match(
+        /match \/assessment_config\/\{docId\}[\s\S]*?docId != 'settings'/g,
+      ) || []
+    ).length >= 2 &&
+    (
+      rules.match(
+        /match \/map_resources\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g,
+      ) || []
+    ).length >= 2,
   "Teacher assessment source writes must be fenced behind the command gateway.",
 );
 assert(
@@ -161,9 +189,9 @@ for (const collection of [
   "semester_assessment_results",
 ]) {
   assert(
-    new RegExp(`match /${collection}/\\{docId\\} \\{[\\s\\S]*?allow read, create, update, delete: if false;`).test(
-      rules,
-    ),
+    new RegExp(
+      `match /${collection}/\\{docId\\} \\{[\\s\\S]*?allow read, create, update, delete: if false;`,
+    ).test(rules),
     `${collection} must be server-only in Firestore Rules.`,
   );
 }

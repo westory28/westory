@@ -3,8 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const PRESENTATION_BASELINE =
-  "676869fa289d3e7ecef234cbb5cca65c60ec4597";
+const PRESENTATION_BASELINE = "676869fa289d3e7ecef234cbb5cca65c60ec4597";
 const read = (path) => readFileSync(resolve(path), "utf8");
 const show = (path) =>
   execFileSync("git", ["show", `${PRESENTATION_BASELINE}:${path}`], {
@@ -18,12 +17,11 @@ const header = read("src/components/common/Header.tsx");
 const footer = read("src/components/common/Footer.tsx");
 const menu = read("src/constants/menus.ts");
 const css = read("assets/css/style.css");
+const appCss = read("src/assets/index.css");
 const productionCss = show("assets/css/style.css");
 const auth = read("src/contexts/AuthContext.tsx");
 const login = read("src/pages/Login.tsx");
-const maintenanceGate = read(
-  "src/components/auth/StudentMaintenanceGate.tsx",
-);
+const maintenanceGate = read("src/components/auth/StudentMaintenanceGate.tsx");
 
 assert.doesNotMatch(
   mainLayout,
@@ -37,7 +35,7 @@ assert.doesNotMatch(
 );
 assert.match(
   mainLayout,
-  /<Header onTeacherSidebarExpandedChange=\{setTeacherSidebarExpanded\}\s*\/>[\s\S]*?<main[\s\S]*?id="main-content"[\s\S]*?\{children\}[\s\S]*?<Footer\s*\/>/u,
+  /<Header onTeacherContextVisibleChange=\{setTeacherContextVisible\}\s*\/>[\s\S]*?<main[\s\S]*?id="main-content"[\s\S]*?\{children\}[\s\S]*?<Footer\s*\/>/u,
   "Production Header/main/Footer order drifted.",
 );
 assert.equal(
@@ -55,12 +53,58 @@ assert.equal(
   1,
   "Header must mount exactly one notification controller.",
 );
-assert.match(header, /<header>/u);
+assert.match(
+  header,
+  /<header className=\{isTeacherPortal \? "ws-teacher-header" : undefined\}>/u,
+);
 assert.match(header, /className="header-container"/u);
 assert.match(header, /className=\{`desktop-nav/u);
 assert.match(header, /id="mobile-menu"/u);
 assert.match(header, /className="mobile-menu-btn"/u);
 assert.match(header, /resolvedChildren\.map/u);
+// Keep the approved top main menu and floating, active-section-only submenu.
+// Both consume the same permission-filtered menu tree.
+assert.match(
+  header,
+  /<header\b[\s\S]*?<nav\s+className=\{`desktop-nav[\s\S]*?menuItems\.map[\s\S]*?<\/nav>[\s\S]*?<\/header>/u,
+  "Main navigation must remain inside the top header.",
+);
+assert.match(
+  header,
+  /baseMenuItems\.filter\(\(item\) => canViewTeacherMenuUrl\(item\.url\)\)/u,
+);
+assert.match(
+  header,
+  /item\.children\.filter\(\(child\) => canViewTeacherMenuUrl\(child\.url\)\)/u,
+);
+assert.match(
+  header,
+  /return canAccessTeacherPath\(pathname, userData, currentUser\?\.email \|\| ""\)/u,
+);
+assert.match(header, /getStudentRouteAccess\([\s\S]*?\)\.allowed/u);
+assert.match(
+  header,
+  /onPointerEnter=\{[\s\S]*?event\.pointerType === "mouse"[\s\S]*?setExpandedTopMenu\(item\.url\)/u,
+);
+assert.match(header, /aria-expanded=\{expandedTopMenu === item\.url\}/u);
+assert.match(header, /event\.key === "Escape"/u);
+assert.match(header, /event\.key === "ArrowDown"/u);
+assert.match(
+  header,
+  /const showTeacherSidebar = Boolean\(\s*location\.pathname\.startsWith\("\/teacher"\) &&\s*shellViewport !== "mobile" &&\s*activeDesktopSubmenu,?\s*\)/u,
+);
+assert.match(
+  header,
+  /onTeacherContextVisibleChange\?\.\(showTeacherSidebar\)/u,
+);
+assert.match(
+  header,
+  /showTeacherSidebar && activeDesktopSubmenu && \([\s\S]*?<aside className="ws-teacher-sidebar"[\s\S]*?activeDesktopSubmenu\.resolvedChildren\.map/u,
+);
+assert.match(
+  mainLayout,
+  /currentUser && isTeacherRoute && teacherContextVisible \? "ws-teacher-layout"/u,
+);
 assert.doesNotMatch(
   header,
   /from\s+["']firebase\/(?:firestore|storage)["']/u,
@@ -80,7 +124,10 @@ for (const frozenLabel of [
   "위스 관리",
   "학생 관리",
 ]) {
-  assert.ok(menu.includes(`name: "${frozenLabel}"`), `Menu label drift: ${frozenLabel}`);
+  assert.ok(
+    menu.includes(`name: "${frozenLabel}"`),
+    `Menu label drift: ${frozenLabel}`,
+  );
 }
 
 const extractRule = (source, selector) => {
@@ -98,6 +145,15 @@ const extractRule = (source, selector) => {
   throw new Error(`Unclosed CSS rule: ${selector}`);
 };
 const normalizeCss = (value) => value.replace(/\s+/gu, " ").trim();
+const floatingSubmenuCss = extractRule(appCss, ".ws-teacher-sidebar");
+assert.match(floatingSubmenuCss, /position:\s*fixed/u);
+assert.match(
+  floatingSubmenuCss,
+  /top:\s*calc\(var\(--ws-header-height\) \+ var\(--space-6\)\)/u,
+);
+assert.match(floatingSubmenuCss, /left:\s*var\(--space-4\)/u);
+assert.match(floatingSubmenuCss, /border-radius:\s*var\(--radius-xl\)/u);
+assert.match(floatingSubmenuCss, /box-shadow:\s*var\(--shadow-md\)/u);
 for (const selector of [
   "body",
   "header",
@@ -138,7 +194,10 @@ assert.equal(
 );
 
 const authPreflight = auth.indexOf("readStudentMaintenanceBootstrap(user)");
-const authSession = auth.indexOf("synchronizeApplicationSession(", authPreflight);
+const authSession = auth.indexOf(
+  "synchronizeApplicationSession(",
+  authPreflight,
+);
 assert.ok(
   authPreflight >= 0 && authSession > authPreflight,
   "Auth maintenance preflight must precede session open.",
@@ -162,6 +221,9 @@ console.log(
     presentationBaseline: PRESENTATION_BASELINE,
     rejectedShellMounts: 0,
     notificationControllers: 1,
+    topMainNavigation: true,
+    floatingActiveSubmenu: true,
+    permissionFilteredNavigation: true,
     frozenCssRules: 11,
     desktopBreakpoint: 1024,
     menuLabelsPreserved: 10,

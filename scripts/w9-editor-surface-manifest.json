@@ -4,10 +4,10 @@
   "expectedDispositionCounts": {
     "DRAFT_REQUIRED": 4,
     "DOMAIN_DRAFT_EXISTS": 10,
-    "COMMAND_ONLY": 26,
-    "READ_ONLY": 2,
+    "COMMAND_ONLY": 30,
+    "READ_ONLY": 1,
     "NOT_APPLICABLE": 2,
-    "RELEASE_DECISION": 7,
+    "RELEASE_DECISION": 4,
     "UNKNOWN": 0
   },
   "surfaces": [
@@ -426,50 +426,58 @@
     },
     {
       "id": "MAP01",
-      "disposition": "RELEASE_DECISION",
+      "disposition": "COMMAND_ONLY",
       "file": "src/pages/teacher/ManageMaps.tsx",
       "anchors": [
         "handleFileInputChange",
         "handleSave",
-        "shouldHandoffLegacyLessonManagementMutation"
+        "persistBatch",
+        "saveMapResources",
+        "uploadMapAsset"
       ],
-      "rationale": "지도 파일은 로컬 미리보기까지만 허용하며, 저장은 공식 asset command가 없어 차단한 뒤 학습 운영 화면으로 handoff합니다.",
-      "completion": "SAFE_HANDOFF",
-      "adapter": "legacy-lesson-management-handoff"
+      "rationale": "지도 파일은 서버 발급 업로드 표와 원본 revision·hash를 묶어 Gateway로 저장하며, 결과가 불명확하면 원래 payload와 편집 내용을 유지합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "map-management-command-adapter"
     },
     {
       "id": "MAP02",
-      "disposition": "RELEASE_DECISION",
+      "disposition": "COMMAND_ONLY",
       "file": "src/pages/teacher/ManageMaps.tsx",
       "anchors": [
         "handleSaveTagManager",
-        "shouldHandoffLegacyLessonManagementMutation"
+        "persistMapPayload",
+        "saveMapResources"
       ],
-      "rationale": "지도 태그 편집은 공식 taxonomy command가 없어 저장을 차단한 뒤 학습 운영 화면으로 handoff합니다.",
-      "completion": "SAFE_HANDOFF",
-      "adapter": "legacy-lesson-management-handoff"
+      "rationale": "지도 태그 설정은 권한·중복 실행을 확인한 뒤 지도 원본 revision·hash와 함께 Gateway로 저장합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "map-management-command-adapter"
     },
     {
       "id": "MAP03",
-      "disposition": "READ_ONLY",
+      "disposition": "COMMAND_ONLY",
       "file": "src/pages/teacher/ManageMaps.tsx",
       "anchors": [
         "handleSaveTabRename",
-        "shouldHandoffLegacyLessonManagementMutation",
-        "setHandoffAction"
+        "persistBatch",
+        "saveMapResources"
       ],
-      "rationale": "지도 탭 이름 변경은 현재 화면에서 쓰기를 실행하지 않고 학습 운영 화면으로 안전하게 handoff합니다.",
-      "completion": "MOUNTED_SAFE_HANDOFF",
-      "adapter": "legacy-lesson-management-handoff"
+      "rationale": "지도 탭 이름 변경은 권한을 확인한 뒤 같은 그룹의 지도 원본 revision·hash를 묶어 Gateway로 저장합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "map-management-command-adapter"
     },
     {
       "id": "SRC01",
-      "disposition": "RELEASE_DECISION",
+      "disposition": "COMMAND_ONLY",
       "file": "src/pages/teacher/ManageSourceArchive.tsx",
-      "anchors": ["handleFileChange", "handleSave", "setHandoffAction"],
-      "rationale": "사료 파일은 로컬 선택까지만 허용하며, 저장은 공식 asset command가 없어 차단한 뒤 학습 운영 화면으로 handoff합니다.",
-      "completion": "SAFE_HANDOFF",
-      "adapter": "legacy-lesson-management-handoff"
+      "anchors": [
+        "handleFileChange",
+        "handleSave",
+        "sourceArchiveEditorRecovery",
+        "saveSourceArchiveAsset"
+      ],
+      "rationale": "사료 metadata는 버전·receipt Gateway로 저장하고 파일은 서버 발급 업로드 표를 사용합니다. 원래 계정의 편집 내용과 요청 결과를 복구합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "source-archive-command-adapter"
     },
     {
       "id": "THINK01",

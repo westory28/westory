@@ -106,11 +106,6 @@ assertSurfaceContract("LES02", {
   completion: "MOUNTED_SAFE_HANDOFF",
   adapter: "legacy-lesson-management-handoff",
 });
-assertSurfaceContract("MAP03", {
-  disposition: "READ_ONLY",
-  completion: "MOUNTED_SAFE_HANDOFF",
-  adapter: "legacy-lesson-management-handoff",
-});
 for (const id of ["EX01", "EX02", "EX03", "EX05", "EX06", "EX08"]) {
   assertSurfaceContract(id, {
     disposition: "COMMAND_ONLY",
@@ -118,13 +113,18 @@ for (const id of ["EX01", "EX02", "EX03", "EX05", "EX06", "EX08"]) {
     adapter: "legacy-grade-evidence-adapter",
   });
 }
-for (const id of ["MAP01", "MAP02", "SRC01"]) {
+for (const id of ["MAP01", "MAP02", "MAP03"]) {
   assertSurfaceContract(id, {
-    disposition: "RELEASE_DECISION",
-    completion: "SAFE_HANDOFF",
-    adapter: "legacy-lesson-management-handoff",
+    disposition: "COMMAND_ONLY",
+    completion: "COMMAND_BOUNDARY",
+    adapter: "map-management-command-adapter",
   });
 }
+assertSurfaceContract("SRC01", {
+  disposition: "COMMAND_ONLY",
+  completion: "COMMAND_BOUNDARY",
+  adapter: "source-archive-command-adapter",
+});
 
 const app = read("src/App.tsx");
 assertMountedRoute(app, "/teacher/lesson", "ManageLesson");
@@ -164,33 +164,48 @@ const mapRename = sourceSection(
   maps,
   "const handleSaveTabRename",
   "const selectedPreview",
-  "MAP03 tab rename handoff",
+  "MAP03 tab rename command",
 );
 assertOrdered(
   mapRename,
   [
-    "shouldHandoffLegacyLessonManagementMutation()",
-    'setHandoffAction("지도 탭 이름 변경")',
-    "return;",
-    "persistToScope",
+    "!canEdit || mutationFlight.current",
+    "!beginMutation()",
+    "await persistBatch(",
+    "setItems(",
   ],
-  "MAP03 tab rename handoff",
+  "MAP03 tab rename command",
 );
 const mapTagSave = sourceSection(
   maps,
   "const handleSaveTagManager",
-  "const persistOrder",
-  "MAP02 taxonomy handoff",
+  "const handleOpenTabRename",
+  "MAP02 taxonomy command",
 );
 assertOrdered(
   mapTagSave,
   [
-    "shouldHandoffLegacyLessonManagementMutation()",
-    'setHandoffAction("지도 태그 설정 저장")',
-    "return;",
+    "!canEdit",
+    "!beginMutation()",
+    "await persistMapPayload(",
+    "setIsTagManagerOpen(false)",
   ],
-  "MAP02 taxonomy handoff",
+  "MAP02 taxonomy command",
 );
+const mapSave = sourceSection(maps, "const handleSave =", "const handleReprocessPdf", "MAP01 map save command");
+assertOrdered(mapSave, ["!canEdit || mutationFlight.current", "pendingCommit.current", "await persistBatch(pendingCommit.current)"], "MAP01 uncertain map save recovery");
+assert.ok(mapSave.includes("await uploadSelectedFile("), "MAP01 file save must use the ticketed upload adapter");
+assert.ok(mapSave.includes("await persistMapPayload("), "MAP01 save must use the shared map command path");
+const mapPayload = sourceSection(maps, "const persistMapPayload", "const uploadSelectedFile", "MAP01/02 map payload adapter");
+assert.ok(mapPayload.includes("await persistBatch("), "Map payload saves must dispatch through the shared batch adapter");
+const mapBatch = sourceSection(maps, "const persistBatch", "const handleMoveItem", "MAP01/02/03 shared map command");
+assertOrdered(mapBatch, ["pendingCommit.current = structuredClone(resources)", "await saveMapResources(", "sourceFor(", "getAttachedMapUploadIds(", "rememberSaved(result.resources)"], "Map pending payload, source fence, assets and confirmed revision");
+const mapAdapter = read("src/lib/mapManagement.ts");
+const mapCommand = sourceSection(mapAdapter, "export const saveMapResources", "export const deleteMapResource", "Map Gateway adapter");
+assertOrdered(mapCommand, ["if (!expectedUid)", "unconfirmedWrites.get(key)", "await getMapCommandScope(config)", "unconfirmedWrites.set(key, payload)", 'await executeWestoryCommand("saveMapResources", payload, { expectedUid })', "unconfirmedWrites.delete(key)"], "Map identity, semester fence and retained command payload");
+assert.ok(mapCommand.includes('"COMMAND_OUTCOME_UNCONFIRMED"'), "Unconfirmed map writes must retain their payload");
+const mapUpload = mapAdapter.slice(mapAdapter.indexOf("export const uploadMapAsset"));
+assertOrdered(mapUpload, ["auth.currentUser?.uid !== expectedUid", "await executeWestoryCommand(", '"prepareMapAssetUpload"', "await getMapCommandScope(config)", "sha256: await hash(bytes)", '>("uploadMapAssetContent", { expectedUid })', "uploadId: ticket.uploadId"], "Map upload must bind content to a Gateway ticket and original account");
 
 const thinkCloud = read("src/pages/teacher/ManageThinkCloud.tsx");
 for (const adapterCall of [
@@ -339,18 +354,20 @@ const sourceArchiveSave = sourceSection(
   sourceArchive,
   "const handleSave",
   "const handleDelete",
-  "SRC01 asset handoff",
+  "SRC01 asset command",
 );
 assertOrdered(
   sourceArchiveSave,
-  ["event.preventDefault()", "setHandoffAction("],
-  "SRC01 asset handoff",
+  ["event.preventDefault()", "!canWrite || !currentUser?.uid", "sourceArchiveEditorRecovery.run(", "return saveSourceArchiveAsset({", "actorUid: ownerUid", "await record.settled", "activeOwnerRef.current !== ownerUid"],
+  "SRC01 retained draft and account-bound asset command",
 );
-assert.doesNotMatch(
-  sourceArchiveSave,
-  /saveSourceArchiveAsset|uploadBytes|setDoc/u,
-  "SRC01 mounted save handler must not retain an asset or Firestore write",
-);
+const sourceAdapter = read("src/lib/sourceArchive.ts");
+const sourceSave = sourceSection(sourceAdapter, "export const saveSourceArchiveAsset", "export const deleteSourceArchiveAsset", "SRC01 asset adapter");
+assertOrdered(sourceSave, ["params.actorUid !== auth.currentUser?.uid", "expectedUpdatedAt: archiveVersion(params.draft.updatedAt)", "await executeWestoryCommand(", '"saveSourceArchiveMetadata"', "commandId: intent.commandId, expectedUid: params.actorUid"], "SRC01 metadata identity, revision and receipt");
+assertOrdered(sourceSave, ['crypto.subtle.digest("SHA-256", bytes)', "getOrCreateLegacyWisMutationIntent(intentKey, () => payload)", "await executeWestoryCommand(", '"prepareSourceArchiveUpload"', "commandId: intent.commandId, expectedUid: params.actorUid", "auth.currentUser?.uid !== params.actorUid", 'getHttpsCallable("uploadSourceArchiveAsset")', "uploadId: prepared.result.uploadId"], "SRC01 hashed upload ticket and account recheck");
+for (const [label, source] of [["Map UI", maps], ["Map adapter", mapAdapter], ["Source archive UI", sourceArchive], ["Source archive adapter", sourceAdapter]]) {
+  assert.doesNotMatch(source, /\b(?:addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction|uploadBytes|uploadBytesResumable|deleteObject)\s*\(/u, `${label} must not bypass the server mutation boundary`);
+}
 const gradeEvidence = read("src/lib/gradeEvidence.ts");
 assert.match(
   gradeEvidence,

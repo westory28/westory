@@ -58,6 +58,40 @@ const frozenPresentationFiles = [
 ];
 
 const approvedSecurityStateClassExceptions = new Map([
+  // User requested arrow-free, keyboard-accessible top dropdowns and a floating
+  // active submenu. Exact replacements remain checked by the shell verifier.
+  [
+    "src/components/common/Header.tsx",
+    new Set([
+      "fa-chevron-down",
+      "text-[10px]",
+      "ml-1",
+      "group-hover:opacity-100",
+      "absolute",
+      "left-0",
+      "top-[calc(100%-8px)]",
+      "z-[100]",
+      "transform",
+      "pt-1",
+      "opacity-0",
+      "duration-150",
+      "group-hover:visible",
+      "invisible",
+    ]),
+  ],
+  // 77791cd: keep the result dialog above the worksheet's floating controls.
+  [
+    "src/pages/student/history-classroom/HistoryClassroomRunner.tsx",
+    new Set(["z-[120]"]),
+  ],
+  // 95c60f7: prevent the teacher's search/filter row overflowing at laptop widths.
+  [
+    "src/pages/teacher/ManageHistoryClassroom.tsx",
+    new Set([
+      "lg:grid-cols-[12.5rem_minmax(14rem,1fr)_auto_auto]",
+      "lg:col-span-1",
+    ]),
+  ],
   // 2026-09-10 user scope: remove saved ink/presentation launcher cards.
   // Only tokens lost with those controls are excepted; other pages stay frozen.
   [
@@ -145,9 +179,8 @@ const presentationResults = frozenPresentationFiles.map((path) => {
   ];
   const currentSource = read(path);
   const approvedMissing = approvedSecurityStateClassExceptions.get(path);
-  const missing = baselineTokens.filter(
-    (token) => !currentSource.includes(token) && !approvedMissing?.has(token),
-  );
+  const absent = baselineTokens.filter((token) => !currentSource.includes(token));
+  const missing = absent.filter((token) => !approvedMissing?.has(token));
   assert.deepEqual(
     missing,
     [],
@@ -158,9 +191,31 @@ const presentationResults = frozenPresentationFiles.map((path) => {
   return {
     path,
     baselineClassTokens: baselineTokens.length,
-    retainedClassTokens: baselineTokens.length - missing.length,
+    retainedClassTokens: baselineTokens.length - absent.length,
+    approvedRemovedClassTokens: absent.length,
   };
 });
+
+assert.match(
+  read("src/components/common/Header.tsx"),
+  /desktop-submenu-shell ws-top-menu__panel/u,
+);
+assert.doesNotMatch(
+  read("src/components/common/Header.tsx"),
+  /fa-chevron-down/u,
+);
+assert.match(
+  read("src/pages/student/history-classroom/HistoryClassroomRunner.tsx"),
+  /z-\[150\][\s\S]*?aria-labelledby="history-classroom-result-title"/u,
+);
+assert.match(
+  read("src/pages/teacher/ManageHistoryClassroom.tsx"),
+  /2xl:grid-cols-\[15rem_minmax\(12rem,18rem\)_auto_auto\]/u,
+);
+assert.match(
+  read("src/pages/teacher/ManageHistoryClassroom.tsx"),
+  /flex flex-wrap gap-1\.5 md:col-span-2 2xl:col-span-1/u,
+);
 
 // User explicitly retired the complete teacher presentation surface.
 assert.equal(
@@ -397,6 +452,10 @@ console.log(
       0,
     ),
     missingProductionClassTokens: 0,
+    approvedRemovedClassTokens: presentationResults.reduce(
+      (total, item) => total + item.approvedRemovedClassTokens,
+      0,
+    ),
     rejectedShellMounts: 0,
     productionAccessMeasurement: "NOT_MEASURED",
     productionWritesMeasurement: "NOT_MEASURED",

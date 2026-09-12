@@ -713,11 +713,6 @@ const HistoryClassroomRunner: React.FC = () => {
     }
   };
 
-  const getExitCooldownDurationLabel = useCallback(() => {
-    const cooldownMs = getExitCooldownMinutes(assignment) * 60000;
-    return formatRemainingDuration(cooldownMs);
-  }, [assignment]);
-
   const markScreenRotationGrace = useCallback(() => {
     if (!assignment || !userData?.uid) return;
     const until = Date.now() + SCREEN_ROTATION_GRACE_MS;
@@ -749,27 +744,45 @@ const HistoryClassroomRunner: React.FC = () => {
     }
 
     cancellationInFlightRef.current = true;
-    const activeAttempt = canonicalAttemptRef.current;
-    if (activeAttempt && !networkOfflineRef.current) {
-      try {
-        await persistCanonicalProgress(true);
-      } catch (saveError) {
-        console.error("Failed to preserve recoverable attempt before exit", {
-          reason,
-          saveError,
-        });
+    try {
+      const activeAttempt = canonicalAttemptRef.current;
+      if (activeAttempt) {
+        if (networkOfflineRef.current) {
+          showToast({
+            tone: "warning",
+            title: "인터넷 연결을 확인해 주세요.",
+            message:
+              "답안을 저장한 뒤 나갈 수 있습니다. 연결 후 다시 시도해 주세요.",
+          });
+          return false;
+        }
+        const saved = await persistCanonicalProgress(true);
+        if (!saved)
+          throw new Error("Attempt changed before exit save completed.");
       }
+      const redirectTo =
+        "redirectTo" in options
+          ? options.redirectTo
+          : "/student/history-classroom";
+      if (redirectTo) {
+        exitNavigationAllowedRef.current = true;
+        navigate(redirectTo, { replace: options.replace ?? true });
+      }
+      return true;
+    } catch (saveError) {
+      console.error("Failed to preserve recoverable attempt before exit", {
+        reason,
+        saveError,
+      });
+      showToast({
+        tone: "warning",
+        title: "답안 저장을 확인하지 못했습니다.",
+        message: "현재 화면을 유지합니다. 잠시 후 나가기를 다시 눌러 주세요.",
+      });
+      return false;
+    } finally {
+      cancellationInFlightRef.current = false;
     }
-    const redirectTo =
-      "redirectTo" in options
-        ? options.redirectTo
-        : "/student/history-classroom";
-    if (redirectTo) {
-      exitNavigationAllowedRef.current = true;
-      navigate(redirectTo, { replace: options.replace ?? true });
-    }
-    cancellationInFlightRef.current = false;
-    return true;
   };
 
   const requestExit = useCallback(
@@ -1700,9 +1713,8 @@ const HistoryClassroomRunner: React.FC = () => {
                 id="history-classroom-exit-description"
                 className="mt-3 text-sm leading-6 text-slate-600"
               >
-                {getExitCooldownMinutes(assignment) > 0
-                  ? `지금 나가면 현재 응시는 종료되고 재응시까지 ${getExitCooldownDurationLabel()}을 기다려야 합니다. 계속 풀려면 취소를 눌러 주세요.`
-                  : "지금 나가면 현재 응시는 종료됩니다. 재응시 제한이 0분이라 바로 다시 응시할 수 있습니다. 계속 풀려면 취소를 눌러 주세요."}
+                답안을 저장한 뒤 나갑니다. 응시 종료 시각은 그대로 유지됩니다.
+                계속 풀려면 취소를 눌러 주세요.
               </p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">

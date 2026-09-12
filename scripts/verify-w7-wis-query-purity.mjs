@@ -152,23 +152,44 @@ const wisIndexes = firestoreIndexes.indexes.filter((index) =>
     index.collectionGroup,
   ),
 );
-assert.equal(wisIndexes.length, 5);
-assert.equal(
-  wisIndexes.filter((index) => index.collectionGroup === "semester_wis_ledger")
-    .length,
-  1,
+const indexContract = (collectionGroup, equalityFields, paginated = false) => ({
+  collectionGroup,
+  queryScope: "COLLECTION",
+  fields: [
+    ...equalityFields.map((fieldPath) => ({ fieldPath, order: "ASCENDING" })),
+    ...(paginated
+      ? [
+          { fieldPath: "createdAt", order: "DESCENDING" },
+          { fieldPath: "__name__", order: "DESCENDING" },
+        ]
+      : []),
+  ],
+});
+// Reward eligibility uses bounded equality queries, while wallet/order pages
+// require deterministic createdAt + document-id cursor ordering.
+const rewardScopeFields = ["semesterId", "studentUid", "type", "activityType"];
+const expectedWisIndexes = [
+  indexContract("semester_wis_ledger", rewardScopeFields),
+  indexContract("semester_wis_ledger", [...rewardScopeFields, "targetDate"]),
+  indexContract("semester_wis_ledger", ["accountId"], true),
+  ...[
+    ["semesterId"],
+    ["accountId"],
+    ["semesterId", "status"],
+    ["accountId", "status"],
+  ].map((fields) => indexContract("semester_wis_orders", fields, true)),
+];
+const indexSignatures = (indexes) =>
+  indexes
+    .map(({ collectionGroup, queryScope, fields }) =>
+      JSON.stringify({ collectionGroup, queryScope, fields }),
+    )
+    .sort();
+assert.deepEqual(
+  indexSignatures(wisIndexes),
+  indexSignatures(expectedWisIndexes),
+  "Wis indexes must cover the exact reward scope and cursor pagination contracts.",
 );
-assert.equal(
-  wisIndexes.filter((index) => index.collectionGroup === "semester_wis_orders")
-    .length,
-  4,
-);
-for (const index of wisIndexes) {
-  assert.deepEqual(index.fields.slice(-2), [
-    { fieldPath: "createdAt", order: "DESCENDING" },
-    { fieldPath: "__name__", order: "DESCENDING" },
-  ]);
-}
 assert.match(
   legacyAdapter,
   /if \(!currentProduct \|\| !currentInventory\)[\s\S]*?새 상품을 저장할 수 없습니다/u,
