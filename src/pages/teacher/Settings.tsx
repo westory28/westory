@@ -8,10 +8,12 @@ import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
 import SettingsArchiveEnrollment from "./components/SettingsArchiveEnrollment";
 import SettingsArchiveRecords from "./components/SettingsArchiveRecords";
+import SettingsStudentAccess from "./components/SettingsStudentAccess";
 import { useAuth } from "../../contexts/AuthContext";
 import { ADMIN_EMAIL } from "../../lib/permissions";
 
 type SettingsTab =
+  | "student-access"
   | "general"
   | "school"
   | "interface"
@@ -22,6 +24,7 @@ type SettingsTab =
   | "notifications";
 
 const SETTINGS_TABS = new Set<SettingsTab>([
+  "student-access",
   "general",
   "school",
   "interface",
@@ -67,6 +70,20 @@ const Settings: React.FC = () => {
               </h2>
             </div>
             <nav className="flex flex-col">
+              {canOpenCutoverCenter && (
+                <button
+                  onClick={() => setActiveTab("student-access")}
+                  aria-current={
+                    activeTab === "student-access" ? "page" : undefined
+                  }
+                  className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "student-access" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
+                >
+                  <div className="w-6 text-center" aria-hidden="true">
+                    <i className="fas fa-door-closed"></i>
+                  </div>
+                  학생 접속 관리
+                </button>
+              )}
               {canOpenCutoverCenter && (
                 <button
                   onClick={() => setActiveTab("archive-records")}
@@ -162,6 +179,7 @@ const Settings: React.FC = () => {
         </aside>
 
         <div className="flex-1 min-w-0">
+          {activeTab === "student-access" && <SettingsStudentAccess />}
           {activeTab === "general" && <SettingsGeneral />}
           {activeTab === "school" && <SettingsSchool />}
           {activeTab === "interface" && <SettingsInterface />}

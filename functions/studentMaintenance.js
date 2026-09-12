@@ -483,7 +483,10 @@ const createUpdateStudentMaintenanceConfigHandler = ({
       recentAuth: true,
       highRisk: true,
     });
-    return service.updateConfig(request);
+    // Session proof is transport metadata, verified above. Keep the business
+    // payload exact without discarding unknown application fields.
+    const { _session, ...data } = request.data || {};
+    return service.updateConfig({ ...request, data });
   };
 };
 

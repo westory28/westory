@@ -75,6 +75,7 @@ const SESSION_CONTROL_CALLABLES = new Set([
   "saveAssessmentProgress",
 ]);
 const USER_EVENT_COMMAND_CALLABLES = new Map([
+  ["updateStudentMaintenanceConfig", { file: "src/lib/studentAccessSettings.ts", function: "changeStudentAccess", symbolId: "src/lib/studentAccessSettings.ts::changeStudentAccess#1" }],
   ["uploadLessonAssetContent", { file: "src/lib/lessonManagement.ts", function: "uploadLessonAsset", symbolId: "src/lib/lessonManagement.ts::uploadLessonAsset#1" }],
   ["uploadMapAssetContent", { file: "src/lib/mapManagement.ts", function: "uploadMapAsset", symbolId: "src/lib/mapManagement.ts::uploadMapAsset#1" }],
   ["uploadSourceArchiveAsset", { file: "src/lib/sourceArchive.ts", function: "saveSourceArchiveAsset", symbolId: "src/lib/sourceArchive.ts::saveSourceArchiveAsset#1" }],

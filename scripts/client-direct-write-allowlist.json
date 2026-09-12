@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "currentWave": "W11",
-  "approvedEntryCount": 146,
+  "approvedEntryCount": 147,
   "entries": [
+    {
+      "id": "DW-247",
+      "file": "src/lib/studentAccessSettings.ts",
+      "function": "changeStudentAccess",
+      "symbolId": "src/lib/studentAccessSettings.ts::changeStudentAccess#1",
+      "boundary": "CALLABLE",
+      "api": "westory#getHttpsCallable",
+      "callable": "updateStudentMaintenanceConfig",
+      "triggers": ["USER_EVENT"],
+      "reason": "관리자의 명시적 접속 변경 확인에서만 호출; 서버 관리자·최근 인증·세션·App Check 검증과 감사 기록 유지; 자동 재시도 금지",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "westory-maintainers",
+      "testOwner": "student-maintenance",
+      "rootCount": 1,
+      "callGraphHash": "46bbdef292f7a2e1d493b7a1"
+    },
     {
       "id": "DW-246",
       "file": "src/lib/mapTagReward.ts",

@@ -235,11 +235,15 @@ const runAsyncChecks = async () => {
   const sessionChecks = [];
   const updateHandler = createUpdateStudentMaintenanceConfigHandler({
     service: updateService,
-    assertActiveApplicationSession: async (_request, options) => sessionChecks.push(options),
+    assertActiveApplicationSession: async (request, options) => {
+      assert.deepEqual(request.data._session, { revision: "verified-proof" });
+      sessionChecks.push(options);
+    },
   });
   const response = await updateHandler({
     auth: auth("admin-uid", "westoria28@gmail.com"),
     data: {
+      _session: { revision: "verified-proof" },
       enabled: true,
       blockedRoles: ["student"],
       bypassUids: ["student-bypass"],
@@ -253,6 +257,17 @@ const runAsyncChecks = async () => {
   assert.equal(writes[0].value.startedAt, timestampSentinel);
   assert.equal(writes[1].value.revision, 5);
   assert.equal(writes[1].value.updatedByEmail, "westoria28@gmail.com");
+  assert.equal(Object.hasOwn(writes[0].value, "_session"), false);
+  await assert.rejects(updateHandler({
+    auth: auth("admin-uid", "westoria28@gmail.com"),
+    data: { _session: { revision: "verified-proof" }, enabled: false, blockedRoles: ["student"], bypassUids: [], title: "안내", message: "접속 안내", unexpected: true },
+  }), (error) => error.code === "invalid-argument");
+  assert.equal(writes.length, 2, "unknown business fields must not write");
+  const deniedHandler = createUpdateStudentMaintenanceConfigHandler({
+    service: { updateConfig: () => assert.fail("unverified session must never mutate access") },
+    assertActiveApplicationSession: async () => { throw new Error("invalid-session"); },
+  });
+  await assert.rejects(deniedHandler({ auth: auth("admin-uid", "westoria28@gmail.com"), data: {} }), /invalid-session/);
 
   const callableFiles = [
     "index.js",

@@ -39,6 +39,7 @@ interface PendingRequest {
 
 const commandLabel = (commandName: string) => {
   const labels: Record<string, string> = {
+    updateStudentMaintenanceConfig: "학생 접속 설정 변경",
     deleteStudentData: "학생 계정과 연결 기록 삭제",
     updateStudentData: "학생 정보 변경",
     resetAssessmentAttemptsByClass: "평가 응시 기록 초기화",

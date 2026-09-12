@@ -121,6 +121,7 @@ const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
 ] as const;
 
 export const HIGH_RISK_COMMANDS = new Set<string>([
+  "updateStudentMaintenanceConfig",
   "uploadMapAssetContent",
   "uploadSourceArchiveAsset",
   "cleanupSourceArchiveAsset",
