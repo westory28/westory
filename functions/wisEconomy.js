@@ -1402,7 +1402,7 @@ const createAssessmentWisRewardAdapter = ({ loadPolicy, resolveActivityReward } 
   };
 };
 
-const createWisCommandAdapter = () => ({
+const createWisCommandAdapter = ({ projectId, now } = {}) => ({
   apply: async ({
     transaction,
     commandId,
@@ -1929,7 +1929,11 @@ const createWisCommandAdapter = () => ({
           "Wis economy transition is invalid.",
           "WIS_ECONOMY_TRANSITION_INVALID",
         );
+      let initialOpeningBinding = null;
       if (payload.targetStatus === "ACTIVE_OPEN") {
+        initialOpeningBinding = await require("./wisInitialOpeningApproval").assertReadyToOpen({
+          transaction, economy, manifest, semesterId: payload.semesterId, expectedSemesterRevision: payload.expectedSemesterRevision, actor, projectId, now,
+        });
         const accountCount = Number(economy.accountCount || 0);
         const initializedAccountCount = Number(
           economy.initializedAccountCount || 0,
@@ -1953,6 +1957,7 @@ const createWisCommandAdapter = () => ({
       transaction.set(
         economyPath(payload.semesterId),
         {
+          ...initialOpeningBinding,
           revision: economyRevision,
           status: payload.targetStatus,
           transitionReason: payload.reason,
@@ -3643,5 +3648,7 @@ module.exports = {
   createWisReadinessAdapter,
   getWisCommandSessionOptions,
   inventoryIdFor,
+  initialGrantTotalsFor: (amount) => ({ balance: amount, ...ledgerTotalsContribution("INITIAL_GRANT", amount) }),
+  ledgerIdFor,
   normalizeWisPayload,
 };

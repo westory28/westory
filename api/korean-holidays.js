@@ -1,5 +1,6 @@
 const KASI_ENDPOINT =
   "https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo";
+const UPSTREAM_TIMEOUT_MS = 8_000;
 
 const xmlValue = (xml, tag) => {
   const match = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
@@ -11,16 +12,24 @@ const parseKasiResponse = (text) => {
 
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     const payload = JSON.parse(trimmed);
+    if (
+      payload?.response?.header?.resultCode !== "00" ||
+      !payload?.response?.body ||
+      typeof payload.response.body !== "object"
+    ) {
+      throw new Error("Invalid KASI response");
+    }
     const items = payload?.response?.body?.items?.item;
     if (!items) return [];
     return Array.isArray(items) ? items : [items];
   }
 
   const resultCode = xmlValue(trimmed, "resultCode");
-  if (resultCode && resultCode !== "00") {
-    throw new Error(
-      `KASI API error ${resultCode}: ${xmlValue(trimmed, "resultMsg")}`,
-    );
+  if (
+    resultCode !== "00" ||
+    !/<body(?:\s[^>]*)?>[\s\S]*?<\/body>/u.test(trimmed)
+  ) {
+    throw new Error("Invalid KASI response");
   }
 
   return Array.from(trimmed.matchAll(/<item>([\s\S]*?)<\/item>/g)).map(
@@ -54,10 +63,7 @@ export default async function handler(request, response) {
       "",
   ).trim();
 
-  response.setHeader(
-    "Cache-Control",
-    "s-maxage=86400, stale-while-revalidate=604800",
-  );
+  response.setHeader("Cache-Control", "no-store");
 
   if (!Number.isInteger(year) || year < 1900 || year > 2100) {
     response.status(400).json({ error: "Invalid year" });
@@ -71,6 +77,8 @@ export default async function handler(request, response) {
     return;
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
     const monthlyResponses = await Promise.all(
       Array.from({ length: 12 }, async (_, index) => {
@@ -83,6 +91,7 @@ export default async function handler(request, response) {
         });
         const apiResponse = await fetch(
           `${KASI_ENDPOINT}?ServiceKey=${serviceKey}&${params}`,
+          { signal: controller.signal },
         );
 
         if (!apiResponse.ok) {
@@ -99,11 +108,19 @@ export default async function handler(request, response) {
       .filter(Boolean)
       .sort((left, right) => left.start.localeCompare(right.start));
 
+    response.setHeader(
+      "Cache-Control",
+      "s-maxage=86400, stale-while-revalidate=604800",
+    );
     response.status(200).json({ holidays });
-  } catch (error) {
+  } catch {
     response.status(502).json({
-      error:
-        error instanceof Error ? error.message : "Failed to fetch holidays",
+      error: controller.signal.aborted
+        ? "Holiday service request timed out"
+        : "Failed to fetch holidays",
     });
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
   }
 }

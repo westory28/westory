@@ -318,7 +318,7 @@ const WisEconomyManager: React.FC = () => {
           <StatePanel
             state="EMPTY"
             title="이번 학기 위스 운영을 시작해 주세요."
-            description="새 학기 계정은 0에서 시작하며, 이전 학기 잔액은 옮기지 않습니다."
+            description="이전 학기 잔액은 옮기지 않으며, 학생마다 초기 500위스를 지급한 뒤 운영을 시작합니다."
           />
           <button
             type="button"
@@ -720,7 +720,7 @@ const AccountPanel: React.FC<{
         />
       </label>
       <div className="wis-actions">
-        {!account.initialGrantLedgerEntryId && (
+        {initialAmount > 0 && !account.initialGrantLedgerEntryId && (
           <button type="button" disabled={busy !== ""} onClick={onInitial}>
             최초 {formatNumber(initialAmount)} 지급
           </button>

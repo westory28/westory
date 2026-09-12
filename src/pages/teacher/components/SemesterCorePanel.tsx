@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { executeWestoryCommand } from "../../../lib/commandGateway";
+import { getDefaultSemesterDates } from "./semesterDates";
 import {
   getServerSemesterCoreState,
   isReadinessCurrent,
@@ -130,8 +131,7 @@ const SemesterCorePanel: React.FC = () => {
     schoolYear: String(new Date().getFullYear()),
     term: "2" as "1" | "2",
     displayName: "",
-    startAt: "",
-    endAt: "",
+    ...getDefaultSemesterDates(String(new Date().getFullYear()), "2"),
   });
 
   const reload = useCallback(async () => {
@@ -324,6 +324,7 @@ const SemesterCorePanel: React.FC = () => {
                 setForm((current) => ({
                   ...current,
                   schoolYear: event.target.value,
+                  ...getDefaultSemesterDates(event.target.value, current.term),
                 }))
               }
               inputMode="numeric"
@@ -338,6 +339,10 @@ const SemesterCorePanel: React.FC = () => {
                 setForm((current) => ({
                   ...current,
                   term: event.target.value as "1" | "2",
+                  ...getDefaultSemesterDates(
+                    current.schoolYear,
+                    event.target.value,
+                  ),
                 }))
               }
               className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm"

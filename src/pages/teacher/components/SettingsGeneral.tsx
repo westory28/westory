@@ -6,6 +6,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { notifySystemConfigUpdated } from "../../../lib/appEvents";
 import { executeWestoryCommand } from "../../../lib/commandGateway";
 import { auth, db } from "../../../lib/firebase";
+import { getDefaultSemesterDates } from "./semesterDates";
 import {
   requestStepUpReauthentication,
   StepUpReauthError,
@@ -918,14 +919,15 @@ const SettingsGeneral: React.FC = () => {
       return;
     }
 
+    const defaultDates = getDefaultSemesterDates(year, semester);
     const startInput = window.prompt(
       `${buildSemesterLabel(year, semester)} 시작일을 YYYY-MM-DD 형식으로 입력해 주세요.`,
-      "",
+      defaultDates.startAt,
     );
     if (startInput === null) return;
     const endInput = window.prompt(
       `${buildSemesterLabel(year, semester)} 종료일을 YYYY-MM-DD 형식으로 입력해 주세요.`,
-      "",
+      defaultDates.endAt,
     );
     if (endInput === null) return;
     const startDate = startInput.trim();

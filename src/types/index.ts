@@ -81,6 +81,7 @@ export interface UserData {
   role: "teacher" | "student" | "staff";
   registrationApprovalStatus?:
     | "PENDING"
+    | "REJECTED"
     | "APPROVED_PENDING_ACCOUNT"
     | "APPROVED";
   staffPermissions?: string[];

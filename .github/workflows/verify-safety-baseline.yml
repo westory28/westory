@@ -41,6 +41,8 @@ jobs:
       - run: npm run security:check-supply-chain
       - run: npm run verify:firebase-environment
       - run: npm run verify:vercel-config
+      - run: node scripts/verify-korean-holidays-api.mjs
+      - run: node scripts/verify-semester-date-defaults.mjs
       - run: npm run verify:typescript-baseline
       - run: npm run verify:access-gate
       - run: npm run verify:session-policy
@@ -58,6 +60,7 @@ jobs:
 
       - run: npm --prefix functions ci --ignore-scripts
       - run: npm --prefix functions run check
+      - run: node functions/scripts/verify-wis-initial-opening-approval.cjs
       - run: node functions/scripts/verify-lesson-answers.cjs
       - run: node functions/scripts/verify-lesson-management.cjs
       - run: node functions/scripts/verify-lesson-assets.cjs

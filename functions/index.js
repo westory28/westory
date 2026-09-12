@@ -12215,7 +12215,9 @@ const dictionaryCommandAdapter = historyDictionaryCommands.createHistoryDictiona
   },
 });
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
-const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
+const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter({
+  projectId: commandGateway.resolveProjectId(),
+});
 const w8CommandAdapter = w8Domains.createW8CommandAdapter();
 const teacherOperationsCommandAdapter =
   teacherOperations.createTeacherOperationsCommandAdapter();
