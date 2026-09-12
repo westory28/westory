@@ -148,20 +148,12 @@ const createLessonAnswerCommandAdapter = () => ({
         "현재 학기의 수강 정보를 확인할 수 없습니다.",
         "LESSON_ENROLLMENT_REQUIRED",
       );
-    let lessons = await transaction.query(`${root}/lessons`, {
+    const lessons = await transaction.query(`${root}/lessons`, {
       field: "unitId",
       operator: "==",
       value: payload.unitId,
       limit: 2,
     });
-    // Preserve legacy fallback reads; every write stays in the active semester.
-    if (!lessons.length)
-      lessons = await transaction.query("lessons", {
-        field: "unitId",
-        operator: "==",
-        value: payload.unitId,
-        limit: 2,
-      });
     if (lessons.length !== 1)
       fail(
         "failed-precondition",

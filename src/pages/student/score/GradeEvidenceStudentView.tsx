@@ -117,6 +117,12 @@ const StudentGradeEvidenceView: React.FC<StudentGradeEvidenceViewProps> = ({
     setLoading(true);
     setError(null);
     try {
+      if (requestedProvenance !== "CURRENT") {
+        throw new GradeEvidenceError(
+          "PERMISSION",
+          "현재 학기 성적만 확인할 수 있습니다.",
+        );
+      }
       const nextState = await getGradeEvidenceState({
         config,
         semesterId: requestedSemesterId || undefined,

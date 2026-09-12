@@ -95,6 +95,7 @@ const manifest = {
   readinessPolicyVersion: "w3-v1",
 };
 const seed = {
+  "site_settings/config": { year: semesterId.split("-")[0], semester: semesterId.split("-")[1], activeSemesterId: semesterId },
   "site_settings/semester_active": { semesterId, revision: 7 },
   [`semester_manifests/${semesterId}`]: manifest,
   "users/admin-uid": { role: "admin", teacherPortalEnabled: true },
@@ -492,6 +493,39 @@ const runKind = async (kind) => {
   assert.equal(afterRelogin.attempt.status, "SUBMITTED");
   assert.equal(afterRelogin.attempt.deadlineAtIso, firstStart.result.deadlineAtIso);
 
+  const foreignDefinitionId = definition.definitionId.replace("2026-2", "2027-1");
+  store.documents.set(`${assessment.DEFINITION_COLLECTION}/${foreignDefinitionId}`, {
+    ...store.snapshot(`${assessment.DEFINITION_COLLECTION}/${definition.definitionId}`).data,
+    definitionId: foreignDefinitionId, semesterId: "2027-1",
+  });
+  await assert.rejects(queryCore.getAssessmentState({ auth: student, data: { definitionId: foreignDefinitionId, attemptId } }),
+    error => error?.details?.reason === "ASSESSMENT_QUERY_SCOPE_MISMATCH");
+  store.documents.delete(`${assessment.DEFINITION_COLLECTION}/${foreignDefinitionId}`);
+
+  const pointerPath = "site_settings/semester_active";
+  const savedPointer = clone(store.documents.get(pointerPath));
+  for (const inactiveReason of ["ARCHIVED", "POINTER_CHANGED"]) {
+    if (inactiveReason === "ARCHIVED") {
+      store.documents.set(`semester_manifests/${semesterId}`, { ...activeManifest, status: "ARCHIVED" });
+    } else {
+      store.documents.set(pointerPath, { ...savedPointer, semesterId: "2027-1" });
+    }
+    const writesBefore = store.writeCount;
+    const rejectInactive = (promise) => assert.rejects(promise, error => error?.details?.reason === "ASSESSMENT_SEMESTER_NOT_ACTIVE");
+    await rejectInactive(queryCore.getAssessmentState({ auth: student, data: { definitionId: definition.definitionId } }));
+    await rejectInactive(queryCore.getAssessmentState({ auth: student, data: { attemptId } }));
+    await rejectInactive(queryCore.saveAssessmentProgress({ auth: student, data: { attemptId, expectedRevision: 1, answers: answerMap, currentItemId: "2", saveId: `save-${kind.toLowerCase()}` } }));
+    await rejectInactive(execute(student, "submitAssessmentAttempt", submitPayload));
+    await rejectInactive(execute(admin, "resetAssessmentAttempt", { definitionId: definition.definitionId, studentUid: student.uid, reason: "archive guard verification" }));
+    await rejectInactive(execute(admin, "resetAssessmentAttemptsByClassV2", { definitionId: definition.definitionId, classId: "class_one", reason: "archive guard verification" }));
+    const teacherRead = await queryCore.getAssessmentState({ auth: admin, data: { definitionId: definition.definitionId } });
+    assert.equal(teacherRead.definition.definitionId, definition.definitionId);
+    assert.equal(store.writeCount, writesBefore, "Inactive semester reads and denied writes must not mutate data");
+    store.documents.set(pointerPath, savedPointer);
+    store.documents.set(`semester_manifests/${semesterId}`, activeManifest);
+  }
+
+
   const boundaryAttempt = await execute(
     student,
     "startAssessmentAttempt",
@@ -677,6 +711,8 @@ const runKind = async (kind) => {
       "SAME_UID_RELOGIN_RECOVERY",
       "TEACHER_CONTENT_COMMAND_CAS_AND_AUDIT_BOUNDARY",
       "ARCHIVE_SOURCE_AND_DEFINITION_WRITE_FENCE",
+      "INACTIVE_SEMESTER_STUDENT_QUERY_SAVE_SUBMIT_RESET_DENIED_BOTH_KINDS",
+      "TEACHER_ARCHIVE_QUERY_PRESERVED",
       "LEGACY_CONFIG_KEY_VALIDATION",
       "W6A_REQUIRED_READINESS",
       "W6A_READINESS_CLASS_WINDOW_SCHEMA_DUPLICATE_LEGACY_MATRIX",

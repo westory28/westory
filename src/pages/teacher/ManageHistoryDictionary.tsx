@@ -384,7 +384,10 @@ const ManageHistoryDictionaryContent: React.FC = () => {
   );
   const mutationBusy = isHistoryDictionaryMutationBusy(currentUser?.uid || "");
   useEffect(() => {
-    const pending = getPendingHistoryDictionaryDraft(currentUser?.uid || "");
+    const pending = getPendingHistoryDictionaryDraft(
+      currentUser?.uid || "",
+      config,
+    );
     if (!pending) return;
     setWord(pending.word);
     setDefinition(pending.definition);
@@ -446,9 +449,10 @@ const ManageHistoryDictionaryContent: React.FC = () => {
     useState(ALL_INITIAL);
 
   useEffect(() => {
-    if (!canRead) return undefined;
+    if (!canRead || !config?.year || !config?.semester) return undefined;
     let active = true;
     const unsubscribeRequests = subscribeTeacherHistoryDictionaryRequests(
+      config,
       (items) => {
         if (active && editorSessionRef.current.active) {
           requestsRef.current = items;
@@ -457,6 +461,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       },
     );
     const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
+      config,
       (items) => {
         if (active && editorSessionRef.current.active) setTerms(items);
       },
@@ -475,10 +480,10 @@ const ManageHistoryDictionaryContent: React.FC = () => {
       unsubscribeRequests();
       unsubscribeTerms();
     };
-  }, [canRead, showToast]);
+  }, [canRead, showToast, config?.year, config?.semester]);
 
   useEffect(() => {
-    if (!canRead) {
+    if (!canRead || !config?.year || !config?.semester) {
       setStudentWords([]);
       return undefined;
     }
@@ -1450,7 +1455,7 @@ const ManageHistoryDictionaryContent: React.FC = () => {
         message: `${result.savedCount}개 항목을 학생용 풀이로 저장했습니다.`,
       });
       try {
-        const latestTerms = await loadTeacherHistoryDictionaryTerms();
+        const latestTerms = await loadTeacherHistoryDictionaryTerms(config);
         if (importSessionRef.current !== session) return;
         setTerms(latestTerms);
         setTermSearch("");

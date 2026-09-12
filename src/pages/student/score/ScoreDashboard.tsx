@@ -459,8 +459,7 @@ const ScoreDashboard: React.FC = () => {
             onChange={(e) => setSemester(e.target.value)}
             className="p-2 border border-gray-300 rounded text-sm min-w-[100px]"
           >
-            <option value="1">1학기</option>
-            <option value="2">2학기</option>
+            <option value={semester}>{semester}학기</option>
           </select>
         </div>
         <div className="flex items-center gap-2">

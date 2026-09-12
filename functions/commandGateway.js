@@ -30,6 +30,7 @@ const historyDictionaryCommands = require("./historyDictionaryCommands");
 const wisLegacyMigration = require("./wisLegacyMigration");
 const studentEnrollmentProfile = require("./studentEnrollmentProfile");
 const studentRegistrationApproval = require("./studentRegistrationApproval");
+const { assertStudentReceiptSemester } = require("./studentSemesterReceipt");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -1359,6 +1360,7 @@ const createCommandGatewayCore = ({
             { commandId: command.commandId, commandType: command.commandType },
           );
         }
+        await assertStudentReceiptSemester(transaction, actor, existing.data);
         return {
           commandId: command.commandId,
           commandType: command.commandType,
@@ -1452,7 +1454,13 @@ const createCommandGatewayCore = ({
       command.commandType,
       command.commandId,
     );
-    const snapshot = await store.get(`${RECEIPT_COLLECTION}/${receiptId}`);
+    const snapshot = actor.actorRole === "student"
+      ? await store.runTransaction(async transaction => {
+        const document = await transaction.get(`${RECEIPT_COLLECTION}/${receiptId}`);
+        if (document.exists) await assertStudentReceiptSemester(transaction, actor, document.data);
+        return document;
+      })
+      : await store.get(`${RECEIPT_COLLECTION}/${receiptId}`);
     if (!snapshot.exists) {
       return {
         commandId: command.commandId,

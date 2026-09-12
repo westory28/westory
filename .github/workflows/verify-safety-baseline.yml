@@ -44,6 +44,8 @@ jobs:
       - run: node scripts/verify-korean-holidays-api.mjs
       - run: node scripts/verify-semester-date-defaults.mjs
       - run: node scripts/verify-semester-archive-view.mjs
+      - run: node scripts/verify-admin-semester-content-ui.mjs
+      - run: node scripts/verify-lesson-semester-isolation.mjs
       - run: node scripts/verify-lesson-initial-load.mjs
       - run: node scripts/verify-session-query-cache.mjs
       - run: node scripts/verify-student-profile-batching.mjs
@@ -78,12 +80,15 @@ jobs:
       - run: node scripts/verify-staging-login-transport.mjs
       - run: node functions/scripts/verify-history-dictionary-bulk-conflict.cjs
       - run: node functions/scripts/verify-history-dictionary-request-scope.cjs
+      - run: node functions/scripts/verify-history-dictionary-semester-query.cjs
+      - run: node functions/scripts/verify-history-dictionary-semester-privacy.cjs
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
       - run: npm install --global firebase-tools@15.15.0
       - run: node scripts/verify-firebase-storage-runtime-framing.cjs
+      - run: firebase emulators:exec --project demo-westory-content-semester-rules --only firestore "node scripts/verify-content-semester-rules.mjs"
       - run: firebase emulators:exec --project demo-westory-session-lesson-rules --only firestore,storage "node scripts/verify-lesson-release-rules.mjs"
         env:
           NODE_OPTIONS: --require=${{ github.workspace }}/scripts/firebase-storage-runtime-framing.cjs

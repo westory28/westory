@@ -145,6 +145,7 @@ const manifestPath = `semester_manifests/${semesterId}`;
 const enrollmentSlotId = archiveEnrollment.buildEnrollmentSlotId(semesterId, studentUid);
 
 const baseSeed = {
+  "site_settings/config": { year: semesterId.split("-")[0], semester: semesterId.split("-")[1], activeSemesterId: semesterId },
   "site_settings/semester_active": {
     semesterId,
     revision: 7,
@@ -1688,8 +1689,8 @@ const buildLegacyRosterPayload = ({ rosterId = "legacy-roster-one", records = nu
   const activeManifest = clone(store.documents.get(manifestPath));
   store.documents.set(manifestPath, { ...activeManifest, status: "PREPARING" });
   const preparingProjection = await queryCore.getGradeEvidenceState(
-    requestFor(studentUid, {
-      audience: "student",
+    requestFor(teacherUid, {
+      audience: "teacher",
       semesterId,
       scoreKind: "performance",
       provenance: "CURRENT",
@@ -1699,8 +1700,8 @@ const buildLegacyRosterPayload = ({ rosterId = "legacy-roster-one", records = nu
   assert.equal(preparingProjection.readOnly, true);
   store.documents.set(manifestPath, { ...activeManifest, status: "CLOSING" });
   const closingProjection = await queryCore.getGradeEvidenceState(
-    requestFor(studentUid, {
-      audience: "student",
+    requestFor(teacherUid, {
+      audience: "teacher",
       semesterId,
       scoreKind: "performance",
       provenance: "CURRENT",
@@ -1756,7 +1757,7 @@ const buildLegacyRosterPayload = ({ rosterId = "legacy-roster-one", records = nu
         provenance: "ARCHIVE",
       }),
     ),
-    "GRADE_PROVENANCE_MISMATCH",
+    "GRADE_STUDENT_CURRENT_SEMESTER_REQUIRED",
   );
 
   store.documents.set(manifestPath, {
@@ -1792,8 +1793,8 @@ const buildLegacyRosterPayload = ({ rosterId = "legacy-roster-one", records = nu
 
   const writesBeforeArchiveQuery = store.writeCount;
   const archived = await queryCore.getGradeEvidenceState(
-    requestFor(studentUid, {
-      audience: "student",
+    requestFor(teacherUid, {
+      audience: "teacher",
       semesterId,
       scoreKind: "performance",
       provenance: "ARCHIVE",
@@ -1804,8 +1805,8 @@ const buildLegacyRosterPayload = ({ rosterId = "legacy-roster-one", records = nu
   assert.equal(archived.records.length, 1);
   assert.equal(archived.provenance, "ARCHIVE");
   const archivedDetail = await queryCore.getGradeEvidenceState(
-    requestFor(studentUid, {
-      audience: "student",
+    requestFor(teacherUid, {
+      audience: "teacher",
       semesterId,
       recordId,
       scoreKind: "performance",
@@ -1814,6 +1815,14 @@ const buildLegacyRosterPayload = ({ rosterId = "legacy-roster-one", records = nu
   );
   assert.equal(archivedDetail.detail.record.provenance, "ARCHIVE");
   assert.equal(archivedDetail.detail.record.readOnly, true);
+  for (const provenance of ["CURRENT", "ARCHIVE"]) {
+    for (const detailRequested of [false, true]) {
+      await assertReason(queryCore.getGradeEvidenceState(requestFor(studentUid, {
+        audience: "student", semesterId, scoreKind: "performance", provenance,
+        ...(detailRequested ? { recordId } : {}),
+      })), "GRADE_STUDENT_CURRENT_SEMESTER_REQUIRED");
+    }
+  }
   const legacy = await queryCore.getGradeEvidenceState(
     requestFor(studentUid, {
       audience: "student",

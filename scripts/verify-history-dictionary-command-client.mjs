@@ -129,6 +129,7 @@ vm.runInNewContext(code, {
     if (name === "./commandGateway") return gateway;
     if (name === "./semesterScope")
       return {
+        getSemesterCollectionPath: (config, name) => `years/${config.year}/semesters/${config.semester}/${name}`,
         getYearSemester: (config) => ({
           year: config.year,
           semester: config.semester,
@@ -157,7 +158,7 @@ assert.equal(
 );
 checks += 4;
 let observed;
-api.subscribeStudentHistoryDictionaryWords("owner", (values) => {
+api.subscribeStudentHistoryDictionaryWords(config, "owner", (values) => {
   observed = values;
 });
 listener({
@@ -283,11 +284,12 @@ const original = {
 await assert.rejects(api.saveStudentHistoryDictionaryEntry(original, "owner"));
 assert.equal(api.hasPendingHistoryDictionaryMutation("owner"), true);
 assert.equal(
-  api.getPendingHistoryDictionaryDraft("owner").definition,
+  api.getPendingHistoryDictionaryDraft("owner", config).definition,
   "처음 풀이",
 );
-assert.equal(api.getPendingHistoryDictionaryDraft("other"), null);
-checks += 2;
+assert.equal(api.getPendingHistoryDictionaryDraft("other", config), null);
+assert.equal(api.getPendingHistoryDictionaryDraft("owner", { year: "2026", semester: "1" }), null);
+checks += 3;
 original.definition = "바뀐 풀이";
 original.expectedWordVersion = "999:0";
 await assert.rejects(
@@ -342,6 +344,16 @@ for (const file of files.slice(1)) {
   );
   checks++;
 }
+auth.currentUser = { uid: "owner" };
+reads.length = 0;
+await api.loadPublishedHistoryDictionaryTerm(config, "고려");
+await api.loadStudentHistoryDictionaryWord(config, "owner", "term");
+await api.loadTeacherHistoryDictionaryTerms(config);
+assert.equal(reads[0][0], "years/2026/semesters/2/history_dictionary_terms");
+assert.equal(reads[1], "years/2026/semesters/2/dictionary_students/owner/history_dictionary_words/term");
+assert.equal(reads[2][0], "years/2026/semesters/2/history_dictionary_terms");
+await assert.rejects(api.loadPublishedHistoryDictionaryTerm(null, "고려"), /현재 학기/);
+checks += 4;
 console.log(
   `History dictionary gateway client: ${checks} checks PASS (mocked, no network)`,
 );

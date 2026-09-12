@@ -1,3 +1,4 @@
+const { dictionaryTermPath, dictionaryRequestPath, dictionaryWordPath, assertDictionaryActiveSemester } = require("./historyDictionaryScope");
 const { createHash } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
 const names = ["requestHistoryDictionaryTerm", "saveStudentHistoryDictionaryWord", "saveStudentHistoryDictionaryEntry", "deleteStudentHistoryDictionaryWord", "deleteStudentHistoryDictionaryWordByTeacher", "updateStudentHistoryDictionaryWordByTeacher", "saveHistoryDictionaryTerm", "approveHistoryDictionaryTermForRequests"];
@@ -70,6 +71,7 @@ const createHistoryDictionaryCommandAdapter = ({ db, operations, prepareContext 
     if (!actor?.actorUid || (student ? actor.actorRole !== "student" : !["teacher", "admin"].includes(actor.actorRole)))
       fail("HISTORY_DICTIONARY_ROLE_REQUIRED", "이 작업을 할 수 있는 계정으로 로그인해 주세요.", "permission-denied");
     if (!transaction.native) throw new Error("Dictionary commands require the shared native transaction");
+    await assertDictionaryActiveSemester(transaction, payload);
     const uid = student ? actor.actorUid : payload.uid || payload.fallbackUid || "";
     const termId = payload.termId || ((payload.word || payload.normalizedWord) ? termIdFor(payload.word || payload.normalizedWord) : "");
     const requestId = commandType === "requestHistoryDictionaryTerm"
@@ -84,11 +86,11 @@ const createHistoryDictionaryCommandAdapter = ({ db, operations, prepareContext 
     if (student || ["deleteStudentHistoryDictionaryWordByTeacher", "updateStudentHistoryDictionaryWordByTeacher"].includes(commandType)) {
       const targetTermId = termId || (payload.normalizedWord ? termIdFor(payload.normalizedWord) : "");
       if (!targetTermId) invalid();
-      await check("expectedWordVersion", `users/${uid}/history_dictionary_words/${targetTermId}`);
+      await check("expectedWordVersion", dictionaryWordPath(payload, uid, targetTermId));
     }
     if (["saveStudentHistoryDictionaryWord", "saveHistoryDictionaryTerm", "approveHistoryDictionaryTermForRequests"].includes(commandType))
-      await check("expectedTermVersion", `history_dictionary_terms/${termId}`);
-    if (requestId) await check("expectedRequestVersion", `history_dictionary_requests/${requestId}`);
+      await check("expectedTermVersion", dictionaryTermPath(payload, termId));
+    if (requestId) await check("expectedRequestVersion", dictionaryRequestPath(payload, requestId));
     const prepared = await prepareContext({ ...context, uid, termId, requestId, student });
     const result = await operations[commandType]({ data: payload }, {
       ...context, ...prepared,

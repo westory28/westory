@@ -40,7 +40,7 @@ const getFloatingOffsetClassName = (pathname: string, search: string) => {
 const formatStatusLabel = (status: StudentHistoryDictionaryWord["status"]) =>
   status === "saved" ? "저장됨" : "요청 중";
 
-const StudentHistoryDictionaryController: React.FC = () => {
+const StudentHistoryDictionaryControllerContent: React.FC = () => {
   const { currentUser, config } = useAuth();
   const { showToast } = useAppToast();
   const location = useLocation();
@@ -93,18 +93,31 @@ const StudentHistoryDictionaryController: React.FC = () => {
     setWord("");
     setDefinition("");
     setMemo("");
-    const pending = getPendingHistoryDictionaryDraft(currentUser?.uid || "");
+    const pending = getPendingHistoryDictionaryDraft(
+      currentUser?.uid || "",
+      config,
+    );
     if (pending) {
       setWord(pending.word);
       setDefinition(pending.definition);
       setMemo(pending.memo);
     }
-    if (!currentUser?.uid || !isStudentRoute) {
+    if (
+      !currentUser?.uid ||
+      !isStudentRoute ||
+      !config?.year ||
+      !config?.semester
+    ) {
       setWords([]);
       return undefined;
     }
-    return subscribeStudentHistoryDictionaryWords(currentUser.uid, setWords);
-  }, [currentUser?.uid, isStudentRoute]);
+    setWords([]);
+    return subscribeStudentHistoryDictionaryWords(
+      config,
+      currentUser.uid,
+      setWords,
+    );
+  }, [currentUser?.uid, isStudentRoute, config?.year, config?.semester]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -145,6 +158,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
         ownerUid,
       );
       const savedWord = await loadStudentHistoryDictionaryWord(
+        config,
         ownerUid,
         result.termId,
       ).catch(() => null);
@@ -210,7 +224,10 @@ const StudentHistoryDictionaryController: React.FC = () => {
     setCheckingTeacherTerm(true);
     setTeacherChecked(false);
     try {
-      const result = await loadPublishedHistoryDictionaryTerm(currentWord);
+      const result = await loadPublishedHistoryDictionaryTerm(
+        config,
+        currentWord,
+      );
       setTerm(result);
       setTeacherChecked(true);
     } catch (error) {
@@ -238,6 +255,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       );
       setDefinition(term.definition);
       const savedWord = await loadStudentHistoryDictionaryWord(
+        config,
         ownerUid,
         term.id,
       ).catch(() => null);
@@ -281,6 +299,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
         ownerUid,
       );
       const savedWord = await loadStudentHistoryDictionaryWord(
+        config,
         ownerUid,
         result.termId,
       ).catch(() => null);
@@ -656,6 +675,15 @@ const StudentHistoryDictionaryController: React.FC = () => {
         </div>
       )}
     </>
+  );
+};
+
+const StudentHistoryDictionaryController: React.FC = () => {
+  const { currentUser, config } = useAuth();
+  return (
+    <StudentHistoryDictionaryControllerContent
+      key={`${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`}
+    />
   );
 };
 

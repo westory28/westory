@@ -943,18 +943,8 @@ const ManageHistoryClassroom: React.FC = () => {
         const semesterMapSnap = await getDocs(
           query(collection(db, mapPath), orderBy("sortOrder", "asc")),
         );
-        const legacyMapSnap = await getDocs(
-          query(collection(db, "map_resources"), orderBy("sortOrder", "asc")),
-        );
         const mapById = new Map<string, MapResource>();
         const nextLegacyMapIds = new Set<string>();
-        legacyMapSnap.docs.forEach((docSnap) => {
-          nextLegacyMapIds.add(docSnap.id);
-          mapById.set(
-            docSnap.id,
-            normalizeMapResource(docSnap.id, docSnap.data()),
-          );
-        });
         semesterMapSnap.docs.forEach((docSnap) => {
           nextLegacyMapIds.delete(docSnap.id);
           mapById.set(
@@ -1004,19 +994,10 @@ const ManageHistoryClassroom: React.FC = () => {
           config,
           "history_classrooms",
         );
-        let assignmentSnap = await getDocs(
+        const assignmentSnap = await getDocs(
           query(collection(db, assignmentPath), orderBy("updatedAt", "desc")),
         );
-        let loadedLegacyAssignments = false;
-        if (assignmentSnap.empty) {
-          assignmentSnap = await getDocs(
-            query(
-              collection(db, "history_classrooms"),
-              orderBy("updatedAt", "desc"),
-            ),
-          );
-          loadedLegacyAssignments = true;
-        }
+        const loadedLegacyAssignments = false;
         const loadedAssignments = assignmentSnap.docs
           .map((docSnap) =>
             mergeHistoryClassroomMapSnapshot(
@@ -1038,22 +1019,13 @@ const ManageHistoryClassroom: React.FC = () => {
           config,
           "history_classroom_results",
         );
-        let resultSnap = await getDocs(
+        const resultSnap = await getDocs(
           query(
             collection(db, resultPath),
             orderBy("createdAt", "desc"),
             limit(HISTORY_CLASSROOM_RESULT_LIMIT),
           ),
         );
-        if (resultSnap.empty) {
-          resultSnap = await getDocs(
-            query(
-              collection(db, "history_classroom_results"),
-              orderBy("createdAt", "desc"),
-              limit(HISTORY_CLASSROOM_RESULT_LIMIT),
-            ),
-          );
-        }
         const groupedResults: Record<string, HistoryClassroomResult[]> = {};
         resultSnap.docs.forEach((docSnap) => {
           const result = normalizeHistoryClassroomResult(

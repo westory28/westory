@@ -280,14 +280,7 @@ const resolveLesson = async (transaction, root, unitId) => {
     value: unitId,
     limit: 2,
   });
-  const source = scoped.length
-    ? scoped
-    : await transaction.query("lessons", {
-        field: "unitId",
-        operator: "==",
-        value: unitId,
-        limit: 2,
-      });
+  const source = scoped;
   if (source.length > 1)
     fail(
       "failed-precondition",
@@ -331,10 +324,7 @@ const createLessonCommandAdapter = ({ now = () => Date.now() } = {}) => ({
     const root = await assertWritable(transaction, payload, actor);
     const treePath = `${root}/curriculum/tree`;
     const treeSnapshot = await transaction.get(treePath);
-    const legacyTree = !treeSnapshot.exists
-      ? await transaction.get("curriculum/tree")
-      : null;
-    const currentTree = treeSnapshot.data || legacyTree?.data || {};
+    const currentTree = treeSnapshot.data || {};
     const done = (id, refs, result) => ({
       target: { kind: commandType, id, refs },
       sourceHash: createHash("sha256")

@@ -874,6 +874,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const attempt = attemptSnapshot.data || {};
       if (attempt.attemptId !== payload.attemptId) fail("failed-precondition", "Assessment attempt identity is inconsistent.", "ASSESSMENT_ATTEMPT_INVALID");
       if (attempt.studentUid !== actor.actorUid) fail("permission-denied", "Assessment attempt belongs to another student.", "ASSESSMENT_ATTEMPT_FORBIDDEN");
+      await assertAssessmentSemesterWritable(transaction, attempt.semesterId);
       if (attempt.status === "SUBMITTED") {
         if (attempt.resultRef !== resultPath(attempt.attemptId)) fail("failed-precondition", "Assessment result reference is inconsistent.", "ASSESSMENT_RESULT_INVALID");
         const resultDoc = await transaction.get(attempt.resultRef);
@@ -951,6 +952,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       assertTeacherActor(actor);
       const definition = await transaction.get(definitionPath(payload.definitionId));
       if (!definition.exists) fail("not-found", "Assessment definition was not found.", "ASSESSMENT_DEFINITION_NOT_FOUND");
+      await assertAssessmentSemesterWritable(transaction, definition.data?.semesterId);
       let resolvedClassId = payload.classId;
       if (!payload.classId.startsWith("class_")) {
         const [grade, classNumber] = payload.classId.split("-");
@@ -967,6 +969,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       assertTeacherActor(actor);
       const definition = await transaction.get(definitionPath(payload.definitionId));
       if (!definition.exists) fail("not-found", "Assessment definition was not found.", "ASSESSMENT_DEFINITION_NOT_FOUND");
+      await assertAssessmentSemesterWritable(transaction, definition.data?.semesterId);
       const attempts = (await transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: payload.definitionId })).filter((document) => document.data?.studentUid === payload.studentUid && document.data?.resetAt == null);
       for (const document of attempts) transaction.set(document.path, { status: "LOCKED", resetAt: timestamp, resetBy: actor.actorUid, resetReason: payload.reason, updatedAt: timestamp }, { merge: true });
       return { target: { kind: "assessment-attempt-reset", id: `${payload.definitionId}:${payload.studentUid}`, refs: attempts.map((item) => item.path) }, sourceHash: definition.data?.sourceHash || null, result: { definitionId: payload.definitionId, studentUid: payload.studentUid, resetCount: attempts.length } };
@@ -1071,6 +1074,12 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
       const definitionId = query.definitionId || attemptSnapshot?.data?.definitionId || "";
       const definitionSnapshot = definitionId ? await transaction.get(definitionPath(definitionId)) : null;
       if (!definitionSnapshot?.exists) return { status: "INVALID_LINK", definition: null, attempt: null, serverNowIso: now().toISOString(), writeCount: 0 };
+      if (attemptSnapshot?.exists && (attemptSnapshot.data?.definitionId !== definitionId || attemptSnapshot.data?.semesterId !== definitionSnapshot.data?.semesterId)) {
+        fail("permission-denied", "Assessment attempt does not belong to the requested definition and semester.", "ASSESSMENT_QUERY_SCOPE_MISMATCH");
+      }
+      if (actor.role === "student") {
+        await assertAssessmentSemesterWritable(transaction, definitionSnapshot.data?.semesterId);
+      }
       let ownAttempt = attemptSnapshot;
       if (!ownAttempt && actor.role === "student") {
         const attempts = (await transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: definitionId })).filter((document) => document.data?.studentUid === actor.uid && document.data?.resetAt == null).sort((left, right) => Number(right.data?.attemptNumber || 0) - Number(left.data?.attemptNumber || 0));
@@ -1152,6 +1161,7 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
       if (!snapshot.exists) fail("not-found", "Assessment attempt was not found.", "ASSESSMENT_ATTEMPT_NOT_FOUND");
       const attempt = snapshot.data || {};
       if (attempt.studentUid !== actor.uid) fail("permission-denied", "Assessment attempt belongs to another student.", "ASSESSMENT_ATTEMPT_FORBIDDEN");
+      await assertAssessmentSemesterWritable(transaction, attempt.semesterId);
       const saveHash = sha256(canonicalJson({ answers: payload.answers, currentItemId: payload.currentItemId }));
       if (attempt.lastSaveId === payload.saveId) {
         if (attempt.lastSaveHash !== saveHash) fail("already-exists", "saveId was reused with different progress.", "ASSESSMENT_SAVE_ID_CONFLICT");

@@ -382,8 +382,7 @@ const ScoreReport: React.FC = () => {
               onChange={(event) => setSemester(event.target.value)}
               className="h-11 min-w-36 rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800"
             >
-              <option value="1">1학기</option>
-              <option value="2">2학기</option>
+              <option value={semester}>{semester}학기</option>
             </select>
           </label>
           <label className="flex items-center gap-3 text-sm font-extrabold text-slate-600">

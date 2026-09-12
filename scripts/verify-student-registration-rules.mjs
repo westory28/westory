@@ -30,13 +30,16 @@ try {
       if (user.uid !== "new") await setDoc(doc(db, `users/${user.uid}`), { ...user, role: user.uid === "teacher" ? "teacher" : "student" });
     }
     for (const id of ["config", "menu_config", "consent"]) await setDoc(doc(db, `site_settings/${id}`), { test: true });
+    await setDoc(doc(db, "site_settings/config"), { year: "2026", semester: "2" });
+    await setDoc(doc(db, "site_settings/semester_active"), { semesterId: "2026-2", revision: 4 });
+    await setDoc(doc(db, "semester_manifests/2026-2"), { semesterId: "2026-2", status: "ACTIVE", revision: 4 });
     await setDoc(doc(db, "site_settings/consent/items/one"), { title: "동의" });
-    await setDoc(doc(db, "lessons/registration-test"), { title: "합성 수업" });
+    await setDoc(doc(db, "years/2026/semesters/2/lessons/registration-test"), { title: "합성 수업" });
     await uploadBytes(ref(ctx.storage(bucket), "lesson_pdfs/registration/test.pdf"), new Uint8Array([37,80,68,70]), { contentType: "application/pdf" });
   });
   const contexts = identities.map(user => env.authenticatedContext(user.uid, { email: user.email, auth_time: authTime }));
   const db = contexts[0].firestore(), storage = contexts[0].storage(bucket), userRef = doc(db, "users/new");
-  const lesson = doc(db, "lessons/registration-test"), file = ref(storage, "lesson_pdfs/registration/test.pdf");
+  const lesson = doc(db, "years/2026/semesters/2/lessons/registration-test"), file = ref(storage, "lesson_pdfs/registration/test.pdf");
   await deny(getDoc(lesson)); await deny(getBytes(file)); await pass(getDoc(userRef));
   for (const id of ["config", "menu_config", "consent"]) await pass(getDoc(doc(db, `site_settings/${id}`)));
   await pass(getDoc(doc(db, "site_settings/consent/items/one")));
@@ -53,6 +56,6 @@ try {
   await deny(getDoc(lesson)); await deny(getBytes(file));
   await env.withSecurityRulesDisabled(ctx => updateDoc(doc(ctx.firestore(), "users/new"), { registrationApprovalStatus: "APPROVED" }));
   await pass(getDoc(lesson)); await pass(getBytes(file));
-  for (const ctx of contexts.slice(1)) { await pass(getDoc(doc(ctx.firestore(), "lessons/registration-test"))); await pass(getBytes(ref(ctx.storage(bucket), "lesson_pdfs/registration/test.pdf"))); }
+  for (const ctx of contexts.slice(1)) { await pass(getDoc(doc(ctx.firestore(), "years/2026/semesters/2/lessons/registration-test"))); await pass(getBytes(ref(ctx.storage(bucket), "lesson_pdfs/registration/test.pdf"))); }
   console.log(JSON.stringify({ passed: true, checks, projectId, productionAccess: 0 }));
 } finally { await env.cleanup(); }

@@ -1161,14 +1161,6 @@ const ManageLesson: React.FC = () => {
         return doc(scopedRef, scopedSnap.docs[0].id);
       }
 
-      const legacyRef = collection(db, "lessons");
-      const legacySnap = await getDocs(
-        query(legacyRef, where("unitId", "==", unitId), limit(1)),
-      );
-      if (!legacySnap.empty) {
-        return doc(legacyRef, legacySnap.docs[0].id);
-      }
-
       return null;
     },
     [config],
@@ -1846,10 +1838,7 @@ const ManageLesson: React.FC = () => {
         const latestSelection =
           await findInitialLessonSelection<QueryDocumentSnapshot>({
             tree: nextTree,
-            collectionPaths: [
-              getSemesterCollectionPath(config, "lessons"),
-              "lessons",
-            ],
+            collectionPaths: [getSemesterCollectionPath(config, "lessons")],
             isCurrent: () =>
               isCurrent() && lessonLoadIdRef.current === lessonLoadId,
             readPage: async (collectionPath, cursor, pageSize) => {
@@ -1909,13 +1898,7 @@ const ManageLesson: React.FC = () => {
         await applyLoadedTree(scopedDoc.data().tree);
         return;
       }
-      const legacyDoc = await getDocFromServer(doc(db, "curriculum", "tree"));
-      if (!isCurrent()) return;
       treeRevisionRef.current = 0;
-      if (legacyDoc.exists() && legacyDoc.data().tree) {
-        await applyLoadedTree(legacyDoc.data().tree);
-        return;
-      }
       await applyLoadedTree([
         { id: `root-${Date.now()}`, title: "수업 자료", children: [] },
       ]);
@@ -2106,20 +2089,10 @@ const ManageLesson: React.FC = () => {
         where("unitId", "==", unitId),
         limit(1),
       );
-      let documents =
+      const documents =
         initialSnapshot && !restored
           ? [initialSnapshot]
           : (await getDocsFromServer(scopedQuery)).docs;
-      if (documents.length === 0)
-        documents = (
-          await getDocsFromServer(
-            query(
-              collection(db, "lessons"),
-              where("unitId", "==", unitId),
-              limit(1),
-            ),
-          )
-        ).docs;
       if (
         !editorMountedRef.current ||
         loadId !== lessonLoadIdRef.current ||

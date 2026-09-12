@@ -4051,6 +4051,14 @@ const createGradeQueryCore = ({ store, assertSession = sessionAuthority.assertAc
 
     return store.runTransaction(async (transaction) => {
       const manifest = await transaction.get(manifestPath(query.semesterId));
+      if (!actor.canManage) {
+        const pointer = await transaction.get(semesterCore.ACTIVE_SEMESTER_POINTER_PATH);
+        if (query.source !== "CURRENT" || !pointer.exists || !manifest.exists ||
+          pointer.data?.semesterId !== query.semesterId || manifest.data?.status !== "ACTIVE" ||
+          Number(pointer.data?.revision || 0) !== Number(manifest.data?.revision || 0)) {
+          fail("permission-denied", "Students can only read the canonical active semester grades.", "GRADE_STUDENT_CURRENT_SEMESTER_REQUIRED");
+        }
+      }
       if (!manifest.exists) {
         return {
           mode: query.mode,

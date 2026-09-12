@@ -310,16 +310,19 @@ const HistoryClassroomRunner: React.FC = () => {
       setLegacyNoticeOpen(true);
 
       try {
+        if (explicitLegacySource) {
+          throw new Error(
+            "현재 학기에 제공되는 역사교실만 확인할 수 있습니다.",
+          );
+        }
         const { year, semester } = getYearSemester(config);
         const definitionId = buildAssessmentDefinitionId(
           `${year}-${semester}`,
           "HISTORY_CLASSROOM",
           assignmentId,
         );
-        const assessmentState = explicitLegacySource
-          ? null
-          : await getAssessmentState({ definitionId });
-        if (!explicitLegacySource && !assessmentState?.definition) {
+        const assessmentState = await getAssessmentState({ definitionId });
+        if (!assessmentState?.definition) {
           throw new Error(
             "유효하지 않거나 더 이상 사용할 수 없는 역사교실 링크입니다.",
           );
@@ -338,9 +341,7 @@ const HistoryClassroomRunner: React.FC = () => {
         const snap = await getDoc(
           doc(
             db,
-            explicitLegacySource
-              ? `history_classrooms/${assignmentId}`
-              : getSemesterDocPath(config, "history_classrooms", assignmentId),
+            getSemesterDocPath(config, "history_classrooms", assignmentId),
           ),
         );
         if (!snap.exists()) {
@@ -356,13 +357,7 @@ const HistoryClassroomRunner: React.FC = () => {
           const mapSnap = await getDoc(
             doc(
               db,
-              explicitLegacySource
-                ? `map_resources/${loaded.mapResourceId}`
-                : getSemesterDocPath(
-                    config,
-                    "map_resources",
-                    loaded.mapResourceId,
-                  ),
+              getSemesterDocPath(config, "map_resources", loaded.mapResourceId),
             ),
           );
           if (mapSnap.exists()) {
@@ -389,16 +384,6 @@ const HistoryClassroomRunner: React.FC = () => {
 
         if (isHistoryClassroomPastDue(loaded)) {
           throw new Error("응시 기간이 마감된 역사교실입니다.");
-        }
-        if (explicitLegacySource) {
-          setAssignment(loaded);
-          setLegacySource(true);
-          setCurrentPage(loaded.pdfPageImages?.[0]?.page || 1);
-          setAnswers({});
-          setCanonicalAttempt(null);
-          setAttemptStarted(false);
-          setCompleted(false);
-          return;
         }
         if (!assessmentState)
           throw new Error("역사교실 응시 상태를 확인할 수 없습니다.");

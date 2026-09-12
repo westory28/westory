@@ -37,8 +37,8 @@ const actual = [
 ].join("\n");
 const uid = "student-a", teacher = "teacher-a", scope = { year: "2026", semester: "2" }, day = "2026-09-11";
 const semesterId = "2026-2", definition = "역사적 사건의 배경과 전개 과정을 충분히 설명하는 학생의 뜻풀이입니다.";
-const wordPath = (termId, owner = uid) => `users/${owner}/history_dictionary_words/${termId}`;
-const termPath = termId => `history_dictionary_terms/${termId}`;
+const wordPath = (termId, owner = uid) => `years/2026/semesters/2/dictionary_students/${owner}/history_dictionary_words/${termId}`;
+const termPath = termId => `years/2026/semesters/2/history_dictionary_terms/${termId}`;
 const requestIdFor = word => `req_${crypto.createHash("sha1").update(`2026:2:${uid}:${word.trim().toLowerCase()}`).digest("hex")}`;
 const clone = value => structuredClone(value);
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -69,7 +69,7 @@ const setup = () => {
   };
   seedScope();
   docs.set(semesterCore.ACTIVE_SEMESTER_POINTER_PATH, { semesterId, revision: 3 });
-  docs.set("site_settings/config", scope);
+  docs.set("site_settings/config", { ...scope, activeSemesterId: semesterId });
   docs.set(`users/${uid}`, { uid, role: "student", name: "학생", email: `${uid}@school.test` });
   docs.set(`users/${teacher}`, { uid: teacher, role: "teacher", name: "교사", email: `${teacher}@school.test` });
   const query = (path, group = false) => ({ path, group, filters: [], cap: Infinity,
@@ -114,7 +114,7 @@ const setup = () => {
   };
   const exported = {};
   runInNewContext(actual, {
-    exports: exported, db, crypto, HttpsError, REGION: "asia-northeast3", onCall: (_, handler) => handler,
+    exports: exported, require: name => require(name.replace("./", "../")), db, crypto, HttpsError, REGION: "asia-northeast3", onCall: (_, handler) => handler,
     dictionaryNotifications, historyDictionaryDelete: require("../historyDictionaryDelete"), historyDictionaryUpdate: require("../historyDictionaryUpdate"),
     HISTORY_DICTIONARY_TERMS_COLLECTION: "history_dictionary_terms", HISTORY_DICTIONARY_REQUESTS_COLLECTION: "history_dictionary_requests",
     FieldValue: { serverTimestamp: () => ({ __serverTimestamp: true }) },
@@ -206,14 +206,14 @@ const rejectUnchanged = async (f, action, reason, zeroWrites = true) => {
     f.seedScope("2027", "1");
     f.docs.set(semesterCore.ACTIVE_SEMESTER_POINTER_PATH, { semesterId: "2027-1", revision: 3 });
     f.docs.get("semester_manifests/2026-2").status = "CLOSED";
-    await rejectUnchanged(f, () => f.execute("deleteStudentHistoryDictionaryWord", { termId, expectedWordVersion: f.version(wordPath(termId)), year: "2027", semester: "1" }), "HISTORY_DICTIONARY_WIS_ECONOMY_CLOSED");
+    await rejectUnchanged(f, () => f.execute("deleteStudentHistoryDictionaryWord", { termId, expectedWordVersion: f.version(wordPath(termId)), year: "2027", semester: "1" }), "HISTORY_DICTIONARY_VERSION_CONFLICT");
     eq(f.docs.get(`semester_wis_accounts/${wis.accountIdFor("2027-1", uid)}`).balance, 500);
     eq(f.docs.get(`semester_wis_accounts/${origin.accountId}`).balance, 550);
   });
   await test("Student request, teacher term publication/approval and rejection commit notification outbox atomically", async () => {
     const f = setup(), word = "request-word", termId = commands.termIdFor(word), requestId = requestIdFor(word);
     const requested = await f.execute("requestHistoryDictionaryTerm", { word, memo: "학생 요청", warningAccepted: true, expectedWordVersion: null, expectedRequestVersion: null });
-    eq(requested.result.created, true); eq(f.docs.get(`history_dictionary_requests/${requestId}`).status, "requested");
+    eq(requested.result.created, true); eq(f.docs.get(`years/2026/semesters/2/history_dictionary_requests/${requestId}`).status, "requested");
     eq([...f.docs.keys()].filter(path => path.startsWith(dictionaryNotifications.COLLECTION)).length, 1);
     const published = await f.execute("saveHistoryDictionaryTerm", { word, definition, expectedTermVersion: null }, { uid: teacher });
     eq(published.result.resolvedCount, 1); eq(f.docs.get(wordPath(termId)).status, "saved");
@@ -222,17 +222,17 @@ const rejectUnchanged = async (f, action, reason, zeroWrites = true) => {
     await f.execute("saveHistoryDictionaryTerm", { word: another, definition, expectedTermVersion: null }, { uid: teacher });
     await f.execute("requestHistoryDictionaryTerm", { word: another, warningAccepted: true, expectedWordVersion: null, expectedRequestVersion: null });
     const approved = await f.execute("approveHistoryDictionaryTermForRequests", { termId: otherTerm, requestId: otherRequest,
-      expectedTermVersion: f.version(termPath(otherTerm)), expectedRequestVersion: f.version(`history_dictionary_requests/${otherRequest}`) }, { uid: teacher });
+      expectedTermVersion: f.version(termPath(otherTerm)), expectedRequestVersion: f.version(`years/2026/semesters/2/history_dictionary_requests/${otherRequest}`) }, { uid: teacher });
     eq(approved.result.resolvedCount, 1);
     const count = [...f.docs.keys()].filter(path => path.startsWith(dictionaryNotifications.COLLECTION)).length;
     await f.execute("deleteStudentHistoryDictionaryWordByTeacher", { uid, termId: otherTerm, requestId: otherRequest,
-      expectedWordVersion: f.version(wordPath(otherTerm)), expectedRequestVersion: f.version(`history_dictionary_requests/${otherRequest}`) }, { uid: teacher });
-    eq(f.docs.get(`history_dictionary_requests/${otherRequest}`).status, "rejected");
+      expectedWordVersion: f.version(wordPath(otherTerm)), expectedRequestVersion: f.version(`years/2026/semesters/2/history_dictionary_requests/${otherRequest}`) }, { uid: teacher });
+    eq(f.docs.get(`years/2026/semesters/2/history_dictionary_requests/${otherRequest}`).status, "rejected");
     eq([...f.docs.keys()].filter(path => path.startsWith(dictionaryNotifications.COLLECTION)).length, count + 1);
   });
   await test("Rejected request reopens with one atomic teacher outbox; lost-response replay and pending edits add none", async () => {
     const f = setup(), word = "reopen-request", termId = commands.termIdFor(word), requestId = requestIdFor(word);
-    const requestPath = `history_dictionary_requests/${requestId}`;
+    const requestPath = `years/2026/semesters/2/history_dictionary_requests/${requestId}`;
     const outbox = () => [...f.docs].filter(([path]) => path.startsWith(`${dictionaryNotifications.COLLECTION}/`));
     await f.execute("requestHistoryDictionaryTerm", { word, warningAccepted: true, expectedWordVersion: null, expectedRequestVersion: null });
     eq(outbox().length, 1);
@@ -356,6 +356,23 @@ const rejectUnchanged = async (f, action, reason, zeroWrites = true) => {
       const f = setup(); mutate(f);
       await rejectUnchanged(f, () => f.execute("saveStudentHistoryDictionaryEntry", f.awardPayload()));
     }
+  });
+  await test("Same word in the previous semester and legacy collections cannot be read or overwritten by current commands", async () => {
+    const f = setup(), word = "semester-isolation", id = commands.termIdFor(word);
+    const oldTerm = `years/2026/semesters/1/history_dictionary_terms/${id}`;
+    const oldWord = `years/2026/semesters/1/dictionary_students/${uid}/history_dictionary_words/${id}`;
+    const globalTerm = `history_dictionary_terms/${id}`;
+    const globalWord = `users/${uid}/history_dictionary_words/${id}`;
+    const previous = { word, definition: "지난 학기 뜻풀이", createdAt: 7, rewardOrigins: [] };
+    for (const path of [oldTerm, oldWord, globalTerm, globalWord]) f.docs.set(path, clone(previous));
+    await f.execute("saveStudentHistoryDictionaryEntry", f.awardPayload(word));
+    await f.execute("saveHistoryDictionaryTerm", { word, definition, expectedTermVersion: null }, { uid: teacher });
+    for (const path of [oldTerm, oldWord, globalTerm, globalWord]) eq(f.docs.get(path), previous);
+    eq(f.docs.get(termPath(id)).semester, "2");
+    eq(f.docs.get(wordPath(id)).semester, "2");
+    f.docs.set("semester_manifests/2026-1", { semesterId: "2026-1", revision: 2, status: "ARCHIVED" });
+    await rejectUnchanged(f, () => f.execute("saveHistoryDictionaryTerm", { year: "2026", semester: "1", word, definition, expectedTermVersion: "legacy" }, { uid: teacher }), "HISTORY_DICTIONARY_SEMESTER_CHANGED");
+    await rejectUnchanged(f, () => f.execute("deleteStudentHistoryDictionaryWordByTeacher", { year: "2026", semester: "1", uid, termId: id, expectedWordVersion: "legacy" }, { uid: teacher }), "HISTORY_DICTIONARY_SEMESTER_CHANGED");
   });
   eq([...executedOperations].sort(), [...names].sort());
   console.log(JSON.stringify({ passed: true, checks, cases, actualOperations: [...executedOperations],

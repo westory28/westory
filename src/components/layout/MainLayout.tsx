@@ -39,6 +39,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     configReady,
     menuConfig,
     menuConfigReady,
+    refreshConfig,
   } = useAuth();
   const { showToast } = useAppToast();
   const navigate = useNavigate();
@@ -150,6 +151,23 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (loading)
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
+
+  if (currentUser && (isStudentRoute || isTeacherRoute) && !configReady) {
+    return <PageLoading message="현재 학기를 확인하는 중입니다." />;
+  }
+  if (currentUser && (isStudentRoute || isTeacherRoute) && !config) {
+    return (
+      <div role="alert" className="mx-auto max-w-xl p-6 text-center">
+        <p>현재 학기를 확인하지 못했습니다. 다시 불러와 주세요.</p>
+        <button
+          className="mt-4 rounded-lg bg-blue-600 px-4 py-3 font-bold text-white"
+          onClick={() => void refreshConfig()}
+        >
+          다시 불러오기
+        </button>
+      </div>
+    );
+  }
 
   if (currentUser && isStudentRoute && !studentAccessReady) {
     return <PageLoading message="학생 공개 설정을 확인하는 중입니다." />;

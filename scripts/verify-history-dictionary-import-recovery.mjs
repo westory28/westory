@@ -171,8 +171,8 @@ export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>l
 window.setIdentity=(uid,semester='2',role='teacher')=>{identity={...identity,currentUser:{uid,email:uid+'@yongshin-ms.ms.kr'},userData:{role},config:{year:'2026',semester}};listeners.forEach(fn=>fn());};
 window.toasts=[];const showToast=toast=>window.toasts.push(toast);export const useAppToast=()=>({showToast});
 let terms=[],termListeners=new Set();window.emitTerms=rows=>{terms=rows;termListeners.forEach(fn=>fn(terms));};
-export const subscribeTeacherHistoryDictionaryTerms=cb=>{termListeners.add(cb);cb(terms);return()=>termListeners.delete(cb);};
-export const subscribeTeacherHistoryDictionaryRequests=cb=>{cb([]);return()=>{};};
+export const subscribeTeacherHistoryDictionaryTerms=(_config,cb)=>{termListeners.add(cb);cb(terms);return()=>termListeners.delete(cb);};
+export const subscribeTeacherHistoryDictionaryRequests=(_config,cb)=>{cb([]);return()=>{};};
 export const loadTeacherStudentHistoryDictionaryWords=async()=>[];export const loadNotifications=async()=>[];
 window.failRefresh=false;window.refreshCalls=0;export const loadTeacherHistoryDictionaryTerms=async()=>{window.refreshCalls++;if(window.failRefresh)throw Error('Synthetic refresh failure');return terms;};
 export const normalizeHistoryDictionaryWord=value=>String(value||'').trim().replace(/\\s+/g,' ').toLowerCase();

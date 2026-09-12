@@ -21,12 +21,17 @@ import {
 } from "../../../lib/semesterArchiveView";
 import ResponsiveDataContainer from "../../../components/common/ResponsiveDataContainer";
 import LegacyArchiveRecords from "./LegacyArchiveRecords";
+import SettingsArchiveContent, {
+  archiveContentGroups,
+  type ArchiveContentGroup,
+} from "./SettingsArchiveContent";
 
 const buttonClass =
   "px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-800 font-bold hover:bg-gray-50 disabled:opacity-60";
 const fieldClass =
   "w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-gray-800";
 const kinds = {
+  ...archiveContentGroups,
   roster: "학생 명부",
   wis: "위스 잔액·거래",
   orders: "위스 주문",
@@ -122,7 +127,7 @@ function ArchiveRecords({
   accountName,
 }: {
   semesterId: string;
-  kind: Exclude<RecordKind, "legacy">;
+  kind: Exclude<RecordKind, "legacy" | ArchiveContentGroup>;
   accountId?: string;
   accountName?: string;
 }) {
@@ -597,7 +602,13 @@ const SettingsArchiveRecords: React.FC = () => {
                 {selected.startDate || "시작일 미등록"} ~{" "}
                 {selected.endDate || "종료일 미등록"} · 읽기 전용
               </p>
-              {kind === "legacy" ? (
+              {kind in archiveContentGroups ? (
+                <SettingsArchiveContent
+                  key={`${selected.semesterId}:${kind}:${currentUser?.uid || ""}`}
+                  semesterId={selected.semesterId}
+                  group={kind as ArchiveContentGroup}
+                />
+              ) : kind === "legacy" ? (
                 <LegacyArchiveRecords
                   key={selected.semesterId}
                   semesterId={selected.semesterId}
@@ -606,7 +617,9 @@ const SettingsArchiveRecords: React.FC = () => {
                 <ArchiveRecords
                   key={`${selected.semesterId}:${kind}`}
                   semesterId={selected.semesterId}
-                  kind={kind}
+                  kind={
+                    kind as Exclude<RecordKind, "legacy" | ArchiveContentGroup>
+                  }
                 />
               )}
             </>

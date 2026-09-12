@@ -277,18 +277,12 @@ const HistoryClassroomIndex: React.FC = () => {
                 left.title.localeCompare(right.title, "ko"),
             );
 
-        let loadedFromLegacy = false;
-        let loadedAssignments = normalizeVisibleAssignments(
+        const loadedFromLegacy = false;
+        const loadedAssignments = normalizeVisibleAssignments(
           await loadAssignedSnapshots(
             getSemesterCollectionPath(config, "history_classrooms"),
           ),
         );
-        if (!loadedAssignments.length) {
-          loadedFromLegacy = true;
-          loadedAssignments = normalizeVisibleAssignments(
-            await loadAssignedSnapshots("history_classrooms"),
-          );
-        }
         if (cancelled) return;
         setAssignments(loadedAssignments);
         setLegacyAssignmentIds(
@@ -350,12 +344,9 @@ const HistoryClassroomIndex: React.FC = () => {
 
         const [resultDocs, exemptionDocs, requestDocs] = await Promise.all([
           (async () => {
-            let docs = await readResultDocs(
+            const docs = await readResultDocs(
               getSemesterCollectionPath(config, "history_classroom_results"),
             );
-            if (!docs.length) {
-              docs = await readResultDocs("history_classroom_results");
-            }
             return docs;
           })(),
           loadOwnSemesterDocs("history_classroom_exemptions", [

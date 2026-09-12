@@ -1,4 +1,5 @@
 const READ_ONLY_QUERIES = new Set([
+  "getAdminSemesterContent",
   "getWisEconomyState",
   "getArchiveEnrollmentState",
   "getStudentEnrollmentProfileState",

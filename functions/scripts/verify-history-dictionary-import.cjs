@@ -27,6 +27,14 @@ const createAuthorizer = (profiles) => runInNewContext(
     HttpsError,
     commandGateway: gateway,
     historyDictionaryImport: dictionary,
+    historyDictionaryCommands: require("../historyDictionaryCommands"),
+    sourceArchiveManagement: require("../sourceArchiveManagement"),
+    mapManagement: require("../mapManagement"),
+    wisLegacyMigration: require("../wisLegacyMigration"),
+    studentEnrollmentProfile: require("../studentEnrollmentProfile"),
+    studentRegistrationApproval: require("../studentRegistrationApproval"),
+    mapTagWisReward: require("../mapTagWisReward"),
+
     lessonAnswers: require("../lessonAnswers"),
     lessonManagement: require("../lessonManagement"),
     teacherPatchNotes: require("../teacherPatchNotes"),
@@ -56,9 +64,9 @@ const request = (value = payload(), commandId = randomUUID(), uid = "teacher-a",
   data: { commandType: TYPE, commandId, payload: value, ...(drop ? { _testDropResponseAfterCommit: true } : {}) },
 });
 const termId = (word) => `term_${createHash("sha1").update(word.trim().replace(/\s+/g, " ").toLowerCase()).digest("hex")}`;
-const pathFor = (word) => `history_dictionary_terms/${termId(word)}`;
+const pathFor = (word) => `years/2026/semesters/2/history_dictionary_terms/${termId(word)}`;
 const setup = (seed = {}, options = {}) => {
-  const store = new Store(seed);
+  const store = new Store({ "site_settings/semester_active": { semesterId: "2026-2", revision: 1 }, "semester_manifests/2026-2": { semesterId: "2026-2", status: "ACTIVE", revision: 1 }, ...seed });
   const profiles = new Map([
     ["teacher-a", { role: "teacher" }], ["teacher-b", { role: "teacher" }],
     ["student", { role: "student" }], ["staff", { role: "staff", permissions: { lesson_read: true, lesson_manage: true } }],
@@ -112,33 +120,25 @@ const run = async () => {
     assert.equal(result.replayed, false);
     assert.deepEqual(result.result, { savedCount: 1, termIds: [termId("joseon dynasty")] });
     assert.deepEqual(test.store.docs.get(pathFor("joseon dynasty")), {
-      ...normalized.terms[0], normalizedWord: "joseon dynasty", status: "published", createdBy: "teacher-a", updatedBy: "teacher-a", createdAt: 123, updatedAt: 123, publishedAt: 123,
+      ...normalized.terms[0], year: "2026", semester: "2", normalizedWord: "joseon dynasty", status: "published", createdBy: "teacher-a", updatedBy: "teacher-a", createdAt: 123, updatedAt: 123, publishedAt: 123,
     });
-    assert.equal(test.store.docs.size, 3);
+    assert.equal(test.store.docs.size, 5);
     const receipt = [...test.store.docs].find(([key]) => key.startsWith("command_receipts/"))[1];
     assert.equal(receipt.actorRole, "teacher");
     assert.equal(receipt.actorCapability, "history_dictionary:import");
     assert.equal(receipt.actorUid, "teacher-a");
     assert.equal(receipt.sourceHash, receipt.payloadHash);
   });
-  await check("optional defaults and past syntax-valid scope without active pointer", async () => {
+  await check("archived semester import is rejected without any writes", async () => {
     const test = setup();
-    const result = await test.core.execute(request({ year: "2001", semester: "1", terms: [{ word: "고려", definition: "다섯 글자 이상의 설명" }] }));
-    assert.equal(result.result.savedCount, 1);
-    const row = test.store.docs.get(pathFor("고려"));
-    assert.equal(row.studentLevel, "중학생 수준");
-    assert.equal(row.relatedUnitId, "");
-    assert.deepEqual(row.tags, []);
-    assert.equal(Object.hasOwn(row, "year"), false);
-    assert.equal(Object.hasOwn(row, "semester"), false);
-    assert.equal([...test.store.docs.keys()].some((key) => key.startsWith("years/")), false);
+    await denied(test, request({ year: "2001", semester: "1", terms: [{ word: "고려", definition: "다섯 글자 이상의 설명" }] }), "HISTORY_DICTIONARY_SEMESTER_CHANGED");
   });
   await check("200 rows create exactly 200 terms plus one receipt and audit", async () => {
     const test = setup();
     const result = await test.core.execute(request(payload(Array.from({ length: 200 }, (_, i) => `단어${i}`))));
     assert.equal(result.result.savedCount, 200);
     assert.equal(new Set(result.result.termIds).size, 200);
-    assert.equal(test.store.docs.size, 202);
+    assert.equal(test.store.docs.size, 204);
     assert.equal([...test.store.docs.keys()].filter((key) => key.startsWith("command_receipts/")).length, 1);
     assert.equal([...test.store.docs.keys()].filter((key) => key.startsWith("command_audit_events/")).length, 1);
   });
@@ -155,7 +155,7 @@ const run = async () => {
     ]);
     assert.equal(result.filter((item) => item.status === "fulfilled").length, 1);
     assert.equal(result.find((item) => item.status === "rejected").reason.details.reason, CONFLICT);
-    assert.equal(test.store.docs.size, 4);
+    assert.equal(test.store.docs.size, 6);
     assert.equal(test.store.docs.has(pathFor("first")) !== test.store.docs.has(pathFor("second")), true);
   });
   await check("concurrent identical operation replays one receipt", async () => {
@@ -163,7 +163,7 @@ const run = async () => {
     const req = request(payload(["one", "two"]));
     const result = await Promise.all([test.core.execute(req), test.core.execute(req)]);
     assert.equal(result.filter((item) => item.replayed).length, 1);
-    assert.equal(test.store.docs.size, 4);
+    assert.equal(test.store.docs.size, 6);
   });
   await check("receipt replay after later edits never rewrites dictionary content", async () => {
     const test = setup();
@@ -182,12 +182,12 @@ const run = async () => {
     const test = setup();
     const req = request(payload(["one", "two"]), randomUUID(), "teacher-a", true);
     await assert.rejects(test.core.execute(req), (error) => error.details?.reason === "TEST_RESPONSE_LOSS");
-    assert.equal(test.store.docs.size, 4);
+    assert.equal(test.store.docs.size, 6);
     const status = await test.core.getStatus(statusRequest(req));
     assert.equal(status.status, "SUCCEEDED");
     assert.equal(status.result.savedCount, 2);
     assert.equal((await test.core.execute(req)).replayed, true);
-    assert.equal(test.store.docs.size, 4);
+    assert.equal(test.store.docs.size, 6);
     assert.equal((await test.core.getStatus(statusRequest(req, "teacher-b"))).status, "NOT_FOUND");
     await denied(test, { ...req, auth: request(undefined, undefined, "teacher-b").auth }, CONFLICT);
   });
@@ -199,7 +199,7 @@ const run = async () => {
       tx.create(path, value);
     } }));
     await assert.rejects(test.core.execute(request(payload(["one", "two"]))), (error) => error.code === "unavailable");
-    assert.equal(test.store.docs.size, 0);
+    assert.equal(test.store.docs.size, 2);
   });
   await check("receipt create failure rolls back all term creates", async () => {
     const test = setup();
@@ -209,7 +209,7 @@ const run = async () => {
       tx.create(path, value);
     } }));
     await assert.rejects(test.core.execute(request()), (error) => error.code === "unavailable");
-    assert.equal(test.store.docs.size, 0);
+    assert.equal(test.store.docs.size, 2);
   });
   for (const uid of ["student", "staff", "missing"]) {
     await check(`${uid} cannot import or read operation status`, async () => {

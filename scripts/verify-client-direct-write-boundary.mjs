@@ -52,6 +52,7 @@ const DIRECT_MUTATIONS = new Map([
 ]);
 
 const QUERY_CALLABLES = new Set([
+  "getAdminSemesterContent",
   "getAdminSemesterLegacyRecords",
   "getCommandStatus",
   "getSemesterCoreState",

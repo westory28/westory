@@ -116,6 +116,7 @@ const enrollment = {
   snapshot: { displayName: "합성 학생", studentNumber: "01" },
 };
 const tx = new MemoryTransaction({
+  "site_settings/semester_active": { semesterId: "2026-2", revision: 7 },
   "semester_manifests/2026-2": manifest,
   "semester_classes/class-1": semesterClass,
   "semester_classes/class-2": {
@@ -1018,20 +1019,12 @@ const run = async () => {
           source: "ARCHIVE",
         },
       }),
-    (error) => error.details?.reason === "W8_SOURCE_MISMATCH",
+    (error) => error.details?.reason === "W8_STUDENT_CURRENT_SEMESTER_REQUIRED",
   );
-  const explicitCurrent = await queryCore.getW8DomainState({
+  await assert.rejects(() => queryCore.getW8DomainState({
     auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
-    data: {
-      domain: "LEARNING",
-      audience: "student",
-      semesterId: "2026-2",
-      source: "EXPLICIT",
-    },
-  });
-  assert.equal(explicitCurrent.provenance, "EXPLICIT");
-  assert.equal(explicitCurrent.readOnly, true);
-  assert.equal(explicitCurrent.writeCount, 0);
+    data: { domain: "LEARNING", audience: "student", semesterId: "2026-2", source: "EXPLICIT" },
+  }), error => error.details?.reason === "W8_STUDENT_CURRENT_SEMESTER_REQUIRED");
   const dashboard = await queryCore.getW8DomainState({
     auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
     data: {
@@ -1134,6 +1127,14 @@ const run = async () => {
       provenance: "ARCHIVE",
     });
     tx.resetTransaction();
+    if (archiveObserverCase.domain === "LEARNING") {
+      await assert.rejects(() => queryCore.getW8DomainState({
+        auth: { uid: "archive-observer", token: { email: "archive-observer@yongshin-ms.ms.kr" } },
+        data: { domain: "LEARNING", audience: "teacher", semesterId: "2026-2", source: archiveObserverCase.source },
+      }), error => error.details?.reason === "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED");
+      assert.equal(tx.queryLog.length, 0);
+      continue;
+    }
     const archiveObserverState = await queryCore.getW8DomainState({
       auth: {
         uid: "archive-observer",
@@ -1152,7 +1153,7 @@ const run = async () => {
     assert.equal(archiveObserverState.enrollmentId, null);
     assert.equal(
       archiveObserverState.contents.length > 0,
-      archiveObserverCase.domain !== "ATTENDANCE",
+      false,
     );
     assert.equal(
       archiveObserverState.contents.every(
@@ -1198,6 +1199,16 @@ const run = async () => {
     status: "ARCHIVED",
     provenance: "ARCHIVE",
   });
+  for (const source of ["CURRENT", "ARCHIVE", "EXPLICIT", "LEGACY"]) {
+    tx.resetTransaction();
+    const before = JSON.stringify([...tx.documents]);
+    await assert.rejects(() => queryCore.getW8DomainState({
+      auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+      data: { domain: "LEARNING", audience: "student", semesterId: "2026-2", source },
+    }), error => error.details?.reason === "W8_STUDENT_CURRENT_SEMESTER_REQUIRED");
+    assert.equal(JSON.stringify([...tx.documents]), before);
+    assert.equal(tx.queryLog.length, 0, "Rejected past-semester reads never query content");
+  }
   const archiveHomeroomAttendance = await queryCore.getW8DomainState({
     auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
     data: {
@@ -1209,32 +1220,26 @@ const run = async () => {
     },
   });
   assert.equal(archiveHomeroomAttendance.records.length > 0, true);
-  const archiveDelegatedLearning = await queryCore.getW8DomainState({
-    auth: {
-      uid: "lesson-reader",
-      token: { email: "lesson-reader@yongshin-ms.ms.kr" },
-    },
-    data: {
-      domain: "LEARNING",
-      audience: "teacher",
-      semesterId: "2026-2",
-      source: "ARCHIVE",
-    },
+  for (const [uid, email] of [
+    ["teacher-1", "teacher@yongshin-ms.ms.kr"],
+    ["lesson-reader", "lesson-reader@yongshin-ms.ms.kr"],
+    ["archive-admin", "westoria28@gmail.com"],
+  ]) for (const source of ["ARCHIVE", "EXPLICIT"]) {
+    tx.resetTransaction();
+    await assert.rejects(() => queryCore.getW8DomainState({
+      auth: { uid, token: { email } },
+      data: { domain: "LEARNING", audience: "teacher", semesterId: "2026-2", source },
+    }), error => error.details?.reason === "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED");
+    assert.equal(tx.queryLog.length, 0);
+  }
+  const archiveDashboard = await queryCore.getW8DomainState({
+    auth: { uid: "archive-admin", token: { email: "westoria28@gmail.com" } },
+    data: { domain: "DASHBOARD", audience: "teacher", semesterId: "2026-2", source: "ARCHIVE" },
   });
-  assert.equal(archiveDelegatedLearning.progress.length > 0, true);
-  const archiveAdminLearning = await queryCore.getW8DomainState({
-    auth: {
-      uid: "archive-admin",
-      token: { email: "westoria28@gmail.com" },
-    },
-    data: {
-      domain: "LEARNING",
-      audience: "teacher",
-      semesterId: "2026-2",
-      source: "ARCHIVE",
-    },
-  });
-  assert.equal(archiveAdminLearning.progress.length > 0, true);
+  assert.deepEqual(archiveDashboard.contents, []);
+  assert.deepEqual(archiveDashboard.progress, []);
+  assert.deepEqual(archiveDashboard.dashboard.upcomingLearning, []);
+  assert.equal(archiveDashboard.records.length > 0, true);
   await assert.rejects(
     () => apply("createNotice", { ...common, ...noticeEditable }),
     (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
@@ -1243,7 +1248,10 @@ const run = async () => {
   console.log(
     JSON.stringify({
       passed: true,
-      cases: 91,
+      cases: 100,
+      teacherArchivedLearningRouteDenials: 10,
+      archivedDashboardLearningRows: 0,
+      studentArchivedContentReadDenials: 4,
       commandTypes: Object.values(w8.W8_COMMAND_TYPES).length,
       readinessChecks: checks.length,
       readAfterWrite: 0,
@@ -1260,7 +1268,7 @@ const run = async () => {
       archiveExplicitSourceBypassCases: archiveObserverCases.filter(
         ({ source }) => source === "EXPLICIT",
       ).length,
-      archivePrivilegedPolicyPreservationCases: 3,
+      archivePrivilegedPolicyPreservationCases: 2,
       productionAccess: 0,
     }),
   );

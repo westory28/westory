@@ -91,21 +91,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
-  year: "2026",
-  semester: "1",
-  showQuiz: true,
-  showScore: true,
-  showLesson: true,
-};
-
 const normalizeSystemConfig = (raw: SystemConfig | null): SystemConfig => {
   const year = String(raw?.year || "").trim();
   const semester = String(raw?.semester || "").trim();
+  if (!/^\d{4}$/.test(year) || !["1", "2"].includes(semester)) {
+    throw new Error("현재 학기 설정을 확인할 수 없습니다.");
+  }
 
   return {
-    year: /^\d{4}$/.test(year) ? year : DEFAULT_SYSTEM_CONFIG.year,
-    semester: semester === "2" ? "2" : DEFAULT_SYSTEM_CONFIG.semester,
+    year,
+    semester,
     showQuiz: raw?.showQuiz !== false,
     showScore: raw?.showScore !== false,
     showLesson: raw?.showLesson !== false,

@@ -115,7 +115,7 @@ const getTimestampMs = (value: unknown) => {
   return date?.getTime() || 0;
 };
 
-const HistoryDictionary: React.FC = () => {
+const HistoryDictionaryContent: React.FC = () => {
   const { currentUser, config } = useAuth();
   const { showToast } = useAppToast();
   const wordListRef = useRef<HTMLDivElement>(null);
@@ -256,18 +256,26 @@ const HistoryDictionary: React.FC = () => {
     setWord("");
     setDefinition("");
     setMemo("");
-    const pending = getPendingHistoryDictionaryDraft(currentUser?.uid || "");
+    const pending = getPendingHistoryDictionaryDraft(
+      currentUser?.uid || "",
+      config,
+    );
     if (pending) {
       setWord(pending.word);
       setDefinition(pending.definition);
       setMemo(pending.memo);
     }
-    if (!currentUser?.uid) {
+    if (!currentUser?.uid || !config?.year || !config?.semester) {
       setWords([]);
       return undefined;
     }
-    return subscribeStudentHistoryDictionaryWords(currentUser.uid, setWords);
-  }, [currentUser?.uid]);
+    setWords([]);
+    return subscribeStudentHistoryDictionaryWords(
+      config,
+      currentUser.uid,
+      setWords,
+    );
+  }, [currentUser?.uid, config?.year, config?.semester]);
 
   useEffect(() => {
     setTeacherChecked(false);
@@ -320,6 +328,7 @@ const HistoryDictionary: React.FC = () => {
         ownerUid,
       );
       const savedWord = await loadStudentHistoryDictionaryWord(
+        config,
         ownerUid,
         result.termId,
       ).catch(() => null);
@@ -381,7 +390,10 @@ const HistoryDictionary: React.FC = () => {
     if (!currentWord || busy) return;
     setBusy(true);
     try {
-      const result = await loadPublishedHistoryDictionaryTerm(currentWord);
+      const result = await loadPublishedHistoryDictionaryTerm(
+        config,
+        currentWord,
+      );
       setTeacherTerm(result);
       setTeacherChecked(true);
     } catch (error) {
@@ -408,6 +420,7 @@ const HistoryDictionary: React.FC = () => {
       );
       setDefinition(teacherTerm.definition);
       const savedWord = await loadStudentHistoryDictionaryWord(
+        config,
         ownerUid,
         teacherTerm.id,
       ).catch(() => null);
@@ -450,6 +463,7 @@ const HistoryDictionary: React.FC = () => {
         ownerUid,
       );
       const savedWord = await loadStudentHistoryDictionaryWord(
+        config,
         ownerUid,
         result.termId,
       ).catch(() => null);
@@ -949,6 +963,15 @@ const HistoryDictionary: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+const HistoryDictionary: React.FC = () => {
+  const { currentUser, config } = useAuth();
+  return (
+    <HistoryDictionaryContent
+      key={`${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`}
+    />
   );
 };
 

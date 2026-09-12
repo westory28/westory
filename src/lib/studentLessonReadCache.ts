@@ -14,11 +14,7 @@ import {
   normalizeMapResource,
   type MapResource,
 } from "./mapResources";
-import {
-  getSemesterCollectionPath,
-  getSemesterDocPath,
-  getYearSemester,
-} from "./semesterScope";
+import { getSemesterCollectionPath, getSemesterDocPath } from "./semesterScope";
 import type { SystemConfig } from "../types";
 import {
   findLatestLessonTreeSelection,
@@ -54,7 +50,6 @@ const effectiveLessonsCache = new Map<
   string,
   CacheEntry<{
     scopedLatestLessons: Partial<LessonData>[];
-    legacyLatestLessons: Partial<LessonData>[];
     visibleLessons: Partial<LessonData>[];
     visibleUnitIds: Set<string>;
   }>
@@ -67,7 +62,11 @@ const lessonCache = new Map<string, CacheEntry<Partial<LessonData> | null>>();
 const mapResourcesCache = new Map<string, CacheEntry<MapResource[]>>();
 
 const getScopeKey = (config: ConfigLike) => {
-  const { year, semester } = getYearSemester(config);
+  const year = String(config?.year || "");
+  const semester = String(config?.semester || "");
+  if (!/^\d{4}$/.test(year) || !/^[12]$/.test(semester)) {
+    throw new Error("조회할 학기가 아직 확인되지 않았습니다.");
+  }
   return `${year}:${semester}`;
 };
 
@@ -163,11 +162,6 @@ export const readStudentCurriculumTree = (config: ConfigLike) =>
       return semesterTree.data().tree as StudentCurriculumTreeItem[];
     }
 
-    const globalTree = await getDoc(doc(db, "curriculum", "tree"));
-    if (globalTree.exists() && globalTree.data().tree) {
-      return globalTree.data().tree as StudentCurriculumTreeItem[];
-    }
-
     return [];
   });
 
@@ -176,18 +170,10 @@ const readEffectiveStudentLessons = (config: ConfigLike) =>
     const scopedLatestLessons = getLatestLessonsByUnitId(
       await readLessonCollection(getSemesterCollectionPath(config, "lessons")),
     );
-    const scopedUnitIds = getLessonUnitIds(scopedLatestLessons);
-    const legacyLatestLessons = getLatestLessonsByUnitId(
-      await readLessonCollection("lessons"),
-    ).filter(
-      (lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()),
-    );
-    const effectiveLessons = [...scopedLatestLessons, ...legacyLatestLessons];
-    const visibleLessons = effectiveLessons.filter(isStudentVisibleLesson);
+    const visibleLessons = scopedLatestLessons.filter(isStudentVisibleLesson);
 
     return {
       scopedLatestLessons,
-      legacyLatestLessons,
       visibleLessons,
       visibleUnitIds: getLessonUnitIds(visibleLessons),
     };
@@ -215,25 +201,12 @@ export const readStudentLatestLessonSelection = (
     latestLessonSelectionCache,
     `${getScopeKey(config)}:${getTreeCacheKey(tree)}`,
     async () => {
-      const { scopedLatestLessons, legacyLatestLessons } =
-        await readEffectiveStudentLessons(config);
-      let latestSelection = findLatestLessonTreeSelection(
+      const { scopedLatestLessons } = await readEffectiveStudentLessons(config);
+      const latestSelection = findLatestLessonTreeSelection(
         tree,
         scopedLatestLessons,
-        {
-          visibleOnly: true,
-        },
+        { visibleOnly: true },
       );
-
-      if (!latestSelection) {
-        latestSelection = findLatestLessonTreeSelection(
-          tree,
-          [...scopedLatestLessons, ...legacyLatestLessons],
-          {
-            visibleOnly: true,
-          },
-        );
-      }
 
       return latestSelection;
     },
@@ -245,12 +218,7 @@ export const readStudentLesson = (config: ConfigLike, unitId: string) =>
       collection(db, getSemesterCollectionPath(config, "lessons")),
       where("unitId", "==", unitId),
     );
-    let snap = await getDocs(semesterQuery);
-    if (snap.empty) {
-      snap = await getDocs(
-        query(collection(db, "lessons"), where("unitId", "==", unitId)),
-      );
-    }
+    const snap = await getDocs(semesterQuery);
 
     return snap.empty
       ? null

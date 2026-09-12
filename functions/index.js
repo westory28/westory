@@ -1460,14 +1460,11 @@ const buildHistoryDictionaryTermId = (normalizedWord) =>
 const buildHistoryDictionaryRequestId = (year, semester, uid, normalizedWord) =>
   `req_${buildHistoryDictionaryHash(`${year}:${semester}:${uid}:${normalizedWord}`)}`;
 
-const getHistoryDictionaryTermPath = (termId) =>
-  `${HISTORY_DICTIONARY_TERMS_COLLECTION}/${termId}`;
-
-const getHistoryDictionaryRequestPath = (requestId) =>
-  `${HISTORY_DICTIONARY_REQUESTS_COLLECTION}/${requestId}`;
-
-const getStudentHistoryDictionaryWordPath = (uid, termId) =>
-  `users/${uid}/history_dictionary_words/${termId}`;
+const {
+  dictionaryTermPath: getHistoryDictionaryTermPath,
+  dictionaryRequestPath: getHistoryDictionaryRequestPath,
+  dictionaryWordPath: getStudentHistoryDictionaryWordPath,
+} = require("./historyDictionaryScope");
 
 const MAX_HISTORY_DICTIONARY_BULK_TERMS = 200;
 
@@ -4334,6 +4331,8 @@ const collectKnownUserStudentDataRefs = async (uid) => {
     ),
   );
   snapshots.forEach((snapshot) => addQueryDocRefs(refsByPath, snapshot));
+  const dictionaryRefs = await require("./historyDictionaryPrivacy").collectCanonicalDictionaryUserRefs(db, uid);
+  dictionaryRefs.forEach(ref => refsByPath.set(ref.path, ref));
   return Array.from(refsByPath.values());
 };
 
@@ -4499,6 +4498,7 @@ const collectStudentProfileSnapshotRefs = async (year, semester, uid) => {
   const refsByPath = new Map();
   const scopedCollections = [
     PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
+    HISTORY_DICTIONARY_REQUESTS_COLLECTION,
     "point_transactions",
     "point_orders",
     "quiz_results",
@@ -4546,6 +4546,10 @@ const collectStudentProfileSnapshotRefs = async (year, semester, uid) => {
   scopedRefs.flat().forEach((ref) => refsByPath.set(ref.path, ref));
   legacyRefs.flat().forEach((ref) => refsByPath.set(ref.path, ref));
   userSnapshots.forEach((snapshot) => addQueryDocRefs(refsByPath, snapshot));
+  const dictionaryWords = await db.collection(`${semesterRoot}/dictionary_students/${uid}/history_dictionary_words`).get();
+  dictionaryWords.docs.forEach(document => {
+    if (document.data()?.uid === uid) refsByPath.set(document.ref.path, document.ref);
+  });
   performanceScoreRefs.forEach((ref) => refsByPath.set(ref.path, ref));
   existingDirectRefs.forEach((ref) => refsByPath.set(ref.path, ref));
 
@@ -5391,20 +5395,7 @@ const readEffectiveVisibleLessonCorePointCatalog = async (
       ...(docSnap.data() || {}),
     })),
   );
-  const scopedUnitIds = new Set(
-    scopedLessons
-      .map((lesson) => String(lesson.unitId || "").trim())
-      .filter(Boolean),
-  );
-  const legacySnapshot = await transaction.get(db.collection("lessons"));
-  const legacyLessons = getLatestLessonsByUnitIdForCorePoints(
-    legacySnapshot.docs.map((docSnap) => ({
-      id: docSnap.id,
-      ...(docSnap.data() || {}),
-    })),
-  ).filter((lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()));
-
-  return [...scopedLessons, ...legacyLessons]
+  return scopedLessons
     .filter(isStudentVisibleLessonForCorePoints)
     .map((lesson) => ({
       unitId: String(lesson.unitId || "").trim(),
@@ -10513,6 +10504,7 @@ const reclaimHistoryDictionaryRewardIfNeeded = async ({
 };
 
 const requestHistoryDictionaryTermOperation = async (request, context) => {
+    const dictionaryScope = assertYearSemester(request.data);
     const { uid } = context.identity;
     const { year, semester } = assertYearSemester(request.data);
     const word = sanitizeHistoryDictionaryWord(request.data?.word);
@@ -10541,9 +10533,9 @@ const requestHistoryDictionaryTermOperation = async (request, context) => {
       uid,
       normalizedWord,
     );
-    const termRef = db.doc(getHistoryDictionaryTermPath(termId));
-    const requestRef = db.doc(getHistoryDictionaryRequestPath(requestId));
-    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+    const termRef = db.doc(getHistoryDictionaryTermPath(dictionaryScope, termId));
+    const requestRef = db.doc(getHistoryDictionaryRequestPath(dictionaryScope, requestId));
+    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(dictionaryScope, uid, termId));
 
     const result = await context.runTransaction(async (transaction) => {
       const [termSnap, requestSnap] = await Promise.all([
@@ -10704,14 +10696,15 @@ const requestHistoryDictionaryTermOperation = async (request, context) => {
 exports.requestHistoryDictionaryTerm = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
 const saveStudentHistoryDictionaryWordOperation = async (request, context) => {
+    const dictionaryScope = assertYearSemester(request.data);
     const { uid } = context.identity;
     const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
     if (!termId) {
       throw new HttpsError("invalid-argument", "termId is required.");
     }
 
-    const termRef = db.doc(getHistoryDictionaryTermPath(termId));
-    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+    const termRef = db.doc(getHistoryDictionaryTermPath(dictionaryScope, termId));
+    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(dictionaryScope, uid, termId));
     return context.runTransaction(async (transaction) => {
       const [termSnap, wordSnap] = await Promise.all([
         transaction.get(termRef), transaction.get(wordRef),
@@ -10733,6 +10726,7 @@ const saveStudentHistoryDictionaryWordOperation = async (request, context) => {
       transaction.set(
         wordRef,
         {
+          year: dictionaryScope.year, semester: dictionaryScope.semester, uid,
           termId,
           word: sanitizeHistoryDictionaryWord(term.word),
           normalizedWord: normalizeHistoryDictionaryWord(
@@ -10755,6 +10749,7 @@ const saveStudentHistoryDictionaryWordOperation = async (request, context) => {
 exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
 const saveStudentHistoryDictionaryEntryOperation = async (request, context) => {
+    const dictionaryScope = assertYearSemester(request.data);
     const { uid } = context.identity;
     const word = sanitizeHistoryDictionaryWord(request.data?.word);
     const normalizedWord = normalizeHistoryDictionaryWord(word);
@@ -10774,7 +10769,7 @@ const saveStudentHistoryDictionaryEntryOperation = async (request, context) => {
     }
 
     const termId = buildHistoryDictionaryTermId(normalizedWord);
-    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(dictionaryScope, uid, termId));
     const { profile } = { profile: context.profile };
     const result = await context.runTransaction(async (transaction) => {
       const wordSnap = await transaction.get(wordRef);
@@ -10842,6 +10837,7 @@ const saveStudentHistoryDictionaryEntryOperation = async (request, context) => {
 exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
 const deleteStudentHistoryDictionaryWordOperation = async (request, context) => {
+    const dictionaryScope = assertYearSemester(request.data);
     const { uid } = context.identity;
     const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
     const scoped =
@@ -10851,7 +10847,7 @@ const deleteStudentHistoryDictionaryWordOperation = async (request, context) => 
       throw new HttpsError("invalid-argument", "termId is required.");
     }
 
-    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(dictionaryScope, uid, termId));
     const { profile } = { profile: context.profile };
     const result = await context.runTransaction(async (transaction) => {
       const wordSnap = await transaction.get(wordRef);
@@ -10900,6 +10896,7 @@ const deleteStudentHistoryDictionaryWordOperation = async (request, context) => 
 exports.deleteStudentHistoryDictionaryWord = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
 const deleteStudentHistoryDictionaryWordByTeacherOperation = async (request, context) => {
+    const dictionaryScope = assertYearSemester(request.data);
     const manager = context.identity;
     const { year, semester } = assertYearSemester(request.data);
     // Validate raw path components before constructing any Admin reference.
@@ -10911,10 +10908,10 @@ const deleteStudentHistoryDictionaryWordByTeacherOperation = async (request, con
       160,
     );
     const wordRef = db.doc(
-      getStudentHistoryDictionaryWordPath(targetUid, termId),
+      getStudentHistoryDictionaryWordPath(dictionaryScope, targetUid, termId),
     );
     const requestRef = requestId
-      ? db.doc(getHistoryDictionaryRequestPath(requestId))
+      ? db.doc(getHistoryDictionaryRequestPath(dictionaryScope, requestId))
       : null;
     const result = await context.runTransaction(async (transaction) => {
       const [wordSnap, requestSnap, profileSnap] = await Promise.all([
@@ -11012,28 +11009,31 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall(
   { region: REGION },
   async (request) => {
     await assertHistoryDictionaryManager(request);
-    const scoped = getOptionalYearSemester(request.data);
+    const scoped = assertYearSemester(request.data);
+    const [activePointer, activeManifest] = await db.getAll(
+      db.doc("site_settings/semester_active"), db.doc(`semester_manifests/${scoped.year}-${scoped.semester}`),
+    );
+    if (!activePointer.exists || !activeManifest.exists
+      || activePointer.data()?.semesterId !== `${scoped.year}-${scoped.semester}`
+      || !Number.isSafeInteger(activePointer.data()?.revision) || activePointer.data().revision < 1
+      || activeManifest.data()?.semesterId !== `${scoped.year}-${scoped.semester}`
+      || activePointer.data()?.revision !== activeManifest.data()?.revision
+      || activeManifest.data()?.status !== "ACTIVE" || activeManifest.data()?.readOnly === true)
+      throw new HttpsError("permission-denied", "지난 학기 자료는 관리자 설정의 학기 조회에서 확인해 주세요.");
     const timestampMs = (value) => {
       if (!value) return 0;
       if (typeof value.toMillis === "function") return value.toMillis();
       if (typeof value.toDate === "function") return value.toDate().getTime();
       return Number(value.seconds || 0) * 1000;
     };
-    const usersSnapshot = await db.collection("users").get();
-    const wordGroups = await Promise.all(
-      usersSnapshot.docs.map(async (userDoc) => {
-        const profile = userDoc.data() || {};
-        const wordsSnapshot = await userDoc.ref
-          .collection("history_dictionary_words")
-          .limit(100)
-          .get();
-        return wordsSnapshot.docs.map((docSnap) => ({
-          docSnap,
-          profile,
-          uid: userDoc.id,
-        }));
-      }),
-    );
+    const wordSnapshot = await db.collectionGroup("history_dictionary_words")
+      .where("year", "==", scoped.year).where("semester", "==", scoped.semester)
+      .where("status", "==", "saved").limit(501).get();
+    if (wordSnapshot.size > 500) throw new HttpsError("resource-exhausted", "학생 단어가 많아 조회 범위를 나누어야 합니다.");
+    const expectedPrefix = `years/${scoped.year}/semesters/${scoped.semester}/dictionary_students/`;
+    const wordGroups = [wordSnapshot.docs.filter(doc => doc.ref.path.startsWith(expectedPrefix)).map(docSnap => ({
+      docSnap, profile: {}, uid: docSnap.ref.parent.parent.id,
+    }))];
 
     const words = wordGroups
       .flat()
@@ -11052,9 +11052,6 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall(
         const dataYear = sanitizeHistoryDictionaryText(data.year, 8);
         const dataSemester = sanitizeHistoryDictionaryText(data.semester, 8);
         if (
-          scoped &&
-          dataYear &&
-          dataSemester &&
           (dataYear !== scoped.year || dataSemester !== scoped.semester)
         ) {
           return null;
@@ -11122,6 +11119,7 @@ exports.listStudentHistoryDictionaryWordsForTeacher = onCall(
 );
 
 const updateStudentHistoryDictionaryWordByTeacherOperation = async (request, context) => {
+    const dictionaryScope = assertYearSemester(request.data);
     const manager = context.identity;
     const { year, semester } = assertYearSemester(request.data);
     const target = historyDictionaryUpdate.parseTarget(request.data, { year, semester });
@@ -11148,10 +11146,10 @@ const updateStudentHistoryDictionaryWordByTeacherOperation = async (request, con
 
     const nextTermId = buildHistoryDictionaryTermId(normalizedWord);
     const previousRef = db.doc(
-      getStudentHistoryDictionaryWordPath(targetUid, previousTermId),
+      getStudentHistoryDictionaryWordPath(dictionaryScope, targetUid, previousTermId),
     );
     const nextRef = db.doc(
-      getStudentHistoryDictionaryWordPath(targetUid, nextTermId),
+      getStudentHistoryDictionaryWordPath(dictionaryScope, targetUid, nextTermId),
     );
     await context.runTransaction(async (transaction) => {
       const [previousSnap, nextSnap, profileSnap] = await Promise.all([
@@ -11179,7 +11177,7 @@ const updateStudentHistoryDictionaryWordByTeacherOperation = async (request, con
       const profile = profileSnap.exists ? profileSnap.data() || {} : null;
       const binding = historyDictionaryUpdate.inspectCurrent({ target, wordData: existing, profile });
       const requestSnap = binding.requestId
-        ? await transaction.get(db.doc(getHistoryDictionaryRequestPath(binding.requestId)))
+        ? await transaction.get(db.doc(getHistoryDictionaryRequestPath(dictionaryScope, binding.requestId)))
         : null;
       const requestOriginTermId = historyDictionaryUpdate.inspectRequest({
         target, wordData: existing, binding,
@@ -11336,7 +11334,7 @@ const readHistoryDictionaryFallbackTarget = async ({
   });
   if (!fallbackRequestId) return null;
   const snapshot = await transaction.get(
-    db.doc(getHistoryDictionaryRequestPath(fallbackRequestId)),
+    db.doc(getHistoryDictionaryRequestPath({ year, semester }, fallbackRequestId)),
   );
   if (snapshot.exists) {
     const target = inspectHistoryDictionaryRequestTarget({
@@ -11344,7 +11342,7 @@ const readHistoryDictionaryFallbackTarget = async ({
     });
     if (!target.pending) return target;
     const wordSnap = await transaction.get(db.doc(
-      getStudentHistoryDictionaryWordPath(fallbackUid, termId),
+      getStudentHistoryDictionaryWordPath({ year, semester }, fallbackUid, termId),
     ));
     assertHistoryDictionaryStudentWordBinding({
       snapshot: wordSnap, uid: fallbackUid, termId, requestId: fallbackRequestId,
@@ -11357,7 +11355,7 @@ const readHistoryDictionaryFallbackTarget = async ({
   )) failHistoryDictionaryRequestTarget("HISTORY_DICTIONARY_FALLBACK_UNVERIFIED");
   const [profileSnap, wordSnap] = await Promise.all([
     transaction.get(db.doc(`users/${fallbackUid}`)),
-    transaction.get(db.doc(getStudentHistoryDictionaryWordPath(fallbackUid, termId))),
+    transaction.get(db.doc(getStudentHistoryDictionaryWordPath({ year, semester }, fallbackUid, termId))),
   ]);
   const profile = profileSnap.data() || {};
   const word = wordSnap.data() || {};
@@ -11402,7 +11400,7 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
     termId, normalizedWord: "pending-term-read", year, semester,
     requestId, fallbackRequestId, fallbackUid,
   });
-  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+  const termRef = db.doc(getHistoryDictionaryTermPath({ year, semester }, termId));
   const apply = async (transaction) => {
     const termSnap = await transaction.get(termRef);
     if (!termSnap.exists && !termData) throw new HttpsError("not-found", "Dictionary term does not exist.");
@@ -11420,14 +11418,14 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
 
     let targets;
     if (requestId) {
-      const snapshot = await transaction.get(db.doc(getHistoryDictionaryRequestPath(requestId)));
+      const snapshot = await transaction.get(db.doc(getHistoryDictionaryRequestPath({ year, semester }, requestId)));
       const target = inspectHistoryDictionaryRequestTarget({
         snapshot, termId, normalizedWord, year, semester,
       });
       targets = target.pending ? [target] : [];
     } else {
       const requestSnap = await transaction.get(
-        db.collection(HISTORY_DICTIONARY_REQUESTS_COLLECTION)
+        db.collection(`years/${year}/semesters/${semester}/history_dictionary_requests`)
           .where("normalizedWord", "==", normalizedWord)
           .where("year", "==", year)
           .where("semester", "==", semester)
@@ -11447,7 +11445,7 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
     // particular, preserve createdAt and reward/profile metadata on existing rows.
     const preparedTargets = await Promise.all(targets.map(async (target) => {
       const wordSnap = target.wordSnap || await transaction.get(
-        db.doc(getStudentHistoryDictionaryWordPath(target.uid, termId)),
+        db.doc(getStudentHistoryDictionaryWordPath({ year, semester }, target.uid, termId)),
       );
       assertHistoryDictionaryStudentWordBinding({
         snapshot: wordSnap, uid: target.uid, termId, requestId: target.snapshot.ref.id,
@@ -11472,8 +11470,9 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
       }
       const existingWord = target.wordSnap.data() || {};
       transaction.set(
-        db.doc(getStudentHistoryDictionaryWordPath(target.uid, termId)),
+        db.doc(getStudentHistoryDictionaryWordPath({ year, semester }, target.uid, termId)),
         {
+          year, semester, uid: target.uid,
           termId, word: sanitizeHistoryDictionaryWord(term.word), normalizedWord,
           definition: sanitizeHistoryDictionaryText(term.definition, 1200),
           studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
@@ -11519,6 +11518,7 @@ exports.saveHistoryDictionaryTermsBulk = onCall(
 );
 
 const saveHistoryDictionaryTermOperation = async (request, context) => {
+    const dictionaryScope = assertYearSemester(request.data);
     const manager = context.identity;
     const word = sanitizeHistoryDictionaryWord(request.data?.word);
     const normalizedWord = normalizeHistoryDictionaryWord(word);
@@ -11547,7 +11547,7 @@ const saveHistoryDictionaryTermOperation = async (request, context) => {
     }
 
     const termId = buildHistoryDictionaryTermId(normalizedWord);
-    const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+    const termRef = db.doc(getHistoryDictionaryTermPath(dictionaryScope, termId));
     const scoped =
       getOptionalYearSemester(request.data) ||
       (await getCurrentConfiguredYearSemester());
@@ -11560,6 +11560,7 @@ const saveHistoryDictionaryTermOperation = async (request, context) => {
       });
       if (fallback && !fallback.pending) return { termId, normalizedWord, resolved: [] };
       const nextTerm = {
+          year: dictionaryScope.year, semester: dictionaryScope.semester,
           word,
           normalizedWord,
           definition,
@@ -11596,6 +11597,7 @@ const saveHistoryDictionaryTermOperation = async (request, context) => {
 exports.saveHistoryDictionaryTerm = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });
 
 const approveHistoryDictionaryTermForRequestsOperation = async (request, context) => {
+    const dictionaryScope = assertYearSemester(request.data);
     const manager = context.identity;
     const { year, semester } = assertYearSemester(request.data);
     const termId = request.data?.termId ?? "";
@@ -12401,6 +12403,22 @@ Object.assign(
 const adminSemesterRecords = require("./adminSemesterRecords");
 Object.assign(exports, adminSemesterRecords.createAdminSemesterRecordsCallableExports({
   core: adminSemesterRecords.createAdminSemesterRecordsCore({ store: commandGatewayStore }),
+}));
+const adminSemesterContent = require("./adminSemesterContent");
+Object.assign(exports, adminSemesterContent.createAdminSemesterContentCallableExports({
+  core: adminSemesterContent.createAdminSemesterContentCore({
+    store: commandGatewayStore,
+    queryDictionaryWords: async ({ semesterId, pageSize, after }) => {
+      const [year, semester] = semesterId.split("-");
+      let query = db.collectionGroup("history_dictionary_words")
+        .where("year", "==", year).where("semester", "==", semester)
+        .orderBy(require("firebase-admin/firestore").FieldPath.documentId())
+        .limit(pageSize + 1);
+      if (after) query = query.startAfter(db.doc(after));
+      const snapshot = await query.get();
+      return snapshot.docs.map(document => ({ path: document.ref.path, data: document.data(), exists: true }));
+    },
+  }),
 }));
 
 const retiredW8LegacyCallable = onCall({ region: REGION }, async () => {

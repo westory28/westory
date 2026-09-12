@@ -293,6 +293,23 @@
         }
       ],
       "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "history_dictionary_words",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "year", "order": "ASCENDING" },
+        { "fieldPath": "semester", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "history_dictionary_words",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "year", "order": "ASCENDING" },
+        { "fieldPath": "semester", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -315,6 +332,16 @@
           "queryScope": "COLLECTION_GROUP"
         }
       ]
+    },
+    {
+      "collectionGroup": "history_dictionary_words",
+      "fieldPath": "uid",
+      "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }]
+    },
+    {
+      "collectionGroup": "history_dictionary_requests",
+      "fieldPath": "uid",
+      "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }]
     }
   ]
 }

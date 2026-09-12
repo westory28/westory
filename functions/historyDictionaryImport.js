@@ -1,10 +1,10 @@
+const { dictionaryTermPath, assertDictionaryActiveSemester } = require("./historyDictionaryScope");
 const { createHash } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
 
 const HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES = Object.freeze({
   SAVE_HISTORY_DICTIONARY_TERMS_BULK: "saveHistoryDictionaryTermsBulk",
 });
-const TERMS_COLLECTION = "history_dictionary_terms";
 const MAX_TERMS = 200;
 const fail = (code, message, reason) => {
   throw new HttpsError(code, message, { reason });
@@ -90,8 +90,7 @@ const normalizeHistoryDictionaryImportPayload = (commandType, payload) => {
       tags,
     };
   });
-  // These fields preserve the caller's frozen import context. Dictionary terms
-  // remain global; this command intentionally does not require an active term.
+  // The frozen context is the actual semester storage boundary.
   return { year, semester, terms };
 };
 
@@ -114,6 +113,7 @@ const createHistoryDictionaryImportCommandAdapter = () => ({
         "역사 사전을 등록할 교사 권한이 필요합니다.",
         "HISTORY_DICTIONARY_IMPORT_TEACHER_REQUIRED",
       );
+    await assertDictionaryActiveSemester(transaction, payload);
     const terms = payload.terms.map((term) => {
       const normalizedWord = normalizeHistoryDictionaryWord(term.word);
       return {
@@ -122,7 +122,7 @@ const createHistoryDictionaryImportCommandAdapter = () => ({
         termId: buildHistoryDictionaryTermId(normalizedWord),
       };
     });
-    const paths = terms.map((term) => `${TERMS_COLLECTION}/${term.termId}`);
+    const paths = terms.map((term) => dictionaryTermPath(payload, term.termId));
     // Gateway reads its actor-bound receipt first. Read every target before any
     // create so one conflict rolls back the whole import, receipt, and audit.
     const existing = await transaction.getAll(paths);
@@ -135,6 +135,7 @@ const createHistoryDictionaryImportCommandAdapter = () => ({
     terms.forEach(({ termId, ...term }, index) => {
       transaction.create(paths[index], {
         ...term,
+        year: payload.year, semester: payload.semester,
         status: "published",
         createdBy: actor.actorUid,
         updatedBy: actor.actorUid,

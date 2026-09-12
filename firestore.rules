@@ -176,6 +176,23 @@ service cloud.firestore {
       return canBootstrapWestory() && passesStudentRegistrationFence();
     }
 
+    // Current academic material is identified by three agreeing server records.
+    // Missing configuration never falls back to a default year or semester.
+    function isCurrentSemesterScope(year, semester) {
+      let config = get(/databases/$(database)/documents/site_settings/config).data;
+      let pointer = get(/databases/$(database)/documents/site_settings/semester_active).data;
+      let semesterId = year + '-' + semester;
+      let manifest = get(/databases/$(database)/documents/semester_manifests/$(semesterId)).data;
+      return year is string && year.matches('^[0-9]{4}$')
+        && semester is string && semester in ['1', '2']
+        && config.year == year && config.semester == semester
+        && pointer.semesterId == semesterId
+        && pointer.revision is int
+        && manifest.semesterId == semesterId
+        && manifest.status == 'ACTIVE'
+        && manifest.revision == pointer.revision;
+    }
+
     function isAdmin() {
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com" && canUseWestory();
     }
@@ -341,24 +358,30 @@ service cloud.firestore {
         );
     }
 
+    // The caller has already passed canUseWestory. Avoid re-evaluating the
+    // full session and maintenance fence for every alternative role branch.
+    function currentProfileHasAcademicPermission(permission) {
+      let profile = userProfile();
+      return permission != '' && profile.get('teacherPortalEnabled', false) == true
+        && profile.get('staffPermissions', []) is list
+        && permission in profile.get('staffPermissions', []);
+    }
+
+    function canReadOwnedAcademicResource(ownerUid, permission) {
+      return canUseWestory() && (
+        ownerUid == request.auth.uid
+        || request.auth.token.email == "westoria28@gmail.com"
+        || currentUserIsTeacherProfile()
+        || currentProfileHasAcademicPermission(permission)
+      );
+    }
+
     function canReadQuizResult(data) {
-      return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || isAdmin()
-          || isTeacherRole()
-          || hasPermission('quiz_read')
-        );
+      return canReadOwnedAcademicResource(data.uid, 'quiz_read');
     }
 
     function canReadQuizSubmission(data) {
-      return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || isAdmin()
-          || isTeacherRole()
-          || hasPermission('quiz_read')
-        );
+      return canReadOwnedAcademicResource(data.uid, 'quiz_read');
     }
 
     function isAssignedHistoryClassroomStudent(data) {
@@ -382,7 +405,15 @@ service cloud.firestore {
     }
 
     function canReadHistoryClassroomResource(data) {
-      return isAdmin() || isTeacherRole() || isAssignedHistoryClassroomStudent(data);
+      return canUseWestory() && (
+        request.auth.token.email == "westoria28@gmail.com"
+        || currentUserIsTeacherProfile()
+        || data.get('targetStudentUid', '') == request.auth.uid
+        || (data.get('targetStudentAccessMap', {}) is map
+          && data.get('targetStudentAccessMap', {}).get(request.auth.uid, false) == true)
+        || (data.get('targetStudentUids', []) is list
+          && request.auth.uid in data.get('targetStudentUids', []))
+      );
     }
 
     function canWriteHistoryClassroomResource() {
@@ -390,18 +421,11 @@ service cloud.firestore {
     }
 
     function canReadHistoryClassroomResult(data) {
-      return isAdmin()
-        || isTeacherRole()
-        || (canUseWestory() && data.uid == request.auth.uid);
+      return canReadOwnedAcademicResource(data.uid, '');
     }
 
     function canReadHistoryClassroomExemption(data) {
-      return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || isAdmin()
-          || isTeacherRole()
-        );
+      return canReadOwnedAcademicResource(data.uid, '');
     }
 
     function canReadSourceArchive() {
@@ -413,13 +437,7 @@ service cloud.firestore {
     }
 
     function canReadHistoryDictionaryRequest(data) {
-      return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || isAdmin()
-          || isTeacherRole()
-          || hasPermission('lesson_read')
-        );
+      return canReadOwnedAcademicResource(data.uid, 'lesson_read');
     }
 
     function canReadOwnPointResource(targetUid) {
@@ -427,7 +445,7 @@ service cloud.firestore {
     }
 
     function canManagePerformanceScores() {
-      return isAdmin() || isTeacherRole();
+      return canUseWestory() && (request.auth.token.email == "westoria28@gmail.com" || currentUserIsTeacherProfile());
     }
 
     function currentUserIsTeacherProfile() {
@@ -568,19 +586,11 @@ service cloud.firestore {
     }
 
     function canReadPerformanceScoreObjection(data) {
-      return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || canManagePerformanceScores()
-        );
+      return canReadOwnedAcademicResource(data.uid, '');
     }
 
     function canReadPerformanceScoreAnswerSheetRequest(data) {
-      return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || canManagePerformanceScores()
-        );
+      return canReadOwnedAcademicResource(data.uid, '');
     }
 
     function performanceScorePath(userId, scoreId) {
@@ -1085,11 +1095,17 @@ service cloud.firestore {
       }
 
       match /performance_scores/{scoreId} {
-        allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
+        allow read: if canUseWestory() && (
+          request.auth.token.email == "westoria28@gmail.com" || currentUserIsTeacherProfile()
+          || (request.auth.uid == userId && isCurrentSemesterScope(resource.data.academicYear, resource.data.semester)));
         allow create, update, delete: if false;
 
         match /confirmations/{confirmationId} {
-          allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
+          allow read: if canUseWestory() && (
+            request.auth.token.email == "westoria28@gmail.com" || currentUserIsTeacherProfile()
+            || (request.auth.uid == userId && isCurrentSemesterScope(
+              get(performanceScorePath(userId, scoreId)).data.academicYear,
+              get(performanceScorePath(userId, scoreId)).data.semester)));
           allow create, update, delete: if false;
         }
       }
@@ -1100,23 +1116,12 @@ service cloud.firestore {
       }
 
       match /history_dictionary_words/{wordId} {
-        allow read: if isOwnUser(userId)
-          || isAdmin()
-          || isTeacherRole()
-          || hasPermission('lesson_read');
-        allow create, update, delete: if false;
+        allow read, create, update, delete: if false;
       }
     }
 
     match /{path=**}/history_dictionary_words/{wordId} {
-      allow read: if canUseWestory()
-        && (
-          isAdmin()
-          || isTeacherRole()
-          || hasPermission('lesson_read')
-          || resource.data.uid == request.auth.uid
-        );
-      allow create, update, delete: if false;
+      allow read, create, update, delete: if false;
     }
 
     match /site_settings/{docId} {
@@ -1370,12 +1375,12 @@ service cloud.firestore {
     }
 
     match /curriculum/{docId} {
-      allow read: if canUseWestory();
+      allow read: if false;
       allow write: if false;
     }
 
     match /lessons/{docId} {
-      allow read: if canUseWestory();
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
@@ -1390,69 +1395,67 @@ service cloud.firestore {
     }
 
     match /history_dictionary_terms/{termId} {
-      allow read: if canUseWestory();
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /history_dictionary_requests/{requestId} {
-      allow read: if canReadHistoryDictionaryRequest(resource.data);
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /quiz_questions/{docId} {
-      allow read: if canUseWestory();
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /history_classrooms/{docId} {
-      allow read: if canReadHistoryClassroomResource(resource.data);
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /history_classroom_results/{docId} {
-      allow read: if canReadHistoryClassroomResult(resource.data);
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /history_classroom_exemptions/{docId} {
-      allow read: if canReadHistoryClassroomExemption(resource.data);
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /history_classroom_exemption_requests/{docId} {
-      allow read: if canReadHistoryClassroomExemption(resource.data);
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /assessment_config/{docId} {
-      allow read: if canUseWestory();
-      allow write: if docId != 'settings'
-        && docId != 'performance_score'
-        && (isAdmin() || isTeacherRole());
+      allow read: if false;
+      allow write: if false;
     }
 
     match /grading_plans/{docId} {
-      allow read: if canUseWestory();
+      allow read: if false;
       allow write: if false;
     }
 
     match /exam_config/{docId} {
-      allow read: if canManagePerformanceScores();
+      allow read: if false;
       allow write: if false;
     }
 
     match /performance_score_rosters/{docId} {
-      allow read: if canManagePerformanceScores();
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /quiz_results/{resultId} {
-      allow read: if canReadQuizResult(resource.data);
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
     match /quiz_submissions/{docId} {
-      allow read: if canReadQuizSubmission(resource.data);
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
@@ -1502,11 +1505,11 @@ service cloud.firestore {
     }
 
     match /lesson_progress/{userId} {
-      allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+      allow read: if false;
       allow create, update, delete: if false;
 
       match /units/{unitId} {
-        allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow read: if false;
         allow create, update, delete: if false;
       }
     }
@@ -1591,12 +1594,12 @@ service cloud.firestore {
       }
 
       match /curriculum/{docId} {
-        allow read: if canUseWestory();
+        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
         allow write: if false;
       }
 
       match /lessons/{docId} {
-        allow read: if canUseWestory();
+        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
         allow create, update, delete: if false;
       }
 
@@ -1605,78 +1608,95 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      match /history_dictionary_terms/{termId} {
+        allow read: if isCurrentSemesterScope(year, semester) && canUseWestory();
+        allow create, update, delete: if false;
+      }
+
+      match /history_dictionary_requests/{requestId} {
+        allow read: if isCurrentSemesterScope(year, semester)
+          && canReadHistoryDictionaryRequest(resource.data);
+        allow create, update, delete: if false;
+      }
+
+      match /dictionary_students/{userId}/history_dictionary_words/{wordId} {
+        allow read: if isCurrentSemesterScope(year, semester)
+          && canReadOwnedAcademicResource(userId, 'lesson_read');
+        allow create, update, delete: if false;
+      }
+
       match /quiz_questions/{docId} {
-        allow read: if canUseWestory();
+        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
         allow create, update, delete: if false;
       }
 
       match /history_classrooms/{docId} {
-        allow read: if isTrustedW10PVisualFixtureAdmin()
-          || canReadHistoryClassroomResource(resource.data);
+        allow read: if isCurrentSemesterScope(year, semester) && (isTrustedW10PVisualFixtureAdmin()
+          || canReadHistoryClassroomResource(resource.data));
         allow create, update, delete: if false;
       }
 
       match /history_classroom_results/{docId} {
-        allow read: if canReadHistoryClassroomResult(resource.data);
+        allow read: if isCurrentSemesterScope(year, semester) && (canReadHistoryClassroomResult(resource.data));
         allow create, update, delete: if false;
       }
 
       match /history_classroom_exemptions/{docId} {
-        allow read: if canReadHistoryClassroomExemption(resource.data);
+        allow read: if isCurrentSemesterScope(year, semester) && (canReadHistoryClassroomExemption(resource.data));
         allow create, update, delete: if false;
       }
 
       match /history_classroom_exemption_requests/{docId} {
-        allow read: if canReadHistoryClassroomExemption(resource.data);
+        allow read: if isCurrentSemesterScope(year, semester) && (canReadHistoryClassroomExemption(resource.data));
         allow create, update, delete: if false;
       }
 
       match /assessment_config/{docId} {
-        allow read: if canUseWestory();
-        allow write: if docId != 'settings'
+        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
+        allow write: if isCurrentSemesterScope(year, semester) && docId != 'settings'
           && docId != 'performance_score'
           && (isAdmin() || isTeacherRole());
       }
 
       match /grading_plans/{docId} {
-        allow read: if canUseWestory();
+        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
         allow write: if false;
       }
 
       match /grading_plans_meta/{docId} {
-        allow read: if docId == 'current'
-          && (isTrustedW10PVisualFixtureAdmin() || isAdmin());
+        allow read: if isCurrentSemesterScope(year, semester) && (docId == 'current'
+          && (isTrustedW10PVisualFixtureAdmin() || isAdmin()));
         allow create, update, delete: if false;
       }
 
       match /exam_config/{docId} {
-        allow read: if isTrustedW10PVisualFixtureAdmin()
-          || canManagePerformanceScores();
+        allow read: if isCurrentSemesterScope(year, semester) && (isTrustedW10PVisualFixtureAdmin()
+          || canManagePerformanceScores());
         allow write: if false;
       }
 
       match /performance_score_rosters/{docId} {
-        allow read: if canManagePerformanceScores();
+        allow read: if isCurrentSemesterScope(year, semester) && (canManagePerformanceScores());
         allow create, update, delete: if false;
       }
 
       match /performance_score_objections/{docId} {
-        allow read: if canReadPerformanceScoreObjection(resource.data);
+        allow read: if isCurrentSemesterScope(year, semester) && (canReadPerformanceScoreObjection(resource.data));
         allow create, update, delete: if false;
       }
 
       match /performance_score_answer_sheet_requests/{docId} {
-        allow read: if canReadPerformanceScoreAnswerSheetRequest(resource.data);
+        allow read: if isCurrentSemesterScope(year, semester) && (canReadPerformanceScoreAnswerSheetRequest(resource.data));
         allow create, update, delete: if false;
       }
 
       match /quiz_results/{resultId} {
-        allow read: if canReadQuizResult(resource.data);
+        allow read: if isCurrentSemesterScope(year, semester) && (canReadQuizResult(resource.data));
         allow create, update, delete: if false;
       }
 
       match /quiz_submissions/{docId} {
-        allow read: if canReadQuizSubmission(resource.data);
+        allow read: if isCurrentSemesterScope(year, semester) && (canReadQuizSubmission(resource.data));
         allow create, update, delete: if false;
       }
 
@@ -1686,21 +1706,21 @@ service cloud.firestore {
       }
 
       match /lesson_progress/{userId} {
-        allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory() && (request.auth.uid == userId || isAdmin()));
         allow create, update, delete: if false;
 
         match /units/{unitId} {
-          allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+          allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory() && (request.auth.uid == userId || isAdmin()));
           allow create, update, delete: if false;
         }
       }
 
       match /lesson_presentations/{unitId}/teachers/{userId} {
-        allow read: if isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read'));
+        allow read: if isCurrentSemesterScope(year, semester) && (isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read')));
         allow write: if false;
 
         match /classes/{classId} {
-          allow read: if isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read'));
+          allow read: if isCurrentSemesterScope(year, semester) && (isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read')));
           allow write: if false;
         }
       }

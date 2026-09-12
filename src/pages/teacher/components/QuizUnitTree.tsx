@@ -34,10 +34,7 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({ onSelect }) => {
           return;
         }
 
-        const legacyTree = await getDoc(doc(db, "curriculum", "tree"));
-        if (legacyTree.exists()) {
-          setTreeData(legacyTree.data().tree || []);
-        }
+        setTreeData([]);
       } catch (e) {
         console.error("Failed to load curriculum tree", e);
       }

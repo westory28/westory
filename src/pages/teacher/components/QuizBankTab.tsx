@@ -758,8 +758,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       );
       if (scoped.exists()) return (scoped.data().tree || []) as TreeUnit[];
 
-      const legacy = await getDoc(doc(db, "curriculum", "tree"));
-      if (legacy.exists()) return (legacy.data().tree || []) as TreeUnit[];
+      return [];
     } catch (error) {
       console.error(error);
     }

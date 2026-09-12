@@ -1411,6 +1411,13 @@ const assertManifest = async (
       operationType,
     });
   }
+  if (actor?.actorRole === "student") {
+    const pointer = await transaction.get(semesterCore.ACTIVE_SEMESTER_POINTER_PATH);
+    if (!pointer.exists || pointer.data?.semesterId !== payload.semesterId
+      || !Number.isSafeInteger(pointer.data?.revision) || pointer.data.revision < 1
+      || pointer.data?.revision !== manifest.revision || manifest.readOnly === true)
+      fail("failed-precondition", "Student writes require the current semester.", "W8_STUDENT_CURRENT_SEMESTER_REQUIRED");
+  }
   return manifest;
 };
 const assertDatesWithinSemester = (manifest, commandType, payload) => {
@@ -3620,10 +3627,20 @@ const createW8QueryCore = ({
           : "SEMESTER_NOT_FOUND",
       writeCount: 0,
     };
+    if (query.audience === "student" && query.source !== "CURRENT")
+      fail("permission-denied", "Students can only read the current semester.", "W8_STUDENT_CURRENT_SEMESTER_REQUIRED");
     if (query.source === "LEGACY") return base;
     return store.runTransaction(async (transaction) => {
       const manifest = await transaction.get(manifestPath(query.semesterId));
       if (!manifest.exists) return base;
+      if (query.audience === "student") {
+        const pointer = await transaction.get(semesterCore.ACTIVE_SEMESTER_POINTER_PATH);
+        if (!pointer.exists || pointer.data?.semesterId !== query.semesterId
+          || !Number.isSafeInteger(pointer.data?.revision) || pointer.data.revision < 1
+          || pointer.data?.revision !== manifest.data?.revision || manifest.data?.status !== "ACTIVE"
+          || manifest.data?.readOnly === true)
+          fail("permission-denied", "Students can only read the current semester.", "W8_STUDENT_CURRENT_SEMESTER_REQUIRED");
+      }
       const manifestStatus = String(manifest.data?.status || "");
       const lifecycleProvenance = ["CLOSED", "ARCHIVED"].includes(
         manifestStatus,
@@ -3644,6 +3661,8 @@ const createW8QueryCore = ({
           "Requested ARCHIVE source does not match the Semester lifecycle.",
           "W8_SOURCE_MISMATCH",
         );
+      if (query.audience === "teacher" && query.domain === "LEARNING" && lifecycleProvenance === "ARCHIVE")
+        fail("permission-denied", "지난 학기 수업 자료와 생각 모아는 관리자 설정의 학기 조회에서 확인해 주세요.", "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED");
       const provenance =
         query.source === "EXPLICIT" ? "EXPLICIT" : lifecycleProvenance;
       const readOnly =
@@ -4238,7 +4257,9 @@ const createW8QueryCore = ({
               row.targetClassIds.includes(query.classId),
           );
       };
-      if (["LEARNING", "DASHBOARD"].includes(query.domain))
+      // The historical dashboard keeps schedule/attendance/communication data,
+      // but academic material is available only through the administrator archive.
+      if (["LEARNING", "DASHBOARD"].includes(query.domain) && lifecycleProvenance !== "ARCHIVE")
         await loadLearning();
       if (query.domain === "LEARNING") await loadThinkCloud();
       if (["SCHEDULE", "DASHBOARD"].includes(query.domain))

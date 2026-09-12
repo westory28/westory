@@ -90,8 +90,8 @@ const emit=()=>{if(deferInitialSubscriptions)return;termListeners.forEach(fn=>fn
 // Student words currently use a one-shot load effect. A synthetic provider
 // callback identity change re-runs that actual effect without remounting Page.
 const pulseIO=()=>{toast=value=>baseToast(value);toastListeners.forEach(fn=>fn());};
-export const subscribeTeacherHistoryDictionaryTerms=(fn)=>{termListeners.add(fn);if(!deferInitialSubscriptions)fn(clone(data.terms));return()=>{termListeners.delete(fn);staleTerms.push(fn);};};
-export const subscribeTeacherHistoryDictionaryRequests=(fn)=>{requestListeners.add(fn);if(!deferInitialSubscriptions)fn(clone(data.requests));return()=>{requestListeners.delete(fn);staleRequests.push(fn);};};
+export const subscribeTeacherHistoryDictionaryTerms=(_config,fn)=>{termListeners.add(fn);if(!deferInitialSubscriptions)fn(clone(data.terms));return()=>{termListeners.delete(fn);staleTerms.push(fn);};};
+export const subscribeTeacherHistoryDictionaryRequests=(_config,fn)=>{requestListeners.add(fn);if(!deferInitialSubscriptions)fn(clone(data.requests));return()=>{requestListeners.delete(fn);staleRequests.push(fn);};};
 const pendingLoads=[];window.deferEditorLoads=false;
 export const loadTeacherStudentHistoryDictionaryWords=async(config)=>{window.editorLoads.push({type:'studentWords',config:clone(config),uid:identity.currentUser?.uid});const rows=clone(data.studentWords);if(window.deferEditorLoads)return new Promise(resolve=>pendingLoads.push({resolve,rows}));return rows;};
 export const loadTeacherHistoryDictionaryTerms=async()=>clone(data.terms);

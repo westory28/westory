@@ -16,9 +16,9 @@ const actualScope = slice("const assertYearSemester =", "const resolveHallOfFame
 const actualResolver = slice("const failHistoryDictionaryRequestTarget =", "exports.saveHistoryDictionaryTermsBulk =");
 const actualOperations = slice("const saveHistoryDictionaryTermOperation =", "exports.updateStudentProfileIcon =");
 const termId = "term_" + crypto.createHash("sha1").update("term").digest("hex");
-const termPath = "history_dictionary_terms/" + termId;
-const wordPath = (uid = "student-one") => "users/" + uid + "/history_dictionary_words/" + termId;
-const requestPath = (id) => "history_dictionary_requests/" + id;
+const termPath = "years/2026/semesters/2/history_dictionary_terms/" + termId;
+const wordPath = (uid = "student-one") => "years/2026/semesters/2/dictionary_students/" + uid + "/history_dictionary_words/" + termId;
+const requestPath = (id) => "years/2026/semesters/2/history_dictionary_requests/" + id;
 const canonicalRequestId = (uid = "student-one", year = "2026", semester = "2", word = "term") =>
   "req_" + crypto.createHash("sha1").update(year + ":" + semester + ":" + uid + ":" + word).digest("hex");
 const fallbackId = canonicalRequestId();
@@ -89,7 +89,7 @@ const setup = (seed = {}, options = {}) => {
     actualSanitizers + actualScope + actualResolver + actualOperations +
     "\nexports.resolve = resolveHistoryDictionaryRequestsWithTerm; exports.operations = {saveHistoryDictionaryTermOperation, approveHistoryDictionaryTermForRequestsOperation};",
     {
-      exports, db, HttpsError, crypto, REGION: "asia-northeast3",
+      exports, require: name => require(name.replace("./", "../")), db, HttpsError, crypto, REGION: "asia-northeast3",
       dictionaryNotifications: require("../dictionaryNotifications"),
       HISTORY_DICTIONARY_TERMS_COLLECTION: "history_dictionary_terms",
       HISTORY_DICTIONARY_REQUESTS_COLLECTION: "history_dictionary_requests",
@@ -310,8 +310,8 @@ const fallback = { fallbackRequestId: fallbackId, fallbackUid: "student-one" };
       [wordPath()]: proof({ year: 2026, semester: 2 }),
     });
     assert.equal((await test.approve({ requestId: fallbackId })).resolvedCount, 1);
-    assert.equal(test.store.docs.get(wordPath()).year, 2026);
-    assert.equal(test.store.docs.get(wordPath()).semester, 2);
+    assert.equal(test.store.docs.get(wordPath()).year, "2026");
+    assert.equal(test.store.docs.get(wordPath()).semester, "2");
   });
   await check("all target bindings validated before any fanout write", async () => {
     const test = setup({
@@ -357,7 +357,7 @@ const fallback = { fallbackRequestId: fallbackId, fallbackUid: "student-one" };
   });
   await check("missing configured scope fails before single-term mutation", async () => {
     const test = setup(); test.store.docs.delete("site_settings/config");
-    await rejectsUnchanged(test, () => test.save({ year: "", semester: "" }), MISMATCH);
+    await assert.rejects(test.save({ year: "", semester: "" }), error => error.code === "invalid-argument");
     assert.equal(test.writes.length, 0);
   });
   await check("teacher authorization remains before helper execution", async () => {

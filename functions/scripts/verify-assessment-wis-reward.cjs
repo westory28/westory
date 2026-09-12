@@ -60,6 +60,7 @@ const slotPath = `semester_enrollment_slots/${archive.buildEnrollmentSlotId(scop
 const accountPath = `${wis.WIS_ACCOUNT_COLLECTION}/${accountId}`, economyPath = `${wis.WIS_ECONOMY_COLLECTION}/${scope}`;
 const policyPath = "years/2026/semesters/2/point_policies/current";
 const seed = () => ({
+  "site_settings/config": { year: scope.split("-")[0], semester: scope.split("-")[1], activeSemesterId: scope },
   "site_settings/semester_active": { semesterId: scope, revision: 7 },
   [`semester_manifests/${scope}`]: { semesterId: scope, status: "ACTIVE", revision: 7 },
   [`users/${uid}`]: { role: "student", registrationApprovalStatus: "APPROVED" },
@@ -177,9 +178,9 @@ async function rejectsNoWrites(h, run, reason) {
   const negatives = [
     ["migration enabled", docs => docs.set(`wis_legacy_migration_controls/${scope}`, { enabled: true }), "WIS_MIGRATION_WRITES_BLOCKED"],
     ["migration blocked", docs => docs.set(`wis_legacy_migration_controls/${scope}`, { writesBlocked: true }), "WIS_MIGRATION_WRITES_BLOCKED"],
-    ["closed semester", docs => docs.get(`semester_manifests/${scope}`).status = "CLOSED", "ASSESSMENT_WIS_SEMESTER_INACTIVE"],
+    ["closed semester", docs => docs.get(`semester_manifests/${scope}`).status = "CLOSED", "ASSESSMENT_SEMESTER_NOT_ACTIVE"],
     ["read only semester", docs => docs.get(`semester_manifests/${scope}`).readOnly = true, "ASSESSMENT_WIS_SEMESTER_INACTIVE"],
-    ["stale pointer", docs => docs.get("site_settings/semester_active").revision = 6, "ASSESSMENT_WIS_SEMESTER_INACTIVE"],
+    ["stale pointer", docs => docs.get("site_settings/semester_active").revision = 6, "ASSESSMENT_SEMESTER_NOT_ACTIVE"],
     ["closed economy", docs => docs.get(economyPath).status = "CLOSED", "ASSESSMENT_WIS_ECONOMY_CLOSED"],
     ["missing account", docs => docs.delete(accountPath), "ASSESSMENT_WIS_ACCOUNT_INVALID"],
     ["wrong owner account", docs => docs.get(accountPath).studentUid = "other", "ASSESSMENT_WIS_ACCOUNT_INVALID"],

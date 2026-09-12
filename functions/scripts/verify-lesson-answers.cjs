@@ -83,8 +83,9 @@ const sourcePath = `${root}/lessons/lesson-one`;
 const progressPath = `${root}/lesson_progress/student-one/units/unit-one`;
 const slotPath = `${enrollment.ENROLLMENT_SLOT_COLLECTION}/${enrollment.buildEnrollmentSlotId("2026-2", "student-one")}`;
 const seed = () => ({
+  "site_settings/config": { year: "2026", semester: "2", activeSemesterId: "2026-2" },
   "site_settings/semester_active": { semesterId: "2026-2", revision: 4 },
-  "semester_manifests/2026-2": { status: "ACTIVE", revision: 4 },
+  "semester_manifests/2026-2": { semesterId: "2026-2", status: "ACTIVE", revision: 4 },
   [slotPath]: { activeEnrollmentId: "enroll-one" },
   [`${enrollment.SEMESTER_ENROLLMENT_COLLECTION}/enroll-one`]: {
     studentUid: "student-one",
@@ -272,24 +273,18 @@ if (require.main === module)
     await denied("LESSON_BLANKS_INVALID", payload(), (data) => {
       data[sourcePath].worksheetBlanks.push({ id: "0", answer: "collision" });
     });
-    const legacy = setup((data) => {
+    await denied("LESSON_SOURCE_AMBIGUOUS", payload(), (data) => {
       data["lessons/old-source"] = data[sourcePath];
+      data["years/2026/semesters/1/lessons/old-source"] = data[sourcePath];
       delete data[sourcePath];
     });
-    await legacy.execute();
-    assert.equal(legacy.store.docs.get(progressPath).answerRevision, 1);
-    assert.equal(
-      legacy.store.docs.get("lessons/old-source").contentRevision,
-      2,
-    );
-    checks++;
     console.log(
       JSON.stringify({
         passed: true,
         checks,
         networkAccess: 0,
         coverage:
-          "server grading, hidden pages, reward preservation, replay, lost response, concurrent CAS, role, enrollment, scope, legacy read-only fallback",
+          "server grading, hidden pages, reward preservation, replay, lost response, concurrent CAS, role, enrollment, scope, semester-only sources; prior-semester and global sources denied",
       }),
     );
   })().catch((error) => {

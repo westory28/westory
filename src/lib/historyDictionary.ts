@@ -1,6 +1,5 @@
 import {
   collection,
-  collectionGroup,
   doc,
   documentId,
   getDoc,
@@ -20,7 +19,7 @@ import {
   type W2CommandPayloads,
   type W2CommandResults,
 } from "./commandGateway";
-import { getYearSemester } from "./semesterScope";
+import { getSemesterCollectionPath, getYearSemester } from "./semesterScope";
 import type {
   HistoryDictionaryRequest,
   HistoryDictionaryTerm,
@@ -33,6 +32,13 @@ type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 const TERMS_COLLECTION = "history_dictionary_terms";
 const REQUESTS_COLLECTION = "history_dictionary_requests";
 const TEACHER_TERMS_LIMIT = 500;
+const dictionaryCollection = (config: ConfigLike, name: string) => {
+  if (!config?.year || !config?.semester)
+    throw new Error("현재 학기를 확인한 뒤 사전을 다시 열어 주세요.");
+  return getSemesterCollectionPath(config, name);
+};
+const dictionaryWordCollection = (config: ConfigLike, uid: string) =>
+  `${dictionaryCollection(config, "dictionary_students")}/${uid}/history_dictionary_words`;
 
 export type HistoryDictionaryWriteVersion = string | null;
 export const getHistoryDictionaryWriteVersion = (
@@ -79,11 +85,16 @@ export const subscribeHistoryDictionaryMutation = (listener: () => void) => {
 };
 export const hasPendingHistoryDictionaryMutation = (uid: string) =>
   dictionaryPending.has(uid);
-export const getPendingHistoryDictionaryDraft = (uid: string) => {
+export const getPendingHistoryDictionaryDraft = (
+  uid: string,
+  config: ConfigLike,
+) => {
   if (auth.currentUser?.uid !== uid) return null;
   const pending = dictionaryPending.get(uid);
   if (!pending) return null;
   const value = pending.payload as unknown as Record<string, unknown>;
+  if (value.year !== config?.year || value.semester !== config?.semester)
+    return null;
   return {
     word: typeof value.word === "string" ? value.word : "",
     definition: typeof value.definition === "string" ? value.definition : "",
@@ -230,12 +241,16 @@ const dictionaryHash = async (value: string) =>
   ).join("");
 const dictionaryTermId = async (word: string) =>
   `term_${await dictionaryHash(normalizeHistoryDictionaryWord(word))}`;
-const readRequestVersion = async (uid: string, requestId: string) => {
+const readRequestVersion = async (
+  config: ConfigLike,
+  uid: string,
+  requestId: string,
+) => {
   if (!requestId) return null;
   // The uid constraint proves ownership even when the queried document is absent.
   const snapshot = await getDocs(
     query(
-      collection(db, REQUESTS_COLLECTION),
+      collection(db, dictionaryCollection(config, REQUESTS_COLLECTION)),
       where("uid", "==", uid),
       where(documentId(), "==", requestId),
       limit(1),
@@ -411,13 +426,16 @@ const mergeHistoryDictionaryRequests = (
   );
 };
 
-export const loadPublishedHistoryDictionaryTerm = async (word: string) => {
+export const loadPublishedHistoryDictionaryTerm = async (
+  config: ConfigLike,
+  word: string,
+) => {
   const normalizedWord = normalizeHistoryDictionaryWord(word);
   if (!normalizedWord) return null;
 
   const snapshot = await getDocs(
     query(
-      collection(db, TERMS_COLLECTION),
+      collection(db, dictionaryCollection(config, TERMS_COLLECTION)),
       where("normalizedWord", "==", normalizedWord),
       limit(1),
     ),
@@ -429,12 +447,13 @@ export const loadPublishedHistoryDictionaryTerm = async (word: string) => {
 };
 
 export const subscribeStudentHistoryDictionaryWords = (
+  config: ConfigLike,
   uid: string,
   onChange: (words: StudentHistoryDictionaryWord[]) => void,
 ): Unsubscribe =>
   onSnapshot(
     query(
-      collection(db, `users/${uid}/history_dictionary_words`),
+      collection(db, dictionaryWordCollection(config, uid)),
       orderBy("updatedAt", "desc"),
       limit(20),
     ),
@@ -453,12 +472,13 @@ export const subscribeStudentHistoryDictionaryWords = (
   );
 
 export const loadStudentHistoryDictionaryWord = async (
+  config: ConfigLike,
   uid: string,
   termId: string,
 ) => {
   assertHistoryDictionaryEditorOwner(uid);
   const snapshot = await getDoc(
-    doc(db, `users/${uid}/history_dictionary_words/${termId}`),
+    doc(db, `${dictionaryWordCollection(config, uid)}/${termId}`),
   );
   assertHistoryDictionaryEditorOwner(uid);
   return snapshot.exists()
@@ -467,18 +487,18 @@ export const loadStudentHistoryDictionaryWord = async (
 };
 
 export const subscribeTeacherHistoryDictionaryRequests = (
+  config: ConfigLike,
   onChange: (requests: HistoryDictionaryRequest[]) => void,
 ): Unsubscribe => {
   let rootRequests: HistoryDictionaryRequest[] = [];
-  let studentWordRequests: HistoryDictionaryRequest[] = [];
 
   const emit = () => {
-    onChange(mergeHistoryDictionaryRequests(rootRequests, studentWordRequests));
+    onChange(mergeHistoryDictionaryRequests(rootRequests, []));
   };
 
   const unsubscribeRootRequests = onSnapshot(
     query(
-      collection(db, REQUESTS_COLLECTION),
+      collection(db, dictionaryCollection(config, REQUESTS_COLLECTION)),
       orderBy("updatedAt", "desc"),
       limit(100),
     ),
@@ -495,69 +515,10 @@ export const subscribeTeacherHistoryDictionaryRequests = (
     },
   );
 
-  const unsubscribeStudentWordRequests = onSnapshot(
-    query(
-      collectionGroup(db, "history_dictionary_words"),
-      where("status", "==", "requested"),
-      limit(100),
-    ),
-    (snapshot) => {
-      studentWordRequests = snapshot.docs.map((item) =>
-        mapStudentWordRequestDoc(item),
-      );
-      emit();
-    },
-    (error) => {
-      console.error(
-        "Failed to subscribe student history dictionary word requests:",
-        error,
-      );
-      studentWordRequests = [];
-      emit();
-    },
-  );
-
   return () => {
     unsubscribeRootRequests();
-    unsubscribeStudentWordRequests();
   };
 };
-
-export const subscribeTeacherStudentHistoryDictionaryWords = (
-  onChange: (words: StudentHistoryDictionaryWord[]) => void,
-  onError?: (error: Error) => void,
-): Unsubscribe =>
-  onSnapshot(
-    query(
-      collectionGroup(db, "history_dictionary_words"),
-      where("status", "==", "saved"),
-      limit(500),
-    ),
-    (snapshot) => {
-      onChange(
-        snapshot.docs
-          .map((item) => mapTeacherStudentWordDoc(item))
-          .filter((item) =>
-            ["student", "teacher_reviewed"].includes(
-              item.definitionSource || "",
-            ),
-          )
-          .sort(
-            (a, b) =>
-              getTimestampMs(b.updatedAt || b.createdAt) -
-              getTimestampMs(a.updatedAt || a.createdAt),
-          ),
-      );
-    },
-    (error) => {
-      console.error(
-        "Failed to subscribe student history dictionary words:",
-        error,
-      );
-      onError?.(error);
-      onChange([]);
-    },
-  );
 
 export const loadTeacherStudentHistoryDictionaryWords = async (
   config?: ConfigLike,
@@ -574,12 +535,13 @@ export const loadTeacherStudentHistoryDictionaryWords = async (
 };
 
 export const subscribeTeacherHistoryDictionaryTerms = (
+  config: ConfigLike,
   onChange: (terms: HistoryDictionaryTerm[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe =>
   onSnapshot(
     query(
-      collection(db, TERMS_COLLECTION),
+      collection(db, dictionaryCollection(config, TERMS_COLLECTION)),
       orderBy("updatedAt", "desc"),
       limit(TEACHER_TERMS_LIMIT),
     ),
@@ -595,10 +557,10 @@ export const subscribeTeacherHistoryDictionaryTerms = (
     },
   );
 
-export const loadTeacherHistoryDictionaryTerms = async () => {
+export const loadTeacherHistoryDictionaryTerms = async (config: ConfigLike) => {
   const snapshot = await getDocs(
     query(
-      collection(db, TERMS_COLLECTION),
+      collection(db, dictionaryCollection(config, TERMS_COLLECTION)),
       orderBy("updatedAt", "desc"),
       limit(TEACHER_TERMS_LIMIT),
     ),
@@ -631,6 +593,7 @@ export const requestHistoryDictionaryTerm = async (
         input.expectedRequestVersion !== undefined
           ? input.expectedRequestVersion
           : await readRequestVersion(
+              config,
               expectedUid,
               `req_${await dictionaryHash(`${year}:${semester}:${expectedUid}:${normalizeHistoryDictionaryWord(input.word)}`)}`,
             ),
@@ -730,7 +693,10 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
       const wordSnapshot =
         input.expectedWordVersion === undefined
           ? await getDoc(
-              doc(db, `users/${input.uid}/history_dictionary_words/${termId}`),
+              doc(
+                db,
+                `${dictionaryWordCollection(config, input.uid)}/${termId}`,
+              ),
             )
           : null;
       return {
@@ -751,7 +717,11 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
         expectedRequestVersion:
           input.expectedRequestVersion !== undefined
             ? input.expectedRequestVersion
-            : await readRequestVersion(input.uid, input.requestId || ""),
+            : await readRequestVersion(
+                config,
+                input.uid,
+                input.requestId || "",
+              ),
       };
     },
     expectedUid,
@@ -823,6 +793,7 @@ export const saveHistoryDictionaryTerm = async (
         input.expectedRequestVersion !== undefined
           ? input.expectedRequestVersion
           : await readRequestVersion(
+              config,
               input.fallbackUid || "",
               input.fallbackRequestId || "",
             ),
@@ -929,6 +900,7 @@ export const approveHistoryDictionaryTermForRequests = async (
         input.expectedRequestVersion !== undefined
           ? input.expectedRequestVersion
           : await readRequestVersion(
+              config,
               input.requestUid || "",
               input.requestId || "",
             ),

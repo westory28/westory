@@ -81,6 +81,10 @@ try {
   await Promise.all([testEnv.clearFirestore(), testEnv.clearStorage()]);
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
+    await setDoc(doc(db, "site_settings/config"), { year: "2026", semester: "2" });
+    await setDoc(doc(db, "site_settings/semester_active"), { semesterId: "2026-2", revision: 4 });
+    await setDoc(doc(db, "semester_manifests/2026-2"), { semesterId: "2026-2", status: "ACTIVE", revision: 4 });
+
     const storage = context.storage(bucketUrl);
     for (const user of Object.values(users)) {
       await setDoc(
@@ -97,7 +101,7 @@ try {
         });
       }
     }
-    await setDoc(doc(db, "lessons", "maintenance-probe"), { title: "probe" });
+    await setDoc(doc(db, "years/2026/semesters/2/lessons", "maintenance-probe"), { title: "probe" });
     await setDoc(
       doc(db, "site_settings", "student_maintenance"),
       maintenancePayload(true),
@@ -126,7 +130,7 @@ try {
     db: anonymousContext.firestore(),
     storage: anonymousContext.storage(bucketUrl),
   };
-  const lessonRef = (client) => doc(client.db, "lessons", "maintenance-probe");
+  const lessonRef = (client) => doc(client.db, "years/2026/semesters/2/lessons", "maintenance-probe");
   const configRef = (client) => doc(client.db, "site_settings", "student_maintenance");
   const storageRef = (client) => ref(client.storage, "lesson_pdfs/maintenance-probe/probe.pdf");
 
@@ -136,7 +140,7 @@ try {
   );
   await fails(
     "enabled student collection query is fenced",
-    getDocs(collection(clients.student.db, "lessons")),
+    getDocs(collection(clients.student.db, "years/2026/semesters/2/lessons")),
   );
   await succeeds(
     "enabled student can bootstrap its own user document",

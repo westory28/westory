@@ -82,11 +82,11 @@ assert(
   "Legacy History Classroom sources must remain visibly read-only.",
 );
 assert(
-  /setLegacySource\(true\)/.test(history) &&
-    /state="LEGACY"/.test(history) &&
-    /readOnly/.test(history),
-  "Student legacy History Classroom access must identify provenance and stay read-only.",
+  !/`(?:history_classrooms|map_resources)\//.test(history) &&
+    /if \(explicitLegacySource\) \{\s*throw new Error/.test(history),
+  "Student legacy History Classroom links must fail before any global data read.",
 );
+await import("./verify-semester-assessment-reads.mjs");
 
 assert(
   /if \(!attemptStarted && !completed\)/.test(history) &&
@@ -163,11 +163,19 @@ assert(
         /match \/history_classrooms\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g,
       ) || []
     ).length >= 2 &&
-    (
-      rules.match(
-        /match \/assessment_config\/\{docId\}[\s\S]*?docId != 'settings'/g,
-      ) || []
-    ).length >= 2 &&
+    (() => {
+      const blocks = [
+        ...rules.matchAll(/match \/assessment_config\/\{docId\} \{([^}]+)\}/g),
+      ].map((match) => match[1]);
+      return (
+        blocks.length === 2 &&
+        /allow read: if false;/.test(blocks[0]) &&
+        /allow write: if false;/.test(blocks[0]) &&
+        /allow write: if isCurrentSemesterScope\(year, semester\) && docId != 'settings'\s*&& docId != 'performance_score'\s*&& \(isAdmin\(\) \|\| isTeacherRole\(\)\);/.test(
+          blocks[1],
+        )
+      );
+    })() &&
     (
       rules.match(
         /match \/map_resources\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g,
@@ -223,7 +231,7 @@ console.log(
       "SERVER_QUESTION_SELECTION_AUTHORITY",
       "TEACHER_ASSESSMENT_WRITES_GATEWAY_ONLY",
       "ARCHIVE_SOURCE_WRITE_FENCE",
-      "LEGACY_PROVENANCE_VISIBLE_READ_ONLY",
+      "STUDENT_LEGACY_READ_DENIED_TEACHER_ARCHIVE_PRESERVED",
       "LEGACY_CALLABLES_RETIRED",
       "OLD_BUNDLE_DIRECT_WRITE_DENIED",
       "VISIBILITY_PAGEHIDE_NO_CANCEL",

@@ -185,16 +185,29 @@ const rejected = async (reason, input, mutate, uid) => {
   assert.equal(saved.result.treeRevision, 4);
   assert.equal(atomic.store.docs.get(treePath).tree[0].title, "수정");
   checks++;
-  const legacy = setup((data) => {
+  await rejected("LESSON_CONTENT_CONFLICT", payload(), (data) => {
     data["lessons/legacy"] = data[lessonPath];
+    data["years/2026/semesters/1/lessons/old-source"] = data[lessonPath];
     delete data[lessonPath];
   });
-  await legacy.execute("saveLessonDocument", payload());
-  assert.equal(
-    legacy.store.docs.get(`${root}/lessons/unit-unit-one`).contentRevision,
-    3,
-  );
-  assert.equal(legacy.store.docs.get("lessons/legacy").contentRevision, 2);
+  await rejected("LESSON_UNIT_NOT_IN_TREE", payload(), (data) => {
+    data["curriculum/tree"] = data[treePath];
+    data["years/2026/semesters/1/curriculum/tree"] = data[treePath];
+    delete data[treePath];
+  });
+  const fresh = setup((data) => {
+    data["lessons/legacy"] = data[lessonPath];
+    data["years/2026/semesters/1/lessons/old-source"] = data[lessonPath];
+    delete data[lessonPath];
+  });
+  await fresh.execute("saveLessonDocument", { ...payload(), expectedRevision: 0 });
+  const freshLesson = fresh.store.docs.get(`${root}/lessons/unit-unit-one`);
+  assert.equal(freshLesson.contentRevision, 1);
+  assert.equal(freshLesson.title, "수정");
+  assert.equal(freshLesson.pdfStoragePath, undefined);
+  assert.deepEqual(freshLesson.worksheetExamHighlights || [], []);
+  assert.equal(fresh.store.docs.get("lessons/legacy").contentRevision, 2);
+  assert.equal(fresh.store.docs.get("years/2026/semesters/1/lessons/old-source").contentRevision, 2);
   checks++;
   const assets = setup();
   const prepared = await assets.execute("prepareLessonAssetUpload", {
@@ -301,7 +314,7 @@ const rejected = async (reason, input, mutate, uid) => {
       checks,
       networkAccess: 0,
       coverage:
-        "teacher role, semester, CAS, atomic tree+content, legacy copy, core point IDs, ticket ownership and attach",
+        "teacher role, semester, CAS, atomic tree+content, no legacy inheritance, semester-only content, core point IDs, ticket ownership and attach",
     }),
   );
 })().catch((error) => {

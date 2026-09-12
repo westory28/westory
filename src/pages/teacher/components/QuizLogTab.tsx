@@ -793,10 +793,7 @@ const QuizLogTab: React.FC = () => {
             );
             if (scoped.exists())
               return (scoped.data().tree || []) as TreeUnit[];
-            const legacy = await getDoc(doc(db, "curriculum", "tree"));
-            return legacy.exists()
-              ? ((legacy.data().tree || []) as TreeUnit[])
-              : [];
+            return [];
           })(),
           getDocs(
             collection(db, getSemesterCollectionPath(config, "quiz_questions")),

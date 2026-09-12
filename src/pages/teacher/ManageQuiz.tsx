@@ -62,10 +62,7 @@ const ManageQuiz: React.FC = () => {
           return;
         }
 
-        const legacyTree = await getDoc(doc(db, "curriculum", "tree"));
-        if (legacyTree.exists()) {
-          setTreeData(legacyTree.data().tree || []);
-        }
+        setTreeData([]);
       } catch (error) {
         console.error(error);
       }

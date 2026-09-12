@@ -1,3 +1,4 @@
+const { dictionaryWordPath } = require("./historyDictionaryScope");
 const { HttpsError } = require("firebase-functions/v2/https");
 const fail = (reason, message) => { throw new HttpsError("failed-precondition", message, { reason }); };
 const createHistoryDictionaryRuntime = ({ db, semesterCore, archiveEnrollment, legacyRewards, wisRewards, dictionaryNotifications, getWisHallOfFamePath }) => ({
@@ -40,7 +41,7 @@ const createHistoryDictionaryRuntime = ({ db, semesterCore, archiveEnrollment, l
       : ["deleteStudentHistoryDictionaryWord", "deleteStudentHistoryDictionaryWordByTeacher"].includes(commandType) ? "reclaim" : null;
     let legacyPlan, wisPlan, wordData = {};
     if (operation) {
-      const word = await transaction.get(db.doc(`users/${uid}/history_dictionary_words/${termId}`));
+      const word = await transaction.get(db.doc(dictionaryWordPath(scope, uid, termId)));
       wordData = word.exists ? word.data() : {};
       const targetUser = uid === actor.actorUid ? user : await transaction.get(db.doc(`users/${uid}`));
       const legacyReads = await legacyRewards.read(transaction, {

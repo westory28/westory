@@ -45,13 +45,17 @@ const activeSession = (uid) => ({
 
 const env = await initializeTestEnvironment({
   projectId,
-  firestore: { host: "127.0.0.1", port: 8080, rules },
+  firestore: { host: "127.0.0.1", port: Number(process.env.CONTENT_RULES_FIRESTORE_PORT || 8080), rules },
 });
 
 try {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
+    await setDoc(doc(db, "site_settings/config"), { year: "2026", semester: "2" });
+    await setDoc(doc(db, "site_settings/semester_active"), { semesterId: "2026-2", revision: 4 });
+    await setDoc(doc(db, "semester_manifests/2026-2"), { semesterId: "2026-2", status: "ACTIVE", revision: 4 });
+
     await Promise.all([
       setDoc(doc(db, "users", studentUid), {
         uid: studentUid,
@@ -91,7 +95,7 @@ try {
         scope: "2026_2",
       }),
       setDoc(
-        doc(db, "users", studentUid, "history_dictionary_words", "fixture"),
+        doc(db, "years/2026/semesters/2/dictionary_students", studentUid, "history_dictionary_words", "fixture"),
         {
           uid: studentUid,
           updatedAt: Timestamp.now(),
@@ -102,7 +106,7 @@ try {
         scope: "2026_2",
       }),
       setDoc(
-        doc(db, "users", otherStudentUid, "history_dictionary_words", "other"),
+        doc(db, "years/2026/semesters/2/dictionary_students", otherStudentUid, "history_dictionary_words", "other"),
         {
           uid: otherStudentUid,
           updatedAt: Timestamp.now(),
@@ -124,7 +128,7 @@ try {
     where("scope", "==", "2026_2"),
   );
   const historyQuery = query(
-    collection(studentDb, "users", studentUid, "history_dictionary_words"),
+    collection(studentDb, "years/2026/semesters/2/dictionary_students", studentUid, "history_dictionary_words"),
     orderBy("updatedAt", "desc"),
     limit(20),
   );
@@ -141,7 +145,7 @@ try {
     getDocs(
       collection(
         studentDb,
-        "users",
+        "years/2026/semesters/2/dictionary_students",
         otherStudentUid,
         "history_dictionary_words",
       ),
@@ -157,7 +161,7 @@ try {
     setDoc(
       doc(
         studentDb,
-        "users",
+        "years/2026/semesters/2/dictionary_students",
         studentUid,
         "history_dictionary_words",
         "forbidden",
@@ -184,7 +188,7 @@ try {
     getDocs(
       collection(
         noSessionDb,
-        "users",
+        "years/2026/semesters/2/dictionary_students",
         "w10p-no-session-student",
         "history_dictionary_words",
       ),

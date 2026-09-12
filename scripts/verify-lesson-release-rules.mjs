@@ -86,6 +86,10 @@ for (const [variant, rules] of [
     };
     await env.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
+    await setDoc(doc(db, "site_settings/config"), { year: "2026", semester: "2" });
+    await setDoc(doc(db, "site_settings/semester_active"), { semesterId: "2026-2", revision: 4 });
+    await setDoc(doc(db, "semester_manifests/2026-2"), { semesterId: "2026-2", status: "ACTIVE", revision: 4 });
+
       // clearStorage() targets the default bucket; clean this explicit test
       // bucket as well before switching production/staging rules in one run.
       for (const path of [
