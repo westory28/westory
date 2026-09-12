@@ -1699,7 +1699,7 @@ button.lesson-core-point-floating-status:disabled {
   font-weight: 700 !important;
 }
 
-.student-calendar-section .fc-day-sat a {
+.student-calendar-section .fc-day-sat:not(.fc-day-holiday) a {
   color: #3b82f6 !important;
   text-decoration: none;
   font-weight: 700;
@@ -2185,7 +2185,7 @@ button.lesson-core-point-floating-status:disabled {
   color: #ef4444 !important;
 }
 
-.student-calendar-section .fc-day-sat .student-calendar-day-label {
+.student-calendar-section .fc-day-sat:not(.fc-day-holiday) .student-calendar-day-label {
   color: #3b82f6 !important;
 }
 

@@ -783,7 +783,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
 
       <style>{`
                 .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
-                .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-sat:not(.fc-day-holiday) a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-daygrid-event.holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
                 .fc-daygrid-event.holiday-text-event .fc-event-title { color: #ffffff !important; font-weight: 800 !important; }

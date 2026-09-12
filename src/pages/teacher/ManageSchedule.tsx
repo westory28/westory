@@ -992,7 +992,7 @@ const ManageSchedule = () => {
                 .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
                 .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 600; border: none; }
                 .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
-                .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-sat:not(.fc-day-holiday) a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday a { color: #ef4444 !important; font-weight: 700 !important; text-decoration: none; }
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
                 .fc-daygrid-event.holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
