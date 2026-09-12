@@ -21,6 +21,9 @@ import {
 
 const projectId =
   process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w3";
+const firestorePort = Number(
+  process.env.FIRESTORE_EMULATOR_HOST?.split(":").at(-1) || 8080,
+);
 const adminUid = "w3-admin";
 const adminEmail = "westoria28@gmail.com";
 const teacherUid = "w3-teacher";
@@ -59,18 +62,23 @@ const semesterMetaRef = (
   year = "2027",
   semester = "2",
 ) => doc(db, "years", year, "semesters", semester, collectionName, documentId);
-const rules = readFileSync(resolve("firestore.rules"), "utf8");
+// Run the checked-in contracts independently. Production runs last so the
+// shared emulator returns to the Production rule contract for the next suite.
+for (const rulesFile of ["firestore.staging.rules", "firestore.rules"]) {
+const rules = readFileSync(resolve(rulesFile), "utf8");
+const fixturePrivilegeAllowed = rulesFile === "firestore.staging.rules";
 
 const testEnv = await initializeTestEnvironment({
   projectId,
   firestore: {
     host: "127.0.0.1",
-    port: 8080,
+    port: firestorePort,
     rules,
   },
 });
 
 try {
+  await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await Promise.all([
@@ -343,6 +351,8 @@ try {
     "history_classrooms",
     "w10p-history-classroom",
   );
+  // These are ordinary teacher reads in both environments. They must not be
+  // mistaken for the Staging-only administrative metadata exception below.
   await assertSucceeds(getDoc(fixtureAdminExamRef));
   await assertSucceeds(getDocs(fixtureAdminHistoryClassroomsQuery));
   await assertFails(
@@ -481,7 +491,7 @@ try {
       .firestore(),
   ];
   for (const collectionName of semesterMetaCollections) {
-    await assertSucceeds(
+    await (fixturePrivilegeAllowed ? assertSucceeds : assertFails)(
       getDoc(semesterMetaRef(fixtureAdminDb, collectionName)),
     );
     await assertFails(
@@ -580,6 +590,15 @@ try {
       { merge: true },
     ),
   );
+  // school_config is still explicitly permitted to a recently authenticated
+  // real administrator. The synthetic metadata reader gains no write powers.
+  for (const deniedDb of [teacherDb, fixtureAdminDb]) {
+    await assertFails(
+      updateDoc(doc(deniedDb, "site_settings", "school_config"), {
+        schoolName: "관리자 권한 없이 변경 금지",
+      }),
+    );
+  }
   await assertFails(
     updateDoc(
       doc(
@@ -598,6 +617,8 @@ try {
   console.log(
     JSON.stringify({
       suite: "w3-semester-core-rules",
+      rulesFile,
+      fixturePrivilegeAllowed,
       passed: true,
       cases: [
         "SEMESTER_MANIFEST_CREATE_UPDATE_DELETE_DENIED",
@@ -606,14 +627,17 @@ try {
         "ACTIVE_POINTER_CREATE_UPDATE_DELETE_DENIED",
         "COMPAT_CONFIG_CREATE_UPDATE_DELETE_DENIED",
         "SERVER_OWNED_DOCUMENTS_READABLE_TO_AUTHORIZED_CLIENT",
-        "LEGACY_SEMESTER_META_CURRENT_READABLE_TO_ADMIN_OR_TRUSTED_VISUAL_FIXTURE_ADMIN",
+        fixturePrivilegeAllowed
+          ? "STAGING_META_EXACT_TRUSTED_VISUAL_FIXTURE_READ_ALLOWED"
+          : "PRODUCTION_META_SYNTHETIC_ADMIN_READ_DENIED",
         "LEGACY_SEMESTER_META_VISUAL_FIXTURE_TRUST_FACTORS_ENFORCED",
         "LEGACY_SEMESTER_META_DIRECT_WRITES_DENIED",
-        "TRUSTED_VISUAL_FIXTURE_ADMIN_READS_EXAM_AND_HISTORY_WITH_WRITES_DENIED",
+        "ORDINARY_TEACHER_EXAM_AND_HISTORY_READS_WITH_WRITES_DENIED",
         "UNMIGRATED_SETTINGS_WRITE_RETAINED_AND_W7_POINT_POLICY_WRITE_RETIRED",
       ],
     }),
   );
 } finally {
   await testEnv.cleanup();
+}
 }

@@ -596,6 +596,45 @@ const main = async () => {
     assert.equal(settingsArtifacts.receipts.length, 1);
     assert.equal(settingsArtifacts.audits.length, 1);
 
+    // Registration and administrator capability are separate boundaries.
+    // Missing/PENDING profiles stop before business writes; approval does not
+    // confer authority to change semester operational settings.
+    for (const registrationApprovalStatus of [null, "PENDING"]) {
+      if (registrationApprovalStatus) {
+        await withAdminDb(testEnv, (db) =>
+          setDoc(doc(db, "users", negative.user.uid), {
+            role: "student",
+            registrationApprovalStatus,
+          }),
+        );
+      }
+      const unapprovedBefore = await snapshotSemesterState(testEnv);
+      const unapprovedProfile = await withAdminDb(testEnv, (db) =>
+        readDocument(db, `users/${negative.user.uid}`),
+      );
+      await expectReason(
+        () =>
+          runCommand(negative, "updateOperationalSettings", {
+            showQuiz: true,
+            showScore: false,
+            showLesson: true,
+          }),
+        "STUDENT_REGISTRATION_APPROVAL_REQUIRED",
+      );
+      assert.deepEqual(await snapshotSemesterState(testEnv), unapprovedBefore);
+      assert.deepEqual(
+        await withAdminDb(testEnv, (db) =>
+          readDocument(db, `users/${negative.user.uid}`),
+        ),
+        unapprovedProfile,
+      );
+    }
+    await withAdminDb(testEnv, (db) =>
+      setDoc(doc(db, "users", negative.user.uid), {
+        role: "student",
+        registrationApprovalStatus: "APPROVED",
+      }),
+    );
     const unauthorizedBefore = await snapshotSemesterState(testEnv);
     await expectReason(
       () =>
@@ -660,6 +699,8 @@ const main = async () => {
           "GET_COMMAND_STATUS_QUERY_ONLY",
           "GET_SEMESTER_CORE_STATE_QUERY_ONLY",
           "OPERATIONAL_SETTINGS_CONCURRENT_EFFECT_ONCE_POINTER_PRESERVED",
+          "MISSING_STUDENT_PROFILE_PRE_BUSINESS_ZERO_WRITE",
+          "PENDING_STUDENT_APPROVAL_PRE_BUSINESS_ZERO_WRITE",
           "UNAUTHORIZED_PRE_BUSINESS_ZERO_WRITE",
           "EXPIRED_SESSION_PRE_BUSINESS_ZERO_WRITE",
         ],

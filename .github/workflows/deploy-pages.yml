@@ -62,9 +62,12 @@ jobs:
           java-version: 21
 
       - name: Verify Functions and W2 through W11 semester cutover safety
+        env:
+          NODE_OPTIONS: --require=${{ github.workspace }}/scripts/firebase-storage-runtime-framing.cjs
         run: |
           npm --prefix functions run check
           npm install --global firebase-tools@15.15.0
+          node scripts/verify-firebase-storage-runtime-framing.cjs
           npm run verify:w11-semester-cutover
 
       - name: Upload Pages artifact
