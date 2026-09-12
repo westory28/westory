@@ -121,6 +121,7 @@ export interface CalendarEvent {
 }
 
 export type PointTransactionType =
+  | "initial_grant"
   | "attendance"
   | "attendance_monthly_bonus"
   | "attendance_milestone_bonus"

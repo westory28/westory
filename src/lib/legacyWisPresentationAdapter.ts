@@ -238,6 +238,7 @@ export const hydrateLegacyStudentWisOwnProjection = (
 };
 
 const mapLedgerType = (entry: WisLedgerEntry): PointTransactionType => {
+  if (entry.type === "INITIAL_GRANT") return "initial_grant";
   if (entry.type === "ORDER_DEBIT") return "purchase_hold";
   if (entry.type === "ORDER_REFUND") return "purchase_cancel";
   if (entry.type === "GRANT" && entry.activityType === "history_dictionary")
@@ -277,7 +278,10 @@ const mapLedgerEntry = (
     delta: entry.delta,
     balanceAfter: entry.balanceAfter,
     sourceId: entry.sourceId,
-    sourceLabel: entry.reason || "위스 원장 반영",
+    sourceLabel:
+      entry.type === "INITIAL_GRANT"
+        ? "학기 시작 위스 지급"
+        : entry.reason || "위스 원장 반영",
     policyId: "w7-canonical-ledger",
     createdBy: entry.actorUid,
     createdAt: entry.createdAt,

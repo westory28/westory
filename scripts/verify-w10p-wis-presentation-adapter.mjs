@@ -118,6 +118,54 @@ const loadAdapterFunction = (name, dependencies = {}) => {
   return new Function(...Object.keys(dependencies), `${code}\nreturn ${name};`)(...Object.values(dependencies));
 };
 const mapLedgerType = loadAdapterFunction("mapLedgerType");
+const mapLedgerEntry = loadAdapterFunction("mapLedgerEntry", { mapLedgerType });
+const initialLedger = Object.freeze({
+  ...wireLedgerEntry,
+  ledgerEntryId: "wisled-initial-1",
+  type: "INITIAL_GRANT",
+  sourceId: "initial-opening-1",
+  delta: 500,
+  balanceBefore: 0,
+  balanceAfter: 500,
+  reason: "User-approved initial 500 Wis; no legacy balance carryover",
+});
+const initialTransaction = mapLedgerEntry(initialLedger, studentUid);
+assert.equal(initialTransaction.type, "initial_grant");
+assert.equal(initialTransaction.activityType, "initial_grant");
+assert.equal(initialTransaction.sourceLabel, "학기 시작 위스 지급");
+assert.equal(initialTransaction.delta, 500);
+assert.equal(initialTransaction.balanceAfter, 500);
+assert.equal(initialTransaction.id, initialLedger.ledgerEntryId);
+assert.equal(
+  initialLedger.reason,
+  "User-approved initial 500 Wis; no legacy balance carryover",
+  "presentation must not rewrite the immutable ledger note",
+);
+assert.equal(
+  ["manual_adjust", "manual_reclaim"].includes(initialTransaction.type),
+  false,
+  "initial grants must not qualify for the existing teacher adjustment UI",
+);
+const manualTransaction = mapLedgerEntry(
+  { ...initialLedger, type: "GRANT", reason: "교사가 입력한 사유" },
+  studentUid,
+);
+assert.equal(manualTransaction.type, "manual_adjust");
+assert.equal(manualTransaction.sourceLabel, "교사가 입력한 사유");
+const labelsModule = { exports: {} };
+new Function(
+  "module",
+  "exports",
+  ts.transpileModule(
+    readFileSync(resolve("src/constants/pointLabels.ts"), "utf8"),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS } },
+  ).outputText,
+)(labelsModule, labelsModule.exports);
+assert.equal(
+  labelsModule.exports.POINT_TRANSACTION_TYPE_LABELS[initialTransaction.type],
+  "학기 시작 위스",
+  "student and teacher histories share the localized label",
+);
 assert.equal(mapLedgerType({ type: "GRANT", delta: 10, activityType: "history_dictionary" }), "history_dictionary");
 assert.equal(mapLedgerType({ type: "REVERSAL", delta: -10, activityType: "history_dictionary_reclaim" }), "history_dictionary_reclaim");
 assert.equal(mapLedgerType({ type: "DEDUCT", delta: -10, activityType: "history_dictionary" }), "manual_reclaim");
@@ -198,7 +246,7 @@ console.log(
       (entry) => entry.sourceId === "lesson-core-points-all",
     ).length,
     orderRows: visibleOrders.length,
-    addedChecks: ["dictionary activity/type mapping", "assessment base/bonus activity normalization and labels", "unknown activity filtering and reversal classification", "purchase and review memo display", "purchase memo dispatch", "response-loss original memo replay"],
+    addedChecks: ["initial grant label, immutable reason and non-editable classification", "dictionary activity/type mapping", "assessment base/bonus activity normalization and labels", "unknown activity filtering and reversal classification", "purchase and review memo display", "purchase memo dispatch", "response-loss original memo replay"],
     productionAccess: 0,
   }),
 );

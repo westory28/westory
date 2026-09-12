@@ -178,6 +178,7 @@ export const POINT_TRANSACTION_TYPE_LABELS: Record<
   PointTransactionType,
   string
 > = {
+  initial_grant: "학기 시작 위스",
   attendance: "출석 체크",
   attendance_monthly_bonus: "월간 개근 보너스",
   attendance_milestone_bonus: "출석 누적 보너스",
