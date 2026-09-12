@@ -119,11 +119,7 @@ const getDesktopSubmenuChildren = (
   );
 };
 
-const Header: React.FC<
-  Record<string, unknown> & {
-    onTeacherContextVisibleChange?: (visible: boolean) => void;
-  }
-> = ({ onTeacherContextVisibleChange }) => {
+const Header: React.FC<Record<string, unknown>> = () => {
   const {
     currentUser,
     userData,
@@ -332,14 +328,6 @@ const Header: React.FC<
         resolvedChildren.length > 0 &&
         (isTeacherPortal || desktopSubmenuParentUrls.has(item.url)),
     );
-  const showTeacherSidebar = Boolean(
-    location.pathname.startsWith("/teacher") &&
-    shellViewport !== "mobile" &&
-    activeDesktopSubmenu,
-  );
-  useEffect(() => {
-    onTeacherContextVisibleChange?.(showTeacherSidebar);
-  }, [onTeacherContextVisibleChange, showTeacherSidebar]);
   const desktopSubmenuContainerClass =
     activeDesktopSubmenu?.item.url === "/student/lesson/note"
       ? "mx-auto max-w-[1500px] px-3 pt-6 md:px-5 lg:px-8 xl:px-10"
@@ -1074,32 +1062,6 @@ const Header: React.FC<
           notificationHost,
         )}
 
-      {showTeacherSidebar && activeDesktopSubmenu && (
-        <aside className="ws-teacher-sidebar" aria-label="교사 하위 메뉴">
-          <h2 className="ws-teacher-sidebar__title">
-            {activeDesktopSubmenu.item.name}
-          </h2>
-          <nav aria-label={`${activeDesktopSubmenu.item.name} 하위 메뉴`}>
-            {activeDesktopSubmenu.resolvedChildren.map((child, index) => (
-              <Link
-                key={`${child.resolvedUrl}-${index}`}
-                to={child.resolvedUrl}
-                className="ws-teacher-sidebar__link"
-                aria-current={
-                  isChildActive(
-                    child.resolvedUrl,
-                    activeDesktopSubmenu.resolvedChildren,
-                  )
-                    ? "page"
-                    : undefined
-                }
-              >
-                {child.name}
-              </Link>
-            ))}
-          </nav>
-        </aside>
-      )}
       {!isTeacherPortal && activeDesktopSubmenu && (
         <div className="hidden lg:block">
           <div className={desktopSubmenuContainerClass}>

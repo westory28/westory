@@ -45,8 +45,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
   const isTeacherRoute = location.pathname.startsWith("/teacher");
-  const [teacherContextVisible, setTeacherContextVisible] =
-    React.useState(false);
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
     currentUser && isTeacherRoute && isTeacherUser(userData, currentUser.email),
@@ -167,10 +165,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <div
-      className={`flex min-h-screen flex-col bg-gray-50 ${currentUser && isTeacherRoute && teacherContextVisible ? "ws-teacher-layout" : ""}`}
-    >
-      <Header onTeacherContextVisibleChange={setTeacherContextVisible} />
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      <Header />
       {studentEnhancementsReady && (
         <React.Suspense fallback={null}>
           <StudentRankPromotionController />

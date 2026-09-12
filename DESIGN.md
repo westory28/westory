@@ -117,12 +117,16 @@ Layout tokens:
 W5 shell breakpoints are behavioral contracts rather than device labels:
 
 - Below `768px`: student bottom navigation, teacher app bar and one drawer, one-column content.
-- `768px` to `1023px`: student bottom navigation, teacher compact rail, full-width detail when selected.
-- `1024px` to `1279px`: student top navigation, teacher compact rail, controlled master-detail layout.
-- `1280px` and above: student top navigation, teacher labeled sidebar, wider data workspace.
+- `768px` to `1023px`: student bottom navigation, teacher top navigation and a context drawer.
+- `1024px` to `1279px`: student and teacher top navigation; lesson tree beside the editor.
+- `1280px` and above: top navigation and a wider data workspace.
 - `1600px` and above: the workspace may add a context pane; reading content does not stretch merely to fill space.
 
 Only one responsive navigation variant may be mounted at a time. CSS-hidden duplicate navigation, notification, query, and listener instances are not allowed.
+
+Teacher submenu destinations remain in the top hover/focus dropdown. Do not duplicate them in a global left sidebar. On lesson management, only the lesson tree occupies the left context panel: width `--ws-context-panel-width`, sticky top `--ws-header-height + --space-6`, maximum height `100dvh - --ws-header-height - --space-12`, radius `--radius-xl`, shadow `--shadow-md`. Its tree scrolls independently; narrow screens use one drawer.
+
+Teacher top menu labels remain on one line, with `--space-4` column gap plus existing `--space-2` side margins to distinguish destinations from spaces within a label.
 
 ## 5. Components
 

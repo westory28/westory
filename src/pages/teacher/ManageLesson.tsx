@@ -22,7 +22,9 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  startAfter,
   where,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import {
   getBlob,
@@ -64,10 +66,8 @@ import {
   type LessonFootnote,
   type NormalizedLessonData,
 } from "../../lib/lessonData";
-import {
-  findLatestLessonTreeSelection,
-  findLessonTreeSelectionByUnitId,
-} from "../../lib/lessonTreeSelection";
+import { findLessonTreeSelectionByUnitId } from "../../lib/lessonTreeSelection";
+import { findInitialLessonSelection } from "../../lib/lessonInitialSelection";
 import {
   lessonWriteRecovery,
   lessonWriteFailureMessage,
@@ -662,7 +662,7 @@ const EMPTY_PDF_EDITOR_SNAPSHOT = createPdfEditorSnapshot({
 });
 
 const ManageLesson: React.FC = () => {
-  const { config, userData, currentUser } = useAuth();
+  const { config, configReady, userData, currentUser } = useAuth();
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeTitle, setSelectedNodeTitle] = useState("");
@@ -1370,13 +1370,25 @@ const ManageLesson: React.FC = () => {
   };
 
   useEffect(() => {
+    ++treeLoadIdRef.current;
+    ++lessonLoadIdRef.current;
+    treeLoadedRef.current = false;
     setSelectedNodeId(null);
     setSelectedNodeTitle("");
     clearLessonEditor(true);
     setTreeData([]);
     setScreenBusyMessage(null);
+    if (!configReady) return;
+    if (!config?.year || !config?.semester) {
+      setPdfSaveFeedback({
+        tone: "error",
+        message:
+          "학기 설정을 불러오지 못했습니다. 연결을 확인한 뒤 화면을 다시 열어 주세요.",
+      });
+      return;
+    }
     void loadTree(true);
-  }, [teacherScope]);
+  }, [teacherScope, configReady]);
   useEffect(() => {
     const unsubscribe = subscribeSourceArchiveAssets(
       (items) => {
@@ -1830,28 +1842,35 @@ const ManageLesson: React.FC = () => {
           lessonWriteRecovery.acknowledge(recovery);
         }
 
-        const readRecentLessons = async (collectionPath: string) => {
-          const snap = await getDocsFromServer(
-            query(collection(db, collectionPath), orderBy("updatedAt", "desc")),
-          );
-          return snap.docs.map((docSnap) => docSnap.data() as LessonData);
-        };
-
-        const scopedLessons = await readRecentLessons(
-          getSemesterCollectionPath(config, "lessons"),
-        );
-        let latestSelection = findLatestLessonTreeSelection(
-          nextTree,
-          scopedLessons,
-        );
-
-        if (!latestSelection) {
-          const legacyLessons = await readRecentLessons("lessons");
-          latestSelection = findLatestLessonTreeSelection(nextTree, [
-            ...scopedLessons,
-            ...legacyLessons,
-          ]);
-        }
+        const latestSelection =
+          await findInitialLessonSelection<QueryDocumentSnapshot>({
+            tree: nextTree,
+            collectionPaths: [
+              getSemesterCollectionPath(config, "lessons"),
+              "lessons",
+            ],
+            isCurrent: () =>
+              isCurrent() && lessonLoadIdRef.current === lessonLoadId,
+            readPage: async (collectionPath, cursor, pageSize) => {
+              const snap = await getDocsFromServer(
+                query(
+                  collection(db, collectionPath),
+                  orderBy("updatedAt", "desc"),
+                  ...(cursor ? [startAfter(cursor)] : []),
+                  limit(pageSize),
+                ),
+              );
+              return {
+                lessons: snap.docs.map(
+                  (docSnap) => docSnap.data() as LessonData,
+                ),
+                nextCursor:
+                  snap.size === pageSize
+                    ? snap.docs[snap.docs.length - 1]
+                    : undefined,
+              };
+            },
+          });
 
         if (
           !latestSelection ||
@@ -3550,11 +3569,16 @@ const ManageLesson: React.FC = () => {
                   <i className="fas fa-list text-4xl text-blue-400"></i>
                 </div>
                 <p className="text-lg font-bold text-gray-600">
-                  수업 자료를 선택해 주세요.
+                  {!configReady
+                    ? "학기 설정을 확인하는 중입니다."
+                    : pdfSaveFeedback?.tone === "error"
+                      ? "수업 자료를 준비하지 못했습니다."
+                      : "수업 자료를 선택해 주세요."}
                 </p>
                 <p className="mt-2 text-sm">
-                  왼쪽 트리에서 말단 수업 항목을 선택하면 편집을 시작할 수
-                  있습니다.
+                  {pdfSaveFeedback?.tone === "error"
+                    ? pdfSaveFeedback.message
+                    : "왼쪽 트리에서 말단 수업 항목을 선택하면 편집을 시작할 수 있습니다."}
                 </p>
               </div>
             ) : (

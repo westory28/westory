@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import StorageImage from "../../../components/common/StorageImage";
+import { useShellViewport } from "../../../hooks/useShellViewport";
 import {
   getLessonPdfExtractionHelpText,
   getLessonPdfExtractionStatusLabel,
@@ -259,6 +260,7 @@ export function LessonTreePanel({
   onSaveTree,
   renderTreeNode,
 }: LessonTreePanelProps) {
+  const viewport = useShellViewport();
   const renderActionButtons = (compact = false) => (
     <div className={`flex shrink-0 gap-2 ${compact ? "text-xs" : ""}`}>
       <button
@@ -293,67 +295,75 @@ export function LessonTreePanel({
 
   return (
     <>
-      <div className="ws-lesson-tree-desktop w-full max-w-sm">
-        <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-4">
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold text-gray-800">
-                수업 자료 트리
-              </h2>
-              <p className="text-xs text-gray-500">
-                단원과 자료 구조를 관리합니다.
-              </p>
+      {viewport === "compact" || viewport === "desktop" ? (
+        <aside className="ws-lesson-tree-desktop" aria-label="수업 자료 트리">
+          <div className="ws-lesson-tree-panel">
+            <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-4">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-gray-800">
+                  수업 자료 트리
+                </h2>
+                <p className="text-xs text-gray-500">
+                  단원과 자료 구조를 관리합니다.
+                </p>
+              </div>
+              {renderActionButtons()}
             </div>
-            {renderActionButtons()}
+            {renderTreeList()}
           </div>
-          {renderTreeList()}
-        </div>
-      </div>
-
-      {sidebarOpen && (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 bg-black/45 lg:hidden"
-          onClick={onCloseSidebar}
-          aria-label="수업 자료 목차 닫기"
-        />
+        </aside>
+      ) : (
+        <>
+          {sidebarOpen && (
+            <button
+              type="button"
+              className="fixed inset-0 z-40 bg-black/45 lg:hidden"
+              onClick={onCloseSidebar}
+              aria-label="수업 자료 목차 닫기"
+            />
+          )}
+          <aside
+            id="lesson-tree-drawer"
+            role="dialog"
+            aria-modal={sidebarOpen ? "true" : undefined}
+            aria-hidden={!sidebarOpen}
+            aria-labelledby="lesson-tree-drawer-title"
+            {...mobileDrawerInertProps}
+            className={`fixed bottom-0 right-0 top-16 z-50 flex h-[calc(100vh-64px)] w-[84%] max-w-[360px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 lg:hidden ${
+              sidebarOpen
+                ? "translate-x-0"
+                : "pointer-events-none translate-x-full"
+            }`}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4">
+              <h2
+                id="lesson-tree-drawer-title"
+                className="text-base font-bold text-gray-800"
+              >
+                수업 자료 목차
+              </h2>
+              <button
+                type="button"
+                onClick={onCloseSidebar}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+                aria-label="수업 자료 목차 닫기"
+              >
+                <i className="fas fa-times text-sm" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-800">
+                  자료 구조 관리
+                </p>
+                <p className="text-xs text-gray-500">말단 자료를 선택하세요.</p>
+              </div>
+              {renderActionButtons(true)}
+            </div>
+            {renderTreeList("p-3")}
+          </aside>
+        </>
       )}
-      <aside
-        id="lesson-tree-drawer"
-        role="dialog"
-        aria-modal={sidebarOpen ? "true" : undefined}
-        aria-hidden={!sidebarOpen}
-        aria-labelledby="lesson-tree-drawer-title"
-        {...mobileDrawerInertProps}
-        className={`fixed bottom-0 right-0 top-16 z-50 flex h-[calc(100vh-64px)] w-[84%] max-w-[360px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 lg:hidden ${
-          sidebarOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
-        }`}
-      >
-        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4">
-          <h2
-            id="lesson-tree-drawer-title"
-            className="text-base font-bold text-gray-800"
-          >
-            수업 자료 목차
-          </h2>
-          <button
-            type="button"
-            onClick={onCloseSidebar}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
-            aria-label="수업 자료 목차 닫기"
-          >
-            <i className="fas fa-times text-sm" aria-hidden="true"></i>
-          </button>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-gray-800">자료 구조 관리</p>
-            <p className="text-xs text-gray-500">말단 자료를 선택하세요.</p>
-          </div>
-          {renderActionButtons(true)}
-        </div>
-        {renderTreeList("p-3")}
-      </aside>
     </>
   );
 }

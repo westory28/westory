@@ -4238,59 +4238,6 @@ button.lesson-core-point-floating-status:disabled {
     width: var(--ws-context-panel-width);
   }
 }
-.ws-teacher-sidebar {
-  position: fixed;
-  top: calc(var(--ws-header-height) + var(--space-6));
-  left: var(--space-4);
-  z-index: 35;
-  width: var(--ws-teacher-sidebar-width);
-  max-height: calc(100dvh - var(--ws-header-height) - var(--space-12));
-  overflow-y: auto;
-  background: var(--ws-surface);
-  border: 1px solid var(--ws-border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-3);
-}
-.ws-teacher-sidebar__title {
-  margin: 0 0 var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--ws-type-small);
-  font-weight: 800;
-  color: var(--ws-text-strong);
-}
-.ws-teacher-sidebar__link {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: calc(var(--space-10) + var(--space-1));
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--ws-text);
-  font-size: var(--ws-type-small);
-  font-weight: 500;
-  text-decoration: none;
-}
-.ws-teacher-sidebar__link[aria-current="page"] {
-  background: var(--ws-primary-soft);
-  color: var(--ws-primary-text);
-}
-.ws-teacher-sidebar a:hover {
-  background: var(--ws-surface-subtle);
-}
-.ws-teacher-sidebar a:focus-visible,
-.ws-teacher-sidebar button:focus-visible {
-  outline: 2px solid var(--ws-ring);
-  outline-offset: -2px;
-}
-@media (min-width: 768px) {
-  .ws-teacher-layout > main,
-  .ws-teacher-layout > footer {
-    margin-left: calc(var(--ws-teacher-sidebar-width) + var(--space-6));
-    width: calc(100% - var(--ws-teacher-sidebar-width) - var(--space-6));
-  }
-}
 .desktop-nav {
   align-items: center;
 }
@@ -4326,6 +4273,14 @@ button.lesson-core-point-floating-status:disabled {
 }
 .ws-teacher-header .nav-link {
   margin: 0 var(--space-2);
+}
+.ws-teacher-header .desktop-nav {
+  column-gap: var(--space-4);
+}
+.ws-teacher-header .desktop-nav > .nav-link,
+.ws-teacher-header .ws-top-menu {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 /* Keep the teacher's main navigation at the top on touch widths, too. */
 @media (max-width: 1023px) {
@@ -4364,31 +4319,33 @@ button.lesson-core-point-floating-status:disabled {
       100dvh - var(--ws-header-height) - var(--space-12) - var(--space-6)
     );
   }
-  .ws-teacher-sidebar {
-    top: calc(var(--ws-header-height) + var(--space-12) + var(--space-4));
-    max-height: calc(
-      100dvh - var(--ws-header-height) - var(--space-12) - var(--space-8)
-    );
-    width: calc(var(--ws-teacher-sidebar-width) - var(--space-12));
-  }
-  .ws-teacher-layout > main,
-  .ws-teacher-layout > footer {
-    margin-left: calc(
-      var(--ws-teacher-sidebar-width) - var(--space-12) + var(--space-6)
-    );
-    width: calc(
-      100% - var(--ws-teacher-sidebar-width) + var(--space-12) - var(--space-6)
-    );
-  }
 }
-/* The legacy global .hidden rule overrides Tailwind's lg:block. */
+/* The lesson tree is the teacher's context panel, separate from top navigation. */
 .ws-lesson-tree-desktop {
-  display: none;
+  position: sticky;
+  top: calc(var(--ws-header-height) + var(--space-6));
+  align-self: flex-start;
+  flex: 0 0 var(--ws-context-panel-width);
+  width: var(--ws-context-panel-width);
+  max-width: 100%;
 }
-@media (min-width: 1024px) {
-  .ws-lesson-tree-desktop {
-    display: block;
-  }
+.ws-lesson-tree-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--ws-header-height) - var(--space-12));
+  overflow: hidden;
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+.ws-lesson-tree-panel > :first-child {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.ws-lesson-tree-panel > :last-child {
+  min-height: 0;
+  overscroll-behavior: contain;
 }
 @media (prefers-reduced-motion: reduce) {
   .ws-top-menu__panel {

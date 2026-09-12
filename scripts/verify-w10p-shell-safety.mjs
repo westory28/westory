@@ -35,7 +35,7 @@ assert.doesNotMatch(
 );
 assert.match(
   mainLayout,
-  /<Header onTeacherContextVisibleChange=\{setTeacherContextVisible\}\s*\/>[\s\S]*?<main[\s\S]*?id="main-content"[\s\S]*?\{children\}[\s\S]*?<Footer\s*\/>/u,
+  /<Header\s*\/>[\s\S]*?<main[\s\S]*?id="main-content"[\s\S]*?\{children\}[\s\S]*?<Footer\s*\/>/u,
   "Production Header/main/Footer order drifted.",
 );
 assert.equal(
@@ -62,7 +62,7 @@ assert.match(header, /className=\{`desktop-nav/u);
 assert.match(header, /id="mobile-menu"/u);
 assert.match(header, /className="mobile-menu-btn"/u);
 assert.match(header, /resolvedChildren\.map/u);
-// Keep the approved top main menu and floating, active-section-only submenu.
+// Keep the approved top main menu with its dropdown destinations.
 // Both consume the same permission-filtered menu tree.
 assert.match(
   header,
@@ -89,22 +89,10 @@ assert.match(
 assert.match(header, /aria-expanded=\{expandedTopMenu === item\.url\}/u);
 assert.match(header, /event\.key === "Escape"/u);
 assert.match(header, /event\.key === "ArrowDown"/u);
-assert.match(
-  header,
-  /const showTeacherSidebar = Boolean\(\s*location\.pathname\.startsWith\("\/teacher"\) &&\s*shellViewport !== "mobile" &&\s*activeDesktopSubmenu,?\s*\)/u,
-);
-assert.match(
-  header,
-  /onTeacherContextVisibleChange\?\.\(showTeacherSidebar\)/u,
-);
-assert.match(
-  header,
-  /showTeacherSidebar && activeDesktopSubmenu && \([\s\S]*?<aside className="ws-teacher-sidebar"[\s\S]*?activeDesktopSubmenu\.resolvedChildren\.map/u,
-);
-assert.match(
-  mainLayout,
-  /currentUser && isTeacherRoute && teacherContextVisible \? "ws-teacher-layout"/u,
-);
+assert.doesNotMatch(header, /ws-teacher-sidebar|onTeacherContextVisibleChange/u,
+  "Teacher destinations belong only in the top navigation.");
+assert.doesNotMatch(mainLayout, /ws-teacher-layout|teacherContextVisible/u,
+  "Main content must not reserve space for a duplicate global submenu.");
 assert.doesNotMatch(
   header,
   /from\s+["']firebase\/(?:firestore|storage)["']/u,
@@ -145,15 +133,13 @@ const extractRule = (source, selector) => {
   throw new Error(`Unclosed CSS rule: ${selector}`);
 };
 const normalizeCss = (value) => value.replace(/\s+/gu, " ").trim();
-const floatingSubmenuCss = extractRule(appCss, ".ws-teacher-sidebar");
-assert.match(floatingSubmenuCss, /position:\s*fixed/u);
-assert.match(
-  floatingSubmenuCss,
-  /top:\s*calc\(var\(--ws-header-height\) \+ var\(--space-6\)\)/u,
-);
-assert.match(floatingSubmenuCss, /left:\s*var\(--space-4\)/u);
-assert.match(floatingSubmenuCss, /border-radius:\s*var\(--radius-xl\)/u);
-assert.match(floatingSubmenuCss, /box-shadow:\s*var\(--shadow-md\)/u);
+const treeCss = extractRule(appCss, ".ws-lesson-tree-desktop");
+assert.match(treeCss, /position:\s*sticky/u);
+assert.match(treeCss, /top:\s*calc\(var\(--ws-header-height\) \+ var\(--space-6\)\)/u);
+const treePanelCss = extractRule(appCss, ".ws-lesson-tree-panel");
+assert.match(treePanelCss, /border-radius:\s*var\(--radius-xl\)/u);
+assert.match(treePanelCss, /box-shadow:\s*var\(--shadow-md\)/u);
+assert.doesNotMatch(appCss, /\.ws-teacher-sidebar|\.ws-teacher-layout/u);
 for (const selector of [
   "body",
   "header",
@@ -222,7 +208,7 @@ console.log(
     rejectedShellMounts: 0,
     notificationControllers: 1,
     topMainNavigation: true,
-    floatingActiveSubmenu: true,
+    lessonTreeContextPanel: true,
     permissionFilteredNavigation: true,
     frozenCssRules: 11,
     desktopBreakpoint: 1024,

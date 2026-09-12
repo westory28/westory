@@ -15,13 +15,14 @@ export const useAppToast=()=>({showToast:()=>{}});export const inferToastFromAle
 export const loadStudentRankPromotionSnapshot=async()=>({rank:null,policy:{rankPolicy:{}}});export const invalidateStudentRankPromotionSnapshotCache=()=>{};export const db={};export const doc=()=>({});export const getDoc=async()=>({exists:()=>false});export const runtimeEnvironment='local';export const touchApplicationSession=async()=>({});
 export default function Stub(){return null;} export const lazyWithRetry=()=>()=>null;`);
 const entry=`import React from 'react';import {createRoot} from 'react-dom/client';import {HashRouter} from 'react-router-dom';import MainLayout from './src/components/layout/MainLayout';import StatePanel from './src/components/common/StatePanel';import {LoadingOverlay} from './src/components/common/LoadingState';const Pending=React.lazy(()=>new Promise(()=>{}));import {LessonTreePanel} from './src/pages/teacher/components/LessonEditorPanels';
-createRoot(document.getElementById('root')).render(<HashRouter><MainLayout>{location.hash.endsWith("/loading")?<React.Suspense fallback={<LoadingOverlay/>}><Pending/></React.Suspense>:location.hash.endsWith("/data-loading")?<StatePanel state="LOADING"/>:location.hash.endsWith("/inline-loading")?<StatePanel state="LOADING" compact/>:location.hash.endsWith("/error")?<StatePanel state="ERROR"/>:<><h1>수업 자료 확인</h1><button>본문 동작</button><LessonTreePanel treeData={[{id:"qa",title:"검증용 자료",children:[]}]} sidebarOpen={false} onCloseSidebar={()=>{}} onOpenRootModal={()=>{}} onSaveTree={()=>{}} renderTreeNode={node=><button>{node.title}</button>}/></>}</MainLayout></HashRouter>);`;
+function Fixture(){const [open,setOpen]=React.useState(false);return <MainLayout>{location.hash.endsWith("/loading")?<React.Suspense fallback={<LoadingOverlay/>}><Pending/></React.Suspense>:location.hash.endsWith("/data-loading")?<StatePanel state="LOADING"/>:location.hash.endsWith("/inline-loading")?<StatePanel state="LOADING" compact/>:location.hash.endsWith("/error")?<StatePanel state="ERROR"/>:<div style={{padding:24}}><h1>수업 자료 확인</h1><div style={{display:'flex',gap:24,alignItems:'flex-start'}}><LessonTreePanel treeData={Array.from({length:45},(_,i)=>({id:String(i),title:'검증용 수업 자료 '+(i+1),children:[]}))} sidebarOpen={open} onCloseSidebar={()=>setOpen(false)} onOpenRootModal={()=>{}} onSaveTree={()=>{}} renderTreeNode={node=><button style={{display:'block',minHeight:44}}>{node.title}</button>}/><section style={{flex:1,minWidth:0,minHeight:1500}}><button onClick={()=>setOpen(true)}>목차 열기</button><button>본문 동작</button></section></div></div>}</MainLayout>};createRoot(document.getElementById('root')).render(<HashRouter><Fixture/></HashRouter>);`;
 const result=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,write:false,loader:{'.svg':'dataurl'},platform:'browser',format:'iife',metafile:true,define:{'process.env.NODE_ENV':'"development"','import.meta.env':'{}'},plugins:[{name:'no-network-fixture',setup(api){api.onResolve({filter:/LessonContent$|LessonWorksheetStage$|StorageImage$|AuthContext$|AppToastProvider$|\/firebase$|applicationSession$|lazyWithRetry$|firebase\/firestore$|StudentHistoryDictionaryController$|StudentRankPromotionController$|TeacherPatchMemoController$|NotificationBell$|pointRankPromotion$/},()=>({path:fixture}));}}]});
 assert.ok(!Object.keys(result.metafile.inputs).some(p=>p.includes('node_modules/@firebase/')),'Fixture must not include Firebase');
 const cssFile=readdirSync('dist/assets').find(n=>/^main-.*\.css$/.test(n));
 const css=readFileSync(join('dist/assets',cssFile),'utf8')+'\n'+readFileSync('src/assets/index.css','utf8');
 const server=createServer((req,res)=>{res.setHeader('Content-Security-Policy',"default-src 'self';connect-src 'none';style-src 'self' 'unsafe-inline';font-src 'none';img-src 'self' data:;script-src 'self'");res.setHeader('Content-Type',req.url==='/app.js'?'text/javascript':req.url==='/app.css'?'text/css':'text/html');res.end(req.url==='/app.js'?result.outputFiles[0].contents:req.url==='/app.css'?css:'<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><div id="root"></div><script src="/app.js"></script></html>');});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
+if(process.argv.includes('--serve-only')) { console.log(JSON.stringify({url:`http://127.0.0.1:${server.address().port}`,output})); await new Promise(()=>{}); }
 let browser;const checks=[];
 try{
  browser=await chromium.launch({channel:'chrome',headless:true});
@@ -34,14 +35,11 @@ try{
   assert.equal(await top.getByRole('link',{name:'학습 자료 관리',exact:true}).isVisible(),true);
   const alignment=await top.evaluate(nav=>Array.from(nav.querySelectorAll(':scope > .nav-link, :scope > .ws-top-menu > .nav-link')).map(e=>{const r=e.getBoundingClientRect();return r.top+r.height/2;}));assert.ok(Math.max(...alignment)-Math.min(...alignment)<2,'main menu vertical alignment at '+width);assert.equal(await top.locator('button, .fa-chevron-down').count(),0);
   const side=page.getByRole('complementary',{name:'교사 하위 메뉴'});
-  assert.equal(await side.count(),width>=768?1:0);
-  if(width>=768){
-   assert.equal(await side.getByRole('link',{name:'평가 관리',exact:true}).count(),0);
-   assert.equal(await side.getByRole('link',{name:'수업 자료',exact:true}).getAttribute('aria-current'),'page');
-  }
-  const bounds=await page.evaluate(()=>{const s=document.querySelector('.ws-teacher-sidebar');const r=s?.getBoundingClientRect();const m=document.getElementById('main-content').getBoundingClientRect();const h=document.querySelector('header').getBoundingClientRect();return {sideRight:r?.right??0,sideLeft:r?.left??0,sideTop:r?.top??0,headerBottom:h.bottom,mainLeft:m.left,overflow:document.documentElement.scrollWidth>innerWidth+1};});
-  assert.equal(bounds.overflow,false,`page overflow at ${width}`);assert.ok(bounds.mainLeft>=bounds.sideRight-1,`sidebar overlap at ${width}`);
-  if(width>=768){assert.ok(bounds.sideLeft>0);assert.ok(bounds.sideTop>bounds.headerBottom);}
+  assert.equal(await side.count(),0);
+  const bounds=await page.evaluate(()=>{const m=document.getElementById('main-content').getBoundingClientRect();const links=Array.from(document.querySelectorAll('.desktop-nav > .nav-link, .desktop-nav > .ws-top-menu > .nav-link')).map(e=>e.getBoundingClientRect());return {mainLeft:m.left,overflow:document.documentElement.scrollWidth>innerWidth+1,minMenuGap:Math.min(...links.slice(1).map((r,i)=>r.left-links[i].right))};});
+  assert.equal(bounds.overflow,false,`page overflow at ${width}`);
+  assert.equal(bounds.mainLeft,0);
+  assert.ok(bounds.minMenuGap>=24,`menu label separation at ${width}`);
   const menu=top.getByRole('link',{name:'학습 자료 관리',exact:true});
   await page.mouse.move(width-1,850);
   await menu.focus();await menu.press('ArrowDown');
@@ -51,10 +49,10 @@ try{
   await menu.press('Escape');assert.equal(await menu.getAttribute('aria-expanded'),'false');
   if(width>=1024){await top.getByRole('link',{name:'학습 자료 관리',exact:true}).hover();assert.equal(await drop.isVisible(),true);await page.mouse.move(width-1,850);}
   assert.equal(await page.getByRole('heading',{name:'수업 자료 트리',exact:true}).isVisible(),width>=1024);
-  if(width>=768){await side.getByRole('link',{name:'역사 사전 관리',exact:true}).click();await page.waitForFunction(()=>location.hash.endsWith('history-dictionary'));assert.equal(await side.getByRole('link',{name:'역사 사전 관리',exact:true}).getAttribute('aria-current'),'page');}
+  await menu.focus();await menu.press('ArrowDown');
+  await drop.getByRole('link',{name:'역사 사전 관리',exact:true}).click();await page.waitForFunction(()=>location.hash.endsWith('history-dictionary'));
   await top.getByRole('link',{name:'평가 관리',exact:true}).click();
   await page.waitForFunction(()=>location.hash==='#/teacher/quiz');
-  if(width>=768){await side.getByRole('link',{name:'문제 은행',exact:true}).click();await page.waitForFunction(()=>location.hash.endsWith('?tab=bank'));assert.equal(await side.getByRole('link',{name:'문제 은행',exact:true}).getAttribute('aria-current'),'page');assert.equal(await side.getByRole('link',{name:'수업 자료',exact:true}).count(),0);}
   await page.mouse.move(width-1,850);
   await page.screenshot({path:join(output,`teacher-${width}.png`)});checks.push({width,teacher:true,...bounds});
  }

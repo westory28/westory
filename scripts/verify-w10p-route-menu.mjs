@@ -239,20 +239,9 @@ assert.doesNotMatch(
   /<AppShell/u,
   "legacy routes still mount AppShell",
 );
-assert.match(
-  mainLayout,
-  /<Header onTeacherContextVisibleChange=\{setTeacherContextVisible\}\s*\/>/u,
-  "Header with active teacher submenu layout synchronization missing",
-);
-assert.match(
-  header,
-  /onTeacherContextVisibleChange\?\.\(showTeacherSidebar\)/u,
-);
-assert.match(
-  mainLayout,
-  /currentUser && isTeacherRoute && teacherContextVisible \? "ws-teacher-layout"/u,
-  "Teacher layout must reserve space only when its contextual submenu is visible",
-);
+assert.match(mainLayout, /<Header\s*\/>/u, "Top Header mount missing");
+assert.doesNotMatch(header, /ws-teacher-sidebar|onTeacherContextVisibleChange/u);
+assert.doesNotMatch(mainLayout, /ws-teacher-layout|teacherContextVisible/u);
 assert.match(mainLayout, /<Footer\s*\/>/u, "Production Footer mount missing");
 
 const implicitAccessPaths = new Set([
