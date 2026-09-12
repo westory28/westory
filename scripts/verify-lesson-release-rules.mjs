@@ -8,8 +8,9 @@ import {
 import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { ref, uploadBytes, deleteObject, getBytes } from "firebase/storage";
 
-const production = readFileSync("firestore.rules", "utf8");
-const staging = readFileSync("firestore.staging.rules", "utf8");
+// Git checkouts may use different line endings on Windows; compare rule text.
+const production = readFileSync("firestore.rules", "utf8").replace(/\r\n/g, "\n");
+const staging = readFileSync("firestore.staging.rules", "utf8").replace(/\r\n/g, "\n");
 const helper =
   /    function isTrustedW10PVisualFixtureAdmin\(\) \{[\s\S]*?\r?\n    \}/;
 assert.match(production.match(helper)?.[0] || "", /return false;/);

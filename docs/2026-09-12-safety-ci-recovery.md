@@ -17,6 +17,10 @@
 
 타입 오류 0, 앱 빌드 및 변경 영역의 집중 검증은 통과했습니다. 로컬 전체 검사에서는 Functions 검사까지 진행했으나 Windows Storage 에뮬레이터가 초기화 중 멈춰 해당 실행을 중단했습니다. 이를 전체 검증 통과로 기록하지 않습니다. 전체 통과 여부는 이 수정 커밋에 대한 실제 GitHub 실행 결과로 판정합니다.
 
+`2ab6cdd`의 원격 실행 34674084358은 앞선 29개 단계를 통과했지만 Linux에서도 Storage 초기화가 멈췄습니다. Firebase CLI 15.15.0이 stdout의 각 청크를 독립 JSON으로 해석하여 큰 경고 응답이 나뉘면 요청 완료를 놓치는 문제를 확인했습니다. 해당 실행은 교체 실행을 위해 취소했습니다.
+
+`firebase-storage-runtime-framing.cjs`는 이 버전의 Storage runtime이 시작한 rules JAR stdout에만 UTF-8 줄 단위 처리를 적용합니다. 운영 Rules, 원본 경고·오류, 다른 프로세스는 바꾸지 않습니다. CI의 에뮬레이터 실행 단계 두 곳에만 preload를 적용하며, 체크아웃 단계에는 적용하지 않습니다. CLI 버전 변경 시 보정을 다시 검토하도록 명시적으로 실패합니다. 분할·합쳐진 응답, 한글·이모지 경계, 마지막 응답, 크기 초과와 무관한 spawn을 자동 검증합니다. Windows의 Rules 문자열 대조는 줄바꿈만 정규화합니다.
+
 원격 실행과 최종 배포 결과 기록: `C:/westory-w10p-provenance-runtime/safety-ci-final.json`. 이 파일이 아직 없으면 최종 판정은 미완료입니다. 원래 실패 로그와 로컬 중단 로그도 같은 runtime 폴더에 보존합니다.
 
 Vercel 웹 대시보드의 `westoria28-8028` 로그인은 확인했습니다. 기존 알림함의 최근 배포 실패는 8월 26일 Staging authDomain 설정 불일치였으며, `a6a07ec`의 Vercel 상태는 `Canceled by Ignored Build Step`/success입니다. 현재 Firebase 테스트 사이트의 성공을 Vercel 배포 성공으로 표현하지 않습니다. CLI 인증의 유효성은 이번 웹 로그인 확인과 별개입니다.

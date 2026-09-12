@@ -71,5 +71,10 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm install --global firebase-tools@15.15.0
+      - run: node scripts/verify-firebase-storage-runtime-framing.cjs
       - run: firebase emulators:exec --project demo-westory-session-lesson-rules --only firestore,storage "node scripts/verify-lesson-release-rules.mjs"
+        env:
+          NODE_OPTIONS: --require=${{ github.workspace }}/scripts/firebase-storage-runtime-framing.cjs
       - run: npm run verify:w11-semester-cutover
+        env:
+          NODE_OPTIONS: --require=${{ github.workspace }}/scripts/firebase-storage-runtime-framing.cjs
