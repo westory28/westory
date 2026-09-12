@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
-import { InlineLoading } from "../../../components/common/LoadingState";
+import { PageDataLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifySystemConfigUpdated } from "../../../lib/appEvents";
 import { executeWestoryCommand } from "../../../lib/commandGateway";
@@ -1093,10 +1093,7 @@ const SettingsGeneral: React.FC = () => {
     }
   };
 
-  if (loading)
-    return (
-      <InlineLoading message="기본 설정을 불러오는 중입니다." showWarning />
-    );
+  if (loading) return <PageDataLoading />;
 
   if (loadError) {
     return (

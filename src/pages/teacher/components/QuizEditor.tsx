@@ -2,7 +2,10 @@
 import { db } from "../../../lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
-import { LoadingOverlay } from "../../../components/common/LoadingState";
+import {
+  LoadingOverlay,
+  PageDataLoading,
+} from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
 import {
   getSemesterCollectionPath,
@@ -1169,9 +1172,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         <div className="h-full min-h-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
             {loading ? (
-              <div className="text-center p-10 text-gray-400">
-                문제를 불러오는 중...
-              </div>
+              <PageDataLoading />
             ) : filteredQuestions.length === 0 ? (
               <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
                 등록된 문제가 없습니다.

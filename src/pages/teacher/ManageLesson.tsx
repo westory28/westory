@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
-import { Link } from "react-router-dom";
-import { LoadingOverlay } from "../../components/common/LoadingState";
+import {
+  LoadingOverlay,
+  PageDataLoading,
+} from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { db, getFirebaseStorage } from "../../lib/firebase";
 import {
@@ -86,7 +88,6 @@ import { LEGACY_LESSON_READ_ONLY_MESSAGE } from "../../lib/legacyLessonSafetyAda
 import { canWriteLessonManagement } from "../../lib/permissions";
 import { subscribeSourceArchiveAssets } from "../../lib/sourceArchive";
 import {
-  LEGACY_LESSON_MANAGEMENT_ROUTE,
   buildLegacyLessonManagementHandoffMessage,
   shouldHandoffLegacyLessonManagementMutation,
 } from "../../lib/legacyLessonManagementHandoff";
@@ -1842,6 +1843,7 @@ const ManageLesson: React.FC = () => {
           lessonWriteRecovery.acknowledge(recovery);
         }
 
+        const initialDocuments = new Map<string, QueryDocumentSnapshot>();
         const latestSelection =
           await findInitialLessonSelection<QueryDocumentSnapshot>({
             tree: nextTree,
@@ -1860,6 +1862,15 @@ const ManageLesson: React.FC = () => {
                   limit(pageSize),
                 ),
               );
+              for (const lesson of snap.docs) {
+                const unitId = String(lesson.data().unitId || "");
+                if (
+                  collectionPath ===
+                    getSemesterCollectionPath(config, "lessons") &&
+                  !initialDocuments.has(unitId)
+                )
+                  initialDocuments.set(unitId, lesson);
+              }
               return {
                 lessons: snap.docs.map(
                   (docSnap) => docSnap.data() as LessonData,
@@ -1885,6 +1896,8 @@ const ManageLesson: React.FC = () => {
         await loadLessonContent(
           latestSelection.node.id,
           latestSelection.node.title,
+          undefined,
+          initialDocuments.get(latestSelection.node.id),
         );
       };
 
@@ -2060,6 +2073,7 @@ const ManageLesson: React.FC = () => {
     unitId: string,
     title: string,
     restored?: { recovery: LessonWriteRecovery; outcome: LessonWriteOutcome },
+    initialSnapshot?: QueryDocumentSnapshot,
   ) => {
     const loadId = ++lessonLoadIdRef.current;
     const loadContext = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}/${unitId}`;
@@ -2093,25 +2107,30 @@ const ManageLesson: React.FC = () => {
         where("unitId", "==", unitId),
         limit(1),
       );
-      let snap = await getDocsFromServer(scopedQuery);
-      if (snap.empty)
-        snap = await getDocsFromServer(
-          query(
-            collection(db, "lessons"),
-            where("unitId", "==", unitId),
-            limit(1),
-          ),
-        );
+      let documents =
+        initialSnapshot && !restored
+          ? [initialSnapshot]
+          : (await getDocsFromServer(scopedQuery)).docs;
+      if (documents.length === 0)
+        documents = (
+          await getDocsFromServer(
+            query(
+              collection(db, "lessons"),
+              where("unitId", "==", unitId),
+              limit(1),
+            ),
+          )
+        ).docs;
       if (
         !editorMountedRef.current ||
         loadId !== lessonLoadIdRef.current ||
         editorSessionRef.current.context !== loadContext
       )
         return;
-      if (snap.empty && restored?.outcome.ok)
+      if (documents.length === 0 && restored?.outcome.ok)
         throw new Error("저장 결과를 서버에서 확인하지 못했습니다.");
-      if (!snap.empty || restored?.recovery.kind === "document") {
-        const savedData = normalizeLessonData(snap.docs[0]?.data() || {}, {
+      if (documents.length > 0 || restored?.recovery.kind === "document") {
+        const savedData = normalizeLessonData(documents[0]?.data() || {}, {
           unitId,
           title,
         });
@@ -3529,12 +3548,6 @@ const ManageLesson: React.FC = () => {
         {!canEdit && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
             <p>{LEGACY_LESSON_READ_ONLY_MESSAGE}</p>
-            <Link
-              to={LEGACY_LESSON_MANAGEMENT_ROUTE}
-              className="mt-2 inline-flex text-blue-700 underline"
-            >
-              학습 운영으로 이동
-            </Link>
           </div>
         )}
         {handoffAction && (
@@ -3543,12 +3556,6 @@ const ManageLesson: React.FC = () => {
             role="status"
           >
             <p>{buildLegacyLessonManagementHandoffMessage(handoffAction)}</p>
-            <Link
-              to={LEGACY_LESSON_MANAGEMENT_ROUTE}
-              className="mt-2 inline-flex text-blue-700 underline"
-            >
-              학습 운영으로 이동
-            </Link>
           </div>
         )}
         <div className="flex flex-1 flex-col gap-6 pb-4 lg:flex-row">
@@ -3832,21 +3839,25 @@ const ManageLesson: React.FC = () => {
         onClose={() => setSourceArchivePickerFootnoteId(null)}
         onSelectAsset={handleSelectSourceArchiveAsset}
       />
-      {(screenBusyMessage || pdfExtractionRetryOverlay) && (
-        <LoadingOverlay
-          message={
-            pdfExtractionRetryOverlay?.message ||
-            screenBusyMessage ||
-            "잠시만 기다려 주세요."
-          }
-          detail={
-            screenBusyMessage
-              ? "잠시만 기다려 주세요."
-              : pdfExtractionRetryOverlay?.phase === "requesting"
-                ? "재요청을 준비하는 중입니다."
-                : "완료되면 이 창이 자동으로 닫힙니다."
-          }
-        />
+      {screenBusyMessage?.includes("불러오는") && !pdfExtractionRetryOverlay ? (
+        <PageDataLoading />
+      ) : (
+        (screenBusyMessage || pdfExtractionRetryOverlay) && (
+          <LoadingOverlay
+            message={
+              pdfExtractionRetryOverlay?.message ||
+              screenBusyMessage ||
+              "잠시만 기다려 주세요."
+            }
+            detail={
+              screenBusyMessage
+                ? "잠시만 기다려 주세요."
+                : pdfExtractionRetryOverlay?.phase === "requesting"
+                  ? "재요청을 준비하는 중입니다."
+                  : "완료되면 이 창이 자동으로 닫힙니다."
+            }
+          />
+        )
       )}
     </div>
   );

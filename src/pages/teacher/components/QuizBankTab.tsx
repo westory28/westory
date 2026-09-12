@@ -11,7 +11,10 @@ import {
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
-import { LoadingOverlay } from "../../../components/common/LoadingState";
+import {
+  LoadingOverlay,
+  PageDataLoading,
+} from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
 import {
   getSemesterCollectionPath,
@@ -3081,7 +3084,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         colSpan={8}
                         className="px-4 py-12 text-center text-sm font-bold text-slate-400"
                       >
-                        문제와 응시 데이터를 불러오는 중...
+                        <PageDataLoading />
                       </td>
                     </tr>
                   )}

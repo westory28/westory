@@ -136,10 +136,10 @@ assert.match(
   /shouldHandoffLegacyLessonManagementMutation\s*=\s*\(\)\s*=>\s*true/u,
   "Legacy lesson mutations must remain fail-closed before a mounted legacy editor can hand off",
 );
-assert.match(
+assert.doesNotMatch(
   lessonHandoff,
-  /LEGACY_LESSON_MANAGEMENT_ROUTE\s*=\s*["']\/teacher\/learning["']/u,
-  "Legacy lesson handoff must target the canonical mounted learning route",
+  /\/teacher\/learning|학습 운영 화면/u,
+  "Retired learning operations must not be offered as a legacy editor destination",
 );
 
 const lesson = read("src/pages/teacher/ManageLesson.tsx");

@@ -214,9 +214,6 @@ const HistoryClassroomIndex: React.FC = () => {
   const [exemptionRequests, setExemptionRequests] = useState<
     HistoryClassroomExemptionRequest[]
   >([]);
-  const [requestingAssignmentId, setRequestingAssignmentId] = useState<
-    string | null
-  >(null);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
 
@@ -419,19 +416,6 @@ const HistoryClassroomIndex: React.FC = () => {
       cancelled = true;
     };
   }, [config, studentUid]);
-
-  const handleRequestExemption = async (
-    assignmentId: string,
-    exemptionId: string,
-  ) => {
-    void assignmentId;
-    void exemptionId;
-    if (!studentUid || requestingAssignmentId) return;
-    window.alert(
-      "기존 역사교실 면제권 요청은 종료되었습니다. 나의 학습에서 대상 콘텐츠를 열고 면제를 요청해 주세요.",
-    );
-    navigate("/student/learning");
-  };
 
   const classroomItems = useMemo(
     () =>
@@ -670,12 +654,6 @@ const HistoryClassroomIndex: React.FC = () => {
                     !isLegacyAssignment &&
                     (item.status === "available" || item.status === "retry");
                   const canOpen = canStart || isLegacyAssignment;
-                  const canRequestExemption =
-                    !item.passedAttempt &&
-                    item.exemptionState === "available" &&
-                    Boolean(item.availableExemption);
-                  const isRequestingExemption =
-                    requestingAssignmentId === item.assignment.id;
 
                   return (
                     <article
@@ -786,25 +764,6 @@ const HistoryClassroomIndex: React.FC = () => {
                                     ? "다시 도전하기"
                                     : statusMeta.label}
                           </button>
-
-                          {canRequestExemption && item.availableExemption && (
-                            <button
-                              type="button"
-                              disabled={Boolean(requestingAssignmentId)}
-                              onClick={() => {
-                                if (!item.availableExemption) return;
-                                void handleRequestExemption(
-                                  item.assignment.id,
-                                  item.availableExemption.id,
-                                );
-                              }}
-                              className="min-h-11 whitespace-nowrap rounded-2xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-black leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
-                            >
-                              {isRequestingExemption
-                                ? "요청 보내는 중"
-                                : "면제권 사용 요청"}
-                            </button>
-                          )}
 
                           {!item.passedAttempt &&
                             item.exemptionState === "requested" && (

@@ -1,5 +1,5 @@
 import React from "react";
-import { LoadingOverlay } from "./LoadingState";
+import { PageDataLoading } from "./LoadingState";
 
 export type CommonUiState =
   | "LOADING"
@@ -191,12 +191,7 @@ const StatePanel: React.FC<StatePanelProps> = ({
 }) => {
   const preset = DEFAULTS[state];
   if (state === "LOADING" && !compact) {
-    return (
-      <LoadingOverlay
-        message={title || preset.title}
-        detail={description || preset.description}
-      />
-    );
+    return <PageDataLoading />;
   }
   const isUrgent =
     state === "ERROR" ||

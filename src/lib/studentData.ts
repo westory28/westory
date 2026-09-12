@@ -56,21 +56,29 @@ export const loadStudentProfileEditStates = async (
       classes: StudentProfileEditState["classes"];
     }
   >("getStudentEnrollmentProfileState");
-  for (let offset = 0; offset < studentUids.length; offset += 100) {
-    const { data } = await callable({
-      semesterId,
-      studentUids: studentUids.slice(offset, offset + 100),
-    });
+  const uniqueUids = [...new Set(studentUids)];
+  // At most four bounded requests at once, instead of waiting for every batch.
+  for (let offset = 0; offset < uniqueUids.length; offset += 400) {
+    const batches = Array.from(
+      { length: Math.ceil(Math.min(400, uniqueUids.length - offset) / 100) },
+      (_, index) =>
+        uniqueUids.slice(offset + index * 100, offset + (index + 1) * 100),
+    );
+    const responses = await Promise.all(
+      batches.map((batch) => callable({ semesterId, studentUids: batch })),
+    );
     assertOwner(ownerUid);
-    if (data.semesterId !== semesterId)
-      throw new Error("조회 학기가 바뀌었습니다. 명단을 다시 열어 주세요.");
-    for (const value of data.students)
-      states.set(value.studentUid, {
-        ...value,
-        semesterId,
-        ownerUid,
-        classes: data.classes,
-      });
+    for (const { data } of responses) {
+      if (data.semesterId !== semesterId)
+        throw new Error("조회 학기가 바뀌었습니다. 명단을 다시 열어 주세요.");
+      for (const value of data.students)
+        states.set(value.studentUid, {
+          ...value,
+          semesterId,
+          ownerUid,
+          classes: data.classes,
+        });
+    }
   }
   return states;
 };

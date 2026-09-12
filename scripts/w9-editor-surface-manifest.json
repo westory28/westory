@@ -4,9 +4,9 @@
   "expectedDispositionCounts": {
     "DRAFT_REQUIRED": 4,
     "DOMAIN_DRAFT_EXISTS": 10,
-    "COMMAND_ONLY": 30,
+    "COMMAND_ONLY": 31,
     "READ_ONLY": 1,
-    "NOT_APPLICABLE": 2,
+    "NOT_APPLICABLE": 1,
     "RELEASE_DECISION": 4,
     "UNKNOWN": 0
   },
@@ -40,12 +40,12 @@
     },
     {
       "id": "D04",
-      "disposition": "NOT_APPLICABLE",
-      "file": "src/pages/teacher/Dashboard.tsx",
-      "anchors": ["/teacher/schedule"],
-      "rationale": "Dashboard 편집은 제거되고 Schedule 이동만 제공합니다.",
-      "completion": "QUERY_ONLY",
-      "adapter": "none"
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/TeacherCalendarEventModal.tsx",
+      "anchors": ["createScheduleEvent", "updateScheduleEvent", "deleteScheduleEvent", "expectedEventRevision", "expectedSemesterRevision"],
+      "rationale": "학사 일정 팝업의 짧은 편집은 명시적 저장과 기존 trusted command의 버전 검증으로 처리합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "dashboard-calendar-command-modal"
     },
     {
       "id": "STU01",
@@ -400,9 +400,9 @@
       "anchors": [
         "LEGACY_LESSON_READ_ONLY_MESSAGE",
         "blockLegacyLessonMutationAsync",
-        "LEGACY_LESSON_MANAGEMENT_ROUTE"
+        "buildLegacyLessonManagementHandoffMessage"
       ],
-      "rationale": "기존 수업자료 route는 실제 화면을 유지해 조회·제시를 제공하고, 저장 동작은 차단한 뒤 학습 운영 화면으로 안전하게 handoff합니다.",
+      "rationale": "지원하지 않는 기존 수업자료 쓰기는 차단하고 안내를 표시합니다. 폐기된 학습 운영 화면으로 이동하지 않습니다.",
       "completion": "MOUNTED_SAFE_HANDOFF",
       "adapter": "legacy-lesson-management-handoff"
     },

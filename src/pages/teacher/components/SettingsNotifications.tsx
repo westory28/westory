@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
-import { InlineLoading } from "../../../components/common/LoadingState";
+import { PageDataLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
   getW8DomainState,
@@ -1124,10 +1124,7 @@ const SettingsNotifications: React.FC = () => {
     <div className="space-y-2">{events.map(renderEventRow)}</div>
   );
 
-  if (loading)
-    return (
-      <InlineLoading message="알림 설정을 불러오는 중입니다." showWarning />
-    );
+  if (loading) return <PageDataLoading />;
 
   return (
     <div className="space-y-5">

@@ -280,9 +280,12 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
             {notices.map((notice) => {
               const noticeUnread =
                 audience === "student" && !notice.acknowledged;
-              const targetUrl =
-                targetByNoticeId.get(notice.noticeId) ||
-                (audience === "teacher" ? "/teacher/communication" : "");
+              const savedTarget = targetByNoticeId.get(notice.noticeId) || "";
+              const retiredTarget =
+                /^\/(?:teacher|student)\/(?:learning|schedule|attendance|communication)(?:[/?#]|$)/u.test(
+                  savedTarget.replace(/^#/u, ""),
+                );
+              const targetUrl = retiredTarget ? "" : savedTarget;
               const canAcknowledge =
                 noticeUnread && Boolean(state) && !state?.readOnly;
               const actionable = Boolean(targetUrl) || canAcknowledge;

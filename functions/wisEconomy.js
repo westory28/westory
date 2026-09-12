@@ -2716,7 +2716,7 @@ const queryHallAccounts = async (transaction, scope) => {
       { limit: WIS_HALL_ACCOUNT_LIMIT },
     );
   }
-  return rows.map((row) => row.data || {});
+  return rows.map((row) => row.data || {}).filter((account) => Number(account.rankEarnedTotal || 0) > 0);
 };
 
 const projectWisAccount = (account) =>
@@ -2846,7 +2846,8 @@ const rankHallEntries = (entries) => {
 const limitHallEntries = (entries, limit, includeTies) => {
   const ranked = rankHallEntries(entries);
   if (!includeTies) return ranked.slice(0, limit);
-  return ranked.filter((entry) => entry.rank <= limit);
+  // Keep equal ranks, but never turn a podium into the complete school roster.
+  return ranked.filter((entry) => entry.rank <= limit).slice(0, 20);
 };
 
 const buildWisHallOfFameProjection = ({
@@ -2856,6 +2857,7 @@ const buildWisHallOfFameProjection = ({
   studentAccount = null,
 }) => {
   const entries = accounts
+    .filter((account) => Number(account.rankEarnedTotal || 0) > 0)
     .map((account) => {
       const grade = String(account?.grade || "").trim();
       const className = String(account?.classNumber || "").trim();

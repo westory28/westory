@@ -29,7 +29,7 @@ export const findInitialLessonSelection = async <Cursor>(options: {
       const page = await options.readPage(
         path,
         cursor,
-        INITIAL_LESSON_PAGE_SIZE,
+        cursor === undefined ? 1 : INITIAL_LESSON_PAGE_SIZE,
       );
       if (!options.isCurrent()) return null;
       const selection = findLatestLessonTreeSelection(

@@ -32,7 +32,7 @@ const run = async (pages, options = {}) => {
     collectionPaths: paths,
     isCurrent: () => true,
     readPage: async (path, cursor, pageSize) => {
-      assert.equal(pageSize, 10);
+      assert.equal(pageSize, cursor === undefined ? 1 : 10);
       calls.push([path, cursor]);
       const index = cursor ?? 0;
       const rows = pages[path]?.[index] ?? [];
@@ -57,7 +57,7 @@ assert.deepEqual(first.calls, [[paths[0], undefined]]);
 // Deleted tree references must not make limit(10) incorrectly return no lesson.
 const later = await run({
   [paths[0]]: [
-    Array.from({ length: 10 }, (_, i) => lesson(`removed-${i}`, 100 - i)),
+    [lesson("removed-0", 100)],
     [lesson("current", 50)],
     [lesson("legacy", 40)],
   ],

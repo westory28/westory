@@ -1222,8 +1222,39 @@ const run = async () => {
     },
   });
   assert.equal(largeHallState.hallOfFame.snapshotVersion, 7);
+  assert.deepEqual(largeHallState.hallOfFame.gradeLeaderboardByGrade, {});
+  assert.deepEqual(largeHallState.hallOfFame.classLeaderboardByClassKey, {});
   assert.equal(largeTx.readStats.queryDocuments - beforeHallQueryReads, 206);
   assert.ok(largeTx.readStats.maxQueryDocuments <= 2_001);
+  // Initial balances do not earn a rank, and a large tie must not render
+  // the complete school roster in the Hall of Fame.
+  const tiedSeed = structuredClone(largeSeed);
+  for (const [path, account] of Object.entries(tiedSeed)) {
+    if (path.startsWith("semester_wis_accounts/")) {
+      account.balance = 500;
+      account.rankEarnedTotal = 100;
+    }
+  }
+  const tiedTx = new MemoryTransaction(tiedSeed);
+  const tiedCore = wis.createWisQueryCore({
+    store: {
+      get: (path) => tiedTx.get(path),
+      runTransaction: (callback) => callback(tiedTx),
+    },
+    assertSession: async (request) => ({
+      uid: request.auth.uid,
+      email: request.auth.token.email,
+    }),
+  });
+  const tiedHall = await tiedCore.getWisEconomyState({
+    auth: {
+      uid: "large-reader",
+      token: { email: "large-reader@yongshin-ms.ms.kr" },
+    },
+    data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT", projection: "hall-of-fame", limit: 20 },
+  });
+  assert.equal(tiedHall.hallOfFame.gradeLeaderboardByGrade["2"].length, 20);
+  assert.equal(tiedHall.hallOfFame.classLeaderboardByClassKey["2-3"].length, 20);
   const teacherOrderRequest = (cursor = "", orderStatus = "") =>
     largeQueryCore.getWisEconomyState({
       auth: {

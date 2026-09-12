@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import {
   InlineLoading,
+  PageDataLoading,
   LoadingOverlay,
 } from "../../../components/common/LoadingState";
 import ExamOmrCard, {
@@ -12564,7 +12565,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         )}
 
         {rostersLoading ? (
-          <InlineLoading message="저장된 점수를 불러오는 중입니다." />
+          <PageDataLoading />
         ) : rosters.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
             {managerCopy.emptyRosterMessage}

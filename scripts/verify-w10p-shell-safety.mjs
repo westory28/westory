@@ -55,7 +55,7 @@ assert.equal(
 );
 assert.match(
   header,
-  /<header className=\{isTeacherPortal \? "ws-teacher-header" : undefined\}>/u,
+  /<header\s+className=\{isTeacherPortal \? "ws-teacher-header" : undefined\}/u,
 );
 assert.match(header, /className="header-container"/u);
 assert.match(header, /className=\{`desktop-nav/u);

@@ -58,6 +58,33 @@ const frozenPresentationFiles = [
 ];
 
 const approvedSecurityStateClassExceptions = new Map([
+  // 2026-09-12: only the initial skeleton/text indicators were replaced by the
+  // shared centered loader. Content, editing, and saving states stay frozen.
+  [
+    "src/pages/teacher/ManageSourceArchive.tsx",
+    new Set(["animate-pulse", "space-y-2", "h-5", "h-4"]),
+  ],
+  ["src/pages/teacher/components/ExamGradingPlan.tsx", new Set(["p-10"])],
+  // The only action using these tokens led to the retired learning-operations page.
+  ["src/pages/student/history-classroom/HistoryClassroomIndex.tsx", new Set([
+    "min-h-11", "whitespace-nowrap", "py-2.5", "leading-5", "hover:bg-blue-50",
+    "disabled:border-slate-200", "disabled:bg-slate-50", "disabled:text-slate-400",
+  ])],
+  // 2026-09-12 explicit request: remove both notice boards, enlarge the teacher
+  // semester heading, and keep the remaining calendar/ranking layout usable.
+  ["src/pages/student/Dashboard.tsx", new Set([
+    "md:grid-rows-2", "student-dashboard-notice", "md:order-2", "md:row-span-1",
+    "border-yellow-200", "bg-[#fffbeb]", "text-amber-800/70", "md:order-1",
+    "md:row-span-2", "order-3", "md:order-3",
+  ])],
+  ["src/pages/teacher/Dashboard.tsx", new Set([
+    "md:flex-row", "shrink-0", "text-gray-900", "tracking-tight", "py-1", "text-xs",
+    "md:text-sm", "shadow-md", "md:grid", "md:grid-cols-5", "md:grid-rows-2", "h-auto",
+    "md:h-[calc(100vh-140px)]", "min-h-[500px]", "teacher-dashboard-notice", "order-1",
+    "md:order-2", "md:col-span-2", "md:row-span-1", "border-yellow-200", "bg-[#fffbeb]",
+    "text-amber-800/70", "order-2", "md:order-1", "md:col-span-3", "md:row-span-2",
+    "order-3", "md:order-3",
+  ])],
   // User requested arrow-free, keyboard-accessible top dropdowns and a floating
   // active submenu. Exact replacements remain checked by the shell verifier.
   [
@@ -146,7 +173,12 @@ const approvedSecurityStateClassExceptions = new Map([
   ],
   [
     "src/pages/student/components/CalendarSection.tsx",
-    new Set(["student-calendar-shell__error-message"]),
+    new Set([
+      "student-calendar-shell__error-message",
+      // Attendance controls were explicitly retired with their routes.
+      "student-calendar-shell__attendance-tools", "student-calendar-shell__attendance-label",
+      "student-calendar-shell__attendance-indicator", "student-calendar-shell__attendance-action",
+    ]),
   ],
 ]);
 
@@ -232,6 +264,47 @@ assert.doesNotMatch(
   read("src/pages/teacher/components/LessonEditorPanels.tsx"),
   /onOpenTeacherPreview|교사용 수업 화면/u,
 );
+
+// Verify the actual replacement, rather than treating removed loader tokens as
+// general permission to redesign these pages.
+assert.match(read("src/pages/teacher/ManageSourceArchive.tsx"), /\{loading \? \(\s*<PageDataLoading \/>/u);
+assert.match(read("src/pages/teacher/components/ExamGradingPlan.tsx"), /\{loadState === "loading" \? \(\s*<PageDataLoading \/>/u);
+for (const path of [
+  "src/pages/teacher/ManageSourceArchive.tsx",
+  "src/pages/teacher/ManageThinkCloud.tsx",
+  "src/pages/teacher/ManageMaps.tsx",
+  "src/pages/teacher/components/SettingsGeneral.tsx",
+  "src/pages/teacher/components/SettingsSchool.tsx",
+  "src/pages/teacher/components/SettingsInterface.tsx",
+  "src/pages/teacher/components/QuizBankTab.tsx",
+  "src/pages/teacher/components/QuizEditor.tsx",
+  "src/pages/teacher/components/ExamGradingPlan.tsx",
+  "src/pages/teacher/components/PerformanceScoreManager.tsx",
+]) {
+  assert.match(read(path), /<PageDataLoading\s*\/>/u, `${path} must render the shared initial data loader`);
+}
+
+const teacherDashboard = read("src/pages/teacher/Dashboard.tsx");
+const studentDashboard = read("src/pages/student/Dashboard.tsx");
+for (const dashboard of [teacherDashboard, studentDashboard]) {
+  assert.doesNotMatch(dashboard, /NoticeBoard|subscribeVisibleNotices/u, "Retired notice boards must not mount or subscribe");
+  assert.match(dashboard, /domain:\s*"SCHEDULE"/u, "Dashboard reads must be scoped to the visible calendar");
+  assert.match(dashboard, /<WisRankingPanel/u, "The existing Wis panel must remain available");
+}
+assert.match(teacherDashboard, /<h1[^>]*text-2xl[^>]*md:text-3xl[^>]*>[\s\S]*?\{year\}학년도 \{semester\}학기[\s\S]*?<\/h1>/u);
+assert.doesNotMatch(teacherDashboard, /<h1[^>]*>\s*대시보드/u);
+assert.match(teacherDashboard, /<TeacherCalendarEventModal/u);
+assert.match(teacherDashboard, /onDateDoubleClick=/u);
+assert.match(teacherDashboard, /onEventDoubleClick=/u);
+const dashboardCalendar = read("src/pages/teacher/components/TeacherCalendarSection.tsx");
+assert.match(dashboardCalendar, /currentHandlers\.current\.onDateDoubleClick\(dateStr\)/u, "Calendar callbacks must follow current permission/data state after first mount");
+const calendarModal = read("src/pages/teacher/components/TeacherCalendarEventModal.tsx");
+for (const command of ["createScheduleEvent", "updateScheduleEvent", "deleteScheduleEvent"]) assert.match(calendarModal, new RegExp(`\\b${command}\\s*\\(`, "u"));
+assert.match(calendarModal, /expectedSemesterRevision/u);
+assert.match(calendarModal, /expectedEventRevision/u);
+assert.match(calendarModal, /resolveScheduleTargets/u);
+assert.doesNotMatch(calendarModal, /\b(?:setDoc|updateDoc|deleteDoc|addDoc)\s*\(/u);
+assert.doesNotMatch(read("src/pages/student/components/CalendarSection.tsx"), /onAttendanceCheck|attendance-tools/u);
 
 const app = read("src/App.tsx");
 const main = read("src/main.tsx");

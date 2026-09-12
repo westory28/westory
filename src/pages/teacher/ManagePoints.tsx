@@ -8,7 +8,7 @@ import React, {
 import { useSearchParams } from "react-router-dom";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import { useAppToast } from "../../components/common/AppToastProvider";
-import { InlineLoading } from "../../components/common/LoadingState";
+import { PageDataLoading } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   adjustLegacyTeacherWis as adjustPoints,
@@ -288,7 +288,7 @@ const createRankEmojiCollectionDraft = (
   };
 };
 
-const ManagePoints: React.FC = () => {
+const ManagePointsScope: React.FC = () => {
   const { config, currentUser, userData, interfaceConfig } = useAuth();
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -296,7 +296,11 @@ const ManagePoints: React.FC = () => {
   const canRead = canReadPoints(userData, currentUser?.email);
   const canManage = canManagePoints(userData, currentUser?.email);
 
-  const [activeTab, setActiveTab] = useState<TeacherPointTab>("overview");
+  const [activeTab, setActiveTab] = useState<TeacherPointTab>(() => {
+    const requested = searchParams.get("tab") as TeacherPointTab;
+    return requested in TEACHER_POINT_TAB_LABELS ? requested : "overview";
+  });
+  const loadRequestRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
   const [wallets, setWallets] = useState<PointWallet[]>([]);
@@ -364,7 +368,7 @@ const ManagePoints: React.FC = () => {
   } | null>(null);
   const loadHallOfFameState = useCallback(
     () => getLegacyTeacherWisHallOfFameState(config),
-    [config],
+    [currentUser?.uid, config?.year, config?.semester],
   );
   const saveHallOfFameConfig = (
     hallOfFame: Parameters<
@@ -696,6 +700,7 @@ const ManagePoints: React.FC = () => {
   };
 
   const loadAll = async () => {
+    const requestId = ++loadRequestRef.current;
     if (!canRead) {
       setLoading(false);
       return;
@@ -704,6 +709,10 @@ const ManagePoints: React.FC = () => {
     setLoading(true);
     setLoadErrorMessage("");
     try {
+      // Hall of fame owns its single projection read. Other tabs request only
+      // the records they actually render, rather than the entire economy.
+      if (activeTab === "hall-of-fame") return;
+      const needsWallets = activeTab === "overview" || activeTab === "grant";
       const [
         nextWallets,
         nextSchoolOptions,
@@ -711,60 +720,66 @@ const ManagePoints: React.FC = () => {
         nextProducts,
         nextOrders,
       ] = await Promise.all([
-        listPointWallets(config),
-        getPointSchoolOptions(config),
+        needsWallets ? listPointWallets(config) : Promise.resolve([]),
+        needsWallets
+          ? getPointSchoolOptions(config)
+          : Promise.resolve({
+              grades: grantGradeOptions,
+              classes: grantClassOptions,
+            }),
         getPointPolicy(config),
-        listPointProducts(config, false),
-        listPointOrders(config, { limitCount: 200 }),
+        activeTab === "products"
+          ? listPointProducts(config, false)
+          : Promise.resolve([]),
+        activeTab === "requests"
+          ? listPointOrders(config, { limitCount: 200 })
+          : Promise.resolve([]),
       ]);
+      if (requestId !== loadRequestRef.current) return;
       const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
         needsPointRankLegacyFallback(wallet),
       )
         ? await getPointRankManualAdjustEarnedPointsMap(config)
         : {};
+      if (requestId !== loadRequestRef.current) return;
 
-      setWallets(nextWallets);
-      setGrantGradeOptions(nextSchoolOptions.grades);
-      setGrantClassOptions(nextSchoolOptions.classes);
+      if (needsWallets) {
+        setWallets(nextWallets);
+        setGrantGradeOptions(nextSchoolOptions.grades);
+        setGrantClassOptions(nextSchoolOptions.classes);
+      }
       setSavedPolicy(nextPolicy);
-      setPolicyDraft(nextPolicy);
-      setPolicyDirty(false);
-      setPolicyFeedbackMessage("");
-      setPolicyFeedbackTone(null);
-      setRankThemeDraft(createRankThemeDraft(nextPolicy.rankPolicy));
-      setRankThemeDirty(false);
-      setRankThemeFeedbackMessage("");
-      setRankThemeFeedbackTone(null);
-      setRankSettingsDraft(createRankSettingsDraft(nextPolicy.rankPolicy));
-      setRankSettingsDirty(false);
-      setRankSettingsFeedbackMessage("");
-      setRankSettingsFeedbackTone(null);
-      setRankEmojiDraft(createRankEmojiCollectionDraft(nextPolicy.rankPolicy));
-      setRankEmojiDirty(false);
-      setRankEmojiFeedbackMessage("");
-      setRankEmojiFeedbackTone(null);
-      setProducts(nextProducts);
-      setProductOrderDirty(false);
-      setProductOrderSaving(false);
-      setProductOrderFeedback("");
-      setOrders(nextOrders);
-      setRankManualAdjustEarnedPointsByUid(
-        nextRankManualAdjustEarnedPointsByUid,
-      );
+      if (!policyDirty) setPolicyDraft(nextPolicy);
+      if (!rankThemeDirty)
+        setRankThemeDraft(createRankThemeDraft(nextPolicy.rankPolicy));
+      if (!rankSettingsDirty)
+        setRankSettingsDraft(createRankSettingsDraft(nextPolicy.rankPolicy));
+      if (!rankEmojiDirty)
+        setRankEmojiDraft(
+          createRankEmojiCollectionDraft(nextPolicy.rankPolicy),
+        );
+      if (activeTab === "products" && !productOrderDirty)
+        setProducts(nextProducts);
+      if (activeTab === "requests") setOrders(nextOrders);
+      if (needsWallets)
+        setRankManualAdjustEarnedPointsByUid(
+          nextRankManualAdjustEarnedPointsByUid,
+        );
 
       const nextSelectedUid =
         selectedUid && nextWallets.some((wallet) => wallet.uid === selectedUid)
           ? selectedUid
           : nextWallets[0]?.uid || "";
-      setSelectedUid(nextSelectedUid);
+      if (needsWallets) setSelectedUid(nextSelectedUid);
     } catch (error: any) {
+      if (requestId !== loadRequestRef.current) return;
       console.error("Failed to load W7 wis state:", error);
       setLoadErrorMessage(
         error?.message ||
           "위스 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
       );
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   };
 
@@ -786,10 +801,13 @@ const ManagePoints: React.FC = () => {
 
   useEffect(() => {
     void loadAll();
-  }, [canRead, config]);
+    return () => {
+      loadRequestRef.current += 1;
+    };
+  }, [canRead, currentUser?.uid, config?.year, config?.semester, activeTab]);
 
   useEffect(() => {
-    if (!selectedUid) {
+    if (!selectedUid || activeTab !== "overview") {
       setTransactions([]);
       return;
     }
@@ -808,7 +826,7 @@ const ManagePoints: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config, selectedUid]);
+  }, [config?.year, config?.semester, selectedUid, activeTab]);
 
   useEffect(() => {
     if (!selectedEditableTransaction) {
@@ -1774,12 +1792,7 @@ const ManagePoints: React.FC = () => {
               : ""
           }
         >
-          {loading && (
-            <InlineLoading
-              message="위스 정보를 불러오는 중입니다."
-              showWarning
-            />
-          )}
+          {loading && <PageDataLoading />}
 
           {!loading && !!loadErrorMessage && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
@@ -1979,6 +1992,17 @@ const ManagePoints: React.FC = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+const ManagePoints: React.FC = () => {
+  const { currentUser, config } = useAuth();
+  // Drafts and outstanding reads belong to exactly one account and semester.
+  // Tab changes retain edits; changing scope remounts the complete editor.
+  return (
+    <ManagePointsScope
+      key={`${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`}
+    />
   );
 };
 

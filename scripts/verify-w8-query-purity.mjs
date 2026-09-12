@@ -176,14 +176,16 @@ for (const name of [
 }
 
 const app = read("src/App.tsx");
-assert.match(app, /import\("\.\/pages\/student\/W8StudentHub"\)/u);
-assert.match(app, /import\("\.\/pages\/teacher\/W8TeacherHub"\)/u);
-assert.match(
-  app,
-  /import\("\.\/pages\/teacher\/ManageSchedule"\)/u,
-  "The Production schedule presentation adapter must remain mounted.",
-);
-const scheduleAdapter = read("src/pages/teacher/ManageSchedule.tsx");
+// The user retired the standalone W8 operations pages. Schedule editing now
+// lives in the dashboard modal and still uses the same trusted commands.
+assert.doesNotMatch(app, /import\("\.\/pages\/(student\/W8StudentHub|teacher\/W8TeacherHub|teacher\/ManageSchedule)"\)/u);
+const scheduleAdapter = read("src/pages/teacher/components/TeacherCalendarEventModal.tsx");
+const dashboard = read("src/pages/teacher/Dashboard.tsx");
+assert.match(dashboard, /<TeacherCalendarEventModal/u);
+assert.match(scheduleAdapter, /expectedSemesterRevision/u);
+assert.match(scheduleAdapter, /expectedEventRevision/u);
+assert.match(scheduleAdapter, /resolveScheduleTargets/u);
+assert.doesNotMatch(scheduleAdapter, /\b(?:setDoc|updateDoc|deleteDoc|addDoc)\s*\(/u);
 for (const command of [
   "createScheduleEvent",
   "updateScheduleEvent",
@@ -195,8 +197,8 @@ for (const command of [
     `Schedule adapter does not use ${command}.`,
   );
 }
-assert.match(scheduleAdapter, /getW8DomainState/u);
-assert.match(scheduleAdapter, /domain:\s*"SCHEDULE"/u);
+assert.match(dashboard, /getW8DomainState/u);
+assert.match(dashboard, /domain:\s*"SCHEDULE"/u);
 const studentScheduleAdapter = read("src/lib/legacyStudentScheduleAdapter.ts");
 assert.match(studentScheduleAdapter, /getW8DomainState/u);
 assert.match(studentScheduleAdapter, /domain:\s*"SCHEDULE"/u);

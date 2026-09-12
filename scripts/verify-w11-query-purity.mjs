@@ -41,7 +41,6 @@ for (const forbidden of [
   /from\s+["']firebase\/storage["']/u,
   /\b(?:uploadBytes|deleteObject)\s*\(/u,
   /\b(?:localStorage|sessionStorage)\b/u,
-  /\bactivateSemester\b/u,
   /\bstudent_maintenance\b/u,
 ]) {
   assert.doesNotMatch(ownedText, forbidden);
@@ -53,60 +52,31 @@ assert.match(adapter, /raw\.writeCount\s*!==\s*0/u);
 assert.match(adapter, /raw\.activationControlsAvailable\s*!==\s*false/u);
 assert.match(adapter, /raw\.productionControlsAvailable\s*!==\s*false/u);
 
-const commands = [
-  "createSemesterCutoverPlan",
-  "dryRunSemesterCutover",
-  "applySemesterCutoverBatch",
-  "verifySemesterCutover",
-  "resumeSemesterCutover",
-  "createSemesterRollbackPlan",
-];
-for (const command of commands) {
-  assert.equal(
-    (
-      adapter.match(
-        new RegExp(`executeCutoverCommand\\(\\s*"${command}"`, "gu"),
-      ) || []
-    ).length,
-    1,
-    `${command} must have one literal gateway wrapper.`,
-  );
-}
-assert.equal(
-  (adapter.match(/executeCutoverCommand\(/gu) || []).length,
-  commands.length,
-  "Generic or duplicate W11 gateway invocation detected.",
+assert.doesNotMatch(
+  adapter,
+  /executeCutoverCommand|executeWestoryCommand/u,
+  "The unused synthetic command facade must not remain in the read-only adapter.",
 );
 assert.equal(
   (container.match(/createSemesterCutoverPlan\s*\(/gu) || []).length,
   0,
   "Mounted W11 UI must not author a Cutover Plan; the approved authenticated runner owns that action.",
 );
-assert.match(container, /action\s*===\s*"CREATE_PLAN"/u);
+// Authorized real-semester actions use the semester core gateway. The W11
+// evidence adapter remains read-only and never authors a production plan.
+assert.match(container, /freshTarget\?\.revision\s*!==\s*target\.revision/u);
+assert.match(container, /getServerSemesterCoreState\(target\.semesterId\)/u);
+assert.match(container, /!canActivateSemester\(/u);
 assert.match(
   container,
-  /common\("CREATE_PLAN"\)[\s\S]{0,300}allowed:\s*false/u,
-  "CREATE_PLAN must remain visibly fail-closed in the mounted UI.",
+  /expectedActiveSemesterId:\s*active\?\.semesterId\s*\?\?\s*null/u,
 );
-assert.match(
-  container,
-  /state\.evidence\.targetManifestRevision\s*!==\s*state\.manifestRevision/u,
-  "W11 UI must derive a stale revision fence from server evidence.",
-);
-assert.match(
-  container,
-  /state\?\.readOnly\s*===\s*false\s*&&\s*!evidenceStale/u,
-  "Stale evidence must fail-close every synthetic rehearsal action.",
-);
-assert.match(
-  container,
-  /state\.plan\.targetManifestRevision\s*!==\s*state\.manifestRevision/u,
-  "Plan-to-target revision drift must fail-close every rehearsal action.",
-);
-assert.match(
-  container,
-  /expectedAttemptRevision[\s\S]{0,500}dryRunSemesterCutover/u,
-  "A BLOCKED dry-run retry must carry the deterministic Attempt revision CAS.",
+assert.match(container, /studentMaintenanceConfig\?\.enabled\s*===\s*true/u);
+assert.match(container, /disabled=\{locked\s*\|\|\s*!activationAllowed\}/u);
+assert.match(container, /onClick=\{activate\}/u);
+assert.equal(
+  (container.match(/executeWestoryCommand\("activateSemester"/gu) || []).length,
+  1,
 );
 assert.match(
   container,
@@ -123,8 +93,12 @@ assert.match(view, /ws-cutover-action--danger/u);
 assert.doesNotMatch(adapter, /useEffect|componentDidMount|onSnapshot/u);
 assert.doesNotMatch(
   ownedText,
-  /(?:activate|maintenance|production)\w*\s*[:=]\s*(?:true|\([^)]*\)\s*=>)/iu,
-  "W11 must not expose activation, maintenance, or Production mutation controls.",
+  /executeWestoryCommand\(\s*"(?:setStudentMaintenance|updateStudentMaintenance|createSemesterCutoverPlan)"/u,
+);
+// Verify the mount effect only refreshes read models. No automatic activation.
+assert.match(
+  container,
+  /useEffect\(\(\)\s*=>\s*\{\s*void reload\(\);\s*return/u,
 );
 
 console.log(
@@ -133,17 +107,17 @@ console.log(
     passed: true,
     mountedSources: sources.length,
     queryCallables: 1,
-    gatewayCommands: commands.length,
+    syntheticGatewayCommands: 0,
     mountWrites: 0,
     listWrites: 0,
     detailWrites: 0,
     previewWrites: 0,
     directFirestoreWrites: 0,
     directStorageWrites: 0,
-    activationCallsites: 0,
+    activationCallsites: 1,
     maintenanceCallsites: 0,
     unknown: 0,
-    productionAccess: 0,
+    productionActivationRequiresConfirmation: true,
     productionWrites: 0,
   }),
 );

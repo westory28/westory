@@ -45,6 +45,11 @@ jobs:
       - run: node scripts/verify-semester-date-defaults.mjs
       - run: node scripts/verify-semester-archive-view.mjs
       - run: node scripts/verify-lesson-initial-load.mjs
+      - run: node scripts/verify-session-query-cache.mjs
+      - run: node scripts/verify-student-profile-batching.mjs
+      - run: node scripts/verify-teacher-navigation-preload.mjs
+      - run: node scripts/verify-enrollment-roster-form.mjs
+      - run: node scripts/verify-semester-transition-guide.mjs
       - run: npm run verify:typescript-baseline
       - run: npm run verify:access-gate
       - run: npm run verify:session-policy

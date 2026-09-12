@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 const DEFAULT_WARNING =
   "자료를 불러오는 중에는 새로고침하거나 다른 화면으로 이동하지 마세요.";
@@ -87,3 +87,18 @@ export const InlineLoading: React.FC<LoadingStateProps> = ({
     />
   </div>
 );
+
+/** Shared initial page-read indicator. Navigation remains available while
+ * protected data and controls stay behind their page's loading boundary. */
+export const PageDataLoading: React.FC<LoadingStateProps> = () => {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), 150);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return visible ? (
+    <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center px-4">
+      <LoadingCard message="자료를 불러오는 중입니다." />
+    </div>
+  ) : null;
+};

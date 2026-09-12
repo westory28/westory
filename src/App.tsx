@@ -15,7 +15,7 @@ import { StepUpReauthProvider } from "./components/auth/StepUpReauthProvider";
 import ProtectedAccessGate from "./components/auth/ProtectedAccessGate";
 import StudentMaintenanceGate from "./components/auth/StudentMaintenanceGate";
 import StatePanel from "./components/common/StatePanel";
-import { LoadingOverlay } from "./components/common/LoadingState";
+import { PageDataLoading } from "./components/common/LoadingState";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
@@ -43,10 +43,6 @@ const StudentMaps = lazyWithRetry(
 const StudentThinkCloud = lazyWithRetry(
   () => import("./pages/student/lesson/ThinkCloud"),
   "student-think-cloud",
-);
-const W8StudentHub = lazyWithRetry(
-  () => import("./pages/student/W8StudentHub"),
-  "w8-student-hub",
 );
 const StudentQuizIndex = lazyWithRetry(
   () => import("./pages/student/quiz/QuizIndex"),
@@ -108,17 +104,9 @@ const SemesterCutoverCenter = lazyWithRetry(
   () => import("./pages/teacher/SemesterCutoverCenter"),
   "semester-cutover-center",
 );
-const ManageSchedule = lazyWithRetry(
-  () => import("./pages/teacher/ManageSchedule"),
-  "manage-schedule",
-);
 const ManageLesson = lazyWithRetry(
   () => import("./pages/teacher/ManageLesson"),
   "manage-lesson",
-);
-const W8TeacherHub = lazyWithRetry(
-  () => import("./pages/teacher/W8TeacherHub"),
-  "w8-teacher-hub",
 );
 const ManageHistoryDictionary = lazyWithRetry(
   () => import("./pages/teacher/ManageHistoryDictionary"),
@@ -174,8 +162,8 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
   return <Navigate to={`${pathname}${search ? `?${search}` : ""}`} replace />;
 };
 
-const RouteContentFallback: React.FC<{ message?: string }> = ({ message }) => (
-  <LoadingOverlay message={message || "자료를 불러오는 중입니다."} />
+const RouteContentFallback: React.FC<{ message?: string }> = () => (
+  <PageDataLoading />
 );
 
 const renderWithLayout = (children: React.ReactNode, message?: string) => (
@@ -384,13 +372,6 @@ const App: React.FC = () => {
                       )}
                     />
                     <Route
-                      path="/teacher/schedule"
-                      element={renderWithLayout(
-                        <ManageSchedule />,
-                        "일정 관리 화면을 준비하는 중입니다.",
-                      )}
-                    />
-                    <Route
                       path="/teacher/lesson"
                       element={renderWithLayout(
                         <ManageLesson />,
@@ -458,55 +439,6 @@ const App: React.FC = () => {
                       element={renderWithLayout(
                         <Calendar />,
                         "일정을 준비하는 중입니다.",
-                      )}
-                    />
-                    <Route
-                      path="/student/learning"
-                      element={renderWithLayout(
-                        <W8StudentHub />,
-                        "학습 자료를 준비하는 중입니다.",
-                      )}
-                    />
-                    <Route
-                      path="/student/schedule"
-                      element={renderWithLayout(
-                        <W8StudentHub />,
-                        "일정을 준비하는 중입니다.",
-                      )}
-                    />
-                    <Route
-                      path="/student/attendance"
-                      element={renderWithLayout(
-                        <W8StudentHub />,
-                        "출석 기록을 준비하는 중입니다.",
-                      )}
-                    />
-                    <Route
-                      path="/student/communication"
-                      element={renderWithLayout(
-                        <W8StudentHub />,
-                        "공지와 알림을 준비하는 중입니다.",
-                      )}
-                    />
-                    <Route
-                      path="/teacher/learning"
-                      element={renderWithLayout(
-                        <W8TeacherHub />,
-                        "학습 운영 화면을 준비하는 중입니다.",
-                      )}
-                    />
-                    <Route
-                      path="/teacher/attendance"
-                      element={renderWithLayout(
-                        <W8TeacherHub />,
-                        "출석 운영 화면을 준비하는 중입니다.",
-                      )}
-                    />
-                    <Route
-                      path="/teacher/communication"
-                      element={renderWithLayout(
-                        <W8TeacherHub />,
-                        "공지 운영 화면을 준비하는 중입니다.",
                       )}
                     />
                     <Route

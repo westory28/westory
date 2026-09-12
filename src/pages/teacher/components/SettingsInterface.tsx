@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
-import { InlineLoading } from "../../../components/common/LoadingState";
+import { PageDataLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import {
   cloneDefaultMenus,
@@ -447,10 +447,7 @@ const SettingsInterface: React.FC = () => {
     }
   };
 
-  if (loading)
-    return (
-      <InlineLoading message="화면 설정을 불러오는 중입니다." showWarning />
-    );
+  if (loading) return <PageDataLoading />;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

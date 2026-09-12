@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { InlineLoading } from "../../components/common/LoadingState";
+import {
+  InlineLoading,
+  PageDataLoading,
+} from "../../components/common/LoadingState";
 import StatePanel from "../../components/common/StatePanel";
 import MapSidebar from "../../components/common/MapSidebar";
 import MapViewer from "../../components/common/MapViewer";
@@ -1528,10 +1531,7 @@ const ManageMaps: React.FC = () => {
             />
           )}
           {loading ? (
-            <InlineLoading
-              message="지도 자료를 불러오는 중입니다."
-              showWarning
-            />
+            <PageDataLoading />
           ) : currentPreviewItem ? (
             <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-100 p-4 pb-4 sm:p-6 sm:pb-4 lg:p-8 lg:pb-4">

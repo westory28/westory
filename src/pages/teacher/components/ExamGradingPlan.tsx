@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { PageDataLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import { collection, doc, getDocs, query, orderBy } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -1099,9 +1100,7 @@ const ExamGradingPlan: React.FC = () => {
 
         <div className="space-y-4 lg:h-[calc(100vh-300px)] lg:overflow-y-auto lg:pr-2">
           {loadState === "loading" ? (
-            <div className="text-center p-10 text-gray-400">
-              데이터를 불러오는 중...
-            </div>
+            <PageDataLoading />
           ) : loadState === "error" ? (
             <div className="text-center py-12 text-red-700 bg-red-50 rounded-xl border border-red-200">
               <p className="font-bold">

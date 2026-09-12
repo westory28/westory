@@ -1,4 +1,5 @@
 import { POINT_POLICY_FALLBACK } from "./points";
+import { auth } from "./firebase";
 import {
   forgetLegacyWisMutationIntent,
   getLegacyWisMutationIntent,
@@ -93,6 +94,7 @@ const queryState = (
 ) => {
   const normalized = normalizeQueryContext(context);
   const key = [
+    auth.currentUser?.uid || "",
     audience,
     options.projection || "",
     options.accountId || "",

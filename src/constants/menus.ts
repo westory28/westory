@@ -25,11 +25,9 @@ export const MENUS: MenuConfig = {
         { name: "역사 사전", url: "/student/lesson/history-dictionary" },
         { name: "지도", url: "/student/lesson/maps" },
         { name: "싱크 클라우드", url: "/student/lesson/think-cloud" },
-        { name: "학습 현황", url: "/student/learning" },
-        { name: "일정", url: "/student/schedule" },
+
         { name: "학사 일정", url: "/student/calendar" },
-        { name: "출석", url: "/student/attendance" },
-        { name: "공지·소통", url: "/student/communication" },
+
         { name: "지난 학기", url: "/student/mypage/archive" },
       ],
     },
@@ -85,14 +83,6 @@ export const MENUS: MenuConfig = {
         { name: "지도", url: "/teacher/lesson/maps" },
         { name: "사료 창고", url: "/teacher/lesson/source-archive" },
         { name: "싱크 클라우드 관리", url: "/teacher/lesson/think-cloud" },
-        { name: "학습 운영", url: "/teacher/learning" },
-        { name: "일정", url: "/teacher/schedule" },
-        {
-          name: "공휴일 동기화",
-          url: "/teacher/schedule?adminTools=holidays",
-        },
-        { name: "출석", url: "/teacher/attendance" },
-        { name: "공지·소통", url: "/teacher/communication" },
       ],
     },
     {
@@ -148,6 +138,15 @@ const toSafeText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
 const LEGACY_MENU_URL_PREFIXES = [
+  "/student/learning",
+  "/student/schedule",
+  "/student/attendance",
+  "/student/communication",
+  "/teacher/learning",
+  "/teacher/schedule",
+  "/teacher/attendance",
+  "/teacher/communication",
+
   "/student/quiz/history2",
   "/teacher/quiz/history2",
 ];
@@ -256,7 +255,8 @@ const mergeFallbackChildren = (
           : "";
     const preserveProductionChildOrder =
       migratedModernParentUrl !== "" &&
-      currentChildren.some((child) => child.url === migratedModernParentUrl);
+      (currentChildren.some((child) => child.url === migratedModernParentUrl) ||
+        !currentChildren.some((child) => child.url === fallbackItem.url));
     const mergedChildren = preserveProductionChildOrder
       ? fallbackItem.children.map((fallbackChild) => {
           const savedChild = currentChildren.find(

@@ -11,6 +11,7 @@ import {
 } from "../../lib/studentMenuAccess";
 import { runAfterNextPaint } from "../../lib/browserTasks";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
+import { preloadTeacherRouteCode } from "../../lib/teacherRoutePreload";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
 import { removeStorage } from "../../lib/safeStorage";
 import { runtimeEnvironment } from "../../lib/firebase";
@@ -212,6 +213,16 @@ const Header: React.FC<Record<string, unknown>> = () => {
       return canManageSettings(userData, currentUser?.email || "");
     }
     return canAccessTeacherPath(pathname, userData, currentUser?.email || "");
+  };
+  const preloadMenuLink = (target: EventTarget | null) => {
+    if (!currentUser || !isTeacherPortal || !(target instanceof Element))
+      return;
+    const href =
+      target.closest<HTMLAnchorElement>("a")?.getAttribute("href") || "";
+    const route = href.startsWith("#/") ? href.slice(1) : href;
+    if (route.startsWith("/teacher/") && canViewTeacherMenuUrl(route)) {
+      preloadTeacherRouteCode(route);
+    }
   };
   const menuItems =
     portal === "teacher"
@@ -691,7 +702,13 @@ const Header: React.FC<Record<string, unknown>> = () => {
 
   return (
     <>
-      <header className={isTeacherPortal ? "ws-teacher-header" : undefined}>
+      <header
+        className={isTeacherPortal ? "ws-teacher-header" : undefined}
+        onPointerOverCapture={(event) => {
+          if (event.pointerType === "mouse") preloadMenuLink(event.target);
+        }}
+        onFocusCapture={(event) => preloadMenuLink(event.target)}
+      >
         <div className="header-container">
           <div className="flex items-center gap-4 h-full">
             <Link to={home} className="logo-text">

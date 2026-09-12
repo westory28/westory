@@ -1,10 +1,4 @@
 import { getHttpsCallable } from "./firebase";
-import {
-  executeWestoryCommand,
-  type W2CommandPayloads,
-  type W2CommandResults,
-  type W2CommandType,
-} from "./commandGateway";
 
 export type CutoverOperationType =
   | "SEMESTER_MANIFEST"
@@ -161,13 +155,6 @@ export interface CreateCutoverPlanPayload {
   targetManifestRevision: number;
   copyDenylist: string[];
   operations: Array<Omit<CutoverOperation, "strategy">>;
-}
-
-export interface CutoverCommandContext {
-  planId: string;
-  attemptId: string;
-  expectedPlanRevision: number;
-  expectedAttemptRevision: number;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -454,44 +441,3 @@ export const getSemesterCutoverState = async (input: {
     writeCount: 0,
   };
 };
-
-const executeCutoverCommand = <T extends W2CommandType>(
-  type: T,
-  payload: W2CommandPayloads[T],
-) => executeWestoryCommand(type, payload);
-
-export const createSemesterCutoverPlan = (payload: CreateCutoverPlanPayload) =>
-  executeCutoverCommand("createSemesterCutoverPlan", payload);
-export const dryRunSemesterCutover = (input: {
-  planId: string;
-  expectedPlanRevision: number;
-  expectedAttemptRevision?: number;
-}) => executeCutoverCommand("dryRunSemesterCutover", input);
-export const applySemesterCutoverBatch = (
-  input: CutoverCommandContext & {
-    operationKeys: string[];
-    failures?: Array<{
-      operationKey: string;
-      errorCode: string;
-      errorReason?: string;
-    }>;
-  },
-) => executeCutoverCommand("applySemesterCutoverBatch", input);
-export const verifySemesterCutover = (input: CutoverCommandContext) =>
-  executeCutoverCommand("verifySemesterCutover", input);
-export const resumeSemesterCutover = (
-  input: CutoverCommandContext & { operationKeys: string[]; reason: string },
-) => executeCutoverCommand("resumeSemesterCutover", input);
-export const createSemesterRollbackPlan = (
-  input: CutoverCommandContext & { reason: string },
-) => executeCutoverCommand("createSemesterRollbackPlan", input);
-
-export type SemesterCutoverCommandResults = Pick<
-  W2CommandResults,
-  | "createSemesterCutoverPlan"
-  | "dryRunSemesterCutover"
-  | "applySemesterCutoverBatch"
-  | "verifySemesterCutover"
-  | "resumeSemesterCutover"
-  | "createSemesterRollbackPlan"
->;

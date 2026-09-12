@@ -14,7 +14,7 @@
     {"id":"BULK-WIS-01","disposition":"DOMAIN_ATOMIC","file":"src/pages/teacher/WisEconomyManager.tsx","anchors":["createAccounts","createWisAccounts"]},
     {"id":"BULK-GRADE-01","disposition":"BULK_FRAMEWORK","file":"src/pages/teacher/components/GradeEvidenceManager.tsx","anchors":["executeLifecycleAction","finalize","publish"]},
     {"id":"BULK-NOTICE-01","disposition":"SINGLE_COMMAND","file":"src/pages/teacher/W8TeacherHub.tsx","anchors":["targetClassIds","targetUserIds","createNotice"]},
-    {"id":"BULK-ROSTER-01","disposition":"DOMAIN_ATOMIC","file":"src/pages/teacher/components/SettingsArchiveEnrollment.tsx","anchors":["importEnrollmentRoster"]},
+    {"id":"BULK-ROSTER-01","disposition":"DOMAIN_ATOMIC","file":"src/pages/teacher/components/EnrollmentRosterImport.tsx","anchors":["importEnrollmentRoster"]},
     {"id":"BULK-STUDENT-DELETE","disposition":"RELEASE_DECISION","file":"src/pages/teacher/StudentList.tsx","anchors":["handleBulkDelete"]},
     {"id":"BULK-STUDENT-PROMOTE","disposition":"RELEASE_DECISION","file":"src/pages/teacher/StudentList.tsx","anchors":["handleBulkPromote"]},
     {"id":"BULK-DIC-XLSX","disposition":"RELEASE_DECISION","file":"src/lib/historyDictionary.ts","anchors":["saveHistoryDictionaryTermsBulk"]},

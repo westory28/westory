@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "functionalBaseline": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
   "presentationBaseline": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
-  "rawRouteCount": 48,
+  "rawRouteCount": 40,
   "canonicalCounts": {
-    "student": 22,
-    "teacher": 15,
+    "student": 18,
+    "teacher": 11,
     "admin": 2,
     "support": 5
   },
@@ -37,7 +37,6 @@
     { "path": "/teacher/settings/cutover", "role": "admin", "component": "SemesterCutoverCenter", "contextual": true },
     { "path": "/teacher/settings", "role": "admin", "component": "Settings", "contextual": true },
     { "path": "/teacher/points", "role": "teacher", "component": "ManagePoints" },
-    { "path": "/teacher/schedule", "role": "teacher", "component": "ManageSchedule" },
     { "path": "/teacher/lesson", "role": "teacher", "component": "ManageLesson" },
     { "path": "/teacher/lesson/history-dictionary", "role": "teacher", "component": "ManageHistoryDictionary" },
     { "path": "/teacher/lesson/maps", "role": "teacher", "component": "ManageMaps" },
@@ -48,13 +47,6 @@
     { "path": "/student/history", "role": "student", "component": "StudentHistory" },
     { "path": "/student/points", "role": "student", "component": "StudentPoints" },
     { "path": "/student/calendar", "role": "student", "component": "Calendar" },
-    { "path": "/student/learning", "role": "student", "component": "W8StudentHub" },
-    { "path": "/student/schedule", "role": "student", "component": "W8StudentHub" },
-    { "path": "/student/attendance", "role": "student", "component": "W8StudentHub" },
-    { "path": "/student/communication", "role": "student", "component": "W8StudentHub" },
-    { "path": "/teacher/learning", "role": "teacher", "component": "W8TeacherHub" },
-    { "path": "/teacher/attendance", "role": "teacher", "component": "W8TeacherHub" },
-    { "path": "/teacher/communication", "role": "teacher", "component": "W8TeacherHub" },
     { "path": "/developer-log", "role": "support", "component": "DeveloperLog", "contextual": true },
     { "path": "/developer-log/:postId", "role": "support", "component": "DeveloperLog", "contextual": true },
     { "path": "*", "role": "support", "component": "NotFound", "contextual": true }
@@ -71,11 +63,7 @@
           ["싱크 클라우드", "/student/lesson/think-cloud"]
         ],
         "appendedChildren": [
-          ["학습 현황", "/student/learning"],
-          ["일정", "/student/schedule"],
           ["학사 일정", "/student/calendar"],
-          ["출석", "/student/attendance"],
-          ["공지·소통", "/student/communication"],
           ["지난 학기", "/student/mypage/archive"]
         ]
       },
@@ -125,11 +113,6 @@
           ["싱크 클라우드 관리", "/teacher/lesson/think-cloud"]
         ],
         "appendedChildren": [
-          ["학습 운영", "/teacher/learning"],
-          ["일정", "/teacher/schedule"],
-          ["공휴일 동기화", "/teacher/schedule?adminTools=holidays"],
-          ["출석", "/teacher/attendance"],
-          ["공지·소통", "/teacher/communication"]
         ]
       },
       {

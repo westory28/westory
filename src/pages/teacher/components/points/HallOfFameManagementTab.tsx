@@ -6,6 +6,7 @@ import WisHallOfFameStudentPreview, {
   type HallOfFamePreviewView,
 } from "../../../../components/common/WisHallOfFameStudentPreview";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
+import { PageDataLoading } from "../../../../components/common/LoadingState";
 import { createStableLegacyMutationActionKey } from "../../../../lib/legacyWisMutationIntent";
 import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
 import {
@@ -897,14 +898,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       )}
 
       {loading ? (
-        <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center text-gray-400 shadow-sm">
-          <div className="mb-2 text-2xl">
-            <i className="fas fa-spinner fa-spin"></i>
-          </div>
-          <p className="font-bold">
-            화랑의 전당 관리 데이터를 불러오는 중입니다.
-          </p>
-        </div>
+        <PageDataLoading />
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(21rem,23rem)]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

@@ -28,9 +28,6 @@ import {
   getW8DomainState,
   toW8LocalDateTimeInput,
   toW8StatePanelState,
-  type AttendanceStatus,
-  type W8AttendanceRecord,
-  type W8AttendanceSession,
   type W8ScheduleEvent,
 } from "../../lib/w8Domains";
 import {
@@ -41,7 +38,6 @@ import {
 import type { CalendarEvent } from "../../types";
 
 const CalendarSection = lazy(() => import("./components/CalendarSection"));
-const NoticeBoard = lazy(() => import("./components/NoticeBoard"));
 const SearchModal = lazy(() => import("./components/SearchModal"));
 
 const normalizeClassValue = (value: unknown): string => {
@@ -88,109 +84,6 @@ const projectScheduleEvent = (
   targetClass: event.classIds.length ? studentClassKey : undefined,
 });
 
-interface AttendanceProjection {
-  dates: string[];
-  label: string;
-  title: string;
-}
-
-const EMPTY_ATTENDANCE_PROJECTION: AttendanceProjection = {
-  dates: [],
-  label: "기록 없음",
-  title: "오늘 등록된 출석 기록이 없습니다.",
-};
-
-const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
-  UNRECORDED: "확인 전",
-  PRESENT: "출석 완료",
-  LATE: "지각 기록",
-  ABSENT: "결석 기록",
-  EARLY_LEAVE: "조퇴 기록",
-  EXCUSED: "출석 인정",
-};
-
-const ATTENDED_STATUSES = new Set<AttendanceStatus>([
-  "PRESENT",
-  "LATE",
-  "EARLY_LEAVE",
-  "EXCUSED",
-]);
-
-const getKstDateKey = () => {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value || "";
-  return `${valueOf("year")}-${valueOf("month")}-${valueOf("day")}`;
-};
-
-const projectAttendance = (
-  sessions: W8AttendanceSession[],
-  records: W8AttendanceRecord[],
-): AttendanceProjection => {
-  const recordBySessionId = new Map(
-    records.map((record) => [record.sessionId, record]),
-  );
-  const dates = Array.from(
-    new Set(
-      sessions
-        .filter((session) => {
-          const status = recordBySessionId.get(
-            session.sessionId,
-          )?.attendanceStatus;
-          return status ? ATTENDED_STATUSES.has(status) : false;
-        })
-        .map((session) => session.date.split("T")[0])
-        .filter((date) => /^\d{4}-\d{2}-\d{2}$/u.test(date)),
-    ),
-  ).sort();
-
-  const todaySessions = sessions.filter(
-    (session) => session.date.split("T")[0] === getKstDateKey(),
-  );
-  const todayStatuses = todaySessions.map(
-    (session) =>
-      recordBySessionId.get(session.sessionId)?.attendanceStatus ||
-      "UNRECORDED",
-  );
-  if (todayStatuses.length === 0) {
-    return { ...EMPTY_ATTENDANCE_PROJECTION, dates };
-  }
-
-  const recordedStatuses = todayStatuses.filter(
-    (status) => status !== "UNRECORDED",
-  );
-  if (recordedStatuses.length === 0) {
-    return {
-      dates,
-      label: "확인 전",
-      title: "오늘 출석 기록을 아직 확인하지 않았습니다.",
-    };
-  }
-
-  const uniqueStatuses = Array.from(new Set(recordedStatuses));
-  const label =
-    recordedStatuses.length !== todayStatuses.length ||
-    uniqueStatuses.length > 1
-      ? "기록 확인"
-      : uniqueStatuses[0] === "EXCUSED"
-        ? "출석 완료"
-        : ATTENDANCE_STATUS_LABELS[uniqueStatuses[0]];
-  const details = todaySessions.map((session, index) => {
-    const period = session.period ? `${session.period} ` : "";
-    return `${period}${ATTENDANCE_STATUS_LABELS[todayStatuses[index]]}`;
-  });
-  return {
-    dates,
-    label,
-    title: `오늘 출석: ${details.join(", ")}`,
-  };
-};
-
 const DashboardCalendarFallback: React.FC = () => (
   <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
     <div className="mb-4 flex items-center justify-between">
@@ -225,9 +118,6 @@ const StudentDashboard: React.FC = () => {
   const [secondaryPanelsReady, setSecondaryPanelsReady] = useState(false);
   const [hallOfFameRecognition, setHallOfFameRecognition] =
     useState<HallOfFameRecognition | null>(null);
-  const [attendance, setAttendance] = useState<AttendanceProjection>(
-    EMPTY_ATTENDANCE_PROJECTION,
-  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<W8DomainError | null>(null);
 
@@ -261,7 +151,7 @@ const StudentDashboard: React.FC = () => {
     try {
       const nextState = await getW8DomainState({
         config,
-        domain: "DASHBOARD",
+        domain: "SCHEDULE",
         audience: "student",
         studentUid: currentUser.uid,
         source: "CURRENT",
@@ -269,12 +159,6 @@ const StudentDashboard: React.FC = () => {
       const projectedEvents = nextState.scheduleEvents
         .filter((event) => event.status === "ACTIVE")
         .map((event) => projectScheduleEvent(event, studentClassKey));
-      setAttendance(
-        projectAttendance(
-          nextState.attendanceSessions,
-          nextState.attendanceRecords,
-        ),
-      );
       const year = nextState.semesterId.split("-")[0] || config?.year || "";
       try {
         const holidays = await getKoreanPublicHolidays(year);
@@ -408,26 +292,8 @@ const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="student-dashboard-grid flex h-auto min-h-[500px] flex-col gap-4 md:grid md:grid-cols-5 md:grid-rows-2">
-        <div className="student-dashboard-notice order-1 md:order-2 md:col-span-2 md:row-span-1">
-          {secondaryPanelsReady ? (
-            <Suspense
-              fallback={
-                <div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">
-                  알림장을 준비 중입니다.
-                </div>
-              }
-            >
-              <NoticeBoard />
-            </Suspense>
-          ) : (
-            <div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">
-              알림장을 준비 중입니다.
-            </div>
-          )}
-        </div>
-
-        <div className="student-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2">
+      <div className="student-dashboard-grid flex h-auto min-h-[500px] flex-col gap-4 md:grid md:grid-cols-5">
+        <div className="student-dashboard-calendar order-1 md:col-span-3">
           <Suspense fallback={<DashboardCalendarFallback />}>
             <CalendarSection
               categories={categories}
@@ -435,17 +301,13 @@ const StudentDashboard: React.FC = () => {
               onDateClick={handleDateClick}
               onEventClick={handleEventClick}
               onSearchClick={() => setIsSearchOpen(true)}
-              onAttendanceCheck={() => navigate("/student/attendance")}
               calendarRef={calendarRef}
               selectedDate={selectedDate}
-              attendanceDates={attendance.dates}
-              attendanceStatusLabel={attendance.label}
-              attendanceStatusTitle={attendance.title}
             />
           </Suspense>
         </div>
 
-        <div className="student-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1">
+        <div className="student-dashboard-ranking order-2 md:col-span-2">
           {secondaryPanelsReady ? (
             <WisRankingPanel
               config={config}

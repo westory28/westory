@@ -1264,27 +1264,27 @@ export const validateCommandManifest = (manifest, analysis) => {
     ),
     "W9 query callable not observed",
   );
-  const expectedW11Commands = [
-    "createSemesterCutoverPlan",
-    "dryRunSemesterCutover",
-    "applySemesterCutoverBatch",
-    "verifySemesterCutover",
-    "resumeSemesterCutover",
-    "createSemesterRollbackPlan",
+  const expectedSemesterGuideCommands = [
+    "createSemesterManifest",
+    "updateSemesterManifest",
+    "transitionSemesterStatus",
+    "validateSemesterReadiness",
+    "activateSemester",
   ];
-  const cutoverGateway = analysis.observations.find(
+  const cutoverGateways = analysis.observations.filter(
     (entry) =>
-      entry.file === "src/lib/semesterCutover.ts" &&
-      entry.function === "executeCutoverCommand" &&
+      entry.file === "src/pages/teacher/SemesterCutoverCenter.tsx" &&
       entry.boundary === "GATEWAY",
   );
-  assert.ok(cutoverGateway, "W11 Cutover gateway wrapper was not observed");
   assert.deepEqual(
-    String(cutoverGateway.callable || "").split("|").sort(),
-    expectedW11Commands.sort(),
-    "W11 Cutover gateway command union changed",
+    cutoverGateways.map((entry) => entry.callable).sort(),
+    expectedSemesterGuideCommands.sort(),
+    "Semester guide must expose only the five supported core operations",
   );
-  assert.deepEqual(cutoverGateway.triggers, ["USER_EVENT"]);
+  for (const entry of cutoverGateways)
+    assert.deepEqual(entry.triggers, ["USER_EVENT"], "Semester guide mutations require an explicit user event");
+  assert.equal(analysis.observations.some((entry) => entry.file === "src/lib/semesterCutover.ts" && entry.boundary === "GATEWAY"), false,
+    "The retired synthetic command facade must not remain reachable or allowlisted");
   assert.ok(
     analysis.queryCallables.some((entry) =>
       entry.names.includes("getSemesterCutoverState"),

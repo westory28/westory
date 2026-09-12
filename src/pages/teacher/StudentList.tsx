@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { useAppDialog } from "../../components/common/AppDialogProvider";
 import { db } from "../../lib/firebase";
+import { sessionQueryCache } from "../../lib/sessionQueryCache";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentRegistrationApprovalPanel from "./components/StudentRegistrationApprovalPanel";
 import StudentDetailModal from "./components/StudentDetailModal";
 import { useAuth } from "../../contexts/AuthContext";
+import { PageDataLoading } from "../../components/common/LoadingState";
 import { canEditStudentList, canManageW8Domains } from "../../lib/permissions";
 import {
   getArchiveEnrollmentState,
@@ -192,13 +194,16 @@ const loadScopedStudentProfiles = async (studentUids: string[]) => {
 
 const toStudentList = async (
   state: ArchiveEnrollmentState,
+  suppliedProfiles?: Map<string, Record<string, any>>,
 ): Promise<Student[]> => {
   const activeEnrollments = state.enrollments.filter(
     (enrollment) => enrollment.enrollmentStatus === "ACTIVE",
   );
-  const profileByUid = await loadScopedStudentProfiles(
-    activeEnrollments.map((enrollment) => enrollment.studentUid),
-  );
+  const profileByUid =
+    suppliedProfiles ??
+    (await loadScopedStudentProfiles(
+      activeEnrollments.map((enrollment) => enrollment.studentUid),
+    ));
   const classById = new Map(
     state.classes.map((schoolClass) => [schoolClass.classId, schoolClass]),
   );
@@ -257,12 +262,13 @@ const scopedConfigFromSemesterId = (
   return match ? { year: match[1], semester: match[2] } : fallback;
 };
 
-const StudentList: React.FC = () => {
+const StudentListScope: React.FC = () => {
   const { userData, currentUser, config } = useAuth();
   const { confirm } = useAppDialog();
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const listRequestRef = useRef(0);
   const [currentPage, setCurrentPage] = useState(1);
 
   const [gradeFilter, setGradeFilter] = useState("all");
@@ -321,6 +327,7 @@ const StudentList: React.FC = () => {
   }, [normalizedStudents, gradeFilter, classFilter, searchQuery]);
 
   const fetchStudents = async (options: { silent?: boolean } = {}) => {
+    const requestId = ++listRequestRef.current;
     if (!options.silent) setLoading(true);
     setLoadError("");
     try {
@@ -328,11 +335,23 @@ const StudentList: React.FC = () => {
         source: "CURRENT",
         callSite: "StudentList.fetchStudents",
       });
-      let list = await toStudentList(state);
+      let list: Student[];
       if (canEditStudentList(userData, currentUser?.email || "")) {
         const editStates = await loadStudentProfileEditStates(
           scopedConfigFromSemesterId(state.semesterId, config),
-          list.map((student) => student.userId),
+          state.enrollments
+            .filter((item) => item.enrollmentStatus === "ACTIVE")
+            .map((item) => item.studentUid),
+        );
+        // The trusted batch already returns the profile. Do not issue another
+        // individual Firestore request for every student before using it.
+        list = await toStudentList(
+          state,
+          new Map(
+            [...editStates]
+              .filter(([, value]) => value.profile)
+              .map(([uid, value]) => [uid, value.profile!]),
+          ),
         );
         list = list.map((student) => {
           const editState = editStates.get(student.userId),
@@ -345,7 +364,8 @@ const StudentList: React.FC = () => {
             editState,
           };
         });
-      }
+      } else list = await toStudentList(state);
+      if (requestId !== listRequestRef.current) return;
       setSemesterId(state.semesterId);
       const configuredSemesterId =
         config?.year && config?.semester
@@ -391,6 +411,7 @@ const StudentList: React.FC = () => {
       setStudents(list);
       setFilteredStudents(list);
     } catch (error) {
+      if (requestId !== listRequestRef.current) return;
       console.error("Error fetching students:", error);
       setStudents([]);
       setFilteredStudents([]);
@@ -399,7 +420,7 @@ const StudentList: React.FC = () => {
         "현재 학기 학생 명단을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
       );
     } finally {
-      if (!options.silent) setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   };
 
@@ -433,6 +454,9 @@ const StudentList: React.FC = () => {
   useEffect(() => {
     if (!currentUser?.uid) return;
     void fetchStudents();
+    return () => {
+      listRequestRef.current += 1;
+    };
   }, [currentUser?.uid, config?.year, config?.semester]);
 
   useEffect(() => {
@@ -758,6 +782,7 @@ const StudentList: React.FC = () => {
   };
 
   const handleRefreshList = async () => {
+    sessionQueryCache.clear();
     setGradeFilter("all");
     setClassFilter("all");
     setSearchQuery("");
@@ -867,7 +892,7 @@ const StudentList: React.FC = () => {
                 {loading ? (
                   <tr>
                     <td colSpan={7} className="p-10 text-center text-gray-400">
-                      데이터를 불러오는 중...
+                      <PageDataLoading />
                     </td>
                   </tr>
                 ) : loadError ? (
@@ -1101,6 +1126,15 @@ const StudentList: React.FC = () => {
         />
       </div>
     </div>
+  );
+};
+
+const StudentList: React.FC = () => {
+  const { currentUser, config } = useAuth();
+  return (
+    <StudentListScope
+      key={`${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`}
+    />
   );
 };
 

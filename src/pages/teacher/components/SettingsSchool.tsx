@@ -3,7 +3,7 @@ import { db } from "../../../lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
-import { InlineLoading } from "../../../components/common/LoadingState";
+import { PageDataLoading } from "../../../components/common/LoadingState";
 
 interface GradeItem {
   value: string;
@@ -140,10 +140,7 @@ const SettingsSchool: React.FC = () => {
     }
   };
 
-  if (loading)
-    return (
-      <InlineLoading message="학교 설정을 불러오는 중입니다." showWarning />
-    );
+  if (loading) return <PageDataLoading />;
 
   return (
     <div className="max-w-3xl space-y-8">

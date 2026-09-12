@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -24,7 +24,8 @@ interface TeacherCalendarSectionProps {
   onDateClick: (dateStr: string) => void;
   onDateDoubleClick: (dateStr: string) => void;
   onEventClick: (event: CalendarEvent) => void;
-  onAddEvent: () => void;
+  onEventDoubleClick?: (event: CalendarEvent) => void;
+  onAddEvent?: () => void;
   onSearchClick: () => void;
   calendarRef: React.RefObject<FullCalendar>;
   filterClass: string;
@@ -184,6 +185,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   onDateClick,
   onDateDoubleClick,
   onEventClick,
+  onEventDoubleClick,
   onAddEvent,
   onSearchClick,
   calendarRef,
@@ -193,6 +195,40 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   onFilterChange,
   selectedDate,
 }) => {
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentHandlers = useRef({
+    onDateClick,
+    onDateDoubleClick,
+    onEventClick,
+    onEventDoubleClick,
+  });
+  currentHandlers.current = {
+    onDateClick,
+    onDateDoubleClick,
+    onEventClick,
+    onEventDoubleClick,
+  };
+  useEffect(
+    () => () => {
+      if (clickTimer.current) clearTimeout(clickTimer.current);
+    },
+    [],
+  );
+  const selectEvent = (event: CalendarEvent) => {
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    if (!currentHandlers.current.onEventDoubleClick) {
+      currentHandlers.current.onEventClick(event);
+      return;
+    }
+    clickTimer.current = setTimeout(
+      () => currentHandlers.current.onEventClick(event),
+      240,
+    );
+  };
+  const editEvent = (event: CalendarEvent) => {
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    currentHandlers.current.onEventDoubleClick?.(event);
+  };
   const { categories } = useScheduleCategories();
   const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>([
     { value: "1", label: "1학년" },
@@ -539,16 +575,18 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
               </select>
             </div>
 
-            <div className="student-calendar-shell__calendar-tools">
-              <button
-                type="button"
-                onClick={onAddEvent}
-                className="student-calendar-shell__control-button student-calendar-shell__action-button"
-              >
-                <i className="fas fa-plus mr-1"></i>
-                추가
-              </button>
-            </div>
+            {onAddEvent && (
+              <div className="student-calendar-shell__calendar-tools">
+                <button
+                  type="button"
+                  onClick={onAddEvent}
+                  className="student-calendar-shell__control-button student-calendar-shell__action-button"
+                >
+                  <i className="fas fa-plus mr-1"></i>
+                  추가
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -581,17 +619,36 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
             onDateClick(arg.dateStr);
           }}
           dayCellDidMount={(arg) => {
-            arg.el.ondblclick = () => {
+            arg.el.ondblclick = (click) => {
+              if (
+                (click.target as HTMLElement)?.closest(
+                  ".fc-event, .fc-more-link",
+                )
+              )
+                return;
               const dateStr = toLocalYmd(arg.date);
-              onDateClick(dateStr);
-              onDateDoubleClick(dateStr);
+              currentHandlers.current.onDateClick(dateStr);
+              currentHandlers.current.onDateDoubleClick(dateStr);
             };
           }}
           eventClick={(arg) => {
             setMorePopover(null);
-            onEventClick(arg.event.extendedProps as CalendarEvent);
+            selectEvent(arg.event.extendedProps as CalendarEvent);
           }}
           eventDidMount={(arg) => {
+            arg.el.ondblclick = (click) => {
+              click.stopPropagation();
+              editEvent(arg.event.extendedProps as CalendarEvent);
+            };
+            arg.el.tabIndex = 0;
+            arg.el.onkeydown = (key) => {
+              if (key.key === "Enter") {
+                key.preventDefault();
+                currentHandlers.current.onEventClick(
+                  arg.event.extendedProps as CalendarEvent,
+                );
+              }
+            };
             const event = arg.event.extendedProps as CalendarEvent & {
               inclusiveSpanDays?: number;
               isMultiDayRange?: boolean;
@@ -748,7 +805,8 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     <button
                       key={event.id}
                       type="button"
-                      onClick={() => onEventClick(event)}
+                      onClick={() => selectEvent(event)}
+                      onDoubleClick={() => editEvent(event)}
                       className="grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
                     >
                       <div className="flex min-w-0 items-center gap-2 font-bold text-gray-700">

@@ -56,7 +56,6 @@ const teacherRoutes = [
   "/teacher/exam",
   "/teacher/settings",
   "/teacher/points",
-  "/teacher/schedule",
   "/teacher/lesson",
   "/teacher/lesson/history-dictionary",
   "/teacher/lesson/maps",
@@ -72,7 +71,7 @@ for (const route of [...studentRoutes, ...teacherRoutes]) {
   );
 }
 assert(studentRoutes.length === 17, "student canonical route count drift");
-assert(teacherRoutes.length === 13, "teacher canonical route count drift");
+assert(teacherRoutes.length === 12, "teacher canonical route count drift");
 for (const alias of [
   "/student/quiz/history2",
   "/student/quiz/history2/*",

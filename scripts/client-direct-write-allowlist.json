@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "currentWave": "W11",
-  "approvedEntryCount": 147,
+  "approvedEntryCount": 151,
   "entries": [
     {
       "id": "DW-247",
@@ -11,7 +11,9 @@
       "boundary": "CALLABLE",
       "api": "westory#getHttpsCallable",
       "callable": "updateStudentMaintenanceConfig",
-      "triggers": ["USER_EVENT"],
+      "triggers": [
+        "USER_EVENT"
+      ],
       "reason": "관리자의 명시적 접속 변경 확인에서만 호출; 서버 관리자·최근 인증·세션·App Check 검증과 감사 기록 유지; 자동 재시도 금지",
       "introducedWave": "W11",
       "migrationWave": "PERMANENT",
@@ -29,7 +31,9 @@
       "boundary": "GATEWAY",
       "api": "westory#executeWestoryCommand",
       "callable": "claimMapTagReward",
-      "triggers": ["USER_EVENT"],
+      "triggers": [
+        "USER_EVENT"
+      ],
       "reason": "학생의 PDF 지도 모달 태그 클릭만 현재 UID·학기에 묶어 서버 정책 검증 및 원자적 위스 지급 명령으로 전달; 재시도는 같은 interactionId와 commandId 유지",
       "introducedWave": "W11",
       "migrationWave": "PERMANENT",
@@ -204,7 +208,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "84e00bfd9ce2116a3e81b815"
+      "callGraphHash": "4d90c6f0da781e820d9182fa"
     },
     {
       "id": "DW-008",
@@ -1554,83 +1558,83 @@
     },
     {
       "id": "DW-160",
-      "file": "src/pages/teacher/components/SettingsArchiveEnrollment.tsx",
-      "function": "<run callback>",
-      "symbolId": "src/pages/teacher/components/SettingsArchiveEnrollment.tsx::<run callback>#3",
+      "file": "src/pages/teacher/components/EnrollmentRosterImport.tsx",
+      "function": "apply",
+      "symbolId": "src/pages/teacher/components/EnrollmentRosterImport.tsx::apply#1",
       "boundary": "GATEWAY",
       "api": "westory#executeWestoryCommand",
       "callable": "importEnrollmentRoster",
       "triggers": [
         "USER_EVENT"
       ],
-      "reason": "W4 승인 명단 명시적 command gateway 호출",
+      "reason": "기존 W4 승인 명단 명령의 폼 위치 이전; 관리자 명시적 등록 확인과 서버 명부 검증 통과 후에만 호출; 학기 revision·validationHash 유지, 미확인 결과는 동일 commandId로 재조회",
       "introducedWave": "W4B",
       "migrationWave": "PERMANENT",
       "expiresAfterWave": "PERMANENT",
       "owner": "W4 Archive Enrollment",
       "testOwner": "W4 command gateway",
       "rootCount": 1,
-      "callGraphHash": "d22513f0b702a7aa82319c4d"
+      "callGraphHash": "6875d04be706d30db0ede5d3"
     },
     {
       "id": "DW-161",
-      "file": "src/pages/teacher/components/SettingsArchiveEnrollment.tsx",
-      "function": "<run callback>",
-      "symbolId": "src/pages/teacher/components/SettingsArchiveEnrollment.tsx::<run callback>#4",
+      "file": "src/pages/teacher/components/EnrollmentOperations.tsx",
+      "function": "submit",
+      "symbolId": "src/pages/teacher/components/EnrollmentOperations.tsx::submit#1",
       "boundary": "GATEWAY",
       "api": "westory#executeWestoryCommand",
       "callable": "moveEnrollment",
       "triggers": [
         "USER_EVENT"
       ],
-      "reason": "W4 학급 이동 명시적 command gateway 호출",
+      "reason": "기존 W4 학급 이동 명령의 선택 폼 위치 이전; 학생·학급·번호·사유를 확인한 사용자 동작만 허용; 기존 학적 revision CAS와 동일 commandId 재시도 유지",
       "introducedWave": "W4B",
       "migrationWave": "PERMANENT",
       "expiresAfterWave": "PERMANENT",
       "owner": "W4 Archive Enrollment",
       "testOwner": "W4 command gateway",
       "rootCount": 1,
-      "callGraphHash": "def567f016d1a05c2479f721"
+      "callGraphHash": "25ae5cc94b3b40aeb86c0185"
     },
     {
       "id": "DW-162",
-      "file": "src/pages/teacher/components/SettingsArchiveEnrollment.tsx",
-      "function": "<run callback>",
-      "symbolId": "src/pages/teacher/components/SettingsArchiveEnrollment.tsx::<run callback>#5",
+      "file": "src/pages/teacher/components/EnrollmentOperations.tsx",
+      "function": "run",
+      "symbolId": "src/pages/teacher/components/EnrollmentOperations.tsx::run#1",
       "boundary": "GATEWAY",
       "api": "westory#executeWestoryCommand",
       "callable": "prepareSemesterArchive",
       "triggers": [
         "USER_EVENT"
       ],
-      "reason": "W4 아카이브 준비 명시적 command gateway 호출",
+      "reason": "기존 W4 보관 준비 명령의 화면 위치 이전; 명시적 기록 확인 클릭 후 최신 학기 revision 및 보관 차단 상태 재확인; 관리자 전용 정책과 기존 3종 보관 범위 유지",
       "introducedWave": "W4A",
       "migrationWave": "PERMANENT",
       "expiresAfterWave": "PERMANENT",
       "owner": "W4 Archive Enrollment",
       "testOwner": "W4 command gateway",
       "rootCount": 1,
-      "callGraphHash": "d78004c33a59441eb8922868"
+      "callGraphHash": "eaf3e73e9f37211d3f415ec4"
     },
     {
       "id": "DW-163",
-      "file": "src/pages/teacher/components/SettingsArchiveEnrollment.tsx",
-      "function": "<run callback>",
-      "symbolId": "src/pages/teacher/components/SettingsArchiveEnrollment.tsx::<run callback>#6",
+      "file": "src/pages/teacher/components/EnrollmentOperations.tsx",
+      "function": "run",
+      "symbolId": "src/pages/teacher/components/EnrollmentOperations.tsx::run#1",
       "boundary": "GATEWAY",
       "api": "westory#executeWestoryCommand",
       "callable": "freezeSemesterArchive",
       "triggers": [
         "USER_EVENT"
       ],
-      "reason": "W4 아카이브 동결 명시적 command gateway 호출",
+      "reason": "기존 W4 보관 완료 명령의 화면 위치 이전; 종료 학기·보관 확인란·차단 항목 없음 확인 후 사용자 클릭만 허용; 최신 학기 revision CAS·무결성 해시 검증·동일 commandId 재시도 유지",
       "introducedWave": "W4A",
       "migrationWave": "PERMANENT",
       "expiresAfterWave": "PERMANENT",
       "owner": "W4 Archive Enrollment",
       "testOwner": "W4 command gateway",
       "rootCount": 1,
-      "callGraphHash": "b3d0a6d08ff11b2ceadb6a64"
+      "callGraphHash": "eaf3e73e9f37211d3f415ec4"
     },
     {
       "id": "DW-164",
@@ -2130,7 +2134,7 @@
       "owner": "W8 Domains",
       "testOwner": "W8 command safety",
       "rootCount": 1,
-      "callGraphHash": "899147bc34e52365fc2de5ad"
+      "callGraphHash": "3da4f43ff778a099bd59fe62"
     },
     {
       "id": "DW-218",
@@ -2312,26 +2316,6 @@
       "testOwner": "W9 Bulk safety",
       "rootCount": 1,
       "callGraphHash": "5059bcd2e0c6ee44333b7491"
-    },
-    {
-      "id": "DW-209",
-      "file": "src/lib/semesterCutover.ts",
-      "function": "executeCutoverCommand",
-      "symbolId": "src/lib/semesterCutover.ts::executeCutoverCommand#1",
-      "boundary": "GATEWAY",
-      "api": "westory#executeWestoryCommand",
-      "callable": "applySemesterCutoverBatch|createSemesterCutoverPlan|createSemesterRollbackPlan|dryRunSemesterCutover|resumeSemesterCutover|verifySemesterCutover",
-      "triggers": [
-        "USER_EVENT"
-      ],
-      "reason": "W11 Cutover의 명시적 관리자 동작용 command gateway wrapper; create-plan은 mounted UI callsite 0이며 공식 인증 runner만 사용",
-      "introducedWave": "W11",
-      "migrationWave": "PERMANENT",
-      "expiresAfterWave": "PERMANENT",
-      "owner": "W11 Semester Cutover",
-      "testOwner": "W11 Cutover safety",
-      "rootCount": 1,
-      "callGraphHash": "1a2a7a09efe6854c3759d581"
     },
     {
       "id": "DW-210",
@@ -2952,6 +2936,106 @@
       "testOwner": "student-registration-enrollment-safety",
       "rootCount": 1,
       "callGraphHash": "01ca8078213c790092421c1a"
+    },
+    {
+      "id": "DW-248",
+      "api": "westory#executeWestoryCommand",
+      "boundary": "GATEWAY",
+      "callable": "updateSemesterManifest",
+      "callGraphHash": "796df4dfb03c5012fcc069ef",
+      "file": "src/pages/teacher/SemesterCutoverCenter.tsx",
+      "function": "<runAction callback>",
+      "rootCount": 1,
+      "symbolId": "src/pages/teacher/SemesterCutoverCenter.tsx::<runAction callback>#1",
+      "triggers": [
+        "USER_EVENT"
+      ],
+      "reason": "관리자 학기 전환 안내 화면에서 명시적으로 요청한 학기 핵심 명령",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "Semester Transition Guide",
+      "testOwner": "Semester transition guide safety"
+    },
+    {
+      "id": "DW-249",
+      "api": "westory#executeWestoryCommand",
+      "boundary": "GATEWAY",
+      "callable": "createSemesterManifest",
+      "callGraphHash": "3e76dc38bbbb5761f939fb71",
+      "file": "src/pages/teacher/SemesterCutoverCenter.tsx",
+      "function": "<runAction callback>",
+      "rootCount": 1,
+      "symbolId": "src/pages/teacher/SemesterCutoverCenter.tsx::<runAction callback>#2",
+      "triggers": [
+        "USER_EVENT"
+      ],
+      "reason": "관리자 학기 전환 안내 화면에서 명시적으로 요청한 학기 핵심 명령",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "Semester Transition Guide",
+      "testOwner": "Semester transition guide safety"
+    },
+    {
+      "id": "DW-250",
+      "api": "westory#executeWestoryCommand",
+      "boundary": "GATEWAY",
+      "callable": "transitionSemesterStatus",
+      "callGraphHash": "c9679a822a7ab89fb6f3027f",
+      "file": "src/pages/teacher/SemesterCutoverCenter.tsx",
+      "function": "<runAction callback>",
+      "rootCount": 1,
+      "symbolId": "src/pages/teacher/SemesterCutoverCenter.tsx::<runAction callback>#3",
+      "triggers": [
+        "USER_EVENT"
+      ],
+      "reason": "관리자 학기 전환 안내 화면에서 명시적으로 요청한 학기 핵심 명령",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "Semester Transition Guide",
+      "testOwner": "Semester transition guide safety"
+    },
+    {
+      "id": "DW-251",
+      "api": "westory#executeWestoryCommand",
+      "boundary": "GATEWAY",
+      "callable": "validateSemesterReadiness",
+      "callGraphHash": "201793d863e9ce3c980570a3",
+      "file": "src/pages/teacher/SemesterCutoverCenter.tsx",
+      "function": "<runAction callback>",
+      "rootCount": 1,
+      "symbolId": "src/pages/teacher/SemesterCutoverCenter.tsx::<runAction callback>#4",
+      "triggers": [
+        "USER_EVENT"
+      ],
+      "reason": "관리자 학기 전환 안내 화면에서 명시적으로 요청한 학기 핵심 명령",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "Semester Transition Guide",
+      "testOwner": "Semester transition guide safety"
+    },
+    {
+      "id": "DW-252",
+      "api": "westory#executeWestoryCommand",
+      "boundary": "GATEWAY",
+      "callable": "activateSemester",
+      "callGraphHash": "67f286150feba978aa91e8f6",
+      "file": "src/pages/teacher/SemesterCutoverCenter.tsx",
+      "function": "<runAction callback>",
+      "rootCount": 1,
+      "symbolId": "src/pages/teacher/SemesterCutoverCenter.tsx::<runAction callback>#5",
+      "triggers": [
+        "USER_EVENT"
+      ],
+      "reason": "관리자 학기 전환 안내 화면에서 명시적으로 요청한 학기 핵심 명령",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "Semester Transition Guide",
+      "testOwner": "Semester transition guide safety"
     }
   ]
 }

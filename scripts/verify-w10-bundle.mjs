@@ -114,6 +114,13 @@ for (const [id, budget] of Object.entries(baseline.budgets)) {
   const matches = files.filter((file) =>
     new RegExp(budget.pattern, "u").test(file),
   );
+  // These standalone menus were explicitly retired. Keep their historical
+  // measurements, and require their code to be absent from the release.
+  if (["teacherManageSchedule", "w8StudentHub", "w8TeacherHub"].includes(id)) {
+    assert.equal(matches.length, 0, `${id} retired screen returned to the bundle`);
+    results[id] = { retired: true, bytes: 0, gzipBytes: 0 };
+    continue;
+  }
   assert.equal(
     matches.length,
     1,
@@ -267,10 +274,15 @@ for (const pattern of baseline.assetContract.forbiddenRuntimeCdnPatterns) {
 }
 
 const app = read("src/App.tsx");
+const retiredImports = new Set([
+  "./pages/teacher/ManageSchedule",
+  "./pages/student/W8StudentHub",
+  "./pages/teacher/W8TeacherHub",
+]);
 for (const importPath of baseline.requiredLazyImports) {
   assert.equal(
     countOccurrences(app, `import("${importPath}")`),
-    1,
+    retiredImports.has(importPath) ? 0 : 1,
     `Lazy route import missing or duplicated: ${importPath}`,
   );
 }
@@ -290,7 +302,7 @@ console.log(
     baselineWave: baseline.baselineWave,
     referenceBuilds: REFERENCE_BUILDS,
     chunks: results,
-    routeLevelLazyImports: baseline.requiredLazyImports.length,
+    routeLevelLazyImports: baseline.requiredLazyImports.filter((path) => !retiredImports.has(path)).length,
     initialDeferredDependencyLeaks: 0,
     forbiddenRuntimeCdnReferences: 0,
     typography: {

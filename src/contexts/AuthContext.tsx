@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { User, onIdTokenChanged, signOut } from "firebase/auth";
+import { sessionQueryCache } from "../lib/sessionQueryCache";
 import { doc, getDocFromServer, onSnapshot } from "firebase/firestore";
 import { auth, authPersistenceReady, db } from "../lib/firebase";
 import { waitForAuthenticationReads } from "../lib/authenticationReadBarrier";
@@ -483,6 +484,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       unsubscribe = onIdTokenChanged(
         auth,
         async (user) => {
+          sessionQueryCache.clear();
           const eventSequence = ++tokenEventSequence;
           // Invalidate older async resolutions immediately. Sign-out must not
           // wait for an in-flight popup or paused Firestore transport.

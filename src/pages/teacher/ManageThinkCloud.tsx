@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import WordCloudView from "../../components/common/WordCloudView";
+import { PageDataLoading } from "../../components/common/LoadingState";
 import {
   DEFAULT_THINK_CLOUD_OPTIONS,
   formatClassLabel,
@@ -1023,11 +1024,7 @@ const ManageThinkCloud: React.FC = () => {
             </div>
 
             <nav className="flex-1 overflow-y-auto lg:max-h-[60vh]">
-              {sessionLoadState === "loading" && (
-                <p className="p-4 text-sm font-bold text-gray-500">
-                  저장된 주제를 불러오는 중입니다.
-                </p>
-              )}
+              {sessionLoadState === "loading" && <PageDataLoading />}
               {sessionLoadState === "permission" && (
                 <div
                   className="p-4 text-sm font-bold text-gray-600"

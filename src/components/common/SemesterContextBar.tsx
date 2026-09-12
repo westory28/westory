@@ -82,6 +82,15 @@ const SemesterContextBar: React.FC = () => {
         : currentSemesterId;
   const readOnly = context.provenance === "ARCHIVE" || context.readOnly;
 
+  // These management pages show the selected manifest's actual server state.
+  // A URL alone cannot tell whether it is active, preparing, or archived.
+  if (
+    location.pathname === "/teacher/settings/cutover" ||
+    (location.pathname === "/teacher/settings" &&
+      params.get("tab") === "archive-enrollment")
+  )
+    return null;
+
   return (
     <div className="ws-semester-context" aria-label="학기와 자료 출처">
       <span className="ws-semester-context__label">{semesterLabel}</span>

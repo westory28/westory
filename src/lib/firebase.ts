@@ -30,6 +30,7 @@ import {
   readInjectedActiveFirebaseBindingMarker,
 } from "./firebaseActiveBinding";
 import { isHighRiskCommand } from "./highRiskCommands";
+import { sessionQueryCache } from "./sessionQueryCache";
 import {
   requestStepUpReauthentication,
   runHighRiskCommandSingleFlight,
@@ -370,7 +371,13 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
       await import("./applicationSession");
     assertExpectedOwner();
     const prepared = prepareCallableDataWithApplicationSession(name, data);
-    return callable(prepared as RequestData | undefined);
+    return sessionQueryCache.run(
+      name,
+      prepared,
+      auth.currentUser?.uid || "",
+      () => auth.currentUser?.uid || "",
+      () => callable(prepared as RequestData | undefined),
+    );
   };
 
   const callableWithSession = (async (data?: RequestData) =>
