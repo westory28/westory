@@ -7,6 +7,7 @@ import SettingsPrivacy from "./components/SettingsPrivacy";
 import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
 import SettingsArchiveEnrollment from "./components/SettingsArchiveEnrollment";
+import SettingsArchiveRecords from "./components/SettingsArchiveRecords";
 import { useAuth } from "../../contexts/AuthContext";
 import { ADMIN_EMAIL } from "../../lib/permissions";
 
@@ -16,6 +17,7 @@ type SettingsTab =
   | "interface"
   | "privacy"
   | "archive-enrollment"
+  | "archive-records"
   | "access"
   | "notifications";
 
@@ -25,6 +27,7 @@ const SETTINGS_TABS = new Set<SettingsTab>([
   "interface",
   "privacy",
   "archive-enrollment",
+  "archive-records",
   "access",
   "notifications",
 ]);
@@ -64,6 +67,20 @@ const Settings: React.FC = () => {
               </h2>
             </div>
             <nav className="flex flex-col">
+              {canOpenCutoverCenter && (
+                <button
+                  onClick={() => setActiveTab("archive-records")}
+                  aria-current={
+                    activeTab === "archive-records" ? "page" : undefined
+                  }
+                  className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "archive-records" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
+                >
+                  <div className="w-6 text-center" aria-hidden="true">
+                    <i className="fas fa-clock-rotate-left"></i>
+                  </div>
+                  지난 학기 기록
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab("general")}
                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "general" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
@@ -144,11 +161,12 @@ const Settings: React.FC = () => {
           </div>
         </aside>
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {activeTab === "general" && <SettingsGeneral />}
           {activeTab === "school" && <SettingsSchool />}
           {activeTab === "interface" && <SettingsInterface />}
           {activeTab === "archive-enrollment" && <SettingsArchiveEnrollment />}
+          {activeTab === "archive-records" && <SettingsArchiveRecords />}
           {activeTab === "access" && <SettingsAccess />}
           {activeTab === "notifications" && <SettingsNotifications />}
           {activeTab === "privacy" && <SettingsPrivacy />}

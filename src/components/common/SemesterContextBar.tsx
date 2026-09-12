@@ -34,7 +34,7 @@ const getTrustedContext = (
   }
   if (pathname === "/teacher/settings") {
     const tab = params.get("tab");
-    if (tab === "archive-enrollment") {
+    if (tab === "archive-enrollment" || tab === "archive-records") {
       return {
         provenance: "ARCHIVE" as ProvenanceKind,
         acceptsSemester: true,

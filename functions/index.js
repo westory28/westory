@@ -12398,6 +12398,11 @@ Object.assign(
   }),
 );
 
+const adminSemesterRecords = require("./adminSemesterRecords");
+Object.assign(exports, adminSemesterRecords.createAdminSemesterRecordsCallableExports({
+  core: adminSemesterRecords.createAdminSemesterRecordsCore({ store: commandGatewayStore }),
+}));
+
 const retiredW8LegacyCallable = onCall({ region: REGION }, async () => {
   throw new HttpsError(
     "failed-precondition",

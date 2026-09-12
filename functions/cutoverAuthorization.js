@@ -1,5 +1,6 @@
 const { createHash } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
+const productionApproval = require("./productionCutoverApproval");
 
 const sha256 = (value) => createHash("sha256").update(String(value), "utf8").digest("hex");
 const attemptIdFor = (planId) => `cutattempt_${sha256(planId)}`;
@@ -22,6 +23,8 @@ const assertPreparingCutoverCreate = async ({
   cutoverPlanId,
   cutoverOperationKey,
   operationType,
+  projectId,
+  now,
 }) => {
   if (
     actor?.actorRole !== "admin"
@@ -62,6 +65,7 @@ const assertPreparingCutoverCreate = async ({
       commandType,
     });
   }
+  await productionApproval.assertProductionCutoverApproval({ transaction, plan: plan.data, actor, projectId, now });
   return { planId: cutoverPlanId, attemptId, itemPath };
 };
 

@@ -236,8 +236,8 @@ function activeLearningPlaceholder() { return { title: "합성 자료", summary:
   }
   let productionSessionReads = 0;
   const productionCore = commandGateway.createCommandGatewayCore({ projectId: "history-quiz-yongsin", store: { runTransaction: async () => { throw new Error("business read forbidden"); } }, assertSession: async () => { productionSessionReads += 1; return {}; } });
-  await assert.rejects(() => productionCore.execute({ data: { commandType: "createSemesterCutoverPlan" } }), (error) => error.details?.reason === "W11_PROJECT_FORBIDDEN");
-  assert.equal(productionSessionReads, 0);
+  await assert.rejects(() => productionCore.execute({ data: { commandType: "createSemesterCutoverPlan" } }), (error) => error.details?.reason === "COMMAND_ADMIN_REQUIRED");
+  assert.equal(productionSessionReads, 1);
   const fixtureMarker = {
     fixtureId: "w10p-visual-fixture-v1",
     fixtureOwner: "w10p-visual-parity",
@@ -479,9 +479,9 @@ function activeLearningPlaceholder() { return { title: "합성 자료", summary:
   await assert.rejects(
     () =>
       productionFixtureQueryCore.getSemesterCutoverState(fixtureAdminRequest),
-    (error) => error.details?.reason === "W11_PROJECT_FORBIDDEN",
+    (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
   );
-  assert.equal(productionFixtureSessionReads, 0);
+  assert.equal(productionFixtureSessionReads, 1);
   for (const commandType of Object.values(cutover.CUTOVER_COMMAND_TYPES)) {
     await assert.rejects(
       () =>
@@ -576,9 +576,10 @@ function activeLearningPlaceholder() { return { title: "합성 자료", summary:
   assert.equal(source.includes("semester_cutover_plans/missing-plan"), true);
   assert.equal(source.includes("semester_cutover_attempts/missing-attempt"), true);
   assert.equal(source.includes("/__missing__"), false);
+  const productionApprovalCases = await require("./verify-production-cutover-approval.cjs")();
   const semesterCoreSource = readFileSync(resolve(__dirname, "../semesterCore.js"), "utf8");
   assert.equal(semesterCoreSource.includes('getAll: (paths) => typeof transaction.getAll === "function"'), true);
   const rules = readFileSync(resolve(__dirname, "../../firestore.rules"), "utf8");
   for (const collection of ["semester_cutover_plans", "semester_cutover_attempts", "semester_cutover_evidence", "semester_cutover_targets"]) assert.equal(rules.includes(`match /${collection}/`), true);
-  console.log(JSON.stringify({ passed: true, cases: 35, fixtureAdminReadCases: 24, commands: 6, datasets: 12, maxOperations: 100, applyBatchLimit: 25, blockedDryRunRetry: true, latestPlanFence: true, stagingScopeFence: true, snapshotByteLimit: cutover.SNAPSHOT_TOTAL_BYTE_LIMIT, snapshotTransactionByteLimit: cutover.SNAPSHOT_TRANSACTION_BYTE_LIMIT, readinessChecks: 1, productionAccess: 0, productionWrites: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 35, fixtureAdminReadCases: 24, productionApprovalCases, commands: 6, datasets: 12, maxOperations: 100, applyBatchLimit: 25, blockedDryRunRetry: true, latestPlanFence: true, stagingScopeFence: true, snapshotByteLimit: cutover.SNAPSHOT_TOTAL_BYTE_LIMIT, snapshotTransactionByteLimit: cutover.SNAPSHOT_TRANSACTION_BYTE_LIMIT, readinessChecks: 1, productionAccess: 0, productionWrites: 0 }));
 })().catch((error) => { console.error(error); process.exitCode = 1; });

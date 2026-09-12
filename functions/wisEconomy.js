@@ -1730,11 +1730,16 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
         actor,
       });
       if (type === "INITIAL_GRANT") {
+        // The manifest is ACTIVE here. Promote this prepared account only as
+        // part of its exactly-once opening, without scanning every account.
+        const activeMetadata = { status: "ACTIVE", provenance: "CURRENT", readOnly: false };
         transaction.set(
           accountPath(account.accountId),
-          { initialGrantLedgerEntryId: posted.ledgerEntryId },
+          { ...activeMetadata, initialGrantLedgerEntryId: posted.ledgerEntryId },
           { merge: true },
         );
+        transaction.set(balancePath(account.accountId), activeMetadata, { merge: true });
+        transaction.set(rankingPath(account.accountId), activeMetadata, { merge: true });
         transaction.set(
           economyPath(payload.semesterId),
           {
@@ -1960,6 +1965,8 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
           ...initialOpeningBinding,
           revision: economyRevision,
           status: payload.targetStatus,
+          provenance: ["CLOSED", "ARCHIVED"].includes(payload.targetStatus) ? "ARCHIVE" : "CURRENT",
+          readOnly: ["CLOSED", "ARCHIVED"].includes(payload.targetStatus),
           transitionReason: payload.reason,
           updatedAt: timestamp,
           updatedBy: actor.actorUid,

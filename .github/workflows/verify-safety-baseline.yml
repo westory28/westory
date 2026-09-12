@@ -43,6 +43,7 @@ jobs:
       - run: npm run verify:vercel-config
       - run: node scripts/verify-korean-holidays-api.mjs
       - run: node scripts/verify-semester-date-defaults.mjs
+      - run: node scripts/verify-semester-archive-view.mjs
       - run: node scripts/verify-lesson-initial-load.mjs
       - run: npm run verify:typescript-baseline
       - run: npm run verify:access-gate

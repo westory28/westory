@@ -10,6 +10,7 @@ const w8Domains = require("./w8Domains");
 const teacherOperations = require("./teacherOperations");
 const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
+const productionApproval = require("./productionCutoverApproval");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -338,8 +339,8 @@ const normalizeCutoverPayload = (type, raw) => {
 
 const assertProject = (projectId) => {
   const normalized = String(projectId || "").trim();
-  if (normalized !== STAGING_PROJECT_ID && !normalized.startsWith("demo-westory-session-")) {
-    fail("failed-precondition", "W11 cutover is limited to Dedicated Staging and emulator projects.", "W11_PROJECT_FORBIDDEN");
+  if (normalized !== STAGING_PROJECT_ID && normalized !== productionApproval.PRODUCTION_PROJECT_ID && !normalized.startsWith("demo-westory-session-")) {
+    fail("failed-precondition", "Cutover project is not supported.", "W11_PROJECT_FORBIDDEN");
   }
 };
 const assertCutoverProject = assertProject;
@@ -590,27 +591,36 @@ const assertReceiptTargetScope = ({ receipt, operation, targetSemesterId, docume
     if (document?.exists && document.data?.semesterId && document.data.semesterId !== targetSemesterId) fail("failed-precondition", "Child receipt ref document belongs to another semester.", "W11_CHILD_RECEIPT_SCOPE_MISMATCH", { operationKey: operation.operationKey, ref, documentSemesterId: document.data.semesterId });
   }
 };
-const assertReceiptAuditAuthoritySummary = ({ receiptId, receipt, audit, operation, actor }) => {
+const assertReceiptAuditAuthoritySummary = ({ receiptId, receipt, audit, operation, actor, approvedProductionExecution = null }) => {
   const auditPath = `${AUDIT_COLLECTION}/${receiptId}`;
   const session = receipt.session;
+  const approvedServerSession = approvedProductionExecution
+    && approvedProductionExecution.projectId === productionApproval.PRODUCTION_PROJECT_ID
+    && approvedProductionExecution.actorUid === actor.actorUid
+    && approvedProductionExecution.actorEmail === ADMIN_EMAIL
+    && session?.authorityMode === "SERVER_MAINTENANCE"
+    && session.authTime === 0 && session.ref === null && session.protocolVersion === 0
+    && session.authorityGeneration === approvedProductionExecution.serverMaintenanceRunId
+    && session.revisionHash === sha256(approvedProductionExecution.approvalHash)
+    && session.observedFailure === null
+    && [receipt, audit?.data].every(row => row?.executionProvenance?.kind === "SERVER_MAINTENANCE"
+      && row.executionProvenance.runId === approvedProductionExecution.serverMaintenanceRunId
+      && row.executionProvenance.approvalHash === approvedProductionExecution.approvalHash);
+  const applicationSession = isObject(session)
+    && Number.isSafeInteger(session.authTime) && session.authTime > 0
+    && session.ref === `application_sessions/${actor.actorUid}/sessions/${session.authTime}`
+    && typeof session.authorityMode === "string" && session.authorityMode && session.authorityMode !== "SERVER_MAINTENANCE"
+    && typeof session.authorityGeneration === "string" && session.authorityGeneration
+    && Number.isSafeInteger(session.protocolVersion) && session.protocolVersion >= 1
+    && typeof session.revisionHash === "string" && /^[0-9a-f]{64}$/.test(session.revisionHash)
+    && Object.prototype.hasOwnProperty.call(session, "observedFailure");
   if (
     receipt.actorUid !== actor.actorUid
     || String(receipt.actorEmail || "").trim().toLowerCase() !== ADMIN_EMAIL
     || receipt.actorRole !== "admin"
     || typeof receipt.actorCapability !== "string"
     || !receipt.actorCapability.trim()
-    || !isObject(session)
-    || !Number.isSafeInteger(session.authTime)
-    || session.authTime <= 0
-    || session.ref !== `application_sessions/${actor.actorUid}/sessions/${session.authTime}`
-    || typeof session.authorityMode !== "string"
-    || !session.authorityMode
-    || typeof session.authorityGeneration !== "string"
-    || !session.authorityGeneration
-    || !Number.isSafeInteger(session.protocolVersion)
-    || session.protocolVersion < 1
-    || (typeof session.revisionHash !== "string" || !/^[0-9a-f]{64}$/.test(session.revisionHash))
-    || !Object.prototype.hasOwnProperty.call(session, "observedFailure")
+    || (!approvedServerSession && !applicationSession)
   ) {
     fail(
       "failed-precondition",
@@ -647,7 +657,7 @@ const assertReceiptAuditAuthoritySummary = ({ receiptId, receipt, audit, operati
     );
   }
 };
-const assertReconciledChildReceipt = ({ receiptId, receipt, audit, operation, actor, targetSemesterId, documentsByPath }) => {
+const assertReconciledChildReceipt = ({ receiptId, receipt, audit, operation, actor, targetSemesterId, documentsByPath, approvedProductionExecution }) => {
   if (
     !receipt?.exists
     || receipt.data?.status !== "SUCCEEDED"
@@ -659,7 +669,7 @@ const assertReconciledChildReceipt = ({ receiptId, receipt, audit, operation, ac
     fail("failed-precondition", "Child command receipt does not match the Cutover Plan.", "W11_CHILD_RECEIPT_MISMATCH", { operationKey: operation.operationKey });
   }
   assertReceiptTargetScope({ receipt: receipt.data, operation, targetSemesterId, documentsByPath });
-  assertReceiptAuditAuthoritySummary({ receiptId, receipt: receipt.data, audit, operation, actor });
+  assertReceiptAuditAuthoritySummary({ receiptId, receipt: receipt.data, audit, operation, actor, approvedProductionExecution });
 };
 const revisionEvidenceFor = (document) => {
   for (const field of ["revision", "stateRevision", "manifestRevision", "recordRevision", "sessionRevision"]) {
@@ -669,13 +679,15 @@ const revisionEvidenceFor = (document) => {
   return null;
 };
 
-const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
+const createSemesterCutoverCommandAdapter = ({ projectId = "", now = () => new Date() } = {}) => ({
   apply: async ({ transaction, commandId: parentCommandId, commandType, payload, payloadHash, timestamp, actor }) => {
     assertProject(projectId);
     if (actor?.actorRole !== "admin" || String(actor?.actorEmail || "").toLowerCase() !== ADMIN_EMAIL) fail("permission-denied", "Highest administrator authority is required.", "W11_ADMIN_REQUIRED");
 
     if (commandType === CUTOVER_COMMAND_TYPES.CREATE_PLAN) {
       assertProjectSemesterPair(projectId, payload.sourceSemesterId, payload.targetSemesterId);
+      const productionPlan = { ...payload, planId: planIdFor(payload.manifestVersion, payload.sourceSemesterId, payload.targetSemesterId) };
+      const approval = await productionApproval.assertProductionCutoverApproval({ transaction, plan: productionPlan, actor, projectId, now, creating: true });
       const [sourceSnapshot, targetSnapshot] = await transaction.getAll([manifestPath(payload.sourceSemesterId), manifestPath(payload.targetSemesterId)]);
       const source = assertManifestRevision(sourceSnapshot, payload.sourceSemesterId, payload.sourceManifestRevision, ["ACTIVE", "CLOSING", "CLOSED", "ARCHIVED"], "Source");
       const target = assertManifestRevision(targetSnapshot, payload.targetSemesterId, payload.targetManifestRevision, ["PREPARING", "READY"], "Target");
@@ -694,6 +706,7 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
         fail(samePlan ? "already-exists" : "aborted", samePlan ? "Cutover plan already exists." : "Cutover Manifest changed without a manifestVersion bump.", samePlan ? "W11_PLAN_EXISTS" : "W11_MANIFEST_VERSION_CONFLICT", { planId, existingManifestHash: existing.data?.manifestHash || null, requestedManifestHash: payload.manifestHash });
       }
       const plan = { schemaVersion: CUTOVER_SCHEMA_VERSION, policyVersion: CUTOVER_POLICY_VERSION, planId, planRevision: 1, planType: "CUTOVER", status: "CREATED", manifestVersion: payload.manifestVersion, manifestHash: payload.manifestHash, sourceSemesterId: payload.sourceSemesterId, targetSemesterId: payload.targetSemesterId, sourceManifestRevision: payload.sourceManifestRevision, targetManifestRevision: payload.targetManifestRevision, sourceStatus: source.status, targetStatus: target.status, copyDenylist: payload.copyDenylist, operations: payload.operations, operationCount: payload.operations.length, createdAt: timestamp, createdBy: actor.actorUid, updatedAt: timestamp, updatedBy: actor.actorUid, commandId: parentCommandId, payloadHash };
+      if (approval) Object.assign(plan, productionApproval.bindingFor(approval));
       transaction.create(path, plan);
       transaction.set(targetPath(payload.targetSemesterId), { schemaVersion: CUTOVER_SCHEMA_VERSION, policyVersion: CUTOVER_POLICY_VERSION, targetSemesterId: payload.targetSemesterId, latestPlanId: planId, latestAttemptId: null, latestEvidenceId: null, status: "CREATED", manifestHash: payload.manifestHash, updatedAt: timestamp });
       return { target: { kind: "semester-cutover-plan", id: planId, refs: [path, targetPath(payload.targetSemesterId)] }, sourceHash: payload.manifestHash, result: { planId, planRevision: 1, status: "CREATED", attemptId: attemptIdFor(planId), operationCount: payload.operations.length, manifestHash: payload.manifestHash } };
@@ -701,6 +714,7 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
 
     const plan = await transaction.get(planPath(payload.planId));
     assertRevision(plan, "planRevision", payload.expectedPlanRevision, "W11_PLAN_REVISION_CONFLICT");
+    const approvedProductionExecution = await productionApproval.assertProductionCutoverApproval({ transaction, plan: plan.data, actor, projectId, now });
     if (plan.data?.planType !== "CUTOVER") fail("failed-precondition", "Rollback plan is not executable.", "W11_PLAN_TYPE_INVALID");
     assertProjectSemesterPair(projectId, plan.data.sourceSemesterId, plan.data.targetSemesterId);
     await assertLatestTargetMarker(
@@ -805,7 +819,7 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
         if (["SUCCEEDED", "NOT_APPLICABLE"].includes(row.data.status)) {
           if (row.data.status === "SUCCEEDED" && row.data.childCommandType) {
             const receiptId = receiptIdFor(actor.actorUid, row.data.childCommandType, row.data.childCommandId);
-            assertReconciledChildReceipt({ receiptId, receipt: receiptByPath.get(`${RECEIPT_COLLECTION}/${receiptId}`), audit: auditByPath.get(`${AUDIT_COLLECTION}/${receiptId}`), operation: row.data, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath });
+            assertReconciledChildReceipt({ receiptId, receipt: receiptByPath.get(`${RECEIPT_COLLECTION}/${receiptId}`), audit: auditByPath.get(`${AUDIT_COLLECTION}/${receiptId}`), operation: row.data, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath, approvedProductionExecution });
           }
           results.push({ operationKey: key, status: row.data.status, replayed: true, receiptId: row.data.receiptId || null }); continue;
         }
@@ -815,7 +829,7 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
           receiptId = receiptIdFor(actor.actorUid, row.data.childCommandType, row.data.childCommandId);
           const receipt = receiptByPath.get(`${RECEIPT_COLLECTION}/${receiptId}`);
           if (receipt?.exists) {
-            assertReconciledChildReceipt({ receiptId, receipt, audit: auditByPath.get(`${AUDIT_COLLECTION}/${receiptId}`), operation: row.data, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath });
+            assertReconciledChildReceipt({ receiptId, receipt, audit: auditByPath.get(`${AUDIT_COLLECTION}/${receiptId}`), operation: row.data, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath, approvedProductionExecution });
             status = "SUCCEEDED";
           } else if (failure) { status = "FAILED"; errorCode = failure.errorCode; errorReason = failure.errorReason; }
         } else {
@@ -906,7 +920,7 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
           : null;
         const receipt = receiptId ? receiptById.get(receiptId) : null;
         if (receiptId) {
-          assertReconciledChildReceipt({ receiptId, receipt, audit: auditById.get(receiptId), operation, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath });
+          assertReconciledChildReceipt({ receiptId, receipt, audit: auditById.get(receiptId), operation, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath, approvedProductionExecution });
           if (operation.receiptId !== receiptId) fail("failed-precondition", "Succeeded item receipt reference changed.", "W11_CHILD_RECEIPT_MISMATCH", { operationKey: operation.operationKey });
         }
         const refs = receiptId && Array.isArray(receipt.data?.target?.refs) ? receipt.data.target.refs : [];
@@ -1058,15 +1072,23 @@ const createSemesterCutoverQueryCore = ({ store, projectId = "", assertSession =
 });
 const createSemesterCutoverCallableExports = ({ core }) => ({ getSemesterCutoverState: onCall({ region: REGION }, (request) => core.getSemesterCutoverState(request)) });
 
-const createSemesterCutoverReadinessAdapter = () => ({
+const createSemesterCutoverReadinessAdapter = ({ projectId = productionApproval.resolveProjectId(), now = () => new Date() } = {}) => ({
   evaluate: async ({ transaction, manifest }) => {
     if (!["PREPARING", "VALIDATING", "READY"].includes(manifest?.status)) return [{ checkId: READINESS_CHECK_ID, label: "Semester cutover readiness", category: "CUTOVER", required: true, status: "PASS", evidence: `applicability=NOT_APPLICABLE; semesterStatus=${manifest?.status || "UNKNOWN"}`, failureReason: null, ownerWave: "W11" }];
-    if (manifest?.cutoverApplicability === "NOT_APPLICABLE") return [{ checkId: READINESS_CHECK_ID, label: "Semester cutover readiness", category: "CUTOVER", required: true, status: "PASS", evidence: "applicability=NOT_APPLICABLE; source=EXPLICIT_STORED_FIXTURE", failureReason: null, ownerWave: "W11" }];
+    if (manifest?.cutoverApplicability === "NOT_APPLICABLE" && projectId !== productionApproval.PRODUCTION_PROJECT_ID) return [{ checkId: READINESS_CHECK_ID, label: "Semester cutover readiness", category: "CUTOVER", required: true, status: "PASS", evidence: "applicability=NOT_APPLICABLE; source=EXPLICIT_STORED_FIXTURE", failureReason: null, ownerWave: "W11" }];
     const pointer = await transaction.get(targetPath(manifest.semesterId));
     if (!pointer.exists || pointer.data?.status !== "VERIFIED" || !pointer.data?.latestPlanId || !pointer.data?.latestAttemptId || !pointer.data?.latestEvidenceId) return [{ checkId: READINESS_CHECK_ID, label: "Semester cutover readiness", category: "CUTOVER", required: true, status: "FAIL", evidence: "applicability=APPLICABLE; verifiedEvidence=missing", failureReason: "SEMESTER_CUTOVER_NOT_VERIFIED", ownerWave: "W11" }];
     const [plan, attempt, evidence] = await transaction.getAll([planPath(pointer.data.latestPlanId), attemptPath(pointer.data.latestAttemptId), evidencePath(pointer.data.latestEvidenceId)]);
     let current = plan.exists && attempt.exists && evidence.exists && plan.data?.status === "VERIFIED" && attempt.data?.status === "VERIFIED" && evidence.data?.status === "PASS" && plan.data?.manifestHash === evidence.data?.manifestHash && Number(plan.data?.targetManifestRevision || 0) === Number(manifest.revision || 0) && Number(evidence.data?.targetManifestRevision || 0) === Number(manifest.revision || 0);
     let dependencyHash = null;
+    if (current) {
+      try {
+        await productionApproval.assertProductionCutoverApproval({ transaction, plan: plan.data, projectId, now });
+      } catch (error) {
+        if (!String(error?.details?.reason || "").startsWith("PRODUCTION_CUTOVER_")) throw error;
+        return [{ checkId: READINESS_CHECK_ID, label: "Semester cutover readiness", category: "CUTOVER", required: true, status: "FAIL", evidence: "applicability=APPLICABLE; productionApproval=invalid", failureReason: error.details.reason, ownerWave: "W11" }];
+      }
+    }
     if (current) {
       const snapshots = await inspectDatasets(transaction, plan.data.operations || [], plan.data.sourceSemesterId, plan.data.targetSemesterId);
       const deniedActivitySnapshot = await activitySnapshot(transaction, plan.data.targetSemesterId);

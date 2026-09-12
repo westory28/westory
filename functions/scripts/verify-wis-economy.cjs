@@ -236,6 +236,11 @@ const run = async () => {
     0,
   );
 
+  // Prepared accounts must become usable when their active-semester opening
+  // posts, including the balance and ranking projections.
+  for (const collection of ["semester_wis_accounts", "semester_wis_balances", "semester_wis_rankings"]) {
+    tx.set(`${collection}/${accountId}`, { status: "PREPARING", provenance: "PREPARING", readOnly: true }, { merge: true });
+  }
   const initial = await apply("grantInitialWis", {
     ...common,
     expectedEconomyRevision: 2,
@@ -246,6 +251,12 @@ const run = async () => {
     reason: "최초 지급",
   });
   assert.equal(initial.result.balance, 500);
+  for (const collection of ["semester_wis_accounts", "semester_wis_balances", "semester_wis_rankings"]) {
+    const saved = (await tx.get(`${collection}/${accountId}`)).data;
+    assert.equal(saved.status, "ACTIVE");
+    assert.equal(saved.provenance, "CURRENT");
+    assert.equal(saved.readOnly, false);
+  }
   assert.deepEqual(
     (({ earnedTotal, rankEarnedTotal, spentTotal, adjustedTotal }) => ({
       earnedTotal,
@@ -1386,6 +1397,8 @@ const run = async () => {
     actor,
   });
   assert.equal(transitionResult.result.status, "ACTIVE_INITIALIZING");
+  assert.equal((await transitionTx.get("semester_wis_economies/2026-2")).data.provenance, "CURRENT");
+  assert.equal((await transitionTx.get("semester_wis_economies/2026-2")).data.readOnly, false);
   const openedLarge = await transitionAdapter.apply({
     transaction: transitionTx,
     commandId: "transition-large-2",
