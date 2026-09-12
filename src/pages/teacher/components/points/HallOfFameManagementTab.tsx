@@ -990,7 +990,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   >
                     {gradeOptions.length === 0 && (
                       <option value={WIS_HALL_OF_FAME_GRADE_KEY}>
-                        학년 없음
+                        순위가 있는 학년 없음
                       </option>
                     )}
                     {gradeOptions.map((option) => (
@@ -1011,7 +1011,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm disabled:bg-slate-100 disabled:text-slate-400"
                   >
                     {classOptions.length === 0 && (
-                      <option value="">학급 없음</option>
+                      <option value="">순위가 있는 학급 없음</option>
                     )}
                     {classOptions.map((option) => {
                       const parsed = parseClassKey(option);

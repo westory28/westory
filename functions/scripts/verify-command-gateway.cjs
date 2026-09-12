@@ -264,12 +264,22 @@ const main = async () => {
     },
   });
   let authCalls = 0;
+  const semesterQueryRequests = new WeakSet();
   const assertSession = async (request, options) => {
     authCalls += 1;
-    assert.deepEqual(options, { recentAuth: true, highRisk: true });
+    assert.deepEqual(options, semesterQueryRequests.has(request)
+      ? { recentAuth: false, highRisk: false }
+      : { recentAuth: true, highRisk: true });
     if (request.auth?.uid === "expired-uid") {
       throw new HttpsError("unauthenticated", "expired", {
         reason: "SESSION_EXPIRED",
+      });
+    }
+    // The general application session remains active after the recent-auth
+    // window/high-risk session expires; writes must still demand reauthentication.
+    if (request.auth?.uid === "general-only-admin" && options.recentAuth) {
+      throw new HttpsError("unauthenticated", "recent authentication required", {
+        reason: "RECENT_AUTH_REQUIRED",
       });
     }
     return {
@@ -1428,6 +1438,7 @@ const main = async () => {
     semesterId: "2027-2",
     _session: semesterStateRequest.data._session,
   };
+  semesterQueryRequests.add(semesterStateRequest);
   const semesterState = await callable.getSemesterCoreState.run(semesterStateRequest);
   assert.equal(semesterState.active.semesterId, "2027-2");
   assert.equal(semesterState.requested.semesterId, "2027-2");
@@ -1506,22 +1517,58 @@ const main = async () => {
     semesterId: "2027-2",
     _session: unauthorizedSemesterQuery.data._session,
   };
+  semesterQueryRequests.add(unauthorizedSemesterQuery);
   const semesterReadsBeforeUnauthorized = store.queryReads;
+  const semesterTransactionsBeforeUnauthorized = store.transactionCalls;
   assert.equal(
     await getReason(() => callable.getSemesterCoreState.run(unauthorizedSemesterQuery)),
     "COMMAND_ADMIN_REQUIRED",
   );
   assert.equal(store.queryReads, semesterReadsBeforeUnauthorized);
+  assert.equal(store.transactionCalls, semesterTransactionsBeforeUnauthorized);
   const expiredSemesterQuery = requestFor({ uid: "expired-uid" });
   expiredSemesterQuery.data = {
     semesterId: "2027-2",
     _session: expiredSemesterQuery.data._session,
   };
+  semesterQueryRequests.add(expiredSemesterQuery);
   assert.equal(
     await getReason(() => callable.getSemesterCoreState.run(expiredSemesterQuery)),
     "SESSION_EXPIRED",
   );
   assert.equal(store.queryReads, semesterReadsBeforeUnauthorized);
+  assert.equal(store.transactionCalls, semesterTransactionsBeforeUnauthorized);
+
+  const ordinarySessionQuery = requestFor({ uid: "general-only-admin" });
+  ordinarySessionQuery.auth.token.auth_time -= 600;
+  ordinarySessionQuery.data = { semesterId: "2027-2", _session: ordinarySessionQuery.data._session };
+  semesterQueryRequests.add(ordinarySessionQuery);
+  const writesBeforeOrdinarySessionQuery = Array.from(store.committedWrites.values())
+    .reduce((sum, count) => sum + count, 0);
+  const ordinarySessionState = await callable.getSemesterCoreState.run(ordinarySessionQuery);
+  assert.equal(ordinarySessionState.active.semesterId, "2027-2");
+  assert.equal(ordinarySessionState.requested.semesterId, "2027-2");
+  assert.equal(Array.from(store.committedWrites.values()).reduce((sum, count) => sum + count, 0), writesBeforeOrdinarySessionQuery);
+
+  const readsBeforeStaleMutation = store.queryReads;
+  const transactionsBeforeStaleMutation = store.transactionCalls;
+  for (const commandType of [
+    COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+    COMMAND_TYPES.UPDATE_SEMESTER_MANIFEST,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+    COMMAND_TYPES.ACTIVATE_SEMESTER,
+  ]) {
+    const staleWrite = requestFor({ uid: "general-only-admin", commandId: nextSemesterCommandId(), commandType, payload: {} });
+    staleWrite.auth.token.auth_time = ordinarySessionQuery.auth.token.auth_time;
+    assert.equal(await getReason(() => callable.executeCommand.run(staleWrite)), "RECENT_AUTH_REQUIRED");
+    const staleStatus = requestFor({ uid: "general-only-admin", commandId: staleWrite.data.commandId, commandType });
+    staleStatus.auth.token.auth_time = ordinarySessionQuery.auth.token.auth_time;
+    assert.equal(await getReason(() => callable.getCommandStatus.run(staleStatus)), "RECENT_AUTH_REQUIRED");
+  }
+  assert.equal(store.queryReads, readsBeforeStaleMutation);
+  assert.equal(store.transactionCalls, transactionsBeforeStaleMutation);
+  assert.equal(Array.from(store.committedWrites.values()).reduce((sum, count) => sum + count, 0), writesBeforeOrdinarySessionQuery);
 
   assert.equal(
     await getReason(() => callable.executeCommand.run(requestFor({
@@ -2308,6 +2355,8 @@ const main = async () => {
       "SEMESTER_CLOSING_CANCEL_CLOSE_ARCHIVE_LIFECYCLE",
       "SEMESTER_CLOSED_CONFIG_NOT_LEGACY_ACTIVE_AND_NEXT_READY_ACTIVATES",
       "SEMESTER_QUERY_ONLY_RESOLVER_AUTH_AND_ZERO_WRITES",
+      "SEMESTER_QUERY_GENERAL_SESSION_WITHOUT_RECENT_AUTH_ZERO_WRITES",
+      "SEMESTER_MUTATIONS_AND_STATUS_RETAIN_HIGH_RISK_REAUTH",
       "SEMESTER_QUERY_READINESS_DEPENDENCY_FRESHNESS_SAME_TRANSACTION",
       "SEMESTER_RESOLVER_CLOSING_CURRENT_AND_CONFLICT_FAIL_CLOSED",
       "HOLIDAY_CANONICAL_ACTIVE_POINTER_AND_MANIFEST_SCOPE_FENCE",

@@ -273,13 +273,14 @@ const WisHallOfFamePositionEditor: React.FC<
   const emptyPodiumMessage =
     effectivePreviewView === "grade"
       ? snapshot
-        ? `${previewGradeKey}학년 전교 랭킹을 집계 중이에요.`
+        ? `${previewGradeKey}학년에서 아직 순위에 오른 학생이 없어요.`
         : "화랑의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다."
       : snapshot
         ? "아직 우리 학급 랭킹이 없어요."
         : "우리 학급 랭킹도 잠시 후 다시 표시됩니다.";
-  const rightRailEmptyMessage =
-    effectivePreviewView === "grade"
+  const rightRailEmptyMessage = snapshot
+    ? "추가 순위에 오른 학생이 없어요."
+    : effectivePreviewView === "grade"
       ? "전교 추가 랭킹을 집계 중이에요."
       : "우리 학급 추가 랭킹을 준비 중이에요.";
   const desktopRail = resolvedConfig.leaderboardPanel.desktop;

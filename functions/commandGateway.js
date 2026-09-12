@@ -1245,6 +1245,11 @@ const createCommandGatewayCore = ({
   concreteTimestamp = () => Timestamp.now(),
   projectId = resolveProjectId(),
   getSessionOptions = (commandType) => {
+    // Reading the administrator's semester state uses the general session.
+    // All semester mutations and command-status checks retain their own policy.
+    if (commandType === GET_SEMESTER_CORE_STATE_COMMAND_TYPE) {
+      return { recentAuth: false, highRisk: false };
+    }
     if (commandType === mapTagWisReward.COMMAND_TYPE) return { recentAuth: false, highRisk: false };
     if (Object.values(historyDictionaryImport.HISTORY_DICTIONARY_IMPORT_COMMAND_TYPES).includes(commandType)) return { recentAuth: false, highRisk: false };
     if (historyDictionaryCommands.STUDENT_COMMAND_TYPES.has(commandType)) return { recentAuth: false, highRisk: false };
