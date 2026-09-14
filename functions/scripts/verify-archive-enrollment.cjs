@@ -614,6 +614,96 @@ const main = async () => {
   assert.equal(current.enrollments.length, 2);
   assert.equal(store.writeCount, currentBefore);
 
+  // Hold all independent domain reads: none may wait for another to finish.
+  const parallelReadPaths = new Set([
+    archiveEnrollment.SEMESTER_CLASS_COLLECTION,
+    archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION,
+    archiveEnrollment.ROSTER_IMPORT_COLLECTION,
+    `${archiveEnrollment.ARCHIVE_MANIFEST_COLLECTION}/${semesterId}`,
+  ]);
+  const startedReads = new Set();
+  let releaseReads;
+  const readGate = new Promise((resolve) => { releaseReads = resolve; });
+  const originalRunTransaction = store.runTransaction.bind(store);
+  store.runTransaction = (callback) => originalRunTransaction((transaction) => {
+    const wrapRead = (method) => async (path, ...args) => {
+      if (parallelReadPaths.has(path)) {
+        startedReads.add(path);
+        await readGate;
+      }
+      return transaction[method](path, ...args);
+    };
+    return callback({ ...transaction, get: wrapRead("get"), query: wrapRead("query") });
+  });
+  const parallelCurrent = queries.getArchiveEnrollmentState(queryRequest({
+    source: "CURRENT", callSite: "verify-w4-unit-current",
+  }));
+  try {
+    await new Promise(setImmediate);
+    assert.deepEqual(startedReads, parallelReadPaths, "All four authorized reads must start before any is released");
+  } finally {
+    releaseReads();
+    store.runTransaction = originalRunTransaction;
+  }
+  assert.deepEqual(await parallelCurrent, current);
+  assert.equal(store.writeCount, currentBefore);
+
+  for (const [method, input, highRisk] of [
+    ["getArchiveEnrollmentState", { source: "CURRENT", callSite: "verify-w4-unit-current" }, false],
+    ["previewEnrollmentRoster", roster, true],
+  ]) {
+    const request = queryRequest(input);
+    const expected = await queries[method](request);
+    const started = new Set();
+    let releaseIdentity;
+    const identityGate = new Promise((resolve) => { releaseIdentity = resolve; });
+    let domainTransactions = 0;
+    const core = archiveEnrollment.createArchiveEnrollmentQueryCore({
+      projectId: "demo-westory-session-w4",
+      assertSession: async (value, options) => {
+        started.add("session");
+        assert.deepEqual(options, { recentAuth: highRisk, highRisk });
+        await identityGate;
+        return assertSession(value, options);
+      },
+      store: {
+        get: (path) => { started.add("profile"); return store.get(path); },
+        runTransaction: (callback) => { domainTransactions += 1; return store.runTransaction(callback); },
+      },
+    });
+    const result = core[method](request);
+    try {
+      await new Promise(setImmediate);
+      assert.deepEqual(started, new Set(["session", "profile"]));
+      assert.equal(domainTransactions, 0, `${method} cannot query business data before session validation`);
+    } finally { releaseIdentity(); }
+    assert.deepEqual(await result, expected);
+  }
+  const sessionFailure = new Error("synthetic session failure");
+  const profileFailure = new Error("synthetic profile failure");
+  for (const uid of ["admin-uid", "", "unsafe/uid"]) {
+    let profileReads = 0;
+    const core = archiveEnrollment.createArchiveEnrollmentQueryCore({
+      assertSession: async () => { throw sessionFailure; },
+      store: {
+        get: async () => { profileReads += 1; throw profileFailure; },
+        runTransaction: () => assert.fail("Denied session cannot start a domain transaction"),
+      },
+    });
+    await assert.rejects(() => core.getArchiveEnrollmentState(queryRequest({}, uid)),
+      (error) => error === sessionFailure);
+    assert.equal(profileReads, uid === "admin-uid" ? 1 : 0);
+  }
+  const mismatchedCore = archiveEnrollment.createArchiveEnrollmentQueryCore({
+    assertSession: async () => ({ uid: "another-uid", email: ADMIN_EMAIL }),
+    store: {
+      get: async () => { throw profileFailure; },
+      runTransaction: () => assert.fail("Actor mismatch cannot start a domain transaction"),
+    },
+  });
+  assert.equal(await reasonFrom(() => mismatchedCore.getArchiveEnrollmentState(queryRequest({}))),
+    "COMMAND_ACTOR_MISMATCH");
+
   store.documents.set(
     `${semesterCore.SEMESTER_READINESS_REPORT_COLLECTION}/${semesterId}`,
     {
@@ -896,6 +986,13 @@ const main = async () => {
         "W4_DEPENDENCY_CHANGE_STALES_READINESS",
         "W4_RESPONSE_LOSS_STATUS_AND_REPLAY_RECOVERY",
         "CURRENT_EXPLICIT_PROVENANCE_QUERY_ZERO_WRITE",
+        "CURRENT_FOUR_INDEPENDENT_READS_START_TOGETHER_RESULT_UNCHANGED",
+        "CURRENT_ACTOR_READS_PARALLEL_WITH_SESSION_GATE",
+        "PREVIEW_ACTOR_READS_PARALLEL_HIGH_RISK_OPTIONS_PRESERVED",
+        "SESSION_FAILURE_PRECEDES_PROFILE_FAILURE",
+        "UNAUTHENTICATED_PROFILE_PREFETCH_DISABLED",
+        "SLASH_UID_PROFILE_PREFETCH_DISABLED",
+        "ACTOR_MISMATCH_PRECEDES_PROFILE_FAILURE",
         "ENROLLMENT_MOVE_PRESERVES_HISTORY",
         "CONCURRENT_ENROLLMENT_MOVE_EXACTLY_ONE_ACTIVE",
         "ENROLLMENT_CLOSE_CLEARS_ACTIVE_SLOT",

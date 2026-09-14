@@ -784,12 +784,12 @@ const evaluateReadinessAdapters = async ({
   transaction,
   manifest,
   evaluatedAt,
+  parallel = false,
 }) => {
   if (!Array.isArray(readinessAdapters)) {
     throw new TypeError("readinessAdapters must be an array.");
   }
-  const rawChecks = [];
-  for (const adapter of readinessAdapters) {
+  const evaluateAdapter = async (adapter) => {
     if (!adapter || typeof adapter.evaluate !== "function") {
       fail(
         "failed-precondition",
@@ -816,7 +816,21 @@ const evaluateReadinessAdapters = async ({
         "SEMESTER_READINESS_ADAPTER_INVALID",
       );
     }
-    rawChecks.push(...adapterChecks);
+    return adapterChecks;
+  };
+  const rawChecks = [];
+  if (parallel) {
+    // Read-only queries may overlap adapters. Keep adapter registration order
+    // for checks and errors, even when a later adapter finishes first.
+    const results = await Promise.allSettled(readinessAdapters.map(evaluateAdapter));
+    for (const result of results) {
+      if (result.status === "rejected") throw result.reason;
+      rawChecks.push(...result.value);
+    }
+  } else {
+    for (const adapter of readinessAdapters) {
+      rawChecks.push(...await evaluateAdapter(adapter));
+    }
   }
   const checks = rawChecks.map((check) => normalizeExtensionCheck(check, {
     evaluatedAt,
@@ -1474,8 +1488,10 @@ const resolveSemesterCoreState = async ({ store, semesterId = null, readinessAda
     ? null
     : normalizeSemesterId(semesterId);
   const loadState = async (reader) => {
-    const manifestDocuments = await reader.query(SEMESTER_MANIFEST_COLLECTION);
-    const [pointerSnapshot] = await readDocuments(reader, [ACTIVE_SEMESTER_POINTER_PATH]);
+    const [manifestDocuments, [pointerSnapshot]] = await Promise.all([
+      reader.query(SEMESTER_MANIFEST_COLLECTION),
+      readDocuments(reader, [ACTIVE_SEMESTER_POINTER_PATH]),
+    ]);
     const manifests = manifestDocuments.map((document) => document.data || {});
     const current = manifests.filter((manifest) =>
       manifest.status === "ACTIVE" || manifest.status === "CLOSING");
@@ -1535,6 +1551,7 @@ const resolveSemesterCoreState = async ({ store, semesterId = null, readinessAda
         transaction: reader,
         manifest: selectedManifest,
         evaluatedAt: new Date().toISOString(),
+        parallel: true,
       });
       const dependencyHash = hashDependencyDocuments(seedDocuments, extensionChecks);
       const report = reportSnapshot.exists ? reportSnapshot.data || {} : null;

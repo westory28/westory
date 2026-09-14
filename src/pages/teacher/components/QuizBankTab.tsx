@@ -321,7 +321,7 @@ const getWrongAnswerLabel = (value: unknown) => {
 };
 
 const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
-  const { config } = useAuth();
+  const { config, currentUser } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [questionStats, setQuestionStats] = useState<
     Record<string, QuestionAggregate>
@@ -340,6 +340,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [lastAttemptAt, setLastAttemptAt] = useState(0);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
   const [loading, setLoading] = useState(false);
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [roundAnalyticsLoading, setRoundAnalyticsLoading] = useState(false);
+  const auxiliaryLoading = loading || supportLoading || roundAnalyticsLoading;
+  const userTouchedFiltersRef = useRef(false);
+  const analyticsRoundRef = useRef("");
   const [filters, setFilters] = useState<BankFilterState>(
     createEmptyBankFilters,
   );
@@ -542,18 +547,44 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   }, [config]);
 
   useEffect(() => {
+    let active = true;
+    userTouchedFiltersRef.current = false;
+    userTouchedClassScopeRef.current = false;
+    analyticsRoundRef.current = "";
     const loadAll = async () => {
       setLoading(true);
+      setSupportLoading(true);
+      setQuestions([]);
+      setTreeData([]);
+      setQuestionStats({});
+      setClassAverageByClass({});
+      setParticipationByClass({});
+      setTotalParticipants(0);
+      setRecentClassFocus(null);
+      setLastAttemptAt(0);
+      setStudentRoster([]);
+      setRosterAccessLimited(false);
+      setDefaultFocus(null);
+      setFilters(createEmptyBankFilters());
+      setCategoryFilter("");
+      setExamRoundFilter("");
       try {
-        const [questionsResult, treeResult, statsResult, rosterResult] =
-          await Promise.all([
-            loadQuestions(),
-            loadTreeData(),
-            loadQuestionAnalytics(),
-            loadStudentRoster(),
-          ]);
+        const [questionsResult, treeResult] = await Promise.all([
+          loadQuestions(),
+          loadTreeData(),
+        ]);
+        if (!active) return;
         setQuestions(questionsResult);
         setTreeData(treeResult);
+        // Reading and editing questions must not wait for the statistics or
+        // every student's profile. An empty bank needs neither extra read.
+        setLoading(false);
+        if (!questionsResult.length) return;
+        const [statsResult, rosterResult] = await Promise.all([
+          loadQuestionAnalytics(),
+          loadStudentRoster(),
+        ]);
+        if (!active) return;
         setQuestionStats(statsResult.questionStats);
         setClassAverageByClass(statsResult.classAverageByClass);
         setParticipationByClass(statsResult.participationByClass);
@@ -570,7 +601,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           statsResult.recentExamRoundFocus,
         );
         setDefaultFocus(nextDefaultFocus);
-        if (nextDefaultFocus) {
+        if (nextDefaultFocus && !userTouchedFiltersRef.current) {
           setFilters(
             nextDefaultFocus.category === "exam_prep"
               ? createEmptyBankFilters()
@@ -580,11 +611,17 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           setExamRoundFilter(nextDefaultFocus.examRound || "");
         }
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+          setSupportLoading(false);
+        }
       }
     };
     void loadAll();
-  }, [config]);
+    return () => {
+      active = false;
+    };
+  }, [config?.year, config?.semester, currentUser?.uid]);
 
   const loadQuestions = async () => {
     try {
@@ -1032,14 +1069,17 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   };
 
   useEffect(() => {
-    if (!isMockExamCategory(categoryFilter)) return;
+    if (loading || supportLoading || !questions.length) return;
+    const round = isMockExamCategory(categoryFilter) ? examRoundFilter : "";
+    if (analyticsRoundRef.current === round) return;
     let active = true;
 
     const reloadRoundAnalytics = async () => {
-      setLoading(true);
+      setRoundAnalyticsLoading(true);
       try {
-        const statsResult = await loadQuestionAnalytics(examRoundFilter);
+        const statsResult = await loadQuestionAnalytics(round);
         if (!active) return;
+        analyticsRoundRef.current = round;
         setQuestionStats(statsResult.questionStats);
         setClassAverageByClass(statsResult.classAverageByClass);
         setParticipationByClass(statsResult.participationByClass);
@@ -1047,15 +1087,24 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         setRecentClassFocus(statsResult.recentClassFocus);
         setLastAttemptAt(statsResult.lastAttemptAt);
       } finally {
-        if (active) setLoading(false);
+        if (active) setRoundAnalyticsLoading(false);
       }
     };
 
     void reloadRoundAnalytics();
     return () => {
       active = false;
+      setRoundAnalyticsLoading(false);
     };
-  }, [categoryFilter, config, examRoundFilter]);
+  }, [
+    categoryFilter,
+    config?.year,
+    config?.semester,
+    examRoundFilter,
+    loading,
+    supportLoading,
+    questions.length,
+  ]);
 
   const selectedBig = useMemo(
     () => treeData.find((big) => big.id === filters.big),
@@ -1205,7 +1254,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   }, [analyticsScope, classFilter, classOptions]);
 
   useEffect(() => {
-    if (userTouchedClassScopeRef.current || !recentClassFocus) return;
+    if (
+      userTouchedClassScopeRef.current ||
+      userTouchedFiltersRef.current ||
+      !recentClassFocus
+    )
+      return;
     if (!classOptions.includes(recentClassFocus.classOnly)) return;
     setAnalyticsScope("class");
     setClassFilter(recentClassFocus.classOnly);
@@ -2554,7 +2608,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     editType === "choice" && editPreviewChoiceItems.some((item) => item.image);
 
   return (
-    <div>
+    <div
+      onChangeCapture={() => {
+        userTouchedFiltersRef.current = true;
+      }}
+      onClickCapture={() => {
+        userTouchedFiltersRef.current = true;
+      }}
+    >
       {!canEdit && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
           읽기 전용 권한입니다. 문제 수정은 관리자만 가능합니다.
@@ -2595,6 +2656,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 <button
                   key={scope}
                   type="button"
+                  disabled={auxiliaryLoading}
                   onClick={() => {
                     userTouchedClassScopeRef.current = true;
                     setAnalyticsScope(scope);
@@ -2615,7 +2677,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 userTouchedClassScopeRef.current = true;
                 setClassFilter(e.target.value);
               }}
-              disabled={analyticsScope !== "class" || classOptions.length === 0}
+              disabled={
+                auxiliaryLoading ||
+                analyticsScope !== "class" ||
+                classOptions.length === 0
+              }
               className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
               aria-label="학급 선택"
             >
@@ -2701,6 +2767,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             </select>
             <select
               value={statusFilter}
+              disabled={auxiliaryLoading}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
             >
@@ -2738,7 +2805,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       </div>
 
       <div className="pb-4">
-        <section className="rounded-lg border border-slate-200 bg-white">
+        {auxiliaryLoading && (
+          <p role="status" className="py-3 text-sm text-slate-500">
+            문제 목록을 먼저 표시하고 있습니다. 응시 통계를 확인하는 중입니다.
+          </p>
+        )}
+        <section
+          hidden={auxiliaryLoading}
+          className="rounded-lg border border-slate-200 bg-white"
+        >
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h3 className="font-black text-slate-900">{scopeTitle}</h3>
@@ -3064,6 +3139,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       <button
                         type="button"
                         onClick={() => toggleSort("rate")}
+                        disabled={auxiliaryLoading}
                         className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
                       >
                         정답률{" "}
@@ -3210,25 +3286,29 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           </td>
                           <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="text-xs font-black text-slate-700">
-                              {rateInfo.text}
+                              {auxiliaryLoading ? "확인 중" : rateInfo.text}
                             </div>
                             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                               <div
                                 className={`h-full rounded-full ${rateInfo.attempts && rateInfo.rate < 60 ? "bg-red-500" : "bg-blue-500"}`}
                                 style={{
-                                  width: `${rateInfo.attempts ? rateInfo.rate : 0}%`,
+                                  width: `${!auxiliaryLoading && rateInfo.attempts ? rateInfo.rate : 0}%`,
                                 }}
                               ></div>
                             </div>
                           </td>
                           <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="text-xs font-black text-slate-700">
-                              {stat.uniqueWrongStudents}명 오답
+                              {auxiliaryLoading
+                                ? "확인 중"
+                                : `${stat.uniqueWrongStudents}명 오답`}
                             </div>
                             <div className="mt-2 min-w-0 truncate text-[11px] font-bold text-slate-400">
-                              {wrong.count
-                                ? `${wrong.answer} ${wrong.count}회`
-                                : "반복 오답 없음"}
+                              {auxiliaryLoading
+                                ? "-"
+                                : wrong.count
+                                  ? `${wrong.answer} ${wrong.count}회`
+                                  : "반복 오답 없음"}
                             </div>
                           </td>
                           <td className="overflow-hidden px-4 py-5 align-top">
@@ -3236,13 +3316,19 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                               <div
                                 className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-black ${status.tone}`}
                               >
-                                {status.label}
+                                {auxiliaryLoading ? "확인 중" : status.label}
                               </div>
                               <div
                                 className="mt-1 truncate text-[11px] font-black text-slate-700"
-                                title={getRecommendation(q, stat)}
+                                title={
+                                  auxiliaryLoading
+                                    ? ""
+                                    : getRecommendation(q, stat)
+                                }
                               >
-                                {getRecommendation(q, stat)}
+                                {auxiliaryLoading
+                                  ? "-"
+                                  : getRecommendation(q, stat)}
                               </div>
                             </div>
                           </td>
@@ -3328,7 +3414,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             )}
           </div>
 
-          <aside className="space-y-4">
+          <aside hidden={auxiliaryLoading} className="space-y-4">
             <section className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-black text-slate-900">학급 간 비교</h3>

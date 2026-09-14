@@ -3541,10 +3541,18 @@ const createW8QueryCore = ({
 } = {}) => {
   if (!store) throw new TypeError("store is required.");
   const getW8DomainState = async (request) => {
-    const identity = await assertSession(request, {
+    const identityPromise = assertSession(request, {
       recentAuth: false,
       highRisk: false,
     });
+    const requestedUid = String(request.auth?.uid || "").trim();
+    const profilePromise = requestedUid && !requestedUid.includes("/")
+      ? Promise.resolve().then(() => store.get(`users/${requestedUid}`)).then(
+          (profile) => ({ ok: true, profile }),
+          (error) => ({ ok: false, error }),
+        )
+      : null;
+    const identity = await identityPromise;
     const uid = String(identity?.uid || request.auth?.uid || "").trim();
     if (!uid || uid !== String(request.auth?.uid || "").trim())
       fail(
@@ -3563,7 +3571,10 @@ const createW8QueryCore = ({
         "Students can only query their own W8 state.",
         "W8_STUDENT_SCOPE_FORBIDDEN",
       );
-    const profile = await store.get(`users/${uid}`);
+    // Keep identity, payload and student-scope errors ahead of profile failures.
+    const profileResult = profilePromise ? await profilePromise : null;
+    if (profileResult && !profileResult.ok) throw profileResult.error;
+    const profile = profileResult ? profileResult.profile : await store.get(`users/${uid}`);
     const isAdmin =
       String(
         identity?.email || request.auth?.token?.email || "",
@@ -3758,76 +3769,28 @@ const createW8QueryCore = ({
       const activeWindow = (row, fromKey, untilKey) =>
         (!row[fromKey] || row[fromKey] <= currentIso) &&
         (!row[untilKey] || row[untilKey] >= currentIso);
+      const readRows = async (collection, id, filter) =>
+        (id
+          ? [await transaction.get(path(collection, id))].filter((row) => row.exists)
+          : await transaction.query(collection, filter)).map((row) => row.data);
       const loadLearning = async () => {
-        contents = query.contentId
-          ? [
-              await transaction.get(
-                path(LEARNING_CONTENT_COLLECTION, query.contentId),
-              ),
-            ]
-              .filter((row) => row.exists)
-              .map((row) => row.data)
-          : (
-              await transaction.query(LEARNING_CONTENT_COLLECTION, {
-                field: "semesterId",
-                operator: "==",
-                value: query.semesterId,
-              })
-            ).map((row) => row.data);
-        if (!suppressArchiveStudentState && selectedUid) {
-          progress = (
-            await transaction.query(LEARNING_PROGRESS_COLLECTION, {
-              field: "studentUid",
-              operator: "==",
-              value: selectedUid,
-            })
-          )
-            .map((row) => row.data)
-            .filter((row) => row.semesterId === query.semesterId);
-          exemptions = (
-            await transaction.query(LEARNING_EXEMPTION_COLLECTION, {
-              field: "studentUid",
-              operator: "==",
-              value: selectedUid,
-            })
-          )
-            .map((row) => row.data)
-            .filter((row) => row.semesterId === query.semesterId);
-          exemptionRequests = (
-            await transaction.query(LEARNING_EXEMPTION_REQUEST_COLLECTION, {
-              field: "studentUid",
-              operator: "==",
-              value: selectedUid,
-            })
-          )
-            .map((row) => row.data)
-            .filter((row) => row.semesterId === query.semesterId);
-        } else if (
-          !suppressArchiveStudentState &&
-          query.audience === "teacher"
-        ) {
-          progress = (
-            await transaction.query(LEARNING_PROGRESS_COLLECTION, {
-              field: "semesterId",
-              operator: "==",
-              value: query.semesterId,
-            })
-          ).map((row) => row.data);
-          exemptions = (
-            await transaction.query(LEARNING_EXEMPTION_COLLECTION, {
-              field: "semesterId",
-              operator: "==",
-              value: query.semesterId,
-            })
-          ).map((row) => row.data);
-          exemptionRequests = (
-            await transaction.query(LEARNING_EXEMPTION_REQUEST_COLLECTION, {
-              field: "semesterId",
-              operator: "==",
-              value: query.semesterId,
-            })
-          ).map((row) => row.data);
-        }
+        const stateFilter = selectedUid
+          ? { field: "studentUid", operator: "==", value: selectedUid }
+          : { field: "semesterId", operator: "==", value: query.semesterId };
+        const readState = async (collection) => {
+          if (suppressArchiveStudentState || (!selectedUid && query.audience !== "teacher"))
+            return [];
+          const rows = await readRows(collection, "", stateFilter);
+          return selectedUid ? rows.filter((row) => row.semesterId === query.semesterId) : rows;
+        };
+        [contents, progress, exemptions, exemptionRequests] = await Promise.all([
+          readRows(LEARNING_CONTENT_COLLECTION, query.contentId, {
+            field: "semesterId", operator: "==", value: query.semesterId,
+          }),
+          readState(LEARNING_PROGRESS_COLLECTION),
+          readState(LEARNING_EXEMPTION_COLLECTION),
+          readState(LEARNING_EXEMPTION_REQUEST_COLLECTION),
+        ]);
         if (query.audience === "student") {
           contents = contents.filter(
             (row) =>
@@ -4030,26 +3993,16 @@ const createW8QueryCore = ({
         }
       };
       const loadSchedule = async () => {
-        events = query.eventId
-          ? [
-              await transaction.get(
-                path(SCHEDULE_EVENT_COLLECTION, query.eventId),
-              ),
-            ]
-              .filter((row) => row.exists)
-              .map((row) => row.data)
-          : (
-              await transaction.query(SCHEDULE_EVENT_COLLECTION, {
-                field: "semesterId",
-                operator: "==",
-                value: query.semesterId,
-              })
-            ).map((row) => row.data);
         const [year, term] = query.semesterId.split("-");
-        const holidays = await transaction.query(
-          `years/${year}/semesters/${term}/calendar`,
-          { field: "eventType", operator: "==", value: "holiday" },
-        );
+        const [eventRows, holidays] = await Promise.all([
+          readRows(SCHEDULE_EVENT_COLLECTION, query.eventId, {
+            field: "semesterId", operator: "==", value: query.semesterId,
+          }),
+          transaction.query(`years/${year}/semesters/${term}/calendar`, {
+            field: "eventType", operator: "==", value: "holiday",
+          }),
+        ]);
+        events = eventRows;
         events.push(
           ...holidays.map((row) => ({
             ...baseDocument(query.semesterId),
@@ -4088,60 +4041,24 @@ const createW8QueryCore = ({
       };
       const loadAttendance = async () => {
         if (suppressArchiveStudentState) return;
-        sessions = query.sessionId
-          ? [
-              await transaction.get(
-                path(ATTENDANCE_SESSION_COLLECTION, query.sessionId),
-              ),
-            ]
-              .filter((row) => row.exists)
-              .map((row) => row.data)
-          : (
-              await transaction.query(ATTENDANCE_SESSION_COLLECTION, {
-                field: "semesterId",
-                operator: "==",
-                value: query.semesterId,
-              })
-            ).map((row) => row.data);
+        const recordsByStudent = query.audience === "student" || (!query.sessionId && selectedUid);
+        const recordFilter = recordsByStudent
+          ? { field: "studentUid", operator: "==", value: selectedUid }
+          : query.sessionId
+            ? { field: "sessionId", operator: "==", value: query.sessionId }
+            : { field: "semesterId", operator: "==", value: query.semesterId };
+        [sessions, records] = await Promise.all([
+          readRows(ATTENDANCE_SESSION_COLLECTION, query.sessionId, {
+            field: "semesterId", operator: "==", value: query.semesterId,
+          }),
+          readRows(ATTENDANCE_RECORD_COLLECTION, "", recordFilter),
+        ]);
+        if (recordsByStudent)
+          records = records.filter((row) => row.semesterId === query.semesterId);
         if (query.audience === "student") {
           sessions = sessions.filter(
             (row) => row.classId === enrollment?.classId,
           );
-          records = (
-            await transaction.query(ATTENDANCE_RECORD_COLLECTION, {
-              field: "studentUid",
-              operator: "==",
-              value: uid,
-            })
-          )
-            .map((row) => row.data)
-            .filter((row) => row.semesterId === query.semesterId);
-        } else if (query.sessionId) {
-          records = (
-            await transaction.query(ATTENDANCE_RECORD_COLLECTION, {
-              field: "sessionId",
-              operator: "==",
-              value: query.sessionId,
-            })
-          ).map((row) => row.data);
-        } else if (selectedUid) {
-          records = (
-            await transaction.query(ATTENDANCE_RECORD_COLLECTION, {
-              field: "studentUid",
-              operator: "==",
-              value: selectedUid,
-            })
-          )
-            .map((row) => row.data)
-            .filter((row) => row.semesterId === query.semesterId);
-        } else {
-          records = (
-            await transaction.query(ATTENDANCE_RECORD_COLLECTION, {
-              field: "semesterId",
-              operator: "==",
-              value: query.semesterId,
-            })
-          ).map((row) => row.data);
         }
         if (query.classId) {
           sessions = sessions.filter((row) => row.classId === query.classId);
@@ -4182,26 +4099,25 @@ const createW8QueryCore = ({
         }
       };
       const loadCommunication = async () => {
-        notificationConfig = await transaction.get(NOTIFICATION_CONFIG_PATH);
+        [notificationConfig, deliveries, acknowledgements, notices] = await Promise.all([
+          transaction.get(NOTIFICATION_CONFIG_PATH),
+          readRows(NOTICE_DELIVERY_COLLECTION, "", {
+            field: "recipientUid", operator: "==", value: uid,
+          }),
+          query.audience === "student" || (!suppressArchiveStudentState && selectedUid)
+            ? readRows(NOTICE_ACK_COLLECTION, "", {
+                field: "studentUid", operator: "==", value: selectedUid,
+              })
+            : [],
+          query.audience === "teacher"
+            ? readRows(NOTICE_COLLECTION, query.noticeId, {
+                field: "semesterId", operator: "==", value: query.semesterId,
+              })
+            : [],
+        ]);
+        deliveries = deliveries.filter((row) => row.semesterId === query.semesterId);
+        acknowledgements = acknowledgements.filter((row) => row.semesterId === query.semesterId);
         if (query.audience === "student") {
-          deliveries = (
-            await transaction.query(NOTICE_DELIVERY_COLLECTION, {
-              field: "recipientUid",
-              operator: "==",
-              value: uid,
-            })
-          )
-            .map((row) => row.data)
-            .filter((row) => row.semesterId === query.semesterId);
-          acknowledgements = (
-            await transaction.query(NOTICE_ACK_COLLECTION, {
-              field: "studentUid",
-              operator: "==",
-              value: uid,
-            })
-          )
-            .map((row) => row.data)
-            .filter((row) => row.semesterId === query.semesterId);
           const noticeIds = [...new Set(deliveries.map((row) => row.noticeId))];
           notices = (
             await transaction.getAll(
@@ -4216,39 +4132,6 @@ const createW8QueryCore = ({
                 ["PUBLISHED", "SCHEDULED"].includes(row.status) &&
                 activeWindow(row, "publishAt", "expireAt"),
             );
-        } else {
-          notices = query.noticeId
-            ? [await transaction.get(path(NOTICE_COLLECTION, query.noticeId))]
-                .filter((row) => row.exists)
-                .map((row) => row.data)
-            : (
-                await transaction.query(NOTICE_COLLECTION, {
-                  field: "semesterId",
-                  operator: "==",
-                  value: query.semesterId,
-                })
-              ).map((row) => row.data);
-          deliveries = (
-            await transaction.query(NOTICE_DELIVERY_COLLECTION, {
-              field: "recipientUid",
-              operator: "==",
-              value: uid,
-            })
-          )
-            .map((row) => row.data)
-            .filter((row) => row.semesterId === query.semesterId);
-          acknowledgements =
-            !suppressArchiveStudentState && selectedUid
-              ? (
-                  await transaction.query(NOTICE_ACK_COLLECTION, {
-                    field: "studentUid",
-                    operator: "==",
-                    value: selectedUid,
-                  })
-                )
-                  .map((row) => row.data)
-                  .filter((row) => row.semesterId === query.semesterId)
-              : [];
         }
         if (query.classId)
           notices = notices.filter(
@@ -4259,15 +4142,14 @@ const createW8QueryCore = ({
       };
       // The historical dashboard keeps schedule/attendance/communication data,
       // but academic material is available only through the administrator archive.
-      if (["LEARNING", "DASHBOARD"].includes(query.domain) && lifecycleProvenance !== "ARCHIVE")
-        await loadLearning();
+      await Promise.all([
+        ["LEARNING", "DASHBOARD"].includes(query.domain) && lifecycleProvenance !== "ARCHIVE"
+          ? loadLearning() : undefined,
+        ["SCHEDULE", "DASHBOARD"].includes(query.domain) ? loadSchedule() : undefined,
+        ["ATTENDANCE", "DASHBOARD"].includes(query.domain) ? loadAttendance() : undefined,
+        ["COMMUNICATION", "DASHBOARD"].includes(query.domain) ? loadCommunication() : undefined,
+      ]);
       if (query.domain === "LEARNING") await loadThinkCloud();
-      if (["SCHEDULE", "DASHBOARD"].includes(query.domain))
-        await loadSchedule();
-      if (["ATTENDANCE", "DASHBOARD"].includes(query.domain))
-        await loadAttendance();
-      if (["COMMUNICATION", "DASHBOARD"].includes(query.domain))
-        await loadCommunication();
       const expose = (rows) =>
         rows.map((row) => {
           const projected = {

@@ -1050,6 +1050,103 @@ const run = async () => {
   assert.equal("targetUserIds" in dashboard.dashboard.todaySchedule[0], false);
   assert.equal("createdBy" in dashboard.contents[0], false);
   assert.equal("openedBy" in dashboard.sessions[0], false);
+
+  const dashboardRequest = {
+    auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+    data: { domain: "DASHBOARD", audience: "student", semesterId: "2026-2", source: "CURRENT" },
+  };
+  const parallelReadPaths = new Set([
+    "semester_learning_contents", "semester_learning_progress",
+    "semester_learning_exemptions", "semester_learning_exemption_requests",
+    "semester_schedule_events", "years/2026/semesters/2/calendar",
+    "semester_attendance_sessions", "semester_attendance_records",
+    "site_settings/notification_config", "semester_notice_deliveries",
+    "semester_notice_acknowledgements",
+  ]);
+  const startedReads = new Set();
+  let releaseReads;
+  const readGate = new Promise((resolve) => { releaseReads = resolve; });
+  const originalRunTransaction = store.runTransaction;
+  store.runTransaction = (callback) => originalRunTransaction((transaction) => {
+    const wrapRead = (method) => async (path, ...args) => {
+      if (parallelReadPaths.has(path)) {
+        startedReads.add(path);
+        await readGate;
+      }
+      return transaction[method](path, ...args);
+    };
+    return callback({
+      get: wrapRead("get"), query: wrapRead("query"),
+      getAll: transaction.getAll.bind(transaction),
+    });
+  });
+  const parallelDashboard = queryCore.getW8DomainState(dashboardRequest);
+  try {
+    await new Promise(setImmediate);
+    assert.deepEqual(startedReads, parallelReadPaths, "All eleven independent dashboard reads must start before any is released");
+    assert.equal(tx.readPaths.some((path) => path.startsWith("semester_notices/")), false,
+      "Student notice documents still depend on authorized delivery results");
+  } finally {
+    releaseReads();
+    store.runTransaction = originalRunTransaction;
+  }
+  assert.deepEqual(await parallelDashboard, dashboard);
+
+  let releaseIdentity;
+  const identityGate = new Promise((resolve) => { releaseIdentity = resolve; });
+  const actorReadsStarted = new Set();
+  let actorDomainTransactions = 0;
+  const parallelActorCore = w8.createW8QueryCore({
+    now: () => "2026-08-12T15:30:00.000Z",
+    assertSession: async (request, options) => {
+      actorReadsStarted.add("session");
+      assert.deepEqual(options, { recentAuth: false, highRisk: false });
+      await identityGate;
+      return { uid: request.auth.uid, email: request.auth.token.email };
+    },
+    store: {
+      get: (path) => { actorReadsStarted.add("profile"); return store.get(path); },
+      runTransaction: (callback) => { actorDomainTransactions += 1; return store.runTransaction(callback); },
+    },
+  });
+  const parallelActorResult = parallelActorCore.getW8DomainState(dashboardRequest);
+  try {
+    await new Promise(setImmediate);
+    assert.deepEqual(actorReadsStarted, new Set(["session", "profile"]));
+    assert.equal(actorDomainTransactions, 0, "Actor profile alone cannot authorize W8 domain reads");
+  } finally { releaseIdentity(); }
+  assert.deepEqual(await parallelActorResult, dashboard);
+
+  const sessionFailure = new Error("synthetic session failure");
+  const profileFailure = new Error("synthetic profile failure");
+  for (const uid of ["student-1", "", "unsafe/uid"]) {
+    let profileReads = 0;
+    const core = w8.createW8QueryCore({
+      assertSession: async () => { throw sessionFailure; },
+      store: {
+        get: async () => { profileReads += 1; throw profileFailure; },
+        runTransaction: () => assert.fail("Denied session cannot start W8 domain reads"),
+      },
+    });
+    await assert.rejects(() => core.getW8DomainState({ ...dashboardRequest, auth: { ...dashboardRequest.auth, uid } }),
+      (error) => error === sessionFailure);
+    assert.equal(profileReads, uid === "student-1" ? 1 : 0);
+  }
+  for (const [identityUid, data, expectedReason] of [
+    ["another-student", {}, "COMMAND_ACTOR_MISMATCH"],
+    ["student-1", {}, null],
+    ["student-1", { ...dashboardRequest.data, studentUid: "another-student" }, "W8_STUDENT_SCOPE_FORBIDDEN"],
+  ]) {
+    const core = w8.createW8QueryCore({
+      assertSession: async () => ({ uid: identityUid, email: dashboardRequest.auth.token.email }),
+      store: {
+        get: async () => { throw profileFailure; },
+        runTransaction: () => assert.fail("Invalid actor/payload/scope cannot start W8 domain reads"),
+      },
+    });
+    await assert.rejects(() => core.getW8DomainState({ ...dashboardRequest, data }),
+      (error) => expectedReason ? error.details?.reason === expectedReason : error.code === "invalid-argument");
+  }
   const teacherAttendance = await queryCore.getW8DomainState({
     auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
     data: {
@@ -1248,7 +1345,10 @@ const run = async () => {
   console.log(
     JSON.stringify({
       passed: true,
-      cases: 100,
+      cases: 108,
+      parallelActorReadChecks: 7,
+      parallelDashboardReadsBeforeRelease: startedReads.size,
+      parallelDashboardResultUnchanged: true,
       teacherArchivedLearningRouteDenials: 10,
       archivedDashboardLearningRows: 0,
       studentArchivedContentReadDenials: 4,

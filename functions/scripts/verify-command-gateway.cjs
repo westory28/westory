@@ -23,6 +23,8 @@ const {
   SEMESTER_READINESS_REPORT_COLLECTION,
   TRANSITION_TABLE,
   createSemesterCoreCommandAdapter,
+  evaluateReadinessAdapters,
+  resolveSemesterCoreState,
   getSemesterSeedDefinitions,
 } = require("../semesterCore");
 
@@ -1453,6 +1455,85 @@ const main = async () => {
     Array.from(store.committedWrites.values()).reduce((sum, count) => sum + count, 0),
     queryWritesBefore,
   );
+  const independentCoreReads = new Set();
+  const startedAdapters = [];
+  let releaseCoreReads;
+  let releaseAdapters;
+  const coreReadGate = new Promise((resolve) => { releaseCoreReads = resolve; });
+  const adapterGate = new Promise((resolve) => { releaseAdapters = resolve; });
+  const originalCoreTransaction = store.runTransaction.bind(store);
+  const readOnlyAdapters = Array.from({ length: 7 }, (_, index) => ({
+    evaluate: async ({ transaction }) => {
+      assert.deepEqual(Object.keys(transaction).sort(), ["get", "getAll", "query"]);
+      startedAdapters.push(index);
+      await adapterGate;
+      return [];
+    },
+  }));
+  store.runTransaction = (callback) => originalCoreTransaction((transaction) => callback({
+    ...transaction,
+    query: async (path, ...args) => {
+      if (path === SEMESTER_MANIFEST_COLLECTION) {
+        independentCoreReads.add(path);
+        await coreReadGate;
+      }
+      return transaction.query(path, ...args);
+    },
+    getAll: async (paths) => {
+      if (paths.includes(ACTIVE_SEMESTER_POINTER_PATH)) {
+        independentCoreReads.add(ACTIVE_SEMESTER_POINTER_PATH);
+        await coreReadGate;
+      }
+      return transaction.getAll(paths);
+    },
+  }));
+  const parallelCoreState = resolveSemesterCoreState({
+    store, semesterId: "2027-2", readinessAdapters: readOnlyAdapters,
+  });
+  try {
+    await new Promise(setImmediate);
+    assert.deepEqual(independentCoreReads,
+      new Set([SEMESTER_MANIFEST_COLLECTION, ACTIVE_SEMESTER_POINTER_PATH]));
+    assert.deepEqual(startedAdapters, [], "Adapters wait for the selected manifest");
+    releaseCoreReads();
+    await new Promise(setImmediate);
+    assert.deepEqual(startedAdapters, [0, 1, 2, 3, 4, 5, 6], "All seven read-only adapters start together");
+  } finally {
+    releaseCoreReads();
+    releaseAdapters();
+    store.runTransaction = originalCoreTransaction;
+  }
+  assert.deepEqual(await parallelCoreState, semesterState);
+  assert.equal(Array.from(store.committedWrites.values()).reduce((sum, count) => sum + count, 0), queryWritesBefore);
+
+  const adapterArgs = {
+    transaction: {}, manifest: { revision: 1 }, evaluatedAt: "2032-01-01T00:00:00.000Z",
+  };
+  const orderedAdapters = [0, 1, 2].map((index) => ({ evaluate: async () => {
+    if (index === 0) await new Promise(setImmediate);
+    return [{ checkId: `query_parallel_${index}`, label: `Query check ${index}`,
+      category: "DOMAIN", required: true, status: "PASS", evidence: "verified",
+      failureReason: null, ownerWave: "W4" }];
+  } }));
+  assert.deepEqual(
+    await evaluateReadinessAdapters({ ...adapterArgs, readinessAdapters: orderedAdapters, parallel: true }),
+    await evaluateReadinessAdapters({ ...adapterArgs, readinessAdapters: orderedAdapters }),
+    "Completion order must not change readiness check order",
+  );
+  const adapterFailures = [new Error("first registered adapter"), new Error("later faster adapter")];
+  const failureStarts = [];
+  const failingAdapters = adapterFailures.map((error, index) => ({ evaluate: async () => {
+    failureStarts.push(index);
+    if (index === 0) await new Promise(setImmediate);
+    throw error;
+  } }));
+  await assert.rejects(evaluateReadinessAdapters({ ...adapterArgs, readinessAdapters: failingAdapters }),
+    (error) => error === adapterFailures[0]);
+  assert.deepEqual(failureStarts, [0], "Command default remains sequential and stops on first failure");
+  failureStarts.length = 0;
+  await assert.rejects(evaluateReadinessAdapters({ ...adapterArgs, readinessAdapters: failingAdapters, parallel: true }),
+    (error) => error === adapterFailures[0]);
+  assert.deepEqual(failureStarts, [0, 1], "Read-only parallel mode preserves registered error precedence");
   const resolverDependencyPath = "years/2027/semesters/2/calendar_meta/current";
   const resolverDependency = store.data(resolverDependencyPath);
   store.documents.set(resolverDependencyPath, {
@@ -2358,6 +2439,8 @@ const main = async () => {
       "SEMESTER_QUERY_GENERAL_SESSION_WITHOUT_RECENT_AUTH_ZERO_WRITES",
       "SEMESTER_MUTATIONS_AND_STATUS_RETAIN_HIGH_RISK_REAUTH",
       "SEMESTER_QUERY_READINESS_DEPENDENCY_FRESHNESS_SAME_TRANSACTION",
+      "SEMESTER_QUERY_PARALLEL_POINTER_MANIFEST_SEVEN_READONLY_ADAPTERS_ZERO_WRITES",
+      "SEMESTER_PARALLEL_CHECK_ORDER_ERROR_PRECEDENCE_COMMAND_SEQUENTIAL_PRESERVED",
       "SEMESTER_RESOLVER_CLOSING_CURRENT_AND_CONFLICT_FAIL_CLOSED",
       "HOLIDAY_CANONICAL_ACTIVE_POINTER_AND_MANIFEST_SCOPE_FENCE",
     ],

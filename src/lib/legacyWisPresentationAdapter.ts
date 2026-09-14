@@ -637,12 +637,23 @@ export const getLegacyTeacherPointSchoolOptions = async (
   schoolOptionsFromState(await queryAllPages(config, "overview"));
 
 /** The overview already contains policy and canonical roster labels. */
+export type LegacyTeacherAccountReference = {
+  accountId: string;
+  studentUid: string;
+  semesterId: string;
+};
+
 export const getLegacyTeacherPointOverview = async (config: ConfigLike) => {
   const state = await queryAllPages(config, "overview");
   return {
     wallets: state.accounts.map((account) => mapWallet(state, account)),
     schoolOptions: schoolOptionsFromState(state),
     policy: compatibilityPolicy(state),
+    accountReferences: state.accounts.map((account) => ({
+      accountId: account.accountId,
+      studentUid: account.studentUid,
+      semesterId: state.semesterId,
+    })),
   };
 };
 
@@ -773,15 +784,38 @@ export const listLegacyTeacherPointTransactionsByUid = async (
   config: ConfigLike,
   uid: string,
   limitCount = 100,
+  knownAccount?: LegacyTeacherAccountReference,
 ) => {
-  const overview = await queryAllPages(config, "overview");
-  const account = overview.accounts.find((item) => item.studentUid === uid);
+  if (
+    knownAccount &&
+    (knownAccount.studentUid !== uid ||
+      knownAccount.semesterId !== semesterKey(config) ||
+      !knownAccount.accountId)
+  )
+    throw new LegacyWisPresentationError(
+      "조회할 학생과 학기를 다시 확인해 주세요.",
+    );
+  const account =
+    knownAccount ||
+    (await queryAllPages(config, "overview")).accounts.find(
+      (item) => item.studentUid === uid,
+    );
   if (!account) return [];
   const state = await queryCurrentTeacherState(config, {
     projection: "account",
     accountId: account.accountId,
     limit: Math.min(200, Math.max(1, Math.floor(limitCount || 100))),
   });
+  const returnedAccount = [state.account, ...state.accounts].find(
+    (item) => item?.accountId === account.accountId,
+  );
+  if (
+    state.semesterId !== semesterKey(config) ||
+    returnedAccount?.studentUid !== uid
+  )
+    throw new LegacyWisPresentationError(
+      "학생의 위스 계좌가 바뀌었습니다. 다시 불러와 주세요.",
+    );
   return limitRows(
     ledgerForAccount(state, account.accountId).map((entry) =>
       mapLedgerEntry(entry, account.studentUid),

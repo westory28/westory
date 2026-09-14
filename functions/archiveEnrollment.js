@@ -2429,10 +2429,18 @@ const assertQueryActor = async ({
   assertSession,
   highRisk = false,
 }) => {
-  const identity = await assertSession(request, {
+  const identityPromise = assertSession(request, {
     recentAuth: highRisk,
     highRisk,
   });
+  const requestedUid = String(request.auth?.uid || "").trim();
+  const profilePromise = requestedUid && !requestedUid.includes("/")
+    ? Promise.resolve().then(() => store.get(`users/${requestedUid}`)).then(
+        (profile) => ({ ok: true, profile }),
+        (error) => ({ ok: false, error }),
+      )
+    : null;
+  const identity = await identityPromise;
   const actorUid = String(identity?.uid || request.auth?.uid || "").trim();
   const actorEmail = String(identity?.email || request.auth?.token?.email || "")
     .trim()
@@ -2444,7 +2452,10 @@ const assertQueryActor = async ({
       "COMMAND_ACTOR_MISMATCH",
     );
   }
-  const profile = await store.get(`users/${actorUid}`);
+  // Preserve the original identity-error priority before consuming this read.
+  const profileResult = profilePromise ? await profilePromise : null;
+  if (profileResult && !profileResult.ok) throw profileResult.error;
+  const profile = profileResult ? profileResult.profile : await store.get(`users/${actorUid}`);
   return {
     actorUid,
     actorEmail,
@@ -2683,21 +2694,18 @@ const createArchiveEnrollmentQueryCore = ({
           "SEMESTER_ACTIVE_CONFLICT",
         );
       }
-      const classes = await transaction.query(SEMESTER_CLASS_COLLECTION, {
-        field: "semesterId",
-        operator: "==",
-        value: semesterId,
-      });
-      const allEnrollments = await transaction.query(
-        SEMESTER_ENROLLMENT_COLLECTION,
-        { field: "semesterId", operator: "==", value: semesterId },
-      );
-      const imports = await transaction.query(ROSTER_IMPORT_COLLECTION, {
-        field: "semesterId",
-        operator: "==",
-        value: semesterId,
-      });
-      const archiveSnapshot = await transaction.get(archivePathFor(semesterId));
+      const [classes, allEnrollments, imports, archiveSnapshot] = await Promise.all([
+        transaction.query(SEMESTER_CLASS_COLLECTION, {
+          field: "semesterId", operator: "==", value: semesterId,
+        }),
+        transaction.query(SEMESTER_ENROLLMENT_COLLECTION, {
+          field: "semesterId", operator: "==", value: semesterId,
+        }),
+        transaction.query(ROSTER_IMPORT_COLLECTION, {
+          field: "semesterId", operator: "==", value: semesterId,
+        }),
+        transaction.get(archivePathFor(semesterId)),
+      ]);
       const enrollments = canManageStudents
         ? allEnrollments
         : allEnrollments.filter(

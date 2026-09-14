@@ -3000,10 +3000,20 @@ const createWisQueryCore = ({
 } = {}) => {
   if (!store) throw new TypeError("store is required.");
   const getWisEconomyState = async (request) => {
-    const identity = await assertSession(request, {
+    const identityPromise = assertSession(request, {
       recentAuth: false,
       highRisk: false,
     });
+    const requestedUid = String(request.auth?.uid || "").trim();
+    // This one actor document is independent of session validation. Hold its
+    // result/error until identity and payload checks pass; no domain reads start yet.
+    const profilePromise = requestedUid && !requestedUid.includes("/")
+      ? Promise.resolve().then(() => store.get(`users/${requestedUid}`)).then(
+          (profile) => ({ ok: true, profile }),
+          (error) => ({ ok: false, error }),
+        )
+      : null;
+    const identity = await identityPromise;
     const uid = String(identity?.uid || request.auth?.uid || "").trim();
     if (!uid || uid !== String(request.auth?.uid || "").trim())
       fail(
@@ -3012,7 +3022,9 @@ const createWisQueryCore = ({
         "COMMAND_ACTOR_MISMATCH",
       );
     const query = normalizeQuery(request.data || {});
-    const profile = await store.get(`users/${uid}`);
+    const profileResult = profilePromise ? await profilePromise : null;
+    if (profileResult && !profileResult.ok) throw profileResult.error;
+    const profile = profileResult ? profileResult.profile : await store.get(`users/${uid}`);
     const profileData = profile.data || {};
     const permissions = Array.isArray(profileData.staffPermissions)
       ? profileData.staffPermissions
@@ -3172,28 +3184,24 @@ const createWisQueryCore = ({
           });
         }
         if (query.projection === "student-core") {
-          const recentLedger = Array.isArray(account?.recentLedgerEntries)
-            ? account.recentLedgerEntries
-            : account
-              ? (
-                  await transaction.query(WIS_LEDGER_COLLECTION, {
+          const [recentLedger, ownRankingSnapshot] = await Promise.all([
+            Array.isArray(account?.recentLedgerEntries)
+              ? account.recentLedgerEntries
+              : transaction.query(WIS_LEDGER_COLLECTION, {
                     field: "accountId",
                     operator: "==",
                     value: ownAccountId,
                     orderBy: { field: "createdAt", direction: "desc" },
                     limit: Math.min(query.limit, WIS_RECENT_LEDGER_LIMIT),
-                  })
-                ).map((row) => row.data)
-              : [];
+                  }).then((rows) => rows.map((row) => row.data)),
+            transaction.get(rankingPath(ownAccountId)),
+          ]);
           const ledgerRows = recentLedger.slice(0, WIS_RECENT_LEDGER_LIMIT);
           const page = paginatePresortedRows(ledgerRows, {
             cursor: query.cursor,
             limit: query.limit,
             id: (row) => row.ledgerEntryId,
           });
-          const ownRankingSnapshot = account
-            ? await transaction.get(rankingPath(ownAccountId))
-            : { exists: false, data: null };
           const ownRanking =
             ownRankingSnapshot.exists &&
             ownRankingSnapshot.data?.studentUid === uid &&
@@ -3375,19 +3383,22 @@ const createWisQueryCore = ({
           accountSnapshot.data?.semesterId === query.semesterId
             ? accountSnapshot.data
             : null;
-        const recentLedger = Array.isArray(rawAccount?.recentLedgerEntries)
-          ? rawAccount.recentLedgerEntries
-          : rawAccount
-            ? (
-                await transaction.query(WIS_LEDGER_COLLECTION, {
+        const [recentLedger, projectedAccounts] = await Promise.all([
+          Array.isArray(rawAccount?.recentLedgerEntries)
+            ? rawAccount.recentLedgerEntries
+            : rawAccount
+              ? transaction.query(WIS_LEDGER_COLLECTION, {
                   field: "accountId",
                   operator: "==",
                   value: targetAccountId,
                   orderBy: { field: "createdAt", direction: "desc" },
                   limit: Math.min(query.limit, WIS_RECENT_LEDGER_LIMIT),
-                })
-              ).map((row) => row.data)
-            : [];
+                }).then((rows) => rows.map((row) => row.data))
+              : [],
+          rawAccount
+            ? projectTeacherRosterFields(transaction, [rawAccount], query.semesterId)
+            : [],
+        ]);
         const filteredLedger = ledgerEntry
           ? [ledgerEntry]
           : recentLedger.slice(0, WIS_RECENT_LEDGER_LIMIT);
@@ -3396,15 +3407,7 @@ const createWisQueryCore = ({
           limit: query.limit,
           id: (row) => row.ledgerEntryId,
         });
-        const accounts = rawAccount
-          ? (
-              await projectTeacherRosterFields(
-                transaction,
-                [rawAccount],
-                query.semesterId,
-              )
-            ).map(projectWisAccount)
-          : [];
+        const accounts = projectedAccounts.map(projectWisAccount);
         return {
           ...base,
           account: accounts[0] || null,

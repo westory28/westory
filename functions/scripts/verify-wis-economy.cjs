@@ -969,6 +969,112 @@ const run = async () => {
     newestLedgerEntries,
   );
   assert.equal("recentLedgerEntries" in teacherAccountState.accounts[0], false);
+
+  const latencyRequest = {
+    auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
+    data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT" },
+  };
+  let releaseIdentity;
+  let releaseProfile;
+  const identityGate = new Promise((resolve) => { releaseIdentity = resolve; });
+  const profileGate = new Promise((resolve) => { releaseProfile = resolve; });
+  const startedActorReads = new Set();
+  let domainTransactions = 0;
+  const parallelActorCore = wis.createWisQueryCore({
+    assertSession: async () => {
+      startedActorReads.add("session");
+      await identityGate;
+      return { uid: "teacher-1", email: "teacher@yongshin-ms.ms.kr" };
+    },
+    store: {
+      get: async (path) => {
+        assert.equal(path, "users/teacher-1");
+        startedActorReads.add("profile");
+        await profileGate;
+        return tx.get(path);
+      },
+      runTransaction: (callback) => { domainTransactions += 1; return callback(tx); },
+    },
+  });
+  const parallelActorResult = parallelActorCore.getWisEconomyState(latencyRequest);
+  try {
+    await new Promise(setImmediate);
+    assert.deepEqual(startedActorReads, new Set(["session", "profile"]));
+    releaseProfile();
+    await new Promise(setImmediate);
+    assert.equal(domainTransactions, 0, "Profile result alone cannot authorize domain reads");
+  } finally {
+    releaseProfile();
+    releaseIdentity();
+  }
+  assert.deepEqual(await parallelActorResult, teacherState);
+
+  const sessionFailure = new Error("synthetic expired session");
+  const profileFailure = new Error("synthetic profile read failure");
+  const deniedCore = wis.createWisQueryCore({
+    assertSession: async () => { throw sessionFailure; },
+    store: {
+      get: async () => { throw profileFailure; },
+      runTransaction: () => assert.fail("Denied session must not start domain reads"),
+    },
+  });
+  await assert.rejects(() => deniedCore.getWisEconomyState(latencyRequest), (error) => error === sessionFailure);
+  let unauthenticatedProfileReads = 0;
+  const unauthenticatedCore = wis.createWisQueryCore({
+    assertSession: async () => { throw sessionFailure; },
+    store: {
+      get: async () => { unauthenticatedProfileReads += 1; throw profileFailure; },
+      runTransaction: () => assert.fail("Unauthenticated request must not start domain reads"),
+    },
+  });
+  await assert.rejects(() => unauthenticatedCore.getWisEconomyState({ data: latencyRequest.data }),
+    (error) => error === sessionFailure);
+  assert.equal(unauthenticatedProfileReads, 0);
+
+  const originalAccount = (await tx.get(`semester_wis_accounts/${accountId}`)).data;
+  const fallbackAccount = { ...originalAccount };
+  delete fallbackAccount.recentLedgerEntries;
+  tx.set(`semester_wis_accounts/${accountId}`, fallbackAccount);
+  try {
+    for (const audience of ["student", "teacher"]) {
+      const request = audience === "student"
+        ? { auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+            data: { audience, semesterId: "2026-2", source: "CURRENT" } }
+        : { ...latencyRequest, data: { ...latencyRequest.data, projection: "account", accountId, limit: 20 } };
+      const expected = await queryCore.getWisEconomyState(request);
+      const started = new Set();
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      const core = wis.createWisQueryCore({
+        assertSession: async (value) => ({ uid: value.auth.uid, email: value.auth.token.email }),
+        store: {
+          get: (path) => tx.get(path),
+          runTransaction: (callback) => callback({
+            query: async (collection, filter) => {
+              if (collection === "semester_wis_ledger") { started.add("ledger"); await gate; }
+              return tx.query(collection, filter);
+            },
+            get: async (path) => {
+              if (path === `semester_wis_rankings/${accountId}`) { started.add("projection"); await gate; }
+              return tx.get(path);
+            },
+            getAll: async (paths) => {
+              if (paths.some((path) => path.startsWith("semester_enrollment_slots/"))) {
+                started.add("projection"); await gate;
+              }
+              return tx.getAll(paths);
+            },
+          }),
+        },
+      });
+      const result = core.getWisEconomyState(request);
+      try {
+        await new Promise(setImmediate);
+        assert.deepEqual(started, new Set(["ledger", "projection"]), `${audience} ledger and projection start independently`);
+      } finally { release(); }
+      assert.deepEqual(await result, expected);
+    }
+  } finally { tx.set(`semester_wis_accounts/${accountId}`, originalAccount); }
   const readOnlyTeacherState = await queryCore.getWisEconomyState({
     auth: { uid: "reader-1", token: { email: "reader@yongshin-ms.ms.kr" } },
     data: {
@@ -1657,7 +1763,7 @@ const run = async () => {
     (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
   );
 
-  console.log(JSON.stringify({ passed: true, cases: 44, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes"], productionAccess: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 49, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain"], productionAccess: 0 }));
 };
 
 run().catch((error) => {

@@ -749,6 +749,7 @@ const ManageLesson: React.FC = () => {
   const [sourceArchiveAssets, setSourceArchiveAssets] = useState<
     SourceArchiveAsset[]
   >([]);
+  const [sourceArchiveLoading, setSourceArchiveLoading] = useState(false);
   const [sourceArchiveSearch, setSourceArchiveSearch] = useState("");
   const [sourceArchivePickerFootnoteId, setSourceArchivePickerFootnoteId] =
     useState<string | null>(null);
@@ -1382,22 +1383,32 @@ const ManageLesson: React.FC = () => {
     void loadTree(true);
   }, [teacherScope, configReady]);
   useEffect(() => {
+    if (!sourceArchivePickerFootnoteId) return;
+    let active = true;
+    setSourceArchiveLoading(true);
     const unsubscribe = subscribeSourceArchiveAssets(
       (items) => {
+        if (!active) return;
         setSourceArchiveAssets(
           items.filter(
             (item) =>
               item.mediaKind !== "pdf" && item.processingStatus === "ready",
           ),
         );
+        setSourceArchiveLoading(false);
       },
       (error) => {
+        if (!active) return;
         console.error("Failed to load source archive assets:", error);
         setSourceArchiveAssets([]);
+        setSourceArchiveLoading(false);
       },
     );
-    return unsubscribe;
-  }, []);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [sourceArchivePickerFootnoteId]);
   useEffect(() => {
     if (
       activeFootnoteId &&
@@ -2763,6 +2774,8 @@ const ManageLesson: React.FC = () => {
       setActiveFootnoteId(footnoteId);
     }
     setSourceArchiveSearch("");
+    setSourceArchiveAssets([]);
+    setSourceArchiveLoading(true);
     setSourceArchivePickerFootnoteId(footnoteId);
   };
 
@@ -3761,10 +3774,7 @@ const ManageLesson: React.FC = () => {
       <LessonSourceArchivePickerModal
         open={Boolean(sourceArchivePickerFootnoteId)}
         assets={filteredSourceArchiveAssets}
-        loading={
-          Boolean(sourceArchivePickerFootnoteId) &&
-          sourceArchiveAssets.length === 0
-        }
+        loading={sourceArchiveLoading}
         searchValue={sourceArchiveSearch}
         onSearchChange={setSourceArchiveSearch}
         onClose={() => setSourceArchivePickerFootnoteId(null)}

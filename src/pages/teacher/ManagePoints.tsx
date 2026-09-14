@@ -27,6 +27,7 @@ import {
   saveLegacyTeacherPointPolicy as upsertPointPolicy,
   saveLegacyTeacherPointProduct as upsertPointProduct,
   saveLegacyTeacherWisHallOfFameConfig,
+  type LegacyTeacherAccountReference,
   updateLegacyTeacherPointAdjustment as updatePointAdjustment,
 } from "../../lib/legacyWisPresentationAdapter";
 import { createStableLegacyMutationActionKey } from "../../lib/legacyWisMutationIntent";
@@ -304,9 +305,17 @@ const ManagePointsScope: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
   const [wallets, setWallets] = useState<PointWallet[]>([]);
+  const [accountReferences, setAccountReferences] = useState<
+    LegacyTeacherAccountReference[]
+  >([]);
   const [students, setStudents] = useState<PointStudentTarget[]>([]);
   const [grantLoading, setGrantLoading] = useState(false);
   const [selectedUid, setSelectedUid] = useState("");
+  const selectedAccountReference = accountReferences.find(
+    (account) =>
+      account.studentUid === selectedUid &&
+      account.semesterId === `${config?.year}-${config?.semester}`,
+  );
   const [transactions, setTransactions] = useState<PointTransaction[]>([]);
   const [savedPolicy, setSavedPolicy] = useState<PointPolicy>(EMPTY_POLICY);
   const [policyDraft, setPolicyDraft] = useState<PointPolicy>(EMPTY_POLICY);
@@ -695,7 +704,17 @@ const ManagePointsScope: React.FC = () => {
       setTransactions([]);
       return;
     }
-    const nextTransactions = await listPointTransactionsByUid(config, uid, 20);
+    const account = accountReferences.find(
+      (item) =>
+        item.studentUid === uid &&
+        item.semesterId === `${config?.year}-${config?.semester}`,
+    );
+    const nextTransactions = await listPointTransactionsByUid(
+      config,
+      uid,
+      20,
+      account,
+    );
     setTransactions(nextTransactions);
   };
 
@@ -720,6 +739,7 @@ const ManagePointsScope: React.FC = () => {
         nextPolicy,
         nextProducts,
         nextOrders,
+        nextAccountReferences,
       ] = await Promise.all([
         overviewRequest
           ? overviewRequest.then((overview) => overview.wallets)
@@ -739,6 +759,9 @@ const ManagePointsScope: React.FC = () => {
         activeTab === "requests"
           ? listPointOrders(config, { limitCount: 200 })
           : Promise.resolve([]),
+        overviewRequest
+          ? overviewRequest.then((overview) => overview.accountReferences)
+          : Promise.resolve([]),
       ]);
       if (requestId !== loadRequestRef.current) return;
       const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
@@ -750,6 +773,7 @@ const ManagePointsScope: React.FC = () => {
 
       if (needsWallets) {
         setWallets(nextWallets);
+        setAccountReferences(nextAccountReferences);
         setGrantGradeOptions(nextSchoolOptions.grades);
         setGrantClassOptions(nextSchoolOptions.classes);
       }
@@ -812,7 +836,7 @@ const ManagePointsScope: React.FC = () => {
   }, [canRead, currentUser?.uid, config?.year, config?.semester, activeTab]);
 
   useEffect(() => {
-    if (!selectedUid || activeTab !== "overview") {
+    if (!selectedUid || !selectedAccountReference || activeTab !== "overview") {
       setTransactions([]);
       return;
     }
@@ -823,15 +847,31 @@ const ManagePointsScope: React.FC = () => {
         config,
         selectedUid,
         20,
+        selectedAccountReference,
       );
       if (!cancelled) setTransactions(nextTransactions);
     };
 
-    void loadTransactions();
+    void loadTransactions().catch((error) => {
+      if (!cancelled) {
+        setTransactions([]);
+        showToast({
+          tone: "error",
+          title: "거래 내역을 불러오지 못했습니다.",
+          message: error?.message || "다시 학생을 선택해 주세요.",
+        });
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [config?.year, config?.semester, selectedUid, activeTab]);
+  }, [
+    config?.year,
+    config?.semester,
+    selectedUid,
+    selectedAccountReference,
+    activeTab,
+  ]);
 
   useEffect(() => {
     if (!selectedEditableTransaction) {
