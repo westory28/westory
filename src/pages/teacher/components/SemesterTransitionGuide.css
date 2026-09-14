@@ -19,12 +19,12 @@
   justify-content: space-between;
 }
 .ws-semester-guide h1 {
-  font-size: var(--ws-type-section-title);
+  font-size: var(--ws-type-section-title, 1.25rem);
   font-weight: 800;
   color: var(--ws-text-strong);
 }
 .ws-semester-guide h2 {
-  font-size: var(--ws-type-card-title);
+  font-size: var(--ws-type-card-title, 1rem);
   font-weight: 800;
   color: var(--ws-text-strong);
 }
