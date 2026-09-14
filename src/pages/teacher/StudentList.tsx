@@ -933,10 +933,19 @@ const StudentListScope: React.FC = () => {
             </p>
           )}
           <div className="flex-1 overflow-x-auto">
-            <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
+            <table className="w-full min-w-[680px] table-fixed text-left text-sm md:min-w-0">
+              <colgroup>
+                <col className="w-12" />
+                <col className="w-20" />
+                <col className="w-16" />
+                <col className="w-16" />
+                <col />
+                <col className="hidden lg:table-column lg:w-2/5" />
+                <col className="w-24" />
+              </colgroup>
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>
-                  <th className="w-10 p-4 text-center">
+                  <th className="px-2 py-4 text-center">
                     <input
                       type="checkbox"
                       onChange={(e) => handleSelectAll(e.target.checked)}
@@ -949,12 +958,12 @@ const StudentListScope: React.FC = () => {
                       className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                     />
                   </th>
-                  <th className="w-16 p-4 text-center">학년</th>
-                  <th className="w-16 p-4 text-center">반</th>
-                  <th className="w-16 p-4 text-center">번호</th>
-                  <th className="w-32 p-4">이름</th>
-                  <th className="hidden w-64 p-4 lg:table-cell">이메일</th>
-                  <th className="w-64 p-4 text-center">관리</th>
+                  <th className="px-2 py-4 text-center">학년</th>
+                  <th className="px-2 py-4 text-center">반</th>
+                  <th className="px-2 py-4 text-center">번호</th>
+                  <th className="p-4">이름</th>
+                  <th className="hidden p-4 lg:table-cell">이메일</th>
+                  <th className="px-2 py-4 text-center">관리</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -982,7 +991,7 @@ const StudentListScope: React.FC = () => {
                       key={student.id}
                       className="group transition hover:bg-blue-50"
                     >
-                      <td className="p-4 text-center">
+                      <td className="px-2 py-4 text-center">
                         <input
                           type="checkbox"
                           checked={selectedIds.has(student.id)}
@@ -990,16 +999,16 @@ const StudentListScope: React.FC = () => {
                           className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                         />
                       </td>
-                      <td className="p-4 text-center font-bold text-gray-700">
+                      <td className="px-2 py-4 text-center font-bold text-gray-700">
                         {getGradeLabel(student.grade)}
                       </td>
-                      <td className="p-4 text-center font-bold text-gray-600">
+                      <td className="px-2 py-4 text-center font-bold text-gray-600">
                         {getClassLabel(student.class)}
                       </td>
-                      <td className="p-4 text-center font-bold text-gray-600">
+                      <td className="px-2 py-4 text-center font-bold text-gray-600">
                         {student.number}
                       </td>
-                      <td className="whitespace-nowrap p-4">
+                      <td className="p-4">
                         <button
                           onClick={() => {
                             setSelectedStudent(student);
@@ -1010,8 +1019,10 @@ const StudentListScope: React.FC = () => {
                           className="w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                         >
                           <span className="flex items-center">
-                            <span>{student.name || "(이름 없음)"}</span>
-                            <i className="fas fa-folder-open ml-2 text-xs text-gray-300 group-hover:text-blue-400"></i>
+                            <span className="min-w-0 break-words">
+                              {student.name || "(이름 없음)"}
+                            </span>
+                            <i className="fas fa-folder-open ml-2 shrink-0 text-xs text-gray-300 group-hover:text-blue-400"></i>
                           </span>
                           {!student.name && (
                             <span className="mt-1 font-mono text-xs font-normal text-gray-500 group-hover:text-blue-500">
@@ -1020,7 +1031,7 @@ const StudentListScope: React.FC = () => {
                           )}
                         </button>
                       </td>
-                      <td className="hidden p-4 font-mono text-xs text-gray-500 lg:table-cell">
+                      <td className="hidden break-all p-4 font-mono text-xs text-gray-500 lg:table-cell">
                         {student.email ||
                           (profilesLoading
                             ? "확인 중"
@@ -1028,7 +1039,7 @@ const StudentListScope: React.FC = () => {
                               ? "확인 필요"
                               : "")}
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="px-2 py-4 text-center">
                         <div className="flex flex-wrap justify-center gap-1">
                           {!readOnly && (
                             <>

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import ts from "typescript";
 import { analyzeClientBoundary } from "./verify-client-direct-write-boundary.mjs";
 
 const read = (path) => readFileSync(resolve(path), "utf8");
@@ -104,10 +105,59 @@ assert.doesNotMatch(
   /transaction\.query\(WIS_RANKING_COLLECTION/u,
   "Student own ranking must use a direct own-document projection.",
 );
-assert.match(
-  queryCoreSource,
-  /await transaction\.get\(rankingPath\(ownAccountId\)\)/u,
-);
+const assertOwnRankingReadContract = (source) => {
+  const tree = ts.createSourceFile("wis-query.js", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const declarations = [];
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isArrayBindingPattern(node.name)
+      && node.name.elements.some((element) => ts.isBindingElement(element)
+        && ts.isIdentifier(element.name) && element.name.text === "ownRankingSnapshot")) {
+      declarations.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  assert.equal(declarations.length, 1, "The student own ranking must have exactly one explicit result binding.");
+  const declaration = declarations[0];
+  assert.ok(declaration.initializer && ts.isAwaitExpression(declaration.initializer),
+    "The parallel ranking read must be awaited before its result is exposed.");
+  const aggregate = declaration.initializer.expression;
+  assert.ok(ts.isCallExpression(aggregate)
+    && ts.isPropertyAccessExpression(aggregate.expression)
+    && ts.isIdentifier(aggregate.expression.expression)
+    && aggregate.expression.expression.text === "Promise"
+    && aggregate.expression.name.text === "all"
+    && aggregate.arguments.length === 1
+    && ts.isArrayLiteralExpression(aggregate.arguments[0]),
+  "Ranking and ledger reads must be collected by an awaited Promise.all.");
+  const resultIndex = declaration.name.elements.findIndex((element) => ts.isBindingElement(element)
+    && ts.isIdentifier(element.name) && element.name.text === "ownRankingSnapshot");
+  const rankingRead = aggregate.arguments[0].elements[resultIndex];
+  assert.ok(rankingRead && ts.isCallExpression(rankingRead)
+    && ts.isPropertyAccessExpression(rankingRead.expression)
+    && ts.isIdentifier(rankingRead.expression.expression)
+    && rankingRead.expression.expression.text === "transaction"
+    && rankingRead.expression.name.text === "get"
+    && rankingRead.arguments.length === 1,
+  "The ranking result slot must contain a direct transaction.get, never a collection query.");
+  const ownPath = rankingRead.arguments[0];
+  assert.ok(ts.isCallExpression(ownPath) && ts.isIdentifier(ownPath.expression)
+    && ownPath.expression.text === "rankingPath" && ownPath.arguments.length === 1
+    && ts.isIdentifier(ownPath.arguments[0]) && ownPath.arguments[0].text === "ownAccountId",
+  "The ranking read must use the authenticated student's own account path.");
+};
+assert.match(queryCoreSource, /const ownAccountId = accountIdFor\(query\.semesterId, uid\)/u);
+assertOwnRankingReadContract(queryCoreSource);
+for (const [label, before, after] of [
+  ["unawaited reads", "const [recentLedger, ownRankingSnapshot] = await Promise.all", "const [recentLedger, ownRankingSnapshot] = Promise.all"],
+  ["foreign account", "transaction.get(rankingPath(ownAccountId))", "transaction.get(rankingPath(targetAccountId))"],
+  ["collection read", "transaction.get(rankingPath(ownAccountId))", "transaction.query(WIS_RANKING_COLLECTION)"],
+  ["wrong result binding", "const [recentLedger, ownRankingSnapshot]", "const [ownRankingSnapshot, recentLedger]"],
+]) {
+  assert.ok(queryCoreSource.includes(before), `Missing mutation target: ${label}`);
+  assert.throws(() => assertOwnRankingReadContract(queryCoreSource.replace(before, after)),
+    { name: "AssertionError" }, `The ranking contract must reject ${label}.`);
+}
 assert.match(server, /const projectWisAccount/u);
 assert.doesNotMatch(
   server.slice(
