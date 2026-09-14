@@ -31,6 +31,7 @@ import {
 } from "./firebaseActiveBinding";
 import { isHighRiskCommand } from "./highRiskCommands";
 import { sessionQueryCache } from "./sessionQueryCache";
+import { resolveCallableRegion } from "./callableRegion";
 import {
   requestStepUpReauthentication,
   runHighRiskCommandSingleFlight,
@@ -200,9 +201,9 @@ const db = getFirestore(app);
 let analytics: Analytics | null = null;
 let authEmulatorConnected = false;
 let firestoreEmulatorConnected = false;
-let functionsEmulatorConnected = false;
+const functionsEmulatorConnectedRegions = new Set<string>();
 let storageEmulatorConnected = false;
-let functionsPromise: Promise<Functions> | null = null;
+const functionsPromises = new Map<string, Promise<Functions>>();
 let storagePromise: Promise<FirebaseStorage> | null = null;
 
 const emulatorHost =
@@ -317,35 +318,43 @@ if (typeof window !== "undefined" && firebaseConfig.measurementId) {
   }, 0);
 }
 
-const getFirebaseFunctions = () => {
-  if (!functionsPromise) {
-    functionsPromise = import("firebase/functions")
-      .then(({ connectFunctionsEmulator, getFunctions }) => {
-        const functions = getFunctions(
-          app,
-          activeFirebaseBinding?.functionsRegion ??
-            (import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION ||
-              "asia-northeast3"),
+const getFirebaseFunctions = (callableName?: string): Promise<Functions> => {
+  const region = resolveCallableRegion({
+    projectId: firebaseConfig.projectId,
+    callableName,
+    defaultRegion:
+      activeFirebaseBinding?.functionsRegion ??
+      (import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || "asia-northeast3"),
+    emulatorEnabled: emulatorTargets.functions,
+  });
+  const existing = functionsPromises.get(region);
+  if (existing) return existing;
+  const promise: Promise<Functions> = import("firebase/functions")
+    .then(({ connectFunctionsEmulator, getFunctions }) => {
+      const functions = getFunctions(app, region);
+      if (
+        emulatorTargets.functions &&
+        !functionsEmulatorConnectedRegions.has(region)
+      ) {
+        connectFunctionsEmulator(
+          functions,
+          functionsEmulatorHost,
+          functionsEmulatorPort,
         );
-        if (emulatorTargets.functions && !functionsEmulatorConnected) {
-          connectFunctionsEmulator(
-            functions,
-            functionsEmulatorHost,
-            functionsEmulatorPort,
-          );
-          functionsEmulatorConnected = true;
-          console.info(
-            `[Firebase] Connected Functions emulator at ${functionsEmulatorHost}:${functionsEmulatorPort}`,
-          );
-        }
-        return functions;
-      })
-      .catch((error) => {
-        functionsPromise = null;
-        throw error;
-      });
-  }
-  return functionsPromise;
+        functionsEmulatorConnectedRegions.add(region);
+        console.info(
+          `[Firebase] Connected Functions emulator at ${functionsEmulatorHost}:${functionsEmulatorPort}`,
+        );
+      }
+      return functions;
+    })
+    .catch((error) => {
+      if (functionsPromises.get(region) === promise)
+        functionsPromises.delete(region);
+      throw error;
+    });
+  functionsPromises.set(region, promise);
+  return promise;
 };
 
 const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
@@ -353,7 +362,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
   options?: { expectedUid: string },
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
   const [functions, { httpsCallable }] = await Promise.all([
-    getFirebaseFunctions(),
+    getFirebaseFunctions(name),
     import("firebase/functions"),
   ]);
   const callable = httpsCallable<RequestData, ResponseData>(functions, name);

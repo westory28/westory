@@ -2738,7 +2738,8 @@ const createArchiveEnrollmentCallableExports = ({ core } = {}) => {
     previewEnrollmentRoster: onCall({ region: REGION }, (request) =>
       core.previewEnrollmentRoster(request),
     ),
-    getArchiveEnrollmentState: onCall({ region: REGION }, (request) =>
+    // Keep Seoul available for older clients; nam5 reads run beside Firestore.
+    getArchiveEnrollmentState: onCall({ region: [REGION, "us-central1"] }, (request) =>
       core.getArchiveEnrollmentState(request),
     ),
   };

@@ -48,6 +48,7 @@ jobs:
       - run: node scripts/verify-lesson-semester-isolation.mjs
       - run: node scripts/verify-lesson-initial-load.mjs
       - run: node scripts/verify-session-query-cache.mjs
+      - run: node scripts/verify-callable-region.mjs
       - run: node scripts/verify-student-profile-batching.mjs
       - run: node scripts/verify-student-roster-progressive-loading.mjs
       - run: node scripts/verify-wis-overview-loading.mjs
@@ -72,6 +73,7 @@ jobs:
 
       - run: npm --prefix functions ci --ignore-scripts
       - run: npm --prefix functions run check
+      - run: node functions/scripts/verify-query-regions.cjs
       - run: node functions/scripts/verify-wis-initial-opening-approval.cjs
       - run: node functions/scripts/verify-lesson-answers.cjs
       - run: node functions/scripts/verify-lesson-management.cjs

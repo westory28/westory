@@ -4258,7 +4258,8 @@ const createW8QueryCore = ({
   return { getW8DomainState };
 };
 const createW8CallableExports = ({ core }) => ({
-  getW8DomainState: onCall({ region: REGION }, (request) =>
+  // Keep Seoul available for older clients; nam5 reads run beside Firestore.
+  getW8DomainState: onCall({ region: [REGION, "us-central1"] }, (request) =>
     core.getW8DomainState(request),
   ),
 });

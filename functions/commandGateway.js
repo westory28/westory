@@ -1509,7 +1509,8 @@ const createCallableExports = ({ core } = {}) => ({
   getCommandStatus: onCall({ region: REGION }, (request) =>
     (core || getDefaultCore()).getStatus(request),
   ),
-  getSemesterCoreState: onCall({ region: REGION }, (request) =>
+  // Keep Seoul available for older clients; nam5 reads run beside Firestore.
+  getSemesterCoreState: onCall({ region: [REGION, "us-central1"] }, (request) =>
     (core || getDefaultCore()).getSemesterCoreState(request),
   ),
 });

@@ -3520,7 +3520,8 @@ const createWisQueryCore = ({
   return { getWisEconomyState };
 };
 const createWisCallableExports = ({ core }) => ({
-  getWisEconomyState: onCall({ region: REGION }, (request) =>
+  // Keep Seoul available for older clients; nam5 reads run beside Firestore.
+  getWisEconomyState: onCall({ region: [REGION, "us-central1"] }, (request) =>
     core.getWisEconomyState(request),
   ),
 });

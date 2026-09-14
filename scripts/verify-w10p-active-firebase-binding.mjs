@@ -1007,6 +1007,55 @@ const getFunctionsConsumer = firebaseInventory.calls.find(
 );
 assert.equal(
   compactSource(getFunctionsConsumer.node.arguments[1], firebaseSourceFile),
+  "region",
+  "Functions initialization must use the approved per-callable region resolver",
+);
+const callableRegionCalls = callExpressionsNamed(
+  firebaseSourceFile,
+  "resolveCallableRegion",
+);
+assert.equal(callableRegionCalls.length, 1);
+assert.equal(
+  compactSource(
+    singleVariable(firebaseSourceFile, "region").initializer,
+    firebaseSourceFile,
+  ),
+  compactSource(callableRegionCalls[0], firebaseSourceFile),
+);
+const callableRegionInput = callableRegionCalls[0].arguments[0];
+assert.ok(ts.isObjectLiteralExpression(callableRegionInput));
+assert.deepEqual(
+  callableRegionInput.properties.map((property) =>
+    property.name?.getText(firebaseSourceFile),
+  ),
+  ["projectId", "callableName", "defaultRegion", "emulatorEnabled"],
+);
+const callableRegionProperty = (name) =>
+  callableRegionInput.properties.find(
+    (property) => property.name?.getText(firebaseSourceFile) === name,
+  );
+assert.equal(
+  compactSource(
+    callableRegionProperty("projectId").initializer,
+    firebaseSourceFile,
+  ),
+  "firebaseConfig.projectId",
+);
+assert.ok(
+  ts.isShorthandPropertyAssignment(callableRegionProperty("callableName")),
+);
+assert.equal(
+  compactSource(
+    callableRegionProperty("emulatorEnabled").initializer,
+    firebaseSourceFile,
+  ),
+  "emulatorTargets.functions",
+);
+assert.equal(
+  compactSource(
+    callableRegionProperty("defaultRegion").initializer,
+    firebaseSourceFile,
+  ),
   'activeFirebaseBinding?.functionsRegion??(import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION||"asia-northeast3")',
   "local/test Functions fallback must preserve empty-string fallback semantics",
 );
