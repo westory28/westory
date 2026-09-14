@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import SettingsGeneral from "./components/SettingsGeneral";
 import SettingsSchool from "./components/SettingsSchool";
 import SettingsInterface from "./components/SettingsInterface";
@@ -40,16 +40,23 @@ const normalizeSettingsTab = (value: string | null): SettingsTab =>
     ? (value as SettingsTab)
     : "general";
 
-const Settings: React.FC = () => {
+const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = normalizeSettingsTab(searchParams.get("tab"));
+  const activeTab = children
+    ? "cutover"
+    : normalizeSettingsTab(searchParams.get("tab"));
   const canOpenCutoverCenter =
     String(currentUser?.email || "")
       .trim()
       .toLowerCase() === ADMIN_EMAIL;
 
   const setActiveTab = (tab: SettingsTab) => {
+    if (children) {
+      navigate(`/teacher/settings${tab === "general" ? "" : `?tab=${tab}`}`);
+      return;
+    }
     const next = new URLSearchParams(searchParams);
     if (tab === "general") {
       next.delete("tab");
@@ -69,7 +76,7 @@ const Settings: React.FC = () => {
                 <i className="fas fa-cog text-gray-400"></i> 관리자 설정
               </h2>
             </div>
-            <nav className="flex flex-col">
+            <nav className="flex flex-col" aria-label="관리자 설정 메뉴">
               {canOpenCutoverCenter && (
                 <button
                   onClick={() => setActiveTab("student-access")}
@@ -166,7 +173,8 @@ const Settings: React.FC = () => {
               {canOpenCutoverCenter && (
                 <Link
                   to="/teacher/settings/cutover"
-                  className="p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"
+                  aria-current={activeTab === "cutover" ? "page" : undefined}
+                  className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "cutover" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
                 >
                   <div className="w-6 text-center" aria-hidden="true">
                     <i className="fas fa-right-left"></i>
@@ -179,6 +187,7 @@ const Settings: React.FC = () => {
         </aside>
 
         <div className="flex-1 min-w-0">
+          {children}
           {activeTab === "student-access" && <SettingsStudentAccess />}
           {activeTab === "general" && <SettingsGeneral />}
           {activeTab === "school" && <SettingsSchool />}

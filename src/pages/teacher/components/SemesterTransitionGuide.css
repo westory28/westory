@@ -3,7 +3,8 @@
   gap: var(--space-5);
   min-width: 0;
   color: var(--ws-text);
-  padding: var(--space-4);
+  padding: 0;
+  font-size: var(--ws-type-small);
 }
 .ws-semester-guide__heading,
 .ws-semester-guide__toolbar,
@@ -18,12 +19,12 @@
   justify-content: space-between;
 }
 .ws-semester-guide h1 {
-  font-size: var(--ws-type-page-title);
+  font-size: var(--ws-type-section-title);
   font-weight: 800;
   color: var(--ws-text-strong);
 }
 .ws-semester-guide h2 {
-  font-size: var(--ws-type-section-title);
+  font-size: var(--ws-type-card-title);
   font-weight: 800;
   color: var(--ws-text-strong);
 }
@@ -45,8 +46,33 @@
   background: var(--ws-surface);
   border: 1px solid var(--ws-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: var(--space-6);
   min-width: 0;
+}
+.ws-semester-guide__toolbar {
+  align-items: flex-end;
+}
+.ws-semester-guide__heading > div {
+  min-width: 0;
+}
+.ws-semester-guide > .ws-semester-guide__heading {
+  padding: var(--space-6);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-lg);
+  background: var(--ws-surface);
+}
+.ws-semester-guide > .ws-semester-guide__heading p {
+  margin-bottom: 0;
+}
+.ws-semester-guide__summary > span {
+  display: grid;
+  gap: var(--space-1);
+}
+.ws-semester-guide__summary strong {
+  margin-inline-start: 0;
+}
+.ws-semester-guide__summary > a {
+  margin-inline-start: auto;
 }
 .ws-semester-guide__toolbar label {
   flex: 1;
@@ -173,9 +199,12 @@
 }
 @media (max-width: 600px) {
   .ws-semester-guide {
-    padding: var(--space-3);
+    padding: 0;
   }
   .ws-semester-guide__section {
+    padding: var(--space-4);
+  }
+  .ws-semester-guide > .ws-semester-guide__heading {
     padding: var(--space-4);
   }
   .ws-semester-guide__toolbar {

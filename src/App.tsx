@@ -353,7 +353,9 @@ const App: React.FC = () => {
                     <Route
                       path="/teacher/settings/cutover"
                       element={renderWithLayout(
-                        <SemesterCutoverCenter />,
+                        <Settings>
+                          <SemesterCutoverCenter />
+                        </Settings>,
                         "학기 전환 준비 상태를 불러오는 중입니다.",
                       )}
                     />

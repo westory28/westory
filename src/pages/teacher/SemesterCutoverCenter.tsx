@@ -326,19 +326,18 @@ export default function SemesterCutoverCenter() {
   };
 
   return (
-    <main
+    <section
       className="ws-semester-guide"
       aria-labelledby="semester-guide-title"
       aria-busy={loading || Boolean(busy)}
     >
       <header className="ws-semester-guide__heading">
         <div>
-          <h1 id="semester-guide-title">학기 전환</h1>
+          <h1 id="semester-guide-title">학기 전환 준비</h1>
           <p>
             새 학기를 준비하고, 이전 학기 기록을 보존한 뒤 운영 학기를 바꿉니다.
           </p>
         </div>
-        <Link to="/teacher/settings">설정으로 돌아가기</Link>
       </header>
       <div className="ws-semester-guide__summary">
         <span>
@@ -385,7 +384,12 @@ export default function SemesterCutoverCenter() {
               ))}
             </select>
           </label>
-          <button type="button" disabled={locked} onClick={beginCreate}>
+          <button
+            type="button"
+            className="ws-semester-guide__primary"
+            disabled={locked}
+            onClick={beginCreate}
+          >
             새 학기 등록
           </button>
           <button
@@ -715,6 +719,6 @@ export default function SemesterCutoverCenter() {
           {busy} 중입니다. 처리 결과를 확인할 때까지 기다려 주세요.
         </p>
       )}
-    </main>
+    </section>
   );
 }
