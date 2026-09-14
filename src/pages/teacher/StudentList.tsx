@@ -936,9 +936,9 @@ const StudentListScope: React.FC = () => {
             <table className="w-full min-w-[680px] table-fixed text-left text-sm md:min-w-0">
               <colgroup>
                 <col className="w-12" />
-                <col className="w-[18%] lg:w-[10%]" />
-                <col className="w-[18%] lg:w-[10%]" />
-                <col className="w-[18%] lg:w-[10%]" />
+                <col />
+                <col />
+                <col />
                 <col />
                 <col className="hidden lg:table-column lg:w-2/5" />
                 <col className="w-24" />
@@ -961,7 +961,7 @@ const StudentListScope: React.FC = () => {
                   <th className="px-2 py-4 text-center">학년</th>
                   <th className="px-2 py-4 text-center">반</th>
                   <th className="px-2 py-4 text-center">번호</th>
-                  <th className="p-4">이름</th>
+                  <th className="p-4 text-center">이름</th>
                   <th className="hidden p-4 lg:table-cell">이메일</th>
                   <th className="px-2 py-4 text-center">관리</th>
                 </tr>
@@ -1016,9 +1016,9 @@ const StudentListScope: React.FC = () => {
                             setDetailModalOpen(true);
                           }}
                           title="학생 학습 현황 보기"
-                          className="w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
+                          className="w-full text-center font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                         >
-                          <span className="flex items-center">
+                          <span className="flex items-center justify-center">
                             <span className="min-w-0 break-words">
                               {student.name || "(이름 없음)"}
                             </span>

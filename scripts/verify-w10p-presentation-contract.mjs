@@ -243,11 +243,11 @@ const studentRosterColumns = studentRosterSource.match(/<colgroup>([\s\S]*?)<\/c
 assert.ok(studentRosterColumns, "Roster columns must have explicit shared header/body allocation");
 assert.match(studentRosterSource, /<table className="w-full min-w-\[680px\] table-fixed text-left text-sm md:min-w-0">/u,
   "Roster width correction must preserve the mobile scrolling table");
-assert.equal((studentRosterColumns.match(/<col className="w-\[18%\] lg:w-\[10%\]" \/>/gu) || []).length, 3,
-  "Grade, class, and number must receive equal proportional space");
+assert.equal((studentRosterColumns.match(/<col \/>/gu) || []).length, 4,
+  "Grade, class, number and name equally share available width, including when email is hidden");
 assert.match(studentRosterColumns, /^\s*<col className="w-12" \/>/u);
 assert.match(studentRosterColumns, /<col \/>\s*<col className="hidden lg:table-column lg:w-2\/5" \/>\s*<col className="w-24" \/>\s*$/u,
-  "Name gets the remaining width; the email breakpoint and compact management column stay explicit");
+  "The optional email column and compact management column stay explicit");
 assert.match(studentRosterSource, /<span className="min-w-0 break-words">\s*\{student\.name \|\| "\(이름 없음\)"\}/u,
   "The roster must show full student names rather than truncating them");
 
