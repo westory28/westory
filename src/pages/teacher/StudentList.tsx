@@ -936,9 +936,9 @@ const StudentListScope: React.FC = () => {
             <table className="w-full min-w-[680px] table-fixed text-left text-sm md:min-w-0">
               <colgroup>
                 <col className="w-12" />
-                <col className="w-20" />
-                <col className="w-16" />
-                <col className="w-16" />
+                <col className="w-[18%] lg:w-[10%]" />
+                <col className="w-[18%] lg:w-[10%]" />
+                <col className="w-[18%] lg:w-[10%]" />
                 <col />
                 <col className="hidden lg:table-column lg:w-2/5" />
                 <col className="w-24" />
