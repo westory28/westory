@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import WordCloudView from "../../../components/common/WordCloudView";
 import {
@@ -20,12 +20,16 @@ import {
   type W8ThinkCloudResponse,
   type W8ThinkCloudSession,
 } from "../../../lib/w8Domains";
+import {
+  createThinkCloudReadGate,
+  startThinkCloudRefresh,
+} from "../../../lib/thinkCloudRefresh";
 
 type SessionWithId = W8ThinkCloudSession;
 
 const BANNED_WORDS = ["욕설", "비속어"];
-const ThinkCloud: React.FC = () => {
-  const { config, currentUser } = useAuth();
+const ThinkCloudContent: React.FC = () => {
+  const { config, configReady, currentUser, authenticationStatus } = useAuth();
   const [activeSessionId, setActiveSessionId] = useState("");
   const [sessions, setSessions] = useState<SessionWithId[]>([]);
   const [sessionLoadState, setSessionLoadState] = useState<
@@ -37,10 +41,31 @@ const ThinkCloud: React.FC = () => {
   const [responseLoadState, setResponseLoadState] = useState<
     "idle" | "loading" | "ready" | "permission" | "error"
   >("idle");
-  const [draftInput, setDraftInput] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const draftInput = drafts[selectedSessionId] || "";
+  const setDraftInput = (value: string) =>
+    setDrafts((current) => ({ ...current, [selectedSessionId]: value }));
   const [submitError, setSubmitError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [responseLoadAttempt, setResponseLoadAttempt] = useState(0);
+  const [refreshError, setRefreshError] = useState("");
+  const readGate = useRef(createThinkCloudReadGate());
+  const loadedScope = useRef("");
+  const loadedSelection = useRef("");
+  const stoppedRetry = useRef<string | null>(null);
+  const retryKey = `${sessionLoadAttempt}/${responseLoadAttempt}`;
+  const mounted = useRef(true);
+  const scope = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`;
+  const selectionKey = `${scope}/${selectedSessionId}`;
+  const requestKey = `${selectionKey}/${sessionLoadAttempt}/${responseLoadAttempt}/${submitLoading}/${authenticationStatus}/${configReady}`;
+  const currentRequest = useRef(requestKey);
+  currentRequest.current = requestKey;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedSessionId) || null,
@@ -57,12 +82,24 @@ const ThinkCloud: React.FC = () => {
     selectedSession?.options || DEFAULT_THINK_CLOUD_OPTIONS;
 
   useEffect(() => {
-    let cancelled = false;
-    const loadSessions = async () => {
-      setSessionLoadState("loading");
-      try {
-        const state = await getLegacyThinkCloudState(config, "student");
-        if (cancelled) return;
+    if (
+      !currentUser?.uid ||
+      !configReady ||
+      !config ||
+      authenticationStatus !== "AUTHENTICATED" ||
+      submitLoading ||
+      stoppedRetry.current === retryKey
+    )
+      return;
+    if (loadedScope.current !== scope) setSessionLoadState("loading");
+    if (selectedSessionId && loadedSelection.current !== selectionKey)
+      setResponseLoadState("loading");
+    return startThinkCloudRefresh({
+      gate: readGate.current,
+      isCurrent: () => currentRequest.current === requestKey,
+      read: () =>
+        getLegacyThinkCloudState(config, "student", selectedSessionId),
+      onData: (state) => {
         const loaded: SessionWithId[] = state.thinkCloudSessions.map(
           (session) => ({
             ...session,
@@ -96,44 +133,12 @@ const ThinkCloud: React.FC = () => {
           return defaultId;
         });
         setActiveSessionId(state.thinkCloudState.activeSessionId);
+        loadedScope.current = scope;
         setSessionLoadState("ready");
-      } catch (error) {
-        if (!cancelled) {
-          console.warn("Failed to load think cloud sessions:", error);
-          setSessions([]);
-          setSelectedSessionId("");
-          setSessionLoadState(
-            error instanceof W8DomainError && error.kind === "PERMISSION"
-              ? "permission"
-              : "error",
-          );
-        }
-      }
-    };
-    void loadSessions();
-    return () => {
-      cancelled = true;
-    };
-  }, [config, sessionLoadAttempt]);
-
-  useEffect(() => {
-    if (!selectedSessionId) {
-      setResponses([]);
-      setResponseLoadState("idle");
-      return;
-    }
-    let cancelled = false;
-    const loadResponses = async () => {
-      setResponseLoadState("loading");
-      try {
-        const state = await getLegacyThinkCloudState(
-          config,
-          "student",
-          selectedSessionId,
-        );
-        if (cancelled) return;
-        const loaded = [...state.thinkCloudResponses];
-        loaded.sort((a, b) => {
+        const responses = selectedSessionId
+          ? [...state.thinkCloudResponses]
+          : [];
+        responses.sort((a, b) => {
           const ta = Number(
             (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
           );
@@ -142,11 +147,30 @@ const ThinkCloud: React.FC = () => {
           );
           return tb - ta;
         });
-        setResponses(loaded);
-        setResponseLoadState("ready");
-      } catch (error) {
-        if (!cancelled) {
-          console.warn("Failed to load think cloud responses:", error);
+        setResponses(responses);
+        loadedSelection.current = selectionKey;
+        setResponseLoadState(selectedSessionId ? "ready" : "idle");
+        setRefreshError("");
+      },
+      onError: (error) => {
+        const terminal =
+          error instanceof W8DomainError &&
+          (error.kind === "PERMISSION" || error.kind === "SESSION_EXPIRED");
+        if (terminal) stoppedRetry.current = retryKey;
+        if (terminal || loadedScope.current !== scope) {
+          setSessions([]);
+          setActiveSessionId("");
+          setSelectedSessionId("");
+          setResponses([]);
+          loadedScope.current = "";
+          loadedSelection.current = "";
+          setSessionLoadState(
+            error instanceof W8DomainError && error.kind === "PERMISSION"
+              ? "permission"
+              : "error",
+          );
+        }
+        if (terminal || loadedSelection.current !== selectionKey) {
           setResponses([]);
           setResponseLoadState(
             error instanceof W8DomainError && error.kind === "PERMISSION"
@@ -154,13 +178,25 @@ const ThinkCloud: React.FC = () => {
               : "error",
           );
         }
-      }
-    };
-    void loadResponses();
-    return () => {
-      cancelled = true;
-    };
-  }, [config, responseLoadAttempt, selectedSessionId]);
+        setRefreshError(
+          terminal && error instanceof W8DomainError
+            ? error.message
+            : "최신 내용을 확인하지 못했습니다. 잠시 후 다시 확인합니다.",
+        );
+        return !terminal;
+      },
+    });
+  }, [
+    config?.year,
+    config?.semester,
+    currentUser?.uid,
+    configReady,
+    authenticationStatus,
+    selectedSessionId,
+    sessionLoadAttempt,
+    responseLoadAttempt,
+    submitLoading,
+  ]);
 
   const cloudEntries = useMemo(() => {
     const buckets = new Map<
@@ -236,6 +272,7 @@ const ThinkCloud: React.FC = () => {
       }
     }
 
+    currentRequest.current = "";
     setSubmitLoading(true);
     setSubmitError("");
     try {
@@ -255,9 +292,15 @@ const ThinkCloud: React.FC = () => {
         textRaw: rawText,
         textNormalized: normalizedText,
       });
-      setDraftInput("");
+      if (!mounted.current) return;
+      setDrafts((current) =>
+        current[selectedSessionId] === draftInput
+          ? { ...current, [selectedSessionId]: "" }
+          : current,
+      );
       setResponseLoadAttempt((value) => value + 1);
     } catch (error) {
+      if (!mounted.current) return;
       console.error("Failed to submit think cloud response:", error);
       setSubmitError(
         error instanceof W8DomainError
@@ -266,12 +309,24 @@ const ThinkCloud: React.FC = () => {
       );
       setResponseLoadAttempt((value) => value + 1);
     } finally {
-      setSubmitLoading(false);
+      if (mounted.current) setSubmitLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {refreshError && (
+        <p role="status" className="mx-6 mt-4 text-sm text-amber-800">
+          {refreshError}{" "}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setResponseLoadAttempt((value) => value + 1)}
+          >
+            다시 시도
+          </button>
+        </p>
+      )}
       <div className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
         <aside className="w-full lg:w-72 shrink-0">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -465,6 +520,9 @@ const ThinkCloud: React.FC = () => {
                     </span>
                   )}
                 </div>
+                <p className="mb-3 text-xs text-gray-500">
+                  화면을 보고 있을 때 약 16초마다 새 내용을 확인합니다.
+                </p>
 
                 {responseLoadState === "permission" ? (
                   <p className="text-sm text-red-600 font-bold" role="alert">
@@ -505,6 +563,15 @@ const ThinkCloud: React.FC = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+const ThinkCloud: React.FC = () => {
+  const { currentUser, config } = useAuth();
+  return (
+    <ThinkCloudContent
+      key={`${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`}
+    />
   );
 };
 

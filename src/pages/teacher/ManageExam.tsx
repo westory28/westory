@@ -94,6 +94,27 @@ const ManageExam: React.FC = () => {
     setSearchParams(next);
   };
 
+  const scoreWorkflow =
+    activeTab === "performance" || activeTab === "written-essay"
+      ? {
+          description: "업로드한 점수표를 관리합니다.",
+          label: "제출 답안의 성적 근거 관리",
+          target:
+            activeTab === "performance"
+              ? ("evidence-performance" as const)
+              : ("evidence-written" as const),
+        }
+      : activeTab === "evidence-performance" || activeTab === "evidence-written"
+        ? {
+            description: "제출 답안에서 생성한 성적 근거를 관리합니다.",
+            label: "점수표 관리로 돌아가기",
+            target:
+              activeTab === "evidence-performance"
+                ? ("performance" as const)
+                : ("written-essay" as const),
+          }
+        : null;
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <main
@@ -191,6 +212,20 @@ const ManageExam: React.FC = () => {
         </div>
 
         <div className="relative min-h-[500px] flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6">
+          {scoreWorkflow && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3">
+              <p className="text-sm text-gray-600">
+                {scoreWorkflow.description}
+              </p>
+              <button
+                type="button"
+                onClick={() => selectTab(scoreWorkflow.target)}
+                className="min-h-11 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+              >
+                {scoreWorkflow.label}
+              </button>
+            </div>
+          )}
           {activeTab === "preview" && <ExamGradingPlan />}
           {activeTab === "omr" && <ExamOmrConfig />}
           {activeTab === "performance" && <PerformanceScoreManager />}

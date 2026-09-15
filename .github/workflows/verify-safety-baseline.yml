@@ -41,6 +41,7 @@ jobs:
       - run: npm run security:check-supply-chain
       - run: npm run verify:firebase-environment
       - run: npm run verify:vercel-config
+      - run: npm run verify:production-release-fixtures
       - run: node scripts/verify-korean-holidays-api.mjs
       - run: node scripts/verify-semester-date-defaults.mjs
       - run: node scripts/verify-semester-archive-view.mjs
@@ -60,6 +61,8 @@ jobs:
       - run: npm run verify:access-gate
       - run: npm run verify:session-policy
       - run: npm run verify:step-up-reauth
+      - run: npm run verify:lesson-answer-save-recovery
+      - run: npm run verify:thinkcloud-refresh
       - run: npm run verify:assessment-attempt-safety
       - run: npm run verify:w4-command-safety
       - run: npm run verify:w5-shell-safety

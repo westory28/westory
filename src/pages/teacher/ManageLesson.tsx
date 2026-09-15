@@ -961,6 +961,13 @@ const ManageLesson: React.FC = () => {
   const hasUnsavedPdfChanges =
     currentPdfSnapshot !== lastSavedPdfSnapshotRef.current;
   const hasUnsavedLessonChanges = hasUnsavedMetaChanges || hasUnsavedPdfChanges;
+  const hasLessonItems = treeData.some((root) =>
+    root.children?.some((unit) => (unit.children?.length ?? 0) > 0),
+  );
+  const lessonSemesterLabel =
+    config?.year && config?.semester
+      ? `${config.year}학년도 ${config.semester}학기`
+      : "현재 학기";
   const combinedSaveStateTone =
     lessonSaveState === "saving" || pdfSaveState === "saving"
       ? "saving"
@@ -3494,8 +3501,8 @@ const ManageLesson: React.FC = () => {
             저장 결과 확인이 필요합니다.
           </h2>
           <p role="status" className="mt-3 text-sm leading-6 text-gray-600">
-            처음 요청한 내용과 파일을 보관하고 있습니다. 저장 결과를 확인한 뒤
-            편집을 이어갈 수 있습니다.
+            처음 요청한 내용과 파일을 이 탭에 보관하고 있습니다. 탭을 닫거나
+            새로고침하지 말고 저장 결과를 확인해 주세요.
           </p>
           {pdfSaveFeedback?.tone === "error" && (
             <p className="mt-3 text-sm text-red-600">
@@ -3565,12 +3572,22 @@ const ManageLesson: React.FC = () => {
                     ? "학기 설정을 확인하는 중입니다."
                     : pdfSaveFeedback?.tone === "error"
                       ? "수업 자료를 준비하지 못했습니다."
-                      : "수업 자료를 선택해 주세요."}
+                      : !treeLoadedRef.current
+                        ? "수업 자료를 불러오는 중입니다."
+                        : !hasLessonItems
+                          ? `${lessonSemesterLabel}에 수업 항목이 없습니다.`
+                          : "수업 자료를 선택해 주세요."}
                 </p>
                 <p className="mt-2 text-sm">
                   {pdfSaveFeedback?.tone === "error"
                     ? pdfSaveFeedback.message
-                    : "왼쪽 트리에서 말단 수업 항목을 선택하면 편집을 시작할 수 있습니다."}
+                    : !configReady || !treeLoadedRef.current
+                      ? "잠시만 기다려 주세요."
+                      : !hasLessonItems
+                        ? canEdit
+                          ? "목차에 수업 항목을 추가해 자료를 등록해 주세요."
+                          : "수업 항목이 등록되면 이곳에서 확인할 수 있습니다."
+                        : "목차에서 수업 항목을 선택하면 편집을 시작할 수 있습니다."}
                 </p>
               </div>
             ) : (

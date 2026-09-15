@@ -12,6 +12,7 @@ const sourcePaths = [
   "src/lib/stepUpReauth.ts",
   "src/lib/highRiskCommands.ts",
   "src/lib/semesterScope.ts",
+  "src/lib/sessionQueryCache.ts",
   "src/lib/firebase.ts",
 ];
 const sources = Object.fromEntries(sourcePaths.map(path => [path, readFileSync(path, "utf8")]));
@@ -81,6 +82,9 @@ const fixture = ({ storage = new Map(), uid = "student-a" } = {}) => {
     state.entered.push(key);
     if (state.gates.has(key)) await state.gates.get(key).promise;
   };
+  const sessionQueryCache = load(
+    code["src/lib/sessionQueryCache.ts"], {}, { structuredClone },
+  ).createSessionQueryCache();
   const stepUp = load(code["src/lib/stepUpReauth.ts"]);
   const highRisk = load(code["src/lib/highRiskCommands.ts"]);
   const semester = load(code["src/lib/semesterScope.ts"]);
@@ -143,6 +147,7 @@ const fixture = ({ storage = new Map(), uid = "student-a" } = {}) => {
       rawCallable.stream = rawCallable;
       const actualFactory = load(factoryCode, {}, {
         auth: state.auth,
+        sessionQueryCache,
         getFirebaseFunctions: async () => { await waitAt("factory", name); return {}; },
         loadFunctions: async () => ({ httpsCallable: () => rawCallable }),
         loadSession: async () => {

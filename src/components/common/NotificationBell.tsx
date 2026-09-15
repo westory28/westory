@@ -363,10 +363,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                 state?.readOnly ||
                 busy === "notice:all"
               }
-              className="inline-flex items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-extrabold text-stone-600 transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-extrabold text-stone-600 transition hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <i className="fas fa-trash-can" aria-hidden="true"></i>
-              {busy === "notice:all" ? "삭제 중..." : "알림 목록 삭제"}
+              <i className="fas fa-check-double" aria-hidden="true"></i>
+              {busy === "notice:all" ? "확인 중..." : "모두 확인"}
             </button>
           </div>
         </div>
