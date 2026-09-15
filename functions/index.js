@@ -47,6 +47,7 @@ Object.assign(exports, require("./sourceArchiveBeta"));
 Object.assign(exports, require("./lessonPdfBeta"));
 Object.assign(exports, require("./lessonAssetUploads"));
 exports.uploadLessonAssetContent = require("./lessonAssetTransport").uploadLessonAssetContent;
+exports.registerSchoolBanner = require("./schoolBanners").registerSchoolBanner;
 exports.updateStudentMaintenanceConfig =
   studentMaintenance.createUpdateStudentMaintenanceConfigCallable({
     assertActiveApplicationSession:

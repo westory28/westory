@@ -41,6 +41,7 @@ import {
 } from "../../lib/w8Domains";
 import type { CalendarEvent, SystemConfig } from "../../types";
 import TeacherCalendarEventModal from "./components/TeacherCalendarEventModal";
+import SchoolBannerModal from "./components/SchoolBannerModal";
 import SearchModal from "../student/components/SearchModal";
 import { getArchiveEnrollmentState } from "../../lib/archiveEnrollment";
 import {
@@ -101,11 +102,16 @@ const projectScheduleEvent = (
   ...projectScheduleTargets(event.classIds, event.targetUserIds, classes),
 });
 
-// The dashboard image carousel is independent of the retired notice-board editor.
+// The dashboard image carousel uses a dedicated, server-backed banner editor.
 // It performs one scoped read and never blocks the calendar or ranking queries.
 const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
   config,
 }) => {
+  const { currentUser, userData } = useAuth();
+  const canRegister = canManageW8Domains(userData, currentUser?.email);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [registered, setRegistered] = useState(false);
   const [images, setImages] = useState<VisibleNotice[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -133,16 +139,16 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
     return () => {
       active = false;
     };
-  }, [year, semester]);
+  }, [year, semester, reload]);
 
   useEffect(() => {
-    if (paused || images.length < 2) return;
+    if (paused || registerOpen || images.length < 2) return;
     const timer = window.setInterval(
       () => setActiveIndex((index) => (index + 1) % images.length),
       5000,
     );
     return () => window.clearInterval(timer);
-  }, [images.length, paused]);
+  }, [images.length, paused, registerOpen]);
 
   const image = images[activeIndex];
   return (
@@ -150,7 +156,26 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
       className="teacher-dashboard-banner rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
       aria-label="학교 배너"
     >
-      <h2 className="mb-3 text-lg font-extrabold text-gray-900">학교 배너</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-extrabold text-gray-900">학교 배너</h2>
+        {canRegister && (
+          <button
+            type="button"
+            className="min-h-11 rounded-lg bg-blue-600 px-4 font-bold text-white hover:bg-blue-700"
+            onClick={() => {
+              setRegistered(false);
+              setRegisterOpen(true);
+            }}
+          >
+            + 등록
+          </button>
+        )}
+      </div>
+      {registered && (
+        <p role="status" className="mb-3 text-sm text-green-700">
+          학교 배너가 등록되었습니다.
+        </p>
+      )}
       <div className="teacher-dashboard-banner__image">
         {loading ? (
           <InlineLoading message="배너를 불러오는 중입니다." />
@@ -168,6 +193,28 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
           </p>
         )}
       </div>
+      {failed && (
+        <button
+          type="button"
+          className="mt-3 min-h-11 rounded-lg border border-gray-200 px-4 text-sm font-bold text-gray-700"
+          onClick={() => setReload((value) => value + 1)}
+        >
+          다시 불러오기
+        </button>
+      )}
+      {registerOpen && canRegister && currentUser && (
+        <SchoolBannerModal
+          key={`${year}:${semester}:${currentUser.uid}`}
+          semesterId={`${year}-${semester}`}
+          ownerUid={currentUser.uid}
+          onClose={() => setRegisterOpen(false)}
+          onSaved={() => {
+            setRegisterOpen(false);
+            setRegistered(true);
+            setReload((value) => value + 1);
+          }}
+        />
+      )}
       {images.length > 1 && (
         <div className="mt-3 flex items-center justify-center gap-2">
           <button

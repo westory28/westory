@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "currentWave": "W11",
-  "approvedEntryCount": 151,
+  "approvedEntryCount": 152,
   "entries": [
     {
       "id": "DW-247",
@@ -3036,6 +3036,26 @@
       "expiresAfterWave": "PERMANENT",
       "owner": "Semester Transition Guide",
       "testOwner": "Semester transition guide safety"
+    },
+    {
+      "id": "DW-253",
+      "file": "src/lib/schoolBanners.ts",
+      "function": "registerSchoolBanner",
+      "symbolId": "src/lib/schoolBanners.ts::registerSchoolBanner#1",
+      "boundary": "CALLABLE",
+      "api": "westory#getHttpsCallable",
+      "callable": "registerSchoolBanner",
+      "triggers": [
+        "USER_EVENT"
+      ],
+      "reason": "학교 배너 등록 버튼에서 서버 세션·교사 권한·현재 학기·이미지 검증 및 멱등 저장을 수행하는 callable",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "westory-maintainers",
+      "testOwner": "school-banner-registration",
+      "rootCount": 1,
+      "callGraphHash": "922d8460478eaa708c935359"
     }
   ]
 }
