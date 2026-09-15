@@ -3,38 +3,46 @@ import { createRequire } from "node:module";
 import { build } from "esbuild";
 
 // Exercise the real generator, API refresh, event conversion and sync together.
-// Firestore and fetch are replaced so this never writes to a live project.
-const writes = [];
-const deleted = [];
-const firestore = {
-  collection: (_db, path) => path,
-  doc: (_db, path, id) => `${path}/${id}`,
-  query: (path) => path,
-  where: () => undefined,
-  getDocs: async () => [{ ref: "old-holiday-document" }],
-  serverTimestamp: () => "server-timestamp",
-  writeBatch: () => ({
-    delete: (ref) => deleted.push(ref),
-    set: (ref, data) => writes.push({ ref, data }),
-    commit: async () => undefined,
-  }),
+// The callable boundary and fetch are replaced; server persistence is tested separately.
+const operations = [];
+const calendar = {
+  mutateAcademicCalendar: async (operation) => {
+    operations.push(operation);
+    return { count: operation.holidays.length };
+  },
 };
 const bundled = await build({
   entryPoints: ["src/lib/koreanPublicHolidays.ts"],
   bundle: true,
   platform: "node",
   format: "cjs",
-  external: ["firebase/firestore"],
+  plugins: [
+    {
+      name: "calendar-boundary",
+      setup(builder) {
+        builder.onResolve({ filter: /^\.\/academicCalendar$/ }, () => ({
+          path: "calendar-boundary",
+          namespace: "test-boundary",
+        }));
+        builder.onLoad({ filter: /.*/, namespace: "test-boundary" }, () => ({
+          contents:
+            "export const mutateAcademicCalendar = operation => calendar.mutateAcademicCalendar(operation);",
+        }));
+      },
+    },
+  ],
   write: false,
   logLevel: "silent",
 });
 const require = createRequire(import.meta.url);
 const loaded = { exports: {} };
-new Function("module", "exports", "require", bundled.outputFiles[0].text)(
-  loaded,
-  loaded.exports,
-  (id) => (id === "firebase/firestore" ? firestore : require(id)),
-);
+new Function(
+  "module",
+  "exports",
+  "require",
+  "calendar",
+  bundled.outputFiles[0].text,
+)(loaded, loaded.exports, require, calendar);
 const {
   getKoreanPublicHolidays,
   toHolidayCalendarEvent,
@@ -137,18 +145,16 @@ try {
     false,
     "The old daily marker must allow one corrective sync",
   );
-  assert.equal(deleted.length, 1);
+  assert.equal(operations.length, 1);
+  assert.equal(operations[0].action, "SYNC_HOLIDAYS");
+  assert.equal(String(operations[0].year), "2026");
+  assert.equal(String(operations[0].semester), "2");
   for (const date of ["2026-09-24", "2026-09-26"]) {
     assert.equal(
-      writes.find(({ data }) => data.start === date)?.data.title,
+      operations[0].holidays.find((data) => data.start === date)?.title,
       "추석 연휴",
     );
   }
-  assert.ok(
-    writes.every(({ ref }) =>
-      ref.startsWith("years/2026/semesters/2/calendar/"),
-    ),
-  );
   const repeat = await ensureKoreanPublicHolidaysSynced({
     db: {},
     year: 2026,
@@ -159,6 +165,7 @@ try {
     true,
     "The repaired data should retain daily sync deduplication",
   );
+  assert.equal(operations.length, 1);
   assert.deepEqual(await getKoreanPublicHolidays("invalid"), []);
   console.log(
     "Korean holiday regression checks passed (2026–2029, API cache, labels, merge, sync).",

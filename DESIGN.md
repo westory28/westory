@@ -55,6 +55,7 @@ Contrast notes:
 ## 3. Typography
 
 Calendar editor contract:
+- 공휴일 날짜와 이름은 요일보다 우선하여 빨간색으로 표시한다. 토요일과 겹친 공휴일도 빨간색이며, 공휴일이 아닌 토요일만 파란색으로 표시한다.
 - Teacher event dialog: maximum width 960px; two columns from 768px, one column below it.
 - Existing category palette in `scheduleCategories.ts` also supplies optional per-event label colors; labels use dark text on a 22% tint of the chosen color.
 - Calendar label height: 24px; text: existing 12px label size, 4px horizontal padding, single-line ellipsis. FullCalendar owns the date-span width.
