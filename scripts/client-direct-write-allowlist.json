@@ -208,7 +208,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "a0d5fab85148fee0747f4fa1"
+      "callGraphHash": "bf60b901e3df56bc1abf9780"
     },
     {
       "id": "DW-008",
@@ -2134,7 +2134,7 @@
       "owner": "W8 Domains",
       "testOwner": "W8 command safety",
       "rootCount": 1,
-      "callGraphHash": "bf6a4de38b19b16839677a9b"
+      "callGraphHash": "3b05584d15103a016dfcc6d2"
     },
     {
       "id": "DW-218",

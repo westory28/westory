@@ -158,6 +158,11 @@ const approvedSecurityStateClassExceptions = new Map([
   [
     "src/components/common/NotificationBell.tsx",
     new Set([
+      // 2026-09-15: the existing action acknowledges notices; it does not delete them.
+      // Only its retired delete icon/colors are exempted. The replacement is checked below.
+      "hover:border-rose-200",
+      "hover:text-rose-600",
+      "fa-trash-can",
       "inset-0",
       "z-[9999]",
       "bg-black",
@@ -237,6 +242,18 @@ const presentationResults = frozenPresentationFiles.map((path) => {
     approvedRemovedClassTokens: absent.length,
   };
 });
+
+const acknowledgeAllButtons = [
+  ...read("src/components/common/NotificationBell.tsx").matchAll(/<button\b[\s\S]*?<\/button>/gu),
+].map((match) => match[0]).filter((button) =>
+  /onClick=\{\(\) => void acknowledgeAll\(\)\}/u.test(button),
+);
+assert.equal(acknowledgeAllButtons.length, 1, "The acknowledge-all action must stay connected to its explicit button");
+const acknowledgeAllButton = acknowledgeAllButtons[0];
+for (const token of ["hover:border-blue-200", "hover:text-blue-600", "fa-check-double"])
+  assert.ok(acknowledgeAllButton.includes(token), `The acknowledge-all action must use its confirmed-state presentation: ${token}`);
+assert.match(acknowledgeAllButton, /busy === "notice:all" \? "확인 중\.\.\." : "모두 확인"/u);
+assert.doesNotMatch(acknowledgeAllButton, /hover:border-rose-200|hover:text-rose-600|fa-trash-can|알림 목록 삭제|삭제 중/u);
 
 const studentRosterSource = read("src/pages/teacher/StudentList.tsx");
 const studentRosterColumns = studentRosterSource.match(/<colgroup>([\s\S]*?)<\/colgroup>/u)?.[1];
