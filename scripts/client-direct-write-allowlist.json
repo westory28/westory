@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "currentWave": "W11",
-  "approvedEntryCount": 152,
+  "approvedEntryCount": 153,
   "entries": [
     {
       "id": "DW-247",
@@ -3056,6 +3056,26 @@
       "testOwner": "school-banner-registration",
       "rootCount": 1,
       "callGraphHash": "922d8460478eaa708c935359"
+    },
+    {
+      "id": "DW-254",
+      "file": "src/lib/schoolBanners.ts",
+      "function": "manageSchoolBanners",
+      "symbolId": "src/lib/schoolBanners.ts::manageSchoolBanners#1",
+      "boundary": "CALLABLE",
+      "api": "westory#getHttpsCallable",
+      "callable": "manageSchoolBanners",
+      "triggers": [
+        "USER_EVENT"
+      ],
+      "reason": "교사의 배너 순서 저장·삭제 클릭에서만 서버 세션·권한·현재 학기·버전 검사와 멱등 저장을 수행",
+      "introducedWave": "W11",
+      "migrationWave": "PERMANENT",
+      "expiresAfterWave": "PERMANENT",
+      "owner": "westory-maintainers",
+      "testOwner": "school-banner-management",
+      "rootCount": 1,
+      "callGraphHash": "aca4aa24b87c5d28e76d60bc"
     }
   ]
 }

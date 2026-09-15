@@ -42,6 +42,14 @@ import {
 import type { CalendarEvent, SystemConfig } from "../../types";
 import TeacherCalendarEventModal from "./components/TeacherCalendarEventModal";
 import SchoolBannerModal from "./components/SchoolBannerModal";
+import SchoolBannerManager from "./components/SchoolBannerManager";
+import ModalSurface from "../../components/common/ModalSurface";
+import {
+  bannerTimestamp,
+  loadSchoolBanners,
+  schoolBannerStatus,
+  type SchoolBannerRecord,
+} from "../../lib/schoolBanners";
 import SearchModal from "../student/components/SearchModal";
 import { getArchiveEnrollmentState } from "../../lib/archiveEnrollment";
 import {
@@ -110,9 +118,17 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
   const { currentUser, userData } = useAuth();
   const canRegister = canManageW8Domains(userData, currentUser?.email);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const [editingBanner, setEditingBanner] = useState<
+    SchoolBannerRecord | undefined
+  >();
+  const [previewBanner, setPreviewBanner] = useState<VisibleNotice | null>(
+    null,
+  );
   const [reload, setReload] = useState(0);
-  const [registered, setRegistered] = useState(false);
-  const [images, setImages] = useState<VisibleNotice[]>([]);
+  const [message, setMessage] = useState("");
+  const [allBanners, setAllBanners] = useState<SchoolBannerRecord[]>([]);
+  const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -123,12 +139,24 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
     let active = true;
     setLoading(true);
     setFailed(false);
-    setImages([]);
+    setAllBanners([]);
     setActiveIndex(0);
-    void loadVisibleNotices(db, getSemesterCollectionPath(config, "notices"))
+    const request = canRegister
+      ? loadSchoolBanners(config)
+      : loadVisibleNotices(db, getSemesterCollectionPath(config, "notices"));
+    void request
       .then((notices) => {
-        if (active)
-          setImages(notices.filter((notice) => Boolean(notice.imageUrl)));
+        if (active) {
+          setNow(Date.now());
+          setAllBanners(
+            notices
+              .filter((notice) => Boolean(notice.imageUrl))
+              .map((notice) => ({
+                ...notice,
+                revision: Number((notice as SchoolBannerRecord).revision || 0),
+              })),
+          );
+        }
       })
       .catch(() => {
         if (active) setFailed(true);
@@ -139,16 +167,48 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
     return () => {
       active = false;
     };
-  }, [year, semester, reload]);
+  }, [year, semester, reload, canRegister]);
 
   useEffect(() => {
-    if (paused || registerOpen || images.length < 2) return;
+    const boundaries = allBanners
+      .flatMap((item) => [
+        bannerTimestamp(item.publishAt),
+        bannerTimestamp(item.expiresAt),
+      ])
+      .filter((time) => time > Date.now());
+    const wait = boundaries.length
+      ? Math.min(60000, Math.max(10, Math.min(...boundaries) - Date.now() + 10))
+      : 60000;
+    const timer = window.setTimeout(() => setNow(Date.now()), wait);
+    return () => window.clearTimeout(timer);
+  }, [allBanners, now]);
+  const images = useMemo(
+    () =>
+      allBanners.filter(
+        (item) =>
+          schoolBannerStatus(item, now) === "게시 중" &&
+          ["common", "all"].includes(item.targetType),
+      ),
+    [allBanners, now],
+  );
+  const visibleIds = images.map((item) => item.id).join(":");
+  useEffect(() => setActiveIndex(0), [visibleIds]);
+
+  useEffect(() => {
+    if (
+      paused ||
+      registerOpen ||
+      managerOpen ||
+      previewBanner ||
+      images.length < 2
+    )
+      return;
     const timer = window.setInterval(
       () => setActiveIndex((index) => (index + 1) % images.length),
       5000,
     );
     return () => window.clearInterval(timer);
-  }, [images.length, paused, registerOpen]);
+  }, [images.length, paused, registerOpen, managerOpen, previewBanner]);
 
   const image = images[activeIndex];
   return (
@@ -159,37 +219,57 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-extrabold text-gray-900">학교 배너</h2>
         {canRegister && (
-          <button
-            type="button"
-            className="min-h-11 rounded-lg bg-blue-600 px-4 font-bold text-white hover:bg-blue-700"
-            onClick={() => {
-              setRegistered(false);
-              setRegisterOpen(true);
-            }}
-          >
-            + 등록
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="min-h-11 rounded-lg border border-gray-200 px-4 font-bold text-gray-700 disabled:opacity-60"
+              disabled={loading || failed}
+              onClick={() => setManagerOpen(true)}
+            >
+              배너 관리
+            </button>
+            <button
+              type="button"
+              className="min-h-11 rounded-lg bg-blue-600 px-4 font-bold text-white hover:bg-blue-700"
+              onClick={() => {
+                setMessage("");
+                setEditingBanner(undefined);
+                setRegisterOpen(true);
+              }}
+            >
+              + 등록
+            </button>
+          </div>
         )}
       </div>
-      {registered && (
+      {message && (
         <p role="status" className="mb-3 text-sm text-green-700">
-          학교 배너가 등록되었습니다.
+          {message}
         </p>
       )}
       <div className="teacher-dashboard-banner__image">
         {loading ? (
           <InlineLoading message="배너를 불러오는 중입니다." />
         ) : image ? (
-          <img
-            src={image.imageUrl}
-            alt={image.content || "학교 안내 배너"}
-            decoding="async"
-          />
+          <button
+            type="button"
+            className="h-full w-full"
+            aria-label="현재 학교 배너 미리보기"
+            onClick={() => setPreviewBanner(image)}
+          >
+            <img
+              src={image.imageUrl}
+              alt={image.content || "학교 안내 배너"}
+              decoding="async"
+            />
+          </button>
         ) : (
           <p className="text-sm text-gray-500">
             {failed
               ? "배너를 불러오지 못했습니다."
-              : "등록된 배너 이미지가 없습니다."}
+              : allBanners.length
+                ? "현재 게시 중인 공통 배너가 없습니다. 배너 관리에서 게시 기간과 대상을 확인해 주세요."
+                : "등록된 배너 이미지가 없습니다."}
           </p>
         )}
       </div>
@@ -207,13 +287,71 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
           key={`${year}:${semester}:${currentUser.uid}`}
           semesterId={`${year}-${semester}`}
           ownerUid={currentUser.uid}
+          banner={editingBanner}
           onClose={() => setRegisterOpen(false)}
           onSaved={() => {
             setRegisterOpen(false);
-            setRegistered(true);
+            setMessage(
+              editingBanner
+                ? "학교 배너가 수정되었습니다."
+                : "학교 배너가 등록되었습니다.",
+            );
+            if (editingBanner) setManagerOpen(true);
             setReload((value) => value + 1);
           }}
         />
+      )}
+      {managerOpen &&
+        !registerOpen &&
+        !loading &&
+        !failed &&
+        canRegister &&
+        currentUser && (
+          <SchoolBannerManager
+            key={`${reload}:${currentUser.uid}`}
+            banners={allBanners}
+            semesterId={`${year}-${semester}`}
+            ownerUid={currentUser.uid}
+            onClose={() => {
+              setManagerOpen(false);
+              setReload((value) => value + 1);
+            }}
+            onEdit={(banner) => {
+              setManagerOpen(false);
+              setEditingBanner(banner);
+              setRegisterOpen(true);
+            }}
+            onSaved={(notice) => {
+              setManagerOpen(false);
+              setMessage(notice);
+              setReload((value) => value + 1);
+            }}
+          />
+        )}
+      {previewBanner && (
+        <ModalSurface
+          open
+          title="학교 배너 미리보기"
+          size="wide"
+          onClose={() => setPreviewBanner(null)}
+        >
+          <h3 className="mb-3 break-words font-bold">
+            {previewBanner.content || "학교 안내 배너"}
+          </h3>
+          <img
+            src={previewBanner.imageUrl}
+            alt={previewBanner.content || "학교 안내 배너"}
+            className="h-auto w-full rounded-lg"
+          />
+          {previewBanner.developerLogPostId && (
+            <a
+              href={`#/developer-log/${encodeURIComponent(previewBanner.developerLogPostId)}`}
+              className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-gray-200 px-4 font-bold text-blue-700"
+            >
+              연결된 개발자 일지 보기
+            </a>
+          )}
+        </ModalSurface>
       )}
       {images.length > 1 && (
         <div className="mt-3 flex items-center justify-center gap-2">

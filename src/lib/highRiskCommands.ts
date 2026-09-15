@@ -122,6 +122,7 @@ const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
 
 export const HIGH_RISK_COMMANDS = new Set<string>([
   "registerSchoolBanner",
+  "manageSchoolBanners",
   "updateStudentMaintenanceConfig",
   "uploadMapAssetContent",
   "uploadSourceArchiveAsset",

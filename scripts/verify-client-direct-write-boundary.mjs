@@ -76,6 +76,7 @@ const SESSION_CONTROL_CALLABLES = new Set([
   "saveAssessmentProgress",
 ]);
 const USER_EVENT_COMMAND_CALLABLES = new Map([
+  ["manageSchoolBanners", { file: "src/lib/schoolBanners.ts", function: "manageSchoolBanners", symbolId: "src/lib/schoolBanners.ts::manageSchoolBanners#1" }],
   ["registerSchoolBanner", { file: "src/lib/schoolBanners.ts", function: "registerSchoolBanner", symbolId: "src/lib/schoolBanners.ts::registerSchoolBanner#1" }],
   ["updateStudentMaintenanceConfig", { file: "src/lib/studentAccessSettings.ts", function: "changeStudentAccess", symbolId: "src/lib/studentAccessSettings.ts::changeStudentAccess#1" }],
   ["uploadLessonAssetContent", { file: "src/lib/lessonManagement.ts", function: "uploadLessonAsset", symbolId: "src/lib/lessonManagement.ts::uploadLessonAsset#1" }],
