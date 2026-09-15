@@ -1,0 +1,28 @@
+.ws-student-roster .ws-student-roster__identity {
+  width: 14%;
+}
+
+.ws-student-roster .ws-student-roster__management {
+  width: 7rem;
+}
+
+.ws-student-roster .ws-student-roster__action-label {
+  display: none;
+}
+
+.ws-student-roster__actions > button {
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .ws-student-roster .ws-student-roster__management {
+    width: 11rem;
+  }
+
+  .ws-student-roster .ws-student-roster__action-label {
+    display: inline;
+  }
+}

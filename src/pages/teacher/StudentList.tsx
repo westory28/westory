@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { useAppDialog } from "../../components/common/AppDialogProvider";
 import { db } from "../../lib/firebase";
+import "./components/StudentRoster.css";
 import { sessionQueryCache } from "../../lib/sessionQueryCache";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentRegistrationApprovalPanel from "./components/StudentRegistrationApprovalPanel";
@@ -933,15 +934,15 @@ const StudentListScope: React.FC = () => {
             </p>
           )}
           <div className="flex-1 overflow-x-auto">
-            <table className="w-full min-w-[680px] table-fixed text-left text-sm md:min-w-0">
+            <table className="ws-student-roster w-full min-w-[680px] table-fixed text-left text-sm md:min-w-0">
               <colgroup>
                 <col className="w-12" />
-                <col />
-                <col />
-                <col />
+                <col className="ws-student-roster__identity" />
+                <col className="ws-student-roster__identity" />
+                <col className="ws-student-roster__identity" />
                 <col />
                 <col className="hidden lg:table-column lg:w-2/5" />
-                <col className="w-24" />
+                <col className="ws-student-roster__management" />
               </colgroup>
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>
@@ -961,7 +962,7 @@ const StudentListScope: React.FC = () => {
                   <th className="px-2 py-4 text-center">학년</th>
                   <th className="px-2 py-4 text-center">반</th>
                   <th className="px-2 py-4 text-center">번호</th>
-                  <th className="p-4 text-center">이름</th>
+                  <th className="p-4 text-left">이름</th>
                   <th className="hidden p-4 lg:table-cell">이메일</th>
                   <th className="px-2 py-4 text-center">관리</th>
                 </tr>
@@ -1016,9 +1017,9 @@ const StudentListScope: React.FC = () => {
                             setDetailModalOpen(true);
                           }}
                           title="학생 학습 현황 보기"
-                          className="w-full text-center font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
+                          className="w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                         >
-                          <span className="flex items-center justify-center">
+                          <span className="flex items-center">
                             <span className="min-w-0 break-words">
                               {student.name || "(이름 없음)"}
                             </span>
@@ -1039,8 +1040,8 @@ const StudentListScope: React.FC = () => {
                               ? "확인 필요"
                               : "")}
                       </td>
-                      <td className="px-2 py-4 text-center">
-                        <div className="flex flex-wrap justify-center gap-1">
+                      <td className="px-2 py-1 text-center">
+                        <div className="ws-student-roster__actions flex flex-wrap justify-center gap-1">
                           {!readOnly && (
                             <>
                               <button
@@ -1051,10 +1052,16 @@ const StudentListScope: React.FC = () => {
                                   setDetailModalOpen(true);
                                 }}
                                 className="flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                title="수정"
+                                title="편집"
+                                aria-label={`${student.name || "학생"} 편집`}
                               >
-                                <i className="fas fa-edit"></i>
-                                <span className="hidden lg:inline">수정</span>
+                                <i
+                                  className="fas fa-edit"
+                                  aria-hidden="true"
+                                ></i>
+                                <span className="ws-student-roster__action-label">
+                                  편집
+                                </span>
                               </button>
                               <button
                                 onClick={() => void handleDelete(student.id)}
@@ -1068,9 +1075,15 @@ const StudentListScope: React.FC = () => {
                                     ? "학생 정보만 삭제"
                                     : "삭제"
                                 }
+                                aria-label={`${student.name || "학생"} ${student.isTeacherAccount ? "학생 정보만 삭제" : "삭제"}`}
                               >
-                                <i className="fas fa-trash"></i>
-                                <span className="hidden lg:inline">삭제</span>
+                                <i
+                                  className="fas fa-trash"
+                                  aria-hidden="true"
+                                ></i>
+                                <span className="ws-student-roster__action-label">
+                                  삭제
+                                </span>
                               </button>
                               {canResetCorePoints &&
                                 isBangTestStudent(student) && (

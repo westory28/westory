@@ -241,12 +241,12 @@ const presentationResults = frozenPresentationFiles.map((path) => {
 const studentRosterSource = read("src/pages/teacher/StudentList.tsx");
 const studentRosterColumns = studentRosterSource.match(/<colgroup>([\s\S]*?)<\/colgroup>/u)?.[1];
 assert.ok(studentRosterColumns, "Roster columns must have explicit shared header/body allocation");
-assert.match(studentRosterSource, /<table className="w-full min-w-\[680px\] table-fixed text-left text-sm md:min-w-0">/u,
+assert.match(studentRosterSource, /<table className="ws-student-roster w-full min-w-\[680px\] table-fixed text-left text-sm md:min-w-0">/u,
   "Roster width correction must preserve the mobile scrolling table");
-assert.equal((studentRosterColumns.match(/<col \/>/gu) || []).length, 4,
-  "Grade, class, number and name equally share available width, including when email is hidden");
+assert.equal((studentRosterColumns.match(/<col className="ws-student-roster__identity" \/>/gu) || []).length, 3,
+  "Grade, class and number share a bounded proportion instead of stretching across the table");
 assert.match(studentRosterColumns, /^\s*<col className="w-12" \/>/u);
-assert.match(studentRosterColumns, /<col \/>\s*<col className="hidden lg:table-column lg:w-2\/5" \/>\s*<col className="w-24" \/>\s*$/u,
+assert.match(studentRosterColumns, /<col \/>\s*<col className="hidden lg:table-column lg:w-2\/5" \/>\s*<col className="ws-student-roster__management" \/>\s*$/u,
   "The optional email column and compact management column stay explicit");
 assert.match(studentRosterSource, /<span className="min-w-0 break-words">\s*\{student\.name \|\| "\(이름 없음\)"\}/u,
   "The roster must show full student names rather than truncating them");
