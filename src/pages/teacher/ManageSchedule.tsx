@@ -8,16 +8,11 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import { db } from "../../lib/firebase";
+import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import {
-  doc,
-  getDoc,
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+  mutateAcademicCalendar,
+  academicCalendarErrorMessage,
+} from "../../lib/academicCalendar";
 import {
   ensureKoreanPublicHolidaysSynced,
   getKoreanPublicHolidays,
@@ -25,6 +20,11 @@ import {
 } from "../../lib/koreanPublicHolidays";
 
 interface CalendarEvent {
+  revision?: number;
+  allDay?: boolean;
+  startPeriod?: string;
+  endPeriod?: string;
+  period?: string;
   labelColor?: string;
   id?: string;
   title: string;
@@ -221,6 +221,12 @@ const ManageSchedule = () => {
       setIsEditMode(true);
       setSelectedEventId(eventData.id);
       setFormData({
+        revision: eventData.revision ?? 0,
+        labelColor: eventData.labelColor,
+        allDay: eventData.allDay,
+        startPeriod: eventData.startPeriod,
+        endPeriod: eventData.endPeriod,
+        period: eventData.period,
         title: eventData.title,
         start: eventData.start,
         end: eventData.end || "",
@@ -269,35 +275,30 @@ const ManageSchedule = () => {
     }
     if (!currentConfig) return;
 
-    const calRef = collection(
-      db,
-      "years",
-      currentConfig.year,
-      "semesters",
-      currentConfig.semester,
-      "calendar",
-    );
     const finalEnd = endEnabled
       ? formData.end || formData.start
       : formData.start;
+    const { id: _id, revision: _revision, ...fields } = formData;
     const dataToSave = {
-      ...formData,
+      ...fields,
       end: finalEnd,
-      updatedAt: serverTimestamp(),
+      targetClass:
+        formData.targetType === "class" ? formData.targetClass : null,
     };
 
     try {
-      if (isEditMode && selectedEventId) {
-        await updateDoc(doc(calRef, selectedEventId), dataToSave);
-      } else {
-        // @ts-ignore
-        dataToSave.createdAt = serverTimestamp();
-        await addDoc(calRef, dataToSave);
-      }
+      await mutateAcademicCalendar({
+        action: "SAVE_EVENT",
+        year: currentConfig.year,
+        semester: currentConfig.semester,
+        eventId: isEditMode && selectedEventId ? selectedEventId : undefined,
+        expectedRevision: formData.revision ?? 0,
+        event: dataToSave,
+      });
       closeModal();
       fetchEvents();
     } catch (e: any) {
-      alert("저장 실패: " + e.message);
+      alert(academicCalendarErrorMessage(e));
     }
   };
 
@@ -306,21 +307,17 @@ const ManageSchedule = () => {
     if (!window.confirm("정말 삭제하시겠습니까?")) return;
 
     try {
-      await deleteDoc(
-        doc(
-          db,
-          "years",
-          currentConfig.year,
-          "semesters",
-          currentConfig.semester,
-          "calendar",
-          selectedEventId,
-        ),
-      );
+      await mutateAcademicCalendar({
+        action: "DELETE_EVENT",
+        year: currentConfig.year,
+        semester: currentConfig.semester,
+        eventId: selectedEventId,
+        expectedRevision: formData.revision ?? 0,
+      });
       closeModal();
       fetchEvents();
     } catch (e: any) {
-      alert("삭제 실패: " + e.message);
+      alert(academicCalendarErrorMessage(e));
     }
   };
 
@@ -628,7 +625,7 @@ const ManageSchedule = () => {
                 .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
                 .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 600; border: none; }
                 .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
-                .fc-day-sat a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
+                .fc-day-sat:not(.fc-day-holiday) a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
                 .fc-day-holiday a { color: #ef4444 !important; font-weight: 700 !important; text-decoration: none; }
                 .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
                 .fc-daygrid-event.holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }

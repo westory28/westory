@@ -99,6 +99,7 @@ export interface PointStudentTarget {
 
 export interface CalendarEvent {
   id: string;
+  revision?: number;
   labelColor?: string;
   title: string;
   description?: string;

@@ -1,14 +1,5 @@
 import KoreanLunarCalendar from "korean-lunar-calendar";
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  serverTimestamp,
-  type Firestore,
-  where,
-  writeBatch,
-} from "firebase/firestore";
+import type { Firestore } from "firebase/firestore";
 import type { CalendarEvent } from "../types";
 
 export interface KoreanPublicHoliday {
@@ -373,29 +364,17 @@ export const syncKoreanPublicHolidaysToFirestore = async ({
   const holidays = await getKoreanPublicHolidays(year);
   if (holidays.length === 0) return { count: 0 };
 
-  const path = `years/${year}/semesters/${semester}/calendar`;
-  const holidayQuery = query(
-    collection(db, path),
-    where("eventType", "==", "holiday"),
-  );
-  const holidaySnap = await getDocs(holidayQuery);
-  const batch = writeBatch(db);
-
-  holidaySnap.forEach((item) => batch.delete(item.ref));
-  holidays.forEach((holiday) => {
-    const event = toHolidayCalendarEvent(holiday);
-    const ref = doc(db, path, event.id);
-    batch.set(ref, {
-      ...event,
-      targetClass: null,
-      holidaySource: holiday.source,
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    });
+  const { mutateAcademicCalendar } = await import("./academicCalendar");
+  return mutateAcademicCalendar<{ count: number }>({
+    action: "SYNC_HOLIDAYS",
+    year,
+    semester,
+    holidays: holidays.map(({ title, start, source }) => ({
+      title: normalizeHolidayTitle(title, start),
+      start,
+      source,
+    })),
   });
-
-  await batch.commit();
-  return { count: holidays.length };
 };
 
 export const ensureKoreanPublicHolidaysSynced = async ({

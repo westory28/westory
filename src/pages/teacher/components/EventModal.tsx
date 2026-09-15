@@ -1,13 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./eventCalendar.css";
+import { doc, getDoc } from "firebase/firestore";
 import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+  mutateAcademicCalendar,
+  academicCalendarErrorMessage,
+} from "../../../lib/academicCalendar";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -270,6 +267,10 @@ const EventModal: React.FC<EventModalProps> = ({
   };
 
   const persistCategoryDrafts = async () => {
+    if (!config)
+      throw new Error(
+        "현재 학기를 확인하지 못했습니다. 화면을 새로고침해 주세요.",
+      );
     const visibleItems = categoryDrafts.map((item, index) => ({
       key: item.key,
       label: item.label.trim(),
@@ -305,14 +306,12 @@ const EventModal: React.FC<EventModalProps> = ({
 
     setCategoryDrafts(resolvedVisibleItems);
 
-    await setDoc(
-      doc(db, "site_settings", "schedule_categories"),
-      {
-        items,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
+    await mutateAcademicCalendar({
+      action: "SAVE_CATEGORIES",
+      year: config.year,
+      semester: config.semester,
+      items,
+    });
     return true;
   };
 
@@ -330,7 +329,7 @@ const EventModal: React.FC<EventModalProps> = ({
       showToast({
         tone: "error",
         title: "일정 분류 저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: academicCalendarErrorMessage(error),
       });
     } finally {
       setSavingCategories(false);
@@ -353,10 +352,6 @@ const EventModal: React.FC<EventModalProps> = ({
         const saved = await persistCategoryDrafts();
         if (!saved) return;
       }
-      const path = `years/${config.year}/semesters/${config.semester}/calendar`;
-      const docRef = eventData
-        ? doc(db, path, eventData.id)
-        : doc(collection(db, path));
       const finalEnd = end && end >= start ? end : start;
       const finalStartPeriod = isAllDay
         ? SCHEDULE_ALL_DAY_PERIOD_VALUE
@@ -365,7 +360,7 @@ const EventModal: React.FC<EventModalProps> = ({
         ? SCHEDULE_ALL_DAY_PERIOD_VALUE
         : normalizeSchedulePeriod(endPeriod, finalStartPeriod);
 
-      const data: Record<string, unknown> = {
+      const data = {
         title: title.trim(),
         start,
         end: finalEnd,
@@ -379,12 +374,15 @@ const EventModal: React.FC<EventModalProps> = ({
         targetType,
         targetClass:
           targetType === "class" ? `${targetGrade}-${targetClass}` : null,
-        updatedAt: serverTimestamp(),
       };
-
-      if (!eventData) data.createdAt = serverTimestamp();
-
-      await setDoc(docRef, data, { merge: true });
+      await mutateAcademicCalendar({
+        action: "SAVE_EVENT",
+        year: config.year,
+        semester: config.semester,
+        eventId: eventData?.id,
+        expectedRevision: eventData?.revision ?? 0,
+        event: data,
+      });
       onSave();
       showToast({
         tone: "success",
@@ -397,7 +395,7 @@ const EventModal: React.FC<EventModalProps> = ({
       showToast({
         tone: "error",
         title: "일정 저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: academicCalendarErrorMessage(error),
       });
     } finally {
       setLoading(false);
@@ -409,8 +407,13 @@ const EventModal: React.FC<EventModalProps> = ({
       return;
     setLoading(true);
     try {
-      const path = `years/${config.year}/semesters/${config.semester}/calendar`;
-      await deleteDoc(doc(db, path, eventData.id));
+      await mutateAcademicCalendar({
+        action: "DELETE_EVENT",
+        year: config.year,
+        semester: config.semester,
+        eventId: eventData.id,
+        expectedRevision: eventData.revision ?? 0,
+      });
       onSave();
       showToast({
         tone: "success",
@@ -422,7 +425,7 @@ const EventModal: React.FC<EventModalProps> = ({
       showToast({
         tone: "error",
         title: "일정 삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: academicCalendarErrorMessage(error),
       });
     } finally {
       setLoading(false);
