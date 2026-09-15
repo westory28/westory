@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
-import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
+import {
+  getScheduleCategoryMeta,
+  getScheduleEventColor,
+} from "../../../lib/scheduleCategories";
 import {
   compareCalendarSchedule,
   getSchedulePeriodRangeLabel,
@@ -185,7 +188,9 @@ const SearchModal: React.FC<SearchModalProps> = ({
                 categories,
               );
               const bgColor =
-                result.eventType === "holiday" ? "#ef4444" : meta.color;
+                result.eventType === "holiday"
+                  ? "#ef4444"
+                  : getScheduleEventColor(result, categories);
               const typeLabel =
                 result.eventType === "holiday"
                   ? LABELS.holiday

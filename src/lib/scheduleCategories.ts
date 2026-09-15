@@ -32,6 +32,48 @@ export const COLOR_EMOJI_OPTIONS = CATEGORY_COLOR_PRESETS.map(
   (preset) => preset.emoji,
 );
 
+export const SCHEDULE_COLOR_NAMES = [
+  "빨강",
+  "주황",
+  "노랑",
+  "초록",
+  "파랑",
+  "보라",
+  "갈색",
+  "회색",
+  "연보라",
+];
+
+export const getScheduleEventColor = (
+  event: { eventType?: string; labelColor?: string } | undefined,
+  categories?: ScheduleCategory[],
+) =>
+  normalizeColor(
+    event?.labelColor,
+    getScheduleCategoryMeta(event?.eventType, categories).color,
+  );
+
+export const getScheduleEventTextColor = (
+  event: { eventType?: string; labelColor?: string } | undefined,
+  categories?: ScheduleCategory[],
+) => {
+  const luminance = (hex: string) => {
+    const channels = hex.match(/[a-f\d]{2}/gi)!.map((channel) => {
+      const value = parseInt(channel, 16) / 255;
+      return value <= 0.04045
+        ? value / 12.92
+        : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  const background = luminance(getScheduleEventColor(event, categories));
+  const dark = "#111827";
+  const darkContrast = (background + 0.05) / (luminance(dark) + 0.05);
+  const lightContrast = 1.05 / (background + 0.05);
+  if (darkContrast < 4.5 && lightContrast < 4.5) return "#000000";
+  return darkContrast >= lightContrast ? dark : "#ffffff";
+};
+
 export const DEFAULT_SCHEDULE_CATEGORIES: ScheduleCategory[] = [
   {
     key: "exam",

@@ -1,3 +1,7 @@
+import {
+  getScheduleEventColor,
+  getScheduleEventTextColor,
+} from "../../lib/scheduleCategories";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -21,6 +25,7 @@ import {
 } from "../../lib/koreanPublicHolidays";
 
 interface CalendarEvent {
+  labelColor?: string;
   id?: string;
   title: string;
   start: string;
@@ -172,11 +177,9 @@ const ManageSchedule = () => {
             allDay: true,
             backgroundColor: isHoliday
               ? "#ef4444"
-              : colorMap[event.eventType] || "#6b7280",
-            borderColor: isHoliday
-              ? "#ef4444"
-              : colorMap[event.eventType] || "#6b7280",
-            textColor: isHoliday ? "#ffffff" : undefined,
+              : getScheduleEventColor(event),
+            borderColor: isHoliday ? "#ef4444" : getScheduleEventColor(event),
+            textColor: isHoliday ? "#ffffff" : getScheduleEventTextColor(event),
             classNames: isHoliday ? ["holiday-text-event"] : [],
             extendedProps: event,
           };

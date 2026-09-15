@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import "./eventCalendar.css";
 import {
   collection,
   deleteDoc,
@@ -12,6 +13,8 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
   COLOR_EMOJI_OPTIONS,
+  CATEGORY_COLOR_PRESETS,
+  SCHEDULE_COLOR_NAMES,
   DEFAULT_SCHEDULE_CATEGORIES,
   ScheduleCategory,
   createScheduleCategoryKey,
@@ -52,6 +55,8 @@ const EventModal: React.FC<EventModalProps> = ({
   const { showToast } = useAppToast();
 
   const [title, setTitle] = useState("");
+  const [labelColor, setLabelColor] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [isAllDay, setIsAllDay] = useState(false);
@@ -85,6 +90,18 @@ const EventModal: React.FC<EventModalProps> = ({
     DEFAULT_SCHEDULE_CATEGORIES[3]?.emoji || COLOR_EMOJI_OPTIONS[0],
   );
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const opener = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      opener?.focus();
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const loadSchoolConfig = async () => {
@@ -121,6 +138,15 @@ const EventModal: React.FC<EventModalProps> = ({
   }, [categories]);
 
   useEffect(() => {
+    if (!gradeOptions.some((item) => item.value === targetGrade)) {
+      setTargetGrade(gradeOptions[0]?.value || "1");
+    }
+    if (!classOptions.some((item) => item.value === targetClass)) {
+      setTargetClass(classOptions[0]?.value || "1");
+    }
+  }, [gradeOptions, classOptions, targetGrade, targetClass]);
+
+  useEffect(() => {
     if (!categoryDrafts.some((item) => item.key === eventType)) {
       setEventType(
         categoryDrafts[0]?.key || DEFAULT_SCHEDULE_CATEGORIES[0].key,
@@ -147,6 +173,7 @@ const EventModal: React.FC<EventModalProps> = ({
           ? eventData.end
           : nextStart;
       setTitle(eventData.title || "");
+      setLabelColor(eventData.labelColor || "");
       setStart(nextStart);
       setEnd(nextEnd);
       setIsAllDay(persistedAllDay);
@@ -173,6 +200,7 @@ const EventModal: React.FC<EventModalProps> = ({
 
     const nextDate = initialDate || new Date().toISOString().split("T")[0];
     setTitle("");
+    setLabelColor("");
     setStart(nextDate);
     setEnd(nextDate);
     setIsAllDay(false);
@@ -183,7 +211,7 @@ const EventModal: React.FC<EventModalProps> = ({
     setTargetType("common");
     setTargetGrade(gradeOptions[0]?.value || "1");
     setTargetClass(classOptions[0]?.value || "1");
-  }, [isOpen, eventData, initialDate, gradeOptions, classOptions, categories]);
+  }, [isOpen, eventData, initialDate]);
 
   if (!isOpen) return null;
 
@@ -347,6 +375,7 @@ const EventModal: React.FC<EventModalProps> = ({
         period: finalStartPeriod,
         description: description.trim(),
         eventType,
+        labelColor,
         targetType,
         targetClass:
           targetType === "class" ? `${targetGrade}-${targetClass}` : null,
@@ -415,380 +444,377 @@ const EventModal: React.FC<EventModalProps> = ({
     setEndPeriod(nextPeriod);
   };
 
+  const selectedCategory = categoryDrafts.find(
+    (item) => item.key === eventType,
+  );
+  const previewColor = labelColor || selectedCategory?.color;
+
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-[1px] md:items-center"
-      onClick={onClose}
+      className="teacher-event-backdrop"
+      onClick={() => !loading && onClose()}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="teacher-event-modal-title"
-        className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="teacher-event-dialog"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !loading) onClose();
+          if (event.key !== "Tab") return;
+          const controls = Array.from(
+            dialogRef.current?.querySelectorAll<HTMLElement>(
+              "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)",
+            ) || [],
+          ).filter((element) => element.getClientRects().length > 0);
+          const first = controls[0];
+          const last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
       >
-        <div className="flex items-start justify-between gap-4 px-5 pt-5 sm:px-8 sm:pt-7">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-600">
-              <i className="fas fa-edit text-xl"></i>
-            </span>
-            <h3
-              id="teacher-event-modal-title"
-              className="text-2xl font-extrabold tracking-tight text-gray-900"
-            >
-              {eventData ? "일정 수정" : "일정 등록"}
-            </h3>
-          </div>
+        <header className="teacher-event-dialog__header">
+          <h3 id="teacher-event-modal-title">
+            {eventData ? "일정 수정" : "일정 등록"}
+          </h3>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-50 hover:text-gray-700"
+            disabled={loading}
             aria-label="팝업 닫기"
           >
-            <i className="fas fa-times text-lg"></i>
+            ×
           </button>
-        </div>
+        </header>
 
-        <div className="custom-scroll min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
-          <div className="space-y-5">
-            <label className="block">
-              <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                일정 제목
-              </span>
+        <div className="teacher-event-dialog__body">
+          <label className="teacher-event-title">
+            <span>일정 제목</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="예: 1차 수행평가"
+            />
+          </label>
+
+          <div className="teacher-event-dates">
+            <label>
+              <span>시작 일자</span>
               <input
-                type="text"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                className="h-12 w-full rounded-lg border border-slate-300 px-4 text-base font-semibold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                placeholder="예: 1차 수행평가"
-                autoFocus
+                type="date"
+                value={start}
+                onChange={(event) => updateStartDate(event.target.value)}
               />
             </label>
+            <label>
+              <span>시작 교시</span>
+              <select
+                aria-label="시작 교시"
+                value={startPeriod}
+                onChange={(event) => updateStartPeriod(event.target.value)}
+                disabled={isAllDay}
+              >
+                {SCHEDULE_PERIOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>종료 일자</span>
+              <input
+                type="date"
+                value={end}
+                min={start || undefined}
+                onChange={(event) => updateEndDate(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>종료 교시</span>
+              <select
+                aria-label="종료 교시"
+                value={endPeriod}
+                onChange={(event) =>
+                  setEndPeriod(normalizeSchedulePeriod(event.target.value))
+                }
+                disabled={isAllDay}
+              >
+                {SCHEDULE_PERIOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="teacher-event-check">
+              <input
+                type="checkbox"
+                checked={isAllDay}
+                onChange={(event) => setIsAllDay(event.target.checked)}
+              />{" "}
+              하루종일
+            </label>
+          </div>
 
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-              <div>
-                <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                  시작 일자
-                </span>
-                <div className="grid grid-cols-[minmax(0,1fr)_148px] gap-2">
-                  <input
-                    type="date"
-                    value={start}
-                    onChange={(event) => updateStartDate(event.target.value)}
-                    className="h-12 min-w-0 rounded-lg border border-slate-300 px-4 text-base font-semibold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
+          <div className="teacher-event-columns">
+            <div className="teacher-event-column">
+              <fieldset>
+                <legend>대상 선택</legend>
+                <div className="teacher-event-targets">
+                  <label className="teacher-event-check">
+                    <input
+                      type="radio"
+                      name="eventTargetType"
+                      checked={targetType === "common"}
+                      onChange={() => setTargetType("common")}
+                    />
+                    전체 공통
+                  </label>
+                  <label className="teacher-event-check">
+                    <input
+                      type="radio"
+                      name="eventTargetType"
+                      checked={targetType === "class"}
+                      onChange={() => setTargetType("class")}
+                    />
+                    반별 지정
+                  </label>
+                </div>
+                <div className="teacher-event-target-selects">
                   <select
-                    value={startPeriod}
-                    onChange={(event) => updateStartPeriod(event.target.value)}
-                    disabled={isAllDay}
-                    className="h-12 rounded-lg border border-slate-300 bg-white px-3 text-base font-bold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-gray-400"
-                    aria-label="시작 교시"
+                    aria-label="대상 학년"
+                    value={targetGrade}
+                    onChange={(event) => setTargetGrade(event.target.value)}
+                    disabled={targetType !== "class"}
                   >
-                    {SCHEDULE_PERIOD_OPTIONS.map((option) => (
+                    {gradeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="대상 반"
+                    value={targetClass}
+                    onChange={(event) => setTargetClass(event.target.value)}
+                    disabled={targetType !== "class"}
+                  >
+                    {classOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                  종료 일자
+              </fieldset>
+              <label>
+                <span>
+                  메모 <small>(선택)</small>
                 </span>
-                <div className="grid grid-cols-[minmax(0,1fr)_148px] gap-2">
-                  <input
-                    type="date"
-                    value={end}
-                    min={start || undefined}
-                    onChange={(event) => updateEndDate(event.target.value)}
-                    className="h-12 min-w-0 rounded-lg border border-slate-300 px-4 text-base font-semibold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <select
-                    value={endPeriod}
-                    onChange={(event) =>
-                      setEndPeriod(normalizeSchedulePeriod(event.target.value))
-                    }
-                    disabled={isAllDay}
-                    className="h-12 rounded-lg border border-slate-300 bg-white px-3 text-base font-bold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-gray-400"
-                    aria-label="종료 교시"
-                  >
-                    {SCHEDULE_PERIOD_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <label className="inline-flex h-12 cursor-pointer items-center gap-2 self-end rounded-lg border border-slate-300 bg-white px-4 text-sm font-extrabold text-gray-800 transition hover:bg-slate-50">
-                <input
-                  type="checkbox"
-                  checked={isAllDay}
-                  onChange={(event) => setIsAllDay(event.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                <textarea
+                  value={description}
+                  onChange={(event) =>
+                    setDescription(
+                      event.target.value.slice(0, DESCRIPTION_LIMIT),
+                    )
+                  }
+                  maxLength={DESCRIPTION_LIMIT}
+                  placeholder="메모를 입력하세요."
                 />
-                <span className="whitespace-nowrap">하루종일</span>
+                <small className="teacher-event-memo-count">
+                  {description.length} / {DESCRIPTION_LIMIT}
+                </small>
               </label>
             </div>
 
-            <div className="border-t border-slate-200 pt-5">
-              <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.78fr)]">
-                <div className="space-y-5">
-                  <div>
-                    <span className="mb-3 block text-sm font-extrabold text-gray-800">
-                      대상 선택
-                    </span>
-                    <div className="flex flex-wrap gap-8">
-                      <label className="inline-flex cursor-pointer items-center gap-2 text-base font-bold text-gray-800">
+            <div className="teacher-event-column">
+              <div className="teacher-event-category-heading">
+                <label htmlFor="teacher-event-category">일정 분류</label>
+                <button
+                  type="button"
+                  className="teacher-event-link"
+                  aria-expanded={showCategoryManager}
+                  onClick={() => setShowCategoryManager(!showCategoryManager)}
+                >
+                  {showCategoryManager ? "라벨 선택으로" : "분류 관리"}
+                </button>
+              </div>
+              <select
+                id="teacher-event-category"
+                value={eventType}
+                onChange={(event) => setEventType(event.target.value)}
+              >
+                {categoryDrafts.map((category) => (
+                  <option key={category.key} value={category.key}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+
+              {showCategoryManager ? (
+                <div className="teacher-event-category-editor">
+                  {selectedCategory && (
+                    <div className="teacher-event-category-row">
+                      <label>
+                        <span>분류 이름</span>
                         <input
-                          type="radio"
-                          name="eventTargetType"
-                          value="common"
-                          checked={targetType === "common"}
-                          onChange={() => setTargetType("common")}
-                          className="h-5 w-5 text-blue-600"
-                        />
-                        전체 공통
-                      </label>
-                      <label className="inline-flex cursor-pointer items-center gap-2 text-base font-bold text-gray-800">
-                        <input
-                          type="radio"
-                          name="eventTargetType"
-                          value="class"
-                          checked={targetType === "class"}
-                          onChange={() => setTargetType("class")}
-                          className="h-5 w-5 text-blue-600"
-                        />
-                        반별 지정
-                      </label>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <select
-                        value={targetGrade}
-                        onChange={(event) => setTargetGrade(event.target.value)}
-                        disabled={targetType !== "class"}
-                        className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-center font-bold text-gray-800 outline-none transition disabled:bg-slate-50 disabled:text-gray-400"
-                      >
-                        {gradeOptions.map((gradeOpt) => (
-                          <option key={gradeOpt.value} value={gradeOpt.value}>
-                            {gradeOpt.label}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={targetClass}
-                        onChange={(event) => setTargetClass(event.target.value)}
-                        disabled={targetType !== "class"}
-                        className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-center font-bold text-gray-800 outline-none transition disabled:bg-slate-50 disabled:text-gray-400"
-                      >
-                        {classOptions.map((classOpt) => (
-                          <option key={classOpt.value} value={classOpt.value}>
-                            {classOpt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                      메모 <span className="text-gray-400">(선택)</span>
-                    </span>
-                    <textarea
-                      value={description}
-                      onChange={(event) =>
-                        setDescription(
-                          event.target.value.slice(0, DESCRIPTION_LIMIT),
-                        )
-                      }
-                      rows={7}
-                      maxLength={DESCRIPTION_LIMIT}
-                      className="min-h-[180px] w-full resize-y rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      placeholder="메모를 입력하세요."
-                    ></textarea>
-                    <span className="mt-1 block text-right text-sm font-semibold text-gray-400">
-                      {description.length} / {DESCRIPTION_LIMIT}
-                    </span>
-                  </label>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="mb-3">
-                    <h4 className="text-base font-extrabold text-gray-900">
-                      분류 관리
-                    </h4>
-                    <p className="mt-1 text-sm font-medium text-gray-500">
-                      주요 분류만 표시됩니다. 필요할 때 바로 수정할 수 있습니다.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {categoryDrafts.map((category) => (
-                      <button
-                        key={category.key}
-                        type="button"
-                        onClick={() => setEventType(category.key)}
-                        className={`flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm font-bold transition ${
-                          eventType === category.key
-                            ? "border-blue-300 bg-blue-50 text-blue-800"
-                            : "border-slate-200 bg-white text-gray-700 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span
-                          className="h-3.5 w-3.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: category.color }}
-                        ></span>
-                        <span className="truncate">{category.label}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {showCategoryManager && (
-                    <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
-                      <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
-                        {categoryDrafts.map((category) => (
-                          <div
-                            key={category.key}
-                            className="grid grid-cols-[minmax(0,1fr)_78px_34px] gap-2"
-                          >
-                            <input
-                              type="text"
-                              value={category.label}
-                              onChange={(event) =>
-                                handleCategoryDraftChange(category.key, {
-                                  label: event.target.value,
-                                })
-                              }
-                              className="h-10 min-w-0 rounded-md border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-blue-500"
-                            />
-                            <select
-                              value={category.emoji}
-                              onChange={(event) =>
-                                handleCategoryDraftChange(category.key, {
-                                  emoji: event.target.value,
-                                  color: getColorForEmoji(
-                                    event.target.value,
-                                    category.color,
-                                  ),
-                                })
-                              }
-                              className="h-10 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-blue-500"
-                            >
-                              {COLOR_EMOJI_OPTIONS.map((emoji) => (
-                                <option key={emoji} value={emoji}>
-                                  {emoji}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveCategory(category)}
-                              className="inline-flex h-10 items-center justify-center rounded-md border border-red-100 bg-red-50 text-sm font-black text-red-500 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
-                              disabled={categoryDrafts.length <= 1}
-                              aria-label={`${category.label} 분류 삭제`}
-                              title="분류 삭제"
-                            >
-                              <i className="fas fa-minus"></i>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="grid grid-cols-[minmax(0,1fr)_78px_54px] gap-2">
-                        <input
-                          type="text"
-                          value={newCategoryLabel}
+                          value={selectedCategory.label}
                           onChange={(event) =>
-                            setNewCategoryLabel(event.target.value)
+                            handleCategoryDraftChange(eventType, {
+                              label: event.target.value,
+                            })
                           }
-                          placeholder="새 분류"
-                          className="h-10 min-w-0 rounded-md border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-blue-500"
                         />
+                      </label>
+                      <label>
+                        <span>색상</span>
                         <select
-                          value={newCategoryEmoji}
+                          aria-label="분류 색상"
+                          value={selectedCategory.emoji}
                           onChange={(event) =>
-                            setNewCategoryEmoji(event.target.value)
+                            handleCategoryDraftChange(eventType, {
+                              emoji: event.target.value,
+                              color: getColorForEmoji(
+                                event.target.value,
+                                selectedCategory.color,
+                              ),
+                            })
                           }
-                          className="h-10 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-blue-500"
                         >
-                          {COLOR_EMOJI_OPTIONS.map((emoji) => (
+                          {COLOR_EMOJI_OPTIONS.map((emoji, index) => (
                             <option key={emoji} value={emoji}>
-                              {emoji}
+                              {SCHEDULE_COLOR_NAMES[index]}
                             </option>
                           ))}
                         </select>
-                        <button
-                          type="button"
-                          onClick={handleAddCategory}
-                          className="h-10 rounded-md border border-blue-200 bg-blue-50 text-xs font-extrabold text-blue-700 transition hover:bg-blue-100"
-                        >
-                          추가
-                        </button>
-                      </div>
+                      </label>
+                      <button
+                        type="button"
+                        className="teacher-event-danger"
+                        onClick={() => handleRemoveCategory(selectedCategory)}
+                        disabled={categoryDrafts.length <= 1}
+                      >
+                        삭제
+                      </button>
                     </div>
                   )}
-
+                  <div className="teacher-event-category-row">
+                    <label>
+                      <span>새 분류</span>
+                      <input
+                        value={newCategoryLabel}
+                        onChange={(event) =>
+                          setNewCategoryLabel(event.target.value)
+                        }
+                      />
+                    </label>
+                    <label>
+                      <span>색상</span>
+                      <select
+                        aria-label="새 분류 색상"
+                        value={newCategoryEmoji}
+                        onChange={(event) =>
+                          setNewCategoryEmoji(event.target.value)
+                        }
+                      >
+                        {COLOR_EMOJI_OPTIONS.map((emoji, index) => (
+                          <option key={emoji} value={emoji}>
+                            {SCHEDULE_COLOR_NAMES[index]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="button" onClick={handleAddCategory}>
+                      추가
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!showCategoryManager) {
-                        setShowCategoryManager(true);
-                        return;
-                      }
-                      void handleSaveCategories();
-                    }}
+                    onClick={handleSaveCategories}
                     disabled={savingCategories}
-                    className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
                   >
-                    <i className="fas fa-cog"></i>
-                    {showCategoryManager
-                      ? savingCategories
-                        ? "저장 중..."
-                        : "분류 저장하기"
-                      : "분류 관리하기"}
+                    {savingCategories ? "저장 중..." : "분류 저장"}
                   </button>
                 </div>
-              </div>
+              ) : (
+                <fieldset className="teacher-event-colors">
+                  <legend>라벨 색상</legend>
+                  <div className="teacher-event-palette">
+                    <button
+                      type="button"
+                      className="teacher-event-color-default"
+                      aria-pressed={!labelColor}
+                      onClick={() => setLabelColor("")}
+                    >
+                      분류 색상
+                    </button>
+                    {CATEGORY_COLOR_PRESETS.map((preset, index) => (
+                      <button
+                        type="button"
+                        key={preset.color}
+                        className="teacher-event-swatch"
+                        aria-label={SCHEDULE_COLOR_NAMES[index]}
+                        title={SCHEDULE_COLOR_NAMES[index]}
+                        aria-pressed={labelColor === preset.color}
+                        onClick={() => setLabelColor(preset.color)}
+                        style={
+                          {
+                            "--event-color": preset.color,
+                          } as React.CSSProperties
+                        }
+                      >
+                        {labelColor === preset.color ? "✓" : ""}
+                      </button>
+                    ))}
+                  </div>
+                  <div
+                    className="teacher-event-preview"
+                    title={title || "일정 제목"}
+                    style={
+                      { "--event-color": previewColor } as React.CSSProperties
+                    }
+                  >
+                    <span>{title || "일정 제목"}</span>
+                  </div>
+                </fieldset>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-3 border-t border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <div>
-            {eventData && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={loading}
-                className="h-12 rounded-lg border border-red-100 bg-red-50 px-5 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
-              >
-                삭제
-              </button>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-3">
+        <footer className="teacher-event-dialog__footer">
+          {eventData && (
             <button
               type="button"
-              onClick={onClose}
-              className="h-12 min-w-[120px] rounded-lg border border-slate-300 bg-white px-6 text-base font-extrabold text-gray-700 transition hover:bg-slate-50"
+              className="teacher-event-danger"
+              onClick={handleDelete}
+              disabled={loading}
             >
+              일정 삭제
+            </button>
+          )}
+          <div className="teacher-event-dialog__actions">
+            <button type="button" onClick={onClose} disabled={loading}>
               취소
             </button>
             <button
               type="button"
+              className="teacher-event-primary"
               onClick={handleSave}
-              disabled={loading}
-              className="h-12 min-w-[132px] rounded-lg bg-blue-600 px-7 text-base font-extrabold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-60"
+              disabled={loading || savingCategories}
             >
               {loading ? "저장 중..." : "저장"}
             </button>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );
