@@ -41,7 +41,6 @@ import {
 } from "../../lib/w8Domains";
 import type { CalendarEvent, SystemConfig } from "../../types";
 import TeacherCalendarEventModal from "./components/TeacherCalendarEventModal";
-import SchoolBannerModal from "./components/SchoolBannerModal";
 import SchoolBannerManager from "./components/SchoolBannerManager";
 import ModalSurface from "../../components/common/ModalSurface";
 import {
@@ -117,11 +116,7 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
 }) => {
   const { currentUser, userData } = useAuth();
   const canRegister = canManageW8Domains(userData, currentUser?.email);
-  const [registerOpen, setRegisterOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
-  const [editingBanner, setEditingBanner] = useState<
-    SchoolBannerRecord | undefined
-  >();
   const [previewBanner, setPreviewBanner] = useState<VisibleNotice | null>(
     null,
   );
@@ -195,20 +190,13 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
   useEffect(() => setActiveIndex(0), [visibleIds]);
 
   useEffect(() => {
-    if (
-      paused ||
-      registerOpen ||
-      managerOpen ||
-      previewBanner ||
-      images.length < 2
-    )
-      return;
+    if (paused || managerOpen || previewBanner || images.length < 2) return;
     const timer = window.setInterval(
       () => setActiveIndex((index) => (index + 1) % images.length),
       5000,
     );
     return () => window.clearInterval(timer);
-  }, [images.length, paused, registerOpen, managerOpen, previewBanner]);
+  }, [images.length, paused, managerOpen, previewBanner]);
 
   const image = images[activeIndex];
   return (
@@ -223,21 +211,9 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
             <button
               type="button"
               className="min-h-11 rounded-lg border border-gray-200 px-4 font-bold text-gray-700 disabled:opacity-60"
-              disabled={loading || failed}
               onClick={() => setManagerOpen(true)}
             >
               배너 관리
-            </button>
-            <button
-              type="button"
-              className="min-h-11 rounded-lg bg-blue-600 px-4 font-bold text-white hover:bg-blue-700"
-              onClick={() => {
-                setMessage("");
-                setEditingBanner(undefined);
-                setRegisterOpen(true);
-              }}
-            >
-              + 등록
             </button>
           </div>
         )}
@@ -282,52 +258,25 @@ const TeacherDashboardBanner: React.FC<{ config: SystemConfig | null }> = ({
           다시 불러오기
         </button>
       )}
-      {registerOpen && canRegister && currentUser && (
-        <SchoolBannerModal
+      {managerOpen && canRegister && currentUser && (
+        <SchoolBannerManager
           key={`${year}:${semester}:${currentUser.uid}`}
+          banners={allBanners}
           semesterId={`${year}-${semester}`}
           ownerUid={currentUser.uid}
-          banner={editingBanner}
-          onClose={() => setRegisterOpen(false)}
-          onSaved={() => {
-            setRegisterOpen(false);
-            setMessage(
-              editingBanner
-                ? "학교 배너가 수정되었습니다."
-                : "학교 배너가 등록되었습니다.",
-            );
-            if (editingBanner) setManagerOpen(true);
+          loading={loading}
+          failed={failed}
+          onReload={() => setReload((value) => value + 1)}
+          onClose={() => {
+            setManagerOpen(false);
+            setReload((value) => value + 1);
+          }}
+          onSaved={(notice) => {
+            setMessage(notice);
             setReload((value) => value + 1);
           }}
         />
       )}
-      {managerOpen &&
-        !registerOpen &&
-        !loading &&
-        !failed &&
-        canRegister &&
-        currentUser && (
-          <SchoolBannerManager
-            key={`${reload}:${currentUser.uid}`}
-            banners={allBanners}
-            semesterId={`${year}-${semester}`}
-            ownerUid={currentUser.uid}
-            onClose={() => {
-              setManagerOpen(false);
-              setReload((value) => value + 1);
-            }}
-            onEdit={(banner) => {
-              setManagerOpen(false);
-              setEditingBanner(banner);
-              setRegisterOpen(true);
-            }}
-            onSaved={(notice) => {
-              setManagerOpen(false);
-              setMessage(notice);
-              setReload((value) => value + 1);
-            }}
-          />
-        )}
       {previewBanner && (
         <ModalSurface
           open

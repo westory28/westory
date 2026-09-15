@@ -4296,3 +4296,65 @@ button.lesson-core-point-floating-status:disabled {
   background: var(--ws-overlay);
   backdrop-filter: blur(4px);
 }
+/* A single compact workspace for school banner registration and management. */
+.ws-modal:has(.school-banner-workspace) {
+  max-width: min(calc(100vw - 32px), 80rem);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.ws-modal:has(.school-banner-workspace) .ws-modal__surface {
+  max-height: none;
+  overflow: hidden;
+}
+.ws-modal:has(.school-banner-workspace) .ws-modal__header {
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+}
+.ws-modal:has(.school-banner-workspace) .ws-modal__body {
+  overflow: visible;
+  padding: var(--space-4);
+}
+.school-banner-workspace__layout {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.school-banner-workspace__layout[hidden] { display: none; }
+.school-banner-workspace__list {
+  min-width: 0;
+  border-right: 1px solid var(--ws-border);
+  padding-right: var(--space-4);
+}
+.school-banner-workspace__editor, .school-banner-editor, .school-banner-editor fieldset {
+  min-width: 0;
+}
+.school-banner-editor__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.school-banner-editor__image, .school-banner-editor__fields { min-width: 0; }
+.school-banner-editor__image img { max-height: 180px; }
+.school-banner-editor__fields > * + * { margin-top: var(--space-3); }
+.school-banner-editor__period, .school-banner-editor__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.school-banner-editor input[type="datetime-local"] { font-size: 0.875rem; padding-inline: var(--space-2); }
+.school-banner-workspace__preview { display: grid; gap: var(--space-3); }
+.school-banner-workspace__preview > img { width: 100%; max-height: calc(100dvh - 240px); object-fit: contain; }
+.school-banner-workspace__notice { margin-top: var(--space-2); padding: var(--space-2); display:flex; gap:var(--space-3); align-items:center; justify-content:space-between; }
+@media (max-width: 1023px) {
+  .school-banner-editor__columns { grid-template-columns: minmax(0, 1fr); }
+  .school-banner-editor__image { max-width: 24rem; }
+}
+@media (max-width: 767px) {
+  .school-banner-workspace__layout { grid-template-columns: minmax(0, 1fr); }
+  .school-banner-workspace__list { border-right: 0; border-bottom: 1px solid var(--ws-border); padding: 0 0 var(--space-3); }
+  .school-banner-workspace__editor { grid-row: 1; }
+  .school-banner-editor__period { grid-template-columns: minmax(0, 1fr); }
+  .school-banner-workspace__notice { flex-direction: column; align-items: stretch; }
+}

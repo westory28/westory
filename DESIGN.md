@@ -208,6 +208,7 @@ Icon-only controls:
 - Shadow: `--shadow-xl`.
 - One modal at a time.
 - Long editing flows should become a section or side panel instead of a deep modal.
+- School banner management uses one workspace dialog: maximum width `80rem`, viewport inset `16px`, and a `16rem` list column beside the compact editor. Show three list rows per page. Keep 44px controls and reuse existing spacing tokens; on small screens only the outer dialog scrolls.
 
 ### Tables and Lists
 

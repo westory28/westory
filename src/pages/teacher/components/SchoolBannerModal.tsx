@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import ModalSurface from "../../../components/common/ModalSurface";
 import { db } from "../../../lib/firebase";
 import {
   DEVELOPER_LOG_ITEMS_COLLECTION,
@@ -23,6 +22,9 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
   banner?: SchoolBannerRecord;
+  onBusyChange?: (busy: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onPreview?: (url: string, title: string) => void;
 }
 const CATEGORIES = [
   { value: "notice", label: "공지" },
@@ -36,8 +38,8 @@ const categoryLabel = (value: string) =>
   CATEGORIES.find((item) => item.value === value)?.label ||
   (value === "normal" ? "공지" : "학교 안내");
 const inputClass =
-  "min-h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-white p-3 focus:ring-2 focus:ring-blue-500 disabled:opacity-60";
-const labelClass = "mb-2 block font-bold text-gray-800";
+  "min-h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-white p-2 text-sm focus:ring-2 focus:ring-blue-500 disabled:opacity-60";
+const labelClass = "mb-1 block text-sm font-bold text-gray-800";
 const secondaryButton =
   "min-h-11 rounded-lg border border-gray-200 px-4 font-bold text-gray-700 disabled:opacity-60";
 
@@ -47,6 +49,9 @@ const SchoolBannerModal: React.FC<Props> = ({
   onClose,
   onSaved,
   banner,
+  onBusyChange,
+  onDirtyChange,
+  onPreview,
 }) => {
   const editing = Boolean(banner);
   const [draft, setDraft] = useState(() => {
@@ -65,7 +70,6 @@ const SchoolBannerModal: React.FC<Props> = ({
   });
   const [image, setImage] = useState<Blob | null>(null);
   const [preview, setPreview] = useState(banner?.imageUrl || "");
-  const [largePreview, setLargePreview] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -77,18 +81,27 @@ const SchoolBannerModal: React.FC<Props> = ({
   const sequence = useRef(0);
   const inFlight = useRef(false);
   const titleRef = useRef<HTMLInputElement>(null);
-  const previewButtonRef = useRef<HTMLButtonElement>(null);
-  const previewBackRef = useRef<HTMLButtonElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const mounted = useRef(true);
+  const busyCallback = useRef(onBusyChange);
+  const dirtyCallback = useRef(onDirtyChange);
+  busyCallback.current = onBusyChange;
+  dirtyCallback.current = onDirtyChange;
 
   useEffect(() => {
     mounted.current = true;
+    titleRef.current?.focus();
+    dirtyCallback.current?.(false);
     return () => {
       mounted.current = false;
       sequence.current++;
+      dirtyCallback.current?.(false);
+      busyCallback.current?.(false);
     };
   }, []);
+  useEffect(() => {
+    onBusyChange?.(saving || preparing);
+  }, [onBusyChange, saving, preparing]);
   useEffect(() => {
     if (!image) {
       setPreview(banner?.imageUrl || "");
@@ -131,24 +144,19 @@ const SchoolBannerModal: React.FC<Props> = ({
     };
   }, []);
   useEffect(() => {
-    if (largePreview) previewBackRef.current?.focus();
-  }, [largePreview]);
-  useEffect(() => {
     if (error) errorRef.current?.scrollIntoView({ block: "nearest" });
   }, [error]);
 
   const change = (field: keyof typeof draft, value: string) => {
     if (inFlight.current) return;
+    onDirtyChange?.(true);
     setDraft((previous) => ({ ...previous, [field]: value }));
     requestId.current = crypto.randomUUID();
     if (!imageFailed) setError("");
   };
-  const closePreview = () => {
-    setLargePreview(false);
-    window.requestAnimationFrame(() => previewButtonRef.current?.focus());
-  };
   const selectFile = async (file?: File) => {
     if (!file || inFlight.current) return;
+    onDirtyChange?.(true);
     const current = ++sequence.current;
     setImage(null);
     setImageFailed(false);
@@ -278,92 +286,33 @@ const SchoolBannerModal: React.FC<Props> = ({
   };
 
   return (
-    <ModalSurface
-      open
-      title={
-        largePreview
-          ? "학교 배너 미리보기"
-          : editing
-            ? "학교 배너 수정"
-            : "학교 배너 등록"
-      }
-      size={largePreview ? "wide" : "medium"}
-      onClose={largePreview ? closePreview : onClose}
-      dismissible={!saving}
-      initialFocusRef={titleRef}
-      footer={
-        largePreview ? (
-          <button
-            ref={previewBackRef}
-            type="button"
-            className={secondaryButton}
-            onClick={closePreview}
-          >
-            편집으로 돌아가기
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              className={secondaryButton}
-              onClick={onClose}
-              disabled={saving}
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              form="school-banner-form"
-              className="min-h-11 rounded-lg bg-blue-600 px-4 font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-              disabled={
-                saving ||
-                preparing ||
-                imageFailed ||
-                (!image && !banner?.imageUrl)
-              }
-            >
-              {saving ? "저장 중…" : editing ? "수정 저장" : "등록"}
-            </button>
-          </>
-        )
-      }
+    <form
+      id="school-banner-form"
+      onSubmit={save}
+      className="school-banner-editor"
+      aria-busy={saving || preparing}
     >
-      {largePreview && (
-        <img
-          src={preview}
-          alt={draft.title.trim() || "배너 미리보기"}
-          className="h-auto w-full rounded-lg object-contain"
-        />
-      )}
-      <form
-        id="school-banner-form"
-        onSubmit={save}
-        className="space-y-4"
-        aria-busy={saving || preparing}
-        hidden={largePreview}
-      >
-        <p className="text-sm text-gray-600">
-          {semesterId.replace("-", "학년도 ")}학기 학교 배너입니다.
-        </p>
-        <div>
-          <label htmlFor="school-banner-title" className={labelClass}>
-            배너 제목
-          </label>
-          <input
-            ref={titleRef}
-            id="school-banner-title"
-            className={inputClass}
-            maxLength={120}
-            required
-            disabled={saving}
-            value={draft.title}
-            onChange={(event) => change("title", event.target.value)}
-          />
-        </div>
-        <div>
+      <h3 className="mb-3 text-lg font-bold text-gray-900">
+        {editing ? "학교 배너 수정" : "학교 배너 등록"}
+      </h3>
+      <div className="school-banner-editor__columns">
+        <div className="school-banner-editor__image">
           <label htmlFor="school-banner-image" className={labelClass}>
             {editing ? "배너 이미지 변경" : "배너 이미지"}
           </label>
+          {preview ? (
+            <div className="mb-2 overflow-hidden rounded-lg border border-gray-200">
+              <img
+                src={preview}
+                alt={draft.title.trim() || "배너 미리보기"}
+                className="aspect-video h-auto w-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="mb-2 flex aspect-video items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-600">
+              이미지를 선택해 주세요.
+            </div>
+          )}
           <input
             id="school-banner-image"
             type="file"
@@ -376,158 +325,186 @@ const SchoolBannerModal: React.FC<Props> = ({
             }}
           />
           <p id="school-banner-help" className="mt-2 text-sm text-gray-600">
-            JPG·PNG·WebP, 최대 10MB. 권장 크기는 1200 × 675px이며, 가운데를
-            기준으로 16:9 비율로 맞추고 압축합니다.
-            {editing &&
-              " 새 이미지를 선택하지 않으면 기존 이미지를 유지합니다."}
+            JPG·PNG·WebP, 최대 10MB
+            <br />
+            권장 1200 × 675px · 16:9 중앙 맞춤·압축
           </p>
-        </div>
-        {preparing && (
-          <p role="status" className="text-sm text-blue-700">
-            이미지를 준비하는 중입니다.
-          </p>
-        )}
-        {preview && (
-          <div>
-            <div className="overflow-hidden rounded-lg border border-gray-200">
-              <img
-                src={preview}
-                alt={draft.title.trim() || "배너 미리보기"}
-                className="aspect-video h-auto w-full object-contain"
-              />
-            </div>
+          {editing && (
+            <p className="mt-1 text-sm text-gray-600">
+              선택하지 않으면 기존 이미지를 유지합니다.
+            </p>
+          )}
+          {preparing && (
+            <p role="status" className="mt-2 text-sm text-blue-700">
+              이미지를 준비하는 중입니다.
+            </p>
+          )}
+          {preview && onPreview && (
             <button
-              ref={previewButtonRef}
               type="button"
-              className={`${secondaryButton} mt-2`}
-              onClick={() => setLargePreview(true)}
+              className={`${secondaryButton} mt-2 text-sm`}
               disabled={saving || preparing}
+              onClick={() =>
+                onPreview(preview, draft.title.trim() || "배너 미리보기")
+              }
             >
               크게 미리보기
             </button>
-          </div>
-        )}
-        <fieldset disabled={saving} className="space-y-4">
-          <legend className={labelClass}>게시 기간</legend>
-          <p className="text-sm text-gray-600">
-            한국 시간(KST) · 시작을 비우면 바로 게시, 종료를 비우면 계속
-            게시합니다.
-          </p>
-          <div>
-            <label htmlFor="school-banner-publish" className={labelClass}>
-              게시 시작
-            </label>
-            <input
-              id="school-banner-publish"
-              type="datetime-local"
-              className={inputClass}
-              value={draft.publishAt}
-              onChange={(event) => change("publishAt", event.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="school-banner-expires" className={labelClass}>
-              게시 종료
-            </label>
-            <input
-              id="school-banner-expires"
-              type="datetime-local"
-              className={inputClass}
-              value={draft.expiresAt}
-              onChange={(event) => change("expiresAt", event.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="school-banner-category" className={labelClass}>
-              분류
-            </label>
-            <select
-              id="school-banner-category"
-              className={inputClass}
-              value={draft.category}
-              onChange={(event) => change("category", event.target.value)}
-            >
-              {!CATEGORIES.some((item) => item.value === draft.category) && (
-                <option value={draft.category}>
-                  {categoryLabel(draft.category)}
-                </option>
-              )}
-              {CATEGORIES.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {draft.category === "dday" && (
-            <div>
-              <label htmlFor="school-banner-target-date" className={labelClass}>
-                D-Day 목표 날짜
-              </label>
-              <input
-                id="school-banner-target-date"
-                type="date"
-                required
-                className={inputClass}
-                value={draft.targetDate}
-                onChange={(event) => change("targetDate", event.target.value)}
-              />
-            </div>
           )}
+        </div>
+        <fieldset disabled={saving} className="school-banner-editor__fields">
           <div>
-            <label htmlFor="school-banner-target" className={labelClass}>
-              게시 대상
+            <label htmlFor="school-banner-title" className={labelClass}>
+              배너 제목
             </label>
-            <select
-              id="school-banner-target"
+            <input
+              ref={titleRef}
+              id="school-banner-title"
               className={inputClass}
-              value={draft.targetType}
-              onChange={(event) => change("targetType", event.target.value)}
-            >
-              <option value={banner?.targetType === "all" ? "all" : "common"}>
-                전체 공통
-              </option>
-              <option value="class">학급 선택</option>
-            </select>
+              maxLength={120}
+              required
+              value={draft.title}
+              onChange={(event) => change("title", event.target.value)}
+            />
           </div>
-          {draft.targetType === "class" && (
-            <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="school-banner-editor__period">
               <div>
-                <label htmlFor="school-banner-grade" className={labelClass}>
-                  학년
+                <label htmlFor="school-banner-publish" className={labelClass}>
+                  게시 시작
                 </label>
                 <input
-                  id="school-banner-grade"
-                  type="number"
-                  min="1"
-                  max="99"
-                  step="1"
-                  required
+                  id="school-banner-publish"
+                  type="datetime-local"
                   className={inputClass}
-                  value={draft.targetGrade}
-                  onChange={(event) =>
-                    change("targetGrade", event.target.value)
-                  }
+                  value={draft.publishAt}
+                  onChange={(event) => change("publishAt", event.target.value)}
+                  aria-describedby="school-banner-period-help"
                 />
               </div>
               <div>
-                <label htmlFor="school-banner-class" className={labelClass}>
-                  반
+                <label htmlFor="school-banner-expires" className={labelClass}>
+                  게시 종료
                 </label>
                 <input
-                  id="school-banner-class"
-                  type="number"
-                  min="1"
-                  max="99"
-                  step="1"
-                  required
+                  id="school-banner-expires"
+                  type="datetime-local"
                   className={inputClass}
-                  value={draft.targetClass}
-                  onChange={(event) =>
-                    change("targetClass", event.target.value)
-                  }
+                  value={draft.expiresAt}
+                  onChange={(event) => change("expiresAt", event.target.value)}
+                  aria-describedby="school-banner-period-help"
                 />
               </div>
+            </div>
+            <p
+              id="school-banner-period-help"
+              className="mt-1 text-sm text-gray-600"
+            >
+              한국 시간(KST) · 시작 공란: 바로 게시 / 종료 공란: 계속 게시
+            </p>
+          </div>
+          <div className="school-banner-editor__pair">
+            <div>
+              <label htmlFor="school-banner-category" className={labelClass}>
+                분류
+              </label>
+              <select
+                id="school-banner-category"
+                className={inputClass}
+                value={draft.category}
+                onChange={(event) => change("category", event.target.value)}
+              >
+                {!CATEGORIES.some((item) => item.value === draft.category) && (
+                  <option value={draft.category}>
+                    {categoryLabel(draft.category)}
+                  </option>
+                )}
+                {CATEGORIES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="school-banner-target" className={labelClass}>
+                게시 대상
+              </label>
+              <select
+                id="school-banner-target"
+                className={inputClass}
+                value={draft.targetType}
+                onChange={(event) => change("targetType", event.target.value)}
+              >
+                <option value={banner?.targetType === "all" ? "all" : "common"}>
+                  전체 공통
+                </option>
+                <option value="class">학급 선택</option>
+              </select>
+            </div>
+          </div>
+          {(draft.category === "dday" || draft.targetType === "class") && (
+            <div className="school-banner-editor__pair">
+              {draft.category === "dday" && (
+                <div>
+                  <label
+                    htmlFor="school-banner-target-date"
+                    className={labelClass}
+                  >
+                    D-Day 목표 날짜
+                  </label>
+                  <input
+                    id="school-banner-target-date"
+                    type="date"
+                    required
+                    className={inputClass}
+                    value={draft.targetDate}
+                    onChange={(event) =>
+                      change("targetDate", event.target.value)
+                    }
+                  />
+                </div>
+              )}
+              {draft.targetType === "class" && (
+                <div className="school-banner-editor__pair">
+                  <div>
+                    <label htmlFor="school-banner-grade" className={labelClass}>
+                      학년
+                    </label>
+                    <input
+                      id="school-banner-grade"
+                      type="number"
+                      min="1"
+                      max="99"
+                      step="1"
+                      required
+                      className={inputClass}
+                      value={draft.targetGrade}
+                      onChange={(event) =>
+                        change("targetGrade", event.target.value)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="school-banner-class" className={labelClass}>
+                      반
+                    </label>
+                    <input
+                      id="school-banner-class"
+                      type="number"
+                      min="1"
+                      max="99"
+                      step="1"
+                      required
+                      className={inputClass}
+                      value={draft.targetClass}
+                      onChange={(event) =>
+                        change("targetClass", event.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <div>
@@ -562,34 +539,53 @@ const SchoolBannerModal: React.FC<Props> = ({
             </select>
             <p
               id="school-banner-post-help"
-              className="mt-2 text-sm text-gray-600"
+              className="mt-1 text-sm text-gray-600"
             >
-              배너와 연결할 개발자 일지를 선택할 수 있습니다.
+              배너와 연결할 개발자 일지를 선택합니다.
             </p>
             {postsFailed && (
-              <p role="status" className="mt-2 text-sm text-gray-600">
+              <p role="status" className="mt-1 text-sm text-gray-600">
                 게시물 목록을 불러오지 못했습니다. 기존 연결은 유지됩니다.
                 목록이 필요하면 창을 다시 열어 주세요.
               </p>
             )}
           </div>
         </fieldset>
-        {error && (
-          <p
-            ref={errorRef}
-            role="alert"
-            className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
-          >
-            {error}
-          </p>
-        )}
-        {saving && (
-          <p role="status" className="text-sm text-blue-700">
-            배너 정보를 저장하고 있습니다.
-          </p>
-        )}
-      </form>
-    </ModalSurface>
+      </div>
+      {error && (
+        <p
+          ref={errorRef}
+          role="alert"
+          className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700"
+        >
+          {error}
+        </p>
+      )}
+      {saving && (
+        <p role="status" className="mt-3 text-sm text-blue-700">
+          배너 정보를 저장하고 있습니다.
+        </p>
+      )}
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          className={secondaryButton}
+          onClick={onClose}
+          disabled={saving || preparing}
+        >
+          취소
+        </button>
+        <button
+          type="submit"
+          className="min-h-11 rounded-lg bg-blue-600 px-4 font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+          disabled={
+            saving || preparing || imageFailed || (!image && !banner?.imageUrl)
+          }
+        >
+          {saving ? "저장 중…" : editing ? "수정 저장" : "등록"}
+        </button>
+      </div>
+    </form>
   );
 };
 
