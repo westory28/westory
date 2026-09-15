@@ -3,7 +3,11 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
+import {
+  getScheduleCategoryMeta,
+  getScheduleEventColor,
+  getScheduleEventTextColor,
+} from "../../../lib/scheduleCategories";
 import {
   compareCalendarSchedule,
   compareSchedulePeriod,
@@ -266,9 +270,15 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         start: toDateKey(event.start) || event.start,
         end: toExclusiveEnd(event.start, event.end),
         allDay: true,
-        backgroundColor: isHoliday ? "#ef4444" : meta.color,
-        borderColor: isHoliday ? "#ef4444" : meta.color,
-        textColor: isHoliday ? "#ffffff" : undefined,
+        backgroundColor: isHoliday
+          ? "#ef4444"
+          : getScheduleEventColor(event, categories),
+        borderColor: isHoliday
+          ? "#ef4444"
+          : getScheduleEventColor(event, categories),
+        textColor: isHoliday
+          ? "#ffffff"
+          : getScheduleEventTextColor(event, categories),
         classNames: [
           ...(isHoliday ? ["holiday-text-event"] : []),
           ...(isMultiDayRange
@@ -640,7 +650,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const eventTitle = String(arg.event.title || "").trim();
             const meta = getScheduleCategoryMeta(event?.eventType, categories);
             const categoryLabel = isHoliday ? LABELS.holiday : meta.label;
-            const categoryColor = isHoliday ? "#ef4444" : meta.color;
+            const categoryColor = isHoliday
+              ? "#ef4444"
+              : getScheduleEventColor(event, categories);
             const targetLabel = formatEventTargetLabel(event);
             const safeTitle =
               eventTitle || (isHoliday ? LABELS.holiday : LABELS.schedule);
@@ -754,7 +766,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                     categories,
                   );
                   const categoryLabel = isHoliday ? LABELS.holiday : meta.label;
-                  const categoryColor = isHoliday ? "#ef4444" : meta.color;
+                  const categoryColor = isHoliday
+                    ? "#ef4444"
+                    : getScheduleEventColor(event, categories);
                   const eventTitle = formatEventTitle(event);
                   const targetLabel = formatEventTargetLabel(event);
 

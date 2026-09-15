@@ -55,6 +55,25 @@ const normalizeHolidayTitle = (title: string, start: string) => {
   const normalizedTitle = String(title || "")
     .normalize("NFKC")
     .trim();
+  // The official API can use the same name for all three holiday dates.
+  // Resolve the actual lunar holiday before refreshing the cache or syncing it.
+  const lunarHoliday = normalizedTitle.match(/^(설날|추석)(?:\s*연휴)?$/);
+  if (lunarHoliday && /^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    const name = lunarHoliday[1];
+    const year = Number(start.slice(0, 4));
+    const mainDate = lunarToSolar(
+      year,
+      name === "설날" ? 1 : 8,
+      name === "설날" ? 1 : 15,
+    );
+    if (mainDate === start) return name;
+    if (
+      mainDate &&
+      (start === addDays(mainDate, -1) || start === addDays(mainDate, 1))
+    ) {
+      return `${name} 연휴`;
+    }
+  }
   if (normalizedTitle.startsWith("기독탄신일")) {
     return normalizedTitle.replace("기독탄신일", "크리스마스");
   }
@@ -317,19 +336,22 @@ export const getKoreanPublicHolidays = (targetYear: string | number) => {
 
 export const toHolidayCalendarEvent = (
   holiday: KoreanPublicHoliday,
-): CalendarEvent => ({
-  id: `holiday_${holiday.start}_${sanitizeDocId(holiday.title)}`,
-  title: holiday.title,
-  start: holiday.start,
-  end: holiday.start,
-  eventType: "holiday",
-  targetType: "common",
-  targetClass: undefined,
-  description:
-    holiday.source === "kasi"
-      ? "한국천문연구원 특일 정보 기준 공휴일"
-      : "대한민국 공휴일 규칙 기준 자동 생성",
-});
+): CalendarEvent => {
+  const title = normalizeHolidayTitle(holiday.title, holiday.start);
+  return {
+    id: `holiday_${holiday.start}_${sanitizeDocId(title)}`,
+    title,
+    start: holiday.start,
+    end: holiday.start,
+    eventType: "holiday",
+    targetType: "common",
+    targetClass: undefined,
+    description:
+      holiday.source === "kasi"
+        ? "한국천문연구원 특일 정보 기준 공휴일"
+        : "대한민국 공휴일 규칙 기준 자동 생성",
+  };
+};
 
 export const mergeEventsWithKoreanPublicHolidays = (
   events: CalendarEvent[],
@@ -387,7 +409,7 @@ export const ensureKoreanPublicHolidaysSynced = async ({
   semester: string | number;
   force?: boolean;
 }) => {
-  const markerKey = `westory:holiday-sync:${year}:${semester}`;
+  const markerKey = `westory:holiday-sync:v2:${year}:${semester}`;
   const today = new Date().toLocaleDateString("en-CA");
   if (!force && window.localStorage.getItem(markerKey) === today) {
     return { count: 0, skipped: true };

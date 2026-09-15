@@ -4,7 +4,10 @@ import {
   compareCalendarSchedule,
   getSchedulePeriodRangeLabel,
 } from "../../lib/schedulePeriods";
-import { getScheduleCategoryMeta } from "../../lib/scheduleCategories";
+import {
+  getScheduleCategoryMeta,
+  getScheduleEventColor,
+} from "../../lib/scheduleCategories";
 import type { ScheduleCategory } from "../../lib/scheduleCategories";
 import type { CalendarEvent } from "../../types";
 
@@ -194,7 +197,9 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
             const isHoliday = event.eventType === "holiday";
             const meta = getScheduleCategoryMeta(event.eventType, categories);
             const categoryLabel = isHoliday ? "공휴일" : meta.label;
-            const categoryColor = isHoliday ? "#ef4444" : meta.color;
+            const categoryColor = isHoliday
+              ? "#ef4444"
+              : getScheduleEventColor(event, categories);
             const periodLabel = getSchedulePeriodRangeLabel(
               event.startPeriod ?? event.period,
               event.endPeriod,

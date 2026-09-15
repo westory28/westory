@@ -1,3 +1,7 @@
+import {
+  getScheduleEventColor,
+  getScheduleEventTextColor,
+} from "../../lib/scheduleCategories";
 import React, { useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -18,6 +22,7 @@ import {
 import { loadVisibleCalendarEvents } from "../../lib/visibleSchedule";
 
 interface CalendarEvent {
+  labelColor?: string;
   id: string;
   title: string;
   start: string; // ISO string YYYY-MM-DD
@@ -189,11 +194,9 @@ const Calendar = () => {
             allDay: true,
             backgroundColor: isHoliday
               ? "#ef4444"
-              : colorMap[event.eventType] || "#6b7280",
-            borderColor: isHoliday
-              ? "#ef4444"
-              : colorMap[event.eventType] || "#6b7280",
-            textColor: isHoliday ? "#ffffff" : undefined,
+              : getScheduleEventColor(event),
+            borderColor: isHoliday ? "#ef4444" : getScheduleEventColor(event),
+            textColor: isHoliday ? "#ffffff" : getScheduleEventTextColor(event),
             classNames: [
               ...(isHoliday ? ["holiday-text-event"] : []),
               ...(isMultiDayRange
@@ -343,8 +346,7 @@ const Calendar = () => {
               <span
                 className="px-2 py-1 rounded text-xs font-bold text-white inline-block mb-2"
                 style={{
-                  backgroundColor:
-                    colorMap[selectedEvent.eventType] || "#6b7280",
+                  backgroundColor: getScheduleEventColor(selectedEvent),
                 }}
               >
                 {typeLabelMap[selectedEvent.eventType] || "일정"}

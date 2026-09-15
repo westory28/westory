@@ -44,6 +44,7 @@ Design Read: 교육 현장용 React 앱, 학생과 교사가 함께 쓰는 운�
 | Warning text | `--ws-warning-text` | `#dc2626` | 경고 텍스트 |
 | Overlay | `--ws-overlay` | `rgba(15, 23, 42, 0.62)` | 모달 backdrop |
 | Focus ring | `--ws-ring` | `#3b82f6` | focus-visible outline/ring |
+| Solid label contrast | `--ws-solid-label-text` | `#000000` | 단색 일정 라벨에서 흰색·기본 본문색 모두 대비 4.5:1 미만일 때 사용하는 글자색 |
 
 Contrast notes:
 
@@ -52,6 +53,13 @@ Contrast notes:
 - Amber is an accent, not a default CTA color.
 
 ## 3. Typography
+
+Calendar editor contract:
+- Teacher event dialog: maximum width 960px; two columns from 768px, one column below it.
+- Existing category palette in `scheduleCategories.ts` also supplies optional per-event label colors; labels use dark text on a 22% tint of the chosen color.
+- Calendar label height: 24px; text: existing 12px label size, 4px horizontal padding, single-line ellipsis. FullCalendar owns the date-span width.
+- Editor controls: 40px minimum height; dialog gaps/padding use 8px, 12px, 16px, 24px. Memo height: 96px (64px on short landscape screens).
+- Category management edits one selected category at a time, without growing the dialog vertically.
 
 Font stack: `Noto Sans KR`, system sans-serif. Korean readability and school-device compatibility are more important than novelty.
 
