@@ -42,6 +42,11 @@ const commandLabel = (commandName: string) => {
     updateStudentMaintenanceConfig: "학생 접속 설정 변경",
     deleteStudentData: "학생 계정과 연결 기록 삭제",
     updateStudentData: "학생 정보 변경",
+    approveStudentRegistration: "학생 가입 승인",
+    updateStudentEnrollmentProfile: "학생 학적 정보 변경",
+    previewEnrollmentRoster: "학생 명단 미리보기",
+    importEnrollmentRoster: "학생 명단 일괄 등록",
+    moveEnrollment: "학생 학급 이동",
     resetAssessmentAttemptsByClass: "평가 응시 기록 초기화",
     resetQuizAttemptsForClass: "퀴즈 응시 기록 초기화",
     recalculateQuizResultsAfterQuestionCorrection: "평가 결과 재계산",
@@ -52,11 +57,19 @@ const commandLabel = (commandName: string) => {
     correctOfficialGrade: "공식 성적 정정",
     signOfficialGrade: "공식 성적 서명",
     adjustTeacherPoints: "위스 수동 조정",
+    grantWis: "위스 지급",
+    deductWis: "위스 차감",
+    adjustWis: "위스 잔액 조정",
+    reverseWisEntry: "위스 거래 취소",
+    reviewWisOrder: "위스 주문 처리",
     updateTeacherPointAdjustment: "위스 조정 내역 수정",
     reviewTeacherPointOrder: "위스 주문 상태 변경",
     rebuildPointWalletRankTotals: "위스 지갑·순위 재계산",
     deleteSourceArchiveAsset: "사료 원본 삭제",
     updateAccessSettings: "사용자 접근 권한 변경",
+    createTeacherBulkJob: "일괄 작업 생성",
+    cleanupExpiredTeacherDrafts: "만료된 임시 저장 일괄 정리",
+    deleteThinkCloudSession: "생각모아 활동 삭제",
     createSemesterShell: "새 학기 운영 영역 생성",
     createSemesterManifest: "새 학기 Manifest 생성",
     updateSemesterManifest: "학기 Manifest 변경",
@@ -568,9 +581,10 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
               본인 확인이 필요합니다
             </h2>
             <p className="mt-2 text-sm leading-6 text-stone-600">
-              {commandLabel(pending.commandName)} 작업을 실행하기 전에 다시
-              로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수
-              있습니다.
+              현재 로그인되어 있습니다. 중요한 작업을 보호하기 위해 본인 확인이
+              필요합니다. 확인할 작업: {commandLabel(pending.commandName)}. 본인
+              확인은 중요한 작업에 한해 5분 동안 유효하며, 로그인 유지 시간과는
+              별개입니다.
             </p>
 
             {supportsPassword && (

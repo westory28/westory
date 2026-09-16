@@ -5,6 +5,7 @@ const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
 const cutoverAuthorization = require("./cutoverAuthorization");
 const sessionAuthority = require("./sessionAuthority");
+const routineContentCommands = new Set(require("./routineContentWrites.json").commands);
 const {
   onCallWithStudentMaintenance: onCall,
 } = require("./studentMaintenance");
@@ -77,7 +78,8 @@ const W8_READINESS_CHECK_IDS = Object.freeze([
 ]);
 const HIGH_RISK_COMMAND_TYPES = new Set(
   Object.values(W8_COMMAND_TYPES).filter(
-    (commandType) => !STUDENT_COMMAND_TYPES.has(commandType),
+    (commandType) => !STUDENT_COMMAND_TYPES.has(commandType)
+      && !routineContentCommands.has(commandType),
   ),
 );
 

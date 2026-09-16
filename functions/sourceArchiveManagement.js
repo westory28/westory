@@ -388,15 +388,15 @@ const createSourceArchiveCommandAdapter = ({ now = Date.now } = {}) => ({
   },
 });
 
-const assertCallableActor = async (db, assertSession, request) => {
+const assertCallableActor = async (db, assertSession, request, highRisk = true) => {
   const email = String(request.auth?.token?.email || "")
     .trim()
     .toLowerCase();
   if (email !== "westoria28@gmail.com" && !/@yongshin-ms\.ms\.kr$/.test(email))
     fail("permission-denied", "SOURCE_ARCHIVE_ACCOUNT_NOT_ALLOWED");
   const { uid } = await assertSession(request, {
-    recentAuth: true,
-    highRisk: true,
+    recentAuth: highRisk,
+    highRisk,
   });
   const profile = await db.doc(`users/${uid}`).get();
   if (!(email === "westoria28@gmail.com" || profile.data()?.role === "teacher"))
@@ -415,7 +415,7 @@ const createSourceArchiveUploadHandler =
       require("sharp")(bytes, { limitInputPixels: 50000000 }).metadata(),
   }) =>
   async (request) => {
-    const uid = await assertCallableActor(db, assertSession, request);
+    const uid = await assertCallableActor(db, assertSession, request, false);
     // assertCallableActor already validated this callable's session proof.
     exact(request.data, ["uploadId", "contentBase64", "_session"]);
     const { uploadId, contentBase64 } = request.data;

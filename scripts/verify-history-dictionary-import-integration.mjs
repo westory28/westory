@@ -371,7 +371,9 @@ const actualClientBridge = (owner) => {
       "GENERAL dictionary import must not request step-up authentication.",
     );
   });
-  const highRisk = load("src/lib/highRiskCommands.ts");
+  const highRisk = load("src/lib/highRiskCommands.ts", {
+    "../../functions/routineContentWrites.json": JSON.parse(readFileSync(new URL("../functions/routineContentWrites.json", import.meta.url), "utf8")),
+  });
   const semester = load("src/lib/semesterScope.ts");
   const firebase = {
     auth: owner.auth,

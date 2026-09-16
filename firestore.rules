@@ -1156,11 +1156,12 @@ service cloud.firestore {
 
       match /items/{itemId} {
         allow read: if canUseWestory() || (docId == 'consent' && canBootstrapWestory());
-        allow create: if docId != 'consent'
-          && isRecentlyAuthenticatedAdmin();
+        allow create: if (docId == 'developer_logs' && isAdmin())
+          || (docId != 'consent' && isRecentlyAuthenticatedAdmin());
         allow delete: if docId != 'consent'
           && isRecentlyAuthenticatedAdmin();
-        allow update: if (
+        allow update: if (docId == 'developer_logs' && isAdmin())
+          || (
             docId != 'consent'
             && isRecentlyAuthenticatedAdmin()
           )

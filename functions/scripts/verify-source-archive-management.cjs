@@ -72,8 +72,8 @@ const transportSessionProof = {
   protocolVersion: 2,
   revision: "a".repeat(64),
 };
-const assertTransportSession = async (req, options) => {
-  assert.deepEqual(options, { recentAuth: true, highRisk: true });
+const assertTransportSession = async (req, options, highRisk = false) => {
+  assert.deepEqual(options, { recentAuth: highRisk, highRisk });
   if (JSON.stringify(req.data?._session) !== JSON.stringify(transportSessionProof)) {
     throw Object.assign(new Error("Invalid fixture session proof"), {
       code: "unauthenticated",
@@ -579,7 +579,7 @@ const loadProcessor = (db, bucket, onRender = () => {}, failPdf = false) => {
   const cleanup = archive.createSourceArchiveCleanupHandler({
     db: nativeDb(deletion.store),
     bucket: deletionBucket,
-    assertSession: assertTransportSession,
+    assertSession: (req, options) => assertTransportSession(req, options, true),
     now: () => 2000,
   });
   const cleanupRequest = request({

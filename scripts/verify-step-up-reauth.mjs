@@ -1,17 +1,16 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import ts from "typescript";
+import { build } from "esbuild";
+import { fileURLToPath } from "node:url";
 
 const loadTypeScriptModule = async (relativePath) => {
   const sourceUrl = new URL(`../${relativePath}`, import.meta.url);
   const source = await readFile(sourceUrl, "utf8");
-  const transpiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ESNext,
-      target: ts.ScriptTarget.ES2022,
-    },
-    fileName: sourceUrl.pathname,
-  }).outputText;
+  const bundled = await build({
+    stdin: { contents: source, loader: "ts", resolveDir: fileURLToPath(new URL(".", sourceUrl)) },
+    bundle: true, write: false, format: "esm", platform: "node", target: "es2022",
+  });
+  const transpiled = bundled.outputFiles[0].text;
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`;
   return { module: await import(moduleUrl), source };
 };
@@ -71,6 +70,8 @@ for (const commandType of [
   "saveTeacherDraft",
   "discardTeacherDraft",
   "resolveTeacherDraft",
+  "submitThinkCloudResponse",
+  "createLearningContent",
 ]) {
   assert.equal(
     highRiskPolicy.requiresCommandGatewayStepUpReauthentication(commandType),
@@ -84,7 +85,6 @@ for (const commandType of [
   "createTeacherBulkJob",
   "reconcileTeacherBulkJob",
   "retryTeacherBulkJob",
-  "createLearningContent",
   "recordAttendanceBulk",
   "createSemesterEconomy",
   "reviewWisOrder",

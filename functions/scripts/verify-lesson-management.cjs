@@ -64,7 +64,7 @@ const setup = (mutate = () => {}) => {
     serverTimestamp: () => 123,
     concreteTimestamp: () => 123,
     assertSession: async (request, options) => {
-      assert.deepEqual(options, { recentAuth: true, highRisk: true });
+      assert.deepEqual(options, { recentAuth: false, highRisk: false });
       return {
         uid: request.auth.uid,
         email: request.auth.token.email,

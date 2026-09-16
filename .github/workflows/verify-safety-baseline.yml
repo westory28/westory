@@ -63,6 +63,9 @@ jobs:
       - run: npm run verify:access-gate
       - run: npm run verify:session-policy
       - run: npm run verify:step-up-reauth
+      - run: node scripts/verify-routine-content-auth.mjs
+      - run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - run: node scripts/verify-session-display-consistency.mjs
       - run: node scripts/verify-developer-log-save-reauth.mjs
       - run: npm run verify:lesson-answer-save-recovery
       - run: npm run verify:thinkcloud-refresh
@@ -79,6 +82,7 @@ jobs:
 
       - run: npm --prefix functions ci --ignore-scripts
       - run: npm --prefix functions run check
+      - run: node functions/scripts/verify-routine-content-auth.cjs
       - run: node functions/scripts/verify-query-regions.cjs
       - run: node functions/scripts/verify-wis-initial-opening-approval.cjs
       - run: node functions/scripts/verify-lesson-answers.cjs
@@ -98,6 +102,7 @@ jobs:
       - run: npm install --global firebase-tools@15.15.0
       - run: node scripts/verify-firebase-storage-runtime-framing.cjs
       - run: firebase emulators:exec --project demo-westory-content-semester-rules --only firestore "node scripts/verify-content-semester-rules.mjs"
+      - run: firebase emulators:exec --project demo-westory-developer-log --only firestore "node scripts/verify-developer-log-rules.mjs"
       - run: firebase emulators:exec --project demo-westory-session-lesson-rules --only firestore,storage "node scripts/verify-lesson-release-rules.mjs"
         env:
           NODE_OPTIONS: --require=${{ github.workspace }}/scripts/firebase-storage-runtime-framing.cjs

@@ -1,4 +1,7 @@
+import routineContentWrites from "../../functions/routineContentWrites.json";
+
 const COMMAND_GATEWAY_LOW_RISK_COMMANDS = new Set([
+  ...routineContentWrites.commands,
   "claimMapTagReward",
   "requestHistoryDictionaryTerm",
   "saveStudentHistoryDictionaryWord",
@@ -10,6 +13,7 @@ const COMMAND_GATEWAY_LOW_RISK_COMMANDS = new Set([
   "updateTeacherPatchNoteStatus",
   "deleteTeacherPatchNote",
   "saveLessonAnswers",
+  "submitThinkCloudResponse",
   "startAssessmentAttempt",
   "submitAssessmentAttempt",
   "requestGradeReview",
@@ -120,35 +124,45 @@ const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
   "createSemesterRollbackPlan",
 ] as const;
 
-export const HIGH_RISK_COMMANDS = new Set<string>([
-  "registerSchoolBanner",
-  "manageSchoolBanners",
-  "updateStudentMaintenanceConfig",
-  "uploadMapAssetContent",
-  "uploadSourceArchiveAsset",
-  "cleanupSourceArchiveAsset",
-  "uploadLessonAssetContent",
-  ...COMMAND_GATEWAY_HIGH_RISK_COMMANDS,
-  // Retained direct-callable names that have not yet moved to the gateway.
-  "deleteStudentData",
-  "updateStudentData",
-  "resetAssessmentAttemptsByClass",
-  "resetQuizAttemptsForClass",
-  "recalculateQuizResultsAfterQuestionCorrection",
-  "grantHistoryClassroomExemptions",
-  "revokeHistoryClassroomExemptions",
-  "reviewHistoryClassroomExemptionRequest",
-  "reviewPerformanceScoreObjection",
-  "saveWisHallOfFameConfig",
-  "rebuildPointWalletRankTotals",
-  "updateTeacherPointAdjustment",
-  "reviewTeacherPointOrder",
-  "deleteSourceArchiveAsset",
-  "previewEnrollmentRoster",
+const ROUTINE_CONTENT_WRITES = new Set<string>([
+  ...routineContentWrites.commands,
+  ...routineContentWrites.callables,
 ]);
+
+export const HIGH_RISK_COMMANDS = new Set<string>(
+  [
+    "registerSchoolBanner",
+    "manageSchoolBanners",
+    "updateStudentMaintenanceConfig",
+    "uploadMapAssetContent",
+    "uploadSourceArchiveAsset",
+    "cleanupSourceArchiveAsset",
+    "uploadLessonAssetContent",
+    ...COMMAND_GATEWAY_HIGH_RISK_COMMANDS,
+    // Retained direct-callable names that have not yet moved to the gateway.
+    "deleteStudentData",
+    "updateStudentData",
+    "resetAssessmentAttemptsByClass",
+    "resetQuizAttemptsForClass",
+    "recalculateQuizResultsAfterQuestionCorrection",
+    "grantHistoryClassroomExemptions",
+    "revokeHistoryClassroomExemptions",
+    "reviewHistoryClassroomExemptionRequest",
+    "reviewPerformanceScoreObjection",
+    "saveWisHallOfFameConfig",
+    "rebuildPointWalletRankTotals",
+    "updateTeacherPointAdjustment",
+    "reviewTeacherPointOrder",
+    "deleteSourceArchiveAsset",
+    "previewEnrollmentRoster",
+  ].filter((commandName) => !ROUTINE_CONTENT_WRITES.has(commandName)),
+);
 
 export const isHighRiskCommand = (commandName: string) =>
   HIGH_RISK_COMMANDS.has(String(commandName || "").trim());
+
+export const isRoutineContentCallable = (commandName: string) =>
+  routineContentWrites.callables.includes(String(commandName || "").trim());
 
 /**
  * The command gateway fails closed for unknown command names. Only commands

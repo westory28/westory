@@ -629,8 +629,8 @@ const createMapUploadHandler =
   }) =>
   async (request) => {
     const { uid } = await assertSession(request, {
-      recentAuth: true,
-      highRisk: true,
+      recentAuth: false,
+      highRisk: false,
     });
     const { uploadId, contentBase64 } = request.data || {};
     if (

@@ -86,7 +86,9 @@ const fixture = ({ storage = new Map(), uid = "student-a" } = {}) => {
     code["src/lib/sessionQueryCache.ts"], {}, { structuredClone },
   ).createSessionQueryCache();
   const stepUp = load(code["src/lib/stepUpReauth.ts"]);
-  const highRisk = load(code["src/lib/highRiskCommands.ts"]);
+  const highRisk = load(code["src/lib/highRiskCommands.ts"], {
+    "../../functions/routineContentWrites.json": JSON.parse(readFileSync("functions/routineContentWrites.json", "utf8")),
+  });
   const semester = load(code["src/lib/semesterScope.ts"]);
   stepUp.registerStepUpReauthHandler(async name => {
     state.stepUps.push(name);
