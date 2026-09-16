@@ -1,6 +1,12 @@
 import React, { useRef, useState } from "react";
 import ModalSurface from "../../../components/common/ModalSurface";
 import {
+  CATEGORY_COLOR_PRESETS,
+  SCHEDULE_COLOR_NAMES,
+  getScheduleEventColor,
+  useScheduleCategories,
+} from "../../../lib/scheduleCategories";
+import {
   PRESERVE_SCHEDULE_TARGETS,
   resolveScheduleTargets,
   type ScheduleClassOption,
@@ -63,6 +69,8 @@ const TeacherCalendarEventModal: React.FC<Props> = ({
   const [start, setStart] = useState(originalStart);
   const [end, setEnd] = useState(originalEnd);
   const [category, setCategory] = useState(originalCategory);
+  const [labelColor, setLabelColor] = useState(event?.labelColor || "");
+  const { categories } = useScheduleCategories();
   const [target, setTarget] = useState(
     event ? PRESERVE_SCHEDULE_TARGETS : "common",
   );
@@ -137,6 +145,7 @@ const TeacherCalendarEventModal: React.FC<Props> = ({
         expectedSemesterRevision: state.manifestRevision,
         title: title.trim(),
         description,
+        labelColor,
         startAt: preserveTime
           ? event!.startAt
           : toW8ServerDateTime(`${start}T00:00`),
@@ -218,6 +227,7 @@ const TeacherCalendarEventModal: React.FC<Props> = ({
       onClose={onClose}
       dismissible={!saving}
       initialFocusRef={titleRef}
+      size="wide"
       footer={
         <div className="flex w-full flex-wrap items-center justify-end gap-2">
           {event && !confirmAction && (
@@ -253,7 +263,7 @@ const TeacherCalendarEventModal: React.FC<Props> = ({
     >
       <form
         id="teacher-calendar-event-form"
-        className="space-y-4"
+        className="teacher-calendar-event-form space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
@@ -261,9 +271,9 @@ const TeacherCalendarEventModal: React.FC<Props> = ({
       >
         <fieldset
           disabled={saving || !canWrite || conflicted || Boolean(confirmAction)}
-          className="space-y-4"
+          className="teacher-calendar-event-fields"
         >
-          <label className="block text-sm font-bold text-gray-700">
+          <label className="teacher-calendar-event-title block text-sm font-bold text-gray-700">
             일정 제목
             <input
               ref={titleRef}
@@ -300,12 +310,6 @@ const TeacherCalendarEventModal: React.FC<Props> = ({
               />
             </label>
           </div>
-          {event && !event.allDay && (
-            <p className="text-sm text-gray-600">
-              날짜를 그대로 두면 기존 시각이 유지됩니다. 날짜를 바꾸면 종일
-              일정으로 저장됩니다.
-            </p>
-          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block text-sm font-bold text-gray-700">
               일정 종류
@@ -344,8 +348,14 @@ const TeacherCalendarEventModal: React.FC<Props> = ({
               </select>
             </label>
           </div>
+          {event && !event.allDay && (
+            <p className="teacher-calendar-event-note text-sm text-gray-600">
+              날짜를 그대로 두면 기존 시각이 유지됩니다. 날짜를 바꾸면 종일
+              일정으로 저장됩니다.
+            </p>
+          )}
           {event && (
-            <p className="text-sm text-gray-600">
+            <p className="teacher-calendar-event-note text-sm text-gray-600">
               현재 대상: {originalTargetLabel}
             </p>
           )}
@@ -356,9 +366,53 @@ const TeacherCalendarEventModal: React.FC<Props> = ({
               onChange={(e) => setDescription(e.target.value)}
               maxLength={2000}
               rows={4}
-              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              className="teacher-calendar-event-memo mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
             />
           </label>
+          <fieldset className="min-w-0">
+            <legend className="text-sm font-bold text-gray-700">
+              라벨 색상
+            </legend>
+            <div className="teacher-calendar-event-palette mt-2">
+              <button
+                type="button"
+                aria-pressed={!labelColor}
+                onClick={() => setLabelColor("")}
+                className="teacher-calendar-event-swatch text-xs"
+              >
+                분류 기본색
+              </button>
+              {CATEGORY_COLOR_PRESETS.map((preset, index) => (
+                <button
+                  key={preset.color}
+                  type="button"
+                  aria-label={`${SCHEDULE_COLOR_NAMES[index]} 라벨`}
+                  aria-pressed={labelColor.toLowerCase() === preset.color}
+                  onClick={() => setLabelColor(preset.color)}
+                  className="teacher-calendar-event-swatch text-xs"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, ${preset.color} 22%, var(--ws-surface))`,
+                    borderColor: preset.color,
+                  }}
+                >
+                  {SCHEDULE_COLOR_NAMES[index]}
+                </button>
+              ))}
+            </div>
+            <div
+              className="teacher-calendar-event-preview mt-2"
+              title={title.trim() || "일정 제목"}
+              style={{
+                backgroundColor: `color-mix(in srgb, ${getScheduleEventColor({ eventType: category, labelColor }, categories)} 22%, var(--ws-surface))`,
+                borderColor: getScheduleEventColor(
+                  { eventType: category, labelColor },
+                  categories,
+                ),
+              }}
+            >
+              {title.trim() || "일정 제목"}
+            </div>
+          </fieldset>
         </fieldset>
         {!canWrite && (
           <p role="status" className="text-sm text-gray-600">

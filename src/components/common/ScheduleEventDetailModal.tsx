@@ -1,5 +1,9 @@
 import React, { useEffect, useRef } from "react";
-import { getScheduleCategoryMeta } from "../../lib/scheduleCategories";
+import {
+  getScheduleCategoryMeta,
+  getScheduleEventColor,
+  getScheduleEventTextColor,
+} from "../../lib/scheduleCategories";
 import type { ScheduleCategory } from "../../lib/scheduleCategories";
 import { getSchedulePeriodRangeLabel } from "../../lib/schedulePeriods";
 import type { CalendarEvent } from "../../types";
@@ -39,7 +43,9 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
   const categoryLabel = isHoliday
     ? "공휴일"
     : `${categoryMeta.emoji} ${categoryMeta.label}`;
-  const categoryColor = isHoliday ? "#ef4444" : categoryMeta.color;
+  const categoryColor = isHoliday
+    ? "#ef4444"
+    : getScheduleEventColor(event, categories);
   const periodLabel = getSchedulePeriodRangeLabel(
     event.startPeriod ?? event.period,
     event.endPeriod,
@@ -89,7 +95,12 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
           <div>
             <span
               className="inline-flex rounded-full px-3 py-1 text-xs font-extrabold text-white"
-              style={{ backgroundColor: categoryColor }}
+              style={{
+                backgroundColor: categoryColor,
+                color: isHoliday
+                  ? "#ffffff"
+                  : getScheduleEventTextColor(event, categories),
+              }}
             >
               {categoryLabel}
             </span>

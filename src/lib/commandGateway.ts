@@ -267,6 +267,7 @@ interface ScheduleEventInput {
   eventType: string;
   title: string;
   description: string;
+  labelColor?: string;
   startAt: string;
   endAt: string;
   allDay: boolean;

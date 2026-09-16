@@ -2751,8 +2751,9 @@ button.lesson-core-point-floating-status:disabled {
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  min-height: 1.12rem;
-  padding: 0.04rem 0.2rem;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 4px;
   overflow: hidden;
 }
 
@@ -2766,9 +2767,9 @@ button.lesson-core-point-floating-status:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 800;
-  line-height: 1.05;
+  line-height: 1.2;
 }
 
 .student-calendar-section .student-calendar-event-label.is-range {
@@ -4357,4 +4358,74 @@ button.lesson-core-point-floating-status:disabled {
   .school-banner-workspace__editor { grid-row: 1; }
   .school-banner-editor__period { grid-template-columns: minmax(0, 1fr); }
   .school-banner-workspace__notice { flex-direction: column; align-items: stretch; }
+}
+
+/* Calendar reconciliation: keep FullCalendar's date span and clip only labels. */
+.teacher-calendar-shell .student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-daygrid-day-events {
+  padding-left: 0;
+  padding-right: 0;
+}
+.teacher-calendar-shell .student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-daygrid-event:not(.holiday-text-event),
+.teacher-calendar-shell .student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-daygrid-event:not(.holiday-text-event) .fc-event-main {
+  color: var(--ws-text-strong) !important;
+}
+.student-calendar-section .student-calendar-event-label.is-range,
+.student-calendar-section .student-calendar-event-label.is-single {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.teacher-calendar-event-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+.teacher-calendar-event-fields > * { min-width: 0; }
+.teacher-calendar-event-memo { height: 96px; resize: vertical; }
+.teacher-calendar-event-palette {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.teacher-calendar-event-swatch {
+  min-height: 44px;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-md);
+  color: var(--ws-text-strong);
+  background: var(--ws-surface);
+  font-weight: 700;
+}
+.teacher-calendar-event-swatch[aria-pressed="true"] {
+  outline: 2px solid var(--ws-primary);
+  outline-offset: 1px;
+}
+.teacher-calendar-event-swatch:focus-visible {
+  outline: 2px solid var(--ws-ring);
+  outline-offset: 2px;
+}
+.teacher-calendar-event-preview {
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  padding: 0 4px;
+  color: var(--ws-text-strong);
+  font-size: 12px;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (min-width: 768px) {
+  .teacher-calendar-event-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .teacher-calendar-event-title,
+  .teacher-calendar-event-note { grid-column: 1 / -1; }
+}
+@media (min-width: 768px) and (max-height: 650px) {
+  .ws-modal:has(.teacher-calendar-event-form) .ws-modal__header,
+  .ws-modal:has(.teacher-calendar-event-form) .ws-modal__footer { padding-top: 8px; padding-bottom: 8px; }
+  .ws-modal:has(.teacher-calendar-event-form) .ws-modal__body { padding-top: 8px; padding-bottom: 8px; }
+  .teacher-calendar-event-fields { gap: 8px; }
+  .teacher-calendar-event-memo { height: 64px; }
 }

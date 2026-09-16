@@ -74,6 +74,7 @@ const projectScheduleEvent = (
   studentClassKey: string,
 ): CalendarEvent => ({
   id: event.eventId,
+  labelColor: event.labelColor,
   title: event.title,
   description: event.description,
   start: toLegacyDate(event.startAt),

@@ -15,6 +15,7 @@ export type LegacyStudentScheduleEventType =
 
 export interface LegacyStudentScheduleEvent {
   id: string;
+  labelColor?: string;
   title: string;
   start: string;
   end?: string;
@@ -111,6 +112,7 @@ export const projectW8StudentScheduleEvents = (
   return Array.from(eventByIdentity.values()).map(
     (event): LegacyStudentScheduleEvent => ({
       id: event.eventId,
+      labelColor: event.labelColor,
       title: event.title,
       start: toDateKey(event.startAt),
       end: toDateKey(event.endAt),

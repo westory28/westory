@@ -4,7 +4,8 @@ import {
   ref,
   uploadBytes,
 } from "firebase/storage";
-import { getFirebaseStorage } from "./firebase";
+import { auth, getFirebaseStorage } from "./firebase";
+import { StepUpReauthError } from "./stepUpReauth";
 
 export interface DeveloperLogImageUploadResult {
   imageUrl: string;
@@ -21,6 +22,15 @@ const TARGET_IMAGE_BYTES = 540 * 1024;
 const MAX_IMAGE_BYTES = 700 * 1024;
 const IMAGE_QUALITY_STEPS = [0.9, 0.84, 0.78, 0.72, 0.66, 0.6, 0.54, 0.48];
 const IMAGE_SIZE_STEPS = [1, 0.9, 0.8, 0.7, 0.6];
+
+const assertDeveloperLogImageOwner = (expectedUid: string) => {
+  if (!expectedUid || auth.currentUser?.uid !== expectedUid) {
+    throw new StepUpReauthError(
+      "IDENTITY_CHANGED",
+      "로그인 사용자가 바뀌어 이미지 작업을 중단했습니다.",
+    );
+  }
+};
 
 const loadImageElement = (file: File) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
@@ -149,21 +159,29 @@ export const compressDeveloperLogImage = async (file: File) => {
 export const uploadDeveloperLogImage = async ({
   postId,
   file,
+  expectedUid,
 }: {
   postId: string;
   file: File;
+  expectedUid: string;
 }): Promise<DeveloperLogImageUploadResult> => {
+  assertDeveloperLogImageOwner(expectedUid);
   const compressed = await compressDeveloperLogImage(file);
+  assertDeveloperLogImageOwner(expectedUid);
   const storagePath = getStoragePath(postId);
   const storage = await getFirebaseStorage();
   const storageRef = ref(storage, storagePath);
+  assertDeveloperLogImageOwner(expectedUid);
   await uploadBytes(storageRef, compressed.blob, {
     contentType: compressed.mimeType,
     cacheControl: "public,max-age=86400",
   });
+  assertDeveloperLogImageOwner(expectedUid);
+  const imageUrl = await getDownloadURL(storageRef);
+  assertDeveloperLogImageOwner(expectedUid);
 
   return {
-    imageUrl: await getDownloadURL(storageRef),
+    imageUrl,
     imageStoragePath: storageRef.fullPath,
     imageByteSize: compressed.blob.size,
     imageWidth: compressed.width,
@@ -173,15 +191,20 @@ export const uploadDeveloperLogImage = async ({
 };
 
 export const tryDeleteDeveloperLogImage = async (
-  storagePath?: string | null,
+  storagePath: string | null | undefined,
+  expectedUid: string,
 ) => {
   const normalizedPath = String(storagePath || "").trim();
   if (!normalizedPath) return false;
   try {
+    assertDeveloperLogImageOwner(expectedUid);
     const storage = await getFirebaseStorage();
+    assertDeveloperLogImageOwner(expectedUid);
     await deleteObject(ref(storage, normalizedPath));
+    assertDeveloperLogImageOwner(expectedUid);
     return true;
   } catch (error) {
+    if (error instanceof StepUpReauthError) throw error;
     console.warn("Failed to delete developer log image:", error);
     return false;
   }

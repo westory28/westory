@@ -692,6 +692,111 @@ const run = async () => {
   );
   assert.ok(kstEvent.result.eventId);
 
+  const colorSchedule = {
+    ...common,
+    eventType: "SCHOOL",
+    title: "일정 색상 계약",
+    description: "선택 색상 저장과 이전 클라이언트 호환",
+    startAt: "2026-09-16T00:00:00.000Z",
+    endAt: "2026-09-16T01:00:00.000Z",
+    allDay: false,
+    period: "",
+    targetClassIds: ["class-1"],
+    targetUserIds: [],
+    sourceDomain: "USER",
+    sourceReference: "schedule-color-contract",
+  };
+  assert.equal(
+    Object.hasOwn(
+      w8.normalizeW8Payload("createScheduleEvent", colorSchedule),
+      "labelColor",
+    ),
+    false,
+  );
+  assert.equal(
+    Object.hasOwn(
+      tx.documents.get(`semester_schedule_events/${kstEvent.result.eventId}`),
+      "labelColor",
+    ),
+    false,
+  );
+  const colorEvent = await apply("createScheduleEvent", {
+    ...colorSchedule,
+    labelColor: "#A1B2C3",
+  });
+  const colorEventId = colorEvent.result.eventId;
+  const colorEventPath = `semester_schedule_events/${colorEventId}`;
+  assert.equal(tx.documents.get(colorEventPath).labelColor, "#a1b2c3");
+  const colorUpdate = {
+    ...colorSchedule,
+    eventId: colorEventId,
+    expectedEventRevision: 1,
+  };
+  assert.equal(
+    Object.hasOwn(
+      w8.normalizeW8Payload("updateScheduleEvent", colorUpdate),
+      "labelColor",
+    ),
+    false,
+  );
+  await apply("updateScheduleEvent", { ...colorUpdate, title: "색상 생략 수정" });
+  assert.equal(tx.documents.get(colorEventPath).labelColor, "#a1b2c3");
+  await apply("updateScheduleEvent", {
+    ...colorUpdate,
+    expectedEventRevision: 2,
+    labelColor: "",
+  });
+  assert.equal(tx.documents.get(colorEventPath).labelColor, "");
+  await apply("updateScheduleEvent", {
+    ...colorUpdate,
+    expectedEventRevision: 3,
+    labelColor: "#0099FF",
+  });
+  assert.equal(tx.documents.get(colorEventPath).labelColor, "#0099ff");
+  assert.equal(tx.documents.get(colorEventPath).revision, 4);
+  const colorSnapshot = structuredClone(tx.documents.get(colorEventPath));
+  await assert.rejects(
+    () =>
+      apply("updateScheduleEvent", { ...colorUpdate, labelColor: "#000000" }),
+    (error) => error.details?.reason === "W8_SCHEDULE_REVISION_CONFLICT",
+  );
+  assert.deepEqual(tx.documents.get(colorEventPath), colorSnapshot);
+  await assert.rejects(
+    () =>
+      apply(
+        "updateScheduleEvent",
+        { ...colorUpdate, expectedEventRevision: 4, labelColor: "#000000" },
+        student,
+      ),
+    (error) => error.details?.reason === "W8_MANAGE_REQUIRED",
+  );
+  assert.deepEqual(tx.documents.get(colorEventPath), colorSnapshot);
+  const invalidScheduleColors = [
+    undefined,
+    null,
+    123,
+    "#abc",
+    "123456",
+    "#12345678",
+    "red",
+    " #123456",
+    "url(https://example.invalid/color)",
+  ];
+  for (const commandType of ["createScheduleEvent", "updateScheduleEvent"]) {
+    for (const labelColor of invalidScheduleColors) {
+      assert.throws(
+        () =>
+          w8.normalizeW8Payload(commandType, {
+            ...(commandType === "createScheduleEvent" ? colorSchedule : colorUpdate),
+            labelColor,
+          }),
+        (error) =>
+          error.details?.reason === "W8_PAYLOAD_INVALID" &&
+          error.details?.field === "labelColor",
+      );
+    }
+  }
+
   const notice = await apply("createNotice", { ...common, ...noticeEditable });
   const noticeId = notice.result.noticeId;
   const updatedNotice = await apply("updateNotice", {
@@ -790,6 +895,25 @@ const run = async () => {
       email: request.auth.token.email,
     }),
   });
+  for (const [audience, actor] of [
+    ["teacher", teacher],
+    ["student", student],
+  ]) {
+    const scheduleState = await queryCore.getW8DomainState({
+      auth: { uid: actor.actorUid, token: { email: actor.actorEmail } },
+      data: {
+        domain: "SCHEDULE",
+        audience,
+        semesterId: "2026-2",
+        source: "CURRENT",
+      },
+    });
+    assert.equal(
+      scheduleState.events.find((row) => row.eventId === colorEventId)?.labelColor,
+      "#0099ff",
+    );
+    assert.equal(scheduleState.writeCount, 0);
+  }
   let delegatedNonLearningDenialCases = 0;
   const assertDelegatedNonLearningDenied = async (source, domain) => {
     await assert.rejects(
@@ -1346,6 +1470,19 @@ const run = async () => {
     JSON.stringify({
       passed: true,
       cases: 108,
+      scheduleColorChecks: [
+        "legacy create omits color",
+        "create normalizes hex",
+        "update omission preserves color",
+        "empty color resets category default",
+        "update replaces color",
+        "stale revision preserves stored color",
+        "student cannot change color",
+        "invalid colors rejected on create and update",
+        "teacher query exposes color without writes",
+        "student query exposes color without writes",
+      ],
+      invalidScheduleColorCases: invalidScheduleColors.length * 2,
       parallelActorReadChecks: 7,
       parallelDashboardReadsBeforeRelease: startedReads.size,
       parallelDashboardResultUnchanged: true,

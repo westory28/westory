@@ -4,7 +4,11 @@ import {
   compareCalendarSchedule,
   getSchedulePeriodRangeLabel,
 } from "../../lib/schedulePeriods";
-import { getScheduleCategoryMeta } from "../../lib/scheduleCategories";
+import {
+  getScheduleCategoryMeta,
+  getScheduleEventColor,
+  getScheduleEventTextColor,
+} from "../../lib/scheduleCategories";
 import type { ScheduleCategory } from "../../lib/scheduleCategories";
 import type { CalendarEvent } from "../../types";
 import { formatScheduleTargetLabel } from "../../lib/scheduleClassTargets";
@@ -183,7 +187,9 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
             const isHoliday = event.eventType === "holiday";
             const meta = getScheduleCategoryMeta(event.eventType, categories);
             const categoryLabel = isHoliday ? "공휴일" : meta.label;
-            const categoryColor = isHoliday ? "#ef4444" : meta.color;
+            const categoryColor = isHoliday
+              ? "#ef4444"
+              : getScheduleEventColor(event, categories);
             const periodLabel = getSchedulePeriodRangeLabel(
               event.startPeriod ?? event.period,
               event.endPeriod,
@@ -204,7 +210,12 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
                 <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
                   <span
                     className="inline-flex max-w-[96px] shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-black text-white"
-                    style={{ backgroundColor: categoryColor }}
+                    style={{
+                      backgroundColor: categoryColor,
+                      color: isHoliday
+                        ? "#ffffff"
+                        : getScheduleEventTextColor(event, categories),
+                    }}
                     title={categoryLabel}
                   >
                     <span className="truncate">{categoryLabel}</span>

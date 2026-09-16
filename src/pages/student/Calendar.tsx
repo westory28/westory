@@ -11,6 +11,10 @@ import {
 import { loadLegacyStudentScheduleProjection } from "../../lib/legacyStudentScheduleAdapter";
 import { W8DomainError } from "../../lib/w8Domains";
 import {
+  getScheduleEventColor,
+  getScheduleEventTextColor,
+} from "../../lib/scheduleCategories";
+import {
   compareCalendarEventPeriod,
   getSchedulePeriodRangeLabel,
   getSchedulePeriodOrder,
@@ -18,6 +22,7 @@ import {
 
 interface CalendarEvent {
   id: string;
+  labelColor?: string;
   title: string;
   start: string; // ISO string YYYY-MM-DD
   end?: string;
@@ -73,14 +78,6 @@ const Calendar = () => {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
     null,
   );
-
-  const colorMap: { [key: string]: string } = {
-    exam: "#ef4444", // Red
-    performance: "#f97316", // Orange
-    event: "#10b981", // Green
-    diagnosis: "#3b82f6", // Blue
-    formative: "#3b82f6", // Blue
-  };
 
   const typeLabelMap: { [key: string]: string } = {
     exam: "정기 시험",
@@ -152,11 +149,9 @@ const Calendar = () => {
             allDay: true,
             backgroundColor: isHoliday
               ? "#ef4444"
-              : colorMap[event.eventType] || "#6b7280",
-            borderColor: isHoliday
-              ? "#ef4444"
-              : colorMap[event.eventType] || "#6b7280",
-            textColor: isHoliday ? "#ffffff" : undefined,
+              : getScheduleEventColor(event),
+            borderColor: isHoliday ? "#ef4444" : getScheduleEventColor(event),
+            textColor: isHoliday ? "#ffffff" : getScheduleEventTextColor(event),
             classNames: [
               ...(isHoliday ? ["holiday-text-event"] : []),
               ...(isMultiDayRange
@@ -331,8 +326,8 @@ const Calendar = () => {
               <span
                 className="px-2 py-1 rounded text-xs font-bold text-white inline-block mb-2"
                 style={{
-                  backgroundColor:
-                    colorMap[selectedEvent.eventType] || "#6b7280",
+                  backgroundColor: getScheduleEventColor(selectedEvent),
+                  color: getScheduleEventTextColor(selectedEvent),
                 }}
               >
                 {typeLabelMap[selectedEvent.eventType] || "일정"}

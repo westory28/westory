@@ -312,6 +312,18 @@ const editableLearning = (payload) => {
   };
 };
 const editableSchedule = (payload) => {
+  const labelColor = {};
+  // Omitting the optional field must preserve an existing color on merge updates.
+  if (Object.prototype.hasOwnProperty.call(payload, "labelColor")) {
+    if (
+      typeof payload.labelColor !== "string" ||
+      (payload.labelColor !== "" && !/^#[0-9a-f]{6}$/i.test(payload.labelColor))
+    )
+      fail("invalid-argument", "labelColor is invalid.", "W8_PAYLOAD_INVALID", {
+        field: "labelColor",
+      });
+    labelColor.labelColor = payload.labelColor.toLowerCase();
+  }
   const startAt = iso(payload.startAt, "startAt");
   const endAt = iso(payload.endAt, "endAt");
   if (startAt > endAt)
@@ -336,6 +348,7 @@ const editableSchedule = (payload) => {
     ),
     title: text(payload.title, "title", 200, true),
     description: optionalText(payload.description, "description", 3000, true),
+    ...labelColor,
     startAt,
     endAt,
     allDay: boolean(payload.allDay, "allDay"),
@@ -673,6 +686,7 @@ const normalizeW8Payload = (commandType, raw) => {
         "eventType",
         "title",
         "description",
+        "labelColor",
         "startAt",
         "endAt",
         "allDay",
@@ -700,6 +714,7 @@ const normalizeW8Payload = (commandType, raw) => {
         "eventType",
         "title",
         "description",
+        "labelColor",
         "startAt",
         "endAt",
         "allDay",

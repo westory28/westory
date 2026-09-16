@@ -45,6 +45,22 @@ const normalizeHolidayTitle = (title: string, start: string) => {
   const normalizedTitle = String(title || "")
     .normalize("NFKC")
     .trim();
+  // Official results can give all three dates the same lunar holiday name.
+  const lunarHoliday = normalizedTitle.match(/^(설날|추석)(?:\s*연휴)?$/);
+  if (lunarHoliday && /^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    const name = lunarHoliday[1];
+    const mainDate = lunarToSolar(
+      Number(start.slice(0, 4)),
+      name === "설날" ? 1 : 8,
+      name === "설날" ? 1 : 15,
+    );
+    if (mainDate === start) return name;
+    if (
+      mainDate &&
+      [addDays(mainDate, -1), addDays(mainDate, 1)].includes(start)
+    )
+      return `${name} 연휴`;
+  }
   if (normalizedTitle.startsWith("기독탄신일")) {
     return normalizedTitle.replace("기독탄신일", "크리스마스");
   }
@@ -308,8 +324,8 @@ export const getKoreanPublicHolidays = (targetYear: string | number) => {
 export const toHolidayCalendarEvent = (
   holiday: KoreanPublicHoliday,
 ): CalendarEvent => ({
-  id: `holiday_${holiday.start}_${sanitizeDocId(holiday.title)}`,
-  title: holiday.title,
+  id: `holiday_${holiday.start}_${sanitizeDocId(normalizeHolidayTitle(holiday.title, holiday.start))}`,
+  title: normalizeHolidayTitle(holiday.title, holiday.start),
   start: holiday.start,
   end: holiday.start,
   eventType: "holiday",

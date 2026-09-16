@@ -55,6 +55,14 @@ Contrast notes:
 
 ## 3. Typography
 
+Calendar editor contract (2026-09-16 reconciliation of PR #2):
+- 공휴일 날짜와 이름은 요일보다 우선하여 빨간색으로 표시한다. 토요일과 겹친 공휴일도 빨간색이며, 일반 토요일만 파란색으로 표시한다.
+- 교사 일정 편집은 기존 wide ModalSurface를 사용하며, 768px 이상에서 두 열, 그 아래에서 한 열로 배치한다. 날짜·대상·색상·내용과 저장 버튼이 학교 노트북/태블릿 화면에 함께 보이도록 한다.
+- 기존 scheduleCategories 팔레트를 일정별 선택 색상에도 사용한다. 교사 월별 라벨은 선택 색상을 흰 표면에 22% 혼합한 배경과 기존 강한 본문색을 사용한다.
+- 일정 라벨 높이는 24px, 글자는 기존 12px label, 좌우 여백은 4px이다. 날짜 구간 폭은 FullCalendar가 정하고, 제목만 한 줄 말줄임 처리하며 전체 제목을 title로 제공한다.
+- 편집 조작 영역은 기존 최소 44px을 유지한다. 일정 메모 높이는 96px이며 낮은 가로 화면에서는 64px로 줄인다. 간격은 기존 8px/12px/16px/24px 토큰을 사용한다.
+- 단색 일정 라벨 글자는 배경 대비 4.5:1을 만족하는 기존 #111827 또는 #ffffff를 선택하며, 둘 다 부족하면 #000000을 대비 보완색으로 사용한다.
+
 Font stack: `Noto Sans KR`, system sans-serif. Korean readability and school-device compatibility are more important than novelty.
 
 | Role | Token | Size | Weight | Line height | Letter spacing |

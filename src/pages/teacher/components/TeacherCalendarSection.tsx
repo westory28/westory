@@ -12,6 +12,7 @@ import {
 } from "../../../lib/schedulePeriods";
 import {
   getScheduleCategoryMeta,
+  getScheduleEventColor,
   useScheduleCategories,
 } from "../../../lib/scheduleCategories";
 import { CalendarEvent } from "../../../types";
@@ -260,7 +261,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         currentViewType !== "dayGridMonth" || event.eventType !== "holiday",
     )
     .map((event) => {
-      const meta = getScheduleCategoryMeta(event.eventType, categories);
+      const color = getScheduleEventColor(event, categories);
       const isHoliday = event.eventType === "holiday";
       const inclusiveSpanDays = getInclusiveSpanDays(event.start, event.end);
       const isMultiDayRange = inclusiveSpanDays > 1;
@@ -271,9 +272,11 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         start: startDateKey || event.start,
         end: toExclusiveEnd(event.start, event.end),
         allDay: true,
-        backgroundColor: isHoliday ? "#ef4444" : meta.color,
-        borderColor: isHoliday ? "#ef4444" : meta.color,
-        textColor: isHoliday ? "#ffffff" : undefined,
+        backgroundColor: isHoliday
+          ? "#ef4444"
+          : `color-mix(in srgb, ${color} 22%, var(--ws-surface))`,
+        borderColor: isHoliday ? "#ef4444" : color,
+        textColor: isHoliday ? "#ffffff" : "var(--ws-text-strong)",
         classNames: [
           ...(isHoliday ? ["holiday-text-event"] : []),
           ...(isMultiDayRange
@@ -700,7 +703,9 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
               String(arg.event.title || "").trim() ||
               (isHoliday ? "공휴일" : "일정");
             const categoryLabel = isHoliday ? "공휴일" : meta.label;
-            const categoryColor = isHoliday ? "#ef4444" : meta.color;
+            const categoryColor = isHoliday
+              ? "#ef4444"
+              : getScheduleEventColor(event, categories);
             const targetLabel = formatEventTargetLabel(event);
 
             if (arg.view.type === "listMonth") {
@@ -760,7 +765,8 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
           contentHeight="100%"
           expandRows
           eventDisplay="block"
-          dayMaxEvents={3}
+          dayMaxEvents
+          moreLinkText={(count) => `+${count}개`}
           moreLinkClick={handleMoreLinkClick}
           fixedWeekCount={false}
           showNonCurrentDates={true}
@@ -797,7 +803,9 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                     categories,
                   );
                   const categoryLabel = isHoliday ? "공휴일" : meta.label;
-                  const categoryColor = isHoliday ? "#ef4444" : meta.color;
+                  const categoryColor = isHoliday
+                    ? "#ef4444"
+                    : getScheduleEventColor(event, categories);
                   const eventTitle = formatEventTitle(event);
                   const targetLabel = formatEventTargetLabel(event);
 

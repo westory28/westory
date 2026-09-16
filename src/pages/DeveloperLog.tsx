@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -12,9 +11,10 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useAppToast } from "../components/common/AppToastProvider";
 import { InlineLoading, PageLoading } from "../components/common/LoadingState";
@@ -34,6 +34,10 @@ import {
   uploadDeveloperLogImage,
 } from "../lib/developerLogImages";
 import { isDeveloperUser } from "../lib/permissions";
+import {
+  requestStepUpReauthentication,
+  StepUpReauthError,
+} from "../lib/stepUpReauth";
 
 type SortMode = "latest" | "views" | "likes";
 
@@ -58,6 +62,81 @@ const EMPTY_FORM: FormState = {
 };
 
 const MAX_CARD_IMAGE_COUNT = 20;
+
+const assertDeveloperLogOwner = (ownerUid: string) => {
+  if (!ownerUid || auth.currentUser?.uid !== ownerUid) {
+    throw new StepUpReauthError(
+      "IDENTITY_CHANGED",
+      "로그인 사용자가 바뀌었습니다. 원래 계정으로 다시 로그인해 주세요.",
+    );
+  }
+};
+
+const reauthenticateDeveloperLogOwner = async (
+  ownerUid: string,
+  commandName: "saveDeveloperLog" | "deleteDeveloperLog",
+) => {
+  assertDeveloperLogOwner(ownerUid);
+  await requestStepUpReauthentication(commandName);
+  assertDeveloperLogOwner(ownerUid);
+};
+
+type DeveloperLogMode = "list" | "detail" | "write" | "edit";
+type DeveloperLogMutationOutcome =
+  | { status: "saved"; post: DeveloperLogPost }
+  | { status: "deleted" }
+  | { status: "failed"; message: string };
+interface DeveloperLogMutation {
+  ownerUid: string;
+  action: "save" | "delete";
+  postId: string;
+  mode: DeveloperLogMode;
+  form: FormState;
+  files: File[];
+  selectedPost: DeveloperLogPost | null;
+  previewOpen: boolean;
+  pending: boolean;
+  outcome: DeveloperLogMutationOutcome | null;
+  settled: Promise<void>;
+  resolve: () => void;
+}
+
+// Reauthentication replaces protected route children. Keep only the submitted
+// operation in tab memory so the same account can recover its form and files.
+const developerLogMutations = new Map<string, DeveloperLogMutation>();
+const beginDeveloperLogMutation = (
+  input: Omit<
+    DeveloperLogMutation,
+    "pending" | "outcome" | "settled" | "resolve"
+  >,
+) => {
+  let resolve!: () => void;
+  const record: DeveloperLogMutation = {
+    ...input,
+    form: { ...input.form, images: [...input.form.images] },
+    files: [...input.files],
+    pending: true,
+    outcome: null,
+    settled: new Promise<void>((done) => {
+      resolve = done;
+    }),
+    resolve: () => resolve(),
+  };
+  developerLogMutations.set(record.ownerUid, record);
+  return record;
+};
+const finishDeveloperLogMutation = (
+  record: DeveloperLogMutation,
+  outcome: DeveloperLogMutationOutcome,
+) => {
+  record.outcome = outcome;
+  record.pending = false;
+  record.resolve();
+};
+const readDeveloperLogMutation = (ownerUid: string, postId: string) => {
+  const record = developerLogMutations.get(ownerUid);
+  return record?.postId === postId ? record : null;
+};
 
 const getDeveloperLogItemsCollection = () =>
   collection(
@@ -135,21 +214,26 @@ const DeveloperLog: React.FC = () => {
   const canManage = isDeveloperUser(currentUser?.email);
   const canLike = userData?.role === "student";
   const displayName = (userData?.name || "방재석 교사").trim();
+  const [operation, setOperation] = useState<DeveloperLogMutation | null>(() =>
+    readDeveloperLogMutation(currentUser?.uid || "", postId || ""),
+  );
 
   const [posts, setPosts] = useState<DeveloperLogPost[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<DeveloperLogPost | null>(
-    null,
+    operation?.selectedPost || null,
   );
   const [detailLoading, setDetailLoading] = useState(false);
   const [liked, setLiked] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState<"list" | "detail" | "write" | "edit">(
-    "list",
+  const [saving, setSaving] = useState(Boolean(operation?.pending));
+  const [mode, setMode] = useState<DeveloperLogMode>(operation?.mode || "list");
+  const [previewOpen, setPreviewOpen] = useState(
+    operation?.previewOpen || false,
   );
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
+  const [form, setForm] = useState<FormState>(operation?.form || EMPTY_FORM);
+  const [newImageFiles, setNewImageFiles] = useState<File[]>(
+    operation?.files || [],
+  );
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
   const [expandedImage, setExpandedImage] = useState<{
     src: string;
@@ -163,6 +247,72 @@ const DeveloperLog: React.FC = () => {
     "all" | DeveloperLogCategory
   >("all");
   const [sortMode, setSortMode] = useState<SortMode>("latest");
+
+  useEffect(() => {
+    if (!operation) return;
+    let cancelled = false;
+    void operation.settled.then(() => {
+      if (
+        cancelled ||
+        auth.currentUser?.uid !== operation.ownerUid ||
+        currentUser?.uid !== operation.ownerUid ||
+        developerLogMutations.get(operation.ownerUid) !== operation
+      )
+        return;
+      const outcome = operation.outcome;
+      if (!outcome) return;
+      developerLogMutations.delete(operation.ownerUid);
+      setSaving(false);
+      setOperation(null);
+      if (outcome.status === "failed") {
+        setForm(operation.form);
+        setNewImageFiles(operation.files);
+        setSelectedPost(operation.selectedPost);
+        setMode(operation.mode);
+        setPreviewOpen(operation.previewOpen);
+        showToast({
+          tone: "error",
+          title:
+            operation.action === "save"
+              ? "개발자 일지 저장에 실패했습니다."
+              : "개발자 일지 삭제에 실패했습니다.",
+          message: outcome.message,
+        });
+        return;
+      }
+      setNewImageFiles([]);
+      setPreviewOpen(false);
+      if (outcome.status === "saved") {
+        setSelectedPost(outcome.post);
+        setForm({
+          title: outcome.post.title,
+          version: outcome.post.version,
+          category: outcome.post.category,
+          summary: outcome.post.summary,
+          bodyHtml: outcome.post.bodyHtml,
+          isPinned: outcome.post.isPinned,
+          images: outcome.post.images,
+        });
+        setMode("detail");
+        navigate(`/developer-log/${outcome.post.id}`);
+        showToast({
+          tone: "success",
+          title:
+            operation.mode === "edit"
+              ? "개발자 일지를 수정했습니다."
+              : "개발자 일지를 게시했습니다.",
+        });
+      } else {
+        setSelectedPost(null);
+        setMode("list");
+        navigate("/developer-log");
+        showToast({ tone: "success", title: "개발자 일지를 삭제했습니다." });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [operation, currentUser?.uid, navigate, showToast]);
 
   useEffect(() => {
     const q = query(
@@ -195,6 +345,12 @@ const DeveloperLog: React.FC = () => {
   }, [showToast]);
 
   useEffect(() => {
+    if (
+      operation ||
+      (mode === "write" && !postId) ||
+      (mode === "edit" && selectedPost?.id === postId)
+    )
+      return;
     if (!postId) {
       if (mode !== "write") setMode("list");
       setSelectedPost(null);
@@ -204,9 +360,11 @@ const DeveloperLog: React.FC = () => {
     setMode((prev) => (prev === "edit" ? "edit" : "detail"));
     setDetailLoading(true);
     const postRef = getDeveloperLogPostRef(postId);
+    let cancelled = false;
 
     void getDoc(postRef)
       .then(async (snapshot) => {
+        if (cancelled) return;
         if (!snapshot.exists()) {
           setSelectedPost(null);
           showToast({
@@ -233,18 +391,33 @@ const DeveloperLog: React.FC = () => {
           const likeSnap = await getDoc(
             doc(getDeveloperLogPostRef(post.id), "likes", currentUser.uid),
           );
+          if (cancelled) return;
           setLiked(likeSnap.exists());
         }
       })
       .catch((error) => {
+        if (cancelled) return;
         console.error("Failed to load developer log:", error);
         showToast({
           tone: "error",
           title: "게시글을 불러오지 못했습니다.",
         });
       })
-      .finally(() => setDetailLoading(false));
-  }, [currentUser, mode, navigate, postId, showToast]);
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentUser,
+    mode,
+    navigate,
+    postId,
+    showToast,
+    operation,
+    selectedPost?.id,
+  ]);
 
   useEffect(() => {
     const previews = newImageFiles.map((file) => URL.createObjectURL(file));
@@ -318,6 +491,8 @@ const DeveloperLog: React.FC = () => {
   };
 
   const cancelEditor = () => {
+    if (saving || developerLogMutations.get(currentUser?.uid || "")?.pending)
+      return;
     setPreviewOpen(false);
     setNewImageFiles([]);
     setExpandedImage(null);
@@ -329,6 +504,8 @@ const DeveloperLog: React.FC = () => {
   };
 
   const handleImageFiles = (files: FileList | null) => {
+    if (saving || developerLogMutations.get(currentUser?.uid || "")?.pending)
+      return;
     const incoming = Array.from(files || []).filter((file) =>
       file.type.startsWith("image/"),
     );
@@ -355,6 +532,8 @@ const DeveloperLog: React.FC = () => {
   };
 
   const removeExistingImage = (storagePath: string) => {
+    if (saving || developerLogMutations.get(currentUser?.uid || "")?.pending)
+      return;
     setForm((prev) => ({
       ...prev,
       images: prev.images.filter(
@@ -364,7 +543,12 @@ const DeveloperLog: React.FC = () => {
   };
 
   const savePost = async () => {
-    if (!canManage || saving) return;
+    if (
+      !canManage ||
+      saving ||
+      developerLogMutations.get(currentUser?.uid || "")?.pending
+    )
+      return;
     const title = form.title.trim();
     const bodyText = stripHtml(form.bodyHtml);
     if (!title) {
@@ -384,33 +568,36 @@ const DeveloperLog: React.FC = () => {
     }
 
     setSaving(true);
+    const ownerUid = currentUser?.uid || "";
+    const mutation = beginDeveloperLogMutation({
+      ownerUid,
+      action: "save",
+      postId: postId || "",
+      mode,
+      form,
+      files: newImageFiles,
+      selectedPost,
+      previewOpen,
+    });
+    setOperation(mutation);
     const uploadedImages: DeveloperLogImage[] = [];
+    let savedPost: DeveloperLogPost | null = null;
 
     try {
-      const postRef =
-        mode === "edit" && selectedPost
-          ? getDeveloperLogPostRef(selectedPost.id)
-          : await addDoc(getDeveloperLogItemsCollection(), {
-              title,
-              version: form.version.trim(),
-              category: form.category,
-              summary: form.summary.trim(),
-              bodyHtml: form.bodyHtml,
-              images: [],
-              isPinned: form.isPinned,
-              viewCount: 0,
-              likeCount: 0,
-              createdBy: currentUser?.uid || "",
-              createdByName: displayName,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              publishedAt: serverTimestamp(),
-            });
+      await reauthenticateDeveloperLogOwner(ownerUid, "saveDeveloperLog");
+      assertDeveloperLogOwner(ownerUid);
+      const editingExistingPost = mode === "edit" && selectedPost;
+      // Reserve an ID locally. Publish only after every attachment is ready.
+      const postRef = editingExistingPost
+        ? getDeveloperLogPostRef(editingExistingPost.id)
+        : doc(getDeveloperLogItemsCollection());
 
       for (const file of newImageFiles) {
+        assertDeveloperLogOwner(ownerUid);
         const uploaded = await uploadDeveloperLogImage({
           postId: postRef.id,
           file,
+          expectedUid: ownerUid,
         });
         uploadedImages.push({
           ...uploaded,
@@ -436,7 +623,32 @@ const DeveloperLog: React.FC = () => {
         updatedAt: serverTimestamp(),
       };
 
-      await updateDoc(postRef, payload);
+      // Multiple image uploads can outlive the recent-authentication window.
+      await reauthenticateDeveloperLogOwner(ownerUid, "saveDeveloperLog");
+      assertDeveloperLogOwner(ownerUid);
+      if (editingExistingPost) {
+        await updateDoc(postRef, payload);
+      } else {
+        await setDoc(postRef, {
+          ...payload,
+          viewCount: 0,
+          likeCount: 0,
+          createdBy: ownerUid,
+          createdByName: displayName,
+          createdAt: serverTimestamp(),
+          publishedAt: serverTimestamp(),
+        });
+      }
+      savedPost = {
+        ...buildDraftPost(form, displayName, postRef.id),
+        ...(selectedPost || {}),
+        ...payload,
+        id: postRef.id,
+        createdBy: selectedPost?.createdBy || ownerUid,
+        createdByName: selectedPost?.createdByName || displayName,
+        publishedAt: selectedPost?.publishedAt || new Date(),
+      };
+      assertDeveloperLogOwner(ownerUid);
 
       if (selectedPost) {
         const kept = new Set(nextImages.map((image) => image.imageStoragePath));
@@ -445,41 +657,48 @@ const DeveloperLog: React.FC = () => {
         );
         await Promise.all(
           removedImages.map((image) =>
-            tryDeleteDeveloperLogImage(image.imageStoragePath),
+            tryDeleteDeveloperLogImage(image.imageStoragePath, ownerUid),
           ),
         );
       }
+      assertDeveloperLogOwner(ownerUid);
 
-      showToast({
-        tone: "success",
-        title:
-          mode === "edit"
-            ? "개발자 일지를 수정했습니다."
-            : "개발자 일지를 게시했습니다.",
+      finishDeveloperLogMutation(mutation, {
+        status: "saved",
+        post: savedPost,
       });
-      setNewImageFiles([]);
-      setPreviewOpen(false);
-      navigate(`/developer-log/${postRef.id}`);
-      setMode("detail");
     } catch (error: any) {
       console.error("Failed to save developer log:", error);
-      await Promise.all(
-        uploadedImages.map((image) =>
-          tryDeleteDeveloperLogImage(image.imageStoragePath),
-        ),
-      );
-      showToast({
-        tone: "error",
-        title: "개발자 일지 저장에 실패했습니다.",
-        message: error?.message,
+      // Cleanup must never delete images already referenced by a committed post.
+      if (savedPost) {
+        finishDeveloperLogMutation(mutation, {
+          status: "saved",
+          post: savedPost,
+        });
+        return;
+      }
+      if (auth.currentUser?.uid === ownerUid) {
+        await Promise.allSettled(
+          uploadedImages.map((image) =>
+            tryDeleteDeveloperLogImage(image.imageStoragePath, ownerUid),
+          ),
+        );
+      }
+      finishDeveloperLogMutation(mutation, {
+        status: "failed",
+        message: error?.message || "입력 내용을 유지한 채 다시 저장해 주세요.",
       });
-    } finally {
-      setSaving(false);
     }
   };
 
   const deletePost = async () => {
-    if (!canManage || !selectedPost) return;
+    if (
+      !canManage ||
+      !selectedPost ||
+      saving ||
+      developerLogMutations.get(currentUser?.uid || "")?.pending
+    )
+      return;
     if (
       !window.confirm(
         "이 개발자 일지를 삭제할까요? 첨부 이미지도 함께 정리됩니다.",
@@ -487,22 +706,42 @@ const DeveloperLog: React.FC = () => {
     )
       return;
 
+    const ownerUid = currentUser?.uid || "";
+    const mutation = beginDeveloperLogMutation({
+      ownerUid,
+      action: "delete",
+      postId: postId || "",
+      mode,
+      form,
+      files: newImageFiles,
+      selectedPost,
+      previewOpen,
+    });
+    setOperation(mutation);
+    setSaving(true);
+    let deleted = false;
     try {
+      await reauthenticateDeveloperLogOwner(ownerUid, "deleteDeveloperLog");
+      assertDeveloperLogOwner(ownerUid);
       await deleteDoc(getDeveloperLogPostRef(selectedPost.id));
+      deleted = true;
+      assertDeveloperLogOwner(ownerUid);
       await Promise.all(
         selectedPost.images.map((image) =>
-          tryDeleteDeveloperLogImage(image.imageStoragePath),
+          tryDeleteDeveloperLogImage(image.imageStoragePath, ownerUid),
         ),
       );
-      showToast({ tone: "success", title: "개발자 일지를 삭제했습니다." });
-      navigate("/developer-log");
-      setMode("list");
+      assertDeveloperLogOwner(ownerUid);
+      finishDeveloperLogMutation(mutation, { status: "deleted" });
     } catch (error: any) {
       console.error("Failed to delete developer log:", error);
-      showToast({
-        tone: "error",
-        title: "개발자 일지 삭제에 실패했습니다.",
-        message: error?.message,
+      if (deleted) {
+        finishDeveloperLogMutation(mutation, { status: "deleted" });
+        return;
+      }
+      finishDeveloperLogMutation(mutation, {
+        status: "failed",
+        message: error?.message || "다시 로그인한 뒤 삭제해 주세요.",
       });
     }
   };
@@ -847,7 +1086,11 @@ const DeveloperLog: React.FC = () => {
     const totalImageCount = draftPost.images.length;
 
     return (
-      <div className="space-y-5">
+      <fieldset
+        disabled={saving}
+        aria-busy={saving}
+        className="m-0 min-w-0 space-y-5 border-0 p-0"
+      >
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-5 flex flex-col gap-3 border-b border-gray-100 pb-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -967,21 +1210,33 @@ const DeveloperLog: React.FC = () => {
 
               <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
                 <span className="text-sm font-black text-slate-700">본문</span>
-                <QuillEditor
-                  value={form.bodyHtml}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, bodyHtml: value }))
-                  }
-                  minHeight={300}
-                  placeholder="패치 요약, 주요 변경 사항, 기대 효과 등을 정리하세요."
-                  toolbar={[
-                    [{ header: [2, 3, false] }],
-                    ["bold", "italic", "underline"],
-                    [{ list: "ordered" }, { list: "bullet" }],
-                    ["link"],
-                    ["clean"],
-                  ]}
-                />
+                <div
+                  aria-disabled={saving}
+                  ref={(element) => {
+                    element?.toggleAttribute("inert", saving);
+                  }}
+                >
+                  <QuillEditor
+                    value={form.bodyHtml}
+                    onChange={(value) => {
+                      if (
+                        !saving &&
+                        !developerLogMutations.get(currentUser?.uid || "")
+                          ?.pending
+                      )
+                        setForm((prev) => ({ ...prev, bodyHtml: value }));
+                    }}
+                    minHeight={300}
+                    placeholder="패치 요약, 주요 변경 사항, 기대 효과 등을 정리하세요."
+                    toolbar={[
+                      [{ header: [2, 3, false] }],
+                      ["bold", "italic", "underline"],
+                      [{ list: "ordered" }, { list: "bullet" }],
+                      ["link"],
+                      ["clean"],
+                    ]}
+                  />
+                </div>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
@@ -1161,7 +1416,7 @@ const DeveloperLog: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
+      </fieldset>
     );
   };
 

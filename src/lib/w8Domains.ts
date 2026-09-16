@@ -115,6 +115,7 @@ export interface W8ScheduleEvent {
   eventType: string;
   title: string;
   description: string;
+  labelColor?: string;
   startAt: string;
   endAt: string;
   allDay: boolean;
@@ -390,6 +391,7 @@ const normalizeScheduleEvent = (value: unknown): W8ScheduleEvent => {
     eventType: text(item.eventType) || "SCHOOL",
     title: text(item.title) || "제목 없는 일정",
     description: text(item.description),
+    labelColor: text(item.labelColor),
     startAt: text(item.startAt),
     endAt: text(item.endAt),
     allDay: boolean(item.allDay),

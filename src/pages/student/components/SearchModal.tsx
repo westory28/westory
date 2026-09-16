@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
+import {
+  getScheduleCategoryMeta,
+  getScheduleEventColor,
+  getScheduleEventTextColor,
+} from "../../../lib/scheduleCategories";
 import {
   compareCalendarSchedule,
   getSchedulePeriodRangeLabel,
@@ -164,7 +168,9 @@ const SearchModal: React.FC<SearchModalProps> = ({
                 categories,
               );
               const bgColor =
-                result.eventType === "holiday" ? "#ef4444" : meta.color;
+                result.eventType === "holiday"
+                  ? "#ef4444"
+                  : getScheduleEventColor(result, categories);
               const typeLabel =
                 result.eventType === "holiday"
                   ? LABELS.holiday
@@ -183,7 +189,13 @@ const SearchModal: React.FC<SearchModalProps> = ({
                   <div className="mb-1 flex items-center gap-2">
                     <span
                       className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                      style={{ backgroundColor: bgColor }}
+                      style={{
+                        backgroundColor: bgColor,
+                        color:
+                          result.eventType === "holiday"
+                            ? "#ffffff"
+                            : getScheduleEventTextColor(result, categories),
+                      }}
                     >
                       {typeLabel}
                     </span>
