@@ -336,8 +336,8 @@ const createRegisterSchoolBannerHandler =
   } = {}) =>
   async (request) => {
     const identity = await assertSession(request, {
-      recentAuth: true,
-      highRisk: true,
+      recentAuth: false,
+      highRisk: false,
     });
     const input = normalize(request.data);
     const uid = identity.uid;
@@ -468,7 +468,7 @@ const createRegisterSchoolBannerHandler =
         };
       }
       // Recheck session, role and semester after uploading; publish only in the current writable semester.
-      await assertSession(request, { recentAuth: true, highRisk: true });
+      await assertSession(request, { recentAuth: false, highRisk: false });
       const result = await db.runTransaction(async (transaction) => {
         await assertWritable(transaction);
         const receipt = (await transaction.get(receiptRef)).data();

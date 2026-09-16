@@ -186,7 +186,7 @@ const fixture = () => {
       ref,
       data,
     });
-    if (state.authAgeMs > 300000)
+    if (kind === "delete" && state.authAgeMs > 300000)
       throw new Error("Synthetic recent-auth rule rejection");
   };
   let allocatedPostIds = 0;
@@ -497,6 +497,11 @@ for (const editing of [false, true]) {
     writes(test.state).map((event) => event.kind),
     editing ? ["update"] : ["create"],
   );
+  assert.equal(
+    test.state.events.filter((event) => event.kind === "reauth").length,
+    0,
+    "Routine saves must not request five-minute reauthentication",
+  );
   await test.until(() =>
     text(test.state.active.tree).includes("Unsaved title"),
   );
@@ -505,26 +510,25 @@ for (const editing of [false, true]) {
 }
 
 for (const editing of [false, true]) {
-  for (const outcome of ["success", "cancelled", "write-failed"]) {
+  for (const outcome of ["success", "upload-failed", "write-failed"]) {
     const test = fixture();
     await test.openEditor(editing);
     test.addImage();
     const gate = deferred();
-    let first = true;
-    test.state.onReauth = async () => {
-      if (!first) return;
-      first = false;
+    // A separate session transition can still remove the page during upload.
+    test.state.onUpload = async () => {
       test.setAccess("AUTHENTICATING");
       await gate.promise;
       test.setAccess("AUTHORIZED");
-      if (outcome === "cancelled")
-        throw new Error("Synthetic cancellation after remount");
+      if (outcome === "upload-failed")
+        throw new Error("Synthetic upload failure after remount");
     };
     if (outcome === "write-failed")
       test.state[editing ? "onUpdate" : "onSet"] = () => {
         throw new Error("Synthetic server rejection");
       };
     test.save();
+    await test.until(() => test.state.active === null);
     assert.equal(
       test.state.active,
       null,
@@ -573,7 +577,7 @@ for (const editing of [false, true]) {
   const test = fixture();
   await test.openEditor(true);
   test.addImage();
-  test.state.onReauth = async () => {
+  test.state.onStorage = async () => {
     test.setAccess("AUTHENTICATING");
     test.changeOwner();
     test.setAccess("AUTHORIZED");
@@ -620,6 +624,11 @@ for (const cancelled of [false, true]) {
     cancelled ? 0 : 1,
   );
   assert.equal(test.state.instances, 2);
+  assert.equal(
+    test.state.events.filter((event) => event.kind === "reauth").length,
+    1,
+    "Deletes must keep their reauthentication request",
+  );
   checks++;
 }
 
@@ -633,9 +642,7 @@ for (const boundary of ["compression", "storage", "upload"]) {
     ]
   ] = test.changeOwner;
   test.save();
-  await test.until(() =>
-    test.state.events.some((event) => event.kind === "reauth"),
-  );
+  await test.until(() => test.state.auth.currentUser?.uid !== test.owner.uid);
   for (let tick = 0; tick < 4; tick++)
     await new Promise((resolve) => setImmediate(resolve));
   const attempts = writes(test.state);
@@ -683,7 +690,8 @@ for (const operation of ["upload", "delete"]) {
   );
   assert.equal(
     test.state.events.filter((event) => event.kind === "reauth").length,
-    2,
+    0,
+    "A slow upload must not introduce a second authentication prompt",
   );
   assert.ok(
     writes(test.state).every((event) => event.ownerUid === test.owner.uid),

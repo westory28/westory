@@ -26,10 +26,7 @@ try {
   const normal = policy.resolveSessionPolicy("/student/dashboard", false);
   const teacher = policy.resolveSessionPolicy("/teacher/dashboard", false);
   const adminNormal = policy.resolveSessionPolicy("/teacher/dashboard", true);
-  const adminSettings = policy.resolveSessionPolicy(
-    "/teacher/settings",
-    true,
-  );
+  const adminSettings = policy.resolveSessionPolicy("/teacher/settings", true);
   const nonAdminSettings = policy.resolveSessionPolicy(
     "/teacher/settings",
     false,
@@ -46,6 +43,13 @@ try {
   assert.equal(policy.shouldEnforceClientIdleSession("OBSERVE_ONLY"), false);
   assert.equal(policy.shouldEnforceClientIdleSession("DISABLED"), false);
   assert.equal(policy.shouldEnforceClientIdleSession(null), false);
+  for (const mode of [undefined, "", "enforce", "UNKNOWN"]) {
+    assert.equal(policy.shouldEnforceClientIdleSession(mode), false);
+  }
+  assert.equal(
+    policy.resolveSessionPolicy("/teacher/settings/access", true).durationMs,
+    15 * 60 * 1000,
+  );
   assert.equal(
     policy.resolveSessionPolicy("/teacher/settings-old", true).durationMs,
     30 * 60 * 1000,
@@ -69,10 +73,7 @@ try {
     policy.shouldShowSessionWarning(now + 5 * 60 * 1000, normal, now),
     true,
   );
-  assert.equal(
-    policy.shouldShowSessionWarning(now, normal, now),
-    false,
-  );
+  assert.equal(policy.shouldShowSessionWarning(now, normal, now), false);
 
   policy.clearSessionTiming();
   policy.writeSessionActivity(lastActivityAt, normal);
@@ -105,6 +106,43 @@ try {
     true,
     "a legacy session older than 30 minutes must not be revived",
   );
+
+  // Migration preserves the time of the last activity; opening a new route
+  // must not turn the old 60-minute deadline into a fresh 30/15-minute lease.
+  policy.clearSessionTiming();
+  storage.writeLocalOnly(
+    policy.SESSION_EXPIRY_KEY,
+    String(now + 50 * 60 * 1000),
+  );
+  const legacyActivity = policy.readSessionLastActivity();
+  assert.equal(legacyActivity, lastActivityAt);
+  assert.equal(
+    policy.writeSessionActivity(legacyActivity, normal),
+    now + 20 * 60 * 1000,
+  );
+  assert.equal(
+    policy.writeSessionActivity(legacyActivity, adminSettings),
+    now + 5 * 60 * 1000,
+  );
+  assert.equal(
+    policy.writeSessionActivity(legacyActivity, normal),
+    now + 20 * 60 * 1000,
+  );
+  assert.equal(policy.readSessionLastActivity(), legacyActivity);
+
+  const serverDeadline = now + 12 * 60 * 1000;
+  assert.equal(
+    policy.writeSessionDeadline(serverDeadline, adminSettings),
+    serverDeadline,
+  );
+  assert.equal(policy.readSessionExpiry(), serverDeadline);
+  for (const invalid of [NaN, Infinity, 0, -1]) {
+    assert.equal(policy.writeSessionDeadline(invalid, normal), null);
+    assert.equal(policy.readSessionExpiry(), serverDeadline);
+  }
+  policy.clearSessionTiming();
+  assert.equal(policy.readSessionExpiry(), null);
+  assert.equal(policy.readSessionLastActivity(), null);
 
   assert.equal(
     policy.normalizeSessionReturnPath(
@@ -141,7 +179,10 @@ try {
   assert.match(headerSource, /document\.addEventListener\("input"/);
   assert.match(headerSource, /shouldShowSessionWarning/);
   assert.match(headerSource, /세션이 5분 뒤 만료됩니다/);
-  assert.doesNotMatch(headerSource, /const SESSION_DURATION_SECONDS = 60 \* 60/);
+  assert.doesNotMatch(
+    headerSource,
+    /const SESSION_DURATION_SECONDS = 60 \* 60/,
+  );
   assert.match(gateSource, /resolveSessionPolicy/);
   assert.match(gateSource, /writeSessionReturnPath/);
   assert.match(loginSource, /resolvePostLoginTarget/);

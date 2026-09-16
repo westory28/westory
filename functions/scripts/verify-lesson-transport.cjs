@@ -31,8 +31,8 @@ const setup = (change = () => {}, sessionError = false, storageError = 0) => {
     db,
     now: () => 1000,
     assertSession: async (_, options) => {
-      assert.equal(options.highRisk, true);
-      assert.equal(options.recentAuth, true);
+      assert.equal(options.highRisk, false);
+      assert.equal(options.recentAuth, false);
       if (sessionError)
         throw Object.assign(Error("session"), { code: "unauthenticated" });
       return { uid: "teacher" };

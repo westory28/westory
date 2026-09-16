@@ -1,0 +1,35 @@
+{
+  "commands": [
+    "saveLessonTree",
+    "saveLessonDocument",
+    "prepareLessonAssetUpload",
+    "saveMapResources",
+    "prepareMapAssetUpload",
+    "updateMapResourceBlanks",
+    "prepareSourceArchiveUpload",
+    "saveSourceArchiveMetadata",
+    "createAssessmentDefinition",
+    "updateAssessmentDefinition",
+    "upsertQuizQuestion",
+    "upsertHistoryClassroomSource",
+    "transitionAssessmentDefinition",
+    "saveHistoryDictionaryTerm",
+    "approveHistoryDictionaryTermForRequests",
+    "createLearningContent",
+    "updateLearningContent",
+    "transitionLearningContent",
+    "createScheduleEvent",
+    "updateScheduleEvent",
+    "createNotice",
+    "updateNotice",
+    "transitionNotice",
+    "createThinkCloudSession",
+    "transitionThinkCloudSession"
+  ],
+  "callables": [
+    "uploadLessonAssetContent",
+    "uploadMapAssetContent",
+    "uploadSourceArchiveAsset",
+    "registerSchoolBanner"
+  ]
+}

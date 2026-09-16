@@ -29,7 +29,10 @@ import {
   parseActiveFirebaseBindingMarker,
   readInjectedActiveFirebaseBindingMarker,
 } from "./firebaseActiveBinding";
-import { isHighRiskCommand } from "./highRiskCommands";
+import {
+  isHighRiskCommand,
+  isRoutineContentCallable,
+} from "./highRiskCommands";
 import { sessionQueryCache } from "./sessionQueryCache";
 import { resolveCallableRegion } from "./callableRegion";
 import {
@@ -399,7 +402,9 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
     return callable.stream(prepared as RequestData, options);
   };
 
-  if (!isHighRiskCommand(name)) return callableWithSession;
+  const requiresStepUp = isHighRiskCommand(name);
+  if (!requiresStepUp && !isRoutineContentCallable(name))
+    return callableWithSession;
 
   const guardedCallable = (async (data?: RequestData) => {
     const invocationUid = auth.currentUser?.uid || "";
@@ -415,7 +420,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
               : "로그인 사용자를 확인할 수 없어 작업을 실행하지 않았습니다.",
           );
         }
-        await requestStepUpReauthentication(name);
+        if (requiresStepUp) await requestStepUpReauthentication(name);
         if (auth.currentUser?.uid !== invocationUid) {
           throw new StepUpReauthError(
             "IDENTITY_CHANGED",
@@ -428,7 +433,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
     );
   }) as HttpsCallable<RequestData, ResponseData>;
   guardedCallable.stream = async (data, options) => {
-    await requestStepUpReauthentication(name);
+    if (requiresStepUp) await requestStepUpReauthentication(name);
     return callableWithSession.stream(data, options);
   };
   return guardedCallable;

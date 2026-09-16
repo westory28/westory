@@ -23,6 +23,7 @@ const factoryCode = compile(
 const helperCode = compile(
   readFileSync("src/lib/historyDictionary.ts", "utf8"),
 );
+const cacheCode = compile(readFileSync("src/lib/sessionQueryCache.ts", "utf8"));
 const load = (code, imports = {}, globals = {}) => {
   const module = { exports: {} };
   runInNewContext(code, {
@@ -85,6 +86,7 @@ for (const method of methods) {
         {},
         {
           auth,
+          sessionQueryCache: load(cacheCode, {}, { structuredClone }).createSessionQueryCache(),
           StepUpReauthError,
           getFirebaseFunctions: async () => {
             await pause("factory");

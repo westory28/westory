@@ -142,7 +142,7 @@ const fixture = () => {
     uuid: () => `attempt-${++nextId}`,
     assertSession: async (request, options) => {
       sessionChecks++;
-      assert.deepEqual(options, { recentAuth: true, highRisk: true });
+      assert.deepEqual(options, { recentAuth: false, highRisk: false });
       if (!request.auth) {
         const error = Error("No session");
         error.code = "unauthenticated";
@@ -155,7 +155,13 @@ const fixture = () => {
     },
   };
   const handler = createRegisterSchoolBannerHandler(dependencies);
-  const manage = createManageSchoolBannersHandler(dependencies);
+  const manage = createManageSchoolBannersHandler({
+    ...dependencies,
+    assertSession: (request, options) => {
+      assert.deepEqual(options, { recentAuth: true, highRisk: true });
+      return dependencies.assertSession(request, { recentAuth: false, highRisk: false });
+    },
+  });
   return {
     data,
     objects,

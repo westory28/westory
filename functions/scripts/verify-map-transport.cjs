@@ -117,7 +117,7 @@ const build = () => {
     }),
   };
   const assertSession = async (_req, options) => {
-    assert.deepEqual(options, { recentAuth: true, highRisk: true });
+    assert.deepEqual(options, { recentAuth: false, highRisk: false });
     return { uid: "teacher" };
   };
   return {

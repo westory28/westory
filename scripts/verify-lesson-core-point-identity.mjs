@@ -23,6 +23,10 @@ const helperCode = transformSync(
   readFileSync("src/lib/lessonCorePointReward.ts", "utf8"),
   { loader: "ts", format: "cjs" },
 ).code;
+const cacheCode = transformSync(
+  readFileSync("src/lib/sessionQueryCache.ts", "utf8"),
+  { loader: "ts", format: "cjs" },
+).code;
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const deferred = () => {
   let resolve, reject;
@@ -54,6 +58,12 @@ const fixture = () => {
     responseGate: null,
   };
   const factoryModule = { exports: {} };
+  const cacheModule = { exports: {} };
+  runInNewContext(cacheCode, {
+    module: cacheModule,
+    exports: cacheModule.exports,
+    structuredClone,
+  });
   const rawCallable = async (data) => {
     state.calls.push({ uid: state.auth.currentUser?.uid, data });
     if (state.responseGate) return state.responseGate.promise;
@@ -64,6 +74,7 @@ const fixture = () => {
     module: factoryModule,
     exports: factoryModule.exports,
     auth: state.auth,
+    sessionQueryCache: cacheModule.exports.createSessionQueryCache(),
     getFirebaseFunctions: async () => {
       state.entered.push("factory");
       if (state.factoryGate) await state.factoryGate.promise;
@@ -81,6 +92,7 @@ const fixture = () => {
       };
     },
     isHighRiskCommand: () => false,
+    isRoutineContentCallable: () => false,
     StepUpReauthError: class extends Error {
       constructor(code, message) {
         super(message);

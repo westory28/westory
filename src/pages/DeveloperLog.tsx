@@ -584,7 +584,6 @@ const DeveloperLog: React.FC = () => {
     let savedPost: DeveloperLogPost | null = null;
 
     try {
-      await reauthenticateDeveloperLogOwner(ownerUid, "saveDeveloperLog");
       assertDeveloperLogOwner(ownerUid);
       const editingExistingPost = mode === "edit" && selectedPost;
       // Reserve an ID locally. Publish only after every attachment is ready.
@@ -623,8 +622,6 @@ const DeveloperLog: React.FC = () => {
         updatedAt: serverTimestamp(),
       };
 
-      // Multiple image uploads can outlive the recent-authentication window.
-      await reauthenticateDeveloperLogOwner(ownerUid, "saveDeveloperLog");
       assertDeveloperLogOwner(ownerUid);
       if (editingExistingPost) {
         await updateDoc(postRef, payload);
