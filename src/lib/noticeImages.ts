@@ -1,3 +1,4 @@
+import { assertTeacherSemesterWritable } from "./teacherSemesterView";
 import {
   deleteObject,
   getDownloadURL,
@@ -237,10 +238,11 @@ export const uploadNoticeImage = async ({
   const storagePath = getNoticeImageStoragePath(config, noticeId);
   const storage = await getFirebaseStorage();
   const storageRef = ref(storage, storagePath);
-  await uploadBytes(storageRef, compressed.blob, {
+  await (assertTeacherSemesterWritable(),
+  uploadBytes(storageRef, compressed.blob, {
     contentType: compressed.mimeType,
     cacheControl: "public,max-age=86400",
-  });
+  }));
   return {
     imageUrl: await getDownloadURL(storageRef),
     imageStoragePath: storageRef.fullPath,
@@ -256,7 +258,8 @@ export const tryDeleteNoticeImage = async (storagePath?: string | null) => {
   if (!normalizedPath) return false;
   try {
     const storage = await getFirebaseStorage();
-    await deleteObject(ref(storage, normalizedPath));
+    await (assertTeacherSemesterWritable(),
+    deleteObject(ref(storage, normalizedPath)));
     return true;
   } catch (error) {
     console.warn("Failed to delete notice image:", error);

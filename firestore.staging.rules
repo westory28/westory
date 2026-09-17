@@ -199,6 +199,18 @@ service cloud.firestore {
         && isCurrentSemesterScope(config.year, config.semester);
     }
 
+    // Browsing a semester never changes the shared active-semester authority.
+    // Only full teacher/admin roles bypass the current scope for reads; delegated
+    // staff/student access and every write keep their existing restrictions.
+    function canReadAcademicSemesterScope(year, semester) {
+      // Each caller still applies its session, registration and resource fence.
+      // Do not repeat canUseWestory here: its maintenance validation is sizable.
+      return year.matches('^[0-9]{4}$') && semester in ['1', '2']
+        && ((isSignedIn() && (request.auth.token.email == "westoria28@gmail.com"
+          || currentUserIsTeacherProfile()))
+          || isCurrentSemesterScope(year, semester));
+    }
+
     function isAdmin() {
       return isSignedIn() && request.auth.token.email == "westoria28@gmail.com" && canUseWestory();
     }
@@ -1615,12 +1627,12 @@ service cloud.firestore {
       }
 
       match /curriculum/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canUseWestory());
         allow write: if false;
       }
 
       match /lessons/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canUseWestory());
         allow create, update, delete: if false;
       }
 
@@ -1630,94 +1642,94 @@ service cloud.firestore {
       }
 
       match /history_dictionary_terms/{termId} {
-        allow read: if isCurrentSemesterScope(year, semester) && canUseWestory();
+        allow read: if canReadAcademicSemesterScope(year, semester) && canUseWestory();
         allow create, update, delete: if false;
       }
 
       match /history_dictionary_requests/{requestId} {
-        allow read: if isCurrentSemesterScope(year, semester)
+        allow read: if canReadAcademicSemesterScope(year, semester)
           && canReadHistoryDictionaryRequest(resource.data);
         allow create, update, delete: if false;
       }
 
       match /dictionary_students/{userId}/history_dictionary_words/{wordId} {
-        allow read: if isCurrentSemesterScope(year, semester)
+        allow read: if canReadAcademicSemesterScope(year, semester)
           && canReadOwnedAcademicResource(userId, 'lesson_read');
         allow create, update, delete: if false;
       }
 
       match /quiz_questions/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canUseWestory());
         allow create, update, delete: if false;
       }
 
       match /history_classrooms/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (isTrustedW10PVisualFixtureAdmin()
+        allow read: if canReadAcademicSemesterScope(year, semester) && (isTrustedW10PVisualFixtureAdmin()
           || canReadHistoryClassroomResource(resource.data));
         allow create, update, delete: if false;
       }
 
       match /history_classroom_results/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canReadHistoryClassroomResult(resource.data));
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canReadHistoryClassroomResult(resource.data));
         allow create, update, delete: if false;
       }
 
       match /history_classroom_exemptions/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canReadHistoryClassroomExemption(resource.data));
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canReadHistoryClassroomExemption(resource.data));
         allow create, update, delete: if false;
       }
 
       match /history_classroom_exemption_requests/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canReadHistoryClassroomExemption(resource.data));
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canReadHistoryClassroomExemption(resource.data));
         allow create, update, delete: if false;
       }
 
       match /assessment_config/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canUseWestory());
         allow write: if isCurrentSemesterScope(year, semester) && docId != 'settings'
           && docId != 'performance_score'
           && (isAdmin() || isTeacherRole());
       }
 
       match /grading_plans/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory());
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canUseWestory());
         allow write: if false;
       }
 
       match /grading_plans_meta/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (docId == 'current'
+        allow read: if canReadAcademicSemesterScope(year, semester) && (docId == 'current'
           && (isTrustedW10PVisualFixtureAdmin() || isAdmin()));
         allow create, update, delete: if false;
       }
 
       match /exam_config/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (isTrustedW10PVisualFixtureAdmin()
+        allow read: if canReadAcademicSemesterScope(year, semester) && (isTrustedW10PVisualFixtureAdmin()
           || canManagePerformanceScores());
         allow write: if false;
       }
 
       match /performance_score_rosters/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canManagePerformanceScores());
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canManagePerformanceScores());
         allow create, update, delete: if false;
       }
 
       match /performance_score_objections/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canReadPerformanceScoreObjection(resource.data));
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canReadPerformanceScoreObjection(resource.data));
         allow create, update, delete: if false;
       }
 
       match /performance_score_answer_sheet_requests/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canReadPerformanceScoreAnswerSheetRequest(resource.data));
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canReadPerformanceScoreAnswerSheetRequest(resource.data));
         allow create, update, delete: if false;
       }
 
       match /quiz_results/{resultId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canReadQuizResult(resource.data));
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canReadQuizResult(resource.data));
         allow create, update, delete: if false;
       }
 
       match /quiz_submissions/{docId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canReadQuizSubmission(resource.data));
+        allow read: if canReadAcademicSemesterScope(year, semester) && (canReadQuizSubmission(resource.data));
         allow create, update, delete: if false;
       }
 
@@ -1727,21 +1739,27 @@ service cloud.firestore {
       }
 
       match /lesson_progress/{userId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory() && (request.auth.uid == userId || isAdmin()));
+        allow read: if canReadAcademicSemesterScope(year, semester) && canUseWestory()
+          && (request.auth.uid == userId || request.auth.token.email == "westoria28@gmail.com");
         allow create, update, delete: if false;
 
         match /units/{unitId} {
-          allow read: if isCurrentSemesterScope(year, semester) && (canUseWestory() && (request.auth.uid == userId || isAdmin()));
+          allow read: if canReadAcademicSemesterScope(year, semester) && canUseWestory()
+            && (request.auth.uid == userId || request.auth.token.email == "westoria28@gmail.com");
           allow create, update, delete: if false;
         }
       }
 
       match /lesson_presentations/{unitId}/teachers/{userId} {
-        allow read: if isCurrentSemesterScope(year, semester) && (isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read')));
+        allow read: if canReadAcademicSemesterScope(year, semester) && canUseWestory()
+          && (request.auth.token.email == "westoria28@gmail.com"
+            || (request.auth.uid == userId && currentProfileHasAcademicPermission('lesson_read')));
         allow write: if false;
 
         match /classes/{classId} {
-          allow read: if isCurrentSemesterScope(year, semester) && (isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read')));
+          allow read: if canReadAcademicSemesterScope(year, semester) && canUseWestory()
+            && (request.auth.token.email == "westoria28@gmail.com"
+              || (request.auth.uid == userId && currentProfileHasAcademicPermission('lesson_read')));
           allow write: if false;
         }
       }

@@ -213,6 +213,20 @@ function componentHarness() {
             refreshConfig: async () => {},
           }),
         };
+      if (name.includes("TeacherSemesterContext"))
+        return {
+          useTeacherSemester: () => ({
+            viewConfig: { year: "2026", semester: "2" },
+            isViewingPast: false,
+            semesters: [],
+            loading: false,
+            error: "",
+            selectSemester() {},
+            refreshSemesters: async () => {},
+          }),
+        };
+      if (name.includes("AppDialogProvider"))
+        return { useAppDialog: () => ({ confirm: async () => false }) };
       if (name.includes("AppToastProvider"))
         return { useAppToast: () => ({ showToast() {} }) };
       if (name.endsWith("/stepUpReauth"))
@@ -611,11 +625,13 @@ function componentHarness() {
     assert.equal(build(report, true).status, "danger");
     assert.equal(build(null, true), null);
   });
-  await test("semester save does not write removed student menu flags", async () => {
+  await test("confirmed semester activation never writes removed student menu flags", async () => {
     const calls = [];
     const context = {
       hasPendingSemesterSwitch: true,
-      saving: false,
+      isViewingPast: false,
+      switching: false,
+      creating: false,
       semesterStateError: "",
       config: { year: "2027", semester: "1" },
       activeSemester: { year: "2026", semester: "2" },
@@ -631,16 +647,21 @@ function componentHarness() {
       syncSemesterPresentation: () => {},
       showToast: () => {},
       buildSemesterLabel: () => "새 학기",
-      setSaving: () => {},
+      setSwitching: () => {},
+      confirm: async () => true,
+      activeSemesterLabel: "현재 학기",
+      selectedSemesterLabel: "새 학기",
+      refreshSemesters: async () => {},
+      selectSemester: () => {},
       console,
       executeWestoryCommand: () => {
         throw Error("Removed flags must never be written");
       },
     };
-    await evaluate("handleSave", context)();
+    await evaluate("handleActivateSemester", context)();
     assert.deepEqual(calls, [["activate", "2027", "1"]]);
     context.hasPendingSemesterSwitch = false;
-    await evaluate("handleSave", context)();
+    await evaluate("handleActivateSemester", context)();
     assert.equal(calls.length, 1);
   });
   const compiled = ts.transpileModule(source, {

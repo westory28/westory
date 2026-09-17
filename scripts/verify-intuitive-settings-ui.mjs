@@ -39,7 +39,7 @@ try {
     await page
       .getByRole("heading", { name: "기본 환경 설정", exact: true })
       .waitFor();
-    await page.getByLabel("학년도", { exact: true }).waitFor();
+    await page.getByLabel("운영 전환 학년도", { exact: true }).waitFor();
     await page.waitForFunction(
       () =>
         !document.querySelector("#root")?.textContent?.includes("확인 중..."),
@@ -88,6 +88,24 @@ try {
     );
     await page.keyboard.press("Enter");
     await noOverflow();
+    const activate = page.getByRole("button", {
+      name: "운영 학기 전환",
+      exact: true,
+    });
+    await activate.scrollIntoViewIfNeeded();
+    const activationBounds = await activate.boundingBox();
+    const memoBounds = await page
+      .getByRole("button", { name: "패치 메모 열기", exact: true })
+      .boundingBox();
+    assert.ok(activationBounds && memoBounds);
+    assert.equal(
+      activationBounds.x < memoBounds.x + memoBounds.width &&
+        activationBounds.x + activationBounds.width > memoBounds.x &&
+        activationBounds.y < memoBounds.y + memoBounds.height &&
+        activationBounds.y + activationBounds.height > memoBounds.y,
+      false,
+      "Semester activation overlaps memo",
+    );
     await page.screenshot({
       path: join(screenshots, `settings-${width}.png`),
       fullPage: true,
@@ -182,11 +200,12 @@ try {
     .getByRole("alert")
     .filter({ hasText: "변경 결과를 확인하지 못했습니다" })
     .waitFor();
-  await page.waitForFunction(
-    () =>
-      JSON.parse(document.getElementById("fixture-state").textContent)
-        .accessWrites === 1,
-  );
+  await page.waitForFunction(() => {
+    const current = JSON.parse(
+      document.getElementById("fixture-state").textContent,
+    );
+    return current.accessWrites === 1 && current.closed === false;
+  });
   assert.equal((await state()).closed, false);
   assert.equal(
     await page

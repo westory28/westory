@@ -10,10 +10,18 @@ import type {
   WisHallOfFameSnapshot,
 } from "../types";
 
-type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
+type ConfigLike =
+  | Pick<SystemConfig, "year" | "semester" | "teacherViewOnly">
+  | null
+  | undefined;
 type JsonRecord = Record<string, unknown>;
 
-export type WisProvenance = "CURRENT" | "PREPARING" | "ARCHIVE" | "LEGACY";
+export type WisProvenance =
+  | "CURRENT"
+  | "PREPARING"
+  | "ARCHIVE"
+  | "LEGACY"
+  | "EXPLICIT";
 export type WisEconomyStatus =
   | "ACTIVE_INITIALIZING"
   | "ACTIVE_OPEN"
@@ -256,11 +264,13 @@ export const getWisEconomyState = async (input: {
     );
   }
   const source =
-    input.provenance === "LEGACY"
-      ? "LEGACY"
-      : requestedSemesterId !== activeSemesterId
-        ? "ARCHIVE"
-        : input.provenance || "CURRENT";
+    input.audience === "teacher" && input.config?.teacherViewOnly
+      ? "EXPLICIT"
+      : input.provenance === "LEGACY"
+        ? "LEGACY"
+        : requestedSemesterId !== activeSemesterId
+          ? "ARCHIVE"
+          : input.provenance || "CURRENT";
   try {
     const callable = await getHttpsCallable<
       {
@@ -292,7 +302,7 @@ export const getWisEconomyState = async (input: {
     return {
       semesterId: string(raw.semesterId) || requestedSemesterId,
       manifestRevision: number(raw.manifestRevision),
-      provenance: ["ARCHIVE", "LEGACY", "PREPARING"].includes(
+      provenance: ["ARCHIVE", "LEGACY", "PREPARING", "EXPLICIT"].includes(
         string(raw.provenance),
       )
         ? (string(raw.provenance) as WisProvenance)

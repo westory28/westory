@@ -461,7 +461,7 @@ const main = async () => {
       delegatedNonLearningDirectCallDenials += 1;
     };
     const assertLessonReaderLearningPreserved = async (source) => {
-      if (source === "ARCHIVE") {
+      if (["ARCHIVE", "EXPLICIT"].includes(source)) {
         await expectReason(
           queryFunction(lessonReader, "getW8DomainState", {
             domain: "LEARNING", audience: "teacher", semesterId: sourceSemesterId, source,
@@ -840,7 +840,7 @@ const main = async () => {
         archiveAttendanceRecord,
       );
       for (const archiveReadCase of archiveReadCases) {
-        if (archiveReadCase.domain === "LEARNING") {
+        if (archiveReadCase.domain === "LEARNING" && archiveReadCase.source !== "EXPLICIT") {
           await expectReason(
             queryFunction(teacher, "getW8DomainState", {
               domain: archiveReadCase.domain, audience: "teacher",
@@ -863,11 +863,14 @@ const main = async () => {
           })
         ).data;
         assert.equal(archivedState.readOnly, true);
+        assert.equal(archivedState.writeCount, 0);
+        const shouldReadLearning = archiveReadCase.source === "EXPLICIT"
+          && ["LEARNING", "DASHBOARD"].includes(archiveReadCase.domain);
         assert.equal(
           archivedState.contents.some(
             (content) => content.contentId === archiveSourceContentId,
           ),
-          false,
+          shouldReadLearning,
         );
         assert.equal(
           archivedState.contents.every(
@@ -880,7 +883,10 @@ const main = async () => {
         assert.equal(archivedState.enrollment, null);
         assert.equal(archivedState.enrollmentId, null);
         assert.deepEqual(archivedState.progress, []);
-        assert.deepEqual(archivedState.dashboard.upcomingLearning, []);
+        assert.deepEqual(
+          archivedState.dashboard.upcomingLearning,
+          shouldReadLearning ? archivedState.contents : [],
+        );
         assert.deepEqual(archivedState.exemptions, []);
         assert.deepEqual(archivedState.exemptionRequests, []);
         assert.deepEqual(archivedState.sessions, []);
@@ -904,6 +910,14 @@ const main = async () => {
         for (const domain of ["ATTENDANCE", "DASHBOARD"])
           await assertLessonReaderNonLearningDenied(source, domain);
       await assertLessonReaderLearningPreserved("ARCHIVE");
+      await assertLessonReaderLearningPreserved("EXPLICIT");
+      for (const domain of ["LEARNING", "DASHBOARD", "ATTENDANCE"])
+        await expectReason(
+          queryFunction(student, "getW8DomainState", {
+            domain, audience: "student", semesterId: sourceSemesterId, source: "EXPLICIT",
+          }),
+          "W8_STUDENT_CURRENT_SEMESTER_REQUIRED",
+        );
       archiveLifecycleStatusesVerified.add(expectedLifecycleStatus);
     };
     const preparedSourceArchive = (
@@ -961,9 +975,9 @@ const main = async () => {
       sourceSnapshotBeforeArchive,
     );
     await verifyArchiveTeacherPrivacy("ARCHIVED");
-    assert.equal(archivePrivacyReadCount, 8);
-    assert.equal(archivedLearningDirectCallDenials, 4);
-    assert.equal(delegatedArchivedLearningDenials, 2);
+    assert.equal(archivePrivacyReadCount, 10);
+    assert.equal(archivedLearningDirectCallDenials, 2);
+    assert.equal(delegatedArchivedLearningDenials, 4);
     assert.equal(delegatedLearningPreservationCases, 1);
     assert.deepEqual([...archiveLifecycleStatusesVerified].sort(), [
       "ARCHIVED",

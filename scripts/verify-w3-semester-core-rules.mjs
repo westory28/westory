@@ -28,6 +28,10 @@ const adminUid = "w3-admin";
 const adminEmail = "westoria28@gmail.com";
 const teacherUid = "w3-teacher";
 const teacherEmail = "w3-teacher@yongshin-ms.ms.kr";
+const currentScopeOnlyUsers = [
+  { uid: "w3-student", email: "w3-student@yongshin-ms.ms.kr", role: "student" },
+  { uid: "w3-staff", email: "w3-staff@yongshin-ms.ms.kr", role: "staff" },
+];
 const fixtureAdminUid = "w10p-visual-admin";
 const fixtureAdminEmail = "w10p-visual-admin@yongshin-ms.ms.kr";
 const fixtureWrongUid = "w10p-visual-admin-wrong-uid";
@@ -82,6 +86,25 @@ try {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await Promise.all([
+      ...currentScopeOnlyUsers.flatMap(({ uid, email, role }) => [
+        setDoc(doc(db, "users", uid), { email, role }),
+        setDoc(
+          doc(db, "application_sessions", uid, "sessions", String(authTime)),
+          {
+            uid,
+            email,
+            authTime,
+            status: "active",
+            schemaVersion: 2,
+            authorityGeneration: "w1r2-2026-08-09",
+            protocolVersion: 2,
+            sessionRevision: "a".repeat(64),
+            authorityModeAtOpen: "ENFORCE",
+            generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+            highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+          },
+        ),
+      ]),
       setDoc(
         doc(db, "application_sessions", adminUid, "sessions", String(authTime)),
         {
@@ -226,6 +249,9 @@ try {
       ...Object.entries(semesterMetaSeed).map(([collectionName, data]) =>
         setDoc(semesterMetaRef(db, collectionName), data),
       ),
+      setDoc(semesterMetaRef(db, "grading_plans", "scope-probe"), {
+        title: "학기 조회 권한 검증",
+      }),
       setDoc(
         doc(db, "years", "2027", "semesters", "2", "exam_config", "final_exam"),
         { title: "W10P 정기시험" },
@@ -322,6 +348,14 @@ try {
     .authenticatedContext(fixtureAdminUid, fixtureAdminClaims)
     .firestore();
   const unauthenticatedDb = testEnv.unauthenticatedContext().firestore();
+  const currentScopeOnlyDbs = currentScopeOnlyUsers.map(({ uid, email }) =>
+    testEnv.authenticatedContext(uid, { email, auth_time: authTime }).firestore(),
+  );
+  const instructionalRef = (db) => semesterMetaRef(db, "grading_plans", "scope-probe");
+  // A valid student/staff session can read this content while its scope is active.
+  for (const db of [adminDb, teacherDb, ...currentScopeOnlyDbs]) {
+    await assertSucceeds(getDoc(instructionalRef(db)));
+  }
   const fixtureAdminExamRef = doc(
     fixtureAdminDb,
     "years",
@@ -575,8 +609,24 @@ try {
       deleteDoc(doc(db, "site_settings", "semester_active")),
     ]);
   });
-  // Removing authoritative scope cannot leave instructional metadata readable.
-  await assertFails(getDoc(semesterMetaRef(adminDb, "grading_plans_meta")));
+  // Teacher archive browsing is independent of active-semester authority;
+  // each resource's existing role restriction and all write fences still apply.
+  await assertSucceeds(getDoc(semesterMetaRef(adminDb, "grading_plans_meta")));
+  await assertFails(getDoc(semesterMetaRef(teacherDb, "grading_plans_meta")));
+  for (const db of [adminDb, teacherDb]) {
+    await assertSucceeds(getDoc(instructionalRef(db)));
+  }
+  for (const db of [...currentScopeOnlyDbs, unauthenticatedDb]) {
+    await assertFails(getDoc(instructionalRef(db)));
+    await assertFails(getDoc(semesterMetaRef(db, "grading_plans_meta")));
+  }
+  for (const db of [adminDb, teacherDb, ...currentScopeOnlyDbs, unauthenticatedDb]) {
+    await assertFails(updateDoc(instructionalRef(db), { directClientMutation: true }));
+    await assertFails(deleteDoc(instructionalRef(db)));
+    await assertFails(setDoc(semesterMetaRef(db, "grading_plans", "archive-write"), {
+      title: "조회 상태에서 직접 생성 금지",
+    }));
+  }
   await assertFails(setDoc(configRef, { year: "2027", semester: "2" }));
   await assertFails(
     setDoc(activePointerRef, {
@@ -635,6 +685,9 @@ try {
         "LEGACY_SEMESTER_META_VISUAL_FIXTURE_TRUST_FACTORS_ENFORCED",
         "LEGACY_SEMESTER_META_DIRECT_WRITES_DENIED",
         "ORDINARY_TEACHER_EXAM_AND_HISTORY_READS_WITH_WRITES_DENIED",
+        "ADMIN_METADATA_AND_TEACHER_CONTENT_READ_WITHOUT_ACTIVE_POINTER",
+        "STUDENT_STAFF_ANONYMOUS_CONTENT_READ_DENIED_WITHOUT_ACTIVE_POINTER",
+        "ARCHIVE_CONTENT_DIRECT_CREATE_UPDATE_DELETE_DENIED",
         "UNMIGRATED_SETTINGS_WRITE_RETAINED_AND_W7_POINT_POLICY_WRITE_RETIRED",
       ],
     }),

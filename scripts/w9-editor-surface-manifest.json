@@ -204,8 +204,8 @@
       "id": "SET01",
       "disposition": "COMMAND_ONLY",
       "file": "src/pages/teacher/components/SettingsGeneral.tsx",
-      "anchors": ["handleSave"],
-      "rationale": "일반 설정은 짧은 운영 설정 command입니다.",
+      "anchors": ["handleActivateSemester", "prepareSemesterForActivation"],
+      "rationale": "운영 학기 전환은 명시적 확인 후 기존 학기 준비 검증과 Gateway command로 실행합니다.",
       "completion": "COMMAND_BOUNDARY",
       "adapter": "command-gateway"
     },

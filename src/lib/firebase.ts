@@ -18,6 +18,7 @@ import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import type { Functions, HttpsCallable } from "firebase/functions";
 import type { FirebaseStorage } from "firebase/storage";
 import { markLoginPerf } from "./loginPerf";
+import { assertTeacherSemesterCallable } from "./teacherSemesterView";
 import {
   assertFirebaseEnvironmentBoundary,
   getLocalFirebaseConfig,
@@ -364,6 +365,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
   name: string,
   options?: { expectedUid: string },
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
+  assertTeacherSemesterCallable(name, auth.currentUser?.uid || "");
   const [functions, { httpsCallable }] = await Promise.all([
     getFirebaseFunctions(name),
     import("firebase/functions"),
@@ -379,9 +381,11 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
   };
 
   const invokeWithSession = async (data?: RequestData) => {
+    assertTeacherSemesterCallable(name, auth.currentUser?.uid || "");
     const { prepareCallableDataWithApplicationSession } =
       await import("./applicationSession");
     assertExpectedOwner();
+    assertTeacherSemesterCallable(name, auth.currentUser?.uid || "");
     const prepared = prepareCallableDataWithApplicationSession(name, data);
     return sessionQueryCache.run(
       name,
@@ -395,9 +399,11 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
   const callableWithSession = (async (data?: RequestData) =>
     invokeWithSession(data)) as HttpsCallable<RequestData, ResponseData>;
   callableWithSession.stream = async (data, options) => {
+    assertTeacherSemesterCallable(name, auth.currentUser?.uid || "");
     const { prepareCallableDataWithApplicationSession } =
       await import("./applicationSession");
     assertExpectedOwner();
+    assertTeacherSemesterCallable(name, auth.currentUser?.uid || "");
     const prepared = prepareCallableDataWithApplicationSession(name, data);
     return callable.stream(prepared as RequestData, options);
   };
@@ -407,6 +413,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
     return callableWithSession;
 
   const guardedCallable = (async (data?: RequestData) => {
+    assertTeacherSemesterCallable(name, auth.currentUser?.uid || "");
     const invocationUid = auth.currentUser?.uid || "";
     return runHighRiskCommandSingleFlight(
       name,
@@ -433,6 +440,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
     );
   }) as HttpsCallable<RequestData, ResponseData>;
   guardedCallable.stream = async (data, options) => {
+    assertTeacherSemesterCallable(name, auth.currentUser?.uid || "");
     if (requiresStepUp) await requestStepUpReauthentication(name);
     return callableWithSession.stream(data, options);
   };

@@ -2560,8 +2560,10 @@ const createArchiveEnrollmentQueryCore = ({
       highRisk: false,
     });
     const query = normalizeStateQuery(request.data || {});
+    const explicitTeacherRead = query.source === "EXPLICIT"
+      && (actor.isAdmin || actor.profile?.role === "teacher");
     const canManageStudents =
-      actor.isAdmin ||
+      actor.isAdmin || explicitTeacherRead ||
       (actor.profile?.teacherPortalEnabled === true &&
         Array.isArray(actor.profile?.staffPermissions) &&
         actor.profile.staffPermissions.includes("student_list_read"));
@@ -2576,7 +2578,7 @@ const createArchiveEnrollmentQueryCore = ({
     }
     if (
       ["PREPARING", "ARCHIVE", "LEGACY", "EXPLICIT"].includes(query.source) &&
-      !actor.isAdmin
+      !actor.isAdmin && !explicitTeacherRead
     ) {
       fail(
         "permission-denied",
@@ -2654,7 +2656,7 @@ const createArchiveEnrollmentQueryCore = ({
       const manifestSnapshot = await transaction.get(
         manifestPathFor(semesterId),
       );
-      if (!manifestSnapshot.exists) {
+      if (!manifestSnapshot.exists && !explicitTeacherRead) {
         fail(
           "not-found",
           "Semester Manifest does not exist.",
@@ -2662,7 +2664,7 @@ const createArchiveEnrollmentQueryCore = ({
           { semesterId },
         );
       }
-      const manifest = manifestSnapshot.data || {};
+      const manifest = manifestSnapshot.data || { status: "ARCHIVED", provenance: "EXPLICIT" };
       const allowedStatuses =
         query.source === "CURRENT"
           ? ["ACTIVE", "CLOSING"]
@@ -2713,9 +2715,9 @@ const createArchiveEnrollmentQueryCore = ({
           );
       return {
         semesterId,
-        provenance: manifest.provenance,
+        provenance: explicitTeacherRead ? "EXPLICIT" : manifest.provenance,
         source: `${SEMESTER_ENROLLMENT_COLLECTION}:${semesterId}`,
-        readOnly: ["CLOSING", "CLOSED", "ARCHIVED"].includes(manifest.status),
+        readOnly: explicitTeacherRead || ["CLOSING", "CLOSED", "ARCHIVED"].includes(manifest.status),
         schemaVersion: W4_SCHEMA_VERSION,
         legacy: false,
         status: manifest.status,

@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from "react";
+import { assertTeacherSemesterWritable } from "../../../lib/teacherSemesterView";
 import {
   collection,
   deleteDoc,
@@ -11,6 +11,7 @@ import {
   setDoc,
   Timestamp,
 } from "firebase/firestore";
+import React, { useEffect, useId, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -243,7 +244,8 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
         data.noticeOrder = -Date.now();
       }
 
-      await setDoc(docRef, data, { merge: true });
+      await (assertTeacherSemesterWritable(),
+      setDoc(docRef, data, { merge: true }));
       if (imageFile && noticeData?.imageStoragePath) {
         void tryDeleteNoticeImage(noticeData.imageStoragePath);
       }
@@ -281,7 +283,8 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
     setLoading(true);
     try {
       const path = `years/${config.year}/semesters/${config.semester}/notices`;
-      await deleteDoc(doc(db, path, noticeData.id));
+      await (assertTeacherSemesterWritable(),
+      deleteDoc(doc(db, path, noticeData.id)));
       void tryDeleteNoticeImage(noticeData.imageStoragePath);
       onSave();
       showToast({

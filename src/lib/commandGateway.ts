@@ -1,4 +1,5 @@
 import { auth, getHttpsCallable } from "./firebase";
+import { assertTeacherSemesterWritable } from "./teacherSemesterView";
 import { requiresCommandGatewayStepUpReauthentication } from "./highRiskCommands";
 import {
   createHighRiskCommandFlightKey,
@@ -2095,6 +2096,7 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
   CommandGatewayResponse<W2CommandResults[CommandType], CommandType>
 > => {
   const ownerUid = options.expectedUid ?? auth.currentUser?.uid ?? "";
+  assertTeacherSemesterWritable(ownerUid);
   if (!ownerUid) {
     throw new StepUpReauthError(
       "UNAUTHENTICATED",

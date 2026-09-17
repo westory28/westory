@@ -317,6 +317,7 @@ const actualClientBridge = (owner) => {
     "src/lib/stepUpReauth.ts",
     "src/lib/highRiskCommands.ts",
     "src/lib/semesterScope.ts",
+    "src/lib/teacherSemesterView.ts",
   ];
   const code = {};
   for (const path of paths) {
@@ -375,6 +376,9 @@ const actualClientBridge = (owner) => {
     "../../functions/routineContentWrites.json": JSON.parse(readFileSync(new URL("../functions/routineContentWrites.json", import.meta.url), "utf8")),
   });
   const semester = load("src/lib/semesterScope.ts");
+  const teacherView = load("src/lib/teacherSemesterView.ts", {}, {
+    window: { location: { hash: "#/teacher/history-dictionary" } },
+  });
   const firebase = {
     auth: owner.auth,
     db: owner.db,
@@ -429,6 +433,7 @@ const actualClientBridge = (owner) => {
         "./firebase": firebase,
         "./highRiskCommands": highRisk,
         "./stepUpReauth": stepUp,
+        "./teacherSemesterView": teacherView,
       },
       { window: { localStorage } },
     );

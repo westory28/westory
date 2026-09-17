@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { assertTeacherSemesterWritable } from "../../../lib/teacherSemesterView";
 import {
   collection,
   deleteDoc,
@@ -7,6 +7,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -277,14 +278,15 @@ const EventModal: React.FC<EventModalProps> = ({
 
     setCategoryDrafts(resolvedVisibleItems);
 
-    await setDoc(
+    await (assertTeacherSemesterWritable(),
+    setDoc(
       doc(db, "site_settings", "schedule_categories"),
       {
         items,
         updatedAt: serverTimestamp(),
       },
       { merge: true },
-    );
+    ));
     return true;
   };
 
@@ -355,7 +357,8 @@ const EventModal: React.FC<EventModalProps> = ({
 
       if (!eventData) data.createdAt = serverTimestamp();
 
-      await setDoc(docRef, data, { merge: true });
+      await (assertTeacherSemesterWritable(),
+      setDoc(docRef, data, { merge: true }));
       onSave();
       showToast({
         tone: "success",
@@ -381,7 +384,8 @@ const EventModal: React.FC<EventModalProps> = ({
     setLoading(true);
     try {
       const path = `years/${config.year}/semesters/${config.semester}/calendar`;
-      await deleteDoc(doc(db, path, eventData.id));
+      await (assertTeacherSemesterWritable(),
+      deleteDoc(doc(db, path, eventData.id)));
       onSave();
       showToast({
         tone: "success",

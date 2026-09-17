@@ -10,6 +10,11 @@ const calls = [];
 let mode = "lost";
 const failure = code => Object.assign(Error(code), { code: `functions/${code}` });
 const source = transformSync(readFileSync("src/lib/commandGateway.ts", "utf8"), { loader: "ts", format: "cjs" }).code;
+const teacherViewModule = { exports: {} };
+runInNewContext(transformSync(readFileSync("src/lib/teacherSemesterView.ts", "utf8"), { loader: "ts", format: "cjs" }).code, {
+  module: teacherViewModule, exports: teacherViewModule.exports,
+  window: { location: { hash: "#/teacher/settings" } },
+});
 const load = () => {
   const module = { exports: {} };
   runInNewContext(source, {
@@ -28,7 +33,7 @@ const load = () => {
         if (mode === "conflict" || mode === "deleted") throw Object.assign(failure(mode === "conflict" ? "aborted" : "not-found"), { details: { reason: mode === "conflict" ? "PATCH_NOTE_CONFLICT" : "PATCH_NOTE_NOT_FOUND" } });
         return { data: { status: "SUCCEEDED", commandId: request.commandId, result: { noteId: "one-note" } } };
       },
-    } : name === "./highRiskCommands" ? { requiresCommandGatewayStepUpReauthentication: () => false } : {
+    } : name === "./teacherSemesterView" ? teacherViewModule.exports : name === "./highRiskCommands" ? { requiresCommandGatewayStepUpReauthentication: () => false } : {
       createHighRiskCommandFlightKey: (...args) => JSON.stringify(args),
       createHighRiskCommandLockName: value => value,
       runHighRiskCommandSingleFlight: async (_type, _payload, run) => run(),

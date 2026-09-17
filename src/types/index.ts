@@ -1,6 +1,8 @@
 export interface SystemConfig {
   year: string;
   semester: string;
+  /** Teacher-local read scope only; never persisted to system settings. */
+  teacherViewOnly?: boolean;
   showQuiz: boolean;
   showScore: boolean;
   showLesson: boolean;

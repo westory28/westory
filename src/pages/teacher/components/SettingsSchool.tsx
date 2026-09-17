@@ -1,6 +1,7 @@
+import { assertTeacherSemesterWritable } from "../../../lib/teacherSemesterView";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { PageDataLoading } from "../../../components/common/LoadingState";
@@ -120,12 +121,13 @@ const SettingsSchool: React.FC = () => {
     try {
       await requestStepUpReauthentication("updateSchoolSettings");
       const docRef = doc(db, "site_settings", "school_config");
-      await setDoc(docRef, {
+      await (assertTeacherSemesterWritable(),
+      setDoc(docRef, {
         schoolLevel,
         grades,
         classes,
         updatedAt: serverTimestamp(),
-      });
+      }));
       showToast({
         tone: "success",
         title: "학교급·학년·학급 설정이 저장되었습니다.",

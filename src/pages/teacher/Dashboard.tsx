@@ -413,7 +413,8 @@ const TeacherDashboard: React.FC = () => {
       source: "CURRENT",
     });
     const classRequest = getArchiveEnrollmentState({
-      source: "CURRENT",
+      source: config?.teacherViewOnly ? "EXPLICIT" : "CURRENT",
+      ...(config?.teacherViewOnly ? { semesterId: `${year}-${semester}` } : {}),
       callSite: "TeacherDashboard.scheduleClasses",
     });
     await Promise.allSettled([

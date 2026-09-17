@@ -46,6 +46,7 @@ jobs:
       - run: node scripts/verify-korean-public-holidays.mjs
       - run: node scripts/verify-schedule-label-colors.mjs
       - run: node scripts/verify-semester-date-defaults.mjs
+      - run: node scripts/verify-teacher-semester-view.mjs
       - run: node scripts/verify-semester-archive-view.mjs
       - run: node scripts/verify-admin-semester-content-ui.mjs
       - run: node scripts/verify-lesson-semester-isolation.mjs
@@ -81,6 +82,7 @@ jobs:
       - run: npm run verify:w5-shell-safety
       - run: npm run format:check
       - run: npm run build
+      - run: node scripts/verify-teacher-semester-view-browser.mjs
       - run: node scripts/verify-student-dashboard-loading.mjs --browser
       - run: node scripts/verify-reauth-maintenance-integration.mjs
 

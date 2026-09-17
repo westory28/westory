@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
+import { useAppDialog } from "../../../components/common/AppDialogProvider";
+import { useTeacherSemester } from "../../../contexts/TeacherSemesterContext";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { PageDataLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -275,6 +277,16 @@ const getSemesterCommandErrorMessage = (error: unknown) => {
 const SettingsGeneral: React.FC = () => {
   const { refreshConfig, currentUser } = useAuth();
   const { showToast } = useAppToast();
+  const { confirm } = useAppDialog();
+  const {
+    viewConfig,
+    isViewingPast,
+    semesters: viewSemesters,
+    loading: viewSemestersLoading,
+    error: viewSemestersError,
+    selectSemester,
+    refreshSemesters,
+  } = useTeacherSemester();
   const [config, setConfig] = useState<SettingsConfigState>(DEFAULT_CONFIG);
   const [activeSemester, setActiveSemester] = useState<SemesterSelectionState>({
     year: DEFAULT_YEAR,
@@ -299,7 +311,7 @@ const SettingsGeneral: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [semesterStateError, setSemesterStateError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [creating, setCreating] = useState(false);
   const [coreSnapshot, setCoreSnapshot] = useState<SemesterCoreSnapshot>({
     manifests: [],
@@ -596,6 +608,21 @@ const SettingsGeneral: React.FC = () => {
     ];
   }, [availableSemesters, config.year, config.semester]);
 
+  const viewYear = String(viewConfig?.year || activeSemester.year);
+  const viewSemester = String(viewConfig?.semester || activeSemester.semester);
+  const viewYearOptions = Array.from(
+    new Set([...viewSemesters.map((item) => item.year), viewYear]),
+  ).sort((a, b) => Number(b) - Number(a));
+  const viewSemesterOptions = viewSemesters.filter(
+    (item) => item.year === viewYear,
+  );
+  const changeViewYear = (year: string) => {
+    const options = viewSemesters.filter((item) => item.year === year);
+    const selected =
+      options.find((item) => item.semester === viewSemester) || options[0];
+    if (selected) selectSemester(selected);
+  };
+
   const activeSemesterLabel = buildSemesterLabel(
     activeSemester.year,
     activeSemester.semester,
@@ -787,6 +814,7 @@ const SettingsGeneral: React.FC = () => {
   };
 
   const handleCreateSemester = async () => {
+    if (isViewingPast || creating || switching) return;
     const year = String(newSemester.year || "").trim();
     const semester = normalizeSemester(newSemester.semester);
 
@@ -806,7 +834,7 @@ const SettingsGeneral: React.FC = () => {
     ) {
       setConfig((prev) => ({ ...prev, year, semester }));
       setFeedback(
-        `${buildSemesterLabel(year, semester)}는 이미 등록되어 있습니다. 위 설정 저장을 누르면 준비 상태를 확인합니다.`,
+        `${buildSemesterLabel(year, semester)}는 이미 등록되어 있습니다. 운영 학기 전환 전에 준비 상태를 확인해 주세요.`,
       );
       return;
     }
@@ -871,8 +899,9 @@ const SettingsGeneral: React.FC = () => {
         year,
         semester,
       });
+      await refreshSemesters();
       setFeedback(
-        `${buildSemesterLabel(year, semester)}를 만들었습니다. 준비 현황을 확인한 뒤 설정을 저장해 주세요.`,
+        `${buildSemesterLabel(year, semester)}를 만들었습니다. 준비 현황을 확인한 뒤 운영 학기 전환을 진행해 주세요.`,
       );
     } catch (error) {
       console.error("Failed to create semester:", error);
@@ -883,6 +912,7 @@ const SettingsGeneral: React.FC = () => {
             year,
             semester,
           });
+          await refreshSemesters();
           setFeedback(
             `${buildSemesterLabel(year, semester)}는 등록되었습니다. 준비 상태를 다시 확인해 주세요.`,
           );
@@ -905,17 +935,25 @@ const SettingsGeneral: React.FC = () => {
     }
   };
 
-  const handleSave = async () => {
-    if (!hasPendingSemesterSwitch || saving) return;
-    setSaving(true);
+  const handleActivateSemester = async () => {
+    if (isViewingPast || switching || creating || !hasPendingSemesterSwitch)
+      return;
+    setSwitching(true);
+    const year = normalizeYear(config.year);
+    const semester = normalizeSemester(config.semester);
     let semesterSwitchConfirmed = false;
     try {
-      const year = normalizeYear(config.year);
-      const semester = normalizeSemester(config.semester);
+      const confirmed = await confirm({
+        title: "운영 학기를 전환하시겠습니까?",
+        message: `${activeSemesterLabel}에서 ${selectedSemesterLabel}로 전환합니다. 모든 학생과 교사의 운영 학기가 바뀝니다.`,
+        confirmLabel: "운영 학기 전환",
+        cancelLabel: "취소",
+        tone: "warning",
+      });
+      if (!confirmed) return;
       if (semesterStateError) throw new Error(semesterStateError);
       const latestSnapshot = await prepareSemesterForActivation(year, semester);
       semesterSwitchConfirmed = true;
-
       invalidateSiteSettingDocCache("config");
       await refreshConfig();
       notifySystemConfigUpdated();
@@ -924,37 +962,44 @@ const SettingsGeneral: React.FC = () => {
         { year, semester },
         { year, semester },
       );
+      await refreshSemesters();
+      selectSemester(null);
       showToast({
         tone: "success",
-        title: `${buildSemesterLabel(year, semester)}로 전환했습니다.`,
+        title: "운영 학기가 전환되었습니다.",
+        message: `모든 학생과 교사에게 ${buildSemesterLabel(year, semester)}가 적용됩니다.`,
       });
     } catch (error) {
-      console.error("Failed to save config:", error);
-      // A command may succeed before its response is lost. Read current state;
-      // never replay the activation automatically or overwrite sitemap flags.
-      invalidateSiteSettingDocCache("config");
+      console.error("Failed to activate semester:", error);
+      // A failed response can follow a completed activation. Refresh the
+      // authoritative state before offering another switch.
       try {
+        const latestSnapshot = await loadSemesterCoreSnapshot();
+        invalidateSiteSettingDocCache("config");
         await refreshConfig();
         notifySystemConfigUpdated();
-        const latestSnapshot = await loadSemesterCoreSnapshot();
         syncSemesterPresentation(latestSnapshot, activeSemester, {
-          year: normalizeYear(config.year),
-          semester: normalizeSemester(config.semester),
+          year,
+          semester,
         });
+        await refreshSemesters();
       } catch (refreshError) {
-        console.error("Failed to refresh settings after save:", refreshError);
+        console.error(
+          "Failed to refresh semester after activation:",
+          refreshError,
+        );
       }
       showToast({
         tone: "error",
         title: semesterSwitchConfirmed
           ? "학기는 전환했지만 화면을 새로고침하지 못했습니다."
-          : "학기 전환을 완료하지 못했습니다.",
+          : "운영 학기 전환을 완료하지 못했습니다.",
         message: semesterSwitchConfirmed
-          ? "잠시 후 화면을 새로고침해 주세요."
+          ? "서버에는 반영되었습니다. 현재 운영 학기를 다시 확인해 주세요."
           : getSemesterCommandErrorMessage(error),
       });
     } finally {
-      setSaving(false);
+      setSwitching(false);
     }
   };
 
@@ -965,7 +1010,105 @@ const SettingsGeneral: React.FC = () => {
       </div>
 
       <div className="space-y-6">
-        <SettingsStudentAccess />
+        <section
+          className="border-b border-gray-100 pb-6"
+          aria-labelledby="teacher-view-heading"
+        >
+          <h4
+            id="teacher-view-heading"
+            className="mb-4 text-sm font-bold text-gray-900"
+          >
+            교사 자료 조회
+          </h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label
+                htmlFor="teacher-view-year"
+                className="mb-2 block text-sm font-bold text-gray-700"
+              >
+                조회 학년도
+              </label>
+              <select
+                id="teacher-view-year"
+                value={viewYear}
+                onChange={(event) => changeViewYear(event.target.value)}
+                disabled={viewSemestersLoading || creating || switching}
+                className="w-full rounded-lg border border-gray-300 bg-white p-3 font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+              >
+                {viewYearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}학년도
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="teacher-view-semester"
+                className="mb-2 block text-sm font-bold text-gray-700"
+              >
+                조회 학기
+              </label>
+              <select
+                id="teacher-view-semester"
+                value={viewSemester}
+                onChange={(event) =>
+                  selectSemester({
+                    year: viewYear,
+                    semester: event.target.value,
+                  })
+                }
+                disabled={viewSemestersLoading || creating || switching}
+                className="w-full rounded-lg border border-gray-300 bg-white p-3 font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+              >
+                {(viewSemesterOptions.length
+                  ? viewSemesterOptions
+                  : [{ year: viewYear, semester: viewSemester }]
+                ).map((item) => (
+                  <option
+                    key={`${item.year}-${item.semester}`}
+                    value={item.semester}
+                  >
+                    {item.semester}학기
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {viewSemestersError && (
+            <div role="alert" className="mt-3 text-xs font-bold text-red-700">
+              {viewSemestersError}
+              <button
+                type="button"
+                onClick={() => void refreshSemesters()}
+                disabled={viewSemestersLoading}
+                className="ml-3 underline disabled:opacity-60"
+              >
+                다시 불러오기
+              </button>
+            </div>
+          )}
+          {isViewingPast && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <span className="text-xs font-bold text-amber-800">
+                읽기 전용
+              </span>
+              <button
+                type="button"
+                onClick={() => selectSemester(null)}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-800 hover:bg-gray-50"
+              >
+                현재 운영 학기로 돌아가기
+              </button>
+            </div>
+          )}
+        </section>
+        <fieldset
+          disabled={isViewingPast || switching || creating}
+          className="min-w-0"
+        >
+          <SettingsStudentAccess />
+        </fieldset>
         {loading && <PageDataLoading />}
         {loadError && (
           <div
@@ -983,7 +1126,10 @@ const SettingsGeneral: React.FC = () => {
           </div>
         )}
         {!loading && !loadError && (
-          <>
+          <fieldset
+            disabled={isViewingPast || switching || creating}
+            className="min-w-0 space-y-6"
+          >
             <div className="flex flex-wrap items-center gap-3">
               <h4 className="text-sm font-bold text-gray-700">
                 현재 운영 학기
@@ -999,12 +1145,12 @@ const SettingsGeneral: React.FC = () => {
                   htmlFor="settings-year"
                   className="block text-sm font-bold text-gray-700 mb-2"
                 >
-                  학년도
+                  운영 전환 학년도
                 </label>
                 <select
                   id="settings-year"
                   name="year"
-                  aria-label="학년도"
+                  aria-label="운영 전환 학년도"
                   value={config.year}
                   onChange={handleChange}
                   className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
@@ -1021,12 +1167,12 @@ const SettingsGeneral: React.FC = () => {
                   htmlFor="settings-semester"
                   className="block text-sm font-bold text-gray-700 mb-2"
                 >
-                  학기
+                  운영 전환 학기
                 </label>
                 <select
                   id="settings-semester"
                   name="semester"
-                  aria-label="학기"
+                  aria-label="운영 전환 학기"
                   value={config.semester}
                   onChange={handleChange}
                   className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
@@ -1044,7 +1190,7 @@ const SettingsGeneral: React.FC = () => {
             </div>
             {hasPendingSemesterSwitch && (
               <p className="text-sm font-bold text-amber-800" role="status">
-                저장 시 {selectedSemesterLabel}로 전환됩니다.
+                전환 대상: {selectedSemesterLabel}
               </p>
             )}
 
@@ -1180,17 +1326,22 @@ const SettingsGeneral: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-4 text-right">
+            <div className="pt-4 pr-16 text-right sm:pr-20">
               <button
                 type="button"
-                onClick={handleSave}
-                disabled={saving || !hasPendingSemesterSwitch}
+                onClick={handleActivateSemester}
+                disabled={
+                  isViewingPast ||
+                  switching ||
+                  creating ||
+                  !hasPendingSemesterSwitch
+                }
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95"
               >
-                {saving ? "저장 중..." : "설정 저장"}
+                {switching ? "전환 중..." : "운영 학기 전환"}
               </button>
             </div>
-          </>
+          </fieldset>
         )}
       </div>
     </div>

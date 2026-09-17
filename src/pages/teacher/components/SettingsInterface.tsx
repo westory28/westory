@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { assertTeacherSemesterWritable } from "../../../lib/teacherSemesterView";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { PageDataLoading } from "../../../components/common/LoadingState";
@@ -416,7 +417,8 @@ const SettingsInterface: React.FC = () => {
     setSavingInterface(true);
     try {
       await requestStepUpReauthentication("updateInterfaceSettings");
-      await setDoc(
+      await (assertTeacherSemesterWritable(),
+      setDoc(
         doc(db, "site_settings", "interface_config"),
         {
           mainEmoji:
@@ -431,7 +433,7 @@ const SettingsInterface: React.FC = () => {
           updatedAt: serverTimestamp(),
         },
         { merge: true },
-      );
+      ));
       setConfig((prev) => ({ ...prev, instagramUrl }));
       invalidateSiteSettingDocCache("interface_config");
       await refreshInterfaceConfig();
@@ -457,10 +459,11 @@ const SettingsInterface: React.FC = () => {
     try {
       await requestStepUpReauthentication("updateMenuSettings");
       const normalized = sanitizeMenuConfig(menuConfig);
-      await setDoc(doc(db, "site_settings", "menu_config"), {
+      await (assertTeacherSemesterWritable(),
+      setDoc(doc(db, "site_settings", "menu_config"), {
         ...normalized,
         updatedAt: serverTimestamp(),
-      });
+      }));
       setMenuConfig(normalized);
       invalidateSiteSettingDocCache("menu_config");
       notifyMenuConfigUpdated();

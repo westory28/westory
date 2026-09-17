@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { assertTeacherSemesterWritable } from "../../../lib/teacherSemesterView";
 import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -61,7 +62,7 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
     if (!config) return;
     setSaving(true);
     try {
-      const batch = writeBatch(db);
+      const batch = (assertTeacherSemesterWritable(), writeBatch(db));
       const path = `years/${config.year}/semesters/${config.semester}/notices`;
       items.forEach((item, index) => {
         batch.set(
@@ -70,7 +71,7 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
           { merge: true },
         );
       });
-      await batch.commit();
+      await (assertTeacherSemesterWritable(), batch.commit());
       showToast({
         tone: "success",
         title: "알림장 순서가 저장되었습니다.",

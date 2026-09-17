@@ -1835,6 +1835,19 @@ const buildLegacyRosterPayload = ({ rosterId = "legacy-roster-one", records = nu
   assert.equal(legacy.records.length, 0);
   assert.equal(store.writeCount, writesBeforeArchiveQuery);
 
+  const archivedManifest = store.documents.get(manifestPath);
+  store.documents.delete(manifestPath);
+  const unregisteredHistoricalGrades = await queryCore.getGradeEvidenceState(requestFor(teacherUid, {
+    audience: "teacher", semesterId, recordId, scoreKind: "performance", provenance: "EXPLICIT",
+  }));
+  assert.equal(unregisteredHistoricalGrades.detail.record.recordId, recordId);
+  assert.equal(unregisteredHistoricalGrades.readOnly, true);
+  assert.equal(store.writeCount, writesBeforeArchiveQuery);
+  await assertReason(queryCore.getGradeEvidenceState(requestFor(studentUid, {
+    audience: "student", semesterId, recordId, scoreKind: "performance", provenance: "EXPLICIT",
+  })), "GRADE_STUDENT_CURRENT_SEMESTER_REQUIRED");
+  store.documents.set(manifestPath, archivedManifest);
+
   store.documents.set(`${grade.GRADE_LEGACY_ISSUE_COLLECTION}/issue-one`, {
     semesterId,
     status: "OPEN",

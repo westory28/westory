@@ -1,3 +1,4 @@
+import { loadTeacherSemesterRoster } from "../../lib/teacherSemesterRoster";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -967,13 +968,12 @@ const ManageHistoryClassroom: React.FC = () => {
           setSelectedMapId((prev) => prev || loadedMaps[0].id);
         }
 
-        const studentSnap = await getDocs(collection(db, "users"));
-        const loadedStudents = studentSnap.docs
-          .map((docSnap) => {
-            const data = docSnap.data() as Record<string, unknown>;
+        const roster = await loadTeacherSemesterRoster(config);
+        const loadedStudents = roster
+          .map((data) => {
             if (data.role === "teacher") return null;
             return {
-              uid: docSnap.id,
+              uid: data.uid,
               name: String(data.name || "").trim(),
               grade: String(data.grade || "").trim(),
               className: String(data.class || "").trim(),

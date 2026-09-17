@@ -3044,6 +3044,8 @@ const createWisQueryCore = ({
         ));
     const canManage =
       isAdmin || (portalEligible && permissions.includes("point_manage"));
+    const explicitTeacherRead = query.audience === "teacher" && query.source === "EXPLICIT"
+      && (isAdmin || role === "teacher") && canRead;
     if (query.audience === "teacher" && !canRead)
       fail(
         "permission-denied",
@@ -3075,7 +3077,7 @@ const createWisQueryCore = ({
           : "PREPARING";
       const provenance = query.source === "EXPLICIT" ? "EXPLICIT" : lifecycle;
       const readOnly =
-        manifestStatus !== "ACTIVE" ||
+        query.source === "EXPLICIT" || manifestStatus !== "ACTIVE" ||
         (query.audience === "student" &&
           economySnapshot.data?.status !== "ACTIVE_OPEN") ||
         (query.audience === "teacher" && !canManage);
@@ -3089,7 +3091,7 @@ const createWisQueryCore = ({
           reason: "PREPARING_STUDENT_DATA_HIDDEN",
         });
       }
-      if (!manifest.exists || !economySnapshot.exists) {
+      if (!economySnapshot.exists || (!manifest.exists && !explicitTeacherRead)) {
         return emptyWisState({
           query,
           provenance,
@@ -3134,6 +3136,10 @@ const createWisQueryCore = ({
         reason: "",
         writeCount: 0,
       };
+
+      const projectRoster = explicitTeacherRead
+        ? async (_transaction, accounts) => accounts
+        : projectTeacherRosterFields;
 
       if (query.audience === "student") {
         const studentBase = {
@@ -3347,7 +3353,7 @@ const createWisQueryCore = ({
           },
         );
         const accounts = (
-          await projectTeacherRosterFields(
+          await projectRoster(
             transaction,
             page.rows,
             query.semesterId,
@@ -3396,7 +3402,7 @@ const createWisQueryCore = ({
                 }).then((rows) => rows.map((row) => row.data))
               : [],
           rawAccount
-            ? projectTeacherRosterFields(transaction, [rawAccount], query.semesterId)
+            ? projectRoster(transaction, [rawAccount], query.semesterId)
             : [],
         ]);
         const filteredLedger = ledgerEntry
@@ -3453,7 +3459,7 @@ const createWisQueryCore = ({
           ? await transaction.getAll(accountIds.map(accountPath))
           : [];
         const accounts = (
-          await projectTeacherRosterFields(
+          await projectRoster(
             transaction,
             accountSnapshots
               .filter((snapshot) => snapshot.exists)
@@ -3499,7 +3505,7 @@ const createWisQueryCore = ({
         };
       }
       if (query.projection === "hall-of-fame") {
-        const projectedAccounts = await projectTeacherRosterFields(
+        const projectedAccounts = await projectRoster(
           transaction,
           await queryHallAccounts(transaction, query.semesterId),
           query.semesterId,

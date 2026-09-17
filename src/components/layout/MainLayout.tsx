@@ -4,6 +4,7 @@ import {
   useAppToast,
 } from "../common/AppToastProvider";
 import Header from "../common/Header";
+import TeacherSemesterBanner from "../common/TeacherSemesterBanner";
 import Footer from "../common/Footer";
 import { PageLoading } from "../common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
@@ -202,6 +203,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <Header />
+      {isTeacherRoute && <TeacherSemesterBanner />}
       {studentEnhancementsReady && (
         <React.Suspense fallback={null}>
           <StudentRankPromotionController />
@@ -220,7 +222,15 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           isStudentQuizRunRoute ? "flex flex-col" : ""
         }`}
       >
-        {children}
+        <React.Fragment
+          key={
+            isTeacherRoute
+              ? `${currentUser?.uid}/${config?.year}/${config?.semester}/${Boolean(config?.teacherViewOnly)}`
+              : "student"
+          }
+        >
+          {children}
+        </React.Fragment>
       </main>
       <Footer />
     </div>

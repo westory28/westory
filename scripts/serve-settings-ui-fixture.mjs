@@ -22,6 +22,12 @@ const admin = scenario !== 'teacher';
 export const ADMIN_EMAIL = 'westoria28@gmail.com';
 export const auth = {currentUser:{uid:'synthetic-admin',email:admin?ADMIN_EMAIL:'synthetic-teacher@example.test'}};
 export const db = {};
+const viewSemesters=[{year:'2026',semester:'1'},{year:'2026',semester:'2'},{year:'2027',semester:'1'}];
+export const useTeacherSemester=()=>{
+ const [selection,setSelection]=React.useState(null);
+ return {viewConfig:selection||{year:'2026',semester:'2'},isViewingPast:!!selection,semesters:viewSemesters,loading:false,error:'',selectSemester:value=>setSelection(value?.year==='2026'&&value?.semester==='2'?null:value),refreshSemesters:async()=>{}};
+};
+export const useAppDialog=()=>({confirm:async()=>false});
 const config = {year:'2026',semester:'2',showQuiz:true,showScore:true,showLesson:true};
 const refresh = async()=>{};
 const userData = {role:'teacher',name:'합성 교사'};
@@ -86,7 +92,7 @@ export default function Stub(){return null;}
           api.onResolve(
             {
               filter:
-                /AuthContext$|\/firebase$|firebase\/firestore$|\/permissions$|\/AppToastProvider$|\/LoadingState$|\/stepUpReauth$|\/siteSettings$|\/appEvents$|\/semesterCore$|\/commandGateway$|\/teacherPatchNotes$|\/Settings(?:School|Privacy|Access|Notifications|ArchiveEnrollment)$/,
+                /TeacherSemesterContext$|AppDialogProvider$|AuthContext$|\/firebase$|firebase\/firestore$|\/permissions$|\/AppToastProvider$|\/LoadingState$|\/stepUpReauth$|\/siteSettings$|\/appEvents$|\/semesterCore$|\/commandGateway$|\/teacherPatchNotes$|\/Settings(?:School|Privacy|Access|Notifications|ArchiveEnrollment)$/,
             },
             () => ({ path: mock }),
           );

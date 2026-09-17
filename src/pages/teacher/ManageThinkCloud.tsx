@@ -106,7 +106,9 @@ const ManageThinkCloudContent: React.FC = () => {
   const [options, setOptions] = useState<ThinkCloudOptions>(
     DEFAULT_THINK_CLOUD_OPTIONS,
   );
-  const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+  const canEdit =
+    !config?.teacherViewOnly &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
   const selectedReadKey = `${String(config?.year || "")}-${String(
     config?.semester || "",
   )}:${selectedSessionId}`;

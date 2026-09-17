@@ -1,6 +1,7 @@
+import { TeacherSemesterProvider } from "./contexts/TeacherSemesterContext";
 import React, { Suspense } from "react";
 import {
-  HashRouter as Router,
+  HashRouter,
   Routes,
   Route,
   Navigate,
@@ -245,6 +246,12 @@ const NotFound: React.FC = () => {
     </main>
   );
 };
+
+const Router: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <HashRouter>
+    <TeacherSemesterProvider>{children}</TeacherSemesterProvider>
+  </HashRouter>
+);
 
 const App: React.FC = () => {
   return (

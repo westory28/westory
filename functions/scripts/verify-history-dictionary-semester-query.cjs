@@ -30,8 +30,11 @@ const db = {
   },
 };
 runInNewContext(source.slice(start, end), {
-  exports: exportsUnderTest, db, HttpsError, REGION: "test", onCall: (_, handler) => handler,
-  assertHistoryDictionaryManager: async request => { if (request.auth?.uid !== "teacher") throw new HttpsError("permission-denied", "teacher required"); },
+  exports: exportsUnderTest, db, HttpsError, REGION: "test", ADMIN_EMAIL: "westoria28@gmail.com", onCall: (_, handler) => handler,
+  assertHistoryDictionaryManager: async request => {
+    if (!["teacher", "staff"].includes(request.auth?.uid)) throw new HttpsError("permission-denied", "teacher required");
+    return { email: `${request.auth.uid}@yongshin-ms.ms.kr`, profile: { role: request.auth.uid } };
+  },
   assertYearSemester: value => value,
   sanitizeHistoryDictionaryText: value => String(value || ""),
   sanitizeHistoryDictionaryWord: value => String(value || ""),
@@ -47,7 +50,9 @@ runInNewContext(source.slice(start, end), {
   assert.equal(queries, 1);
   await assert.rejects(exportsUnderTest.listStudentHistoryDictionaryWordsForTeacher({ ...request, auth: { uid: "student" } }), error => error.code === "permission-denied");
   scope = "2027-1";
-  await assert.rejects(exportsUnderTest.listStudentHistoryDictionaryWordsForTeacher(request), error => error.code === "permission-denied");
-  assert.equal(queries, 1, "Denied scope cannot reach the word query");
-  console.log(JSON.stringify({ passed: true, checks: 6, queries: 1, userCollectionScans: 0, globalFallbackRows: 0, writes: 0 }));
+  const historical = await exportsUnderTest.listStudentHistoryDictionaryWordsForTeacher(request);
+  assert.equal(historical.words[0].word, "현재", "teachers may inspect the requested semester after the shared semester changes");
+  await assert.rejects(exportsUnderTest.listStudentHistoryDictionaryWordsForTeacher({ ...request, auth: { uid: "staff" } }), error => error.code === "permission-denied");
+  assert.equal(queries, 2, "Denied delegated scope cannot reach the word query");
+  console.log(JSON.stringify({ passed: true, checks: 7, queries: 2, userCollectionScans: 0, globalFallbackRows: 0, writes: 0 }));
 })().catch(error => { console.error(error); process.exitCode = 1; });
