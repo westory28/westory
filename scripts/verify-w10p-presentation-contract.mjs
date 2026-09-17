@@ -90,6 +90,8 @@ const approvedSecurityStateClassExceptions = new Map([
     "md:order-2", "md:col-span-2", "md:row-span-1", "border-yellow-200", "bg-[#fffbeb]",
     "text-amber-800/70", "order-2", "md:order-1", "md:col-span-3", "md:row-span-2",
     "order-3", "md:order-3",
+    // 2026-09-17: the explicit 96rem dashboard width replaces Tailwind's 80rem cap.
+    "max-w-7xl",
   ])],
   // User requested arrow-free, keyboard-accessible top dropdowns and a floating
   // active submenu. Exact replacements remain checked by the shell verifier.
@@ -110,6 +112,20 @@ const approvedSecurityStateClassExceptions = new Map([
       "duration-150",
       "group-hover:visible",
       "invisible",
+      // 2026-09-17: the requested persistent header timer and single notification
+      // replace the hidden desktop controls and duplicate mobile status cards.
+      "lg:block",
+      "md:gap-2",
+      "bg-stone-100",
+      "border-stone-200",
+      "mobile-menu-btn-badge",
+      "mobile-menu-status",
+      "mobile-menu-status-card",
+      "mobile-menu-status-copy",
+      "mobile-menu-status-label",
+      "mobile-menu-notification",
+      "mobile-menu-time-card",
+      "mobile-menu-status-icon",
     ]),
   ],
   // 77791cd: keep the result dialog above the worksheet's floating controls.
@@ -117,6 +133,27 @@ const approvedSecurityStateClassExceptions = new Map([
     "src/pages/student/history-classroom/HistoryClassroomRunner.tsx",
     new Set(["z-[120]"]),
   ],
+  // 2026-09-17: user retired the duplicate student visibility cards and explanatory
+  // readiness panels, replacing the latter with a full-width, closed accordion.
+  ["src/pages/teacher/components/SettingsGeneral.tsx", new Set([
+    "max-w-3xl", "mt-1", "border-blue-100", "bg-blue-50", "bg-white/80",
+    "font-extrabold", "text-blue-900", "font-semibold", "gap-2", "px-2",
+    "py-0.5", "text-[11px]", "bg-white/70", "bg-white/20", "text-[10px]",
+    "bg-amber-100", "text-amber-700", "items-start", "fa-exclamation-triangle",
+    "mt-0.5", "flex-col", "md:flex-row", "md:items-start", "md:justify-between",
+    "leading-5", "md:text-right", "space-y-2", "md:items-end", "pt-6", "mb-4",
+    "space-y-3", "w-10", "h-10", "bg-blue-100", "text-blue-600", "justify-center",
+    "fa-gamepad", "w-5", "h-5", "bg-green-100", "text-green-600", "fa-chart-bar",
+    "bg-purple-100", "text-purple-600", "fa-book-reader", "text-left", "flex-1",
+    "space-y-1.5",
+  ])],
+  // The sitemap save action now uses the existing blue action style and a shared
+  // offset above the patch button; the unrequested instructions were removed.
+  ["src/pages/teacher/components/SettingsInterface.tsx", new Set([
+    "pb-24", "border-blue-100", "text-blue-700", "fa-info-circle", "mr-1",
+    "bottom-4", "right-4", "sm:bottom-6", "sm:right-6", "bg-indigo-600",
+    "hover:bg-indigo-700", "disabled:bg-indigo-300", "shadow-xl",
+  ])],
   // 95c60f7: prevent the teacher's search/filter row overflowing at laptop widths.
   [
     "src/pages/teacher/ManageHistoryClassroom.tsx",
@@ -276,6 +313,25 @@ assert.doesNotMatch(
   read("src/components/common/Header.tsx"),
   /fa-chevron-down/u,
 );
+// The requested shared header controls must stay visible outside the mobile menu.
+// Interactive countdown, refresh, expiry and viewport coverage runs separately in
+// verify-session-display-consistency.mjs; this precheck pins the replacement markup.
+const headerSource = read("src/components/common/Header.tsx");
+const headerStyle = read("src/components/common/Header.css");
+assert.match(headerSource, /import "\.\/Header\.css";/u);
+assert.equal((headerSource.match(/<NotificationBell\b/gu) || []).length, 1,
+  "Both portals must share one notification control rather than duplicate mobile mounts");
+assert.match(headerSource, /<NotificationBell className="ws-header-notification" \/>/u);
+assert.match(headerSource, /\{isSessionEnforced && \(\s*<div className="ws-header-session">[\s\S]*?\{formatCountdown\(remainingSeconds\)\}[\s\S]*?onClick=\{\(\) => extendSession\(\{ force: true \}\)\}[\s\S]*?className="ws-header-session-refresh[^"]*"[\s\S]*?aria-label="접속 시간 60분으로 연장"[\s\S]*?fa-redo-alt/u,
+  "The shared header must retain the countdown and explicit 60-minute refresh action");
+assert.doesNotMatch(headerSource, /mobile-menu-(?:status|notification|time-card)/u,
+  "The retired mobile status cards must not duplicate the persistent header controls");
+assert.match(headerStyle, /\.ws-header-session\s*\{\s*display:\s*inline-flex;/u);
+assert.match(headerStyle, /\.ws-header-notification\s*\{\s*display:\s*block;/u);
+assert.match(headerStyle, /\.ws-header-session-refresh,[\s\S]*?min-width:\s*calc\(var\(--space-10\) \+ var\(--space-1\)\);[\s\S]*?min-height:\s*calc\(var\(--space-10\) \+ var\(--space-1\)\);/u,
+  "Header touch controls must retain their 44px minimum targets");
+assert.match(headerStyle, /@media \(max-width: 1023px\)[\s\S]*?\.ws-header-session\s*\{/u,
+  "The shared timer must retain its compact mobile presentation");
 assert.match(
   read("src/pages/student/history-classroom/HistoryClassroomRunner.tsx"),
   /z-\[150\][\s\S]*?aria-labelledby="history-classroom-result-title"/u,
@@ -358,6 +414,9 @@ const studentArchive = read("src/pages/student/StudentArchiveOverview.tsx");
 const studentMyPage = read("src/pages/student/MyPage.tsx");
 const schedule = read("src/pages/teacher/ManageSchedule.tsx");
 const settings = read("src/pages/teacher/Settings.tsx");
+const generalSettings = read("src/pages/teacher/components/SettingsGeneral.tsx");
+const interfaceSettings = read("src/pages/teacher/components/SettingsInterface.tsx");
+const appStyle = read("src/assets/index.css");
 const permissions = read("src/lib/permissions.ts");
 const semesterCutoverServer = read("functions/semesterCutover.js");
 const visualParityContract = JSON.parse(
@@ -399,6 +458,24 @@ assert.match(
 );
 assert.match(style, /font-family:\s*'Noto Sans KR',\s*sans-serif/u);
 assert.doesNotMatch(style, /\.ws-app-shell\b|\.ws-context-sidebar\b/u);
+
+// Keep the replacements required by the 2026-09-17 UI request alongside the
+// narrowly retired token exceptions. Real geometry is covered by the UI fixtures.
+assert.match(style, /--ws-teacher-dashboard-max:\s*96rem;/u);
+assert.match(appStyle, /\.teacher-dashboard-container\s*\{\s*max-width:\s*min\(var\(--ws-teacher-dashboard-max\), calc\(100vw - 2rem\)\);/u);
+assert.doesNotMatch(teacherDashboard, /\bmax-w-7xl\b/u);
+assert.match(appStyle, /@media \(min-width: 1024px\)\s*\{\s*\.teacher-dashboard-grid\s*\{\s*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 2fr\);/u);
+assert.doesNotMatch(settings, /setActiveTab\("(?:student-access|archive-records)"\)|<SettingsStudentAccess\b|<SettingsArchiveRecords\b/u);
+assert.match(generalSettings, /<SettingsStudentAccess\s*\/>/u);
+assert.doesNotMatch(generalSettings, /학생 메뉴 표시 제어|\bshow(?:Lesson|Quiz|Score)\b|executeWestoryCommand\("updateOperationalSettings"/u);
+const readinessAccordion = generalSettings.match(/<details\b[^>]*>[\s\S]*?<\/details>/u)?.[0];
+assert.ok(readinessAccordion, "Semester readiness must remain in a native accordion");
+assert.doesNotMatch(readinessAccordion.match(/^<details\b[^>]*>/u)[0], /\bopen(?:\s|=|>)/u,
+  "Semester readiness must stay collapsed by default");
+assert.match(readinessAccordion, /className="group w-full /u);
+assert.match(readinessAccordion, /<summary\b[\s\S]*?학기 준비 현황[\s\S]*?<\/summary>[\s\S]*?items: readiness\.requiredItems[\s\S]*?items: readiness\.advisoryItems/u);
+assert.match(interfaceSettings, /className="teacher-floating-action-above-patch fixed left-4 z-40 flex justify-end sm:left-auto"[\s\S]*?onClick=\{\(\) => void saveMenuConfig\(\)\}[\s\S]*?bg-blue-600 hover:bg-blue-700[\s\S]*?사이트맵 저장/u);
+assert.match(appStyle, /\.teacher-floating-action-above-patch\s*\{[\s\S]*?bottom:\s*calc\(\s*env\(safe-area-inset-bottom, 0px\) \+ var\(--space-16\) \+ var\(--space-10\)/u);
 
 for (const label of [
   "학습",
