@@ -13,6 +13,7 @@ const sourcePaths = [
   "src/lib/highRiskCommands.ts",
   "src/lib/semesterScope.ts",
   "src/lib/sessionQueryCache.ts",
+  "src/lib/teacherSemesterView.ts",
   "src/lib/firebase.ts",
 ];
 const sources = Object.fromEntries(sourcePaths.map(path => [path, readFileSync(path, "utf8")]));
@@ -90,6 +91,9 @@ const fixture = ({ storage = new Map(), uid = "student-a" } = {}) => {
     "../../functions/routineContentWrites.json": JSON.parse(readFileSync("functions/routineContentWrites.json", "utf8")),
   });
   const semester = load(code["src/lib/semesterScope.ts"]);
+  const teacherView = load(code["src/lib/teacherSemesterView.ts"], {}, {
+    window: { location: { hash: "#/student/lesson" } },
+  });
   stepUp.registerStepUpReauthHandler(async name => {
     state.stepUps.push(name);
     await waitAt("step-up", name);
@@ -159,7 +163,7 @@ const fixture = ({ storage = new Map(), uid = "student-a" } = {}) => {
             return request;
           } };
         },
-        ...stepUp, ...highRisk,
+        ...stepUp, ...highRisk, ...teacherView,
       });
       return actualFactory.getHttpsCallable(name, options);
     },
@@ -175,6 +179,7 @@ const fixture = ({ storage = new Map(), uid = "student-a" } = {}) => {
   const reload = () => {
     state.gateway = load(code["src/lib/commandGateway.ts"], {
       "./firebase": firebase, "./highRiskCommands": highRisk, "./stepUpReauth": stepUp,
+      "./teacherSemesterView": teacherView,
     }, { window: storageWindow });
     state.api = load(code["src/lib/lessonAnswers.ts"], {
       "./firebase": firebase, "./commandGateway": state.gateway, "./semesterScope": semester,

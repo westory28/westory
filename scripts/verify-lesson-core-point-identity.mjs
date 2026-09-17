@@ -27,6 +27,10 @@ const cacheCode = transformSync(
   readFileSync("src/lib/sessionQueryCache.ts", "utf8"),
   { loader: "ts", format: "cjs" },
 ).code;
+const teacherViewCode = transformSync(
+  readFileSync("src/lib/teacherSemesterView.ts", "utf8"),
+  { loader: "ts", format: "cjs" },
+).code;
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const deferred = () => {
   let resolve, reject;
@@ -59,6 +63,12 @@ const fixture = () => {
   };
   const factoryModule = { exports: {} };
   const cacheModule = { exports: {} };
+  const teacherViewModule = { exports: {} };
+  runInNewContext(teacherViewCode, {
+    module: teacherViewModule,
+    exports: teacherViewModule.exports,
+    window: { location: { hash: "#/student/lesson" } },
+  });
   runInNewContext(cacheCode, {
     module: cacheModule,
     exports: cacheModule.exports,
@@ -74,6 +84,7 @@ const fixture = () => {
     module: factoryModule,
     exports: factoryModule.exports,
     auth: state.auth,
+    ...teacherViewModule.exports,
     sessionQueryCache: cacheModule.exports.createSessionQueryCache(),
     getFirebaseFunctions: async () => {
       state.entered.push("factory");
