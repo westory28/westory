@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "currentWave": "W11",
-  "approvedEntryCount": 153,
+  "approvedEntryCount": 152,
   "entries": [
     {
       "id": "DW-247",
@@ -143,7 +143,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "b76b454abedbca1b3d3d31a4"
+      "callGraphHash": "5d4ba178d2d95ef1f9f4aa76"
     },
     {
       "id": "DW-006",
@@ -208,7 +208,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "80a5f82c3462eb30ff4370bd"
+      "callGraphHash": "01987a0c19233fee8a90d33f"
     },
     {
       "id": "DW-008",
@@ -1357,26 +1357,6 @@
       "callGraphHash": "39d038b5c4a9565b3b7f4349"
     },
     {
-      "id": "DW-159",
-      "file": "src/pages/teacher/components/SettingsGeneral.tsx",
-      "function": "handleSave",
-      "symbolId": "src/pages/teacher/components/SettingsGeneral.tsx::handleSave#1",
-      "boundary": "GATEWAY",
-      "api": "westory#executeWestoryCommand",
-      "callable": "updateOperationalSettings",
-      "triggers": [
-        "USER_EVENT"
-      ],
-      "reason": "W3 운영 설정 명시적 command gateway 호출",
-      "introducedWave": "W3",
-      "migrationWave": "PERMANENT",
-      "expiresAfterWave": "PERMANENT",
-      "owner": "W3 Semester Core",
-      "testOwner": "W3 command gateway",
-      "rootCount": 1,
-      "callGraphHash": "0455714c0b48a3f5681ae2bb"
-    },
-    {
       "id": "DW-110",
       "file": "src/pages/teacher/components/SettingsInterface.tsx",
       "function": "saveInterfaceConfig",
@@ -1394,7 +1374,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "24b622df2314661836bc71c6"
+      "callGraphHash": "b815d2749a13f4fb8b6f96a8"
     },
     {
       "id": "DW-111",
@@ -1414,7 +1394,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "2626aaac1fe30e8a08fd0c1d"
+      "callGraphHash": "d2308a409f667caa7926d907"
     },
     {
       "id": "DW-113",

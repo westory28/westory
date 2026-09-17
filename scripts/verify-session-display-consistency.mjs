@@ -479,6 +479,26 @@ if (process.argv.includes("--serve-only")) {
           checks++;
         }
       }
+      await load("OBSERVE_ONLY", "student", "/student/score");
+      const studentSubmenu = page.locator(".ws-student-desktop-submenu");
+      assert.equal(
+        await studentSubmenu.locator("a").count(),
+        4,
+        "score submenu retains all four destinations",
+      );
+      assert.equal(
+        await studentSubmenu.isVisible(),
+        width >= 1024,
+        `${width}: student desktop submenu visibility follows the original breakpoint`,
+      );
+      for (const link of await studentSubmenu.locator("a").all()) {
+        assert.equal(
+          await link.isVisible(),
+          width >= 1024,
+          `${width}: student score submenu links have correct visibility`,
+        );
+      }
+      checks++;
       await load("ENFORCE");
       await page.evaluate(() => window.sessionDisplayFixture.seedLegacy(4));
       await page.evaluate(() =>

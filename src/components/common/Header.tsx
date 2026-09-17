@@ -1049,7 +1049,7 @@ const Header: React.FC<Record<string, unknown>> = () => {
       </header>
 
       {!isTeacherPortal && activeDesktopSubmenu && (
-        <div className="hidden lg:block">
+        <div className="ws-student-desktop-submenu">
           <div className={desktopSubmenuContainerClass}>
             <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
               {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {

@@ -1,4 +1,4 @@
-/* Keep the live controls independent of the legacy .hidden utility. */
+/* The later legacy .hidden rule overrides Tailwind responsive display rules. */
 .ws-app-header .header-container {
   max-width: var(--ws-workspace-max);
 }
@@ -42,6 +42,10 @@
   flex-shrink: 0;
 }
 
+.ws-student-desktop-submenu {
+  display: none;
+}
+
 .ws-mobile-account {
   display: flex;
   justify-content: space-between;
@@ -61,6 +65,10 @@
 }
 
 @media (min-width: 1024px) {
+  .ws-student-desktop-submenu {
+    display: block;
+  }
+
   .ws-app-header .mobile-menu-btn {
     display: none;
   }
