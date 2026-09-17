@@ -295,7 +295,8 @@ const ManagePointsScope: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const canRead = canReadPoints(userData, currentUser?.email);
-  const canManage = canManagePoints(userData, currentUser?.email);
+  const canManage =
+    !config?.teacherViewOnly && canManagePoints(userData, currentUser?.email);
 
   const [activeTab, setActiveTab] = useState<TeacherPointTab>(() => {
     const requested = searchParams.get("tab") as TeacherPointTab;

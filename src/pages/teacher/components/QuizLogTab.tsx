@@ -1,3 +1,4 @@
+import { loadTeacherSemesterRoster } from "../../../lib/teacherSemesterRoster";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
@@ -798,7 +799,7 @@ const QuizLogTab: React.FC = () => {
           getDocs(
             collection(db, getSemesterCollectionPath(config, "quiz_questions")),
           ),
-          getDocs(collection(db, "users")),
+          loadTeacherSemesterRoster(config),
         ]);
 
         if (!active) return;
@@ -833,11 +834,10 @@ const QuizLogTab: React.FC = () => {
         if (userSnap.status === "fulfilled") {
           setRosterLimited(false);
           setStudents(
-            userSnap.value.docs
-              .map((item) => {
-                const data = item.data() as any;
+            userSnap.value
+              .map((data) => {
                 return {
-                  uid: item.id,
+                  uid: data.uid,
                   grade: normalizeGrade(data.studentGrade || data.grade),
                   name:
                     toText(

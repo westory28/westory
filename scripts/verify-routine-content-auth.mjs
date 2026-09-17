@@ -10,7 +10,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const policy = JSON.parse(read("functions/routineContentWrites.json"));
 const compile = (source) => transformSync(source, { loader: "ts", format: "cjs" }).code;
 const sources = Object.fromEntries([
-  "highRiskCommands", "stepUpReauth", "commandGateway", "sessionQueryCache",
+  "highRiskCommands", "stepUpReauth", "commandGateway", "sessionQueryCache", "teacherSemesterView",
 ].map((name) => [name, compile(read(`src/lib/${name}.ts`))]));
 const firebaseSource = read("src/lib/firebase.ts");
 const factorySource = firebaseSource.slice(
@@ -48,6 +48,7 @@ const fixture = () => {
     prompts: [], calls: [], storage: new Map(), cancel: false, gate: null,
   };
   const risk = load(sources.highRiskCommands, { "../../functions/routineContentWrites.json": policy });
+  const view = load(sources.teacherSemesterView, {}, { window: { location: { hash: "#/teacher/settings" } } });
   const stepUp = load(sources.stepUpReauth);
   stepUp.registerStepUpReauthHandler(async (name) => {
     state.prompts.push(name);
@@ -55,7 +56,7 @@ const fixture = () => {
   });
   const cache = load(sources.sessionQueryCache, {}, { structuredClone }).createSessionQueryCache();
   const factory = load(factoryCode, {}, {
-    auth: state.auth, ...risk, ...stepUp, sessionQueryCache: cache,
+    auth: state.auth, ...risk, ...stepUp, ...view, sessionQueryCache: cache,
     getFirebaseFunctions: async () => ({}),
     loadFunctions: async () => ({ httpsCallable: (_functions, name) => {
       const callable = async (data) => {
@@ -74,12 +75,13 @@ const fixture = () => {
   const gateway = load(sources.commandGateway, {
     "./firebase": { auth: state.auth, ...factory },
     "./highRiskCommands": risk, "./stepUpReauth": stepUp,
+    "./teacherSemesterView": view,
   }, { window: { localStorage: {
     getItem: (key) => state.storage.get(key) ?? null,
     setItem: (key, value) => state.storage.set(key, value),
     removeItem: (key) => state.storage.delete(key),
   } } });
-  return { state, risk, gateway, factory };
+  return { state, risk, gateway, factory, view };
 };
 let checks = 0;
 assert.equal(new Set(policy.commands).size, policy.commands.length);
@@ -141,6 +143,22 @@ for (const name of ["deleteStudentData", "cleanupSourceArchiveAsset", "manageSch
   test.state.auth.currentUser = null;
   await assert.rejects(test.gateway.executeWestoryCommand("saveLessonTree", {}));
   assert.equal(test.state.calls.length, 0);
+  checks++;
+}
+{
+  const test = fixture();
+  const upload = await test.factory.getHttpsCallable("uploadLessonAssetContent");
+  test.view.setTeacherSemesterWriteScope({ uid: "teacher-a", readOnly: true });
+  await assert.rejects(test.gateway.executeWestoryCommand("activateSemester", {}), /조회만/);
+  await assert.rejects(test.gateway.executeWestoryCommand("saveLessonTree", {}), /조회만/);
+  await assert.rejects(upload({}), /조회만/);
+  await assert.rejects(upload.stream({}), /조회만/);
+  assert.equal(test.state.calls.length, 0);
+  assert.equal(test.state.prompts.length, 0);
+  assert.equal(test.state.storage.size, 0);
+  const read = await test.factory.getHttpsCallable("getTeacherSemesterOptions");
+  await read({});
+  assert.equal(test.state.calls.length, 1);
   checks++;
 }
 console.log(`Routine content client authentication: ${checks} checks passed (actual Gateway and callable wrappers; no network).`);

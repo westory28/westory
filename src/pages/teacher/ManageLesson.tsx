@@ -797,7 +797,9 @@ const ManageLesson: React.FC = () => {
     treeLoadedRef.current = false;
   }
   const [handoffAction, setHandoffAction] = useState("");
-  const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+  const canEdit =
+    !config?.teacherViewOnly &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
   const blockLegacyLessonMutationAsync = useCallback(
     async <T = never,>(..._ignored: unknown[]): Promise<T> => {
       setHandoffAction((current) => current || "수업 자료 변경 저장");

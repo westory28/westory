@@ -40,16 +40,19 @@ const ManageQuiz: React.FC = () => {
   const [settingsCategory, setSettingsCategory] = useState("diagnostic");
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
   const canRead = canReadQuizManagement(userData, currentUser?.email || "");
-  const canWrite = canWriteQuizManagement(userData, currentUser?.email || "");
+  const canWrite =
+    !config?.teacherViewOnly &&
+    canWriteQuizManagement(userData, currentUser?.email || "");
+  const canViewManagement = canWrite || Boolean(config?.teacherViewOnly);
   const isManageTab = activeTab === "manage";
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
     if (requestedTab === "log") setActiveTab("log");
     else if (requestedTab === "bank") setActiveTab("bank");
-    else setActiveTab(canWrite ? "manage" : "log");
+    else setActiveTab(canViewManagement ? "manage" : "log");
     setMobileTreeOpen(false);
-  }, [canWrite, searchParams]);
+  }, [canViewManagement, searchParams]);
 
   useEffect(() => {
     const loadTree = async () => {
@@ -91,7 +94,7 @@ const ManageQuiz: React.FC = () => {
         className={`w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-3 ${isManageTab ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "pb-8"}`}
       >
         <div className="flex border-b border-gray-200 mb-3 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
-          {canWrite && (
+          {canViewManagement && (
             <button
               onClick={() => setActiveTab("manage")}
               className={`shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "manage" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
@@ -111,7 +114,7 @@ const ManageQuiz: React.FC = () => {
           >
             문제 은행
           </button>
-          {canWrite && (
+          {canViewManagement && (
             <button
               type="button"
               onClick={() => navigate("/teacher/quiz/history-classroom")}
@@ -124,11 +127,13 @@ const ManageQuiz: React.FC = () => {
 
         {!canWrite && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-            읽기 전용 권한입니다. 문제 등록, 수정, 삭제는 관리자만 가능합니다.
+            {config?.teacherViewOnly
+              ? "이전 학기 자료를 조회하고 있습니다. 문제 등록, 수정, 삭제는 할 수 없습니다."
+              : "읽기 전용 권한입니다. 문제 등록, 수정, 삭제는 관리자만 가능합니다."}
           </div>
         )}
 
-        {canWrite && activeTab === "manage" && (
+        {canViewManagement && activeTab === "manage" && (
           <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden relative min-h-0">
             {mobileTreeOpen && (
               <button

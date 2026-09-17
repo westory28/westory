@@ -1348,7 +1348,7 @@ const run = async () => {
       provenance: "ARCHIVE",
     });
     tx.resetTransaction();
-    if (archiveObserverCase.domain === "LEARNING") {
+    if (archiveObserverCase.domain === "LEARNING" && archiveObserverCase.source !== "EXPLICIT") {
       await assert.rejects(() => queryCore.getW8DomainState({
         auth: { uid: "archive-observer", token: { email: "archive-observer@yongshin-ms.ms.kr" } },
         data: { domain: "LEARNING", audience: "teacher", semesterId: "2026-2", source: archiveObserverCase.source },
@@ -1374,7 +1374,7 @@ const run = async () => {
     assert.equal(archiveObserverState.enrollmentId, null);
     assert.equal(
       archiveObserverState.contents.length > 0,
-      false,
+      archiveObserverCase.source === "EXPLICIT" && ["LEARNING", "DASHBOARD"].includes(archiveObserverCase.domain),
     );
     assert.equal(
       archiveObserverState.contents.every(
@@ -1447,12 +1447,45 @@ const run = async () => {
     ["archive-admin", "westoria28@gmail.com"],
   ]) for (const source of ["ARCHIVE", "EXPLICIT"]) {
     tx.resetTransaction();
-    await assert.rejects(() => queryCore.getW8DomainState({
+    const read = () => queryCore.getW8DomainState({
       auth: { uid, token: { email } },
       data: { domain: "LEARNING", audience: "teacher", semesterId: "2026-2", source },
-    }), error => error.details?.reason === "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED");
-    assert.equal(tx.queryLog.length, 0);
+    });
+    if (source === "EXPLICIT" && uid !== "lesson-reader") {
+      const before = JSON.stringify([...tx.documents]);
+      const state = await read();
+      assert.equal(state.readOnly, true);
+      assert.equal(state.provenance, "EXPLICIT");
+      assert.ok(state.contents.length > 0);
+      assert.equal(state.writeCount, 0);
+      assert.equal(JSON.stringify([...tx.documents]), before);
+    } else {
+      await assert.rejects(read, error => error.details?.reason === "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED");
+      assert.equal(tx.queryLog.length, 0);
+    }
   }
+  tx.seed("years/2025/semesters/1/think_cloud_sessions/legacy-session", {
+    targetGrade: "3", targetClass: "9", status: "closed", title: "과거 생각 모아",
+  });
+  tx.seed("years/2025/semesters/1/think_cloud_sessions/legacy-session/responses/one", {
+    uid: "legacy-student", textRaw: "과거 응답",
+  });
+  const legacyRequest = {
+    auth: { uid: "archive-admin", token: { email: "westoria28@gmail.com" } },
+    data: { domain: "LEARNING", audience: "teacher", semesterId: "2025-1", source: "EXPLICIT", sessionId: "legacy-session" },
+  };
+  const beforeLegacyRead = JSON.stringify([...tx.documents]);
+  const legacyRead = await queryCore.getW8DomainState(legacyRequest);
+  assert.equal(legacyRead.thinkCloudSessions[0].id, "legacy-session");
+  assert.equal(legacyRead.thinkCloudResponses[0].textRaw, "과거 응답");
+  assert.equal(legacyRead.manifestRevision, 0);
+  assert.equal(legacyRead.readOnly, true);
+  assert.equal(legacyRead.writeCount, 0);
+  assert.equal(JSON.stringify([...tx.documents]), beforeLegacyRead, "legacy reads cannot synthesize manifests, classes, or change the current semester");
+  const deniedLegacyTeacher = await queryCore.getW8DomainState({
+    ...legacyRequest, auth: { uid: "archive-observer", token: { email: "archive-observer@yongshin-ms.ms.kr" } },
+  });
+  assert.deepEqual(deniedLegacyTeacher.thinkCloudResponses, [], "teacher class assignment restrictions remain in effect");
   const archiveDashboard = await queryCore.getW8DomainState({
     auth: { uid: "archive-admin", token: { email: "westoria28@gmail.com" } },
     data: { domain: "DASHBOARD", audience: "teacher", semesterId: "2026-2", source: "ARCHIVE" },
@@ -1486,7 +1519,9 @@ const run = async () => {
       parallelActorReadChecks: 7,
       parallelDashboardReadsBeforeRelease: startedReads.size,
       parallelDashboardResultUnchanged: true,
-      teacherArchivedLearningRouteDenials: 10,
+      teacherArchivedLearningRouteDenials: 6,
+      explicitTeacherArchivedLearningReads: 2,
+      explicitAdminLegacyThinkCloudRead: true,
       archivedDashboardLearningRows: 0,
       studentArchivedContentReadDenials: 4,
       commandTypes: Object.values(w8.W8_COMMAND_TYPES).length,

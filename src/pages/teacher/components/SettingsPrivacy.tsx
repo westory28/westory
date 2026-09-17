@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { assertTeacherSemesterWritable } from "../../../lib/teacherSemesterView";
 import {
   collection,
   doc,
@@ -9,6 +9,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -232,10 +233,11 @@ const SettingsPrivacy: React.FC = () => {
     setPrivacySaving(true);
     try {
       await requestStepUpReauthentication("updatePrivacySettings");
-      await setDoc(doc(db, "site_settings", "privacy"), {
+      await (assertTeacherSemesterWritable(),
+      setDoc(doc(db, "site_settings", "privacy"), {
         text: privacyText,
         updatedAt: serverTimestamp(),
-      });
+      }));
 
       if (notifyPrivacyChange) {
         try {

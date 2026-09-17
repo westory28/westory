@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
+import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { PageDataLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
+import { useTeacherSemester } from "../../../contexts/TeacherSemesterContext";
 import { notifySystemConfigUpdated } from "../../../lib/appEvents";
 import { executeWestoryCommand } from "../../../lib/commandGateway";
 import { auth, db } from "../../../lib/firebase";
@@ -340,6 +342,16 @@ const getSemesterCommandErrorMessage = (error: unknown) => {
 const SettingsGeneral: React.FC = () => {
   const { refreshConfig, currentUser } = useAuth();
   const { showToast } = useAppToast();
+  const { confirm } = useAppDialog();
+  const {
+    viewConfig,
+    isViewingPast,
+    semesters: viewSemesters,
+    loading: viewSemestersLoading,
+    error: viewSemestersError,
+    selectSemester,
+    refreshSemesters,
+  } = useTeacherSemester();
   const [config, setConfig] = useState<SettingsConfigState>(DEFAULT_CONFIG);
   const [activeSemester, setActiveSemester] = useState<SemesterSelectionState>({
     year: DEFAULT_YEAR,
@@ -365,6 +377,7 @@ const SettingsGeneral: React.FC = () => {
   const [loadError, setLoadError] = useState("");
   const [semesterStateError, setSemesterStateError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [creating, setCreating] = useState(false);
   const [coreSnapshot, setCoreSnapshot] = useState<SemesterCoreSnapshot>({
     manifests: [],
@@ -616,7 +629,7 @@ const SettingsGeneral: React.FC = () => {
           );
         } else if (!report) {
           setReadinessError(
-            "아직 준비 상태를 확인하지 않았습니다. 설정을 저장하기 전에 필수 항목을 확인해 주세요.",
+            "아직 준비 상태를 확인하지 않았습니다. 운영 학기를 전환하기 전에 필수 항목을 확인해 주세요.",
           );
         }
       })
@@ -666,6 +679,21 @@ const SettingsGeneral: React.FC = () => {
     ];
   }, [availableSemesters, config.year, config.semester]);
 
+  const viewYear = String(viewConfig?.year || activeSemester.year);
+  const viewSemester = String(viewConfig?.semester || activeSemester.semester);
+  const viewYearOptions = Array.from(
+    new Set([...viewSemesters.map((item) => item.year), viewYear]),
+  ).sort((a, b) => Number(b) - Number(a));
+  const viewSemesterOptions = viewSemesters.filter(
+    (item) => item.year === viewYear,
+  );
+  const changeViewYear = (year: string) => {
+    const options = viewSemesters.filter((item) => item.year === year);
+    const selected =
+      options.find((item) => item.semester === viewSemester) || options[0];
+    if (selected) selectSemester(selected);
+  };
+
   const activeSemesterLabel = buildSemesterLabel(
     activeSemester.year,
     activeSemester.semester,
@@ -710,7 +738,7 @@ const SettingsGeneral: React.FC = () => {
       : readiness.status === "danger"
         ? "핵심 준비 항목이 비어 있어 현재 학기 전환은 비권장입니다."
         : missingRequiredItems.length > 0
-          ? "필수 항목 일부가 비어 있어 저장은 가능하지만 전환 전 확인을 권장합니다."
+          ? "필수 항목 일부가 비어 있습니다. 운영 학기를 전환하기 전에 확인해 주세요."
           : "핵심 운영은 가능하지만 참고 항목이 일부 비어 있습니다."
     : "";
   const priorityActionItems = [
@@ -895,6 +923,7 @@ const SettingsGeneral: React.FC = () => {
   };
 
   const handleCreateSemester = async () => {
+    if (isViewingPast || creating || switching || saving) return;
     const year = String(newSemester.year || "").trim();
     const semester = normalizeSemester(newSemester.semester);
 
@@ -908,13 +937,12 @@ const SettingsGeneral: React.FC = () => {
     }
 
     if (
-      availableSemesters.some(
+      viewSemesters.some(
         (item) => item.year === year && item.semester === semester,
       )
     ) {
-      setConfig((prev) => ({ ...prev, year, semester }));
       setFeedback(
-        `${buildSemesterLabel(year, semester)}는 이미 등록되어 있습니다. 위 설정 저장을 누르면 준비 상태를 확인합니다.`,
+        `${buildSemesterLabel(year, semester)}는 이미 등록되어 있습니다. 기존 자료는 교사 자료 조회에서 선택해 주세요.`,
       );
       return;
     }
@@ -979,8 +1007,9 @@ const SettingsGeneral: React.FC = () => {
         year,
         semester,
       });
+      await refreshSemesters();
       setFeedback(
-        `${buildSemesterLabel(year, semester)}를 만들었습니다. 준비 현황을 확인한 뒤 설정을 저장해 주세요.`,
+        `${buildSemesterLabel(year, semester)}를 만들었습니다. 준비 현황을 확인한 뒤 운영 학기 전환을 진행해 주세요.`,
       );
     } catch (error) {
       console.error("Failed to create semester:", error);
@@ -991,6 +1020,7 @@ const SettingsGeneral: React.FC = () => {
             year,
             semester,
           });
+          await refreshSemesters();
           setFeedback(
             `${buildSemesterLabel(year, semester)}는 등록되었습니다. 준비 상태를 다시 확인해 주세요.`,
           );
@@ -1014,47 +1044,23 @@ const SettingsGeneral: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (isViewingPast || saving || switching || creating) return;
     setSaving(true);
     let operationalSettingsSaved = false;
-    let semesterSwitchConfirmed = !hasPendingSemesterSwitch;
     try {
-      const year = normalizeYear(config.year);
-      const semester = normalizeSemester(config.semester);
       await executeWestoryCommand("updateOperationalSettings", {
         showQuiz: config.showQuiz,
         showScore: config.showScore,
         showLesson: config.showLesson,
       });
       operationalSettingsSaved = true;
-
-      let latestSnapshot = coreSnapshot;
-      if (hasPendingSemesterSwitch) {
-        if (semesterStateError) {
-          throw new Error(semesterStateError);
-        }
-        latestSnapshot = await prepareSemesterForActivation(year, semester);
-        semesterSwitchConfirmed = true;
-      } else {
-        latestSnapshot = await loadSemesterCoreSnapshot();
-      }
-
       invalidateSiteSettingDocCache("config");
       await refreshConfig();
       notifySystemConfigUpdated();
-      syncSemesterPresentation(
-        latestSnapshot,
-        { year, semester },
-        {
-          year,
-          semester,
-        },
-      );
       showToast({
         tone: "success",
-        title: "기본 설정이 저장되었습니다.",
-        message: hasPendingSemesterSwitch
-          ? `${buildSemesterLabel(year, semester)} 기준으로 최신 설정을 반영했습니다.`
-          : "학생 메뉴 표시 기준에 최신 설정을 반영했습니다.",
+        title: "학생 메뉴 설정이 저장되었습니다.",
+        message: "운영 학기는 변경하지 않았습니다.",
       });
     } catch (error) {
       console.error("Failed to save config:", error);
@@ -1077,19 +1083,89 @@ const SettingsGeneral: React.FC = () => {
       }
       showToast({
         tone: "error",
-        title:
-          operationalSettingsSaved && !semesterSwitchConfirmed
-            ? "메뉴 설정은 저장했지만 학기 전환 결과를 확인하지 못했습니다."
-            : operationalSettingsSaved
-              ? "설정은 반영했지만 화면을 새로고침하지 못했습니다."
-              : "기본 설정 저장에 실패했습니다.",
-        message:
-          operationalSettingsSaved && semesterSwitchConfirmed
-            ? "서버에는 반영되었습니다. 잠시 후 화면을 새로고침해 주세요."
-            : getSemesterCommandErrorMessage(error),
+        title: operationalSettingsSaved
+          ? "설정은 반영했지만 화면을 새로고침하지 못했습니다."
+          : "학생 메뉴 설정 저장에 실패했습니다.",
+        message: operationalSettingsSaved
+          ? "서버에는 반영되었습니다. 잠시 후 화면을 새로고침해 주세요."
+          : getSemesterCommandErrorMessage(error),
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleActivateSemester = async () => {
+    if (
+      isViewingPast ||
+      switching ||
+      saving ||
+      creating ||
+      !hasPendingSemesterSwitch
+    )
+      return;
+    setSwitching(true);
+    const year = normalizeYear(config.year);
+    const semester = normalizeSemester(config.semester);
+    let semesterSwitchConfirmed = false;
+    try {
+      const confirmed = await confirm({
+        title: "운영 학기를 전환하시겠습니까?",
+        message: `${activeSemesterLabel}에서 ${selectedSemesterLabel}로 전환합니다. 모든 학생과 교사의 운영 학기가 바뀝니다. 이전 자료만 보시려면 위의 교사 자료 조회를 이용해 주세요.`,
+        confirmLabel: "운영 학기 전환",
+        cancelLabel: "취소",
+        tone: "warning",
+      });
+      if (!confirmed) return;
+      if (semesterStateError) throw new Error(semesterStateError);
+      const latestSnapshot = await prepareSemesterForActivation(year, semester);
+      semesterSwitchConfirmed = true;
+      invalidateSiteSettingDocCache("config");
+      await refreshConfig();
+      notifySystemConfigUpdated();
+      syncSemesterPresentation(
+        latestSnapshot,
+        { year, semester },
+        { year, semester },
+      );
+      await refreshSemesters();
+      selectSemester(null);
+      showToast({
+        tone: "success",
+        title: "운영 학기가 전환되었습니다.",
+        message: `모든 학생과 교사에게 ${buildSemesterLabel(year, semester)}가 적용됩니다.`,
+      });
+    } catch (error) {
+      console.error("Failed to activate semester:", error);
+      // A failed response can follow a completed activation. Refresh the
+      // authoritative state before offering another switch.
+      try {
+        const latestSnapshot = await loadSemesterCoreSnapshot();
+        invalidateSiteSettingDocCache("config");
+        await refreshConfig();
+        notifySystemConfigUpdated();
+        syncSemesterPresentation(latestSnapshot, activeSemester, {
+          year,
+          semester,
+        });
+        await refreshSemesters();
+      } catch (refreshError) {
+        console.error(
+          "Failed to refresh semester after activation:",
+          refreshError,
+        );
+      }
+      showToast({
+        tone: "error",
+        title: semesterSwitchConfirmed
+          ? "학기는 전환했지만 화면을 새로고침하지 못했습니다."
+          : "운영 학기 전환을 완료하지 못했습니다.",
+        message: semesterSwitchConfirmed
+          ? "서버에는 반영되었습니다. 현재 운영 학기를 다시 확인해 주세요."
+          : getSemesterCommandErrorMessage(error),
+      });
+    } finally {
+      setSwitching(false);
     }
   };
 
@@ -1120,22 +1196,119 @@ const SettingsGeneral: React.FC = () => {
       <div className="border-b border-gray-100 pb-4 mb-6">
         <h3 className="text-lg font-bold text-gray-900">시스템 기본 설정</h3>
         <p className="text-sm text-gray-500 mt-1">
-          학년도와 학기, 메뉴 표시 여부를 제어합니다.
+          교사 자료 조회, 운영 학기와 학생 메뉴 표시를 설정합니다.
         </p>
       </div>
 
-      <div className="space-y-6">
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-6">
+        <h4 className="text-sm font-bold text-gray-900">교사 자료 조회</h4>
+        <p className="text-xs text-gray-500 mt-1">
+          기존 학기를 선택하면 교사의 모든 메뉴에서 해당 학기 자료를 조회합니다.
+          학생의 운영 학기는 바뀌지 않습니다.
+        </p>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label
+              htmlFor="teacher-view-year"
+              className="block text-sm font-bold text-gray-700 mb-2"
+            >
+              조회 학년도
+            </label>
+            <select
+              id="teacher-view-year"
+              value={viewYear}
+              onChange={(event) => changeViewYear(event.target.value)}
+              disabled={viewSemestersLoading || saving || creating || switching}
+              className="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none disabled:opacity-60"
+            >
+              {viewYearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}학년도
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label
+              htmlFor="teacher-view-semester"
+              className="block text-sm font-bold text-gray-700 mb-2"
+            >
+              조회 학기
+            </label>
+            <select
+              id="teacher-view-semester"
+              value={viewSemester}
+              onChange={(event) =>
+                selectSemester({ year: viewYear, semester: event.target.value })
+              }
+              disabled={viewSemestersLoading || saving || creating || switching}
+              className="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none disabled:opacity-60"
+            >
+              {(viewSemesterOptions.length
+                ? viewSemesterOptions
+                : [{ year: viewYear, semester: viewSemester }]
+              ).map((item) => (
+                <option
+                  key={`${item.year}-${item.semester}`}
+                  value={item.semester}
+                >
+                  {item.semester}학기
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {viewSemestersError && (
+          <div role="alert" className="mt-3 text-xs font-bold text-red-700">
+            {viewSemestersError}
+            <button
+              type="button"
+              onClick={() => void refreshSemesters()}
+              disabled={viewSemestersLoading}
+              className="ml-3 underline disabled:opacity-60"
+            >
+              다시 불러오기
+            </button>
+          </div>
+        )}
+        {isViewingPast && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <p className="text-xs font-bold text-amber-800">
+              이전 학기 조회 중입니다. 설정을 변경하려면 현재 운영 학기로 돌아와
+              주세요.
+            </p>
+            <button
+              type="button"
+              onClick={() => selectSemester(null)}
+              className="bg-white hover:bg-gray-100 text-gray-800 font-bold py-3 px-5 rounded-xl border border-gray-300 shadow-sm transition"
+            >
+              현재 운영 학기로 돌아가기
+            </button>
+          </div>
+        )}
+      </div>
+
+      <fieldset
+        disabled={isViewingPast || switching || saving || creating}
+        className="space-y-6 min-w-0"
+      >
+        <div className="border-t border-gray-100 pt-6">
+          <h4 className="text-sm font-bold text-gray-900">운영 학기 전환</h4>
+          <p className="text-xs text-gray-500 mt-1">
+            모든 학생과 교사가 사용할 운영 학기를 변경합니다.
+          </p>
+        </div>
         <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-blue-200 bg-white/80 p-4">
               <div className="text-xs font-bold text-blue-700">
-                현재 활성 학기
+                현재 운영 학기
               </div>
               <div className="mt-1 text-lg font-extrabold text-blue-900">
                 {activeSemesterLabel}
               </div>
               <p className="mt-2 text-xs font-semibold text-blue-700">
-                학생과 교사 화면에 실제 적용 중인 기준입니다.
+                학생과 교사의 기본 운영 학기입니다.
               </p>
             </div>
             <div
@@ -1146,8 +1319,8 @@ const SettingsGeneral: React.FC = () => {
                   className={`text-xs font-bold ${hasPendingSemesterSwitch ? "text-amber-800" : "text-emerald-700"}`}
                 >
                   {hasPendingSemesterSwitch
-                    ? "저장 시 전환 대상"
-                    : "현재 선택된 학기"}
+                    ? "운영 학기 전환 대상"
+                    : "현재 운영 학기와 동일"}
                 </div>
                 <span
                   className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${hasPendingSemesterSwitch ? "border-amber-300 bg-white text-amber-800" : "border-emerald-300 bg-white text-emerald-700"}`}
@@ -1164,8 +1337,8 @@ const SettingsGeneral: React.FC = () => {
                 className={`mt-2 text-xs font-semibold ${hasPendingSemesterSwitch ? "text-amber-800" : "text-emerald-700"}`}
               >
                 {hasPendingSemesterSwitch
-                  ? `${activeSemesterLabel}는 저장 전까지 그대로 유지됩니다.`
-                  : "저장해도 현재 운영 학기와 같은 값이 유지됩니다."}
+                  ? `${activeSemesterLabel}는 운영 학기 전환을 누르기 전까지 유지됩니다.`
+                  : "현재 운영 중인 학기가 선택되어 있습니다."}
               </p>
             </div>
           </div>
@@ -1216,11 +1389,11 @@ const SettingsGeneral: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
-              학년도
+              운영 전환 학년도
             </label>
             <select
               name="year"
-              aria-label="학년도"
+              aria-label="운영 전환 학년도"
               value={config.year}
               onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
@@ -1234,11 +1407,11 @@ const SettingsGeneral: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
-              학기
+              운영 전환 학기
             </label>
             <select
               name="semester"
-              aria-label="학기"
+              aria-label="운영 전환 학기"
               value={config.semester}
               onChange={handleChange}
               className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
@@ -1258,8 +1431,8 @@ const SettingsGeneral: React.FC = () => {
         <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded-lg border border-amber-200 font-bold flex items-start gap-2">
           <i className="fas fa-exclamation-triangle mt-0.5"></i>
           <span>
-            학년도와 학기를 고르면 전환 대상만 먼저 바뀝니다. 실제 운영 학기는
-            저장 전까지 유지되며, 저장 후 해당 기간 데이터 기준으로 전환됩니다.
+            학년도와 학기를 고르면 전환 대상만 바뀝니다. 운영 학기 전환을 누르고
+            확인해야 모든 학생의 학기가 변경됩니다.
           </span>
         </div>
 
@@ -1268,8 +1441,8 @@ const SettingsGeneral: React.FC = () => {
             <div>
               <div className="text-xs font-bold text-gray-500">
                 {hasPendingSemesterSwitch
-                  ? "저장 시 전환 대상 준비 현황"
-                  : "현재 활성 학기 준비 현황"}
+                  ? "운영 학기 전환 대상 준비 현황"
+                  : "현재 운영 학기 준비 현황"}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span
@@ -1440,6 +1613,50 @@ const SettingsGeneral: React.FC = () => {
           )}
         </div>
 
+        <div className="pt-4 text-right">
+          {!readinessLoading && readiness && readiness.status !== "ready" && (
+            <div
+              className={`mb-4 rounded-xl border p-4 text-left text-sm font-bold flex items-start gap-3 ${readinessWarningClass}`}
+            >
+              <i className="fas fa-exclamation-triangle mt-0.5"></i>
+              <div className="flex-1">
+                <div>
+                  {readiness.status === "danger"
+                    ? "왜 전환 비권장인지 먼저 확인해 주세요."
+                    : "전환 전 먼저 채우면 좋은 항목입니다."}
+                </div>
+                <div className="mt-1 text-xs font-semibold leading-5">
+                  {missingRequiredItems.length > 0
+                    ? `우선 ${missingRequiredItems.map((item) => item.label).join(", ")}부터 확인해 주세요.`
+                    : "핵심 운영 항목은 준비되었고, 아래 참고 항목을 채우면 운영 여유가 더 생깁니다."}
+                </div>
+                {priorityActionItems.length > 0 && (
+                  <div className="mt-3 space-y-1.5 text-xs font-semibold">
+                    {priorityActionItems.map((item, index) => (
+                      <div
+                        key={item.key}
+                      >{`${index + 1}. ${getReadinessItemMeta(item).actionHint}`}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleActivateSemester}
+            disabled={
+              !hasPendingSemesterSwitch ||
+              switching ||
+              readinessLoading ||
+              Boolean(semesterStateError)
+            }
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95"
+          >
+            {switching ? "전환 중..." : "운영 학기 전환"}
+          </button>
+        </div>
+
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
@@ -1550,44 +1767,16 @@ const SettingsGeneral: React.FC = () => {
         </div>
 
         <div className="pt-4 text-right">
-          {!readinessLoading && readiness && readiness.status !== "ready" && (
-            <div
-              className={`mb-4 rounded-xl border p-4 text-left text-sm font-bold flex items-start gap-3 ${readinessWarningClass}`}
-            >
-              <i className="fas fa-exclamation-triangle mt-0.5"></i>
-              <div className="flex-1">
-                <div>
-                  {readiness.status === "danger"
-                    ? "왜 전환 비권장인지 먼저 확인해 주세요."
-                    : "전환 전 먼저 채우면 좋은 항목입니다."}
-                </div>
-                <div className="mt-1 text-xs font-semibold leading-5">
-                  {missingRequiredItems.length > 0
-                    ? `우선 ${missingRequiredItems.map((item) => item.label).join(", ")}부터 확인해 주세요.`
-                    : "핵심 운영 항목은 준비되었고, 아래 참고 항목을 채우면 운영 여유가 더 생깁니다."}
-                </div>
-                {priorityActionItems.length > 0 && (
-                  <div className="mt-3 space-y-1.5 text-xs font-semibold">
-                    {priorityActionItems.map((item, index) => (
-                      <div
-                        key={item.key}
-                      >{`${index + 1}. ${getReadinessItemMeta(item).actionHint}`}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95"
           >
-            {saving ? "저장 중..." : "설정 저장"}
+            {saving ? "저장 중..." : "학생 메뉴 설정 저장"}
           </button>
         </div>
-      </div>
+      </fieldset>
     </div>
   );
 };

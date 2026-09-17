@@ -51,6 +51,8 @@ export interface SemesterClassRecord {
 }
 
 export interface SemesterEnrollmentRecord {
+  effectiveFrom?: string;
+  effectiveTo?: string;
   enrollmentId?: string;
   studentUid: string;
   semesterId?: string;
@@ -88,7 +90,7 @@ export interface ArchiveManifestRecord {
 
 export interface ArchiveEnrollmentState {
   semesterId: string;
-  provenance: "CURRENT" | "PREPARING" | "ARCHIVE" | "LEGACY";
+  provenance: "CURRENT" | "PREPARING" | "ARCHIVE" | "LEGACY" | "EXPLICIT";
   source: string;
   readOnly: boolean;
   schemaVersion: number;

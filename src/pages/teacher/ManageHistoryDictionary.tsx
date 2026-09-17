@@ -330,7 +330,9 @@ const mergeRequestSources = (
 const ManageHistoryDictionaryContent: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
   const canRead = canReadLessonManagement(userData, currentUser?.email || "");
-  const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
+  const canWrite =
+    !config?.teacherViewOnly &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -3246,7 +3248,9 @@ const ManageHistoryDictionary: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
   const scope = getYearSemester(config);
   const canRead = canReadLessonManagement(userData, currentUser?.email || "");
-  const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
+  const canWrite =
+    !config?.teacherViewOnly &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
   const context = `${currentUser?.uid || ""}/${scope.year}/${scope.semester}/${canRead}/${canWrite}`;
   return <ManageHistoryDictionaryContent key={context} />;
 };

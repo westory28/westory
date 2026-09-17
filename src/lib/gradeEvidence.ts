@@ -13,7 +13,11 @@ export type GradeEvidenceScoreKind = "performance" | "written_exam_essay";
 
 export type GradeEvidenceAudience = "student" | "teacher";
 
-export type GradeEvidenceProvenance = "CURRENT" | "ARCHIVE" | "LEGACY";
+export type GradeEvidenceProvenance =
+  | "CURRENT"
+  | "ARCHIVE"
+  | "LEGACY"
+  | "EXPLICIT";
 
 export type GradeEvidenceLifecycleStatus =
   | "DRAFT"
@@ -175,7 +179,10 @@ export class GradeEvidenceError extends Error {
   }
 }
 
-type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
+type ConfigLike =
+  | Pick<SystemConfig, "year" | "semester" | "teacherViewOnly">
+  | null
+  | undefined;
 type JsonRecord = Record<string, unknown>;
 
 const STUDENT_VISIBLE_STATES = new Set<GradeEvidenceLifecycleStatus>([
@@ -234,7 +241,12 @@ const normalizeScoreKind = (value: unknown): GradeEvidenceScoreKind =>
 
 const normalizeProvenance = (value: unknown): GradeEvidenceProvenance => {
   const normalized = String(value || "").toUpperCase();
-  if (normalized === "ARCHIVE" || normalized === "LEGACY") return normalized;
+  if (
+    normalized === "ARCHIVE" ||
+    normalized === "LEGACY" ||
+    normalized === "EXPLICIT"
+  )
+    return normalized;
   return "CURRENT";
 };
 
@@ -577,8 +589,9 @@ export const getGradeEvidenceState = async (
         "조회할 학기 범위가 올바르지 않습니다.",
       );
     }
-    const source: GradeEvidenceProvenance =
-      input.provenance === "LEGACY"
+    const source: GradeEvidenceProvenance = input.config?.teacherViewOnly
+      ? "EXPLICIT"
+      : input.provenance === "LEGACY"
         ? "LEGACY"
         : explicitSemesterId && explicitSemesterId !== activeSemesterId
           ? "ARCHIVE"
@@ -802,8 +815,9 @@ export const getGradeEvidenceDetail = async (
         "조회할 학기 범위가 올바르지 않습니다.",
       );
     }
-    const source: GradeEvidenceProvenance =
-      input.provenance === "LEGACY"
+    const source: GradeEvidenceProvenance = input.config?.teacherViewOnly
+      ? "EXPLICIT"
+      : input.provenance === "LEGACY"
         ? "LEGACY"
         : explicitSemesterId && explicitSemesterId !== activeSemesterId
           ? "ARCHIVE"

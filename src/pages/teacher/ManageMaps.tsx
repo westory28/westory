@@ -222,7 +222,9 @@ const ManageMaps: React.FC = () => {
   const mutationSucceeded = useRef(false);
   const activeRecovery = useRef<ReturnType<typeof mapEditorRecovery.get>>();
   const recoveryKey = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`;
-  const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+  const canEdit =
+    !config?.teacherViewOnly &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
 
   const collectionPath = useMemo(
     () => getSemesterCollectionPath(config, "map_resources"),
@@ -320,7 +322,7 @@ const ManageMaps: React.FC = () => {
       try {
         let resourceList = await loadFromScope("semester");
         if (cancelled) return;
-        if (resourceList.length === 0) {
+        if (resourceList.length === 0 && !config?.teacherViewOnly) {
           resourceList = await loadFromScope("legacy");
         }
         if (cancelled) return;

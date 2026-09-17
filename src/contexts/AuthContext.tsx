@@ -90,7 +90,9 @@ interface AuthContextType {
   refreshInterfaceConfig: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined,
+);
 
 const normalizeSystemConfig = (raw: SystemConfig | null): SystemConfig => {
   const year = String(raw?.year || "").trim();

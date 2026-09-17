@@ -1766,7 +1766,46 @@ const run = async () => {
   console.log(JSON.stringify({ passed: true, cases: 49, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain"], productionAccess: 0 }));
 };
 
-run().catch((error) => {
+run().then(async () => {
+  const historical = new MemoryTransaction({
+    "site_settings/semester_active": { semesterId: "2026-2", revision: 1 },
+    "users/teacher": { role: "teacher", staffPermissions: ["point_manage"] },
+    "users/student": { role: "student" },
+    "users/old-student": { name: "현재 이름", grade: "3", email: "private@example.com" },
+    "semester_manifests/2026-1": { status: "ARCHIVED", revision: 1 },
+    "semester_wis_economies/2026-1": { status: "CLOSED", revision: 1 },
+    "semester_wis_accounts/old-account": { accountId: "old-account", semesterId: "2026-1", studentUid: "old-student", displayName: "과거 이름", grade: "2", classNumber: "1", studentNumber: "3", balance: 80 },
+    "semester_wis_accounts/other-account": { accountId: "other-account", semesterId: "2026-1", studentUid: "other-student", displayName: "이전 학생", balance: 20 },
+    "semester_wis_ledger/old-entry": { ledgerEntryId: "old-entry", accountId: "old-account", semesterId: "2026-1", studentUid: "old-student", delta: 10, balanceAfter: 80, createdAt: "2026-05-01T00:00:00Z", reason: "과거 지급" },
+  });
+  const historicalCore = wis.createWisQueryCore({ store: {
+    get: historical.get.bind(historical), runTransaction: callback => callback(historical),
+  }, assertSession: async request => ({ uid: request.auth.uid, email: request.auth.token.email }) });
+  const read = (data = {}, uid = "teacher") => historicalCore.getWisEconomyState({
+    auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr` } },
+    data: { semesterId: "2026-1", source: "EXPLICIT", audience: "teacher", limit: 1, ...data },
+  });
+  const before = JSON.stringify([...historical.documents]);
+  const first = await read();
+  assert.equal(first.readOnly, true);
+  assert.equal(first.accounts[0].displayName, "과거 이름");
+  assert.equal(first.accounts[0].grade, "2", "saved historical class is retained even after the enrollment slot closes");
+  assert.equal(first.accounts[0].balance, 80);
+  assert.equal(first.nextCursor, "old-account");
+  assert.equal((await read({ cursor: first.nextCursor })).accounts[0].studentUid, "other-student");
+  const detail = await read({ projection: "account", accountId: "old-account" });
+  assert.equal(detail.ledger[0].reason, "과거 지급");
+  assert.equal(detail.accounts[0].classNumber, "1");
+  assert.equal(JSON.stringify([...historical.documents]), before);
+  historical.documents.delete("semester_manifests/2026-1");
+  assert.equal((await read()).accounts[0].balance, 80, "stored scoped accounts remain readable without a manifest document");
+  historical.documents.set("semester_manifests/2026-1", { status: "ACTIVE", revision: 1 });
+  historical.documents.set("semester_wis_economies/2026-1", { status: "ACTIVE_OPEN", revision: 1 });
+  assert.equal((await read()).readOnly, true, "EXPLICIT is read-only even for a manager viewing an ACTIVE semester");
+  historical.documents.delete("semester_wis_economies/2026-1");
+  assert.equal((await read()).reason, "WIS_ECONOMY_NOT_CREATED", "no fabricated legacy economy is created");
+  console.log(JSON.stringify({ explicitTeacherWisReadOnly: true, historicalNamesPreserved: true, boundedPagination: true, writes: 0 }));
+}).catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

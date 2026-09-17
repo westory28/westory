@@ -46,6 +46,7 @@ jobs:
       - run: node scripts/verify-korean-public-holidays.mjs
       - run: node scripts/verify-schedule-label-colors.mjs
       - run: node scripts/verify-semester-date-defaults.mjs
+      - run: node scripts/verify-teacher-semester-view.mjs
       - run: node scripts/verify-semester-archive-view.mjs
       - run: node scripts/verify-admin-semester-content-ui.mjs
       - run: node scripts/verify-lesson-semester-isolation.mjs

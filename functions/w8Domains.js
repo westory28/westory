@@ -3605,6 +3605,8 @@ const createW8QueryCore = ({
       Array.isArray(profile.data?.staffPermissions) &&
       profile.data.staffPermissions.includes("lesson_read");
     const canReadTeacherState = isAdmin || isTeacher || delegatedLessonRead;
+    const explicitTeacherRead = query.audience === "teacher"
+      && query.source === "EXPLICIT" && (isAdmin || isTeacher);
     if (query.audience === "teacher" && !canReadTeacherState)
       fail(
         "permission-denied",
@@ -3660,7 +3662,7 @@ const createW8QueryCore = ({
     if (query.source === "LEGACY") return base;
     return store.runTransaction(async (transaction) => {
       const manifest = await transaction.get(manifestPath(query.semesterId));
-      if (!manifest.exists) return base;
+      if (!manifest.exists && !explicitTeacherRead) return base;
       if (query.audience === "student") {
         const pointer = await transaction.get(semesterCore.ACTIVE_SEMESTER_POINTER_PATH);
         if (!pointer.exists || pointer.data?.semesterId !== query.semesterId
@@ -3669,7 +3671,7 @@ const createW8QueryCore = ({
           || manifest.data?.readOnly === true)
           fail("permission-denied", "Students can only read the current semester.", "W8_STUDENT_CURRENT_SEMESTER_REQUIRED");
       }
-      const manifestStatus = String(manifest.data?.status || "");
+      const manifestStatus = String(manifest.data?.status || (explicitTeacherRead ? "ARCHIVED" : ""));
       const lifecycleProvenance = ["CLOSED", "ARCHIVED"].includes(
         manifestStatus,
       )
@@ -3689,7 +3691,7 @@ const createW8QueryCore = ({
           "Requested ARCHIVE source does not match the Semester lifecycle.",
           "W8_SOURCE_MISMATCH",
         );
-      if (query.audience === "teacher" && query.domain === "LEARNING" && lifecycleProvenance === "ARCHIVE")
+      if (query.audience === "teacher" && query.domain === "LEARNING" && lifecycleProvenance === "ARCHIVE" && !explicitTeacherRead)
         fail("permission-denied", "지난 학기 수업 자료와 생각 모아는 관리자 설정의 학기 조회에서 확인해 주세요.", "W8_ARCHIVE_CONTENT_ADMIN_VIEW_REQUIRED");
       const provenance =
         query.source === "EXPLICIT" ? "EXPLICIT" : lifecycleProvenance;
@@ -3728,7 +3730,7 @@ const createW8QueryCore = ({
         !delegatedLessonRead &&
         !(await getSemesterClassRows()).some(
           (row) =>
-            row.data?.status === "ACTIVE" &&
+            (row.data?.status === "ACTIVE" || explicitTeacherRead) &&
             row.data?.homeroomTeacherUid === uid,
         );
       const selectedUid = query.audience === "student" ? uid : query.studentUid;
@@ -3833,8 +3835,23 @@ const createW8QueryCore = ({
           transaction.query(thinkCloudSessionsPath(query.semesterId)),
         ]);
         const activeClasses = classRows.filter(
-          (row) => row.data?.status === "ACTIVE",
+          (row) => row.data?.status === "ACTIVE" || explicitTeacherRead,
         );
+        // Old sessions can predate the semester-class registry. Administrators
+        // may inspect those stored targets, without creating classes or rosters.
+        if (explicitTeacherRead && isAdmin) {
+          for (const session of sessionRows) {
+            const grade = String(session.data?.targetGrade || "").trim();
+            const classNumber = String(session.data?.targetClass || "").trim();
+            if (!grade || !classNumber || activeClasses.some(row =>
+              String(row.data?.grade || "").trim() === grade
+              && String(row.data?.classNumber || "").trim() === classNumber)) continue;
+            activeClasses.push({ path: "", data: {
+              classId: `legacy_${hashId("class", grade, classNumber)}`,
+              grade, classNumber, displayName: `${grade}학년 ${classNumber}반`,
+            } });
+          }
+        }
         let allowedClasses = [];
         if (query.audience === "student") {
           const ownClass = activeClasses.find(
@@ -4157,10 +4174,9 @@ const createW8QueryCore = ({
               row.targetClassIds.includes(query.classId),
           );
       };
-      // The historical dashboard keeps schedule/attendance/communication data,
-      // but academic material is available only through the administrator archive.
+      // Explicit teacher browsing reuses these menus in read-only mode.
       await Promise.all([
-        ["LEARNING", "DASHBOARD"].includes(query.domain) && lifecycleProvenance !== "ARCHIVE"
+        ["LEARNING", "DASHBOARD"].includes(query.domain) && (lifecycleProvenance !== "ARCHIVE" || explicitTeacherRead)
           ? loadLearning() : undefined,
         ["SCHEDULE", "DASHBOARD"].includes(query.domain) ? loadSchedule() : undefined,
         ["ATTENDANCE", "DASHBOARD"].includes(query.domain) ? loadAttendance() : undefined,

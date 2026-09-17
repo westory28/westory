@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import { loadTeacherSemesterRoster } from "../../../lib/teacherSemesterRoster";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -1036,10 +1037,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const loadStudentRoster = async (): Promise<StudentRosterResult> => {
     try {
-      const snap = await getDocs(collection(db, "users"));
+      const roster = await loadTeacherSemesterRoster(config);
       const students: StudentRosterItem[] = [];
-      snap.forEach((item) => {
-        const raw = item.data() as any;
+      roster.forEach((raw) => {
         const role = toText(raw.role);
         if (role === "teacher") return;
         const classOnly = normalizeClass(
@@ -1047,7 +1047,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         );
         if (!classOnly) return;
         students.push({
-          uid: item.id,
+          uid: raw.uid,
           email: toText(raw.email),
           name:
             toText(

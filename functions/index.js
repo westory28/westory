@@ -56,6 +56,8 @@ exports.updateStudentMaintenanceConfig =
   });
 
 const db = getFirestore();
+exports.getTeacherSemesterOptions = require("./teacherSemesterOptions")
+  .createTeacherSemesterOptionsCallable({ db });
 const REGION = "asia-northeast3";
 const archiveTransportOptions = { region: REGION, enforceAppCheck: true, timeoutSeconds: 120, memory: "512MiB" };
 exports.uploadMapAssetContent = onCall(archiveTransportOptions, (request) =>
@@ -11010,17 +11012,18 @@ exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION, e
 exports.listStudentHistoryDictionaryWordsForTeacher = onCall(
   { region: REGION },
   async (request) => {
-    await assertHistoryDictionaryManager(request);
+    const manager = await assertHistoryDictionaryManager(request);
+    const canReadOtherSemesters = manager.email === ADMIN_EMAIL || manager.profile?.role === "teacher";
     const scoped = assertYearSemester(request.data);
     const [activePointer, activeManifest] = await db.getAll(
       db.doc("site_settings/semester_active"), db.doc(`semester_manifests/${scoped.year}-${scoped.semester}`),
     );
-    if (!activePointer.exists || !activeManifest.exists
+    if (!canReadOtherSemesters && (!activePointer.exists || !activeManifest.exists
       || activePointer.data()?.semesterId !== `${scoped.year}-${scoped.semester}`
       || !Number.isSafeInteger(activePointer.data()?.revision) || activePointer.data().revision < 1
       || activeManifest.data()?.semesterId !== `${scoped.year}-${scoped.semester}`
       || activePointer.data()?.revision !== activeManifest.data()?.revision
-      || activeManifest.data()?.status !== "ACTIVE" || activeManifest.data()?.readOnly === true)
+      || activeManifest.data()?.status !== "ACTIVE" || activeManifest.data()?.readOnly === true))
       throw new HttpsError("permission-denied", "지난 학기 자료는 관리자 설정의 학기 조회에서 확인해 주세요.");
     const timestampMs = (value) => {
       if (!value) return 0;

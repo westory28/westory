@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { assertTeacherSemesterWritable } from "../../../lib/teacherSemesterView";
 import {
   collection,
   doc,
@@ -6,6 +6,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
+import React, { useEffect, useMemo, useState } from "react";
 import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { db } from "../../../lib/firebase";
@@ -112,7 +113,8 @@ const SettingsAccess: React.FC = () => {
     setSavingId(user.id);
     try {
       await requestStepUpReauthentication("updateAccessSettings");
-      await setDoc(
+      await (assertTeacherSemesterWritable(),
+      setDoc(
         doc(db, "users", user.id),
         {
           role: nextUser.staffPermissions.length > 0 ? "staff" : "student",
@@ -121,7 +123,7 @@ const SettingsAccess: React.FC = () => {
           updatedAt: serverTimestamp(),
         },
         { merge: true },
-      );
+      ));
 
       setUsers((prev) =>
         prev.map((item) =>

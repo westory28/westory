@@ -208,7 +208,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "80a5f82c3462eb30ff4370bd"
+      "callGraphHash": "6699d11a9da648827e51748b"
     },
     {
       "id": "DW-008",
@@ -2395,7 +2395,7 @@
       "owner": "W10P Functional Adapter",
       "testOwner": "W3/W10P command safety",
       "rootCount": 1,
-      "callGraphHash": "897297ff49fe0aacc960e759"
+      "callGraphHash": "fac2df2ad4d4facb29210a2e"
     },
     {
       "id": "DW-214",
@@ -2415,7 +2415,7 @@
       "owner": "W10P Functional Adapter",
       "testOwner": "W3/W10P command safety",
       "rootCount": 2,
-      "callGraphHash": "897297ff49fe0aacc960e759"
+      "callGraphHash": "fac2df2ad4d4facb29210a2e"
     },
     {
       "id": "DW-215",
@@ -2435,7 +2435,7 @@
       "owner": "W10P Functional Adapter",
       "testOwner": "W3/W10P command safety",
       "rootCount": 2,
-      "callGraphHash": "897297ff49fe0aacc960e759"
+      "callGraphHash": "fac2df2ad4d4facb29210a2e"
     },
     {
       "id": "DW-219",

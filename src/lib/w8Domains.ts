@@ -12,7 +12,10 @@ import {
   type ThinkCloudSession,
 } from "./thinkCloud";
 
-type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
+type ConfigLike =
+  | Pick<SystemConfig, "year" | "semester" | "teacherViewOnly">
+  | null
+  | undefined;
 type JsonRecord = Record<string, unknown>;
 
 export type W8Domain =
@@ -627,11 +630,13 @@ export const getW8DomainState = async (input: {
     );
   }
   const source =
-    input.source === "LEGACY" || input.source === "EXPLICIT"
-      ? input.source
-      : semesterId !== currentSemesterId
-        ? "ARCHIVE"
-        : input.source || "CURRENT";
+    input.audience === "teacher" && input.config?.teacherViewOnly
+      ? "EXPLICIT"
+      : input.source === "LEGACY" || input.source === "EXPLICIT"
+        ? input.source
+        : semesterId !== currentSemesterId
+          ? "ARCHIVE"
+          : input.source || "CURRENT";
 
   try {
     const callable = await getHttpsCallable<

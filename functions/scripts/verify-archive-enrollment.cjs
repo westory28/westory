@@ -945,6 +945,23 @@ const main = async () => {
   assert.equal(legacy.schemaVersion, 0);
   assert.equal(store.writeCount, legacyWritesBefore);
 
+  store.documents.set("users/semester-reader", { role: "teacher" });
+  const savedManifest = store.documents.get(manifestPath);
+  store.documents.delete(manifestPath);
+  const explicitRequest = { source: "EXPLICIT", semesterId, callSite: "verify-teacher-semester-view" };
+  const historicalRoster = await queries.getArchiveEnrollmentState(queryRequest(explicitRequest,
+    "semester-reader", "semester-reader@yongshin-ms.ms.kr"));
+  assert.equal(historicalRoster.readOnly, true);
+  assert.equal(historicalRoster.provenance, "EXPLICIT");
+  assert.equal(historicalRoster.enrollments.length, 3, "past class-move history remains visible");
+  assert.equal(store.writeCount, legacyWritesBefore);
+  for (const role of ["staff", "student"]) {
+    store.documents.set("users/denied-reader", { role, teacherPortalEnabled: true, staffPermissions: ["student_list_read"] });
+    assert.equal(await reasonFrom(() => queries.getArchiveEnrollmentState(queryRequest(explicitRequest,
+      "denied-reader", "denied-reader@yongshin-ms.ms.kr"))), "ARCHIVE_ACCESS_POLICY_UNDECIDED");
+  }
+  store.documents.set(manifestPath, savedManifest);
+
   assert.equal(
     await reasonFrom(() =>
       gateway.execute(

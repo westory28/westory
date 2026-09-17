@@ -3857,6 +3857,7 @@ const createGradeQueryCore = ({ store, assertSession = sessionAuthority.assertAc
   const getGradeEvidenceState = async (request) => {
     const actor = await resolveActor(request);
     const query = normalizeQuery(request.data || {});
+    const explicitTeacherRead = query.source === "EXPLICIT" && query.audience === "teacher" && actor.canManage;
     if (query.mode === "TEACHER_QUEUE" && !actor.canManage) {
       fail("permission-denied", "Grade management permission is required.", "GRADE_MANAGE_REQUIRED");
     }
@@ -4059,7 +4060,7 @@ const createGradeQueryCore = ({ store, assertSession = sessionAuthority.assertAc
           fail("permission-denied", "Students can only read the canonical active semester grades.", "GRADE_STUDENT_CURRENT_SEMESTER_REQUIRED");
         }
       }
-      if (!manifest.exists) {
+      if (!manifest.exists && !explicitTeacherRead) {
         return {
           mode: query.mode,
           audience: query.audience,
@@ -4078,7 +4079,7 @@ const createGradeQueryCore = ({ store, assertSession = sessionAuthority.assertAc
           writeCount: 0,
         };
       }
-      const manifestStatus = String(manifest.data?.status || "");
+      const manifestStatus = String(manifest.data?.status || (explicitTeacherRead ? "ARCHIVED" : ""));
       if (!semesterCore.SEMESTER_STATUSES.includes(manifestStatus)) {
         fail("failed-precondition", "Semester Manifest status is invalid.", "GRADE_MANIFEST_STATUS_INVALID", {
           semesterId: query.semesterId,

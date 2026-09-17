@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { selectSemesterRosterEnrollments } from "../../lib/semesterRoster";
 import { doc, getDoc } from "firebase/firestore";
 import { useAppDialog } from "../../components/common/AppDialogProvider";
 import { db } from "../../lib/firebase";
@@ -197,8 +198,9 @@ const toStudentList = async (
   state: ArchiveEnrollmentState,
   suppliedProfiles?: Map<string, Record<string, any>>,
 ): Promise<Student[]> => {
-  const activeEnrollments = state.enrollments.filter(
-    (enrollment) => enrollment.enrollmentStatus === "ACTIVE",
+  const activeEnrollments = selectSemesterRosterEnrollments(
+    state.enrollments,
+    state.readOnly,
   );
   const profileByUid =
     suppliedProfiles ??
@@ -307,7 +309,9 @@ const StudentListScope: React.FC = () => {
   const [scopeReadOnly, setScopeReadOnly] = useState(false);
   const [loadError, setLoadError] = useState("");
   const readOnly =
-    scopeReadOnly || !canEditStudentList(userData, currentUser?.email || "");
+    Boolean(config?.teacherViewOnly) ||
+    scopeReadOnly ||
+    !canEditStudentList(userData, currentUser?.email || "");
   const profileActionsDisabled =
     loading || profilesLoading || Boolean(profilesError);
   const canResetCorePoints =
@@ -346,7 +350,10 @@ const StudentListScope: React.FC = () => {
     let rosterDisplayed = false;
     try {
       const state = await getArchiveEnrollmentState({
-        source: "CURRENT",
+        source: config?.teacherViewOnly ? "EXPLICIT" : "CURRENT",
+        ...(config?.teacherViewOnly
+          ? { semesterId: `${config.year}-${config.semester}` }
+          : {}),
         callSite: "StudentList.fetchStudents",
       });
       if (requestId !== listRequestRef.current) return;
@@ -357,11 +364,16 @@ const StudentListScope: React.FC = () => {
             ? `${config.year}-${config.semester}`
             : state.semesterId;
         setScopeReadOnly(
-          state.readOnly || configuredSemesterId !== state.semesterId,
+          Boolean(config?.teacherViewOnly) ||
+            state.readOnly ||
+            configuredSemesterId !== state.semesterId,
         );
       };
       let list: Student[];
-      if (canEditStudentList(userData, currentUser?.email || "")) {
+      if (
+        !config?.teacherViewOnly &&
+        canEditStudentList(userData, currentUser?.email || "")
+      ) {
         if (!state.legacy && state.provenance === "CURRENT") {
           // Canonical enrollment snapshots are enough to display the roster.
           // Emails and mutation versions arrive separately; never use these
@@ -401,7 +413,11 @@ const StudentListScope: React.FC = () => {
             editState,
           };
         });
-      } else list = await toStudentList(state);
+      } else
+        list = await toStudentList(
+          state,
+          config?.teacherViewOnly ? new Map() : undefined,
+        );
       if (requestId !== listRequestRef.current) return;
       applyScope();
       setStudents(sortStudents(list));

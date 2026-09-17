@@ -80,8 +80,11 @@ for (const filename of ["firestore.rules", "firestore.staging.rules"]) {
     for (const path of Object.keys(rows)) {
       await succeeds(getDoc(doc(clients.student, `${second}/${path}`)));
       await fails(getDoc(doc(clients.student, `${first}/${path}`)));
-      await fails(getDoc(doc(clients.teacher, `${first}/${path}`)));
-      await fails(getDoc(doc(clients.admin, `${first}/${path}`)));
+      await (!path.startsWith("lesson_progress/") ? succeeds : fails)(getDoc(doc(clients.teacher, `${first}/${path}`)));
+      await succeeds(getDoc(doc(clients.admin, `${first}/${path}`)));
+      await fails(getDoc(doc(clients.staff, `${first}/${path}`)));
+      await fails(setDoc(doc(clients.teacher, `${first}/${path}`), { unexpected: "write" }));
+      await fails(setDoc(doc(clients.admin, `${first}/${path}`), { unexpected: "write" }));
       if (!path.startsWith("dictionary_students/")) await fails(getDoc(doc(clients.student, path)));
     }
     await succeeds(getDocs(collection(clients.student, `${second}/lessons`)));
@@ -90,6 +93,9 @@ for (const filename of ["firestore.rules", "firestore.staging.rules"]) {
     await succeeds(getDocs(collection(clients.student, `${second}/dictionary_students/student/history_dictionary_words`)));
     await succeeds(getDocs(query(collection(clients.student, `${second}/history_dictionary_requests`), where("uid", "==", "student"))));
     await fails(getDocs(collection(clients.student, `${first}/lessons`)));
+    await succeeds(getDocs(collection(clients.teacher, `${first}/lessons`)));
+    await succeeds(getDocs(collection(clients.admin, `${first}/quiz_results`)));
+    await succeeds(getDocs(collection(clients.teacher, `${first}/history_dictionary_requests`)));
     await fails(getDocs(collection(clients.teacher, "lessons")));
     await fails(getDoc(doc(clients.student, "users/student/history_dictionary_words/word")));
     await fails(getDocs(query(collectionGroup(clients.student, "history_dictionary_words"), where("uid", "==", "student"))));
@@ -137,7 +143,8 @@ for (const filename of ["firestore.rules", "firestore.staging.rules"]) {
     await succeeds(getDoc(doc(clients.teacher, `${second}/lessons/unit`)));
     await env.withSecurityRulesDisabled(context => setDoc(doc(context.firestore(), "site_settings/student_maintenance"), maintenance));
 
-    // Missing, inconsistent or inactive authority must deny even administrators.
+    // Shared scope remains authoritative for students and writes. Teacher reads
+    // are independent so previous data stays inspectable during cutover recovery.
     for (const [path, value] of [
       ["site_settings/config", null],
       ["site_settings/config", { year: "2026", semester: "1" }],
@@ -156,8 +163,10 @@ for (const filename of ["firestore.rules", "firestore.staging.rules"]) {
       await fails(setDoc(doc(clients.student, currentAcademic), { scores: {} }));
       await fails(deleteDoc(doc(clients.student, currentAcademic)));
       await fails(getDoc(doc(clients.student, `${second}/lessons/unit`)));
-      await fails(getDoc(doc(clients.admin, `${second}/lessons/unit`)));
+      await succeeds(getDoc(doc(clients.admin, `${second}/lessons/unit`)));
     }
+    await env.withSecurityRulesDisabled(context => deleteDoc(doc(context.firestore(), `application_sessions/teacher/sessions/${authTime}`)));
+    await fails(getDoc(doc(clients.teacher, `${first}/lessons/unit`)));
     assert.ok(checks > 100);
   } finally {
     await env.cleanup();
