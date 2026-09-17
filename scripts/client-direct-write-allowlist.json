@@ -208,7 +208,7 @@
       "owner": "westory-maintainers",
       "testOwner": "command-gateway-safety",
       "rootCount": 1,
-      "callGraphHash": "d24d53e82aa835eabc175451"
+      "callGraphHash": "80a5f82c3462eb30ff4370bd"
     },
     {
       "id": "DW-008",
@@ -2475,7 +2475,7 @@
       "owner": "westory-maintainers",
       "testOwner": "lesson-release-safety",
       "rootCount": 1,
-      "callGraphHash": "e652acc936c98f583a5d875c"
+      "callGraphHash": "f2ac8da1b8d84ccdd47b6317"
     },
     {
       "id": "DW-223",
@@ -2495,7 +2495,7 @@
       "owner": "westory-maintainers",
       "testOwner": "lesson-release-safety",
       "rootCount": 1,
-      "callGraphHash": "e652acc936c98f583a5d875c"
+      "callGraphHash": "f2ac8da1b8d84ccdd47b6317"
     },
     {
       "id": "DW-224",
