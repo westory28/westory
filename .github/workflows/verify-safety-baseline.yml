@@ -67,7 +67,6 @@ jobs:
       - run: npm run verify:step-up-reauth
       - run: node scripts/verify-routine-content-auth.mjs
       - run: node node_modules/playwright-core/cli.js install --with-deps chromium
-      - run: node scripts/verify-teacher-semester-view-browser.mjs
       - run: node scripts/verify-session-display-consistency.mjs
       - run: node scripts/verify-developer-log-save-reauth.mjs
       - run: node scripts/verify-lesson-upload-performance.mjs
@@ -79,6 +78,7 @@ jobs:
       - run: npm run verify:w5-shell-safety
       - run: npm run format:check
       - run: npm run build
+      - run: node scripts/verify-teacher-semester-view-browser.mjs
       - run: node scripts/verify-student-dashboard-loading.mjs --browser
       - run: node scripts/verify-reauth-maintenance-integration.mjs
 
