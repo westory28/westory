@@ -37,7 +37,7 @@ export default function Stub(){return null;}
 // Keep the worksheet's layout space when isolating PDF rendering so its
 // absolutely positioned library remains usable during the recovery scenario.
 function WorksheetStage(){return <div style={{minHeight:800}} aria-label="학습지 표시 영역"/>;}
-export const lazyWithRetry=(_loader,key)=>key==='teacher-lesson-worksheet-stage'?WorksheetStage:Stub;export const processPdfMapFile=async()=>({pageImages:[{page:1,width:600,height:800,blob:new Blob(['page'],{type:'image/png'})}],regions:[]});
+export const lazyWithRetry=(_loader,key)=>Object.assign(key==='teacher-lesson-worksheet-stage'?WorksheetStage:Stub,{preload:async()=>({default:WorksheetStage})});export const processPdfMapFile=async()=>({pageImages:[{page:1,width:600,height:800,blob:new Blob(['page'],{type:'image/png'})}],regions:[]});
 export const executeWestoryCommand=async(type,input,options)=>{
  observations.calls.push({type,input:structuredClone(input),options});
  if(options.expectedUid!=='teacher-a')throw Error('Wrong owner');

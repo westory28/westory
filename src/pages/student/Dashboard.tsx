@@ -20,6 +20,7 @@ import {
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
 import { markLoginPerf, measureLoginPerf } from "../../lib/loginPerf";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
 import { readSiteSettingDoc } from "../../lib/siteSettings";
 import { getStudentClassKey } from "../../lib/visibleSchedule";
@@ -37,7 +38,10 @@ import {
 } from "../../lib/wisHallOfFameRecognition";
 import type { CalendarEvent } from "../../types";
 
-const CalendarSection = lazy(() => import("./components/CalendarSection"));
+const CalendarSection = lazyWithRetry(
+  () => import("./components/CalendarSection"),
+  "student-dashboard-calendar",
+);
 const SearchModal = lazy(() => import("./components/SearchModal"));
 
 const normalizeClassValue = (value: unknown): string => {
@@ -86,17 +90,18 @@ const projectScheduleEvent = (
 });
 
 const DashboardCalendarFallback: React.FC = () => (
-  <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
+  <div
+    role="status"
+    className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0"
+  >
     <div className="mb-4 flex items-center justify-between">
       <h2 className="text-lg font-bold text-gray-800">
         <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
       </h2>
-      <span className="text-xs font-semibold text-gray-400">
-        초기 로드 최적화 중
-      </span>
+      <span className="text-xs font-semibold text-gray-400">불러오는 중</span>
     </div>
     <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-blue-100 bg-blue-50/50 px-6 text-center text-sm font-medium text-blue-700">
-      학사 일정을 먼저 준비하고 있습니다.
+      학사 일정을 불러오는 중입니다.
     </div>
   </div>
 );
@@ -121,12 +126,19 @@ const StudentDashboard: React.FC = () => {
     useState<HallOfFameRecognition | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<W8DomainError | null>(null);
+  const [loadedScope, setLoadedScope] = useState("");
+  const loadSequence = useRef(0);
 
   const calendarRef = useRef<FullCalendar>(null);
   const { categories } = useScheduleCategories();
   const studentClassKey = getStudentClassKey(userData?.grade, userData?.class);
+  const dashboardScope = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}/${studentClassKey}`;
 
   useEffect(() => {
+    // Download calendar code while the authorized schedule query is in flight.
+    void CalendarSection.preload().catch(() => {
+      // Rendering retains the normal retry/error handling for a failed chunk.
+    });
     markLoginPerf("westory-student-dashboard-rendered");
     measureLoginPerf(
       "westory-first-page-render",
@@ -147,8 +159,12 @@ const StudentDashboard: React.FC = () => {
 
   const load = useCallback(async () => {
     if (!configReady || !currentUser?.uid) return;
+    const sequence = ++loadSequence.current;
+    const isCurrent = () => sequence === loadSequence.current;
     setLoading(true);
     setError(null);
+    setDetailEvent(null);
+    setIsSearchOpen(false);
     try {
       const nextState = await getW8DomainState({
         config,
@@ -157,32 +173,40 @@ const StudentDashboard: React.FC = () => {
         studentUid: currentUser.uid,
         source: "CURRENT",
       });
+      if (!isCurrent()) return;
       const projectedEvents = nextState.scheduleEvents
         .filter((event) => event.status === "ACTIVE")
         .map((event) => projectScheduleEvent(event, studentClassKey));
       const year = nextState.semesterId.split("-")[0] || config?.year || "";
       try {
         const holidays = await getKoreanPublicHolidays(year);
+        if (!isCurrent()) return;
         setEvents(
           mergeEventsWithKoreanPublicHolidays(projectedEvents, holidays),
         );
       } catch (holidayError) {
+        if (!isCurrent()) return;
         console.error("Failed to load Korean public holidays:", holidayError);
         setEvents(projectedEvents);
       }
+      setLoadedScope(dashboardScope);
     } catch (caught) {
+      if (!isCurrent()) return;
       setError(
         caught instanceof W8DomainError
           ? caught
           : new W8DomainError("UNKNOWN", "오늘 자료를 불러오지 못했습니다."),
       );
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [config, configReady, currentUser?.uid, studentClassKey]);
+  }, [config, configReady, currentUser?.uid, studentClassKey, dashboardScope]);
 
   useEffect(() => {
     void load();
+    return () => {
+      loadSequence.current += 1;
+    };
   }, [load]);
 
   useEffect(() => {
@@ -231,8 +255,8 @@ const StudentDashboard: React.FC = () => {
   }, [classLabelMap, gradeLabelMap, userData]);
 
   useEffect(() => {
+    setHallOfFameRecognition(null);
     if (!userData?.uid) {
-      setHallOfFameRecognition(null);
       return;
     }
     let cancelled = false;
@@ -266,18 +290,6 @@ const StudentDashboard: React.FC = () => {
     [config],
   );
 
-  if (loading) return <StatePanel state="LOADING" />;
-  if (error) {
-    return (
-      <StatePanel
-        state={toW8StatePanelState(error)}
-        description={error.message}
-        action={{ label: "다시 불러오기", onClick: () => void load() }}
-        retryable
-      />
-    );
-  }
-
   return (
     <div className="dashboard-container student-dashboard-container mx-auto w-full max-w-7xl px-4 py-6">
       <div className="mb-6 flex shrink-0 flex-col items-center justify-between gap-3 md:flex-row">
@@ -295,22 +307,37 @@ const StudentDashboard: React.FC = () => {
 
       <div className="student-dashboard-grid flex h-auto min-h-[500px] flex-col gap-4 md:grid md:grid-cols-5">
         <div className="student-dashboard-calendar order-1 md:col-span-3">
-          <Suspense fallback={<DashboardCalendarFallback />}>
-            <CalendarSection
-              categories={categories}
-              events={events}
-              onDateClick={handleDateClick}
-              onEventClick={handleEventClick}
-              onSearchClick={() => setIsSearchOpen(true)}
-              calendarRef={calendarRef}
-              selectedDate={selectedDate}
+          {error ? (
+            <StatePanel
+              state={toW8StatePanelState(error)}
+              description={error.message}
+              action={{ label: "다시 불러오기", onClick: () => void load() }}
+              retryable
             />
-          </Suspense>
+          ) : !configReady ||
+            !currentUser?.uid ||
+            loading ||
+            loadedScope !== dashboardScope ? (
+            <DashboardCalendarFallback />
+          ) : (
+            <Suspense fallback={<DashboardCalendarFallback />}>
+              <CalendarSection
+                categories={categories}
+                events={events}
+                onDateClick={handleDateClick}
+                onEventClick={handleEventClick}
+                onSearchClick={() => setIsSearchOpen(true)}
+                calendarRef={calendarRef}
+                selectedDate={selectedDate}
+              />
+            </Suspense>
+          )}
         </div>
 
         <div className="student-dashboard-ranking order-2 md:col-span-2">
-          {secondaryPanelsReady ? (
+          {secondaryPanelsReady && configReady && currentUser?.uid ? (
             <WisRankingPanel
+              key={dashboardScope}
               config={config}
               hallOfFamePath="/student/points?tab=hall-of-fame"
             />
@@ -322,7 +349,7 @@ const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      {isSearchOpen && (
+      {isSearchOpen && !loading && loadedScope === dashboardScope && (
         <Suspense
           fallback={
             <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 pt-20 text-sm font-semibold text-white">
@@ -341,7 +368,11 @@ const StudentDashboard: React.FC = () => {
       )}
 
       <WisHallOfFameRecognitionModal
-        recognition={hallOfFameRecognition}
+        recognition={
+          !loading && loadedScope === dashboardScope
+            ? hallOfFameRecognition
+            : null
+        }
         onClose={() => {
           if (hallOfFameRecognition) {
             markHallOfFameRecognitionSeen(hallOfFameRecognition.seenKey);
@@ -358,7 +389,7 @@ const StudentDashboard: React.FC = () => {
       />
 
       <ScheduleEventDetailModal
-        event={detailEvent}
+        event={!loading && loadedScope === dashboardScope ? detailEvent : null}
         categories={categories}
         onClose={() => setDetailEvent(null)}
       />

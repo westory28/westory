@@ -57,6 +57,7 @@ jobs:
       - run: node scripts/verify-wis-overview-loading.mjs
       - run: node scripts/verify-teacher-page-read-latency.mjs
       - run: node scripts/verify-teacher-navigation-preload.mjs
+      - run: node scripts/verify-initial-route-preload.mjs
       - run: node scripts/verify-enrollment-roster-form.mjs
       - run: node scripts/verify-semester-transition-guide.mjs
       - run: npm run verify:typescript-baseline
@@ -76,6 +77,7 @@ jobs:
       - run: npm run verify:w5-shell-safety
       - run: npm run format:check
       - run: npm run build
+      - run: node scripts/verify-student-dashboard-loading.mjs --browser
       - run: node scripts/verify-reauth-maintenance-integration.mjs
 
       - uses: actions/setup-node@v4

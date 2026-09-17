@@ -150,6 +150,56 @@ const DeveloperLog = lazyWithRetry(
   "developer-log",
 );
 
+// Only the requested screen is prepared during authentication. Data reads still
+// start behind the maintenance, session, role and semester gates below.
+const initialRouteCode: Record<string, () => Promise<unknown>> = {
+  "/": Login.preload,
+  "/maintenance": Maintenance.preload,
+  "/student/dashboard": StudentDashboard.preload,
+  "/student/lesson/note": StudentNote.preload,
+  "/student/lesson/history-dictionary": StudentHistoryDictionary.preload,
+  "/student/lesson/maps": StudentMaps.preload,
+  "/student/lesson/think-cloud": StudentThinkCloud.preload,
+  "/student/quiz": StudentQuizIndex.preload,
+  "/student/quiz/run": QuizRunner.preload,
+  "/student/history-classroom": HistoryClassroomIndex.preload,
+  "/student/history-classroom/run": HistoryClassroomRunner.preload,
+  "/student/score": StudentScoreDashboard.preload,
+  "/student/score/report": StudentScoreReport.preload,
+  "/student/score/performance": StudentPerformanceScoreView.preload,
+  "/student/score/written-exam": StudentWrittenExamEssayScoreView.preload,
+  "/student/mypage": MyPage.preload,
+  "/student/mypage/archive": StudentArchiveOverview.preload,
+  "/student/history": StudentHistory.preload,
+  "/student/points": StudentPoints.preload,
+  "/student/calendar": Calendar.preload,
+  "/teacher/dashboard": TeacherDashboard.preload,
+  "/teacher/students": StudentList.preload,
+  "/teacher/quiz": ManageQuiz.preload,
+  "/teacher/quiz/history-classroom": ManageHistoryClassroom.preload,
+  "/teacher/exam": ManageExam.preload,
+  "/teacher/settings": Settings.preload,
+  "/teacher/settings/cutover": () =>
+    Promise.all([Settings.preload(), SemesterCutoverCenter.preload()]),
+  "/teacher/points": ManagePoints.preload,
+  "/teacher/lesson": ManageLesson.preload,
+  "/teacher/lesson/history-dictionary": ManageHistoryDictionary.preload,
+  "/teacher/lesson/maps": ManageMaps.preload,
+  "/teacher/lesson/source-archive": ManageSourceArchive.preload,
+  "/teacher/lesson/think-cloud": ManageThinkCloud.preload,
+  "/developer-log": DeveloperLog.preload,
+};
+
+export const preloadInitialRouteCode = (hash: string) => {
+  const pathname = hash.replace(/^#/, "").split("?")[0] || "/";
+  const load = Object.prototype.hasOwnProperty.call(initialRouteCode, pathname)
+    ? initialRouteCode[pathname]
+    : pathname.startsWith("/developer-log/")
+      ? DeveloperLog.preload
+      : undefined;
+  void load?.().catch(() => undefined);
+};
+
 const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
   const location = useLocation();
   const [pathname, query = ""] = to.split("?");

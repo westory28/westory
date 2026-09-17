@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
+import App, { preloadInitialRouteCode } from "./App";
 import "./assets/tailwind.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "../assets/css/style.css";
@@ -25,6 +25,7 @@ if (typeof window !== "undefined" && !window.location.hash) {
 }
 
 markLoginPerf("westory-app-load-start");
+preloadInitialRouteCode(window.location.hash);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

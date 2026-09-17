@@ -15,6 +15,7 @@ import {
   type LessonCommandScope,
 } from "../../lib/lessonManagement";
 import { runLessonAssetBatch } from "../../lib/lessonAssetBatch";
+import { markLoginPerf, measureLoginPerf } from "../../lib/loginPerf";
 import {
   collection,
   doc,
@@ -101,6 +102,7 @@ import {
   LessonEditorHeader,
   LessonPdfSection,
   LessonPreviewLauncher,
+  preloadLessonWorksheetStage,
   LessonTreePanel,
   type LessonEditorTab,
   type LessonTreeNode,
@@ -1802,6 +1804,7 @@ const ManageLesson: React.FC = () => {
       editorMountedRef.current &&
       teacherScopeRef.current === scope &&
       treeLoadIdRef.current === requestId;
+    markLoginPerf("westory-teacher-lesson-load-start");
     try {
       const recovery = lessonWriteRecovery.peek(scope);
       if (recovery?.pending)
@@ -1812,10 +1815,37 @@ const ManageLesson: React.FC = () => {
         setUnconfirmedWrite(recovery!);
         return;
       }
+      const lessonCollectionPath = getSemesterCollectionPath(config, "lessons");
+      // The first lesson page does not depend on the tree. Read both together
+      // on normal entry, while recovery still waits for the exact saved result.
+      // Settle an unused prefetch too when navigation or the tree read fails.
+      const firstLessonPage =
+        !recovery && (!selectedNodeId || resetSelection)
+          ? Promise.allSettled([
+              getDocsFromServer(
+                query(
+                  collection(db, lessonCollectionPath),
+                  orderBy("updatedAt", "desc"),
+                  limit(1),
+                ),
+              ).then((snapshot) => {
+                if (
+                  isCurrent() &&
+                  lessonLoadIdRef.current === lessonLoadId &&
+                  snapshot.docs.some(
+                    (lesson) => lesson.data().worksheetPageImages?.length > 0,
+                  )
+                )
+                  void preloadLessonWorksheetStage();
+                return snapshot;
+              }),
+            ])
+          : null;
       const applyLoadedTree = async (nextTree: TreeNode[]) => {
         if (!isCurrent()) return;
         setTreeData(nextTree);
         treeLoadedRef.current = true;
+        markLoginPerf("westory-teacher-lesson-tree-ready");
         if (selectedNodeId && !resetSelection) return;
 
         if (recovery?.kind === "document") {
@@ -1859,23 +1889,32 @@ const ManageLesson: React.FC = () => {
         const latestSelection =
           await findInitialLessonSelection<QueryDocumentSnapshot>({
             tree: nextTree,
-            collectionPaths: [getSemesterCollectionPath(config, "lessons")],
+            collectionPaths: [lessonCollectionPath],
             isCurrent: () =>
               isCurrent() && lessonLoadIdRef.current === lessonLoadId,
             readPage: async (collectionPath, cursor, pageSize) => {
-              const snap = await getDocsFromServer(
-                query(
-                  collection(db, collectionPath),
-                  orderBy("updatedAt", "desc"),
-                  ...(cursor ? [startAfter(cursor)] : []),
-                  limit(pageSize),
-                ),
-              );
+              const prefetched =
+                firstLessonPage &&
+                cursor === undefined &&
+                collectionPath === lessonCollectionPath
+                  ? (await firstLessonPage)[0]
+                  : undefined;
+              if (prefetched?.status === "rejected") throw prefetched.reason;
+              const snap =
+                prefetched?.status === "fulfilled"
+                  ? prefetched.value
+                  : await getDocsFromServer(
+                      query(
+                        collection(db, collectionPath),
+                        orderBy("updatedAt", "desc"),
+                        ...(cursor ? [startAfter(cursor)] : []),
+                        limit(pageSize),
+                      ),
+                    );
               for (const lesson of snap.docs) {
                 const unitId = String(lesson.data().unitId || "");
                 if (
-                  collectionPath ===
-                    getSemesterCollectionPath(config, "lessons") &&
+                  collectionPath === lessonCollectionPath &&
                   !initialDocuments.has(unitId)
                 )
                   initialDocuments.set(unitId, lesson);
@@ -2255,6 +2294,14 @@ const ManageLesson: React.FC = () => {
       }
       setLessonSaveState("saved");
       setPdfSaveState("saved");
+      if (initialSnapshot && !restored) {
+        markLoginPerf("westory-teacher-lesson-data-ready");
+        measureLoginPerf(
+          "westory-teacher-lesson-initial-data",
+          "westory-teacher-lesson-load-start",
+          "westory-teacher-lesson-data-ready",
+        );
+      }
       if (restored) {
         if (!restored.outcome.ok) {
           setPdfSaveFeedback({

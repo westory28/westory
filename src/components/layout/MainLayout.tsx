@@ -110,7 +110,15 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   ]);
 
   useEffect(() => {
-    if (loading || !currentUser) return;
+    if (
+      loading ||
+      !currentUser ||
+      !configReady ||
+      !config ||
+      !studentAccessReady ||
+      (isStudentRoute && !studentRouteAccess.allowed)
+    )
+      return;
 
     markLoginPerf("westory-main-layout-ready", {
       pathname: location.pathname,
@@ -120,7 +128,16 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       "westory-login-first-route-decided",
       "westory-main-layout-ready",
     );
-  }, [currentUser, loading, location.pathname]);
+  }, [
+    config,
+    configReady,
+    currentUser,
+    isStudentRoute,
+    loading,
+    location.pathname,
+    studentAccessReady,
+    studentRouteAccess.allowed,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;

@@ -26,6 +26,8 @@ const LessonWorksheetStage = lazyWithRetry(
   () => import("../../../components/common/LessonWorksheetStage"),
   "teacher-lesson-worksheet-stage",
 );
+export const preloadLessonWorksheetStage = () =>
+  LessonWorksheetStage.preload().catch(() => undefined);
 const LessonContent = lazyWithRetry(
   () => import("../../student/lesson/components/LessonContent"),
   "teacher-lesson-student-preview",

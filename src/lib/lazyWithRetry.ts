@@ -18,10 +18,20 @@ const isChunkLoadError = (error: unknown) => {
 export const lazyWithRetry = <T extends { default: React.ComponentType<any> }>(
   importer: () => Promise<T>,
   key: string,
-) =>
-  lazy(async () => {
+) => {
+  let pending: Promise<T> | undefined;
+  const preload = () => {
+    if (!pending) {
+      pending = importer().catch((error) => {
+        pending = undefined;
+        throw error;
+      });
+    }
+    return pending;
+  };
+  const component = lazy(async () => {
     try {
-      const loaded = await importer();
+      const loaded = await preload();
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem(`${RETRY_PREFIX}${key}`);
       }
@@ -40,3 +50,7 @@ export const lazyWithRetry = <T extends { default: React.ComponentType<any> }>(
       throw error;
     }
   });
+  // Download code without mounting protected components or starting their reads.
+  // Speculative failures remain retryable; only a rendered route may reload.
+  return Object.assign(component, { preload });
+};

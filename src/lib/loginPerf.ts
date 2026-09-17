@@ -23,10 +23,12 @@ export const markLoginPerf = (
 
   try {
     performance.mark(name);
-    console.info(`[Perf] ${name}`, {
-      at: Math.round(performance.now()),
-      ...(detail || {}),
-    });
+    console.info(
+      `[Perf] ${name} ${JSON.stringify({
+        at: Math.round(performance.now()),
+        ...(detail || {}),
+      })}`,
+    );
   } catch {
     // Ignore performance API failures.
   }
@@ -44,9 +46,11 @@ export const measureLoginPerf = (
     const entries = performance.getEntriesByName(name, "measure");
     const lastEntry = entries[entries.length - 1];
     if (lastEntry) {
-      console.info(`[Perf] ${name}`, {
-        durationMs: Math.round(lastEntry.duration),
-      });
+      console.info(
+        `[Perf] ${name} ${JSON.stringify({
+          durationMs: Math.round(lastEntry.duration),
+        })}`,
+      );
     }
   } catch {
     // Ignore missing marks or unsupported browsers.

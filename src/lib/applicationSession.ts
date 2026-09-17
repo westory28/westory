@@ -113,6 +113,19 @@ const assertCurrentAuthEpoch = async (
 export const getApplicationSessionAuthorityMode = () =>
   activeSessionAuthorityMode;
 
+// Drop only this browser's proof when its maintenance gate closes. Do not
+// close the server session, which may still be in use by another browser tab.
+export const clearLocalApplicationSessionProof = (expectedUid: string) => {
+  if (
+    auth.currentUser?.uid !== expectedUid ||
+    (activeSessionProof && activeSessionProof.uid !== expectedUid)
+  ) {
+    return;
+  }
+  activeSessionProof = null;
+  setActiveSessionAuthorityMode(null);
+};
+
 export const subscribeApplicationSessionAuthorityMode = (
   listener: (mode: ApplicationSessionAuthorityMode | null) => void,
 ) => {

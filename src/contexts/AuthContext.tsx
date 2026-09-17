@@ -32,6 +32,7 @@ import {
   subscribeSystemConfigUpdated,
 } from "../lib/appEvents";
 import {
+  clearLocalApplicationSessionProof,
   closeApplicationSession,
   subscribeApplicationSessionAuthorityMode,
   synchronizeApplicationSession,
@@ -142,6 +143,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const maintenanceBlockedRef = useRef(false);
 
   const clearAuthenticatedState = useCallback(() => {
+    const uid = authenticatedUidRef.current;
+    if (uid) clearLocalApplicationSessionProof(uid);
     firstUserDocReadyRef.current = null;
     systemConfigLoadRef.current = null;
     menuConfigLoadRef.current = null;
@@ -185,24 +188,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return systemConfigLoadRef.current;
     }
 
-    const promise = (async () => {
+    const promise: Promise<void> = Promise.resolve().then(async () => {
       try {
         const data = await readFreshSiteSettingDoc<SystemConfig>("config");
-        if (auth.currentUser?.uid !== user.uid) return;
+        if (
+          auth.currentUser?.uid !== user.uid ||
+          systemConfigLoadRef.current !== promise
+        )
+          return;
         setConfig(normalizeSystemConfig(data));
         setConfigReady(true);
         setConfigLoadedAt(Date.now());
         markLoginPerf("westory-auth-config-ready");
       } catch (e) {
         console.error("Failed to load system config", e);
-        if (auth.currentUser?.uid !== user.uid) return;
+        if (
+          auth.currentUser?.uid !== user.uid ||
+          systemConfigLoadRef.current !== promise
+        )
+          return;
         setConfig(null);
         setConfigReady(true);
         setConfigLoadedAt(Date.now());
       } finally {
-        systemConfigLoadRef.current = null;
+        if (systemConfigLoadRef.current === promise) {
+          systemConfigLoadRef.current = null;
+        }
       }
-    })();
+    });
 
     systemConfigLoadRef.current = promise;
     return promise;
@@ -221,23 +234,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return menuConfigLoadRef.current;
     }
 
-    const promise = (async () => {
+    const promise: Promise<void> = Promise.resolve().then(async () => {
       try {
         const data = await readFreshSiteSettingDoc<MenuConfig>("menu_config");
-        if (auth.currentUser?.uid !== user.uid) return;
+        if (
+          auth.currentUser?.uid !== user.uid ||
+          menuConfigLoadRef.current !== promise
+        )
+          return;
         setMenuConfig(data ? sanitizeMenuConfig(data) : cloneDefaultMenus());
         setMenuConfigReady(true);
         setMenuConfigLoadedAt(Date.now());
       } catch (e) {
         console.error("Failed to load menu config", e);
-        if (auth.currentUser?.uid !== user.uid) return;
+        if (
+          auth.currentUser?.uid !== user.uid ||
+          menuConfigLoadRef.current !== promise
+        )
+          return;
         setMenuConfig(null);
         setMenuConfigReady(true);
         setMenuConfigLoadedAt(Date.now());
       } finally {
-        menuConfigLoadRef.current = null;
+        if (menuConfigLoadRef.current === promise) {
+          menuConfigLoadRef.current = null;
+        }
       }
-    })();
+    });
 
     menuConfigLoadRef.current = promise;
     return promise;
@@ -249,9 +272,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(
     () =>
-      subscribeApplicationSessionAuthorityMode(
-        setApplicationSessionAuthorityMode,
-      ),
+      subscribeApplicationSessionAuthorityMode((mode) => {
+        // A session response can arrive after the maintenance check blocks
+        // this user or its profile probe fails. Neither late result may reopen
+        // the client authority after that authentication attempt has ended.
+        const acceptsSession =
+          !maintenanceBlockedRef.current &&
+          (authResolutionPendingRef.current ||
+            (resolvedUserRef.current !== null &&
+              resolvedUserRef.current.uid === auth.currentUser?.uid));
+        if (!acceptsSession && mode !== null) {
+          const uid = authenticatedUidRef.current;
+          if (uid) clearLocalApplicationSessionProof(uid);
+        }
+        setApplicationSessionAuthorityMode(acceptsSession ? mode : null);
+      }),
     [],
   );
 
@@ -281,6 +316,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       resolutionGuard = window.setTimeout(() => {
         if (!active || !authResolutionPendingRef.current) return;
         authRevisionRef.current += 1;
+        authResolutionPendingRef.current = false;
         clearAuthenticatedState();
         setAuthenticationError(
           "로그인 정보와 사용자 권한을 확인하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
@@ -293,6 +329,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       user: User,
       authRevision: number,
     ) => {
+      // This revision is checking again; an earlier maintenance result must
+      // not discard a valid session response for the new authentication check.
+      maintenanceBlockedRef.current = false;
       setStudentMaintenanceAccessStatus("checking");
       const bootstrap = await readStudentMaintenanceBootstrap(user);
       if (
@@ -314,6 +353,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       maintenanceBlockedRef.current = true;
+      clearLocalApplicationSessionProof(user.uid);
       resolvedUserRef.current = user;
       setApplicationSessionAuthorityMode(null);
       setCurrentUser(user);
@@ -529,6 +569,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             setAuthenticationStatus("AUTHENTICATING");
             scheduleResolutionGuard();
             try {
+              // The callable independently enforces maintenance on the server.
+              // Start both verifications together; consume early rejection even
+              // when maintenance later blocks us and this promise is discarded.
+              const applicationSessionReady = synchronizeApplicationSession(
+                user,
+                { expectedUid: user.uid },
+              );
+              void applicationSessionReady.catch(() => undefined);
               const maintenanceAllowed = await verifyMaintenanceAccess(
                 user,
                 refreshRevision,
@@ -538,9 +586,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               // exists. Keep both server checks mandatory, but overlap their
               // network waits; protected children remain AUTHENTICATING.
               const [applicationSession, verifiedUserSnap] = await Promise.all([
-                synchronizeApplicationSession(user, {
-                  expectedUid: user.uid,
-                }),
+                applicationSessionReady,
                 readUserDocumentFromServer(user, refreshRevision),
               ]);
               if (
@@ -603,6 +649,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             unsubscribeUserDoc = null;
           }
           if (user) {
+            if (
+              authenticatedUidRef.current !== null &&
+              authenticatedUidRef.current !== user.uid
+            ) {
+              clearAuthenticatedState();
+            }
             setAuthenticationStatus("AUTHENTICATING");
             setUserData(null);
             firstUserDocReadyRef.current = null;
@@ -620,6 +672,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               ReturnType<typeof getDocFromServer>
             > | null = null;
             try {
+              // Server-side maintenance remains mandatory for this callable.
+              // No settings read or protected mount starts before our matching
+              // maintenance result and the session response both succeed.
+              const applicationSessionReady = synchronizeApplicationSession(
+                user,
+                { expectedUid: user.uid },
+              );
+              void applicationSessionReady.catch(() => undefined);
               const maintenanceAllowed = await verifyMaintenanceAccess(
                 user,
                 authRevision,
@@ -629,9 +689,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               // exists. Keep both server checks mandatory, but overlap their
               // network waits; protected children remain AUTHENTICATING.
               const [applicationSession, userSnap] = await Promise.all([
-                synchronizeApplicationSession(user, {
-                  expectedUid: user.uid,
-                }).then((session) => {
+                applicationSessionReady.then((session) => {
                   if (
                     active &&
                     authRevisionRef.current === authRevision &&
@@ -744,6 +802,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         resumeGuard = null;
       }
       maintenanceBlockedRef.current = true;
+      clearLocalApplicationSessionProof(currentUser.uid);
       authRevisionRef.current += 1;
       authResolutionPendingRef.current = false;
       stopUserDocSubscriptionRef.current();
