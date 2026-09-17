@@ -226,7 +226,7 @@ assert.deepEqual(
   "W11 teacher learning children do not migrate to Production-first order",
 );
 assert.match(header, /menuConfig\?\.teacher\s*\|\|\s*MENUS\.teacher/u);
-assert.match(header, /getStudentVisibleMenuItems\(menuConfig\.student/u);
+assert.match(header, /getStudentVisibleMenuItems\(\s*menuConfig\.student/u);
 assert.match(header, /resolvedChildren\.map\(\(child, childIdx\)/u);
 assert.match(header, /-mobile-child-/u, "mobile child menus are not rendered");
 assert.match(

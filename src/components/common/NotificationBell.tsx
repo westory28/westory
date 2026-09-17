@@ -212,7 +212,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setOpen((current) => !current);
+          if (!open && !loading) void load();
+        }}
         data-session-action="true"
         className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${buttonClassName}`}
         aria-label={panelTitle}
@@ -232,9 +235,6 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
             <div>
               <div className="text-sm font-extrabold text-stone-900">
                 {panelTitle}
-              </div>
-              <div className="mt-0.5 text-xs font-medium text-stone-500">
-                최근 알림을 확인할 수 있습니다.
               </div>
             </div>
             <button
@@ -351,24 +351,25 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
             })}
           </div>
 
-          <div className="flex items-center justify-end border-t border-stone-100 bg-stone-50 px-4 py-3">
-            <button
-              type="button"
-              onClick={() => void acknowledgeAll()}
-              data-session-action="true"
-              disabled={
-                !hasNotifications ||
-                unreadCount === 0 ||
-                audience !== "student" ||
-                state?.readOnly ||
-                busy === "notice:all"
-              }
-              className="inline-flex items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-extrabold text-stone-600 transition hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <i className="fas fa-check-double" aria-hidden="true"></i>
-              {busy === "notice:all" ? "확인 중..." : "모두 확인"}
-            </button>
-          </div>
+          {audience === "student" && (
+            <div className="flex items-center justify-end border-t border-stone-100 bg-stone-50 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => void acknowledgeAll()}
+                data-session-action="true"
+                disabled={
+                  !hasNotifications ||
+                  unreadCount === 0 ||
+                  state?.readOnly ||
+                  busy === "notice:all"
+                }
+                className="inline-flex items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-extrabold text-stone-600 transition hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <i className="fas fa-check-double" aria-hidden="true"></i>
+                {busy === "notice:all" ? "확인 중..." : "모두 확인"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

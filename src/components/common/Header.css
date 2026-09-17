@@ -1,0 +1,114 @@
+/* Keep the live controls independent of the legacy .hidden utility. */
+.ws-app-header .header-container {
+  max-width: var(--ws-workspace-max);
+}
+
+.ws-app-header .header-right {
+  flex-shrink: 0;
+  gap: var(--space-2);
+}
+
+.ws-header-session {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-full);
+  background: var(--ws-surface-subtle);
+}
+
+.ws-header-session-refresh,
+.ws-header-notification > button,
+.ws-header-settings,
+.ws-app-header .btn-logout,
+.ws-app-header .mobile-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-10) + var(--space-1));
+  min-height: calc(var(--space-10) + var(--space-1));
+}
+
+.ws-header-session-refresh:focus-visible {
+  outline: 2px solid var(--ws-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-full);
+}
+
+.ws-header-notification {
+  display: block;
+  flex-shrink: 0;
+}
+
+.ws-mobile-account {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--ws-border);
+  background: var(--ws-surface-subtle);
+}
+
+.ws-mobile-account > a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: calc(var(--space-10) + var(--space-1));
+  font-weight: 700;
+}
+
+@media (min-width: 1024px) {
+  .ws-app-header .mobile-menu-btn {
+    display: none;
+  }
+}
+
+@media (max-width: 1279px) and (min-width: 1024px) {
+  .ws-app-header .header-container {
+    flex-wrap: wrap;
+  }
+
+  .ws-app-header .header-container > div:first-child {
+    display: contents;
+  }
+
+  .ws-app-header .logo-text {
+    min-height: var(--ws-header-height);
+  }
+
+  .ws-app-header .desktop-nav {
+    order: 2;
+    width: 100%;
+    min-height: var(--space-12);
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 1023px) {
+  .ws-app-header .header-user-link,
+  .ws-app-header .ws-header-settings {
+    display: none !important;
+  }
+
+  .ws-app-header .header-right {
+    gap: 0;
+  }
+
+  .ws-header-session {
+    gap: 0;
+    padding-left: var(--space-2);
+  }
+
+  .ws-header-session > i {
+    display: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .ws-app-header .logo-text {
+    font-size: var(--ws-type-card-title);
+  }
+}

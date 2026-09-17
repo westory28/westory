@@ -23,7 +23,6 @@ import {
 } from "../../lib/stepUpReauth";
 import type { StepUpRequestOptions } from "../../lib/stepUpReauth";
 import {
-  clearSessionTiming,
   NORMAL_SESSION_DURATION_MS,
   writeSessionDeadline,
 } from "../../lib/sessionPolicy";
@@ -374,7 +373,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       );
     }
     if (
-      session.authorityMode === "ENFORCE" &&
       !writeSessionDeadline(session.generalExpiresAt, {
         durationMs: NORMAL_SESSION_DURATION_MS,
       })
@@ -383,9 +381,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         "SESSION_REFRESH_FAILED",
         "로그인 세션의 만료 시간을 확인하지 못했습니다.",
       );
-    }
-    if (session.authorityMode !== "ENFORCE") {
-      clearSessionTiming();
     }
     try {
       // Reauthentication publishes the new auth_time before the matching

@@ -48,9 +48,6 @@ function harness(shared = { draft: null }) {
       config: {
         year: "2026",
         semester: "2",
-        showQuiz: false,
-        showScore: true,
-        showLesson: false,
       },
       activeSemester: { year: "2026", semester: "2" },
       newSemester: { year: "2027", semester: "1" },
@@ -314,9 +311,9 @@ function componentHarness() {
     setServerError: (value) => {
       serverError = value;
     },
-    quiz: () =>
+    newYear: () =>
       nodes(instance.tree).find(
-        (n) => n.type === "input" && n.props.name === "showQuiz",
+        (n) => n.type === "input" && n.props["aria-label"] === "새 학기 학년도",
       ),
     retry: () =>
       nodes(instance.tree).find(
@@ -415,7 +412,7 @@ function componentHarness() {
     await other.run();
     assert.equal(other.calls.length, 0);
   });
-  await test("actual handler unmount then new instance load waits for authentication and restores checkboxes", async () => {
+  await test("actual handler unmount then new instance load waits for authentication and restores semester inputs", async () => {
     const shared = { draft: null },
       old = harness(shared);
     let release;
@@ -434,8 +431,8 @@ function componentHarness() {
     await flight;
     await loading;
     const restored = remount.writes.find((w) => w[0] === "config")[1];
-    assert.equal(restored.showQuiz, false);
-    assert.equal(restored.showLesson, false);
+    assert.equal(restored.year, "2026");
+    assert.equal(restored.semester, "2");
     assert.equal(
       remount.writes.find((w) => w[0] === "newSemester")[1].year,
       "2027",
@@ -459,8 +456,8 @@ function componentHarness() {
     const remount = harness(shared);
     await remount.load();
     assert.equal(
-      remount.writes.find((w) => w[0] === "config")[1].showQuiz,
-      false,
+      remount.writes.find((w) => w[0] === "newSemester")[1].year,
+      "2027",
     );
     assert.equal(shared.draft, null);
   });
@@ -497,8 +494,8 @@ function componentHarness() {
         if (edge === "expired") shared.draft.expiresAt = 0;
         await remount.load();
         assert.equal(
-          remount.writes.find((w) => w[0] === "config")[1].showQuiz,
-          true,
+          remount.writes.find((w) => w[0] === "newSemester")[1].year,
+          "2026",
         );
         assert.equal(shared.draft, null);
       },
@@ -534,9 +531,9 @@ function componentHarness() {
         h.mount();
         await h.settle();
         assert(h.retry());
-        assert.equal(h.quiz().props.checked, true);
-        h.quiz().props.onChange({
-          target: { name: "showQuiz", type: "checkbox", checked: false },
+        assert.equal(h.newYear().props.value, "2026");
+        h.newYear().props.onChange({
+          target: { name: "year", value: "2027" },
         });
         h.render();
         const retry = h.retry();
@@ -558,7 +555,7 @@ function componentHarness() {
           h.release();
         }
         await h.settle();
-        assert.equal(h.quiz().props.checked, false);
+        assert.equal(h.newYear().props.value, "2027");
         assert(!h.calls.includes("SAVE"));
         if (outcome === "success") {
           assert(h.calls.includes("query-fresh"));
@@ -578,12 +575,74 @@ function componentHarness() {
           h.mount();
           h.release();
           await h.settle();
-          assert.equal(h.quiz().props.checked, false);
+          assert.equal(h.newYear().props.value, "2027");
           assert(h.calls.includes("query-fresh"));
         }
         h.unmount();
       },
     );
+  await test("complete but stale checks never claim missing data", () => {
+    const build = evaluate("buildReadinessView", { CORE_READINESS_LABELS: {} });
+    const report = {
+      checks: [
+        {
+          checkId: "required",
+          label: "필수 항목",
+          required: true,
+          status: "PASS",
+        },
+        {
+          checkId: "advisory",
+          label: "참고 항목",
+          required: false,
+          status: "NOT_APPLICABLE",
+        },
+      ],
+    };
+    assert.equal(build(report, true).status, "ready");
+    assert.equal(build(report, false).status, "stale");
+    assert.equal(
+      build(report, false).advisoryItems[0].statusLabel,
+      "해당 없음",
+    );
+    report.checks[1].status = "FAIL";
+    assert.equal(build(report, true).status, "partial");
+    report.checks[0].status = "FAIL";
+    assert.equal(build(report, true).status, "danger");
+    assert.equal(build(null, true), null);
+  });
+  await test("semester save does not write removed student menu flags", async () => {
+    const calls = [];
+    const context = {
+      hasPendingSemesterSwitch: true,
+      saving: false,
+      semesterStateError: "",
+      config: { year: "2027", semester: "1" },
+      activeSemester: { year: "2026", semester: "2" },
+      normalizeYear: String,
+      normalizeSemester: String,
+      prepareSemesterForActivation: async (...args) => {
+        calls.push(["activate", ...args]);
+        return {};
+      },
+      invalidateSiteSettingDocCache: () => {},
+      refreshConfig: async () => {},
+      notifySystemConfigUpdated: () => {},
+      syncSemesterPresentation: () => {},
+      showToast: () => {},
+      buildSemesterLabel: () => "새 학기",
+      setSaving: () => {},
+      console,
+      executeWestoryCommand: () => {
+        throw Error("Removed flags must never be written");
+      },
+    };
+    await evaluate("handleSave", context)();
+    assert.deepEqual(calls, [["activate", "2027", "1"]]);
+    context.hasPendingSemesterSwitch = false;
+    await evaluate("handleSave", context)();
+    assert.equal(calls.length, 1);
+  });
   const compiled = ts.transpileModule(source, {
     fileName: path,
     compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },

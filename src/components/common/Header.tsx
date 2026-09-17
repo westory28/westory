@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import PointRankBadge from "./PointRankBadge";
 import { useAppToast } from "./AppToastProvider";
@@ -39,6 +38,7 @@ import {
 } from "../../lib/sessionActivity";
 import type { PointRankDisplay } from "../../lib/pointRanks";
 import { useShellViewport } from "../../hooks/useShellViewport";
+import "./Header.css";
 import {
   canAccessTeacherPortal,
   canAccessTeacherPath,
@@ -144,15 +144,13 @@ const Header: React.FC<Record<string, unknown>> = () => {
   const [profileFallbackIcon, setProfileFallbackIcon] = useState(
     getDefaultProfileEmojiValue(),
   );
-  const [mobileUnreadCount, setMobileUnreadCount] = useState(0);
-  const [desktopNotificationHost, setDesktopNotificationHost] =
-    useState<HTMLSpanElement | null>(null);
-  const [mobileNotificationHost, setMobileNotificationHost] =
-    useState<HTMLSpanElement | null>(null);
   const timeoutHandledRef = useRef(false);
   const sessionExpiryRef = useRef<number | null>(null);
   const lastSessionExtendAtRef = useRef(0);
   const warnedSessionExpiryRef = useRef<number | null>(null);
+  const sessionTouchRevisionRef = useRef(0);
+  const sessionUserIdRef = useRef(currentUser?.uid);
+  sessionUserIdRef.current = currentUser?.uid;
 
   const isReady = !!currentUser;
   const isTeacherUser = canAccessTeacherPortal(
@@ -203,7 +201,11 @@ const Header: React.FC<Record<string, unknown>> = () => {
   const baseMenuItems =
     portal === "student"
       ? canRenderStudentMenu && menuConfig
-        ? getStudentVisibleMenuItems(menuConfig.student || [], config)
+        ? getStudentVisibleMenuItems(
+            menuConfig.student || [],
+            config,
+            menuConfig,
+          )
         : []
       : menuConfig?.teacher || MENUS.teacher || [];
   const canViewTeacherMenuUrl = (url: string) => {
@@ -247,8 +249,6 @@ const Header: React.FC<Record<string, unknown>> = () => {
   const profileLabel = `${displayName} ${isTeacherPortal ? "교사" : "학생"}`;
   const studentProfileIcon = userData?.profileIcon || profileFallbackIcon;
   const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
-  const mobileUnreadLabel =
-    mobileUnreadCount > 99 ? "99+" : String(mobileUnreadCount);
   const desktopSubmenuParentUrls = new Set([
     "/student/lesson/note",
     "/student/quiz",
@@ -346,6 +346,7 @@ const Header: React.FC<Record<string, unknown>> = () => {
 
   const performLogout = async (isTimeout: boolean) => {
     try {
+      sessionTouchRevisionRef.current += 1;
       if (isTimeout && currentUser) {
         writeSessionReturnPath(
           currentUser.uid,
@@ -421,14 +422,30 @@ const Header: React.FC<Record<string, unknown>> = () => {
     }
 
     lastSessionExtendAtRef.current = now;
+    const ownerUid = currentUser?.uid;
+    const touchRevision = ++sessionTouchRevisionRef.current;
+    const applyExpiry = (expiry: number) => {
+      sessionExpiryRef.current = expiry;
+      setSessionExpiry(expiry);
+      timeoutHandledRef.current = false;
+      warnedSessionExpiryRef.current = null;
+      setRemainingSeconds(Math.max(0, Math.ceil((expiry - Date.now()) / 1000)));
+    };
+    // In production observation mode, the local 60-minute timer remains
+    // usable even if the background server touch is delayed or offline.
+    if (isSessionEnforced && applicationSessionAuthorityMode !== "ENFORCE") {
+      applyExpiry(writeSessionActivity(now, sessionPolicy));
+    }
 
     const scope = sessionPolicy.highRisk ? "HIGH_RISK" : "GENERAL";
     void touchApplicationSession(scope)
       .then((serverSession) => {
-        if (!isSessionEnforced || serverSession.authorityMode !== "ENFORCE") {
-          clearSessionTiming();
-          sessionExpiryRef.current = null;
-          setSessionExpiry(null);
+        if (
+          sessionUserIdRef.current !== ownerUid ||
+          sessionTouchRevisionRef.current !== touchRevision ||
+          !isSessionEnforced ||
+          serverSession.authorityMode !== "ENFORCE"
+        ) {
           return;
         }
         const serverExpiry = sessionPolicy.highRisk
@@ -436,18 +453,13 @@ const Header: React.FC<Record<string, unknown>> = () => {
           : serverSession.generalExpiresAt;
         const syncedExpiry = writeSessionDeadline(serverExpiry, sessionPolicy);
         if (!syncedExpiry) return;
-        sessionExpiryRef.current = syncedExpiry;
-        setSessionExpiry(syncedExpiry);
-        timeoutHandledRef.current = false;
-        warnedSessionExpiryRef.current = null;
-        setRemainingSeconds(
-          Math.max(0, Math.ceil((syncedExpiry - Date.now()) / 1000)),
-        );
+        applyExpiry(syncedExpiry);
       })
       .catch((error: unknown) => {
         const code = String((error as { code?: unknown })?.code || "");
         if (
-          isSessionEnforced &&
+          sessionUserIdRef.current === ownerUid &&
+          sessionTouchRevisionRef.current === touchRevision &&
           (code === "functions/unauthenticated" ||
             code === "functions/permission-denied")
         ) {
@@ -493,7 +505,6 @@ const Header: React.FC<Record<string, unknown>> = () => {
       warnedSessionExpiryRef.current = null;
       setSessionExpiry(null);
       setRemainingSeconds(sessionDurationSeconds);
-      if (currentUser) clearSessionTiming();
       return;
     }
     timeoutHandledRef.current = false;
@@ -509,6 +520,7 @@ const Header: React.FC<Record<string, unknown>> = () => {
     );
   }, [
     currentUser,
+    applicationSessionAuthorityMode,
     isSessionEnforced,
     location.pathname,
     sessionPolicy.durationMs,
@@ -624,6 +636,7 @@ const Header: React.FC<Record<string, unknown>> = () => {
     };
   }, [
     currentUser,
+    applicationSessionAuthorityMode,
     isSessionEnforced,
     sessionPolicy.durationMs,
     sessionPolicy.warningLeadMs,
@@ -694,16 +707,10 @@ const Header: React.FC<Record<string, unknown>> = () => {
 
   if (!isReady) return null;
 
-  const renderNotificationInMobileMenu =
-    !isLegacyDesktopViewport && mobileMenuOpen && mobileNotificationHost;
-  const notificationHost = renderNotificationInMobileMenu
-    ? mobileNotificationHost
-    : desktopNotificationHost;
-
   return (
     <>
       <header
-        className={isTeacherPortal ? "ws-teacher-header" : undefined}
+        className={`ws-app-header ${isTeacherPortal ? "ws-teacher-header" : ""}`}
         onPointerOverCapture={(event) => {
           if (event.pointerType === "mouse") preloadMenuLink(event.target);
         }}
@@ -845,8 +852,9 @@ const Header: React.FC<Record<string, unknown>> = () => {
               canManageSettings(userData, currentUser?.email || "") && (
                 <Link
                   to="/teacher/settings"
-                  className="text-gray-400 hover:text-blue-600 transition"
+                  className="ws-header-settings text-gray-400 hover:text-blue-600 transition"
                   title="설정"
+                  aria-label="설정"
                 >
                   <i className="fas fa-cog fa-lg"></i>
                 </Link>
@@ -872,28 +880,31 @@ const Header: React.FC<Record<string, unknown>> = () => {
               )}
             </Link>
 
-            <span ref={setDesktopNotificationHost} className="contents" />
+            <React.Suspense fallback={null}>
+              <NotificationBell className="ws-header-notification" />
+            </React.Suspense>
 
             {isSessionEnforced && (
-              <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
-                <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
+              <div className="ws-header-session">
+                <i
+                  className="fas fa-stopwatch text-stone-400 text-xs"
+                  aria-hidden="true"
+                ></i>
                 <span
                   className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds <= sessionWarningSeconds ? "text-red-500" : "text-stone-600"}`}
-                  title={
-                    sessionPolicy.highRisk
-                      ? "관리자 설정 세션 남은 시간"
-                      : "세션 남은 시간"
-                  }
+                  title="세션 남은 시간"
                 >
                   {formatCountdown(remainingSeconds)}
                 </span>
                 <button
+                  type="button"
                   onClick={() => extendSession({ force: true })}
                   data-session-ignore="true"
-                  className="text-stone-400 hover:text-blue-600 transition p-1"
+                  className="ws-header-session-refresh text-stone-400 hover:text-blue-600 transition"
                   title="시간 연장"
+                  aria-label="접속 시간 60분으로 연장"
                 >
-                  <i className="fas fa-redo-alt text-xs"></i>
+                  <i className="fas fa-redo-alt text-xs" aria-hidden="true"></i>
                 </button>
               </div>
             )}
@@ -943,14 +954,6 @@ const Header: React.FC<Record<string, unknown>> = () => {
               aria-controls="mobile-menu"
             >
               <i className="fas fa-bars"></i>
-              {mobileUnreadCount > 0 && (
-                <span
-                  className="mobile-menu-btn-badge"
-                  aria-label={`읽지 않은 알림 ${mobileUnreadLabel}개`}
-                >
-                  {mobileUnreadLabel}
-                </span>
-              )}
             </button>
           </div>
         </div>
@@ -966,39 +969,20 @@ const Header: React.FC<Record<string, unknown>> = () => {
         <div id="mobile-menu" className={mobileMenuOpen ? "open" : ""}>
           {mobileMenuOpen && (
             <>
-              <div className="mobile-menu-status">
-                <div className="mobile-menu-status-card">
-                  <div className="mobile-menu-status-copy">
-                    <span className="mobile-menu-status-label">알림</span>
-                    <strong>
-                      {mobileUnreadCount > 0
-                        ? `${mobileUnreadLabel}개`
-                        : "새 알림 없음"}
-                    </strong>
-                  </div>
-                  <span ref={setMobileNotificationHost} className="contents" />
-                </div>
-                {isSessionEnforced && (
-                  <button
-                    type="button"
-                    onClick={() => extendSession({ force: true })}
-                    title="시간 연장"
-                    data-session-ignore="true"
-                    className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds <= sessionWarningSeconds ? "is-warning" : ""}`}
+              <div className="ws-mobile-account">
+                <Link
+                  to={profileTarget}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {profileLabel}
+                </Link>
+                {isTeacherPortal && isAdmin && (
+                  <Link
+                    to="/teacher/settings"
+                    onClick={() => setMobileMenuOpen(false)}
                   >
-                    <div className="mobile-menu-status-copy">
-                      <span className="mobile-menu-status-label">
-                        남은 시간
-                      </span>
-                      <strong>{formatCountdown(remainingSeconds)}</strong>
-                    </div>
-                    <span
-                      className="mobile-menu-status-icon"
-                      aria-hidden="true"
-                    >
-                      <i className="fas fa-redo-alt"></i>
-                    </span>
-                  </button>
+                    <i className="fas fa-cog" aria-hidden="true"></i> 설정
+                  </Link>
                 )}
                 {showSessionTestControls && (
                   <div className="grid grid-cols-2 gap-2">
@@ -1063,21 +1047,6 @@ const Header: React.FC<Record<string, unknown>> = () => {
           )}
         </div>
       </header>
-
-      {notificationHost &&
-        createPortal(
-          <React.Suspense fallback={null}>
-            <NotificationBell
-              className={
-                renderNotificationInMobileMenu
-                  ? "mobile-menu-notification"
-                  : "hidden lg:block"
-              }
-              onUnreadCountChange={setMobileUnreadCount}
-            />
-          </React.Suspense>,
-          notificationHost,
-        )}
 
       {!isTeacherPortal && activeDesktopSubmenu && (
         <div className="hidden lg:block">

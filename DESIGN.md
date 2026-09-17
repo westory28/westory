@@ -8,7 +8,7 @@
 
 Westory는 중학교 수업 운영과 학생 학습 경험을 함께 담는 밝고 실용적인 교육용 웹앱이다. 시각 방향은 새로워 보이기보다 즉시 이해되는 관리도구형 정돈감, 학생에게는 단순한 다음 행동, 교사에게는 촘촘하지만 읽히는 운영 흐름이다. 기본 표면은 밝은 회색과 흰색 카드, 명확한 파란 primary, 제한적인 amber 브랜드 포인트를 유지한다.
 
-Design Read: 교육 현장용 React 앱, 학생과 교사가 함께 쓰는 운영 UI, calm school utility 방향.
+Design Read: 사용자가 정한 Simple & Intuitive Design. 기존 Westory 운영 화면의 배치·용어·조작을 유지하고 요청한 불편만 개선한다. 사용자 지시와 기존 화면이 이 문서 및 참고 스킬의 기본값보다 우선한다. 사용자가 요청하지 않은 메뉴·섹션 설명 문단을 추가하지 않는다.
 
 - `DESIGN_VARIANCE`: 3/10. 기존 화면을 전면 재배치하지 않고 한 화면, 한 섹션, 한 패턴씩 개선한다.
 - `MOTION_INTENSITY`: 3/10. 상태 변화와 메뉴 전환은 빠르고 절제한다.
@@ -107,6 +107,7 @@ Layout tokens:
 
 - Page max width: `--ws-page-max: 1280px`.
 - Wide workspace max width: `--ws-workspace-max: 1600px`.
+- Teacher dashboard max width: `--ws-teacher-dashboard-max: 96rem` (기존 운영 너비 유지). 768px 이상에서 `min(96rem, 100vw - 2rem)`, 좌우 padding `--space-10`, 1024px 이상 달력:보조 영역 3:2. 데이터나 월·보기 전환에 따라 너비를 줄이지 않는다.
 - Header height: `--ws-header-height: 64px`.
 - Student mobile bottom navigation height: `--ws-student-nav-height: 68px` plus the device safe area.
 - Teacher compact rail width: `--ws-teacher-rail-width: 72px`.
@@ -191,7 +192,7 @@ Icon-only controls:
 - Labels are required. Placeholder cannot replace label.
 - Input border: `--ws-border`, focus ring `--ws-ring`.
 - Help text and validation text stay near the field.
-- Risk fields such as semester, permission, visibility, delete, and public range need explicit helper copy.
+- For semester, permission, visibility and deletion, identify the target and effect concisely in labels or the action confirmation. Do not add standing explanatory paragraphs unless the user requests them.
 
 ### Tabs and Segmented Controls
 

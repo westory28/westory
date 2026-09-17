@@ -2964,7 +2964,7 @@ button.lesson-core-point-floating-status:disabled {
   font-weight: 900;
 }
 
-/* Teacher home owns its card sizes; the calendar must not stretch the ranking. */
+/* Preserve the approved wide calendar; data and view changes must not resize it. */
 .teacher-dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -3028,8 +3028,8 @@ button.lesson-core-point-floating-status:disabled {
 
 @media (min-width: 768px) {
   .teacher-dashboard-container {
-    max-width: min(96rem, calc(100vw - 2rem));
-    padding-inline: clamp(1.5rem, 2.6vw, 2.5rem);
+    max-width: min(var(--ws-teacher-dashboard-max), calc(100vw - 2rem));
+    padding-inline: var(--space-10);
   }
 }
 

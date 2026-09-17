@@ -14,6 +14,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { notifyMenuConfigUpdated } from "../../../lib/appEvents";
 import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
 import { normalizeInstagramUrl } from "../../../lib/socialLinks";
+import { migrateStudentMenuVisibility } from "../../../lib/studentMenuAccess";
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS,
   DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
@@ -70,7 +71,12 @@ const moveInArray = <T,>(items: T[], from: number, to: number): T[] => {
 };
 
 const SettingsInterface: React.FC = () => {
-  const { refreshInterfaceConfig } = useAuth();
+  const {
+    refreshInterfaceConfig,
+    refreshConfig,
+    config: systemConfig,
+    configReady,
+  } = useAuth();
   const { showToast } = useAppToast();
   const [activeTab, setActiveTab] = useState<InterfaceTab>("landing");
   const [activePortal, setActivePortal] = useState<PortalType>("student");
@@ -79,6 +85,8 @@ const SettingsInterface: React.FC = () => {
     cloneDefaultMenus(),
   );
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reload, setReload] = useState(0);
   const [savingInterface, setSavingInterface] = useState(false);
   const [savingMenu, setSavingMenu] = useState(false);
   const [parentDraft, setParentDraft] = useState<
@@ -102,17 +110,29 @@ const SettingsInterface: React.FC = () => {
     return {
       parentCount: menuConfig[portal].length,
       childCount: children.length,
-      hiddenCount: children.filter((child) => child.hidden).length,
+      hiddenCount:
+        children.filter((child) => child.hidden).length +
+        menuConfig[portal].filter((item) => item.hidden).length,
     };
   };
 
   useEffect(() => {
+    if (!configReady) return;
+    if (!systemConfig) {
+      setLoading(false);
+      setLoadError(true);
+      return;
+    }
+    let active = true;
     const loadSettings = async () => {
+      setLoading(true);
+      setLoadError(false);
       try {
         const [interfaceSnap, menuSnap] = await Promise.all([
           getDoc(doc(db, "site_settings", "interface_config")),
           getDoc(doc(db, "site_settings", "menu_config")),
         ]);
+        if (!active) return;
 
         if (interfaceSnap.exists()) {
           const data = interfaceSnap.data();
@@ -136,21 +156,27 @@ const SettingsInterface: React.FC = () => {
           setConfig(createDefaultInterfaceConfig());
         }
 
-        if (menuSnap.exists()) {
-          setMenuConfig(sanitizeMenuConfig(menuSnap.data()));
-        } else {
-          setMenuConfig(cloneDefaultMenus());
-        }
+        setMenuConfig(
+          migrateStudentMenuVisibility(
+            menuSnap.exists()
+              ? sanitizeMenuConfig(menuSnap.data())
+              : cloneDefaultMenus(),
+            systemConfig,
+          ),
+        );
       } catch (error) {
         console.error("Failed to load interface settings:", error);
-        setMenuConfig(cloneDefaultMenus());
+        if (active) setLoadError(true);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     void loadSettings();
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [configReady, systemConfig, reload]);
 
   const handleConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -189,6 +215,14 @@ const SettingsInterface: React.FC = () => {
   const deleteParent = (portal: PortalType, index: number) => {
     updatePortalMenus(portal, (menus) =>
       menus.filter((_, idx) => idx !== index),
+    );
+  };
+
+  const toggleParentHidden = (portal: PortalType, index: number) => {
+    updatePortalMenus(portal, (menus) =>
+      menus.map((item, idx) =>
+        idx === index ? { ...item, hidden: !item.hidden } : item,
+      ),
     );
   };
 
@@ -433,7 +467,6 @@ const SettingsInterface: React.FC = () => {
       showToast({
         tone: "success",
         title: "사이트맵 메뉴 설정이 저장되었습니다.",
-        message: "학생과 교사 헤더에서 최신 메뉴를 사용할 수 있습니다.",
       });
     } catch (error: any) {
       console.error("Failed to save menu config:", error);
@@ -448,6 +481,25 @@ const SettingsInterface: React.FC = () => {
   };
 
   if (loading) return <PageDataLoading />;
+  if (loadError)
+    return (
+      <div
+        role="alert"
+        className="rounded-xl border border-gray-200 bg-white p-6"
+      >
+        <p>설정을 불러오지 못했습니다.</p>
+        <button
+          type="button"
+          className="mt-3 min-h-11 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white"
+          onClick={() => {
+            if (!systemConfig) void refreshConfig();
+            else setReload((value) => value + 1);
+          }}
+        >
+          다시 불러오기
+        </button>
+      </div>
+    );
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -477,9 +529,6 @@ const SettingsInterface: React.FC = () => {
                   <i className="fas fa-home text-blue-500 mr-2"></i>메인 화면
                   설정
                 </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  로그인(메인) 화면의 문구와 이모지를 설정합니다.
-                </p>
               </div>
 
               <div className="space-y-6">
@@ -495,9 +544,6 @@ const SettingsInterface: React.FC = () => {
                     placeholder="예: 📚"
                     className="w-24 text-center text-2xl border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
-                  <p className="text-xs text-gray-400 mt-1">
-                    이모지 1개를 입력하세요.
-                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -521,9 +567,6 @@ const SettingsInterface: React.FC = () => {
                   <i className="fas fa-copyright text-gray-500 mr-2"></i>푸터
                   설정
                 </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  사이트 하단의 저작권 문구를 설정합니다.
-                </p>
               </div>
 
               <div className="space-y-5">
@@ -573,9 +616,6 @@ const SettingsInterface: React.FC = () => {
                       <i className="fas fa-hourglass-half text-orange-500 mr-2"></i>
                       D-Day 표시
                     </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      메인 화면에 D-Day 카운트를 표시합니다.
-                    </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -630,7 +670,7 @@ const SettingsInterface: React.FC = () => {
                 disabled={savingInterface}
                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-10 rounded-xl shadow-lg transition transform active:scale-95 text-base"
               >
-                <i className="fas fa-save mr-2"></i>
+                <i className="fas fa-save mr-2" aria-hidden="true"></i>
                 {savingInterface ? "저장 중..." : "전체 저장"}
               </button>
             </div>
@@ -638,7 +678,7 @@ const SettingsInterface: React.FC = () => {
         )}
 
         {activeTab === "sitemap" && (
-          <div className="space-y-5 pb-24">
+          <div className="space-y-5 pb-44">
             <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
@@ -646,14 +686,11 @@ const SettingsInterface: React.FC = () => {
                     <i className="fas fa-sitemap text-blue-500"></i>
                     사이트맵 메뉴 관리
                   </h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    선택한 대시보드의 상위/하위 메뉴를 확인하고 바로 편집합니다.
-                  </p>
                 </div>
                 <div
                   role="tablist"
                   aria-label="사이트맵 미리보기 대상"
-                  className="inline-flex rounded-xl bg-gray-100 p-1"
+                  className="flex w-full rounded-xl bg-gray-100 p-1 sm:w-auto"
                 >
                   {(["student", "teacher"] as PortalType[]).map((portal) => {
                     const stats = getPortalMenuStats(portal);
@@ -664,7 +701,7 @@ const SettingsInterface: React.FC = () => {
                         role="tab"
                         aria-selected={activePortal === portal}
                         onClick={() => setActivePortal(portal)}
-                        className={`min-w-[136px] rounded-lg px-4 py-2 text-sm font-bold transition ${
+                        className={`min-w-0 flex-1 rounded-lg px-3 py-2 text-sm font-bold transition sm:min-w-[136px] ${
                           activePortal === portal
                             ? "bg-blue-600 text-white shadow-sm"
                             : "text-gray-600 hover:bg-white hover:text-gray-900"
@@ -708,21 +745,12 @@ const SettingsInterface: React.FC = () => {
               </div>
             </section>
 
-            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              <i className="fas fa-info-circle mr-1"></i>
-              이름 변경, 순서 이동, 삭제, 숨김 설정 후 우측 하단 저장 버튼을
-              눌러 반영합니다.
-            </div>
-
             <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h4 className="text-sm font-extrabold text-gray-900">
                     {getPortalLabel(activePortal)} 미리보기
                   </h4>
-                  <p className="mt-1 text-xs text-gray-500">
-                    현재 편집 상태 기준으로 선택한 대시보드만 표시합니다.
-                  </p>
                 </div>
                 <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
                   상위 {getPortalMenuStats(activePortal).parentCount}개
@@ -736,9 +764,23 @@ const SettingsInterface: React.FC = () => {
                     className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
                   >
                     <div
-                      className={`px-3 py-2.5 text-sm font-bold text-white ${getSitemapHeaderClass(idx)}`}
+                      className={`flex items-center justify-between gap-2 px-3 py-2.5 text-sm font-bold text-white ${getSitemapHeaderClass(idx)}`}
                     >
-                      {item.name}
+                      <span
+                        className={item.hidden ? "line-through opacity-60" : ""}
+                      >
+                        {item.name}
+                      </span>
+                      {activePortal === "student" && (
+                        <button
+                          type="button"
+                          onClick={() => toggleParentHidden(activePortal, idx)}
+                          aria-label={`${item.name} 메뉴 ${item.hidden ? "숨김 해제" : "숨기기"}`}
+                          className="shrink-0 rounded border border-white/50 px-2 py-1 text-xs"
+                        >
+                          {item.hidden ? "숨김 해제" : "숨기기"}
+                        </button>
+                      )}
                     </div>
                     <div className="min-h-[118px] bg-white p-3">
                       {item.children && item.children.length > 0 ? (
@@ -793,9 +835,6 @@ const SettingsInterface: React.FC = () => {
                   <h4 className="text-sm font-extrabold text-gray-900">
                     상위 메뉴 추가
                   </h4>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {getPortalLabel(activePortal)}에 새 상위 메뉴를 추가합니다.
-                  </p>
                 </div>
                 <span className="inline-flex w-fit items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-600">
                   {getPortalLabel(activePortal)}
@@ -836,9 +875,6 @@ const SettingsInterface: React.FC = () => {
                   <h4 className="text-sm font-extrabold text-gray-900">
                     {getPortalLabel(activePortal)} 메뉴 편집
                   </h4>
-                  <p className="mt-1 text-xs text-gray-500">
-                    순서, 이름, 하위 메뉴를 조정합니다.
-                  </p>
                 </div>
                 <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
                   상위 {getPortalMenuStats(activePortal).parentCount}개
@@ -877,6 +913,18 @@ const SettingsInterface: React.FC = () => {
                       >
                         아래로
                       </button>
+                      {activePortal === "student" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleParentHidden(activePortal, parentIndex)
+                          }
+                          aria-label={`${item.name} 메뉴 ${item.hidden ? "숨김 해제" : "숨기기"}`}
+                          className="px-2.5 py-1.5 text-xs rounded-md border border-gray-300 text-gray-600"
+                        >
+                          {item.hidden ? "숨김 해제" : "숨기기"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => deleteParent(activePortal, parentIndex)}
@@ -1036,11 +1084,6 @@ const SettingsInterface: React.FC = () => {
                           <p className="text-[11px] text-gray-500 mt-2 break-all">
                             URL: {child.url}
                           </p>
-                          {activePortal === "student" && child.hidden && (
-                            <p className="text-[11px] text-amber-700 mt-1">
-                              학생 대시보드에서 숨김 처리됨
-                            </p>
-                          )}
                         </div>
                       ))
                     ) : (
@@ -1053,14 +1096,14 @@ const SettingsInterface: React.FC = () => {
               ))}
             </div>
 
-            <div className="fixed bottom-4 left-4 right-4 z-40 flex justify-end sm:bottom-6 sm:left-auto sm:right-6">
+            <div className="teacher-floating-action-above-patch fixed left-4 z-40 flex justify-end sm:left-auto">
               <button
                 type="button"
                 onClick={() => void saveMenuConfig()}
                 disabled={savingMenu}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold py-3 px-8 rounded-xl shadow-xl transition sm:w-auto"
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition sm:w-auto"
               >
-                <i className="fas fa-save mr-2"></i>
+                <i className="fas fa-save mr-2" aria-hidden="true"></i>
                 {savingMenu ? "저장 중..." : "사이트맵 저장"}
               </button>
             </div>

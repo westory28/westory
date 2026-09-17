@@ -32,38 +32,38 @@ try {
     false,
   );
 
-  assert.equal(normal.durationMs, 30 * 60 * 1000);
-  assert.equal(teacher.durationMs, 30 * 60 * 1000);
-  assert.equal(adminNormal.durationMs, 30 * 60 * 1000);
-  assert.equal(adminSettings.durationMs, 15 * 60 * 1000);
-  assert.equal(nonAdminSettings.durationMs, 30 * 60 * 1000);
+  assert.equal(normal.durationMs, 60 * 60 * 1000);
+  assert.equal(teacher.durationMs, 60 * 60 * 1000);
+  assert.equal(adminNormal.durationMs, 60 * 60 * 1000);
+  assert.equal(adminSettings.durationMs, 60 * 60 * 1000);
+  assert.equal(nonAdminSettings.durationMs, 60 * 60 * 1000);
   assert.equal(normal.warningLeadMs, 5 * 60 * 1000);
   assert.equal(adminSettings.warningLeadMs, 5 * 60 * 1000);
   assert.equal(policy.shouldEnforceClientIdleSession("ENFORCE"), true);
-  assert.equal(policy.shouldEnforceClientIdleSession("OBSERVE_ONLY"), false);
-  assert.equal(policy.shouldEnforceClientIdleSession("DISABLED"), false);
+  assert.equal(policy.shouldEnforceClientIdleSession("OBSERVE_ONLY"), true);
+  assert.equal(policy.shouldEnforceClientIdleSession("DISABLED"), true);
   assert.equal(policy.shouldEnforceClientIdleSession(null), false);
   for (const mode of [undefined, "", "enforce", "UNKNOWN"]) {
     assert.equal(policy.shouldEnforceClientIdleSession(mode), false);
   }
   assert.equal(
     policy.resolveSessionPolicy("/teacher/settings/access", true).durationMs,
-    15 * 60 * 1000,
+    60 * 60 * 1000,
   );
   assert.equal(
     policy.resolveSessionPolicy("/teacher/settings-old", true).durationMs,
-    30 * 60 * 1000,
+    60 * 60 * 1000,
   );
 
   const now = 1_800_000_000_000;
   const lastActivityAt = now - 10 * 60 * 1000;
   assert.equal(
     policy.getSessionExpiryAt(lastActivityAt, normal),
-    lastActivityAt + 30 * 60 * 1000,
+    lastActivityAt + 60 * 60 * 1000,
   );
   assert.equal(
     policy.getSessionExpiryAt(lastActivityAt, adminSettings),
-    lastActivityAt + 15 * 60 * 1000,
+    lastActivityAt + 60 * 60 * 1000,
   );
   assert.equal(
     policy.shouldShowSessionWarning(now + 5 * 60 * 1000 + 1, normal, now),
@@ -103,12 +103,12 @@ try {
   );
   assert.equal(
     policy.isStoredSessionExpired(normal, now),
-    true,
-    "a legacy session older than 30 minutes must not be revived",
+    false,
+    "a legacy 60-minute session keeps its remaining ten minutes",
   );
 
   // Migration preserves the time of the last activity; opening a new route
-  // must not turn the old 60-minute deadline into a fresh 30/15-minute lease.
+  // must not turn the old 60-minute deadline into a fresh lease.
   policy.clearSessionTiming();
   storage.writeLocalOnly(
     policy.SESSION_EXPIRY_KEY,
@@ -118,15 +118,15 @@ try {
   assert.equal(legacyActivity, lastActivityAt);
   assert.equal(
     policy.writeSessionActivity(legacyActivity, normal),
-    now + 20 * 60 * 1000,
+    now + 50 * 60 * 1000,
   );
   assert.equal(
     policy.writeSessionActivity(legacyActivity, adminSettings),
-    now + 5 * 60 * 1000,
+    now + 50 * 60 * 1000,
   );
   assert.equal(
     policy.writeSessionActivity(legacyActivity, normal),
-    now + 20 * 60 * 1000,
+    now + 50 * 60 * 1000,
   );
   assert.equal(policy.readSessionLastActivity(), legacyActivity);
 
@@ -143,6 +143,41 @@ try {
   policy.clearSessionTiming();
   assert.equal(policy.readSessionExpiry(), null);
   assert.equal(policy.readSessionLastActivity(), null);
+
+  for (const mode of ["OBSERVE_ONLY", "DISABLED"]) {
+    policy.clearSessionTiming();
+    assert.equal(
+      policy.initializeClientSessionTiming(mode, now - 1, now),
+      now + normal.durationMs,
+      `${mode}: fresh client session starts at 60 minutes`,
+    );
+    assert.equal(
+      policy.initializeClientSessionTiming(
+        mode,
+        now + normal.durationMs,
+        now + 60000,
+      ),
+      now + normal.durationMs,
+      `${mode}: auth refresh does not restart the idle timer`,
+    );
+    policy.writeSessionActivity(now - normal.durationMs, normal);
+    assert.equal(
+      policy.initializeClientSessionTiming(mode, now + normal.durationMs, now),
+      now,
+      `${mode}: expired local deadline cannot be revived by auth refresh`,
+    );
+    assert.equal(policy.isStoredSessionExpired(normal, now), true);
+  }
+  assert.equal(
+    policy.initializeClientSessionTiming("ENFORCE", serverDeadline, now),
+    serverDeadline,
+    "ENFORCE retains the authoritative server deadline",
+  );
+  assert.equal(policy.initializeClientSessionTiming("ENFORCE", NaN, now), null);
+  assert.equal(
+    policy.initializeClientSessionTiming(null, serverDeadline, now),
+    null,
+  );
 
   assert.equal(
     policy.normalizeSessionReturnPath(
@@ -190,7 +225,9 @@ try {
 
   policy.clearSessionTiming();
   policy.clearSessionReturnPath();
-  console.log("Session policy checks passed (30m / 15m / 5m). ");
+  console.log(
+    "Session policy checks passed (60m all roles / 5m warning / all authority modes). ",
+  );
 } finally {
   await server.close();
 }

@@ -8,11 +8,14 @@ export interface MenuItem {
   name: string;
   url: string;
   icon: string;
+  hidden?: boolean;
   children?: MenuChild[];
 }
 
 export type PortalType = "student" | "teacher";
-export type MenuConfig = Record<PortalType, MenuItem[]>;
+export type MenuConfig = Record<PortalType, MenuItem[]> & {
+  studentVisibilitySource?: "sitemap";
+};
 
 export const MENUS: MenuConfig = {
   student: [
@@ -302,6 +305,7 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
         name: toSafeText((item as MenuItem)?.name),
         url: normalizeParentMenuUrl(portal, (item as MenuItem)?.url),
         icon: toSafeText((item as MenuItem)?.icon),
+        hidden: (item as MenuItem)?.hidden === true,
         children: sanitizeChildren((item as MenuItem)?.children),
       }))
       .filter((item) => item.name && item.url && !isLegacyRemovedUrl(item.url))
@@ -312,6 +316,12 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
           fallback[portal].find((x) => x.url === item.url)?.icon ||
           "",
       }));
+
+    // Saved sitemap edits are explicit. Legacy records alone need newly added
+    // default menus; restoring them after an edit can reveal a deleted menu.
+    if ((raw as MenuConfig).studentVisibilitySource === "sitemap") {
+      return sanitized;
+    }
 
     const withFallbackChildren = mergeFallbackChildren(
       sanitized,
@@ -328,5 +338,8 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
   return {
     student: parsePortal("student"),
     teacher: parsePortal("teacher"),
+    ...((raw as MenuConfig).studentVisibilitySource === "sitemap"
+      ? { studentVisibilitySource: "sitemap" as const }
+      : {}),
   };
 };

@@ -8,8 +8,8 @@ const MINUTE_MS = 60 * 1000;
 const LEGACY_SESSION_DURATION_MS = 60 * MINUTE_MS;
 const SESSION_RETURN_PATH_MAX_AGE_MS = 2 * 60 * MINUTE_MS;
 
-export const NORMAL_SESSION_DURATION_MS = 30 * MINUTE_MS;
-export const HIGH_RISK_ADMIN_SESSION_DURATION_MS = 15 * MINUTE_MS;
+export const NORMAL_SESSION_DURATION_MS = 60 * MINUTE_MS;
+export const HIGH_RISK_ADMIN_SESSION_DURATION_MS = NORMAL_SESSION_DURATION_MS;
 export const SESSION_WARNING_LEAD_MS = 5 * MINUTE_MS;
 
 export interface SessionPolicy {
@@ -19,7 +19,9 @@ export interface SessionPolicy {
 }
 
 export const shouldEnforceClientIdleSession = (authorityMode: unknown) =>
-  authorityMode === "ENFORCE";
+  authorityMode === "ENFORCE" ||
+  authorityMode === "OBSERVE_ONLY" ||
+  authorityMode === "DISABLED";
 
 export const isHighRiskAdminPath = (
   pathname: string,
@@ -49,9 +51,8 @@ export const readSessionLastActivity = (): number | null => {
   const value = Number(readLocalOnly(SESSION_LAST_ACTIVITY_KEY));
   if (Number.isFinite(value) && value > 0) return value;
 
-  // Existing W0/W1 sessions only stored a 60-minute expiry. Infer their last
-  // activity conservatively so the shorter Option C policy cannot be bypassed
-  // during the first release after this migration.
+  // Older sessions stored only the 60-minute deadline. Preserve its original
+  // activity time so reloading or changing routes never restarts the timer.
   const legacyExpiry = readSessionExpiry();
   if (legacyExpiry === null) return null;
   const inferredLastActivity = legacyExpiry - LEGACY_SESSION_DURATION_MS;
@@ -83,6 +84,21 @@ export const writeSessionDeadline = (
   writeLocalOnly(SESSION_LAST_ACTIVITY_KEY, String(lastActivityAt));
   writeLocalOnly(SESSION_EXPIRY_KEY, String(expiryAt));
   return expiryAt;
+};
+
+export const initializeClientSessionTiming = (
+  authorityMode: unknown,
+  serverExpiryAt: number,
+  now = Date.now(),
+): number | null => {
+  const policy = { durationMs: NORMAL_SESSION_DURATION_MS };
+  if (authorityMode === "ENFORCE") {
+    return writeSessionDeadline(serverExpiryAt, policy);
+  }
+  if (!shouldEnforceClientIdleSession(authorityMode)) return null;
+  // The server's observe/disabled mode controls server enforcement only.
+  // The browser still retains its own idle deadline across reloads.
+  return writeSessionActivity(readSessionLastActivity() ?? now, policy);
 };
 
 export const clearSessionTiming = () => {

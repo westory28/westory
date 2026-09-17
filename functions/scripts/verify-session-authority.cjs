@@ -11,6 +11,8 @@ initializeApp({ projectId: process.env.GCLOUD_PROJECT });
 
 const {
   assertActiveApplicationSession,
+  GENERAL_IDLE_MS,
+  HIGH_RISK_IDLE_MS,
   MIN_CLIENT_PROTOCOL_VERSION,
   RECENT_AUTH_MS,
   SESSION_AUTHORITY_GENERATION,
@@ -87,6 +89,9 @@ const rejectionReason = async (operation) => {
 };
 
 const main = async () => {
+  assert.equal(GENERAL_IDLE_MS, 60 * 60 * 1000);
+  assert.equal(HIGH_RISK_IDLE_MS, GENERAL_IDLE_MS);
+  assert.equal(RECENT_AUTH_MS, 5 * 60 * 1000);
   assert.equal(
     await rejectionReason(() =>
       assertActiveApplicationSession({ auth: null, data: {} }),
@@ -345,6 +350,28 @@ const main = async () => {
   delete process.env.WESTORY_SESSION_IDLE_MODE;
   process.env.GCLOUD_PROJECT = demoProjectId;
 
+  const openedAt = Date.now();
+  const opened = await callableExports.openApplicationSession.run({
+    auth: { uid: "sixty-minute-open", token: { email, auth_time: nowSeconds } },
+    data: {
+      authorityGeneration: SESSION_AUTHORITY_GENERATION,
+      protocolVersion: MIN_CLIENT_PROTOCOL_VERSION,
+    },
+  });
+  assert.ok(opened.generalExpiresAt >= openedAt + GENERAL_IDLE_MS);
+  assert.ok(opened.generalExpiresAt <= Date.now() + GENERAL_IDLE_MS);
+  assert.equal(opened.highRiskExpiresAt, opened.generalExpiresAt);
+
+  await seedSession("sixty-minute-touch", nowSeconds);
+  const touchedAt = Date.now();
+  const touched = await callableExports.touchApplicationSession.run({
+    ...requestFor("sixty-minute-touch", nowSeconds),
+    data: { ...requestFor("sixty-minute-touch", nowSeconds).data, scope: "GENERAL" },
+  });
+  assert.ok(touched.generalExpiresAt >= touchedAt + GENERAL_IDLE_MS);
+  assert.ok(touched.generalExpiresAt <= Date.now() + GENERAL_IDLE_MS);
+  assert.equal(touched.highRiskExpiresAt, touched.generalExpiresAt);
+
   await seedSession("active", nowSeconds);
   await assert.doesNotReject(() =>
     assertActiveApplicationSession(requestFor("active", nowSeconds)),
@@ -545,6 +572,7 @@ const main = async () => {
       suite: "session-authority-functions-core",
       passed: true,
       cases: [
+        "SIXTY_MINUTE_OPEN_AND_TOUCH_ALL_SCOPES",
         "ENVIRONMENT_MODE_FAIL_CLOSED",
         "UNAUTHENTICATED_DENIED",
         "ACCOUNT_PERMISSION_DENIED",

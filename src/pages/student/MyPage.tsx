@@ -52,6 +52,7 @@ import {
   normalizeMockExamCategory,
 } from "../../lib/mockExamRounds";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
+import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
 import {
   loadStudentQuizResults,
   loadStudentProgressSummary,
@@ -774,16 +775,28 @@ const getBandTypeColor = (
 };
 
 const MyPage: React.FC = () => {
-  const { user, userData, config } = useAuth();
+  const { user, userData, config, configReady, menuConfig, menuConfigReady } =
+    useAuth();
   const navigate = useNavigate();
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedMenu = searchParams.get("menu");
   const requestedAttemptId =
     searchParams.get("attemptId") || searchParams.get("resultId") || "";
-  const canUseLesson = config?.showLesson !== false;
-  const canUseQuiz = config?.showQuiz !== false;
-  const canUseScore = config?.showScore !== false;
+  const canUseRoute = (pathname: string) =>
+    configReady &&
+    menuConfigReady &&
+    getStudentRouteAccess({ pathname }, config, menuConfig).allowed;
+  const canUseLesson = canUseRoute("/student/lesson/note");
+  const canUseQuiz = canUseRoute("/student/quiz");
+  const canUseHistoryClassroom = canUseRoute("/student/history-classroom");
+  const canUseScore = [
+    "/student/score",
+    "/student/score/report",
+    "/student/score/performance",
+    "/student/score/written-exam",
+    "/student/history",
+  ].some(canUseRoute);
 
   const [menu, setMenu] = useState<MainMenu>("profile");
   const [categoryTab, setCategoryTab] = useState<CategoryTab | "all">("all");
@@ -847,10 +860,10 @@ const MyPage: React.FC = () => {
   const wrongNoteDefaultAppliedRef = useRef(false);
 
   useEffect(() => {
-    if (!user || !config) return;
+    if (!user || !config || !configReady || !menuConfigReady) return;
     wrongNoteDefaultAppliedRef.current = false;
     void loadMyPage();
-  }, [user, config]);
+  }, [user, config, configReady, menuConfigReady, canUseQuiz, canUseScore]);
 
   const isMenuAvailable = (nextMenu: MainMenu) => {
     if (nextMenu === "score") return canUseScore;
@@ -2492,7 +2505,7 @@ const MyPage: React.FC = () => {
     if (canUseQuiz) navigate("/student/quiz");
   };
   const openHistoryClassroom = () => {
-    if (canUseQuiz) navigate("/student/history-classroom");
+    if (canUseHistoryClassroom) navigate("/student/history-classroom");
   };
   const focusWrongItem = (item?: WrongNoteItem | null) => {
     if (!canUseQuiz) return;
@@ -2899,6 +2912,10 @@ const MyPage: React.FC = () => {
           recentQuizScore >= 80
             ? "최근 평가 흐름이 좋아요. 같은 리듬을 유지해요."
             : "최근 평가에서 틀린 문항을 다시 보면 점수가 빨리 올라요.",
+        ]
+      : []),
+    ...(canUseHistoryClassroom
+      ? [
           historyParticipationPercent >= 70
             ? "역사교실 참여도 꾸준히 이어지고 있어요."
             : "역사교실 활동을 한 번 더 참여해 보는 것이 좋아요.",
@@ -2928,6 +2945,10 @@ const MyPage: React.FC = () => {
             percent: recentQuizScore || 0,
             onClick: () => selectMenu("wrong_note"),
           },
+        ]
+      : []),
+    ...(canUseHistoryClassroom
+      ? [
           {
             icon: "fa-users",
             label: "역사교실 참여",
@@ -2995,9 +3016,15 @@ const MyPage: React.FC = () => {
       : []),
   ];
   const reviewRouteItems = [
-    { key: "concept", label: "개념 복습", onClick: openNextLesson },
-    { key: "wrong", label: "문제 풀이", onClick: startReview },
-    { key: "retry", label: "다시 도전", onClick: openQuiz },
+    ...(canUseLesson
+      ? [{ key: "concept", label: "개념 복습", onClick: openNextLesson }]
+      : []),
+    ...(canUseQuiz
+      ? [
+          { key: "wrong", label: "문제 풀이", onClick: startReview },
+          { key: "retry", label: "다시 도전", onClick: openQuiz },
+        ]
+      : []),
   ];
   const isSmallUnitFilterMode = isSmallUnitAssessmentCategory(categoryTab);
   const selectedBigScope =
@@ -4616,7 +4643,7 @@ const MyPage: React.FC = () => {
         </section>
       </div>
 
-      {selectedQuizAttempt && (
+      {canUseQuiz && selectedQuizAttempt && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={closeQuizAttemptModal}

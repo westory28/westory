@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import SettingsGeneral from "./components/SettingsGeneral";
 import SettingsSchool from "./components/SettingsSchool";
@@ -7,30 +7,24 @@ import SettingsPrivacy from "./components/SettingsPrivacy";
 import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
 import SettingsArchiveEnrollment from "./components/SettingsArchiveEnrollment";
-import SettingsArchiveRecords from "./components/SettingsArchiveRecords";
-import SettingsStudentAccess from "./components/SettingsStudentAccess";
 import { useAuth } from "../../contexts/AuthContext";
 import { ADMIN_EMAIL } from "../../lib/permissions";
 
 type SettingsTab =
-  | "student-access"
   | "general"
   | "school"
   | "interface"
   | "privacy"
   | "archive-enrollment"
-  | "archive-records"
   | "access"
   | "notifications";
 
 const SETTINGS_TABS = new Set<SettingsTab>([
-  "student-access",
   "general",
   "school",
   "interface",
   "privacy",
   "archive-enrollment",
-  "archive-records",
   "access",
   "notifications",
 ]);
@@ -51,6 +45,18 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
     String(currentUser?.email || "")
       .trim()
       .toLowerCase() === ADMIN_EMAIL;
+
+  useEffect(() => {
+    if (children) return;
+    const tab = searchParams.get("tab");
+    if (tab === "archive-records") {
+      navigate("/teacher/students", { replace: true });
+    } else if (tab === "student-access") {
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      setSearchParams(next, { replace: true });
+    }
+  }, [children, navigate, searchParams, setSearchParams]);
 
   const setActiveTab = (tab: SettingsTab) => {
     if (children) {
@@ -77,39 +83,11 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
               </h2>
             </div>
             <nav className="flex flex-col" aria-label="관리자 설정 메뉴">
-              {canOpenCutoverCenter && (
-                <button
-                  onClick={() => setActiveTab("student-access")}
-                  aria-current={
-                    activeTab === "student-access" ? "page" : undefined
-                  }
-                  className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "student-access" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
-                >
-                  <div className="w-6 text-center" aria-hidden="true">
-                    <i className="fas fa-door-closed"></i>
-                  </div>
-                  학생 접속 관리
-                </button>
-              )}
-              {canOpenCutoverCenter && (
-                <button
-                  onClick={() => setActiveTab("archive-records")}
-                  aria-current={
-                    activeTab === "archive-records" ? "page" : undefined
-                  }
-                  className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "archive-records" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
-                >
-                  <div className="w-6 text-center" aria-hidden="true">
-                    <i className="fas fa-clock-rotate-left"></i>
-                  </div>
-                  지난 학기 기록
-                </button>
-              )}
               <button
                 onClick={() => setActiveTab("general")}
                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "general" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
               >
-                <div className="w-6 text-center">
+                <div className="w-6 text-center" aria-hidden="true">
                   <i className="fas fa-sliders-h"></i>
                 </div>
                 기본 환경 설정
@@ -118,7 +96,7 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
                 onClick={() => setActiveTab("school")}
                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "school" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
               >
-                <div className="w-6 text-center">
+                <div className="w-6 text-center" aria-hidden="true">
                   <i className="fas fa-school"></i>
                 </div>
                 학교/학년/학기
@@ -127,7 +105,7 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
                 onClick={() => setActiveTab("interface")}
                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "interface" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
               >
-                <div className="w-6 text-center">
+                <div className="w-6 text-center" aria-hidden="true">
                   <i className="fas fa-palette"></i>
                 </div>
                 인터페이스 설정
@@ -136,7 +114,7 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
                 onClick={() => setActiveTab("access")}
                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "access" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
               >
-                <div className="w-6 text-center">
+                <div className="w-6 text-center" aria-hidden="true">
                   <i className="fas fa-user-lock"></i>
                 </div>
                 세부 권한 관리
@@ -145,7 +123,7 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
                 onClick={() => setActiveTab("notifications")}
                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "notifications" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
               >
-                <div className="w-6 text-center">
+                <div className="w-6 text-center" aria-hidden="true">
                   <i className="fas fa-bell"></i>
                 </div>
                 알림 관리
@@ -154,7 +132,7 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
                 onClick={() => setActiveTab("privacy")}
                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "privacy" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
               >
-                <div className="w-6 text-center">
+                <div className="w-6 text-center" aria-hidden="true">
                   <i className="fas fa-user-shield"></i>
                 </div>
                 개인정보 동의 관리
@@ -164,7 +142,7 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
                   onClick={() => setActiveTab("archive-enrollment")}
                   className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "archive-enrollment" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
                 >
-                  <div className="w-6 text-center">
+                  <div className="w-6 text-center" aria-hidden="true">
                     <i className="fas fa-box-archive"></i>
                   </div>
                   학급·학적·아카이브
@@ -188,12 +166,10 @@ const Settings: React.FC<React.PropsWithChildren> = ({ children }) => {
 
         <div className="flex-1 min-w-0">
           {children}
-          {activeTab === "student-access" && <SettingsStudentAccess />}
           {activeTab === "general" && <SettingsGeneral />}
           {activeTab === "school" && <SettingsSchool />}
           {activeTab === "interface" && <SettingsInterface />}
           {activeTab === "archive-enrollment" && <SettingsArchiveEnrollment />}
-          {activeTab === "archive-records" && <SettingsArchiveRecords />}
           {activeTab === "access" && <SettingsAccess />}
           {activeTab === "notifications" && <SettingsNotifications />}
           {activeTab === "privacy" && <SettingsPrivacy />}

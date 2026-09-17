@@ -7,6 +7,7 @@ import { notifySystemConfigUpdated } from "../../../lib/appEvents";
 import { executeWestoryCommand } from "../../../lib/commandGateway";
 import { auth, db } from "../../../lib/firebase";
 import { getDefaultSemesterDates } from "./semesterDates";
+import SettingsStudentAccess from "./SettingsStudentAccess";
 import {
   requestStepUpReauthentication,
   StepUpReauthError,
@@ -24,9 +25,6 @@ import {
 type SettingsConfigState = {
   year: string;
   semester: string;
-  showQuiz: boolean;
-  showScore: boolean;
-  showLesson: boolean;
 };
 
 type SemesterRegistryItem = {
@@ -38,11 +36,12 @@ type SemesterRegistryItem = {
 };
 
 type SemesterSelectionState = Pick<SettingsConfigState, "year" | "semester">;
-type SemesterReadinessStatus = "ready" | "partial" | "danger";
+type SemesterReadinessStatus = "ready" | "partial" | "danger" | "stale";
 type ReadinessListItem = {
   key: string;
   label: string;
   ready: boolean;
+  statusLabel: string;
 };
 type SemesterReadinessView = {
   status: SemesterReadinessStatus;
@@ -58,9 +57,6 @@ const DEFAULT_SEMESTER = "1";
 const DEFAULT_CONFIG: SettingsConfigState = {
   year: DEFAULT_YEAR,
   semester: DEFAULT_SEMESTER,
-  showQuiz: true,
-  showScore: true,
-  showLesson: true,
 };
 type SettingsReadinessDraft = {
   ownerUid: string;
@@ -148,85 +144,23 @@ const buildSemesterRegistry = (
 
 const STATUS_META: Record<
   SemesterReadinessStatus,
-  { label: string; badgeClass: string; warningClass: string }
+  { label: string; badgeClass: string }
 > = {
   ready: {
-    label: "\uc900\ube44 \uc644\ub8cc",
+    label: "준비 완료",
     badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    warningClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
   },
   partial: {
-    label: "\uc77c\ubd80 \ube44\uc5b4 \uc788\uc74c",
+    label: "참고 항목 확인",
     badgeClass: "border-amber-200 bg-amber-50 text-amber-800",
-    warningClass: "border-amber-200 bg-amber-50 text-amber-800",
   },
   danger: {
-    label: "\uc804\ud658 \ube44\uad8c\uc7a5",
+    label: "필수 항목 확인",
     badgeClass: "border-red-200 bg-red-50 text-red-700",
-    warningClass: "border-red-200 bg-red-50 text-red-700",
   },
-};
-
-const READINESS_ITEM_META: Partial<
-  Record<
-    ReadinessListItem["key"],
-    { readyHint: string; missingHint: string; actionHint: string }
-  >
-> = {
-  curriculumTree: {
-    readyHint:
-      "단원·차시 기준이 있어 수업자료와 평가 연결을 시작할 수 있습니다.",
-    missingHint:
-      "교육과정 트리가 비어 있으면 수업자료와 문제은행 기준이 없어 실제 운영 준비가 끝난 상태가 아닙니다.",
-    actionHint: "수업자료에서 교육과정 트리부터 채워 주세요.",
-  },
-  assessmentSettings: {
-    readyHint: "평가 기본 설정을 확인할 수 있습니다.",
-    missingHint:
-      "평가 설정이 비어 있어 학기 운영 기준이 아직 고정되지 않았습니다.",
-    actionHint: "평가 설정의 기본 항목을 먼저 확인해 주세요.",
-  },
-  finalExam: {
-    readyHint: "시험 구성 초안 또는 기본 틀이 있습니다.",
-    missingHint: "시험 구성이 비어 있어 평가 운영 준비가 아직 부족합니다.",
-    actionHint: "시험 구성에서 객관식 또는 서술형 틀을 먼저 잡아 주세요.",
-  },
-  gradingPlans: {
-    readyHint: "채점 계획 기준을 이어서 설정할 수 있습니다.",
-    missingHint: "채점 계획이 없어 점수 운영 기준이 바로 보이지 않습니다.",
-    actionHint: "채점 계획을 최소 1개 준비해 주세요.",
-  },
-  calendar: {
-    readyHint: "학사 일정 기준을 이어서 채울 수 있습니다.",
-    missingHint:
-      "학사 일정이 비어 있으면 학기 운영 리듬을 공유하기 어렵습니다.",
-    actionHint: "학사 일정을 먼저 채워 주세요.",
-  },
-  notices: {
-    readyHint: "공지 기준 문서가 준비되어 있습니다.",
-    missingHint: "공지 영역이 비어 있으면 첫 안내 전달 창구가 약합니다.",
-    actionHint: "필수 공지를 한 건 이상 준비해 주세요.",
-  },
-  pointProducts: {
-    readyHint: "위스 활용을 바로 이어갈 수 있습니다.",
-    missingHint: "위스 상품이 없으면 위스를 지급해도 바로 쓰기 어렵습니다.",
-    actionHint: "기본 위스 상품을 먼저 등록해 주세요.",
-  },
-  quizQuestions: {
-    readyHint: "문제은행을 이어서 운영할 수 있습니다.",
-    missingHint: "문제은행이 비어 있어 퀴즈 운영은 추가 준비가 필요합니다.",
-    actionHint: "자주 쓰는 문항부터 채워 주세요.",
-  },
-  historyClassrooms: {
-    readyHint: "히스토리 클래스룸 자료가 준비되어 있습니다.",
-    missingHint:
-      "히스토리 클래스룸 자료가 없어 해당 활동은 바로 운영하기 어렵습니다.",
-    actionHint: "필요한 활동만 우선 등록해 주세요.",
-  },
-  mapResources: {
-    readyHint: "지도 자료를 이어서 활용할 수 있습니다.",
-    missingHint: "지도 자료가 비어 있으면 관련 수업 준비가 늦어질 수 있습니다.",
-    actionHint: "필요한 지도 자료를 먼저 올려 주세요.",
+  stale: {
+    label: "재확인 필요",
+    badgeClass: "border-amber-200 bg-amber-50 text-amber-800",
   },
 };
 
@@ -267,13 +201,6 @@ const CORE_READINESS_LABELS: Record<string, string> = {
   semester_cutover_readiness: "학기 전환 준비",
 };
 
-const getReadinessItemMeta = (item: ReadinessListItem) =>
-  READINESS_ITEM_META[item.key] || {
-    readyHint: `${item.label} 항목을 확인했습니다.`,
-    missingHint: `${item.label} 항목을 확인해 주세요.`,
-    actionHint: `${item.label} 항목을 먼저 확인해 주세요.`,
-  };
-
 const buildReadinessView = (
   report: SemesterReadinessReport | null | undefined,
   canonicalCurrent: boolean,
@@ -289,6 +216,12 @@ const buildReadinessView = (
         .replace(/revision/gi, "최신 정보")
         .replace(/policy/gi, "준비 기준"),
     ready: check.status === "PASS" || check.status === "NOT_APPLICABLE",
+    statusLabel:
+      check.status === "NOT_APPLICABLE"
+        ? "해당 없음"
+        : check.status === "PASS"
+          ? "완료"
+          : "확인 필요",
   }));
   const requiredItems = items.filter(
     (_, index) => report.checks[index]?.required !== false,
@@ -302,9 +235,11 @@ const buildReadinessView = (
     status:
       missingRequired > 0
         ? "danger"
-        : !canonicalCurrent || missingAdvisory > 0
-          ? "partial"
-          : "ready",
+        : !canonicalCurrent
+          ? "stale"
+          : missingAdvisory > 0
+            ? "partial"
+            : "ready",
     requiredItems,
     advisoryItems,
   };
@@ -522,12 +457,7 @@ const SettingsGeneral: React.FC = () => {
         semester: normalizeSemester(data.semester),
       };
 
-      const serverConfig = {
-        ...fallbackActive,
-        showQuiz: data.showQuiz !== false,
-        showScore: data.showScore !== false,
-        showLesson: data.showLesson !== false,
-      };
+      const serverConfig = { ...fallbackActive };
       const retained = getSettingsReadinessDraft(ownerUid);
       const restore =
         retained === recovery &&
@@ -681,60 +611,22 @@ const SettingsGeneral: React.FC = () => {
     readiness?.requiredItems.filter((item) => item.ready).length || 0;
   const advisoryReadyCount =
     readiness?.advisoryItems.filter((item) => item.ready).length || 0;
-  const missingRequiredItems =
-    readiness?.requiredItems.filter((item) => !item.ready) || [];
-  const missingAdvisoryItems =
-    readiness?.advisoryItems.filter((item) => !item.ready) || [];
-  const curriculumTreeMissing = missingRequiredItems.some(
-    (item) => item.key === "curriculumTree" || item.label.includes("교육과정"),
-  );
   const readinessStatusMeta = readiness ? STATUS_META[readiness.status] : null;
   const readinessStatusClass =
     readinessStatusMeta?.badgeClass ||
     "border-gray-200 bg-gray-50 text-gray-700";
-  const readinessWarningClass =
-    readinessStatusMeta?.warningClass ||
-    "border-amber-200 bg-amber-50 text-amber-800";
-  const readinessSummaryTitle = readiness
-    ? readiness.status === "ready"
-      ? "전환 기준 충족"
-      : readiness.status === "danger"
-        ? "지금 전환하면 운영 공백 위험이 큽니다"
-        : "기본 운영은 가능하지만 확인이 더 필요합니다"
-    : "";
-  const readinessSummaryDescription = readiness
-    ? readiness.status === "ready"
-      ? missingAdvisoryItems.length > 0
-        ? "핵심 운영 항목은 준비되었습니다. 참고 항목은 필요에 따라 이어서 채우면 됩니다."
-        : "핵심 운영 항목과 참고 항목이 모두 준비되어 있습니다."
-      : readiness.status === "danger"
-        ? "핵심 준비 항목이 비어 있어 현재 학기 전환은 비권장입니다."
-        : missingRequiredItems.length > 0
-          ? "필수 항목 일부가 비어 있어 저장은 가능하지만 전환 전 확인을 권장합니다."
-          : "핵심 운영은 가능하지만 참고 항목이 일부 비어 있습니다."
-    : "";
-  const priorityActionItems = [
-    ...missingRequiredItems,
-    ...missingAdvisoryItems,
-  ].slice(0, 3);
+  const readinessStatusLabel = readinessLoading
+    ? "확인 중..."
+    : readinessNeedsReauth
+      ? "본인 확인 필요"
+      : semesterStateError || readinessError
+        ? "조회 필요"
+        : readinessStatusMeta?.label || "확인 필요";
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
-    if (type === "checkbox") {
-      const key = name as keyof SettingsConfigState;
-      setConfig(
-        (prev) =>
-          ({
-            ...prev,
-            [key]: checked,
-          }) as SettingsConfigState,
-      );
-      return;
-    }
+    const { name, value } = e.target;
 
     if (name === "year") {
       const nextYear = value;
@@ -1014,29 +906,15 @@ const SettingsGeneral: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!hasPendingSemesterSwitch || saving) return;
     setSaving(true);
-    let operationalSettingsSaved = false;
-    let semesterSwitchConfirmed = !hasPendingSemesterSwitch;
+    let semesterSwitchConfirmed = false;
     try {
       const year = normalizeYear(config.year);
       const semester = normalizeSemester(config.semester);
-      await executeWestoryCommand("updateOperationalSettings", {
-        showQuiz: config.showQuiz,
-        showScore: config.showScore,
-        showLesson: config.showLesson,
-      });
-      operationalSettingsSaved = true;
-
-      let latestSnapshot = coreSnapshot;
-      if (hasPendingSemesterSwitch) {
-        if (semesterStateError) {
-          throw new Error(semesterStateError);
-        }
-        latestSnapshot = await prepareSemesterForActivation(year, semester);
-        semesterSwitchConfirmed = true;
-      } else {
-        latestSnapshot = await loadSemesterCoreSnapshot();
-      }
+      if (semesterStateError) throw new Error(semesterStateError);
+      const latestSnapshot = await prepareSemesterForActivation(year, semester);
+      semesterSwitchConfirmed = true;
 
       invalidateSiteSettingDocCache("config");
       await refreshConfig();
@@ -1044,549 +922,276 @@ const SettingsGeneral: React.FC = () => {
       syncSemesterPresentation(
         latestSnapshot,
         { year, semester },
-        {
-          year,
-          semester,
-        },
+        { year, semester },
       );
       showToast({
         tone: "success",
-        title: "기본 설정이 저장되었습니다.",
-        message: hasPendingSemesterSwitch
-          ? `${buildSemesterLabel(year, semester)} 기준으로 최신 설정을 반영했습니다.`
-          : "학생 메뉴 표시 기준에 최신 설정을 반영했습니다.",
+        title: `${buildSemesterLabel(year, semester)}로 전환했습니다.`,
       });
     } catch (error) {
       console.error("Failed to save config:", error);
-      if (operationalSettingsSaved) {
-        invalidateSiteSettingDocCache("config");
-        try {
-          await refreshConfig();
-          notifySystemConfigUpdated();
-          const latestSnapshot = await loadSemesterCoreSnapshot();
-          syncSemesterPresentation(latestSnapshot, activeSemester, {
-            year: normalizeYear(config.year),
-            semester: normalizeSemester(config.semester),
-          });
-        } catch (refreshError) {
-          console.error(
-            "Failed to refresh settings after partial save:",
-            refreshError,
-          );
-        }
+      // A command may succeed before its response is lost. Read current state;
+      // never replay the activation automatically or overwrite sitemap flags.
+      invalidateSiteSettingDocCache("config");
+      try {
+        await refreshConfig();
+        notifySystemConfigUpdated();
+        const latestSnapshot = await loadSemesterCoreSnapshot();
+        syncSemesterPresentation(latestSnapshot, activeSemester, {
+          year: normalizeYear(config.year),
+          semester: normalizeSemester(config.semester),
+        });
+      } catch (refreshError) {
+        console.error("Failed to refresh settings after save:", refreshError);
       }
       showToast({
         tone: "error",
-        title:
-          operationalSettingsSaved && !semesterSwitchConfirmed
-            ? "메뉴 설정은 저장했지만 학기 전환 결과를 확인하지 못했습니다."
-            : operationalSettingsSaved
-              ? "설정은 반영했지만 화면을 새로고침하지 못했습니다."
-              : "기본 설정 저장에 실패했습니다.",
-        message:
-          operationalSettingsSaved && semesterSwitchConfirmed
-            ? "서버에는 반영되었습니다. 잠시 후 화면을 새로고침해 주세요."
-            : getSemesterCommandErrorMessage(error),
+        title: semesterSwitchConfirmed
+          ? "학기는 전환했지만 화면을 새로고침하지 못했습니다."
+          : "학기 전환을 완료하지 못했습니다.",
+        message: semesterSwitchConfirmed
+          ? "잠시 후 화면을 새로고침해 주세요."
+          : getSemesterCommandErrorMessage(error),
       });
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <PageDataLoading />;
-
-  if (loadError) {
-    return (
-      <div className="max-w-3xl rounded-xl border border-red-200 bg-white p-6 shadow-sm lg:p-8">
-        <div
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700"
-        >
-          {loadError}
-          <button
-            type="button"
-            onClick={() => void loadConfig()}
-            className="ml-3 rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold"
-          >
-            다시 불러오기
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm max-w-3xl">
+    <div className="w-full bg-white rounded-xl border border-gray-200 p-4 sm:p-6 lg:p-8 shadow-sm">
       <div className="border-b border-gray-100 pb-4 mb-6">
-        <h3 className="text-lg font-bold text-gray-900">시스템 기본 설정</h3>
-        <p className="text-sm text-gray-500 mt-1">
-          학년도와 학기, 메뉴 표시 여부를 제어합니다.
-        </p>
+        <h3 className="text-lg font-bold text-gray-900">기본 환경 설정</h3>
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-blue-200 bg-white/80 p-4">
-              <div className="text-xs font-bold text-blue-700">
-                현재 활성 학기
-              </div>
-              <div className="mt-1 text-lg font-extrabold text-blue-900">
+        <SettingsStudentAccess />
+        {loading && <PageDataLoading />}
+        {loadError && (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700"
+          >
+            {loadError}
+            <button
+              type="button"
+              onClick={() => void loadConfig()}
+              className="ml-3 rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold"
+            >
+              다시 불러오기
+            </button>
+          </div>
+        )}
+        {!loading && !loadError && (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <h4 className="text-sm font-bold text-gray-700">
+                현재 운영 학기
+              </h4>
+              <span className="text-base font-bold text-blue-700">
                 {activeSemesterLabel}
-              </div>
-              <p className="mt-2 text-xs font-semibold text-blue-700">
-                학생과 교사 화면에 실제 적용 중인 기준입니다.
-              </p>
+              </span>
             </div>
-            <div
-              className={`rounded-xl border p-4 ${hasPendingSemesterSwitch ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <div
-                  className={`text-xs font-bold ${hasPendingSemesterSwitch ? "text-amber-800" : "text-emerald-700"}`}
-                >
-                  {hasPendingSemesterSwitch
-                    ? "저장 시 전환 대상"
-                    : "현재 선택된 학기"}
-                </div>
-                <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${hasPendingSemesterSwitch ? "border-amber-300 bg-white text-amber-800" : "border-emerald-300 bg-white text-emerald-700"}`}
-                >
-                  {hasPendingSemesterSwitch ? "변경 예정" : "현재와 동일"}
-                </span>
-              </div>
-              <div
-                className={`mt-1 text-lg font-extrabold ${hasPendingSemesterSwitch ? "text-amber-900" : "text-emerald-900"}`}
-              >
-                {selectedSemesterLabel}
-              </div>
-              <p
-                className={`mt-2 text-xs font-semibold ${hasPendingSemesterSwitch ? "text-amber-800" : "text-emerald-700"}`}
-              >
-                {hasPendingSemesterSwitch
-                  ? `${activeSemesterLabel}는 저장 전까지 그대로 유지됩니다.`
-                  : "저장해도 현재 운영 학기와 같은 값이 유지됩니다."}
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 rounded-xl border border-blue-100 bg-white/70 p-3">
-            <div className="text-xs font-bold text-blue-700">
-              준비된 학기 목록
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {availableSemesters.map((item) =>
-                (() => {
-                  const isActive =
-                    item.year === activeSemester.year &&
-                    item.semester === activeSemester.semester;
-                  const isSelected =
-                    item.year === config.year &&
-                    item.semester === config.semester;
 
-                  return (
-                    <span
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label
+                  htmlFor="settings-year"
+                  className="block text-sm font-bold text-gray-700 mb-2"
+                >
+                  학년도
+                </label>
+                <select
+                  id="settings-year"
+                  name="year"
+                  aria-label="학년도"
+                  value={config.year}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}학년도
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="settings-semester"
+                  className="block text-sm font-bold text-gray-700 mb-2"
+                >
+                  학기
+                </label>
+                <select
+                  id="settings-semester"
+                  name="semester"
+                  aria-label="학기"
+                  value={config.semester}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
+                >
+                  {semesterOptions.map((item) => (
+                    <option
                       key={`${item.year}-${item.semester}`}
-                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${
-                        isActive
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : isSelected
-                            ? "border-amber-300 bg-amber-50 text-amber-900"
-                            : "border-blue-200 bg-white text-blue-700"
-                      }`}
+                      value={item.semester}
                     >
-                      <span>{item.label}</span>
-                      {isActive && (
-                        <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-extrabold text-white">
-                          현재
-                        </span>
-                      )}
-                      {isSelected && !isActive && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700">
-                          전환 대상
-                        </span>
-                      )}
-                    </span>
-                  );
-                })(),
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              학년도
-            </label>
-            <select
-              name="year"
-              aria-label="학년도"
-              value={config.year}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
-            >
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}학년도
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              학기
-            </label>
-            <select
-              name="semester"
-              aria-label="학기"
-              value={config.semester}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
-            >
-              {semesterOptions.map((item) => (
-                <option
-                  key={`${item.year}-${item.semester}`}
-                  value={item.semester}
-                >
-                  {item.semester}학기
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded-lg border border-amber-200 font-bold flex items-start gap-2">
-          <i className="fas fa-exclamation-triangle mt-0.5"></i>
-          <span>
-            학년도와 학기를 고르면 전환 대상만 먼저 바뀝니다. 실제 운영 학기는
-            저장 전까지 유지되며, 저장 후 해당 기간 데이터 기준으로 전환됩니다.
-          </span>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <div className="text-xs font-bold text-gray-500">
-                {hasPendingSemesterSwitch
-                  ? "저장 시 전환 대상 준비 현황"
-                  : "현재 활성 학기 준비 현황"}
+                      {item.semester}학기
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+            </div>
+            {hasPendingSemesterSwitch && (
+              <p className="text-sm font-bold text-amber-800" role="status">
+                저장 시 {selectedSemesterLabel}로 전환됩니다.
+              </p>
+            )}
+
+            <details
+              key={`${config.year}-${config.semester}`}
+              className="group w-full rounded-xl border border-gray-200 bg-white"
+            >
+              <summary className="flex min-h-14 cursor-pointer list-none flex-wrap items-center gap-3 rounded-xl px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 [&::-webkit-details-marker]:hidden">
+                <span className="text-sm font-bold text-gray-800">
+                  {hasPendingSemesterSwitch
+                    ? "전환할 학기 준비 현황"
+                    : "학기 준비 현황"}
+                </span>
                 <span
                   className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${readinessStatusClass}`}
                 >
-                  {readinessLoading
-                    ? "\ud655\uc778 \uc911..."
-                    : readinessStatusMeta?.label || "\ud655\uc778 \ud544\uc694"}
+                  {readinessStatusLabel}
                 </span>
-                <span className="text-xs font-bold text-gray-500">
-                  {selectedSemesterLabel}
-                </span>
-              </div>
-              {!readinessLoading && readiness && (
-                <>
-                  <div className="mt-3 text-sm font-bold text-gray-900">
-                    {readinessSummaryTitle}
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-gray-600">
-                    {readinessSummaryDescription}
+                {!readinessLoading && readiness && (
+                  <span className="flex flex-wrap gap-3 text-xs text-gray-600 sm:ml-auto">
+                    <span>
+                      필수 {requiredReadyCount}/{readiness.requiredItems.length}
+                    </span>
+                    <span>
+                      참고 {advisoryReadyCount}/{readiness.advisoryItems.length}
+                    </span>
+                  </span>
+                )}
+                <i
+                  className="fas fa-chevron-down ml-auto text-xs text-gray-500 group-open:rotate-180 sm:ml-0"
+                  aria-hidden="true"
+                ></i>
+              </summary>
+              <div className="border-t border-gray-100 px-4 py-3">
+                {(semesterStateError || readinessError) && (
+                  <p role="alert" className="text-sm text-red-700">
+                    {semesterStateError || readinessError}
                   </p>
-                </>
-              )}
-            </div>
-            {!readinessLoading && readiness && (
-              <div className="grid grid-cols-2 gap-2 text-xs font-bold text-gray-600 md:text-right">
-                <span>
-                  필수 {requiredReadyCount}/{readiness.requiredItems.length}
-                </span>
-                <span>
-                  참고 {advisoryReadyCount}/{readiness.advisoryItems.length}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {(semesterStateError || readinessError) && (
-            <div
-              role="alert"
-              className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700"
-            >
-              {semesterStateError || readinessError}
-            </div>
-          )}
-          {readinessNeedsReauth && (
-            <button
-              type="button"
-              onClick={() => void handleReadinessReauthentication()}
-              disabled={readinessReauthBusy || readinessLoading}
-              className="mt-3 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {readinessReauthBusy ? "본인 확인 중..." : "다시 인증 후 조회"}
-            </button>
-          )}
-
-          {!readinessLoading && readiness && (
-            <>
-              <div
-                className={`mt-4 rounded-xl border p-3 text-xs ${curriculumTreeMissing ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}
-              >
-                <div className="font-bold">
-                  {curriculumTreeMissing
-                    ? "교육과정 트리 확인 필요"
-                    : "기본 자료와 실제 운영 준비는 다릅니다"}
-                </div>
-                <div className="mt-1 leading-5">
-                  기본 자료가 있어도 교육과정의 단원·차시가 비어 있으면 실제
-                  운영 준비는 완료되지 않습니다. 수업자료와 문제은행을
-                  연결하려면 교육과정 구성을 먼저 채워 주세요.
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-bold text-gray-700">
-                      필수 운영 항목
-                    </div>
-                    <span className="text-xs font-bold text-gray-500">
-                      {requiredReadyCount}/{readiness.requiredItems.length}
-                    </span>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {readiness.requiredItems.map((item) => (
-                      <div
-                        key={item.key}
-                        className={`rounded-lg border px-3 py-2 ${
-                          item.ready
-                            ? "border-emerald-200 bg-white"
-                            : "border-amber-200 bg-amber-50"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-bold text-gray-800">
-                              {item.label}
-                            </div>
-                            <div
-                              className={`mt-1 text-xs leading-5 ${item.ready ? "text-gray-500" : "text-amber-900"}`}
+                )}
+                {readinessNeedsReauth && (
+                  <button
+                    type="button"
+                    onClick={() => void handleReadinessReauthentication()}
+                    disabled={readinessReauthBusy || readinessLoading}
+                    className="mt-3 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {readinessReauthBusy
+                      ? "본인 확인 중..."
+                      : "다시 인증 후 조회"}
+                  </button>
+                )}
+                {!readinessLoading && readiness && (
+                  <>
+                    {readiness.status === "stale" && !readinessError && (
+                      <p className="mb-3 text-xs text-amber-800">
+                        이전 확인 결과입니다. 학기 전환 시 다시 검사합니다.
+                      </p>
+                    )}
+                    {[
+                      { title: "필수 항목", items: readiness.requiredItems },
+                      { title: "참고 항목", items: readiness.advisoryItems },
+                    ].map(({ title, items }) => (
+                      <div key={title} className="py-2">
+                        <h5 className="mb-2 text-xs font-bold text-gray-500">
+                          {title}
+                        </h5>
+                        <ul className="divide-y divide-gray-100">
+                          {items.map((item) => (
+                            <li
+                              key={item.key}
+                              className="flex items-center justify-between gap-4 py-2 text-sm"
                             >
-                              {item.ready
-                                ? getReadinessItemMeta(item).readyHint
-                                : getReadinessItemMeta(item).missingHint}
-                            </div>
-                          </div>
-                          <span
-                            className={`inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[11px] font-bold ${
-                              item.ready
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                : "border-amber-200 bg-white text-amber-800"
-                            }`}
-                          >
-                            {item.ready ? "준비됨" : "확인 필요"}
-                          </span>
-                        </div>
+                              <span className="font-medium text-gray-800">
+                                {item.label}
+                              </span>
+                              <span
+                                className={`shrink-0 text-xs font-bold ${item.ready ? "text-emerald-700" : "text-amber-800"}`}
+                              >
+                                {item.statusLabel}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     ))}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-bold text-gray-700">
-                      운영 참고 항목
-                    </div>
-                    <span className="text-xs font-bold text-gray-500">
-                      {advisoryReadyCount}/{readiness.advisoryItems.length}
-                    </span>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {readiness.advisoryItems.map((item) => (
-                      <div
-                        key={item.key}
-                        className={`rounded-lg border px-3 py-2 ${
-                          item.ready
-                            ? "border-emerald-200 bg-white"
-                            : "border-slate-200 bg-white"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-bold text-gray-800">
-                              {item.label}
-                            </div>
-                            <div
-                              className={`mt-1 text-xs leading-5 ${item.ready ? "text-gray-500" : "text-slate-600"}`}
-                            >
-                              {item.ready
-                                ? getReadinessItemMeta(item).readyHint
-                                : getReadinessItemMeta(item).missingHint}
-                            </div>
-                          </div>
-                          <span
-                            className={`inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[11px] font-bold ${
-                              item.ready
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                : "border-slate-200 bg-slate-50 text-slate-600"
-                            }`}
-                          >
-                            {item.ready ? "준비됨" : "추가 준비"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h4 className="text-sm font-bold text-gray-900">
-                새로운 학기 준비
-              </h4>
-              <p className="text-xs text-gray-500 mt-1">
-                새로운 학년/학기를 만들고 기본 자료만 준비합니다. 콘텐츠 복제나
-                데이터 이월은 하지 않으며, 교육과정 구성이 비어 있으면 실제 운영
-                준비는 아직 끝난 상태가 아닙니다.
-              </p>
-            </div>
-            {feedback && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="text-xs font-bold text-blue-700"
-              >
-                {feedback}
-              </div>
-            )}
-          </div>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,160px)_auto] gap-3">
-            <input
-              type="text"
-              name="year"
-              aria-label="새 학기 학년도"
-              value={newSemester.year}
-              onChange={handleNewSemesterChange}
-              inputMode="numeric"
-              placeholder="2027"
-              className="w-full border border-gray-300 rounded-lg p-3 bg-white font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <select
-              name="semester"
-              aria-label="새 학기"
-              value={newSemester.semester}
-              onChange={handleNewSemesterChange}
-              className="w-full border border-gray-300 rounded-lg p-3 bg-white font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="1">1학기</option>
-              <option value="2">2학기</option>
-            </select>
-            <button
-              type="button"
-              onClick={handleCreateSemester}
-              disabled={creating}
-              className="bg-white hover:bg-gray-100 disabled:opacity-60 text-gray-800 font-bold py-3 px-5 rounded-xl border border-gray-300 shadow-sm transition"
-            >
-              {creating ? "생성 중..." : "학기 생성"}
-            </button>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-100 pt-6">
-          <label className="block text-sm font-bold text-gray-700 mb-4">
-            학생 메뉴 표시 제어
-          </label>
-          <div className="space-y-3">
-            <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100 transition">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-                  <i className="fas fa-gamepad"></i>
-                </div>
-                <span className="font-bold text-gray-700">평가(Quiz)</span>
-              </div>
-              <input
-                type="checkbox"
-                name="showQuiz"
-                checked={config.showQuiz}
-                onChange={handleChange}
-                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-              />
-            </label>
-            <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100 transition">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-                  <i className="fas fa-chart-bar"></i>
-                </div>
-                <span className="font-bold text-gray-700">점수(Score)</span>
-              </div>
-              <input
-                type="checkbox"
-                name="showScore"
-                checked={config.showScore}
-                onChange={handleChange}
-                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-              />
-            </label>
-            <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100 transition">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
-                  <i className="fas fa-book-reader"></i>
-                </div>
-                <span className="font-bold text-gray-700">
-                  수업자료(Lesson)
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                name="showLesson"
-                checked={config.showLesson}
-                onChange={handleChange}
-                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-              />
-            </label>
-          </div>
-        </div>
-
-        <div className="pt-4 text-right">
-          {!readinessLoading && readiness && readiness.status !== "ready" && (
-            <div
-              className={`mb-4 rounded-xl border p-4 text-left text-sm font-bold flex items-start gap-3 ${readinessWarningClass}`}
-            >
-              <i className="fas fa-exclamation-triangle mt-0.5"></i>
-              <div className="flex-1">
-                <div>
-                  {readiness.status === "danger"
-                    ? "왜 전환 비권장인지 먼저 확인해 주세요."
-                    : "전환 전 먼저 채우면 좋은 항목입니다."}
-                </div>
-                <div className="mt-1 text-xs font-semibold leading-5">
-                  {missingRequiredItems.length > 0
-                    ? `우선 ${missingRequiredItems.map((item) => item.label).join(", ")}부터 확인해 주세요.`
-                    : "핵심 운영 항목은 준비되었고, 아래 참고 항목을 채우면 운영 여유가 더 생깁니다."}
-                </div>
-                {priorityActionItems.length > 0 && (
-                  <div className="mt-3 space-y-1.5 text-xs font-semibold">
-                    {priorityActionItems.map((item, index) => (
-                      <div
-                        key={item.key}
-                      >{`${index + 1}. ${getReadinessItemMeta(item).actionHint}`}</div>
-                    ))}
-                  </div>
+                  </>
                 )}
               </div>
+            </details>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <h4 className="text-sm font-bold text-gray-900">
+                새 학기 만들기
+              </h4>
+              {feedback && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="mt-2 text-xs font-bold text-blue-700"
+                >
+                  {feedback}
+                </p>
+              )}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,160px)_auto] gap-3">
+                <input
+                  type="text"
+                  name="year"
+                  aria-label="새 학기 학년도"
+                  value={newSemester.year}
+                  onChange={handleNewSemesterChange}
+                  inputMode="numeric"
+                  placeholder="2027"
+                  className="w-full border border-gray-300 rounded-lg p-3 bg-white font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <select
+                  name="semester"
+                  aria-label="새 학기"
+                  value={newSemester.semester}
+                  onChange={handleNewSemesterChange}
+                  className="w-full border border-gray-300 rounded-lg p-3 bg-white font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="1">1학기</option>
+                  <option value="2">2학기</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleCreateSemester}
+                  disabled={creating}
+                  className="bg-white hover:bg-gray-100 disabled:opacity-60 text-gray-800 font-bold py-3 px-5 rounded-xl border border-gray-300 shadow-sm transition"
+                >
+                  {creating ? "생성 중..." : "학기 생성"}
+                </button>
+              </div>
             </div>
-          )}
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95"
-          >
-            {saving ? "저장 중..." : "설정 저장"}
-          </button>
-        </div>
+
+            <div className="pt-4 text-right">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || !hasPendingSemesterSwitch}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform active:scale-95"
+              >
+                {saving ? "저장 중..." : "설정 저장"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

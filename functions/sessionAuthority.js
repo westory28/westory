@@ -14,8 +14,8 @@ const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
 
-const GENERAL_IDLE_MS = 30 * 60 * 1000;
-const HIGH_RISK_IDLE_MS = 15 * 60 * 1000;
+const GENERAL_IDLE_MS = 60 * 60 * 1000;
+const HIGH_RISK_IDLE_MS = GENERAL_IDLE_MS;
 const RECENT_AUTH_MS = 5 * 60 * 1000;
 const SESSION_TOUCH_MIN_INTERVAL_MS = 30 * 1000;
 const MAX_CLOCK_SKEW_MS = 60 * 1000;

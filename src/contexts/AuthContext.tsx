@@ -38,11 +38,7 @@ import {
   synchronizeApplicationSession,
   type ApplicationSessionAuthorityMode,
 } from "../lib/applicationSession";
-import {
-  clearSessionTiming,
-  NORMAL_SESSION_DURATION_MS,
-  writeSessionDeadline,
-} from "../lib/sessionPolicy";
+import { initializeClientSessionTiming } from "../lib/sessionPolicy";
 import {
   STUDENT_MAINTENANCE_CONFIG_DOC_ID,
   invalidateStudentMaintenanceBootstrap,
@@ -597,15 +593,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 return;
               }
               if (
-                applicationSession.authorityMode === "ENFORCE" &&
-                !writeSessionDeadline(applicationSession.generalExpiresAt, {
-                  durationMs: NORMAL_SESSION_DURATION_MS,
-                })
+                !initializeClientSessionTiming(
+                  applicationSession.authorityMode,
+                  applicationSession.generalExpiresAt,
+                )
               ) {
                 throw new Error("Invalid application session deadline");
-              }
-              if (applicationSession.authorityMode !== "ENFORCE") {
-                clearSessionTiming();
               }
               resolvedUserRef.current = user;
               setApplicationSessionAuthorityMode(
@@ -712,15 +705,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 return;
               }
               if (
-                applicationSession.authorityMode === "ENFORCE" &&
-                !writeSessionDeadline(applicationSession.generalExpiresAt, {
-                  durationMs: NORMAL_SESSION_DURATION_MS,
-                })
+                !initializeClientSessionTiming(
+                  applicationSession.authorityMode,
+                  applicationSession.generalExpiresAt,
+                )
               ) {
                 throw new Error("Invalid application session deadline");
-              }
-              if (applicationSession.authorityMode !== "ENFORCE") {
-                clearSessionTiming();
               }
               verifiedUserSnap = userSnap;
               resolvedUserRef.current = user;

@@ -49,6 +49,7 @@
     --ws-maintenance-wordmark-width: clamp(180px, 48vw, 240px);
     --ws-page-max: 1280px;
     --ws-workspace-max: 1600px;
+    --ws-teacher-dashboard-max: 96rem;
     --ws-header-height: 64px;
     --ws-student-nav-height: 68px;
     --ws-teacher-rail-width: 72px;

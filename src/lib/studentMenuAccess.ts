@@ -141,6 +141,34 @@ const isMenuUrlBlockedBySystemConfig = (
   config: SystemConfig,
 ) => isStudentPathBlockedBySystemConfig(parseMenuUrl(menuUrl).pathname, config);
 
+export const migrateStudentMenuVisibility = (
+  menuConfig: MenuConfig,
+  config: SystemConfig,
+): MenuConfig => {
+  if (menuConfig.studentVisibilitySource === "sitemap") return menuConfig;
+
+  return {
+    ...menuConfig,
+    studentVisibilitySource: "sitemap",
+    student: menuConfig.student.map((item) => {
+      const parentBlocked = isMenuUrlBlockedBySystemConfig(item.url, config);
+      if (!item.children?.length) {
+        return { ...item, hidden: item.hidden === true || parentBlocked };
+      }
+      return {
+        ...item,
+        children: item.children.map((child) => ({
+          ...child,
+          hidden:
+            child.hidden === true ||
+            parentBlocked ||
+            isMenuUrlBlockedBySystemConfig(child.url, config),
+        })),
+      };
+    }),
+  };
+};
+
 const menuTargetsEqual = (leftUrl: string, rightUrl: string) => {
   const left = parseMenuUrl(leftUrl);
   const right = parseMenuUrl(rightUrl);
@@ -269,17 +297,25 @@ const isParentUrlHiddenByChild = (item: MenuItem) => {
 export const getStudentVisibleMenuItems = (
   menuItems: MenuItem[],
   config: SystemConfig | null,
+  menuConfig?: MenuConfig | null,
 ): MenuItem[] => {
   if (!config) return [];
+  const useLegacyVisibility = menuConfig?.studentVisibilitySource !== "sitemap";
 
   return menuItems.flatMap((item) => {
-    if (isMenuUrlBlockedBySystemConfig(item.url, config)) return [];
+    if (
+      item.hidden === true ||
+      (useLegacyVisibility && isMenuUrlBlockedBySystemConfig(item.url, config))
+    ) {
+      return [];
+    }
 
     const originalChildren = item.children || [];
     const visibleChildren = originalChildren.filter(
       (child) =>
         child.hidden !== true &&
-        !isMenuUrlBlockedBySystemConfig(child.url, config),
+        (!useLegacyVisibility ||
+          !isMenuUrlBlockedBySystemConfig(child.url, config)),
     );
 
     if (originalChildren.length > 0 && visibleChildren.length === 0) {
@@ -341,7 +377,10 @@ export const getStudentRouteAccess = (
     };
   }
 
-  if (isStudentPathBlockedBySystemConfig(pathname, config)) {
+  if (
+    menuConfig.studentVisibilitySource !== "sitemap" &&
+    isStudentPathBlockedBySystemConfig(pathname, config)
+  ) {
     return {
       allowed: false,
       redirectTo: STUDENT_HIDDEN_MENU_REDIRECT,
@@ -365,6 +404,7 @@ export const getStudentRouteAccess = (
   const visibleMenuItems = getStudentVisibleMenuItems(
     menuConfig.student || [],
     config,
+    menuConfig,
   );
   if (
     !isStudentRouteVisibleInMenu(

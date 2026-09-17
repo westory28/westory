@@ -64,9 +64,13 @@ jobs:
       - run: npm run verify:access-gate
       - run: npm run verify:session-policy
       - run: npm run verify:step-up-reauth
+      - run: node scripts/verify-student-menu-visibility.mjs
+      - run: node scripts/verify-settings-readiness-reauth.cjs
       - run: node scripts/verify-routine-content-auth.mjs
       - run: node node_modules/playwright-core/cli.js install --with-deps chromium
       - run: node scripts/verify-session-display-consistency.mjs
+      - run: node scripts/verify-intuitive-settings-ui.mjs
+      - run: node scripts/verify-dashboard-width.mjs
       - run: node scripts/verify-developer-log-save-reauth.mjs
       - run: node scripts/verify-lesson-upload-performance.mjs
       - run: node scripts/verify-login-bootstrap-performance.mjs
