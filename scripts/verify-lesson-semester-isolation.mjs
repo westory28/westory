@@ -75,7 +75,8 @@ assert.equal((await reader.readStudentLesson(config2, "new-unit")).title, "í˜„ìž
 
 const teacher = readFileSync("src/pages/teacher/ManageLesson.tsx", "utf8");
 assert.doesNotMatch(teacher, /collection\(db,\s*"lessons"\)|doc\(db,\s*"curriculum",\s*"tree"\)/);
-assert.match(teacher, /collectionPaths:\s*\[getSemesterCollectionPath\(config, "lessons"\)\]/);
+assert.match(teacher, /const lessonCollectionPath = getSemesterCollectionPath\(config, "lessons"\);/);
+assert.match(teacher, /collectionPaths:\s*\[lessonCollectionPath\]/);
 const preview = readFileSync("src/pages/teacher/components/ArchivedLessonPreview.tsx", "utf8");
 assert.match(preview, /lessonOverride=\{snapshot\}/);
 assert.match(preview, /disablePersistence/);
