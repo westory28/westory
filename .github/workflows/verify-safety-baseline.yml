@@ -67,6 +67,8 @@ jobs:
       - run: node node_modules/playwright-core/cli.js install --with-deps chromium
       - run: node scripts/verify-session-display-consistency.mjs
       - run: node scripts/verify-developer-log-save-reauth.mjs
+      - run: node scripts/verify-lesson-upload-performance.mjs
+      - run: node scripts/verify-login-bootstrap-performance.mjs
       - run: npm run verify:lesson-answer-save-recovery
       - run: npm run verify:thinkcloud-refresh
       - run: npm run verify:assessment-attempt-safety
@@ -74,6 +76,7 @@ jobs:
       - run: npm run verify:w5-shell-safety
       - run: npm run format:check
       - run: npm run build
+      - run: node scripts/verify-reauth-maintenance-integration.mjs
 
       - uses: actions/setup-node@v4
         with:

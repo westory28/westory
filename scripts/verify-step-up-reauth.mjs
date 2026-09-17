@@ -408,7 +408,7 @@ const continuityBlock = authContextSource.slice(
   destructiveAuthReset,
 );
 assert.match(continuityBlock, /synchronizeApplicationSession/);
-assert.match(continuityBlock, /subscribeUserDocument\(user, refreshRevision\)/);
+assert.match(continuityBlock, /subscribeUserDocument\(\s*user,\s*refreshRevision,\s*verifiedUserSnap\s*,?\s*\)/);
 const continuitySuccessBlock = continuityBlock.slice(
   0,
   continuityBlock.indexOf("} catch (error)"),

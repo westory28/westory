@@ -1,10 +1,10 @@
-const { createHash, randomUUID } = require("node:crypto");
+const { randomUUID } = require("node:crypto");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { storageBucket } = require("firebase-functions/params");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
-const sharp = require("sharp");
 const { ASSET_COLLECTION } = require("./lessonManagement");
+const { validateLessonAssetBytes } = require("./lessonAssetVerification");
 const {
   buildPdfRevisionPathsForBasePath,
 } = require("./sourceArchiveProcessor");
@@ -52,65 +52,24 @@ exports.processLessonAssetUpload = onObjectFinalized(
       )
         throw new Error("파일 크기 또는 형식이 일치하지 않습니다.");
       const [buffer] = await file.download();
-      if (
-        buffer.length !== ticket.byteSize ||
-        createHash("sha256").update(buffer).digest("hex") !== ticket.sha256
-      )
-        throw new Error("파일 내용 검증에 실패했습니다.");
-      if (ticket.kind === "PDF") {
-        if (!buffer.subarray(0, 1024).includes(Buffer.from("%PDF-")))
-          throw new Error("올바른 PDF 파일이 아닙니다.");
-        pdfProcessing = {
-          mediaKind: "pdf",
-          currentRevision: ticket.uploadId,
-          previewText: "",
-          pageCount: 0,
-          extractionStatus: "processing",
-          extractionVersion: "",
-          extractedAt: null,
-          extractedContentPath: "",
-          extractedManifestPath: "",
-          parserKind: "",
-          parseErrorMessage: "",
-          file: {
-            storagePath: ticket.storagePath,
-            originalName: ticket.originalName,
-            mimeType: ticket.contentType,
-            byteSize: ticket.byteSize,
-            width: 0,
-            height: 0,
-            revision: ticket.uploadId,
-            originalAvailable: true,
-            legacyPreviewOnly: false,
-            pendingUploadToken: "",
-            pendingUploadPath: "",
-          },
-        };
-      } else {
-        const info = await sharp(buffer, {
-          limitInputPixels: 50000000,
-        }).metadata();
-        const mime = {
-          png: "image/png",
-          jpeg: "image/jpeg",
-          webp: "image/webp",
-        }[info.format];
-        if (mime !== ticket.contentType || !info.width || !info.height)
-          throw new Error("이미지 형식을 확인할 수 없습니다.");
-      }
+      pdfProcessing = await validateLessonAssetBytes(ticket, buffer);
       await file.setMetadata({
-        metadata: { firebaseStorageDownloadTokens: ticket.downloadToken, ownerUid: ticket.ownerUid, uploadId: ticket.uploadId },
+        metadata: {
+          firebaseStorageDownloadTokens: ticket.downloadToken,
+          ownerUid: ticket.ownerUid,
+          uploadId: ticket.uploadId,
+        },
         cacheControl: "private,max-age=3600",
       });
       const url = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket.name)}/o/${encodeURIComponent(ticket.storagePath)}?alt=media&token=${ticket.downloadToken}`;
-      await db.runTransaction(async (transaction) => {
+      const verified = await db.runTransaction(async (transaction) => {
         const latest = await transaction.get(ticketRef);
         if (
           !latest.exists ||
           !["PENDING", "VERIFIED", "ATTACHED"].includes(latest.data().status) ||
           (latest.data().generation && latest.data().generation !== generation)
         )
-          return;
+          return false;
         transaction.set(
           ticketRef,
           {
@@ -125,13 +84,16 @@ exports.processLessonAssetUpload = onObjectFinalized(
           },
           { merge: true },
         );
+        return true;
       });
-      if (ticket.kind !== "PDF") return;
+      if (!verified || ticket.kind !== "PDF") return;
       const extractionAttempt = randomUUID();
       const claimed = await db.runTransaction(async (transaction) => {
         const latest = await transaction.get(ticketRef);
         if (
           !latest.exists ||
+          !["VERIFIED", "ATTACHED"].includes(latest.data().status) ||
+          latest.data().generation !== generation ||
           ["ready", "failed"].includes(
             latest.data().pdfProcessing?.extractionStatus,
           )

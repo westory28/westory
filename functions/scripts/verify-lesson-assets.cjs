@@ -36,17 +36,20 @@ const setup = (change = () => {}, options = {}) => {
       worksheetBlanks: [{ id: "keep" }],
     },
   });
-  const metrics = { downloads: 0, metadata: 0, parses: 0 };
+  const metrics = { downloads: 0, metadata: 0, parses: 0, transactions: 0 };
   const snap = (value) => ({ exists: value.exists, data: () => value.data });
   const db = {
     doc: (key) => ({ path: key, get: async () => snap(await store.get(key)) }),
-    runTransaction: (callback) =>
-      store.runTransaction((tx) =>
+    runTransaction: (callback) => {
+      metrics.transactions++;
+      options.beforeTransaction?.(store, metrics.transactions);
+      return store.runTransaction((tx) =>
         callback({
           get: async (ref) => snap(await tx.get(ref.path)),
           set: (ref, value, config) => tx.set(ref.path, value, config),
         }),
-      ),
+      );
+    },
   };
   const bucket = {
     name: "demo-fixture-bucket",
@@ -96,11 +99,18 @@ const setup = (change = () => {}, options = {}) => {
     "./sourceArchivePdfAdapter": {
       savePdfStructureArtifacts: async () => {
         metrics.parses++;
+        options.afterParse?.(store);
         if (options.parseError) throw Error("parser failure");
         return { previewText: "parsed", pageCount: 2 };
       },
     },
   };
+  const verification = { exports: {} };
+  runInNewContext(
+    readFileSync(resolve(__dirname, "../lessonAssetVerification.js"), "utf8"),
+    { require: (name) => dependencies[name], module: verification, Buffer },
+  );
+  dependencies["./lessonAssetVerification"] = verification.exports;
   runInNewContext(
     readFileSync(resolve(__dirname, "../lessonAssetUploads.js"), "utf8"),
     {
@@ -221,6 +231,60 @@ const setup = (change = () => {}, options = {}) => {
   });
   await assert.rejects(busy.run(), /lease-busy/);
   assert.equal(busy.metrics.parses, 0);
+  checks++;
+  // The synchronous transport can verify/attach while the worker is starting.
+  const fastAttached = setup(
+    (t) => {
+      t.status = "VERIFIED";
+      t.generation = "10";
+      t.pdfProcessing = { extractionStatus: "processing" };
+    },
+    {
+      beforeTransaction: (store, attempt) => {
+        if (attempt === 1) store.docs.get(path).status = "ATTACHED";
+      },
+    },
+  );
+  await fastAttached.run();
+  assert.equal(fastAttached.store.docs.get(path).status, "ATTACHED");
+  assert.equal(
+    fastAttached.store.docs.get(lessonPath).pdfProcessing.extractionStatus,
+    "ready",
+  );
+  checks++;
+  for (const attempt of [1, 2]) {
+    for (const change of [
+      (t) => {
+        t.status = "FAILED";
+      },
+      (t) => {
+        t.generation = "11";
+      },
+    ]) {
+      const race = setup(() => {}, {
+        beforeTransaction: (store, step) => {
+          if (step === attempt) change(store.docs.get(path));
+        },
+      });
+      await race.run();
+      assert.equal(
+        race.metrics.parses,
+        0,
+        "failed or superseded tickets never acquire an extraction lease",
+      );
+      checks++;
+    }
+  }
+  const staleExtraction = setup(() => {}, {
+    afterParse: (store) => {
+      store.docs.get(path).extractionAttempt = "new-worker";
+    },
+  });
+  await staleExtraction.run();
+  assert.equal(
+    staleExtraction.store.docs.get(path).pdfProcessing.extractionStatus,
+    "processing",
+  );
   checks++;
   console.log(
     JSON.stringify({

@@ -13,7 +13,7 @@ const fixture=join(output,'fixture.tsx');
 writeFileSync(fixture,`import React from '${root}/node_modules/react/index.js';
 export const config={year:'2026',semester:'2'};
 export const auth={currentUser:{uid:'teacher-a',email:'westoria28@gmail.com'}};
-export const useAuth=()=>({currentUser:auth.currentUser,userData:{role:'teacher'},config});
+export const useAuth=()=>({currentUser:auth.currentUser,userData:{role:'teacher'},config,configReady:true});
 export const db={};export const getFirebaseStorage=async()=>({});export const getHttpsCallable=()=>{throw Error('Unexpected callable');};
 let saved={unitId:'unit',title:'원래 제목',contentRevision:3,updatedAt:100,isVisibleToStudents:true};
 let tree=[{id:'root',title:'자료',children:[{id:'middle',title:'단원',children:[{id:'unit',title:'원래 제목',children:[]}]}]}],treeRevision=2;
@@ -25,15 +25,19 @@ if(replaceMode)saved={...saved,contentHtml:'<p>[fn:delete]</p>',footnotes:[{id:'
 const ticket=input=>{const uploadId='asset-'+(++assetSequence),storagePath='lesson-assets/'+uploadId,url='/uploaded-'+uploadId+'.png';tickets.set(uploadId,{...input,storagePath,url,status:'VERIFIED'});return {uploadId,storagePath};};
 let signal=()=>{},pending;export const setSignal=fn=>signal=fn;
 export const collection=(_,path)=>({path});export const doc=(_, ...parts)=>({path:parts.join('/')});
-export const where=(key,op,value)=>({key,value});export const limit=()=>({});export const orderBy=()=>({});export const query=(ref,...filters)=>({...ref,filters});export const serverTimestamp=()=>100;
+export const where=(key,op,value)=>({key,value});export const limit=()=>({});export const orderBy=()=>({});export const startAfter=()=>({});export const query=(ref,...filters)=>({...ref,filters});export const serverTimestamp=()=>100;
 const snapshot=data=>({exists:()=>!!data,data:()=>structuredClone(data),id:'unit',ref:{path:'lesson'}});
-export const getDoc=async ref=>ref.path==='site_settings/semester_active'?snapshot({semesterId:'2026-2',revision:observations.pointerRevision}):getDocFromServer(ref);
+export const onAuthStateChanged=()=>{throw Error("No auth watcher expected")};export const onSnapshot=()=>{throw Error("No upload watcher expected")};export const getDoc=async ref=>ref.path==='site_settings/semester_active'?snapshot({semesterId:'2026-2',revision:observations.pointerRevision}):getDocFromServer(ref);
 export const getDocFromServer=async ref=>{observations.reads.push(ref.path);return ref.path.startsWith('lesson_asset_uploads/')?snapshot(tickets.get(ref.path.split('/').at(-1))):ref.path.endsWith('curriculum/tree')?snapshot({tree,contentRevision:treeRevision}):snapshot(null);};
 export const getDocsFromServer=async ref=>{observations.reads.push(ref.path);const docs=ref.path==='lessons'?[]:[snapshot(saved)];return {empty:!docs.length,docs};};
 export const getDocs=async()=>{throw Error('Editor must read committed server data');};
 export const ref=()=>({});export const getBlob=async()=>new Blob(['image'],{type:'image/png'});export const getDownloadURL=async()=>'';export const listAll=async()=>({items:[],prefixes:[]});
 export const subscribeSourceArchiveAssets=callback=>{callback([]);return()=>{};};
-export default function Stub(){return null;}export const lazyWithRetry=()=>Stub;export const processPdfMapFile=async()=>({pageImages:[{page:1,width:600,height:800,blob:new Blob(['page'],{type:'image/png'})}],regions:[]});
+export default function Stub(){return null;}
+// Keep the worksheet's layout space when isolating PDF rendering so its
+// absolutely positioned library remains usable during the recovery scenario.
+function WorksheetStage(){return <div style={{minHeight:800}} aria-label="학습지 표시 영역"/>;}
+export const lazyWithRetry=(_loader,key)=>key==='teacher-lesson-worksheet-stage'?WorksheetStage:Stub;export const processPdfMapFile=async()=>({pageImages:[{page:1,width:600,height:800,blob:new Blob(['page'],{type:'image/png'})}],regions:[]});
 export const executeWestoryCommand=async(type,input,options)=>{
  observations.calls.push({type,input:structuredClone(input),options});
  if(options.expectedUid!=='teacher-a')throw Error('Wrong owner');
@@ -61,7 +65,7 @@ window.alert=message=>observations.alerts.push(message);window.confirm=()=>true;
 `);
 const entry=`import React from 'react';import {createRoot} from 'react-dom/client';import {HashRouter} from 'react-router-dom';import Editor from './src/pages/teacher/ManageLesson';import {setSignal,remount,finish,observations} from '${fixture.replaceAll('\\','/')}';
 function Harness(){const [ready,setReady]=React.useState(true);setSignal(setReady);return <HashRouter><div style={{position:"relative",zIndex:99999}}><button onClick={remount}>본인 확인 완료</button><button onClick={()=>finish('success')}>서버 저장 완료</button><button onClick={()=>finish('failure')}>서버 저장 실패</button><button onClick={()=>finish('conflict')}>다른 화면과 충돌</button></div>{ready?<Editor/>:<p>본인 확인 중</p>}</HashRouter>;}window.fixture=observations;createRoot(document.getElementById('root')).render(<Harness/>);`;
-const result=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,write:false,platform:'browser',format:'iife',metafile:true,loader:{'.svg':'dataurl'},define:{'process.env.NODE_ENV':'"development"','import.meta.env':'{}'},plugins:[{name:'isolated-server',setup(api){api.onResolve({filter:/AuthContext$|\/firebase$|commandGateway$|firebase\/firestore$|firebase\/storage$|sourceArchive$|LessonSourceArchivePickerModal$|LessonContent$|LessonWorksheetStage$|StorageImage$|lazyWithRetry$|pdfMapProcessor$/},()=>({path:fixture}));}}]});
+const result=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,write:false,platform:'browser',format:'iife',metafile:true,loader:{'.svg':'dataurl'},define:{'process.env.NODE_ENV':'"development"','import.meta.env':'{}'},plugins:[{name:'isolated-server',setup(api){api.onResolve({filter:/AuthContext$|\/firebase$|commandGateway$|firebase\/firestore$|firebase\/auth$|firebase\/storage$|sourceArchive$|LessonSourceArchivePickerModal$|LessonContent$|LessonWorksheetStage$|StorageImage$|lazyWithRetry$|pdfMapProcessor$/},()=>({path:fixture}));}}]});
 assert.ok(!Object.keys(result.metafile.inputs).some(path=>path.includes('node_modules/@firebase/')));
 const cssFile=readdirSync('dist/assets').find(n=>/^main-.*\.css$/.test(n));
 const css=readFileSync(join('dist/assets',cssFile),'utf8');

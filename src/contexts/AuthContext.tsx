@@ -332,13 +332,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return false;
     };
 
-    const subscribeUserDocument = async (user: User, authRevision: number) => {
-      stopUserDocSubscription();
+    const readUserDocumentFromServer = async (
+      user: User,
+      authRevision: number,
+    ) => {
       const userRef = doc(db, "users", user.uid);
-      const readUserDocumentFromServer = async () => {
-        let lastError: unknown = null;
-        const retryDelaysMs = [0, 50, 100, 200, 400, 800, 1600, 2000];
-        for (const delayMs of retryDelaysMs) {
+      let lastError: unknown = null;
+      const retryDelaysMs = [0, 50, 100, 200, 400, 800, 1600, 2000];
+      for (const delayMs of retryDelaysMs) {
+        if (
+          !active ||
+          authRevisionRef.current !== authRevision ||
+          auth.currentUser?.uid !== user.uid
+        ) {
+          return null;
+        }
+        if (delayMs > 0) {
+          await new Promise<void>((resolve) =>
+            window.setTimeout(resolve, delayMs),
+          );
           if (
             !active ||
             authRevisionRef.current !== authRevision ||
@@ -346,19 +358,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           ) {
             return null;
           }
-          if (delayMs > 0) {
-            await new Promise<void>((resolve) =>
-              window.setTimeout(resolve, delayMs),
-            );
-          }
-          try {
-            return await getDocFromServer(userRef);
-          } catch (error) {
-            lastError = error;
-          }
         }
-        throw lastError;
-      };
+        try {
+          return await getDocFromServer(userRef);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError;
+    };
+
+    const subscribeUserDocument = async (
+      user: User,
+      authRevision: number,
+      verifiedUserSnap: Awaited<ReturnType<typeof getDocFromServer>> | null,
+    ) => {
+      stopUserDocSubscription();
+      const userRef = doc(db, "users", user.uid);
       const applyUserDocument = async (
         userSnap: Awaited<ReturnType<typeof getDocFromServer>>,
       ) => {
@@ -441,9 +457,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // A cached snapshot can arrive before Firestore has adopted the token
         // issued by a completed step-up reauthentication. Confirm the user
         // document against the server before protected children can remount.
-        const userSnap = await readUserDocumentFromServer();
-        if (!userSnap) return;
-        await applyUserDocument(userSnap);
+        if (!verifiedUserSnap) return;
+        await applyUserDocument(verifiedUserSnap);
       } catch (e) {
         handleUserDocumentError(e);
         return;
@@ -519,12 +534,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 refreshRevision,
               );
               if (!maintenanceAllowed) return;
-              const applicationSession = await synchronizeApplicationSession(
-                user,
-                {
+              // Reading the user's own document is allowed before a session
+              // exists. Keep both server checks mandatory, but overlap their
+              // network waits; protected children remain AUTHENTICATING.
+              const [applicationSession, verifiedUserSnap] = await Promise.all([
+                synchronizeApplicationSession(user, {
                   expectedUid: user.uid,
-                },
-              );
+                }),
+                readUserDocumentFromServer(user, refreshRevision),
+              ]);
               if (
                 !active ||
                 authRevisionRef.current !== refreshRevision ||
@@ -549,7 +567,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               );
               setCurrentUser(user);
               setAuthenticationError("");
-              void subscribeUserDocument(user, refreshRevision);
+              void subscribeUserDocument(
+                user,
+                refreshRevision,
+                verifiedUserSnap,
+              );
             } catch (error) {
               if (
                 !active ||
@@ -559,6 +581,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 return;
               }
               console.error("Failed to refresh application session", error);
+              authRevisionRef.current += 1;
               clearAuthenticatedState();
               authResolutionPendingRef.current = false;
               setAuthenticationError(
@@ -593,18 +616,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               return;
             }
 
+            let verifiedUserSnap: Awaited<
+              ReturnType<typeof getDocFromServer>
+            > | null = null;
             try {
               const maintenanceAllowed = await verifyMaintenanceAccess(
                 user,
                 authRevision,
               );
               if (!maintenanceAllowed) return;
-              const applicationSession = await synchronizeApplicationSession(
-                user,
-                {
+              // Reading the user's own document is allowed before a session
+              // exists. Keep both server checks mandatory, but overlap their
+              // network waits; protected children remain AUTHENTICATING.
+              const [applicationSession, userSnap] = await Promise.all([
+                synchronizeApplicationSession(user, {
                   expectedUid: user.uid,
-                },
-              );
+                }).then((session) => {
+                  if (
+                    active &&
+                    authRevisionRef.current === authRevision &&
+                    auth.currentUser?.uid === user.uid
+                  ) {
+                    visibilitySettingsReady = Promise.all([
+                      loadAuthedSystemConfig(user),
+                      loadAuthedMenuConfig(user),
+                    ]).then(() => undefined);
+                  }
+                  return session;
+                }),
+                readUserDocumentFromServer(user, authRevision),
+              ]);
               if (
                 !active ||
                 authRevisionRef.current !== authRevision ||
@@ -623,6 +664,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               if (applicationSession.authorityMode !== "ENFORCE") {
                 clearSessionTiming();
               }
+              verifiedUserSnap = userSnap;
               resolvedUserRef.current = user;
               setApplicationSessionAuthorityMode(
                 applicationSession.authorityMode,
@@ -631,6 +673,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             } catch (error) {
               if (!active || authRevisionRef.current !== authRevision) return;
               console.error("Failed to open application session", error);
+              authRevisionRef.current += 1;
               clearAuthenticatedState();
               authResolutionPendingRef.current = false;
               setAuthenticationError(
@@ -642,11 +685,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               return;
             }
 
-            visibilitySettingsReady = Promise.all([
-              loadAuthedSystemConfig(user),
-              loadAuthedMenuConfig(user),
-            ]).then(() => undefined);
-            void subscribeUserDocument(user, authRevision);
+            void subscribeUserDocument(user, authRevision, verifiedUserSnap);
           } else {
             const logoutReason = logoutReasonRef.current;
             const wasAuthenticated = authenticatedUidRef.current !== null;

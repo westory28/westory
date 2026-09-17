@@ -1209,14 +1209,18 @@ const Login: React.FC = () => {
 
     const isTeacherEmail = user.email === TEACHER_EMAIL;
     const userRef = doc(db, "users", user.uid);
-    const userSnap = await getDoc(userRef);
+    // Maintenance bootstrap already confirmed this profile against the server.
+    // Reuse that result for onboarding; AuthContext still requires its final
+    // server profile probe before granting access to protected pages.
+    const userSnap = maintenance.profile ? null : await getDoc(userRef);
+    const existing: Partial<UserData> | null =
+      maintenance.profile ||
+      (userSnap?.exists() ? (userSnap.data() as Partial<UserData>) : null);
+    const userDocExists = existing !== null;
     markLoginPerf("westory-login-user-doc-read", {
-      exists: userSnap.exists() ? "true" : "false",
-      source: "finish-login",
+      exists: userDocExists ? "true" : "false",
+      source: maintenance.profile ? "maintenance-bootstrap" : "finish-login",
     });
-    const existing = userSnap.exists()
-      ? (userSnap.data() as Partial<UserData>)
-      : null;
     const staffPermissions = normalizeStaffPermissions(
       existing?.staffPermissions,
     );
@@ -1345,7 +1349,7 @@ const Login: React.FC = () => {
     }
 
     const requiresBlockingWrite =
-      !userSnap.exists() ||
+      !userDocExists ||
       shouldBlockUserProfileWrite({
         existing,
         nextRole,
@@ -1354,7 +1358,7 @@ const Login: React.FC = () => {
         onboardingResult,
       });
 
-    if (!userSnap.exists()) {
+    if (!userDocExists) {
       await setDoc(
         userRef,
         {
@@ -1423,7 +1427,7 @@ const Login: React.FC = () => {
     clearSessionTiming();
     forceRoute(targetPath);
 
-    if (userSnap.exists() && !requiresBlockingWrite) {
+    if (userDocExists && !requiresBlockingWrite) {
       scheduleDeferredUserMerge(userRef, basePayload, `${nextRole}-login`);
     }
   };

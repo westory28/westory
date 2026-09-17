@@ -1,4 +1,11 @@
-import { doc, getDoc, getDocFromServer } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  getDocFromServer,
+  onSnapshot,
+  type DocumentReference,
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth, db, getHttpsCallable, getFirebaseStorage } from "./firebase";
 import {
   executeWestoryCommand,
@@ -70,6 +77,9 @@ export const getLessonCommandScope = async (config: Config) => {
     throw new Error("현재 학기가 변경되었습니다. 화면을 다시 열어 주세요.");
   return { semesterId, expectedSemesterRevision: data.revision as number };
 };
+export type LessonCommandScope = Awaited<
+  ReturnType<typeof getLessonCommandScope>
+>;
 export const saveLessonTree = async (
   config: Config,
   input: Omit<
@@ -105,6 +115,7 @@ export const saveLessonDocument = async (
     localDraft: LessonLocalDraft;
     prepare: (
       ownerUid: string,
+      commandScope: LessonCommandScope,
     ) => Promise<Pick<LessonDocumentWrite, "document" | "assetUploadIds">>;
   },
 ) => {
@@ -120,9 +131,12 @@ export const saveLessonDocument = async (
     },
     async (snapshot) => {
       const { localDraft } = snapshot;
+      // A save is one semester operation. Every server command still checks
+      // this revision, including a cutover that occurs while files upload.
+      const commandScope = await getLessonCommandScope(config);
       let preparedInput = snapshot.input;
       if (preparation) {
-        const prepared = await preparation.prepare(ownerUid);
+        const prepared = await preparation.prepare(ownerUid, commandScope);
         // Only attachment/document fields are replaceable. The unit and its
         // original revision remain those accepted before any reauthentication.
         preparedInput = { ...snapshot.input, ...prepared };
@@ -135,7 +149,7 @@ export const saveLessonDocument = async (
       };
       snapshot.submission!.preparedInput = structuredClone(preparedInput);
       const payload = {
-        ...(await getLessonCommandScope(config)),
+        ...commandScope,
         ...preparedInput,
       };
       snapshot.submission!.payload = structuredClone(payload);
@@ -219,23 +233,22 @@ export const uploadLessonAsset = async (
     file: Blob;
     originalName?: string;
     expectedUid?: string;
+    commandScope?: LessonCommandScope;
   },
 ) => {
   const ownerUid = input.expectedUid || auth.currentUser?.uid;
   if (!ownerUid) throw new Error("로그인 상태를 확인해 주세요.");
   if (auth.currentUser?.uid !== ownerUid)
     throw new Error("로그인 사용자가 바뀌어 업로드를 중단했습니다.");
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    await input.file.arrayBuffer(),
-  );
+  const bytes = new Uint8Array(await input.file.arrayBuffer());
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
   const sha256 = Array.from(new Uint8Array(hash))
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
   const { result: ticket } = await executeWestoryCommand(
     "prepareLessonAssetUpload",
     {
-      ...(await getLessonCommandScope(config)),
+      ...(input.commandScope || (await getLessonCommandScope(config))),
       unitId: input.unitId,
       expectedRevision: input.expectedRevision,
       kind: input.kind,
@@ -252,9 +265,9 @@ export const uploadLessonAsset = async (
     throw new Error("로그인 사용자가 바뀌어 업로드를 중단했습니다.");
   const ticketRef = doc(db, "lesson_asset_uploads", ticket.uploadId);
   const prior = (await getDocFromServer(ticketRef)).data();
+  let verifiedAsset = prior?.status === "VERIFIED" ? prior : undefined;
   if (prior?.status === "PENDING") {
     try {
-      const bytes = new Uint8Array(await input.file.arrayBuffer());
       let binary = "";
       for (let offset = 0; offset < bytes.length; offset += 16384)
         binary += String.fromCharCode(
@@ -262,35 +275,99 @@ export const uploadLessonAsset = async (
         );
       const upload = await getHttpsCallable<
         { uploadId: string; contentBase64: string },
-        { accepted: boolean }
+        {
+          accepted: boolean;
+          verifiedAsset?: {
+            status: "VERIFIED" | "ATTACHED";
+            url: string;
+            storagePath: string;
+            pdfProcessing?: LessonPdfProcessingMeta;
+          };
+        }
       >("uploadLessonAssetContent", { expectedUid: ownerUid });
-      await upload({ uploadId: ticket.uploadId, contentBase64: btoa(binary) });
+      const response = await upload({
+        uploadId: ticket.uploadId,
+        contentBase64: btoa(binary),
+      });
+      if (response.data.verifiedAsset?.status === "VERIFIED")
+        verifiedAsset = response.data.verifiedAsset;
     } catch (error) {
       // A lost upload acknowledgement may race the finalizer. Poll the ticket
       // once before surfacing the error; never overwrite an existing object.
       const latest = (await getDocFromServer(ticketRef)).data();
       if (!["VERIFIED", "ATTACHED"].includes(latest?.status)) throw error;
+      if (latest?.status === "VERIFIED") verifiedAsset = latest;
     }
   }
-  const deadline = Date.now() + 90000;
-  while (Date.now() < deadline) {
-    if (auth.currentUser?.uid !== ownerUid)
-      throw new Error("로그인 사용자가 바뀌었습니다.");
-    const result = (await getDocFromServer(ticketRef)).data();
-    if (result?.status === "VERIFIED")
-      return {
-        uploadId: ticket.uploadId,
-        storagePath: ticket.storagePath,
-        url: String(result.url),
-        pdfProcessing: result.pdfProcessing as
-          | LessonPdfProcessingMeta
-          | undefined,
-      };
-    if (result?.status === "FAILED" || result?.status === "ATTACHED")
-      throw new Error(result.error || "업로드 요청을 다시 시작해 주세요.");
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-  throw new Error(
-    "파일 검증 시간이 길어지고 있습니다. 현재 편집 내용을 유지한 채 다시 저장해 주세요.",
-  );
+  const result =
+    verifiedAsset ||
+    (await waitForLessonAssetVerification(ticketRef, ownerUid));
+  if (auth.currentUser?.uid !== ownerUid)
+    throw new Error("로그인 사용자가 바뀌었습니다.");
+  return {
+    uploadId: ticket.uploadId,
+    storagePath: ticket.storagePath,
+    url: String(result.url),
+    pdfProcessing: result.pdfProcessing as LessonPdfProcessingMeta | undefined,
+  };
 };
+
+const waitForLessonAssetVerification = (
+  ticketRef: DocumentReference,
+  ownerUid: string,
+) =>
+  new Promise<Record<string, unknown>>((resolve, reject) => {
+    let stopTicket = () => {};
+    let stopAuth = () => {};
+    let settled = false;
+    const finish = (error?: unknown, result?: Record<string, unknown>) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      stopTicket();
+      stopAuth();
+      if (result) resolve(result);
+      else reject(error);
+    };
+    const timeout = setTimeout(
+      () =>
+        finish(
+          new Error(
+            "파일 검증 시간이 길어지고 있습니다. 현재 편집 내용을 유지한 채 다시 저장해 주세요.",
+          ),
+        ),
+      90000,
+    );
+    stopTicket = onSnapshot(
+      ticketRef,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (auth.currentUser?.uid !== ownerUid) {
+          finish(new Error("로그인 사용자가 바뀌었습니다."));
+          return;
+        }
+        // Cached verification must never confirm a new upload or save.
+        if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites)
+          return;
+        const result = snapshot.data();
+        if (result?.status === "VERIFIED") finish(undefined, result);
+        else if (
+          !snapshot.exists() ||
+          result?.status === "FAILED" ||
+          result?.status === "ATTACHED"
+        )
+          finish(
+            new Error(result?.error || "업로드 요청을 다시 시작해 주세요."),
+          );
+      },
+      (error) => finish(error),
+    );
+    stopAuth = onAuthStateChanged(auth, (user) => {
+      if (user?.uid !== ownerUid)
+        finish(new Error("로그인 사용자가 바뀌었습니다."));
+    });
+    if (settled) {
+      stopTicket();
+      stopAuth();
+    }
+  });

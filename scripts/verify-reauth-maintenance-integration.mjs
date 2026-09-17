@@ -15,7 +15,7 @@ writeFileSync(fixture, `
 const tokenListeners=new Set(),snapshots=new Set();let epoch=Math.floor(Date.now()/1000)-600;
 const params=new URLSearchParams(location.search);window.trace=[];window.outcomes=[];window.effects=0;window.offline=false;window.mode='success';window.role=params.get('role')||'teacher';window.maintenance=params.has('maintenance');window.ioErrors=[];
 const emit=()=>{window.trace.push('token-event');tokenListeners.forEach(fn=>{Promise.resolve(fn(auth.currentUser)).catch(e=>window.ioErrors.push(e.message));});};
-window.refreshAuth=emit;window.userReadCount=0;
+window.refreshAuth=emit;window.userReadCount=0;window.holdSession=params.has('overlap');window.holdProbe=params.has('overlap');
 const user={uid:'synthetic-teacher',email:'synthetic@yongshin-ms.ms.kr',providerData:[{providerId:'password'},{providerId:'google.com'}],getIdToken:async()=>getIdToken()};
 export const auth={currentUser:user};export const db={};export const authPersistenceReady=Promise.resolve();
 export const onIdTokenChanged=(_auth,fn)=>{tokenListeners.add(fn);queueMicrotask(()=>fn(auth.currentUser));return()=>tokenListeners.delete(fn);};
@@ -28,11 +28,11 @@ const reauth=async()=>{window.trace.push('reauth');if(window.mode==='credential-
 export const reauthenticateWithCredential=reauth;export const reauthenticateWithPopup=reauth;
 export const disableNetwork=async()=>{window.trace.push('pause');window.offline=true;};
 export const enableNetwork=async()=>{window.trace.push('resume');window.offline=false;};
-export const getHttpsCallable=async name=>async()=>{window.trace.push('call:'+name);if(name==='beginApplicationSessionReauthentication')return{data:{expiresAt:Date.now()+60000}};if(window.mode==='session-error'&&name==='openApplicationSession')throw Error('Synthetic session failure');return {data:{status:'active',authTime:epoch,generalExpiresAt:Date.now()+1800000,highRiskExpiresAt:Date.now()+300000,authorityMode:'ENFORCE',authorityGeneration:'w1r2-2026-08-09',protocolVersion:2,revision:'a'.repeat(64)}};};
+export const getHttpsCallable=async name=>async()=>{window.trace.push('call:'+name);if(name==='beginApplicationSessionReauthentication')return{data:{expiresAt:Date.now()+60000}};if(name==='openApplicationSession'&&window.holdSession)await new Promise(resolve=>{window.releaseSession=resolve;});if(window.mode==='session-error'&&name==='openApplicationSession')throw Error('Synthetic session failure');if(name==='openApplicationSession')window.trace.push('session-ready');return {data:{status:'active',authTime:epoch,generalExpiresAt:Date.now()+1800000,highRiskExpiresAt:Date.now()+300000,authorityMode:'ENFORCE',authorityGeneration:'w1r2-2026-08-09',protocolVersion:2,revision:'a'.repeat(64)}};};
 export const doc=(_db,...parts)=>({path:parts.join('/')});
 const stamp={seconds:1,nanoseconds:0,toMillis:()=>1000};
 const snap=ref=>({exists:()=>ref.path.startsWith('users/')||window.maintenance,data:()=>ref.path.startsWith('users/')?{uid:user.uid,email:user.email,role:window.role,name:'합성 사용자',teacherPortalEnabled:false}:{enabled:window.maintenance,blockedRoles:['student'],bypassUids:[],title:'합성 점검',message:'합성 점검 안내',startedAt:stamp,updatedAt:stamp,updatedBy:'synthetic',revision:1},metadata:{fromCache:false}});
-export const getDocFromServer=async ref=>{window.trace.push('read:'+ref.path);if(ref.path.startsWith('users/'))window.userReadCount++;if(window.offline){window.trace.push('offline-read');throw Error('Synthetic offline server read');}if(window.holdProbe&&ref.path.startsWith('users/')&&window.userReadCount===2)await new Promise(resolve=>{window.releaseProbe=resolve;});if(window.failProbe&&ref.path.startsWith('users/')&&window.userReadCount>=2)throw Error('Synthetic final profile failure');await new Promise(r=>setTimeout(r,10));if(window.offline)throw Error('Synthetic late offline server read');return snap(ref);};
+export const getDocFromServer=async ref=>{window.trace.push('read:'+ref.path);if(ref.path.startsWith('users/'))window.userReadCount++;if(window.offline){window.trace.push('offline-read');throw Error('Synthetic offline server read');}if(window.holdProbe&&ref.path.startsWith('users/')&&window.userReadCount===2)await new Promise(resolve=>{window.releaseProbe=resolve;});if(window.failProbe&&ref.path.startsWith('users/')&&window.userReadCount>=2)throw Error('Synthetic final profile failure');await new Promise(r=>setTimeout(r,10));if(window.offline)throw Error('Synthetic late offline server read');if(ref.path.startsWith('users/')&&window.userReadCount>=2)window.trace.push('profile-ready');return snap(ref);};
 export const onSnapshot=(ref,...args)=>{const next=typeof args[0]==='function'?args[0]:args[1];window.trace.push('listen:'+ref.path);const record={ref,next};snapshots.add(record);queueMicrotask(()=>{if(snapshots.has(record))next(snap(ref));});return()=>{window.trace.push('unlisten:'+ref.path);snapshots.delete(record);};};
 window.setMaintenance=()=>{window.maintenance=true;snapshots.forEach(({ref,next})=>{if(ref.path==='site_settings/student_maintenance')next(snap(ref));});};
 window.setRole=role=>{window.role=role;};
@@ -60,7 +60,42 @@ const server=createServer((req,res)=>{res.setHeader("Content-Security-Policy","d
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 let browser;const cases=[];
 try{
-  browser=await chromium.launch({channel:"chrome",headless:true});const page=await browser.newPage();page.setDefaultTimeout(8000);const errors=[];page.on("pageerror",e=>errors.push(e.message));
+  browser=await chromium.launch({headless:true,...(process.platform === "win32" ? {channel:"chrome"} : {})});const page=await browser.newPage();page.setDefaultTimeout(8000);const errors=[];page.on("pageerror",e=>errors.push(e.message));
+  // Both server operations must start without waiting for the other, and
+  // either unresolved result must keep protected children unmounted.
+  for(const role of ['student','teacher'])for(const last of ['session','profile']){
+    await page.goto(`http://127.0.0.1:${server.address().port}/?case=${cases.length}&overlap=1&role=${role}#/${role}/dashboard`);
+    await page.waitForFunction(()=>!!window.releaseSession&&!!window.releaseProbe);
+    assert.equal(await page.evaluate(()=>window.authState.status),'AUTHENTICATING');
+    assert.equal(await page.getByRole('button',{name:'보호 작업',exact:true}).count(),0);
+    await page.evaluate(last=>{if(last==='session')window.releaseProbe();else window.releaseSession();},last);
+    await page.waitForFunction(last=>window.trace.includes(last==='session'?'profile-ready':'session-ready'),last);
+    assert.equal(await page.evaluate(()=>window.authState.status),'AUTHENTICATING');
+    assert.equal(await page.getByRole('button',{name:'보호 작업',exact:true}).count(),0);
+    await page.evaluate(last=>{if(last==='session')window.releaseSession();else window.releaseProbe();},last);
+    await page.getByRole('button',{name:'보호 작업',exact:true}).waitFor();
+    cases.push({role,scenario:'parallel-bootstrap-'+last+'-last',passed:true});
+  }
+  for(const rejected of ['session','profile']){
+    await page.goto(`http://127.0.0.1:${server.address().port}/?case=${cases.length}&overlap=1#/teacher/dashboard`);
+    await page.waitForFunction(()=>!!window.releaseSession&&!!window.releaseProbe);
+    await page.evaluate(rejected=>{if(rejected==='session'){window.mode='session-error';window.releaseSession();}else{window.failProbe=true;window.releaseProbe();}},rejected);
+    await page.waitForFunction(()=>['ERROR','SESSION_EXPIRED','ANONYMOUS'].includes(window.authState.status));
+    await page.evaluate(rejected=>{if(rejected==='session')window.releaseProbe();else window.releaseSession();},rejected);
+    await page.waitForTimeout(100);
+    assert.equal(await page.getByRole('button',{name:'보호 작업',exact:true}).count(),0);
+    assert.deepEqual(await page.evaluate(()=>window.ioErrors),[]);
+    cases.push({scenario:'parallel-bootstrap-'+rejected+'-rejected',passed:true});
+  }
+  await page.goto(`http://127.0.0.1:${server.address().port}/?case=${cases.length}&overlap=1#/teacher/dashboard`);
+  await page.waitForFunction(()=>!!window.releaseSession&&!!window.releaseProbe);
+  await page.evaluate(()=>window.forceSignOut());
+  await page.waitForFunction(()=>['SESSION_EXPIRED','ANONYMOUS'].includes(window.authState.status));
+  await page.evaluate(()=>{window.releaseSession();window.releaseProbe();});
+  await page.waitForTimeout(100);
+  assert.equal(await page.getByRole('button',{name:'보호 작업',exact:true}).count(),0);
+  assert.deepEqual(await page.evaluate(()=>window.ioErrors),[]);
+  cases.push({scenario:'parallel-bootstrap-sign-out',passed:true});
   for(const viewport of [{width:390,height:844},{width:768,height:1024},{width:1024,height:768},{width:1280,height:800},{width:1600,height:900}]){
     await page.setViewportSize(viewport);
     for(const method of ["password","google"])for(const scenario of ["success","retry","maintenance-changed"]){

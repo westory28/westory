@@ -12,7 +12,9 @@ import {
   uploadLessonAsset,
   downloadLessonPdfReference,
   retryLessonDocumentSave,
+  type LessonCommandScope,
 } from "../../lib/lessonManagement";
+import { runLessonAssetBatch } from "../../lib/lessonAssetBatch";
 import {
   collection,
   doc,
@@ -277,6 +279,7 @@ type LessonUploadContext = {
   expectedRevision: number;
   expectedUid: string;
   assetUploadIds: string[];
+  commandScope: LessonCommandScope;
 };
 
 type PendingLessonPdfUpload = {
@@ -2523,33 +2526,42 @@ const ManageLesson: React.FC = () => {
         pdfProcessing: lessonPdfProcessing,
         pendingIncomingUpload: null,
       };
-    const { expectedRevision, expectedUid } = context;
-    const pageImages: LessonWorksheetPageImage[] = [];
-    for (const page of preparedPdf.pageImages) {
+    const { expectedRevision, expectedUid, commandScope } = context;
+    const upload = async (
+      input: Pick<
+        Parameters<typeof uploadLessonAsset>[1],
+        "kind" | "file" | "originalName"
+      >,
+    ) => {
       const asset = await uploadLessonAsset(config, {
         unitId,
         expectedRevision,
         expectedUid,
-        kind: "PAGE",
-        file: page.blob,
+        commandScope,
+        ...input,
       });
       context.assetUploadIds.push(asset.uploadId);
-      pageImages.push({
-        page: page.page,
-        imageUrl: asset.url,
-        width: page.width,
-        height: page.height,
-      });
-    }
-    const original = await uploadLessonAsset(config, {
-      unitId,
-      expectedRevision,
-      expectedUid,
-      kind: "PDF",
-      file: selectedPdfFile,
-      originalName: selectedPdfFile.name,
-    });
-    context.assetUploadIds.push(original.uploadId);
+      return asset;
+    };
+    // Start the original alongside page images so its background extraction
+    // need not wait for every image. Results retain the document page order.
+    const [original, ...pages] = await runLessonAssetBatch([
+      () =>
+        upload({
+          kind: "PDF",
+          file: selectedPdfFile,
+          originalName: selectedPdfFile.name,
+        }),
+      ...preparedPdf.pageImages.map(
+        (page) => () => upload({ kind: "PAGE", file: page.blob }),
+      ),
+    ]);
+    const pageImages = preparedPdf.pageImages.map((page, index) => ({
+      page: page.page,
+      imageUrl: pages[index].url,
+      width: page.width,
+      height: page.height,
+    }));
     return {
       pdfName: selectedPdfFile.name,
       pdfUrl: original.url,
@@ -3063,6 +3075,7 @@ const ManageLesson: React.FC = () => {
           unitId,
           expectedRevision: context.expectedRevision,
           expectedUid: context.expectedUid,
+          commandScope: context.commandScope,
           kind: "FOOTNOTE",
           file,
           originalName: footnote.sourceArchiveTitle || "",
@@ -3085,6 +3098,7 @@ const ManageLesson: React.FC = () => {
           unitId,
           expectedRevision: context.expectedRevision,
           expectedUid: context.expectedUid,
+          commandScope: context.commandScope,
           kind: "FOOTNOTE",
           file: draft.file,
           originalName: draft.file.name,
@@ -3243,11 +3257,12 @@ const ManageLesson: React.FC = () => {
                   ? { general: meta }
                   : {}),
               },
-              prepare: async (ownerUid) => {
+              prepare: async (ownerUid, commandScope) => {
                 const context = {
                   expectedRevision,
                   expectedUid: ownerUid,
                   assetUploadIds: [...retainedAssetIds],
+                  commandScope,
                 };
                 const worksheet = await uploadWorksheetAssets(
                   selectedNodeId,
