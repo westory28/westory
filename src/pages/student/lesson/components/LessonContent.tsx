@@ -1370,7 +1370,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       className={
         fullscreenPreview
           ? `relative mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn ${canPersist ? "pb-36" : ""}`
-          : `relative mx-auto max-w-4xl animate-fadeIn ${canPersist ? "pb-36" : ""}`
+          : `relative w-full min-w-0 animate-fadeIn ${canPersist ? "pb-36" : ""}`
       }
     >
       {floatingSaveControls}
