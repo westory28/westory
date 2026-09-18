@@ -8590,6 +8590,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   };
 
   const loadClassSheetStudentsForSelection = async () => {
+    invalidateRosterReadCaches(
+      summaryExportRosters.firstRoster?.id || "",
+      summaryExportRosters.secondRoster?.id || "",
+    );
     const [firstRecords, secondRecords] = await Promise.all([
       loadRosterRecordsForClass(
         summaryExportRosters.firstRoster,

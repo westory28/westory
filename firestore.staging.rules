@@ -1152,6 +1152,17 @@ service cloud.firestore {
       }
     }
 
+    // Roster summaries query these collections across student documents.
+    // A nested users rule alone cannot authorize a collection-group query.
+    // Keep student reads scoped above and all score/signature writes server-only.
+    match /{path=**}/performance_scores/{scoreId} {
+      allow list: if canManagePerformanceScores();
+    }
+
+    match /{path=**}/confirmations/{confirmationId} {
+      allow list: if canManagePerformanceScores();
+    }
+
     match /{path=**}/history_dictionary_words/{wordId} {
       allow read, create, update, delete: if false;
     }

@@ -47,6 +47,7 @@ jobs:
       - run: node scripts/verify-schedule-label-colors.mjs
       - run: node scripts/verify-semester-date-defaults.mjs
       - run: node scripts/verify-teacher-semester-view.mjs
+      - run: node scripts/verify-score-read-integration.mjs
       - run: node scripts/verify-semester-archive-view.mjs
       - run: node scripts/verify-admin-semester-content-ui.mjs
       - run: node scripts/verify-lesson-semester-isolation.mjs
@@ -93,6 +94,7 @@ jobs:
 
       - run: npm --prefix functions ci --ignore-scripts
       - run: npm --prefix functions run check
+      - run: node scripts/verify-teacher-semester-read-integration.mjs
       - run: node functions/scripts/verify-routine-content-auth.cjs
       - run: node functions/scripts/verify-query-regions.cjs
       - run: node functions/scripts/verify-wis-initial-opening-approval.cjs
@@ -113,6 +115,7 @@ jobs:
       - run: npm install --global firebase-tools@15.15.0
       - run: node scripts/verify-firebase-storage-runtime-framing.cjs
       - run: firebase emulators:exec --project demo-westory-content-semester-rules --only firestore "node scripts/verify-content-semester-rules.mjs"
+      - run: firebase emulators:exec --project demo-westory-performance-score-reads --only firestore "node scripts/verify-performance-score-read-rules.mjs"
       - run: firebase emulators:exec --project demo-westory-developer-log --only firestore "node scripts/verify-developer-log-rules.mjs"
       - run: firebase emulators:exec --project demo-westory-session-lesson-rules --only firestore,storage "node scripts/verify-lesson-release-rules.mjs"
         env:
