@@ -5737,7 +5737,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       ? writtenExamObjectiveGroupMaxScore
       : isWrittenExamMode && scoreStatsMode === "essay"
         ? writtenExamEssayGroupMaxScore
-        : !usesCombinedPerformanceSummary && scoreStatsMode === "all"
+        : !isWrittenExamMode &&
+            !usesCombinedPerformanceSummary &&
+            scoreStatsMode === "all"
           ? rosters.reduce(
               (max, roster) =>
                 Math.max(max, getFiniteNumber(roster.totalMaxScore) ?? 0),
