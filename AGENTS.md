@@ -92,6 +92,7 @@
 
 ## Firebase / GitHub Pages 운영 주의
 - 현재 프론트엔드 운영은 Vercel `westory` 프로젝트의 `main` 배포이며 운영 도메인은 `www.westory.kr`이다(2026-09-19 확인). 배포 전 운영 도메인에 연결된 커밋과 작업 기준을 비교하고, 푸시 후 Vercel 성공 및 운영 도메인의 실제 변경 반영까지 확인한다.
+- Vercel 빌드가 성공해도 `Production / Staged` 상태에서는 운영 도메인이 갱신되지 않는다. 검증한 해당 커밋의 배포를 `Promote to Production`으로 승격한 뒤 운영 도메인 연결을 확인한다. 자동 도메인 할당 설정을 임의로 바꾸지 않는다.
 - `.github/workflows/deploy-pages.yml`은 기존 GitHub Pages 배포 설정이며 현재 비활성 상태다. 프론트엔드 운영 배포를 위해 임의로 다시 활성화하지 않는다.
 - 앱은 `HashRouter`를 사용한다.
 - `src/main.tsx`, `src/App.tsx`, `vite.config.ts`에는 GitHub Pages 경로와 `#/` 보정 로직이 있다.
