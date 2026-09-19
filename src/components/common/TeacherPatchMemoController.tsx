@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { isAdminUser } from "../../lib/permissions";
+import { getTeacherPatchNoteErrorMessage } from "../../lib/teacherPatchNoteCommands";
 import {
   createTeacherPatchNote,
   deleteTeacherPatchNote,
@@ -271,6 +272,7 @@ const TeacherPatchMemoController: React.FC = () => {
   const [notes, setNotes] = useState<TeacherPatchNote[]>([]);
   const [filter, setFilter] = useState<FilterKey>("open");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteRevision, setEditingNoteRevision] = useState(0);
   const [body, setBody] = useState("");
   const [type, setType] = useState<TeacherPatchNoteType>("bug");
   const [priority, setPriority] = useState<TeacherPatchNotePriority>("normal");
@@ -382,6 +384,7 @@ const TeacherPatchMemoController: React.FC = () => {
 
   const resetForm = (nextPath = currentPath) => {
     setEditingNoteId(null);
+    setEditingNoteRevision(0);
     setBody("");
     setType("bug");
     setPriority("normal");
@@ -409,6 +412,7 @@ const TeacherPatchMemoController: React.FC = () => {
 
   const startEdit = (note: TeacherPatchNote) => {
     setEditingNoteId(note.id);
+    setEditingNoteRevision(note.noteRevision);
     setBody(note.body);
     setType(note.type);
     setPriority(note.priority);
@@ -450,12 +454,12 @@ const TeacherPatchMemoController: React.FC = () => {
     setSaving(true);
     try {
       if (editingNoteId) {
-        const originalStatus =
-          notes.find((note) => note.id === editingNoteId)?.status || "open";
-        await updateTeacherPatchNote(uid, editingNoteId, {
-          ...input,
-          status: originalStatus,
-        });
+        await updateTeacherPatchNote(
+          uid,
+          editingNoteId,
+          editingNoteRevision,
+          input,
+        );
         showToast({ tone: "success", title: "패치 메모를 수정했습니다." });
       } else {
         await createTeacherPatchNote(uid, input);
@@ -467,7 +471,7 @@ const TeacherPatchMemoController: React.FC = () => {
       showToast({
         tone: "error",
         title: "패치 메모를 저장하지 못했습니다.",
-        message: "내용을 확인한 뒤 다시 시도해 주세요.",
+        message: getTeacherPatchNoteErrorMessage(error),
       });
     } finally {
       setSaving(false);
@@ -485,7 +489,7 @@ const TeacherPatchMemoController: React.FC = () => {
       showToast({
         tone: "error",
         title: "처리 상태를 바꾸지 못했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getTeacherPatchNoteErrorMessage(error),
       });
     }
   };
@@ -496,7 +500,7 @@ const TeacherPatchMemoController: React.FC = () => {
     );
     if (!confirmed) return;
     try {
-      await deleteTeacherPatchNote(uid, note.id);
+      await deleteTeacherPatchNote(uid, note);
       if (editingNoteId === note.id) resetForm(currentPath);
       showToast({ tone: "success", title: "패치 메모를 삭제했습니다." });
     } catch (error) {
@@ -504,7 +508,7 @@ const TeacherPatchMemoController: React.FC = () => {
       showToast({
         tone: "error",
         title: "패치 메모를 삭제하지 못했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getTeacherPatchNoteErrorMessage(error),
       });
     }
   };

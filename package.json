@@ -12,6 +12,7 @@
     "verify:teacher-nav": "node scripts/verify-teacher-nav.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
     "verify:teacher-patch-notes-rules": "node scripts/verify-teacher-patch-notes-rules.mjs",
+    "verify:teacher-patch-note-commands": "node scripts/verify-teacher-patch-note-commands.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\""
   },
