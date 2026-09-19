@@ -3940,6 +3940,7 @@ const ManageLesson: React.FC = () => {
                         footnoteAnchorCountMap={footnoteAnchorCountMap}
                         selectedFootnoteId={activeFootnoteId}
                         onSelectFootnote={handleSelectFootnote}
+                        onDeleteFootnote={handleDeleteFootnote}
                         onAddFootnote={handleAddFootnote}
                         onAddFootnoteAndInsert={handleAddFootnoteAndInsert}
                         onOpenFootnoteEditor={openEditFootnoteEditor}

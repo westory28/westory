@@ -30,6 +30,7 @@ interface LessonWorksheetStageProps {
   blanks: LessonWorksheetBlank[];
   mode: LessonWorksheetStageMode;
   teacherTool?: TeacherWorksheetTool;
+  teacherRightButtonPan?: boolean;
   textRegions?: LessonWorksheetTextRegion[];
   examHighlights?: LessonWorksheetExamHighlight[];
   footnoteAnchors?: LessonWorksheetFootnoteAnchor[];
@@ -693,6 +694,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   blanks,
   mode,
   teacherTool = "pan",
+  teacherRightButtonPan = false,
   textRegions = [],
   examHighlights = [],
   footnoteAnchors = [],
@@ -734,6 +736,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     [mode],
   );
   const isTeacherEditMode = capabilities.enableBlankDrafting;
+  const enableTeacherRightButtonPan =
+    isTeacherEditMode && teacherRightButtonPan;
   const isTeacherViewMode = capabilities.showTeacherPageNavigator;
   const isStudentSolveMode = capabilities.enableBlankSolve;
   const isAnnotationEnabled =
@@ -801,6 +805,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     new Map(),
   );
   const panRef = useRef<PanState | null>(null);
+  const temporaryPanRef = useRef<{ page: number; pointerId: number } | null>(
+    null,
+  );
+  const [temporaryPanPage, setTemporaryPanPage] = useState<number | null>(null);
+  const suppressTeacherClickRef = useRef(false);
   const eraserSessionRef = useRef<EraserSessionState | null>(null);
   const viewportZoomFrameRef = useRef<number | null>(null);
   const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -1376,6 +1385,67 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         currentPan.startScrollTop - (clientY - currentPan.startClientY);
     }
   };
+
+  const stopTemporaryPan = () => {
+    const session = temporaryPanRef.current;
+    if (!session) return;
+    temporaryPanRef.current = null;
+    panRef.current = null;
+    setTemporaryPanPage(null);
+    releaseStagePointerCapture(session.pointerId);
+  };
+
+  const startTemporaryPan = (
+    page: number,
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDraftRect(null);
+    suppressTeacherClickRef.current = true;
+    temporaryPanRef.current = { page, pointerId: event.pointerId };
+    setTemporaryPanPage(page);
+    beginMovePan(page, event.clientX, event.clientY);
+    setStagePointerCapture(event.currentTarget, event.pointerId);
+  };
+
+  useEffect(() => {
+    if (!enableTeacherRightButtonPan) return;
+    const handleMove = (event: PointerEvent) => {
+      const session = temporaryPanRef.current;
+      if (!session || session.pointerId !== event.pointerId) return;
+      if (!(event.buttons & 2)) {
+        stopTemporaryPan();
+        return;
+      }
+      if (panRef.current) {
+        event.preventDefault();
+        updateMovePan(panRef.current, event.clientX, event.clientY);
+      }
+    };
+    const handleMouseUp = (event: MouseEvent) => {
+      // A chorded mouse emits pointerup only after its last button is released.
+      if (event.button === 2) stopTemporaryPan();
+    };
+    const handlePointerEnd = (event: PointerEvent) => {
+      if (temporaryPanRef.current?.pointerId === event.pointerId) {
+        stopTemporaryPan();
+      }
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointerup", handlePointerEnd);
+    window.addEventListener("pointercancel", handlePointerEnd);
+    window.addEventListener("blur", stopTemporaryPan);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
+      window.removeEventListener("blur", stopTemporaryPan);
+      stopTemporaryPan();
+    };
+  }, [enableTeacherRightButtonPan]);
 
   const autoSizeTextNote = (
     noteId: string,
@@ -2763,7 +2833,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   ref={(node) => {
                     pageRefs.current[pageImage.page] = node;
                   }}
-                  className={`relative ${
+                  className={`relative ${temporaryPanPage === pageImage.page ? "[&_*]:!cursor-grabbing" : ""} ${
                     isTeacherEditMode
                       ? `touch-none ${
                           teacherTool === "pan"
@@ -2782,7 +2852,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         : ""
                   }`}
                   style={{
-                    cursor: stageCursor,
+                    cursor:
+                      temporaryPanPage === pageImage.page
+                        ? "grabbing"
+                        : stageCursor,
                     touchAction: isViewportInteractive
                       ? allowNativeStudentTouchScroll
                         ? "pan-y"
@@ -2801,6 +2874,87 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         : undefined,
                   }}
                   onDragStart={(event) => event.preventDefault()}
+                  onContextMenuCapture={(event) => {
+                    if (enableTeacherRightButtonPan) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }
+                  }}
+                  onClickCapture={(event) => {
+                    if (
+                      enableTeacherRightButtonPan &&
+                      event.detail !== 0 &&
+                      suppressTeacherClickRef.current
+                    ) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      suppressTeacherClickRef.current = false;
+                    }
+                  }}
+                  onPointerDownCapture={(event) => {
+                    if (!enableTeacherRightButtonPan) return;
+                    if (event.pointerType !== "mouse") {
+                      suppressTeacherClickRef.current = false;
+                      return;
+                    }
+                    if (event.button === 2) {
+                      startTemporaryPan(pageImage.page, event);
+                    } else if (temporaryPanRef.current) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    } else {
+                      suppressTeacherClickRef.current = false;
+                    }
+                  }}
+                  onPointerMoveCapture={(event) => {
+                    if (
+                      !enableTeacherRightButtonPan ||
+                      event.pointerType !== "mouse"
+                    ) {
+                      return;
+                    }
+                    // Pressing another mouse button produces pointermove.
+                    if (!temporaryPanRef.current && event.button === 2) {
+                      if (event.buttons & 2) {
+                        startTemporaryPan(pageImage.page, event);
+                      }
+                      return;
+                    }
+                    if (
+                      temporaryPanRef.current?.pointerId !== event.pointerId
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!(event.buttons & 2)) {
+                      stopTemporaryPan();
+                    } else if (panRef.current) {
+                      updateMovePan(
+                        panRef.current,
+                        event.clientX,
+                        event.clientY,
+                      );
+                    }
+                  }}
+                  onPointerUpCapture={(event) => {
+                    if (
+                      enableTeacherRightButtonPan &&
+                      temporaryPanRef.current?.pointerId === event.pointerId
+                    ) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      stopTemporaryPan();
+                    }
+                  }}
+                  onLostPointerCapture={(event) => {
+                    if (
+                      enableTeacherRightButtonPan &&
+                      temporaryPanRef.current?.pointerId === event.pointerId
+                    ) {
+                      stopTemporaryPan();
+                    }
+                  }}
                   onPointerDown={(event) =>
                     handlePointerDown(pageImage.page, event)
                   }
@@ -2828,10 +2982,19 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         return;
                       }
                     }
-                    if (isTeacherEditMode) handleTeacherPointerUp(pageImage);
-                    else finishStudentStroke();
+                    if (isTeacherEditMode) {
+                      // The window fallback must not finalize the same draft twice.
+                      if (enableTeacherRightButtonPan) event.stopPropagation();
+                      handleTeacherPointerUp(pageImage);
+                    } else finishStudentStroke();
                   }}
                   onPointerCancel={(event) => {
+                    if (
+                      enableTeacherRightButtonPan &&
+                      temporaryPanRef.current?.pointerId === event.pointerId
+                    ) {
+                      stopTemporaryPan();
+                    }
                     if (event.pointerType === "touch") {
                       clearTouchPointer(event.pointerId);
                     }
@@ -2947,13 +3110,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           onSelectExamHighlight?.(highlight.id);
                         }}
                         onPointerDown={(event) => {
-                          if (event.button === 2) {
+                          if (
+                            !enableTeacherRightButtonPan &&
+                            event.button === 2
+                          ) {
                             event.preventDefault();
                             event.stopPropagation();
                             onDeleteExamHighlight?.(highlight.id);
                           }
                         }}
                         onContextMenu={(event) => {
+                          if (enableTeacherRightButtonPan) return;
                           event.preventDefault();
                           event.stopPropagation();
                           onDeleteExamHighlight?.(highlight.id);
@@ -3265,7 +3432,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             onActivateFootnoteAnchor?.(anchor.id);
                           }}
                           onContextMenu={(event) => {
-                            if (!isTeacherEditMode) return;
+                            if (
+                              !isTeacherEditMode ||
+                              enableTeacherRightButtonPan
+                            )
+                              return;
                             event.preventDefault();
                             event.stopPropagation();
                             onDeleteFootnoteAnchor?.(anchor.id);
@@ -3335,13 +3506,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           data-blank-box="true"
                           onClick={() => onSelectBlank?.(blank.id)}
                           onPointerDown={(event) => {
-                            if (event.button === 2) {
+                            if (
+                              !enableTeacherRightButtonPan &&
+                              event.button === 2
+                            ) {
                               event.preventDefault();
                               event.stopPropagation();
                               onDeleteBlank?.(blank.id);
                             }
                           }}
                           onContextMenu={(event) => {
+                            if (enableTeacherRightButtonPan) return;
                             event.preventDefault();
                             event.stopPropagation();
                             onDeleteBlank?.(blank.id);

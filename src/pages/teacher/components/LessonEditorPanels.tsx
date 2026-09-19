@@ -136,6 +136,7 @@ type LessonPdfSectionProps = {
   footnoteAnchorCountMap?: Map<string, number>;
   selectedFootnoteId?: string | null;
   onSelectFootnote?: (footnoteId: string) => void;
+  onDeleteFootnote?: (footnoteId: string) => void;
   onAddFootnote?: () => void;
   onAddFootnoteAndInsert?: () => void;
   onOpenFootnoteEditor?: (footnoteId: string) => void;
@@ -995,6 +996,7 @@ export function LessonPdfSection({
   footnoteAnchorCountMap = new Map<string, number>(),
   selectedFootnoteId = null,
   onSelectFootnote,
+  onDeleteFootnote,
   onAddFootnote,
   onAddFootnoteAndInsert,
   onOpenFootnoteEditor,
@@ -1017,8 +1019,22 @@ export function LessonPdfSection({
     "library" | null
   >(null);
   const [activeLibraryTab, setActiveLibraryTab] = React.useState<
-    "blanks" | "footnotes"
+    "blanks" | "footnotes" | "exam"
   >("blanks");
+  const [examEditorId, setExamEditorId] = React.useState<string | null>(null);
+  const editingExamHighlight = worksheetExamHighlights.find(
+    (highlight) =>
+      highlight.id === examEditorId && highlight.id === activeExamHighlightId,
+  );
+  const selectExamHighlight = (highlightId: string) => {
+    const highlight = worksheetExamHighlights.find(
+      (item) => item.id === highlightId,
+    );
+    if (!highlight) return;
+    setTeacherCurrentPage(highlight.page);
+    onSelectExamHighlight?.(highlightId);
+    setExamEditorId(highlightId);
+  };
   const [teacherCurrentPage, setTeacherCurrentPage] = React.useState<
     number | null
   >(worksheetPageImages[0]?.page ?? null);
@@ -1138,7 +1154,9 @@ export function LessonPdfSection({
   const librarySummaryText =
     activeLibraryTab === "blanks"
       ? "PDF 빈칸을 빠르게 확인하고 선택하거나 삭제할 수 있습니다."
-      : "각주 위치 확인, 본문 연결, 각주 편집을 한곳에서 관리합니다.";
+      : activeLibraryTab === "exam"
+        ? "시험 표시를 선택해 위치를 확인하거나 삭제할 수 있습니다."
+        : "각주 위치 확인, 편집, 삭제를 한곳에서 관리합니다.";
   const canRetryPdfExtraction =
     Boolean(onRetryPdfExtraction) &&
     Boolean(lessonPdfUrl || pdfProcessing.file.storagePath) &&
@@ -1296,9 +1314,9 @@ export function LessonPdfSection({
                 type="button"
                 onClick={() => toggleFloatingPanel("library")}
                 className={toolButtonClass(isLibraryPanelOpen, "blue")}
-                aria-label="빈칸과 각주 목록"
+                aria-label="빈칸, 각주, 시험 목록"
                 aria-pressed={isLibraryPanelOpen}
-                title="빈칸과 각주 목록"
+                title="빈칸, 각주, 시험 목록"
               >
                 <i className="fas fa-layer-group text-sm"></i>
                 목록
@@ -1309,7 +1327,9 @@ export function LessonPdfSection({
                       : "bg-slate-100 text-slate-600"
                   }`}
                 >
-                  {sortedBlanks.length + footnotes.length}
+                  {sortedBlanks.length +
+                    footnotes.length +
+                    worksheetExamHighlights.length}
                 </span>
               </button>
               <button
@@ -1415,6 +1435,7 @@ export function LessonPdfSection({
               >
                 <LessonWorksheetStage
                   mode="teacher-edit"
+                  teacherRightButtonPan
                   pageImages={worksheetPageImages}
                   blanks={worksheetBlanks}
                   examHighlights={worksheetExamHighlights}
@@ -1427,7 +1448,7 @@ export function LessonPdfSection({
                   pendingBlank={draftBlank}
                   onSelectBlank={onSelectBlank}
                   onDeleteBlank={onDeleteBlank}
-                  onSelectExamHighlight={onSelectExamHighlight}
+                  onSelectExamHighlight={selectExamHighlight}
                   onDeleteExamHighlight={onDeleteExamHighlight}
                   onSelectFootnoteAnchor={onSelectFootnoteAnchor}
                   onDeleteFootnoteAnchor={onDeleteFootnoteAnchor}
@@ -1447,7 +1468,7 @@ export function LessonPdfSection({
             </div>
             {isLibraryPanelOpen && (
               <aside
-                aria-label="빈칸과 각주 목록"
+                aria-label="빈칸, 각주, 시험 목록"
                 className="flex max-h-[560px] w-full flex-col overflow-hidden border-t border-slate-200 bg-white xl:max-h-[calc(100vh-220px)] xl:w-80 xl:shrink-0 xl:border-l xl:border-t-0"
               >
                 <div className="border-b border-slate-200 px-4 py-4">
@@ -1469,7 +1490,7 @@ export function LessonPdfSection({
                       <i className="fas fa-times text-xs"></i>
                     </button>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+                  <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-100 p-1">
                     <button
                       type="button"
                       onClick={() => setActiveLibraryTab("blanks")}
@@ -1494,10 +1515,25 @@ export function LessonPdfSection({
                     >
                       각주 {footnotes.length}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveLibraryTab("exam")}
+                      className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                        activeLibraryTab === "exam"
+                          ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                      aria-pressed={activeLibraryTab === "exam"}
+                    >
+                      시험 {worksheetExamHighlights.length}
+                    </button>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
                     <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                      전체 {sortedBlanks.length + footnotes.length}
+                      전체{" "}
+                      {sortedBlanks.length +
+                        footnotes.length +
+                        worksheetExamHighlights.length}
                     </span>
                     {teacherCurrentPage != null && (
                       <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
@@ -1536,6 +1572,39 @@ export function LessonPdfSection({
                         </div>
                       )}
                     </>
+                  ) : activeLibraryTab === "exam" ? (
+                    worksheetExamHighlights.length === 0 ? (
+                      <div className="rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                        아직 만든 시험 표시가 없습니다.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {worksheetExamHighlights.map((highlight, index) => (
+                          <div
+                            key={highlight.id}
+                            className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => selectExamHighlight(highlight.id)}
+                              className="min-w-0 flex-1 text-left text-sm font-semibold text-slate-800"
+                            >
+                              시험 {index + 1} · p.{highlight.page}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onDeleteExamHighlight?.(highlight.id)
+                              }
+                              className="min-h-10 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700"
+                              aria-label={`시험 ${index + 1} 삭제`}
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )
                   ) : (
                     <>
                       <div className="flex flex-wrap gap-2">
@@ -1585,6 +1654,13 @@ export function LessonPdfSection({
                                 onInsertIntoBody={() =>
                                   onInsertFootnoteToken?.(footnote.anchorKey)
                                 }
+                                onDelete={() => onDeleteFootnote?.(footnote.id)}
+                                anchors={anchors}
+                                onSelectAnchor={(anchor) => {
+                                  setTeacherCurrentPage(anchor.page);
+                                  onSelectFootnoteAnchor?.(anchor.id);
+                                }}
+                                onDeleteAnchor={onDeleteFootnoteAnchor}
                               />
                             );
                           })}
@@ -1694,6 +1770,15 @@ export function LessonPdfSection({
               </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
+              {blankEditorMode === "existing" && activeBlank && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteBlank(activeBlank.id)}
+                  className="mr-auto rounded-2xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700"
+                >
+                  빈칸 삭제
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onCancelDraftBlank}
@@ -1707,6 +1792,55 @@ export function LessonPdfSection({
                 className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
               >
                 {blankEditorMode === "draft" ? "적용하고 추가" : "적용"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editingExamHighlight && !isBlankEditorOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="시험 표시 닫기"
+            onClick={() => setExamEditorId(null)}
+            className="absolute inset-0 bg-slate-950/10 backdrop-blur-[1px]"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lesson-exam-editor-title"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setExamEditorId(null);
+            }}
+            className="relative z-10 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+          >
+            <h4
+              id="lesson-exam-editor-title"
+              className="text-lg font-bold text-slate-900"
+            >
+              선택한 시험 표시
+            </h4>
+            <p className="mt-2 text-sm text-slate-500">
+              p.{editingExamHighlight.page}의 선택한 시험 표시만 삭제합니다.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteExamHighlight?.(editingExamHighlight.id);
+                  setExamEditorId(null);
+                }}
+                className="mr-auto rounded-2xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700"
+              >
+                시험 표시 삭제
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setExamEditorId(null)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600"
+              >
+                닫기
               </button>
             </div>
           </div>
@@ -1726,6 +1860,10 @@ function FootnoteFloatingListItem({
   onSelect,
   onOpenEditor,
   onInsertIntoBody,
+  onDelete,
+  anchors = [],
+  onSelectAnchor,
+  onDeleteAnchor,
 }: {
   footnote: LessonFootnote;
   index: number;
@@ -1736,6 +1874,10 @@ function FootnoteFloatingListItem({
   onSelect?: () => void;
   onOpenEditor?: () => void;
   onInsertIntoBody?: () => void;
+  onDelete?: () => void;
+  anchors?: LessonWorksheetFootnoteAnchor[];
+  onSelectAnchor?: (anchor: LessonWorksheetFootnoteAnchor) => void;
+  onDeleteAnchor?: (anchorId: string) => void;
 }) {
   const previewText = stripHtml(footnote.bodyHtml);
 
@@ -1811,7 +1953,42 @@ function FootnoteFloatingListItem({
           <i className="fas fa-link text-[10px]"></i>
           본문에 넣기
         </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="min-h-10 rounded-full bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+          title="각주와 연결된 PDF 위치를 함께 삭제합니다"
+        >
+          각주 삭제
+        </button>
       </div>
+      {anchors.length > 0 && (
+        <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+          {anchors.map((anchor, anchorIndex) => (
+            <div
+              key={anchor.id}
+              className="flex items-center justify-between gap-2 text-xs"
+            >
+              <button
+                type="button"
+                onClick={() => onSelectAnchor?.(anchor)}
+                className="min-h-10 text-slate-700"
+              >
+                위치 {anchorIndex + 1} · p.{anchor.page}
+              </button>
+              <button
+                type="button"
+                onClick={() => onDeleteAnchor?.(anchor.id)}
+                className="min-h-10 px-3 py-2 font-semibold text-red-700"
+                aria-label={`각주 위치 ${anchorIndex + 1} 삭제`}
+                title="각주 내용은 유지하고 이 PDF 위치만 삭제합니다"
+              >
+                위치 삭제
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
