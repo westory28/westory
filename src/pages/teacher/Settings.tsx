@@ -5,10 +5,17 @@ import SettingsInterface from "./components/SettingsInterface";
 import SettingsPrivacy from "./components/SettingsPrivacy";
 import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
+import SettingsSemesterArchive from "./components/SettingsSemesterArchive";
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
-    "general" | "school" | "interface" | "privacy" | "access" | "notifications"
+    | "general"
+    | "archive"
+    | "school"
+    | "interface"
+    | "privacy"
+    | "access"
+    | "notifications"
   >("general");
 
   return (
@@ -30,6 +37,15 @@ const Settings: React.FC = () => {
                   <i className="fas fa-sliders-h"></i>
                 </div>
                 기본 환경 설정
+              </button>
+              <button
+                onClick={() => setActiveTab("archive")}
+                className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "archive" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
+              >
+                <div className="w-6 text-center">
+                  <i className="fas fa-history" aria-hidden="true"></i>
+                </div>
+                이전 학기 조회
               </button>
               <button
                 onClick={() => setActiveTab("school")}
@@ -80,8 +96,11 @@ const Settings: React.FC = () => {
           </div>
         </aside>
 
-        <div className="flex-1">
-          {activeTab === "general" && <SettingsGeneral />}
+        <div className="min-w-0 flex-1">
+          {activeTab === "general" && (
+            <SettingsGeneral onOpenArchive={() => setActiveTab("archive")} />
+          )}
+          {activeTab === "archive" && <SettingsSemesterArchive />}
           {activeTab === "school" && <SettingsSchool />}
           {activeTab === "interface" && <SettingsInterface />}
           {activeTab === "access" && <SettingsAccess />}
