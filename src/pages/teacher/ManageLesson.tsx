@@ -1,14 +1,22 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
 import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
-import { db, getFirebaseStorage } from "../../lib/firebase";
+import { auth, db, getFirebaseStorage } from "../../lib/firebase";
+import {
+  getLessonCommandScope,
+  saveLessonDocument,
+  saveLessonTree,
+  uploadLessonAsset,
+  type LessonCommandScope,
+} from "../../lib/lessonManagement";
 import {
   collection,
   doc,
   getDoc,
   getDocFromServer,
   getDocs,
+  getDocsFromServer,
   limit,
   orderBy,
   query,
@@ -16,14 +24,7 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import {
-  deleteObject,
-  getDownloadURL,
-  listAll,
-  ref,
-  type StorageReference,
-  uploadBytes,
-} from "firebase/storage";
+import { ref, uploadBytes } from "firebase/storage";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
@@ -65,10 +66,6 @@ import {
   normalizeLessonPdfProcessingMeta,
   type LessonPdfProcessingMeta,
 } from "../../lib/lessonPdfExtraction";
-import {
-  tryDeleteLessonFootnoteAsset,
-  uploadLessonFootnoteAsset,
-} from "../../lib/lessonFootnoteAssets";
 import { canWriteLessonManagement } from "../../lib/permissions";
 import { createManagedNotifications } from "../../lib/notifications";
 import { subscribeSourceArchiveAssets } from "../../lib/sourceArchive";
@@ -274,10 +271,11 @@ type FootnoteImageDraft = {
   removeExisting: boolean;
 };
 
-type PendingLessonPdfUpload = {
-  file: File;
-  storagePath: string;
-  uploadToken: string;
+type LessonUploadContext = {
+  expectedRevision: number;
+  expectedUid: string;
+  commandScope: LessonCommandScope;
+  assetUploadIds: string[];
 };
 
 type UploadedWorksheetAssets = {
@@ -287,10 +285,7 @@ type UploadedWorksheetAssets = {
   pageImages: LessonWorksheetPageImage[];
   textRegions: LessonWorksheetTextRegion[];
   pdfProcessing: LessonPdfProcessingMeta;
-  pendingIncomingUpload: PendingLessonPdfUpload | null;
 };
-
-const LESSON_PDF_UPLOAD_CACHE_CONTROL = "public,max-age=3600";
 
 type PendingFootnoteAnchorPlacement = {
   page: number;
@@ -843,6 +838,13 @@ const ManageLesson: React.FC = () => {
   const lastSavedMetaSnapshotRef = useRef(EMPTY_META_EDITOR_SNAPSHOT);
   const lastSavedPdfSnapshotRef = useRef(EMPTY_PDF_EDITOR_SNAPSHOT);
   const deletedFootnoteAssetPathsRef = useRef<string[]>([]);
+  const treeRevisionRef = useRef<number | null>(null);
+  const treeScopeRef = useRef<LessonCommandScope | null>(null);
+  const lessonRevisionRef = useRef<number | null>(null);
+  const lessonScopeRef = useRef<LessonCommandScope | null>(null);
+  const lessonLegacyRef = useRef(false);
+  const lessonLoadIdRef = useRef(0);
+  const lessonSavingRef = useRef(false);
   const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
   const [savedLessonState, setSavedLessonState] =
     useState<NormalizedLessonData>(() => createEmptyNormalizedLessonData());
@@ -1369,21 +1371,6 @@ const ManageLesson: React.FC = () => {
     [config],
   );
 
-  const findOrCreateLessonDocRefByUnitId = useCallback(
-    async (unitId: string) => {
-      const existingLessonDocRef = await findLessonDocRefByUnitId(unitId);
-      if (existingLessonDocRef) {
-        return existingLessonDocRef;
-      }
-      const scopedRef = collection(
-        db,
-        getSemesterCollectionPath(config, "lessons"),
-      );
-      return doc(scopedRef);
-    },
-    [config, findLessonDocRefByUnitId],
-  );
-
   const refreshLessonPdfProcessing = useCallback(
     async (unitId: string) => {
       const lessonDocRef = await findLessonDocRefByUnitId(unitId);
@@ -1700,8 +1687,16 @@ const ManageLesson: React.FC = () => {
   ]);
 
   useEffect(() => {
+    lessonLoadIdRef.current += 1;
+    lessonRevisionRef.current = null;
+    lessonScopeRef.current = null;
+    treeRevisionRef.current = null;
+    treeScopeRef.current = null;
     void loadTree();
-  }, [config]);
+    return () => {
+      lessonLoadIdRef.current += 1;
+    };
+  }, [config?.year, config?.semester, currentUser?.uid]);
   useEffect(() => {
     const unsubscribe = subscribeSourceArchiveAssets(
       (items) => {
@@ -2229,6 +2224,10 @@ const ManageLesson: React.FC = () => {
   };
 
   const clearLessonEditor = (revokeExisting = false) => {
+    lessonLoadIdRef.current += 1;
+    lessonRevisionRef.current = null;
+    lessonScopeRef.current = null;
+    lessonLegacyRef.current = false;
     setLessonTitle("");
     setLessonVideo("");
     setLessonContent("");
@@ -2271,10 +2270,18 @@ const ManageLesson: React.FC = () => {
     !hasUnsavedLessonChanges || window.confirm(unsavedLessonWarningMessage);
 
   const loadTree = async () => {
+    const loadId = lessonLoadIdRef.current;
     try {
+      const commandScope = await getLessonCommandScope(config).catch(
+        () => null,
+      );
       const applyLoadedTree = async (nextTree: TreeNode[]) => {
+        if (loadId !== lessonLoadIdRef.current) return;
         setTreeData(nextTree);
-        if (selectedNodeId) return;
+        if (selectedNodeId) {
+          await loadLessonContent(selectedNodeId, selectedNodeTitle);
+          return;
+        }
 
         const readRecentLessons = async (collectionPath: string) => {
           const snap = await getDocs(
@@ -2299,7 +2306,7 @@ const ManageLesson: React.FC = () => {
           ]);
         }
 
-        if (!latestSelection) return;
+        if (!latestSelection || loadId !== lessonLoadIdRef.current) return;
         setExpandedIds(new Set(latestSelection.pathIds.slice(0, -1)));
         setSelectedNodeId(latestSelection.node.id);
         setSelectedNodeTitle(latestSelection.node.title);
@@ -2310,14 +2317,22 @@ const ManageLesson: React.FC = () => {
         );
       };
 
-      const scopedDoc = await getDoc(
+      const scopedDoc = await getDocFromServer(
         doc(db, getSemesterDocPath(config, "curriculum", "tree")),
       );
+      if (loadId !== lessonLoadIdRef.current) return;
+      if (scopedDoc.metadata.hasPendingWrites)
+        throw new Error("트리의 저장 상태를 확인하지 못했습니다.");
       if (scopedDoc.exists() && scopedDoc.data().tree) {
+        treeRevisionRef.current = scopedDoc.data().contentRevision ?? 0;
+        treeScopeRef.current = commandScope;
         await applyLoadedTree(scopedDoc.data().tree);
         return;
       }
-      const legacyDoc = await getDoc(doc(db, "curriculum", "tree"));
+      const legacyDoc = await getDocFromServer(doc(db, "curriculum", "tree"));
+      if (loadId !== lessonLoadIdRef.current) return;
+      treeRevisionRef.current = 0;
+      treeScopeRef.current = commandScope;
       if (legacyDoc.exists() && legacyDoc.data().tree) {
         await applyLoadedTree(legacyDoc.data().tree);
         return;
@@ -2331,20 +2346,52 @@ const ManageLesson: React.FC = () => {
   };
 
   const saveTree = async (newTree: TreeNode[], silent = true) => {
-    if (!canEdit) return;
+    if (!canEdit || lessonSavingRef.current) return;
+    const loadId = lessonLoadIdRef.current;
+    const expectedUid = currentUser?.uid;
+    const expectedRevision = treeRevisionRef.current;
+    lessonSavingRef.current = true;
     setScreenBusyMessage("트리 구조를 저장하는 중입니다...");
     try {
-      await setDoc(doc(db, getSemesterDocPath(config, "curriculum", "tree")), {
-        tree: newTree,
-        updatedAt: serverTimestamp(),
-      });
+      const commandScope = await getLessonCommandScope(config);
+      if (loadId !== lessonLoadIdRef.current) return;
+      if (!expectedUid || expectedUid !== auth.currentUser?.uid)
+        throw new Error("로그인 상태를 확인한 뒤 다시 저장해 주세요.");
+      if (
+        expectedRevision === null ||
+        JSON.stringify(treeScopeRef.current) !== JSON.stringify(commandScope)
+      ) {
+        throw new Error("학기 정보를 다시 불러온 뒤 트리를 저장해 주세요.");
+      }
+      const result = await saveLessonTree(
+        config,
+        {
+          expectedRevision,
+          tree: newTree,
+        },
+        {
+          expectedUid,
+          commandScope,
+        },
+      );
+      if (
+        loadId !== lessonLoadIdRef.current ||
+        auth.currentUser?.uid !== expectedUid
+      )
+        return;
+      treeRevisionRef.current = result.contentRevision;
       setTreeData(newTree);
       if (!silent) alert("트리 구조를 저장했습니다.");
     } catch (error) {
       console.error(error);
-      alert("트리 저장에 실패했습니다.");
+      if (loadId !== lessonLoadIdRef.current) return;
+      alert(
+        error instanceof Error ? error.message : "트리 저장에 실패했습니다.",
+      );
+    } finally {
+      lessonSavingRef.current = false;
+      if (loadId === lessonLoadIdRef.current) setScreenBusyMessage(null);
     }
-    setScreenBusyMessage(null);
   };
 
   const toggleExpand = (id: string) => {
@@ -2441,6 +2488,10 @@ const ManageLesson: React.FC = () => {
   };
 
   const loadLessonContent = async (unitId: string, title: string) => {
+    const loadId = ++lessonLoadIdRef.current;
+    lessonRevisionRef.current = null;
+    lessonScopeRef.current = null;
+    lessonLegacyRef.current = false;
     setLessonTitle(title);
     setLessonVideo("");
     setLessonContent("");
@@ -2455,6 +2506,9 @@ const ManageLesson: React.FC = () => {
     deletedFootnoteAssetPathsRef.current = [];
     setScreenBusyMessage("수업 자료를 불러오는 중입니다...");
     try {
+      const commandScope = await getLessonCommandScope(config).catch(
+        () => null,
+      );
       const scopedRef = collection(
         db,
         getSemesterCollectionPath(config, "lessons"),
@@ -2464,15 +2518,26 @@ const ManageLesson: React.FC = () => {
         where("unitId", "==", unitId),
         limit(1),
       );
-      let snap = await getDocs(scopedQuery);
-      if (snap.empty)
-        snap = await getDocs(
+      let snap = await getDocsFromServer(scopedQuery);
+      let legacy = false;
+      if (snap.empty) {
+        snap = await getDocsFromServer(
           query(
             collection(db, "lessons"),
             where("unitId", "==", unitId),
             limit(1),
           ),
         );
+        legacy = !snap.empty;
+      }
+      if (loadId !== lessonLoadIdRef.current) return;
+      if (snap.metadata.hasPendingWrites)
+        throw new Error("자료의 저장 상태를 확인하지 못했습니다.");
+      lessonRevisionRef.current = snap.empty
+        ? 0
+        : (snap.docs[0].data().contentRevision ?? 0);
+      lessonScopeRef.current = commandScope;
+      lessonLegacyRef.current = legacy;
       if (!snap.empty) {
         const data = normalizeLessonData(snap.docs[0].data(), {
           unitId,
@@ -2558,7 +2623,7 @@ const ManageLesson: React.FC = () => {
     } catch (error) {
       console.error(error);
     }
-    setScreenBusyMessage(null);
+    if (loadId === lessonLoadIdRef.current) setScreenBusyMessage(null);
   };
 
   const handleEditorTabChange = (nextTab: LessonEditorTab) => {
@@ -2764,20 +2829,6 @@ const ManageLesson: React.FC = () => {
     }
   };
 
-  const deleteStorageFolderRecursive = async (
-    folderRef: StorageReference,
-  ): Promise<void> => {
-    const listing = await listAll(folderRef);
-    await Promise.all(
-      listing.items.map((item) => deleteObject(item).catch(() => undefined)),
-    );
-    await Promise.all(
-      listing.prefixes.map((childRef) =>
-        deleteStorageFolderRecursive(childRef),
-      ),
-    );
-  };
-
   const removeAttachedPdf = () => {
     if (!canEdit) return;
     if (!window.confirm("연결된 PDF 학습지를 제거할까요?")) return;
@@ -2788,6 +2839,7 @@ const ManageLesson: React.FC = () => {
 
   const uploadWorksheetAssets = async (
     unitId: string,
+    context: LessonUploadContext,
   ): Promise<UploadedWorksheetAssets> => {
     if (!selectedPdfFile || !preparedPdf) {
       return {
@@ -2797,77 +2849,43 @@ const ManageLesson: React.FC = () => {
         pageImages: worksheetPageImages,
         textRegions: worksheetTextRegions,
         pdfProcessing: lessonPdfProcessing,
-        pendingIncomingUpload: null,
       };
     }
-    const basePath = `${getSemesterCollectionPath(config, "lesson_pdfs")}/${unitId}`;
-    const uploadToken = crypto.randomUUID();
-    const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
+    const original = await uploadLessonAsset(config, {
+      unitId,
+      expectedRevision: context.expectedRevision,
+      expectedUid: context.expectedUid,
+      commandScope: context.commandScope,
+      kind: "PDF",
+      file: selectedPdfFile,
+      originalName: selectedPdfFile.name,
+    });
+    context.assetUploadIds.push(original.uploadId);
     const pageImages: LessonWorksheetPageImage[] = [];
-    const uploadedPagePaths = new Set<string>();
-    const storage = await getFirebaseStorage();
-    const { getPdfPageImageExtension } =
-      await import("../../lib/pdfMapProcessor");
     for (const page of preparedPdf.pageImages) {
-      const pageExtension = getPdfPageImageExtension(page.blob);
-      const pagePath = `${basePath}/page-${page.page}.${pageExtension}`;
-      const pageRef = ref(storage, pagePath);
-      await uploadBytes(pageRef, page.blob, {
-        contentType: page.blob.type || "image/png",
-        cacheControl: LESSON_PDF_UPLOAD_CACHE_CONTROL,
+      const asset = await uploadLessonAsset(config, {
+        unitId,
+        expectedRevision: context.expectedRevision,
+        expectedUid: context.expectedUid,
+        commandScope: context.commandScope,
+        kind: "PAGE",
+        file: page.blob,
       });
-      uploadedPagePaths.add(pagePath);
+      context.assetUploadIds.push(asset.uploadId);
       pageImages.push({
         page: page.page,
-        imageUrl: await getDownloadURL(pageRef),
+        imageUrl: asset.url,
         width: page.width,
         height: page.height,
       });
     }
-    const previousMaxPage = Math.max(
-      0,
-      ...savedLessonState.worksheetPageImages.map((item) => item.page || 0),
-    );
-    if (previousMaxPage > 0) {
-      const nextPages = new Set(pageImages.map((item) => item.page));
-      const cleanupPaths: string[] = [];
-      for (let page = 1; page <= previousMaxPage; page += 1) {
-        cleanupPaths.push(`${basePath}/page-${page}.png`);
-        if (!nextPages.has(page)) {
-          cleanupPaths.push(`${basePath}/page-${page}.webp`);
-        }
-      }
-      void Promise.all(
-        Array.from(new Set(cleanupPaths)).map(async (path) => {
-          if (uploadedPagePaths.has(path)) return;
-          try {
-            await deleteObject(ref(storage, path));
-          } catch {
-            // Best-effort cleanup only. Missing old page files are expected.
-          }
-        }),
-      );
-    }
     return {
       pdfName: selectedPdfFile.name,
-      pdfUrl: "",
-      pdfStoragePath: pendingUploadPath,
+      pdfUrl: original.url,
+      pdfStoragePath: original.storagePath,
       pageImages,
       textRegions: preparedPdf.regions,
-      pdfProcessing: buildQueuedLessonPdfProcessingMeta({
-        pdfName: selectedPdfFile.name,
-        pdfStoragePath: pendingUploadPath,
-        byteSize: selectedPdfFile.size || 0,
-        pageCount: preparedPdf.pageImages.length,
-        pendingUploadToken: uploadToken,
-        pendingUploadPath,
-        previous: lessonPdfProcessing,
-      }),
-      pendingIncomingUpload: {
-        file: selectedPdfFile,
-        storagePath: pendingUploadPath,
-        uploadToken,
-      },
+      pdfProcessing: normalizeLessonPdfProcessingMeta(original.pdfProcessing),
     };
   };
 
@@ -3351,36 +3369,31 @@ const ManageLesson: React.FC = () => {
   const uploadFootnoteAssets = async (
     unitId: string,
     footnotes: LessonFootnote[],
+    context: LessonUploadContext,
   ) => {
     const nextFootnotes: LessonFootnote[] = [];
-    const staleAssetPathsToDelete: string[] = [];
 
     for (const footnote of footnotes) {
       const draft = footnoteImageDrafts[footnote.id];
       let nextFootnote = { ...footnote };
 
       if (draft?.file) {
-        const uploadedAsset = await uploadLessonFootnoteAsset({
-          config,
+        const asset = await uploadLessonAsset(config, {
           unitId,
-          footnoteId: footnote.id,
+          expectedRevision: context.expectedRevision,
+          expectedUid: context.expectedUid,
+          commandScope: context.commandScope,
+          kind: "FOOTNOTE",
           file: draft.file,
+          originalName: draft.file.name,
         });
+        context.assetUploadIds.push(asset.uploadId);
         nextFootnote = {
           ...nextFootnote,
-          imageUrl: uploadedAsset.imageUrl,
-          imageStoragePath: uploadedAsset.imageStoragePath,
+          imageUrl: asset.url,
+          imageStoragePath: asset.storagePath,
         };
-        if (
-          footnote.imageStoragePath &&
-          footnote.imageStoragePath !== uploadedAsset.imageStoragePath
-        ) {
-          staleAssetPathsToDelete.push(footnote.imageStoragePath);
-        }
       } else if (draft?.removeExisting) {
-        if (footnote.imageStoragePath) {
-          staleAssetPathsToDelete.push(footnote.imageStoragePath);
-        }
         nextFootnote = {
           ...nextFootnote,
           imageUrl: "",
@@ -3393,27 +3406,28 @@ const ManageLesson: React.FC = () => {
 
     return {
       footnotes: reindexFootnotes(nextFootnotes),
-      staleAssetPathsToDelete,
     };
   };
 
   const saveLesson = async (options?: {
     source?: "header" | "pdf-floating";
   }) => {
-    if (!canEdit || !selectedNodeId) return;
-    emitSessionActivity();
+    if (!canEdit || !selectedNodeId || lessonSavingRef.current) return;
     const source = options?.source || "header";
     const shouldSavePdf =
       source === "pdf-floating" ||
       (source === "header" && hasUnsavedPdfChanges);
     const shouldSaveMeta = source === "header" && hasUnsavedMetaChanges;
-
     if (!shouldSaveMeta && !shouldSavePdf) return;
     if (shouldSavePdf && selectedPdfFile && !preparedPdf) {
       alert("PDF 페이지 추출이 끝날 때까지 기다려 주세요.");
       return;
     }
 
+    const loadId = lessonLoadIdRef.current;
+    const expectedUid = currentUser?.uid;
+    const expectedRevision = lessonRevisionRef.current;
+    const expectedTreeRevision = treeRevisionRef.current;
     const committedFootnoteEditor = footnoteEditorSession
       ? commitFootnoteEditorSession({
           session: footnoteEditorSession,
@@ -3423,14 +3437,6 @@ const ManageLesson: React.FC = () => {
           bodySelection,
         })
       : null;
-    const lessonContentForSave =
-      committedFootnoteEditor?.lessonContent ?? lessonContent;
-    const lessonFootnotesForSave =
-      committedFootnoteEditor?.lessonFootnotes ?? lessonFootnotes;
-    const worksheetFootnoteAnchorsForSave =
-      committedFootnoteEditor?.worksheetFootnoteAnchors ??
-      worksheetFootnoteAnchors;
-
     const normalizedGeneralDraft = buildNormalizedGeneralLessonDraft({
       lessonTitle,
       lessonVideo,
@@ -3445,13 +3451,37 @@ const ManageLesson: React.FC = () => {
     const persistedMetaVisibleToStudents = shouldSaveMeta
       ? normalizedGeneralDraft.isVisibleToStudents
       : savedLessonState.isVisibleToStudents;
-    let metaSaved = false;
+    const nextTree =
+      shouldSaveMeta && persistedMetaTitle !== selectedNodeTitle
+        ? replaceNodeTitle(treeData, selectedNodeId, persistedMetaTitle)
+        : undefined;
+
+    lessonSavingRef.current = true;
     try {
-      const lessonDocRef =
-        await findOrCreateLessonDocRefByUnitId(selectedNodeId);
-      if (shouldSaveMeta) {
-        setLessonSaveState("saving");
+      const commandScope = await getLessonCommandScope(config);
+      if (loadId !== lessonLoadIdRef.current) return;
+      if (!expectedUid || expectedUid !== auth.currentUser?.uid)
+        throw new Error("로그인 상태를 확인한 뒤 다시 저장해 주세요.");
+      if (lessonLegacyRef.current) {
+        throw new Error(
+          "이 자료는 이전 저장 경로에서 불러왔습니다. 현재 학기 자료로 옮긴 뒤 저장해 주세요.",
+        );
       }
+      if (
+        expectedRevision === null ||
+        JSON.stringify(lessonScopeRef.current) !== JSON.stringify(commandScope)
+      ) {
+        throw new Error("자료와 학기 정보를 다시 불러온 뒤 저장해 주세요.");
+      }
+      if (
+        nextTree &&
+        (expectedTreeRevision === null ||
+          JSON.stringify(treeScopeRef.current) !== JSON.stringify(commandScope))
+      ) {
+        throw new Error("트리를 다시 불러온 뒤 제목을 저장해 주세요.");
+      }
+      emitSessionActivity();
+      if (shouldSaveMeta) setLessonSaveState("saving");
       if (shouldSavePdf) {
         setPdfSaveState("saving");
         setPdfSaveFeedback(null);
@@ -3463,162 +3493,117 @@ const ManageLesson: React.FC = () => {
             ? "PDF 편집 내용을 저장하는 중입니다..."
             : "제목과 공개 설정을 저장하는 중입니다...",
       );
-
-      if (shouldSaveMeta) {
-        await setDoc(
-          lessonDocRef,
-          {
-            unitId: selectedNodeId,
-            title: normalizedGeneralDraft.title,
-            videoUrl: normalizedGeneralDraft.videoUrl,
-            isVisibleToStudents: normalizedGeneralDraft.isVisibleToStudents,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
+      const context: LessonUploadContext = {
+        expectedRevision,
+        expectedUid,
+        commandScope,
+        assetUploadIds: [],
+      };
+      let savedDraft: ReturnType<typeof buildNormalizedPdfEditorDraft> | null =
+        null;
+      if (shouldSavePdf) {
+        const normalizedDraft = buildNormalizedPdfEditorDraft({
+          lessonContent:
+            committedFootnoteEditor?.lessonContent ?? lessonContent,
+          lessonFootnotes:
+            committedFootnoteEditor?.lessonFootnotes ?? lessonFootnotes,
+          worksheetFootnoteAnchors:
+            committedFootnoteEditor?.worksheetFootnoteAnchors ??
+            worksheetFootnoteAnchors,
+          lessonPdfName,
+          lessonPdfUrl,
+          lessonPdfStoragePath,
+          lessonPdfProcessing,
+          worksheetPageImages,
+          worksheetTextRegions,
+          worksheetBlanks,
+          worksheetExamHighlights,
+        });
+        const worksheet = await uploadWorksheetAssets(selectedNodeId, context);
+        const notes = await uploadFootnoteAssets(
+          selectedNodeId,
+          normalizedDraft.footnotes,
+          context,
         );
-        setLessonTitle(normalizedGeneralDraft.title);
-        setLessonVideo(normalizedGeneralDraft.videoUrl);
-        if (
-          normalizedGeneralDraft.title &&
-          normalizedGeneralDraft.title !== selectedNodeTitle
-        ) {
-          const nextTree = replaceNodeTitle(
-            treeData,
-            selectedNodeId,
-            normalizedGeneralDraft.title,
-          );
-          await setDoc(
-            doc(db, getSemesterDocPath(config, "curriculum", "tree")),
-            { tree: nextTree, updatedAt: serverTimestamp() },
-          );
-          setTreeData(nextTree);
-          setSelectedNodeTitle(normalizedGeneralDraft.title);
-        }
+        savedDraft = buildNormalizedPdfEditorDraft({
+          lessonContent: normalizedDraft.contentHtml,
+          lessonFootnotes: notes.footnotes,
+          worksheetFootnoteAnchors: normalizedDraft.worksheetFootnoteAnchors,
+          lessonPdfName: worksheet.pdfName,
+          lessonPdfUrl: worksheet.pdfUrl,
+          lessonPdfStoragePath: worksheet.pdfStoragePath,
+          lessonPdfProcessing: worksheet.pdfProcessing,
+          worksheetPageImages: worksheet.pageImages,
+          worksheetTextRegions: worksheet.textRegions,
+          worksheetBlanks: normalizedDraft.worksheetBlanks,
+          worksheetExamHighlights: normalizedDraft.worksheetExamHighlights,
+        });
+      }
+      if (loadId !== lessonLoadIdRef.current) return;
+      const result = await saveLessonDocument(
+        config,
+        {
+          unitId: selectedNodeId,
+          expectedRevision,
+          assetUploadIds: context.assetUploadIds,
+          document: {
+            title: persistedMetaTitle,
+            videoUrl: persistedMetaVideoUrl,
+            isVisibleToStudents: persistedMetaVisibleToStudents,
+            ...(savedDraft
+              ? {
+                  contentHtml: savedDraft.contentHtml,
+                  pdfName: savedDraft.pdfName,
+                  pdfUrl: savedDraft.pdfUrl,
+                  pdfStoragePath: savedDraft.pdfStoragePath,
+                  worksheetPageImages: savedDraft.worksheetPageImages,
+                  worksheetTextRegions: savedDraft.worksheetTextRegions,
+                  worksheetBlanks: savedDraft.worksheetBlanks,
+                  worksheetExamHighlights: savedDraft.worksheetExamHighlights,
+                  worksheetFootnoteAnchors: savedDraft.worksheetFootnoteAnchors,
+                  footnotes: savedDraft.footnotes,
+                }
+              : {}),
+          },
+          ...(nextTree
+            ? { tree: nextTree, expectedTreeRevision: expectedTreeRevision! }
+            : {}),
+        },
+        { expectedUid, commandScope },
+      );
+      if (
+        loadId !== lessonLoadIdRef.current ||
+        auth.currentUser?.uid !== expectedUid
+      )
+        return;
+      lessonRevisionRef.current = result.contentRevision;
+      if (nextTree && result.treeRevision !== null) {
+        treeRevisionRef.current = result.treeRevision;
+        setTreeData(nextTree);
+        setSelectedNodeTitle(persistedMetaTitle);
+      }
+      if (shouldSaveMeta) {
+        setLessonTitle(persistedMetaTitle);
+        setLessonVideo(persistedMetaVideoUrl);
         syncSavedMetaState({
           selectedNodeId,
-          lessonTitle: normalizedGeneralDraft.title,
-          lessonVideo: normalizedGeneralDraft.videoUrl,
-          lessonVisibleToStudents: normalizedGeneralDraft.isVisibleToStudents,
+          lessonTitle: persistedMetaTitle,
+          lessonVideo: persistedMetaVideoUrl,
+          lessonVisibleToStudents: persistedMetaVisibleToStudents,
         });
         setLessonSaveState("saved");
-        metaSaved = true;
-        if (!shouldSavePdf) {
-          alert("제목과 공개 설정을 저장했습니다.");
-          return;
-        }
       }
-      const normalizedDraft = buildNormalizedPdfEditorDraft({
-        lessonContent: lessonContentForSave,
-        lessonFootnotes: lessonFootnotesForSave,
-        worksheetFootnoteAnchors: worksheetFootnoteAnchorsForSave,
-        lessonPdfName,
-        lessonPdfUrl,
-        lessonPdfStoragePath,
-        lessonPdfProcessing,
-        worksheetPageImages,
-        worksheetTextRegions,
-        worksheetBlanks,
-        worksheetExamHighlights,
-      });
-      const uploadedWorksheet = await uploadWorksheetAssets(selectedNodeId);
-      const { footnotes: uploadedFootnotes, staleAssetPathsToDelete } =
-        await uploadFootnoteAssets(selectedNodeId, normalizedDraft.footnotes);
-      let resolvedPdfProcessing = uploadedWorksheet.pdfProcessing;
-      let resolvedPdfUrl = uploadedWorksheet.pdfUrl;
-      let resolvedPdfStoragePath = uploadedWorksheet.pdfStoragePath;
-      const draftForPersist = buildNormalizedPdfEditorDraft({
-        lessonContent: normalizedDraft.contentHtml,
-        lessonFootnotes: uploadedFootnotes,
-        worksheetFootnoteAnchors: normalizedDraft.worksheetFootnoteAnchors,
-        lessonPdfName: uploadedWorksheet.pdfName,
-        lessonPdfUrl: uploadedWorksheet.pdfUrl,
-        lessonPdfStoragePath: uploadedWorksheet.pdfStoragePath,
-        lessonPdfProcessing: resolvedPdfProcessing,
-        worksheetPageImages: uploadedWorksheet.pageImages,
-        worksheetTextRegions: uploadedWorksheet.textRegions,
-        worksheetBlanks: normalizedDraft.worksheetBlanks,
-        worksheetExamHighlights: normalizedDraft.worksheetExamHighlights,
-      });
-      const payload = {
-        unitId: selectedNodeId,
-        title: persistedMetaTitle,
-        videoUrl: persistedMetaVideoUrl,
-        isVisibleToStudents: persistedMetaVisibleToStudents,
-        contentHtml: draftForPersist.contentHtml,
-        pdfName: draftForPersist.pdfName,
-        pdfUrl: draftForPersist.pdfUrl,
-        pdfStoragePath: draftForPersist.pdfStoragePath,
-        worksheetPageImages: draftForPersist.worksheetPageImages,
-        worksheetTextRegions: draftForPersist.worksheetTextRegions,
-        worksheetBlanks: draftForPersist.worksheetBlanks,
-        worksheetExamHighlights: draftForPersist.worksheetExamHighlights,
-        worksheetFootnoteAnchors: draftForPersist.worksheetFootnoteAnchors,
-        pdfProcessing: draftForPersist.pdfProcessing,
-        footnotes: draftForPersist.footnotes,
-        updatedAt: serverTimestamp(),
+      if (!savedDraft) {
+        alert("제목과 공개 설정을 저장했습니다.");
+        return;
+      }
+      savedDraft = {
+        ...savedDraft,
+        pdfProcessing: normalizeLessonPdfProcessingMeta(result.pdfProcessing, {
+          pdfName: savedDraft.pdfName,
+          pdfStoragePath: savedDraft.pdfStoragePath,
+        }),
       };
-      await setDoc(lessonDocRef, payload, { merge: true });
-      if (uploadedWorksheet.pendingIncomingUpload) {
-        try {
-          const storage = await getFirebaseStorage();
-          await uploadBytes(
-            ref(storage, uploadedWorksheet.pendingIncomingUpload.storagePath),
-            uploadedWorksheet.pendingIncomingUpload.file,
-            {
-              contentType: "application/pdf",
-              cacheControl: "private,no-store,max-age=0",
-              customMetadata: {
-                lessonDocId: lessonDocRef.id,
-                unitId: selectedNodeId,
-              },
-            },
-          );
-        } catch (error) {
-          const message = String(
-            (error as { message?: string })?.message ||
-              "lesson-pdf-extraction-upload-failed",
-          );
-          const failedProcessing = buildFailedLessonPdfProcessingMeta(
-            uploadedWorksheet.pdfProcessing,
-            message,
-          );
-          resolvedPdfProcessing = {
-            ...failedProcessing,
-            file: {
-              ...failedProcessing.file,
-              storagePath: "",
-              originalAvailable: false,
-              pendingUploadToken: "",
-              pendingUploadPath: "",
-            },
-          };
-          resolvedPdfUrl = "";
-          resolvedPdfStoragePath = "";
-          await setDoc(
-            lessonDocRef,
-            {
-              pdfUrl: "",
-              pdfStoragePath: "",
-              pdfProcessing: resolvedPdfProcessing,
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true },
-          );
-        }
-      }
-      const savedDraft = buildNormalizedPdfEditorDraft({
-        lessonContent: normalizedDraft.contentHtml,
-        lessonFootnotes: uploadedFootnotes,
-        worksheetFootnoteAnchors: normalizedDraft.worksheetFootnoteAnchors,
-        lessonPdfName: uploadedWorksheet.pdfName,
-        lessonPdfUrl: resolvedPdfUrl,
-        lessonPdfStoragePath: resolvedPdfStoragePath,
-        lessonPdfProcessing: resolvedPdfProcessing,
-        worksheetPageImages: uploadedWorksheet.pageImages,
-        worksheetTextRegions: uploadedWorksheet.textRegions,
-        worksheetBlanks: normalizedDraft.worksheetBlanks,
-        worksheetExamHighlights: normalizedDraft.worksheetExamHighlights,
-      });
       setLessonContent(savedDraft.contentHtml);
       setLessonPdfName(savedDraft.pdfName);
       setLessonPdfUrl(savedDraft.pdfUrl);
@@ -3631,7 +3616,6 @@ const ManageLesson: React.FC = () => {
       setWorksheetFootnoteAnchors(savedDraft.worksheetFootnoteAnchors);
       setLessonFootnotes(savedDraft.footnotes);
       if (committedFootnoteEditor) {
-        setLessonContent(savedDraft.contentHtml);
         setActiveFootnoteId(committedFootnoteEditor.activeFootnoteId);
         setActiveFootnoteAnchorId(
           committedFootnoteEditor.activeFootnoteAnchorId,
@@ -3646,36 +3630,9 @@ const ManageLesson: React.FC = () => {
       setPreparedPdf(null);
       setSelectedPdfFile(null);
       resetFootnoteImageDrafts();
-      const cleanupTargets = Array.from(
-        new Set([
-          ...staleAssetPathsToDelete,
-          ...deletedFootnoteAssetPathsRef.current,
-        ]),
-      );
       deletedFootnoteAssetPathsRef.current = [];
-      if (cleanupTargets.length) {
-        void Promise.all(
-          cleanupTargets.map((path) => tryDeleteLessonFootnoteAsset(path)),
-        );
-      }
-      if (savedLessonState.pdfStoragePath && !savedDraft.pdfStoragePath) {
-        const storage = await getFirebaseStorage();
-        const folderRef = ref(
-          storage,
-          `${getSemesterCollectionPath(config, "lesson_pdfs")}/${selectedNodeId}`,
-        );
-        void deleteStorageFolderRecursive(folderRef).catch((cleanupError) => {
-          console.error(
-            "Failed to delete lesson pdf assets after save:",
-            cleanupError,
-          );
-        });
-      }
-      syncSavedSnapshots({
+      syncSavedPdfState({
         selectedNodeId,
-        lessonTitle: persistedMetaTitle,
-        lessonVideo: persistedMetaVideoUrl,
-        lessonVisibleToStudents: persistedMetaVisibleToStudents,
         lessonContent: savedDraft.contentHtml,
         lessonFootnotes: savedDraft.footnotes,
         worksheetFootnoteAnchors: savedDraft.worksheetFootnoteAnchors,
@@ -3691,16 +3648,12 @@ const ManageLesson: React.FC = () => {
         preparedPdf: null,
         footnoteImageDrafts: {},
       });
-      if (shouldSaveMeta) {
-        setLessonSaveState("saved");
-      }
       setPdfSaveState("saved");
-      const isNewlyVisibleToStudents =
+      const shouldNotifyStudents =
+        source === "header" &&
         shouldSaveMeta &&
         persistedMetaVisibleToStudents &&
         savedLessonState.isVisibleToStudents === false;
-      const shouldNotifyStudents =
-        source === "header" && isNewlyVisibleToStudents;
       if (shouldNotifyStudents) {
         const notificationLessonTitle =
           persistedMetaTitle || selectedNodeTitle || "수업자료";
@@ -3713,9 +3666,7 @@ const ManageLesson: React.FC = () => {
           entityType: "lesson",
           entityId: selectedNodeId,
           dedupeKey: `lesson_worksheet_published:${selectedNodeId}`,
-          templateValues: {
-            lessonTitle: notificationLessonTitle,
-          },
+          templateValues: { lessonTitle: notificationLessonTitle },
         }).catch((notificationError) => {
           console.error(
             "Failed to create lesson worksheet notifications:",
@@ -3723,6 +3674,7 @@ const ManageLesson: React.FC = () => {
           );
         });
       }
+      const resolvedPdfProcessing = savedDraft.pdfProcessing;
       const successMessage =
         resolvedPdfProcessing.extractionStatus === "failed"
           ? shouldSaveMeta
@@ -3736,51 +3688,27 @@ const ManageLesson: React.FC = () => {
             : shouldSaveMeta
               ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다."
               : "PDF 편집 내용을 저장했습니다.";
-      setPdfSaveFeedback({
-        tone: "success",
-        message: successMessage,
-      });
-      if (source === "header") {
-        alert(successMessage);
-      }
+      setPdfSaveFeedback({ tone: "success", message: successMessage });
+      if (source === "header") alert(successMessage);
     } catch (error) {
       console.error("Failed to save lesson PDF edits:", error, {
         source,
         selectedNodeId,
-        shouldSaveMeta,
-        shouldSavePdf,
-        footnoteCount: lessonFootnotesForSave.length,
-        worksheetFootnoteAnchorCount: worksheetFootnoteAnchorsForSave.length,
-        footnoteContentTypes: lessonFootnotesForSave.map((footnote) => ({
-          id: footnote.id,
-          anchorKey: footnote.anchorKey,
-          contentType: footnote.contentType,
-        })),
       });
-      if (shouldSaveMeta) {
-        setLessonSaveState(metaSaved ? "saved" : "dirty");
-      } else if (hasUnsavedMetaChanges) {
-        setLessonSaveState("dirty");
-      }
+      if (loadId !== lessonLoadIdRef.current) return;
+      if (shouldSaveMeta || hasUnsavedMetaChanges) setLessonSaveState("dirty");
+      const errorMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : "수업 자료를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
       if (shouldSavePdf) {
         setPdfSaveState("dirty");
-        const errorMessage = shouldSaveMeta
-          ? metaSaved
-            ? "제목/공개 설정은 저장했지만 PDF 편집 내용을 저장하지 못했습니다."
-            : "제목/공개 설정과 PDF 편집 내용을 저장하지 못했습니다."
-          : "PDF 편집 내용을 저장하지 못했습니다.";
-        setPdfSaveFeedback({
-          tone: "error",
-          message: errorMessage,
-        });
-        if (source === "header") {
-          alert(errorMessage);
-        }
-      } else {
-        alert("제목과 공개 설정 저장에 실패했습니다.");
+        setPdfSaveFeedback({ tone: "error", message: errorMessage });
       }
+      if (source === "header") alert(errorMessage);
     } finally {
-      setScreenBusyMessage(null);
+      lessonSavingRef.current = false;
+      if (loadId === lessonLoadIdRef.current) setScreenBusyMessage(null);
     }
   };
 
