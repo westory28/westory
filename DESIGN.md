@@ -112,6 +112,7 @@ Layout tokens:
 - Desktop gutter: `--space-10`.
 - Student page default: one column first.
 - Teacher page default: dense grid allowed only when labels, actions, and overflow remain clear.
+- Teacher dashboard width contract (768px and above): maximum `min(96rem, calc(100vw - 2rem))` (1536px cap), horizontal padding `clamp(1.5rem, 2.6vw, 2.5rem)` (24–40px). Keep the existing five-column grid with calendar spanning three columns and the side panels spanning two; gap remains 16px. These values must not depend on Tailwind CDN insertion order. Do not add `max-w-7xl` or `px-4` overrides to this container.
 
 ## 5. Components
 

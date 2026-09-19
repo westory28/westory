@@ -2686,7 +2686,8 @@ button.lesson-core-point-floating-status:disabled {
 }
 
 @media (min-width: 768px) {
-  .teacher-dashboard-container {
+  /* Preserve the agreed width and gutters regardless of CDN utility order. */
+  .dashboard-container.teacher-dashboard-container {
     max-width: min(96rem, calc(100vw - 2rem));
     padding-inline: clamp(1.5rem, 2.6vw, 2.5rem);
   }

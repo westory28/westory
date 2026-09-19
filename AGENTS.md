@@ -87,10 +87,12 @@
 - rules 전용 자동 검증도 저장소에 준비되어 있지 않다.
 - 자동 검증이 없을수록 영향 경로를 더 좁히고 diff를 더 엄격하게 읽는다.
 - 작업이 최종적으로 마무리되고 필요한 검증을 통과하면, 별도 지시가 없어도 변경 사항을 커밋하고 현재 브랜치로 푸시하는 것을 기본 흐름으로 삼는다.
+- 패치 완료 기준은 커밋/푸시뿐 아니라 운영 배포 성공과 운영 사이트 반영 확인까지다. 프론트엔드도 현재 활성 운영 배포 경로를 확인해 배포하고, 실제 운영 도메인에서 해당 변경을 검증한다. 배포 실패나 반영 미확인 상태를 완료로 보고하지 않는다.
 - 단, 검증 실패, 충돌, 인증 문제, 원격 저장소 접근 문제, 사용자 변경과의 충돌, 임시 파일 포함 가능성, 커밋 범위가 불명확한 경우에는 커밋/푸시 전에 멈추고 사용자에게 보고한다.
 
 ## Firebase / GitHub Pages 운영 주의
-- GitHub Actions는 `.github/workflows/deploy-pages.yml`에서 `main` push 시 `npm ci`와 `npm run build`를 실행하고 `dist`를 GitHub Pages에 배포한다.
+- 현재 프론트엔드 운영은 Vercel `westory` 프로젝트의 `main` 배포이며 운영 도메인은 `www.westory.kr`이다(2026-09-19 확인). 배포 전 운영 도메인에 연결된 커밋과 작업 기준을 비교하고, 푸시 후 Vercel 성공 및 운영 도메인의 실제 변경 반영까지 확인한다.
+- `.github/workflows/deploy-pages.yml`은 기존 GitHub Pages 배포 설정이며 현재 비활성 상태다. 프론트엔드 운영 배포를 위해 임의로 다시 활성화하지 않는다.
 - 앱은 `HashRouter`를 사용한다.
 - `src/main.tsx`, `src/App.tsx`, `vite.config.ts`에는 GitHub Pages 경로와 `#/` 보정 로직이 있다.
 - 라우터 종류, `base`, boot redirect를 가볍게 바꾸지 않는다.

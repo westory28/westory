@@ -173,7 +173,7 @@ const TeacherDashboard: React.FC = () => {
 
   return (
     <div
-      className="dashboard-container teacher-dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1"
+      className="dashboard-container teacher-dashboard-container flex-1"
       data-patch-target="teacher-dashboard"
       data-patch-label="교사 대시보드"
     >
