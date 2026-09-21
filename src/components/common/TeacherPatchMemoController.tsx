@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { isAdminUser } from "../../lib/permissions";
-import { getTeacherPatchNoteErrorMessage } from "../../lib/teacherPatchNoteCommands";
+import {
+  getTeacherPatchNoteErrorMessage,
+  prepareTeacherPatchNoteSession,
+} from "../../lib/teacherPatchNoteCommands";
 import {
   createTeacherPatchNote,
   deleteTeacherPatchNote,
@@ -272,6 +275,8 @@ const TeacherPatchMemoController: React.FC = () => {
   const [notes, setNotes] = useState<TeacherPatchNote[]>([]);
   const [filter, setFilter] = useState<FilterKey>("open");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const activeEditingNoteId = useRef(editingNoteId);
+  activeEditingNoteId.current = editingNoteId;
   const [editingNoteRevision, setEditingNoteRevision] = useState(0);
   const [body, setBody] = useState("");
   const [type, setType] = useState<TeacherPatchNoteType>("bug");
@@ -283,6 +288,10 @@ const TeacherPatchMemoController: React.FC = () => {
   const [targetRect, setTargetRect] =
     useState<TeacherPatchNoteTargetRect | null>(null);
   const [saving, setSaving] = useState(false);
+  const [busyNoteIds, setBusyNoteIds] = useState<Set<string>>(new Set());
+  const mutationLocks = useRef(new Set<string>());
+  const retryNotesSubscription = useRef(false);
+  const [subscriptionAttempt, setSubscriptionAttempt] = useState(0);
   const [selectingTarget, setSelectingTarget] = useState(false);
   const [hoverRect, setHoverRect] = useState<TeacherPatchNoteTargetRect | null>(
     null,
@@ -291,20 +300,49 @@ const TeacherPatchMemoController: React.FC = () => {
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const uid = currentUser?.uid || "";
+  const activeUid = useRef(uid);
+  activeUid.current = uid;
+
+  useEffect(() => {
+    setNotes([]);
+    setBody("");
+    setEditingNoteId(null);
+    setEditingNoteRevision(0);
+    setTargetLabel("");
+    setTargetText("");
+    setTargetSelector("");
+    setTargetRect(null);
+    setSaving(false);
+    setBusyNoteIds(new Set());
+    setOpen(false);
+    setSelectingTarget(false);
+  }, [uid]);
+
+  useEffect(() => {
+    if (open && uid && isTeacherRoute && canUsePatchMemo) {
+      if (retryNotesSubscription.current) {
+        retryNotesSubscription.current = false;
+        setSubscriptionAttempt((attempt) => attempt + 1);
+      }
+      // A failed warm-up must not erase a draft; submit reports actionable errors.
+      void prepareTeacherPatchNoteSession(uid).catch(() => {});
+    }
+  }, [open, uid, isTeacherRoute, canUsePatchMemo]);
 
   useEffect(() => {
     if (!uid || !isTeacherRoute || !canUsePatchMemo) {
       setNotes([]);
       return undefined;
     }
-    return subscribeTeacherPatchNotes(uid, setNotes, () =>
+    return subscribeTeacherPatchNotes(uid, setNotes, () => {
+      retryNotesSubscription.current = true;
       showToast({
         tone: "error",
         title: "패치 메모를 불러오지 못했습니다.",
         message: "권한이나 네트워크 상태를 확인해 주세요.",
-      }),
-    );
-  }, [canUsePatchMemo, isTeacherRoute, showToast, uid]);
+      });
+    });
+  }, [canUsePatchMemo, isTeacherRoute, showToast, uid, subscriptionAttempt]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -402,7 +440,7 @@ const TeacherPatchMemoController: React.FC = () => {
       return;
     }
     if (!open) {
-      resetForm(currentPath);
+      if (!body.trim() && !editingNoteId && !saving) resetForm(currentPath);
       setOpen(true);
       return;
     }
@@ -411,6 +449,7 @@ const TeacherPatchMemoController: React.FC = () => {
   };
 
   const startEdit = (note: TeacherPatchNote) => {
+    if (saving || mutationLocks.current.has(`${uid}:${note.id}`)) return;
     setEditingNoteId(note.id);
     setEditingNoteRevision(note.noteRevision);
     setBody(note.body);
@@ -440,7 +479,8 @@ const TeacherPatchMemoController: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (saving) return;
+    const lockKey = `${uid}:${editingNoteId || "new"}`;
+    if (saving || mutationLocks.current.has(lockKey)) return;
     if (!body.trim()) {
       showToast({
         tone: "warning",
@@ -451,6 +491,7 @@ const TeacherPatchMemoController: React.FC = () => {
     }
 
     const input = buildInput();
+    mutationLocks.current.add(lockKey);
     setSaving(true);
     try {
       if (editingNoteId) {
@@ -460,13 +501,17 @@ const TeacherPatchMemoController: React.FC = () => {
           editingNoteRevision,
           input,
         );
+        if (activeUid.current !== uid) return;
         showToast({ tone: "success", title: "패치 메모를 수정했습니다." });
       } else {
         await createTeacherPatchNote(uid, input);
+        if (activeUid.current !== uid) return;
+        setFilter("open");
         showToast({ tone: "success", title: "패치 메모를 추가했습니다." });
       }
       resetForm(currentPath);
     } catch (error) {
+      if (activeUid.current !== uid) return;
       console.error("Failed to save teacher patch note:", error);
       showToast({
         tone: "error",
@@ -474,7 +519,8 @@ const TeacherPatchMemoController: React.FC = () => {
         message: getTeacherPatchNoteErrorMessage(error),
       });
     } finally {
-      setSaving(false);
+      mutationLocks.current.delete(lockKey);
+      if (activeUid.current === uid) setSaving(false);
     }
   };
 
@@ -482,34 +528,67 @@ const TeacherPatchMemoController: React.FC = () => {
     note: TeacherPatchNote,
     status: TeacherPatchNoteStatus,
   ) => {
+    const lockKey = `${uid}:${note.id}`;
+    if (saving || mutationLocks.current.has(lockKey)) return;
+    mutationLocks.current.add(lockKey);
+    setBusyNoteIds((previous) => new Set(previous).add(note.id));
     try {
-      await updateTeacherPatchNoteStatus(uid, note, status);
+      const result = await updateTeacherPatchNoteStatus(uid, note, status);
+      if (activeUid.current !== uid) return;
+      if (activeEditingNoteId.current === note.id) {
+        setEditingNoteRevision((revision) =>
+          revision === note.noteRevision ? result.noteRevision : revision,
+        );
+      }
     } catch (error) {
+      if (activeUid.current !== uid) return;
       console.error("Failed to update teacher patch note status:", error);
       showToast({
         tone: "error",
         title: "처리 상태를 바꾸지 못했습니다.",
         message: getTeacherPatchNoteErrorMessage(error),
       });
+    } finally {
+      mutationLocks.current.delete(lockKey);
+      if (activeUid.current === uid)
+        setBusyNoteIds((previous) => {
+          const next = new Set(previous);
+          next.delete(note.id);
+          return next;
+        });
     }
   };
 
   const handleDelete = async (note: TeacherPatchNote) => {
+    const lockKey = `${uid}:${note.id}`;
+    if (saving || mutationLocks.current.has(lockKey)) return;
     const confirmed = window.confirm(
       `"${truncate(getNotePreview(note), 40)}" 메모를 삭제할까요?`,
     );
     if (!confirmed) return;
+    mutationLocks.current.add(lockKey);
+    setBusyNoteIds((previous) => new Set(previous).add(note.id));
     try {
       await deleteTeacherPatchNote(uid, note);
-      if (editingNoteId === note.id) resetForm(currentPath);
+      if (activeUid.current !== uid) return;
+      if (activeEditingNoteId.current === note.id) resetForm(currentPath);
       showToast({ tone: "success", title: "패치 메모를 삭제했습니다." });
     } catch (error) {
+      if (activeUid.current !== uid) return;
       console.error("Failed to delete teacher patch note:", error);
       showToast({
         tone: "error",
         title: "패치 메모를 삭제하지 못했습니다.",
         message: getTeacherPatchNoteErrorMessage(error),
       });
+    } finally {
+      mutationLocks.current.delete(lockKey);
+      if (activeUid.current === uid)
+        setBusyNoteIds((previous) => {
+          const next = new Set(previous);
+          next.delete(note.id);
+          return next;
+        });
     }
   };
 
@@ -605,6 +684,7 @@ const TeacherPatchMemoController: React.FC = () => {
                 </span>
                 <textarea
                   ref={bodyRef}
+                  disabled={saving}
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
                   maxLength={2000}
@@ -624,6 +704,7 @@ const TeacherPatchMemoController: React.FC = () => {
                       <button
                         key={option.value}
                         type="button"
+                        disabled={saving}
                         onClick={() => setType(option.value)}
                         className={`inline-flex min-h-9 items-center justify-center gap-1 rounded-full border px-2 text-xs font-extrabold transition ${
                           active
@@ -654,6 +735,7 @@ const TeacherPatchMemoController: React.FC = () => {
                       <button
                         key={option.value}
                         type="button"
+                        disabled={saving}
                         onClick={() => setPriority(option.value)}
                         className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-full border px-3 text-xs font-extrabold transition ${
                           active
@@ -700,6 +782,7 @@ const TeacherPatchMemoController: React.FC = () => {
                         });
                       }
                     }}
+                    disabled={saving}
                     className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full border px-3 text-xs font-extrabold transition ${
                       selectingTarget
                         ? "border-rose-200 bg-rose-50 text-rose-700"
@@ -733,6 +816,7 @@ const TeacherPatchMemoController: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => resetForm(currentPath)}
+                    disabled={saving}
                     className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-extrabold text-slate-600 transition hover:bg-slate-50"
                   >
                     새 메모
@@ -741,7 +825,10 @@ const TeacherPatchMemoController: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={saving}
+                  disabled={
+                    saving ||
+                    (editingNoteId !== null && busyNoteIds.has(editingNoteId))
+                  }
                   className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                 >
                   <i
@@ -787,6 +874,10 @@ const TeacherPatchMemoController: React.FC = () => {
                   return (
                     <article
                       key={note.id}
+                      aria-busy={
+                        busyNoteIds.has(note.id) ||
+                        (saving && editingNoteId === note.id)
+                      }
                       className={`rounded-2xl border bg-white px-3 py-3 transition ${
                         editingNoteId === note.id
                           ? "border-blue-200 shadow-sm"
@@ -802,10 +893,13 @@ const TeacherPatchMemoController: React.FC = () => {
                               completed ? "open" : "done",
                             )
                           }
+                          disabled={saving || busyNoteIds.has(note.id)}
                           className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs transition ${
-                            completed
-                              ? "border-blue-500 bg-blue-600 text-white"
-                              : "border-slate-300 bg-white text-transparent hover:border-blue-300 hover:text-blue-500"
+                            busyNoteIds.has(note.id)
+                              ? "border-blue-300 bg-white text-blue-500"
+                              : completed
+                                ? "border-blue-500 bg-blue-600 text-white"
+                                : "border-slate-300 bg-white text-transparent hover:border-blue-300 hover:text-blue-500"
                           }`}
                           aria-label={
                             completed
@@ -813,12 +907,20 @@ const TeacherPatchMemoController: React.FC = () => {
                               : "패치 메모 완료 처리"
                           }
                         >
-                          <i className="fas fa-check" aria-hidden="true"></i>
+                          <i
+                            className={
+                              busyNoteIds.has(note.id)
+                                ? "fas fa-spinner fa-spin"
+                                : "fas fa-check"
+                            }
+                            aria-hidden="true"
+                          ></i>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => startEdit(note)}
+                          disabled={saving || busyNoteIds.has(note.id)}
                           className="min-w-0 flex-1 text-left"
                         >
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -889,6 +991,7 @@ const TeacherPatchMemoController: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => void handleDelete(note)}
+                            disabled={saving || busyNoteIds.has(note.id)}
                             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100"
                             aria-label="패치 메모 삭제"
                           >

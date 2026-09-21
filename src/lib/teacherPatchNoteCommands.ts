@@ -1,4 +1,5 @@
 import { auth, getHttpsCallable } from "./firebase";
+import { onAuthStateChanged, type User } from "firebase/auth";
 
 type PatchNoteCommand =
   | "createTeacherPatchNote"
@@ -23,6 +24,17 @@ type Session = {
 const generation = "w1r2-2026-08-09";
 const pendingCommands = new Map<string, string>();
 const commandFlights = new Map<string, Promise<CommandResult>>();
+const SESSION_CACHE_MS = 5 * 60 * 1000;
+let sessionCache: {
+  user: User;
+  authTime: number;
+  expiresAt: number;
+  promise: Promise<Session>;
+} | null = null;
+
+onAuthStateChanged(auth, () => {
+  sessionCache = null;
+});
 const assertOwner = (uid: string) => {
   if (!uid || auth.currentUser?.uid !== uid)
     throw new Error(
@@ -34,6 +46,64 @@ const isAmbiguous = (error: unknown) =>
     String((error as { code?: string })?.code || ""),
   );
 
+const getPatchNoteSession = async (ownerUid: string) => {
+  assertOwner(ownerUid);
+  const user = auth.currentUser!;
+  const token = await user.getIdTokenResult();
+  assertOwner(ownerUid);
+  if (auth.currentUser !== user) throw new Error("로그인 상태가 바뀌었습니다.");
+  const authTime = Number(token.claims.auth_time);
+  if (
+    sessionCache?.user === user &&
+    sessionCache.authTime === authTime &&
+    sessionCache.expiresAt > Date.now()
+  ) {
+    return { user, authTime, session: await sessionCache.promise };
+  }
+  const entry = {
+    user,
+    authTime,
+    expiresAt: Date.now() + SESSION_CACHE_MS,
+    promise: (async () => {
+      const open = await getHttpsCallable<
+        { authorityGeneration: string; protocolVersion: number },
+        Session
+      >("openApplicationSession");
+      assertOwner(ownerUid);
+      const { data: session } = await open({
+        authorityGeneration: generation,
+        protocolVersion: 2,
+      });
+      assertOwner(ownerUid);
+      if (
+        auth.currentUser !== user ||
+        session.status !== "active" ||
+        session.authTime !== authTime ||
+        session.authorityGeneration !== generation ||
+        !Number.isInteger(session.protocolVersion) ||
+        session.protocolVersion < 2 ||
+        !/^[a-f0-9]{64}$/.test(session.revision)
+      )
+        throw new Error(
+          "로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요.",
+        );
+      return session;
+    })(),
+  };
+  sessionCache = entry;
+  try {
+    return { user, authTime, session: await entry.promise };
+  } catch (error) {
+    if (sessionCache === entry) sessionCache = null;
+    throw error;
+  }
+};
+
+// Prepare only when the memo panel opens; concurrent saves share this handshake.
+export const prepareTeacherPatchNoteSession = async (ownerUid: string) => {
+  await getPatchNoteSession(ownerUid);
+};
+
 // Production denies direct memo writes. Use its existing owner-scoped Gateway
 // with the same general-session proof used by other routine teacher saves.
 const withPatchNoteSession = async (
@@ -41,46 +111,43 @@ const withPatchNoteSession = async (
   input: Record<string, unknown>,
   ownerUid: string,
 ): Promise<CommandResponse> => {
-  assertOwner(ownerUid);
-  const user = auth.currentUser!;
-  const token = await user.getIdTokenResult();
-  assertOwner(ownerUid);
-  const open = await getHttpsCallable<
-    { authorityGeneration: string; protocolVersion: number },
-    Session
-  >("openApplicationSession");
-  assertOwner(ownerUid);
-  const { data: session } = await open({
-    authorityGeneration: generation,
-    protocolVersion: 2,
-  });
-  assertOwner(ownerUid);
-  if (
-    session.status !== "active" ||
-    session.authTime !== Number(token.claims.auth_time) ||
-    session.authorityGeneration !== generation ||
-    !Number.isInteger(session.protocolVersion) ||
-    session.protocolVersion < 2 ||
-    !/^[a-f0-9]{64}$/.test(session.revision)
-  )
-    throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요.");
+  const { user, authTime, session } = await getPatchNoteSession(ownerUid);
   const call = await getHttpsCallable<Record<string, unknown>, CommandResponse>(
     name,
   );
   const currentToken = await user.getIdTokenResult();
   assertOwner(ownerUid);
-  if (currentToken.claims.auth_time !== token.claims.auth_time)
+  if (
+    auth.currentUser !== user ||
+    Number(currentToken.claims.auth_time) !== authTime
+  ) {
+    sessionCache = null;
     throw new Error("로그인 상태가 바뀌었습니다. 다시 저장해 주세요.");
-  const response = await call({
-    ...input,
-    _session: {
-      authorityGeneration: session.authorityGeneration,
-      protocolVersion: session.protocolVersion,
-      revision: session.revision,
-    },
-  });
-  assertOwner(ownerUid);
-  return response.data;
+  }
+  try {
+    // The Gateway still checks revocation, expiry and permissions on every call.
+    const response = await call({
+      ...input,
+      _session: {
+        authorityGeneration: session.authorityGeneration,
+        protocolVersion: session.protocolVersion,
+        revision: session.revision,
+      },
+    });
+    assertOwner(ownerUid);
+    if (auth.currentUser !== user)
+      throw new Error("로그인 상태가 바뀌었습니다.");
+    return response.data;
+  } catch (error) {
+    if (
+      /(?:unauthenticated|permission-denied)$/.test(
+        String((error as { code?: string })?.code),
+      )
+    ) {
+      if (sessionCache?.user === user) sessionCache = null;
+    }
+    throw error;
+  }
 };
 
 export const executeTeacherPatchNoteCommand = async (

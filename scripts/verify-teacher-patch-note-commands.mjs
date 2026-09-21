@@ -64,9 +64,16 @@ const gatewayHarness = (options = {}) => {
     },
   };
   const auth = { currentUser: user };
+  let authListener;
   const api = load(
     "src/lib/teacherPatchNoteCommands.ts",
     {
+      "firebase/auth": {
+        onAuthStateChanged: (_auth, listener) => {
+          authListener = listener;
+          return () => {};
+        },
+      },
       "./firebase": {
         auth,
         async getHttpsCallable(name) {
@@ -74,7 +81,14 @@ const gatewayHarness = (options = {}) => {
             calls.push({ name, data: plain(data) });
             if (name === "openApplicationSession") {
               options.onOpen?.(auth);
-              return { data: { ...validSession, ...options.session } };
+              return {
+                data: {
+                  ...validSession,
+                  ...(typeof options.session === "function"
+                    ? options.session()
+                    : options.session),
+                },
+              };
             }
             if (name === "executeCommand")
               return options.execute?.(data) ?? success;
@@ -86,6 +100,11 @@ const gatewayHarness = (options = {}) => {
       },
     },
     {
+      Date: class extends Date {
+        static now() {
+          return options.now?.() ?? Date.now();
+        }
+      },
       crypto: {
         randomUUID: () =>
           `00000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`,
@@ -95,6 +114,8 @@ const gatewayHarness = (options = {}) => {
   return {
     auth,
     calls,
+    prepare: () => api.prepareTeacherPatchNoteSession(owner),
+    authChanged: () => authListener(),
     run: (payload = commandPayload, uid = owner) =>
       api.executeTeacherPatchNoteCommand(
         "createTeacherPatchNote",
@@ -149,6 +170,125 @@ await check(
   },
 );
 
+await check("Repeated saves reuse the session handshake", async () => {
+  const h = gatewayHarness();
+  await h.prepare();
+  await h.run();
+  await h.run({ content: { ...commandPayload.content, body: "다음 메모" } });
+  assert.equal(
+    h.calls.filter((call) => call.name === "openApplicationSession").length,
+    1,
+  );
+  assert.equal(
+    h.calls.filter((call) => call.name === "executeCommand").length,
+    2,
+  );
+});
+
+await check(
+  "Different concurrent saves share one session handshake",
+  async () => {
+    const h = gatewayHarness();
+    await Promise.all([
+      h.prepare(),
+      h.run(),
+      h.run({ content: { ...commandPayload.content, body: "별도 메모" } }),
+    ]);
+    assert.equal(
+      h.calls.filter((call) => call.name === "openApplicationSession").length,
+      1,
+    );
+    assert.equal(
+      h.calls.filter((call) => call.name === "executeCommand").length,
+      2,
+    );
+  },
+);
+
+await check("Session proof expires after five minutes", async () => {
+  let now = 1000;
+  const h = gatewayHarness({ now: () => now });
+  await h.run();
+  now += 5 * 60 * 1000 - 1;
+  await h.run();
+  assert.equal(
+    h.calls.filter((call) => call.name === "openApplicationSession").length,
+    1,
+  );
+  now += 1;
+  await h.run();
+  assert.equal(
+    h.calls.filter((call) => call.name === "openApplicationSession").length,
+    2,
+  );
+});
+
+await check(
+  "Same UID reauthentication cannot reuse the old session proof",
+  async () => {
+    let authTime = 123;
+    const h = gatewayHarness({
+      tokenTime: () => authTime,
+      session: () => ({ authTime }),
+    });
+    await h.run();
+    h.auth.currentUser = { ...h.auth.currentUser };
+    await h.run();
+    authTime = 124;
+    await h.run();
+    assert.equal(
+      h.calls.filter((call) => call.name === "openApplicationSession").length,
+      3,
+    );
+  },
+);
+
+await check("Failed panel warm-up can recover on submit", async () => {
+  let attempts = 0;
+  const h = gatewayHarness({
+    onOpen: () => {
+      if (++attempts === 1) throw unavailable();
+    },
+  });
+  await assert.rejects(h.prepare());
+  assert.deepEqual(plain(await h.run()), result);
+  assert.equal(
+    h.calls.filter((call) => call.name === "openApplicationSession").length,
+    2,
+  );
+});
+
+await check(
+  "Auth changes and server auth denial invalidate the session cache",
+  async () => {
+    let denied = false;
+    const h = gatewayHarness({
+      execute: () => {
+        if (denied)
+          throw Object.assign(new Error("expired"), {
+            code: "functions/unauthenticated",
+          });
+        return success;
+      },
+    });
+    await h.run();
+    h.authChanged();
+    await h.run();
+    assert.equal(
+      h.calls.filter((call) => call.name === "openApplicationSession").length,
+      2,
+    );
+    denied = true;
+    await assert.rejects(h.run());
+    denied = false;
+    await h.run();
+    assert.equal(
+      h.calls.filter((call) => call.name === "openApplicationSession").length,
+      3,
+    );
+  },
+);
+
 await check(
   "Invalid session proof and changed auth_time cannot execute writes",
   async () => {
@@ -190,6 +330,10 @@ await check(
     const status = h.calls.find((call) => call.name === "getCommandStatus");
     assert.equal(status.data.commandId, execute.data.commandId);
     assert.deepEqual(status.data._session, execute.data._session);
+    assert.equal(
+      h.calls.filter((call) => call.name === "openApplicationSession").length,
+      1,
+    );
   },
 );
 
