@@ -47,8 +47,33 @@ interface Props {
   onFilterChange: (value: string) => void;
 }
 
-const shortDate = (date: string) =>
-  `${Number(date.slice(5, 7))}.${Number(date.slice(8, 10))}`;
+const readableDate = (date: string) =>
+  `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
+
+// Keep the configured hue readable on both white and the date badge's 22% tint.
+const readableEventColor = (color: string) => {
+  const rgb = color
+    .slice(1)
+    .match(/.{2}/g)!
+    .map((part) => parseInt(part, 16));
+  const luminance = (channels: number[]) =>
+    channels.reduce((sum, channel, index) => {
+      const value = channel / 255;
+      return (
+        sum +
+        (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4) *
+          [0.2126, 0.7152, 0.0722][index]
+      );
+    }, 0);
+  const background = luminance(
+    rgb.map((channel) => channel * 0.22 + 255 * 0.78),
+  );
+  let text = rgb;
+  while ((background + 0.05) / (luminance(text) + 0.05) < 4.5) {
+    text = text.map((channel) => Math.floor(channel * 0.9));
+  }
+  return `rgb(${text.join(", ")})`;
+};
 
 const TeacherWeekSchedule: React.FC<Props> = ({
   events,
@@ -185,8 +210,9 @@ const TeacherWeekSchedule: React.FC<Props> = ({
     );
     list.scrollTop = selectedRow ? selectedRow.offsetTop : 0;
   }, [selectedDate, weekStart, weekEvents]);
-  const month = Number(weekStart.slice(5, 7));
-  const lastMonth = Number(days[6].slice(5, 7));
+  const sameMonth = weekStart.slice(0, 7) === days[6].slice(0, 7);
+  const weekLabel = `${readableDate(weekStart)} – ${sameMonth ? `${Number(days[6].slice(8, 10))}일` : readableDate(days[6])}`;
+  const weekDescription = `${weekStart.slice(0, 4)}년 ${readableDate(weekStart)}부터 ${days[6].slice(0, 4)}년 ${readableDate(days[6])}까지`;
 
   return (
     <section
@@ -198,6 +224,33 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           <TeacherNavigationIcon name="calendar" />
           이번 주 학사 일정
         </h2>
+        <Link
+          to="/teacher/schedule"
+          className="teacher-week-schedule__calendar-link"
+          aria-label="전체 캘린더 보기"
+          title="전체 캘린더 보기"
+        >
+          <TeacherNavigationIcon name="calendar" />
+        </Link>
+      </div>
+      <div className="teacher-week-schedule__toolbar">
+        <span
+          className="teacher-week-schedule__range"
+          aria-live="polite"
+          aria-label={weekDescription}
+        >
+          {weekLabel}
+        </span>
+        <button
+          type="button"
+          className="teacher-week-schedule__today"
+          onClick={() => {
+            onWeekChange(getWeekStart(today));
+            onDateClick(today);
+          }}
+        >
+          이번 주
+        </button>
         <div className="teacher-week-schedule__filters">
           <select
             className="student-calendar-shell__filter-select"
@@ -264,56 +317,22 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 <path d="M12 5v14M5 12h14" />
               </svg>
             </button>
-            <Link to="/teacher/schedule" className="teacher-dashboard-link">
-              전체 보기 <span aria-hidden="true">→</span>
-            </Link>
           </div>
         </div>
       </div>
-      <div className="teacher-week-schedule__toolbar">
-        <span className="teacher-week-schedule__range" aria-live="polite">
-          {weekStart.replace(/-/g, ".")} – {days[6].replace(/-/g, ".")}
-        </span>
-        <div className="teacher-week-schedule__navigation">
-          <button
-            type="button"
-            aria-label="이전 주"
-            onClick={() => onWeekChange(shiftCalendarDate(weekStart, -7))}
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="m14 6-6 6 6 6" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onWeekChange(getWeekStart(today));
-              onDateClick(today);
-            }}
-          >
-            이번 주
-          </button>
-          <button
-            type="button"
-            aria-label="다음 주"
-            onClick={() => onWeekChange(shiftCalendarDate(weekStart, 7))}
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="m10 6 6 6-6 6" />
-            </svg>
-          </button>
-        </div>
-      </div>
       <div className="teacher-week-schedule__viewport">
-        <div
-          key={weekStart}
-          ref={contentRef}
-          className="teacher-week-schedule__content"
-        >
+        <div ref={contentRef} className="teacher-week-schedule__content">
           <div className="teacher-week-strip" aria-label="주간 날짜">
-            <strong className="teacher-week-strip__month">
-              {month === lastMonth ? `${month}월` : `${month}·${lastMonth}월`}
-            </strong>
+            <button
+              type="button"
+              className="teacher-week-strip__previous"
+              aria-label="이전 주"
+              onClick={() => onWeekChange(shiftCalendarDate(weekStart, -7))}
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m14 6-6 6 6 6" />
+              </svg>
+            </button>
             {days.map((date, index) => {
               const dayEvents = weekEvents.filter((event) =>
                 eventIncludesDate(event, date),
@@ -343,6 +362,16 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 </button>
               );
             })}
+            <button
+              type="button"
+              className="teacher-week-strip__next"
+              aria-label="다음 주"
+              onClick={() => onWeekChange(shiftCalendarDate(weekStart, 7))}
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m10 6 6 6-6 6" />
+              </svg>
+            </button>
           </div>
           <div
             ref={eventListRef}
@@ -375,18 +404,15 @@ const TeacherWeekSchedule: React.FC<Props> = ({
             {displayedEvents.map((event) => {
               const start = calendarDateKey(event.start);
               const end = calendarEventEndDate(event);
-              const isToday = eventIncludesDate(event, today);
               const meta = getScheduleCategoryMeta(event.eventType, categories);
               const eventColor =
                 event.eventType === "holiday"
-                  ? "var(--ws-danger, #ef4444)"
+                  ? "var(--ws-danger-text, #b91c1c)"
                   : getScheduleEventColor(event, categories);
               const dateLabel =
                 end > start
-                  ? `${shortDate(start)}–${shortDate(end)}`
-                  : isToday
-                    ? "오늘"
-                    : shortDate(start);
+                  ? `${readableDate(start)} – ${readableDate(end)}`
+                  : readableDate(start);
               const periodLabel =
                 event.eventType === "holiday"
                   ? "종일"
@@ -408,27 +434,30 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                   style={
                     {
                       "--schedule-event-color": eventColor,
+                      "--schedule-event-text-color":
+                        event.eventType === "holiday"
+                          ? eventColor
+                          : readableEventColor(eventColor),
                     } as React.CSSProperties
                   }
                 >
-                  <span className="teacher-week-event__date">
-                    <span
-                      className="teacher-week-event__dot"
-                      style={{ backgroundColor: eventColor }}
-                      aria-hidden="true"
-                    />
+                  <span
+                    className={`teacher-week-event__date${event.eventType !== "holiday" ? " teacher-week-event__date-badge" : ""}`}
+                  >
                     {dateLabel}
                   </span>
                   <span className="teacher-week-event__body">
-                    <strong className="teacher-week-event__ribbon">
+                    <strong className="teacher-week-event__title">
                       {event.title}
                     </strong>
-                    <span>
-                      {event.targetType === "class" && event.targetClass
-                        ? `${classLabel(event.targetClass)} · `
-                        : ""}
-                      {event.eventType === "holiday" ? "공휴일" : meta.label}
-                    </span>
+                    {event.eventType !== "holiday" && (
+                      <span>
+                        {event.targetType === "class" && event.targetClass
+                          ? `${classLabel(event.targetClass)} · `
+                          : ""}
+                        {meta.label}
+                      </span>
+                    )}
                   </span>
                   <span className="teacher-week-event__period">
                     {periodLabel}

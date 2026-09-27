@@ -103,46 +103,72 @@
   white-space: nowrap;
 }
 
+.teacher-week-schedule__calendar-link {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: 1px solid var(--ws-border-blue, #dbeafe);
+  border-radius: var(--radius-full, 9999px);
+  color: var(--ws-primary, #2563eb);
+}
+.teacher-week-schedule__calendar-link svg {
+  width: 24px;
+  height: 24px;
+}
+.teacher-week-schedule__calendar-link:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
 .teacher-week-schedule__toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 8px;
-  min-height: 40px;
+  margin-block: 8px 12px;
 }
 
 .teacher-week-schedule__range {
-  font-size: var(--ws-type-small, 0.875rem);
-  color: var(--ws-text-muted, #6b7280);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: var(--ws-type-body, 1rem);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.teacher-week-schedule__navigation {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.teacher-week-schedule__navigation button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 44px;
-  height: 44px;
-  padding-inline: 8px;
+.teacher-week-schedule__today {
+  min-height: 44px;
+  padding: 8px;
   border-radius: var(--radius-md, 8px);
-  font-size: var(--ws-type-small, 0.875rem);
-  color: var(--ws-text-muted, #6b7280);
+  color: var(--ws-primary, #2563eb);
+  font-size: var(--ws-type-body, 1rem);
+  font-weight: 700;
 }
 
-.teacher-week-schedule__navigation button:hover {
-  background: var(--ws-primary-soft, #eff6ff);
+.teacher-week-strip__previous,
+.teacher-week-strip__next {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md, 8px);
   color: var(--ws-primary, #2563eb);
 }
 
-.teacher-week-schedule__navigation svg,
+.teacher-week-schedule__today:hover,
+.teacher-week-strip__previous:hover,
+.teacher-week-strip__next:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.teacher-week-strip__previous svg,
+.teacher-week-strip__next svg,
 .teacher-week-schedule__filters svg {
   width: 20px;
   height: 20px;
@@ -154,20 +180,13 @@
 
 .teacher-week-strip {
   display: grid;
-  grid-template-columns: 48px repeat(7, minmax(0, 1fr));
+  grid-template-columns: 44px repeat(7, minmax(0, 1fr)) 44px;
   align-items: center;
   flex-shrink: 0;
   padding: 8px 4px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: var(--radius-md, 8px);
   background: var(--ws-surface-subtle, #f8fafc);
-}
-
-.teacher-week-strip__month {
-  text-align: center;
-  font-size: var(--ws-type-body, 1rem);
-  white-space: nowrap;
-  color: var(--ws-text-strong, #111827);
 }
 
 .teacher-week-strip__day {
@@ -365,7 +384,7 @@
 
 .teacher-week-event {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr) auto;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -384,20 +403,25 @@
 }
 
 .teacher-week-event__date {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--ws-type-small, 0.875rem);
-  font-weight: 500;
+  justify-self: start;
+  padding: 4px 8px;
+  font-size: var(--ws-type-body, 1rem);
+  font-weight: 700;
+  color: var(--schedule-event-text-color);
+  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 
-.teacher-week-event__dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.teacher-week-event__date-badge {
+  border: 1px solid var(--schedule-event-color);
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(
+    in srgb,
+    var(--schedule-event-color) 22%,
+    var(--ws-surface, #fff)
+  );
 }
+
 .teacher-week-event__body {
   display: flex;
   min-width: 0;
@@ -410,16 +434,8 @@
   line-height: 1.5;
 }
 
-.teacher-week-event__ribbon {
-  padding: 4px 8px;
-  border: 1px solid var(--schedule-event-color);
-  border-radius: var(--radius-sm, 4px);
-  background: color-mix(
-    in srgb,
-    var(--schedule-event-color) 22%,
-    var(--ws-surface, #fff)
-  );
-  color: var(--ws-text-strong, #111827);
+.teacher-week-event__title {
+  color: var(--schedule-event-text-color);
   overflow-wrap: anywhere;
 }
 .teacher-week-event__body > span,
@@ -623,11 +639,20 @@
     gap: 4px;
   }
   .teacher-week-strip {
-    grid-template-columns: 32px repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     padding-inline: 0;
   }
-  .teacher-week-strip__month {
-    font-size: var(--ws-type-small, 0.875rem);
+  .teacher-week-strip__previous {
+    grid-column: 1 / 3;
+    grid-row: 1;
+  }
+  .teacher-week-strip__next {
+    grid-column: 6 / 8;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .teacher-week-strip__day {
+    grid-row: 2;
   }
   .teacher-week-strip__day strong {
     width: 32px;
@@ -637,9 +662,6 @@
   .teacher-week-schedule__toolbar {
     flex-wrap: wrap;
   }
-  .teacher-week-schedule__navigation {
-    margin-left: auto;
-  }
   .teacher-week-schedule__filters {
     flex-wrap: wrap;
   }
@@ -648,11 +670,12 @@
     margin-left: auto;
   }
   .teacher-week-event {
-    grid-template-columns: 72px minmax(0, 1fr) auto;
+    grid-template-columns: 104px minmax(0, 1fr) auto;
     gap: 8px;
   }
   .teacher-week-event__date {
-    gap: 4px;
+    font-size: var(--ws-type-small, 0.875rem);
+    padding-inline: 4px;
   }
   .teacher-week-event__body strong {
     font-size: var(--ws-type-body, 1rem);
