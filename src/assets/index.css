@@ -4,6 +4,50 @@
 @tailwind components;
 @tailwind utilities;
 
+.notice-image-manager {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 80rem;
+  max-height: 90dvh;
+  overflow: hidden;
+}
+.notice-image-manager__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4, 16px);
+}
+.notice-image-manager__columns,
+.notice-image-editor__columns {
+  display: grid;
+  gap: var(--space-4, 16px);
+  min-width: 0;
+}
+.notice-image-manager__columns[hidden] { display: none; }
+.notice-image-manager__list { order: 2; min-width: 0; }
+.notice-image-manager__editor,
+.notice-image-editor__columns > * { min-width: 0; }
+.notice-image-editor__period,
+.notice-image-editor__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2, 8px);
+}
+.notice-image-editor input,
+.notice-image-editor select { min-width: 0; max-width: 100%; }
+.notice-image-editor__columns img { max-height: 180px; }
+@media (min-width: 768px) {
+  .notice-image-editor__columns { grid-template-columns: 16rem minmax(0, 1fr); }
+}
+@media (min-width: 1024px) {
+  .notice-image-manager__columns { grid-template-columns: 16rem minmax(0, 1fr); }
+  .notice-image-manager__list { order: 0; }
+  .notice-image-manager__editor { order: 1; }
+}
+@media (max-width: 639px) {
+  .notice-image-editor__period { grid-template-columns: minmax(0, 1fr); }
+}
+
 .teacher-floating-action-above-patch {
   right: calc(env(safe-area-inset-right, 0px) + var(--space-4));
   bottom: calc(

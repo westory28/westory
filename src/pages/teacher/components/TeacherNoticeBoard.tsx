@@ -9,8 +9,7 @@ import {
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
-import NoticeModal from "./NoticeModal";
-import NoticeOrderModal from "./NoticeOrderModal";
+import NoticeManagerModal from "./NoticeManagerModal";
 import { getYearSemester } from "../../../lib/semesterScope";
 
 interface Notice {
@@ -288,19 +287,17 @@ const TeacherNoticeBoard: React.FC = () => {
         )}
       </div>
 
-      <NoticeModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        noticeData={selectedNotice}
-        onSave={() => {
-          /* Real-time updates handle list refresh */
-        }}
-      />
-      <NoticeOrderModal
-        isOpen={isOrderModalOpen}
-        notices={notices}
-        onClose={() => setIsOrderModalOpen(false)}
-      />
+      {(isModalOpen || isOrderModalOpen) && (
+        <NoticeManagerModal
+          notices={notices}
+          initialNotice={selectedNotice}
+          initialOrder={isOrderModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setIsOrderModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -7,6 +7,7 @@ import { db } from "../../../lib/firebase";
 interface NoticeOrderItem {
   id: string;
   category: string;
+  content?: string;
   targetType: string;
   targetClass?: string;
   imageUrl?: string;
@@ -18,6 +19,9 @@ interface NoticeOrderModalProps {
   isOpen: boolean;
   notices: NoticeOrderItem[];
   onClose: () => void;
+  embedded?: boolean;
+  onBusyChange?: (busy: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const getCategoryLabel = (category?: string) => {
@@ -33,23 +37,52 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
   isOpen,
   notices,
   onClose,
+  embedded = false,
+  onBusyChange,
+  onDirtyChange,
 }) => {
   const { config } = useAuth();
   const { showToast } = useAppToast();
   const [items, setItems] = useState<NoticeOrderItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const inFlight = useRef(false);
+  const dirty = useRef(false);
+  const [conflicted, setConflicted] = useState(false);
+  const source = useRef(notices);
+  useEffect(() => {
+    onBusyChange?.(saving);
+  }, [saving, onBusyChange]);
+  useEffect(
+    () => () => {
+      onBusyChange?.(false);
+      onDirtyChange?.(false);
+    },
+    [onBusyChange, onDirtyChange],
+  );
 
   useEffect(() => {
     if (isOpen) {
+      // Preserve a draft when another browser updates the list.
+      if (dirty.current && source.current !== notices) {
+        setConflicted(true);
+        return;
+      }
+      source.current = notices;
       setItems(notices);
+    } else {
+      dirty.current = false;
+      setConflicted(false);
     }
   }, [isOpen, notices]);
 
   if (!isOpen) return null;
 
   const moveItem = (index: number, direction: -1 | 1) => {
+    if (inFlight.current || conflicted) return;
     const nextIndex = index + direction;
     if (nextIndex < 0 || nextIndex >= items.length) return;
+    dirty.current = true;
+    onDirtyChange?.(true);
     setItems((current) => {
       const next = [...current];
       [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
@@ -58,7 +91,8 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
   };
 
   const handleSave = async () => {
-    if (!config) return;
+    if (!config || inFlight.current || conflicted) return;
+    inFlight.current = true;
     setSaving(true);
     try {
       const batch = writeBatch(db);
@@ -75,6 +109,8 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
         tone: "success",
         title: "알림장 순서가 저장되었습니다.",
       });
+      dirty.current = false;
+      onDirtyChange?.(false);
       onClose();
     } catch (error) {
       console.error("Failed to save notice order:", error);
@@ -84,17 +120,35 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
         message: "잠시 후 다시 시도해 주세요.",
       });
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };
 
+  const closeEditor = () => {
+    if (inFlight.current) return;
+    if (
+      dirty.current &&
+      !confirm("저장하지 않은 순서 변경을 취소하시겠습니까?")
+    )
+      return;
+    onClose();
+  };
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
+      className={
+        embedded
+          ? ""
+          : "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      }
+      onClick={embedded || saving ? undefined : closeEditor}
     >
       <div
-        className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        className={
+          embedded
+            ? "min-w-0"
+            : "flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        }
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
@@ -109,15 +163,25 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-700"
+            onClick={closeEditor}
+            disabled={saving}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-700"
             aria-label="닫기"
           >
             <i className="fas fa-times"></i>
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        {conflicted && (
+          <p role="alert" className="px-4 py-3 text-sm text-red-700">
+            다른 변경이 확인되었습니다. 순서 편집을 닫고 다시 열어 주세요.
+          </p>
+        )}
+        <div
+          className={
+            embedded ? "py-4" : "min-h-0 flex-1 overflow-y-auto px-6 py-4"
+          }
+        >
           {items.length === 0 ? (
             <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm font-bold text-gray-400">
               순서를 편집할 알림장 이미지가 없습니다.
@@ -127,9 +191,9 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
               {items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[42px_88px_minmax(0,1fr)_84px] items-center gap-3 rounded-xl border border-gray-200 bg-white p-3"
+                  className="grid grid-cols-[48px_minmax(0,1fr)_88px] items-center gap-3 rounded-xl border border-gray-200 bg-white p-3"
                 >
-                  <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
+                  <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
                     {index + 1}
                   </div>
                   <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
@@ -147,7 +211,8 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
                   </div>
                   <div className="min-w-0">
                     <div className="truncate text-sm font-extrabold text-gray-900">
-                      {getCategoryLabel(item.category)}
+                      {index + 1}.{" "}
+                      {item.content || getCategoryLabel(item.category)}
                     </div>
                     <div className="mt-1 truncate text-xs font-bold text-gray-500">
                       {item.targetType === "class"
@@ -159,8 +224,8 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
                     <button
                       type="button"
                       onClick={() => moveItem(index, -1)}
-                      disabled={index === 0 || saving}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35"
+                      disabled={index === 0 || saving || conflicted}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35"
                       aria-label="위로 이동"
                     >
                       <i className="fas fa-chevron-up"></i>
@@ -168,8 +233,10 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
                     <button
                       type="button"
                       onClick={() => moveItem(index, 1)}
-                      disabled={index === items.length - 1 || saving}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35"
+                      disabled={
+                        index === items.length - 1 || saving || conflicted
+                      }
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35"
                       aria-label="아래로 이동"
                     >
                       <i className="fas fa-chevron-down"></i>
@@ -184,7 +251,7 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
         <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeEditor}
             disabled={saving}
             className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-extrabold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
@@ -193,7 +260,7 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || items.length === 0}
+            disabled={saving || conflicted || items.length === 0}
             className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? "저장 중..." : "순서 저장"}

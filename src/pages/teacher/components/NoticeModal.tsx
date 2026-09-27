@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import {
   collection,
   deleteDoc,
@@ -32,6 +32,10 @@ interface NoticeModalProps {
   onClose: () => void;
   noticeData?: any;
   onSave: () => void;
+  embedded?: boolean;
+  onBusyChange?: (busy: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onPreview?: (url: string) => void;
 }
 
 const NOTICE_CATEGORIES = [
@@ -63,6 +67,10 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
   onClose,
   noticeData,
   onSave,
+  embedded = false,
+  onBusyChange,
+  onDirtyChange,
+  onPreview,
 }) => {
   const { config } = useAuth();
   const { showToast } = useAppToast();
@@ -82,8 +90,26 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const inFlight = useRef(false);
+  const dirty = useRef(false);
+  const callbacks = useRef({ onBusyChange, onDirtyChange });
+  callbacks.current = { onBusyChange, onDirtyChange };
 
   useEffect(() => {
+    callbacks.current.onBusyChange?.(loading);
+  }, [loading]);
+
+  useEffect(
+    () => () => {
+      callbacks.current.onBusyChange?.(false);
+      callbacks.current.onDirtyChange?.(false);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    dirty.current = false;
+    callbacks.current.onDirtyChange?.(false);
     if (!isOpen) return;
 
     if (noticeData) {
@@ -165,7 +191,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
   if (!isOpen) return null;
 
   const handleSave = async () => {
-    if (!config) return;
+    if (!config || inFlight.current) return;
     if (!imageFile && !noticeData?.imageUrl) {
       showToast({
         tone: "warning",
@@ -200,6 +226,8 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
       });
       return;
     }
+    inFlight.current = true;
+    callbacks.current.onBusyChange?.(true);
     setLoading(true);
 
     try {
@@ -226,7 +254,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
 
       const data: Record<string, unknown> = {
         category,
-        content: "",
+        content: noticeData?.content || "",
         targetType,
         targetClass:
           targetType === "class" ? `${targetGrade}-${targetClass}` : null,
@@ -247,6 +275,8 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
       if (imageFile && noticeData?.imageStoragePath) {
         void tryDeleteNoticeImage(noticeData.imageStoragePath);
       }
+      dirty.current = false;
+      callbacks.current.onDirtyChange?.(false);
       onSave();
       showToast({
         tone: "success",
@@ -267,22 +297,29 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
             : "잠시 후 다시 시도해 주세요.",
       });
     } finally {
+      inFlight.current = false;
+      callbacks.current.onBusyChange?.(false);
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
     if (
+      inFlight.current ||
       !noticeData ||
       !config ||
       !confirm("이 알림장 이미지를 삭제하시겠습니까?")
     )
       return;
+    inFlight.current = true;
+    callbacks.current.onBusyChange?.(true);
     setLoading(true);
     try {
       const path = `years/${config.year}/semesters/${config.semester}/notices`;
       await deleteDoc(doc(db, path, noticeData.id));
       void tryDeleteNoticeImage(noticeData.imageStoragePath);
+      dirty.current = false;
+      callbacks.current.onDirtyChange?.(false);
       onSave();
       showToast({
         tone: "success",
@@ -297,275 +334,326 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
         message: "잠시 후 다시 시도해 주세요.",
       });
     } finally {
+      inFlight.current = false;
+      callbacks.current.onBusyChange?.(false);
       setLoading(false);
     }
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
+  const closeEditor = () => {
+    if (inFlight.current) return;
+    if (dirty.current && !confirm("저장하지 않은 변경을 취소하시겠습니까?"))
+      return;
+    onClose();
+  };
+  const inputClass =
+    "min-h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:bg-gray-50 disabled:text-gray-400";
+  const labelClass = "mb-1 block text-sm font-extrabold text-gray-800";
+  const title = noticeData ? "알림장 이미지 수정" : "알림장 이미지 등록";
+  const editor = (
+    <form
+      className="notice-image-editor"
+      aria-busy={loading}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void handleSave();
+      }}
+      onChangeCapture={() => {
+        if (!inFlight.current) {
+          dirty.current = true;
+          callbacks.current.onDirtyChange?.(true);
+        }
+      }}
     >
-      <div
-        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+      {embedded && (
+        <h3 className="mb-3 text-lg font-extrabold text-gray-900">{title}</h3>
+      )}
+      <fieldset
+        disabled={loading}
+        className="notice-image-editor__columns min-w-0"
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
-          <h3 className="text-xl font-extrabold text-gray-900">
-            <i className="fas fa-image mr-2 text-blue-600"></i>
-            {noticeData ? "알림장 이미지 수정" : "알림장 이미지 등록"}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-700"
-            aria-label="닫기"
-          >
-            <i className="fas fa-times"></i>
-          </button>
-        </div>
-
-        <div className="grid min-h-0 gap-5 overflow-y-auto px-6 py-5 md:grid-cols-[minmax(0,1fr)_220px]">
-          <div className="space-y-4">
-            <div className="block">
-              <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                알림장 이미지
-              </span>
-              <p className="mb-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold leading-relaxed text-blue-800">
-                학생 대시보드 배너 최적 크기는{" "}
-                <strong>
-                  {NOTICE_IMAGE_RECOMMENDED_WIDTH} x{" "}
-                  {NOTICE_IMAGE_RECOMMENDED_HEIGHT}px
-                </strong>
-                입니다. 이 16:9 비율이면 양옆 여백 없이 보이며, 새 이미지는 저장
-                시 가운데 기준으로 16:9에 맞춰 보정됩니다.
-              </p>
-              <input
-                id={fileInputId}
-                type="file"
-                accept="image/*"
-                onChange={(event) =>
-                  setImageFile(event.target.files?.[0] || null)
-                }
-                className="sr-only"
+        <legend className="sr-only">{title}</legend>
+        <div className="min-w-0 space-y-2">
+          <label htmlFor={fileInputId} className={labelClass}>
+            알림장 이미지
+          </label>
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt="알림장 미리보기"
+                className="aspect-[16/9] max-h-[180px] w-full object-cover"
               />
-              <label
-                htmlFor={fileInputId}
-                className={`group flex min-h-14 cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-extrabold transition focus-within:ring-2 focus-within:ring-blue-200 ${
-                  imageFile
-                    ? "border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 active:bg-blue-200"
-                    : "border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100"
-                }`}
-              >
-                <span className="rounded-md bg-blue-600 px-3 py-2 text-white transition group-hover:bg-blue-700 group-active:bg-blue-800">
-                  파일 선택
-                </span>
-                <span className="min-w-0 truncate">
-                  {imageFile?.name || "선택된 파일 없음"}
-                </span>
-              </label>
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-              {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt="알림장 미리보기"
-                  className="aspect-[16/9] w-full object-cover"
-                />
-              ) : (
-                <div className="flex aspect-[16/9] items-center justify-center text-sm font-bold text-gray-400">
-                  이미지를 선택해 주세요.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                공개 기간
-              </span>
-              <div className="grid grid-cols-1 gap-2">
-                <label className="block">
-                  <span className="mb-1 block text-xs font-extrabold text-gray-700">
-                    공개 시작
-                  </span>
-                  <input
-                    type="datetime-local"
-                    value={publishAt}
-                    onChange={(event) => setPublishAt(event.target.value)}
-                    className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm font-bold outline-none focus:border-blue-500"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-extrabold text-gray-700">
-                    공개 종료
-                  </span>
-                  <input
-                    type="datetime-local"
-                    value={expiresAt}
-                    onChange={(event) => setExpiresAt(event.target.value)}
-                    className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm font-bold outline-none focus:border-blue-500"
-                  />
-                </label>
+            ) : (
+              <div className="flex aspect-[16/9] max-h-[180px] items-center justify-center text-sm font-bold text-gray-500">
+                이미지를 선택해 주세요.
               </div>
-            </div>
-
-            <div>
-              <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                분류
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                {NOTICE_CATEGORIES.map((option) => (
-                  <label key={option.val} className="cursor-pointer">
-                    <input
-                      type="radio"
-                      name="noticeCategory"
-                      value={option.val}
-                      checked={category === option.val}
-                      onChange={(event) => setCategory(event.target.value)}
-                      className="peer sr-only"
-                    />
-                    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-center text-xs font-extrabold text-gray-700 transition peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:text-blue-700">
-                      {option.label}
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {category === "dday" && (
-              <label className="block">
-                <span className="mb-1 block text-xs font-extrabold text-gray-700">
-                  목표 날짜
-                </span>
-                <input
-                  type="date"
-                  value={targetDate}
-                  onChange={(event) => setTargetDate(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm font-bold outline-none focus:border-blue-500"
-                />
-              </label>
             )}
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-extrabold text-gray-700">
-                연동 게시물
-              </span>
+          </div>
+          <input
+            id={fileInputId}
+            type="file"
+            accept="image/*"
+            aria-describedby={`${fileInputId}-help`}
+            onChange={(event) => {
+              const file = event.target.files?.[0] || null;
+              setImageFile(file);
+              if (!file) setPreviewUrl(noticeData?.imageUrl || "");
+            }}
+            className="min-h-11 w-full min-w-0 rounded-lg border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-blue-200"
+          />
+          <p
+            id={`${fileInputId}-help`}
+            className="text-xs leading-5 text-gray-500"
+          >
+            권장 {NOTICE_IMAGE_RECOMMENDED_WIDTH} ×{" "}
+            {NOTICE_IMAGE_RECOMMENDED_HEIGHT}px · 16:9 중앙 맞춤·압축
+          </p>
+          {noticeData && (
+            <p className="text-xs leading-5 text-gray-500">
+              선택하지 않으면 기존 이미지를 유지합니다.
+            </p>
+          )}
+          {previewUrl && onPreview && (
+            <button
+              type="button"
+              onClick={() => onPreview(previewUrl)}
+              className="min-h-11 rounded-lg border border-gray-200 px-3 text-sm font-bold text-gray-700 disabled:opacity-50"
+            >
+              크게 미리보기
+            </button>
+          )}
+        </div>
+        <div className="min-w-0 space-y-3">
+          <div>
+            <div className="notice-image-editor__period">
+              <label className="block min-w-0">
+                <span className={labelClass}>공개 시작</span>
+                <input
+                  type="datetime-local"
+                  value={publishAt}
+                  onChange={(event) => setPublishAt(event.target.value)}
+                  className={inputClass}
+                  aria-describedby={`${fileInputId}-period-help`}
+                />
+              </label>
+              <label className="block min-w-0">
+                <span className={labelClass}>공개 종료</span>
+                <input
+                  type="datetime-local"
+                  value={expiresAt}
+                  onChange={(event) => setExpiresAt(event.target.value)}
+                  className={inputClass}
+                  aria-describedby={`${fileInputId}-period-help`}
+                />
+              </label>
+            </div>
+            <p
+              id={`${fileInputId}-period-help`}
+              className="mt-1 text-xs leading-5 text-gray-500"
+            >
+              시작 공란: 바로 공개 · 종료 공란: 계속 공개
+            </p>
+          </div>
+          <div className="notice-image-editor__pair">
+            <label className="block min-w-0">
+              <span className={labelClass}>분류</span>
               <select
-                value={developerLogPostId}
-                onChange={(event) => setDeveloperLogPostId(event.target.value)}
-                disabled={developerLogLoading}
-                className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className={inputClass}
               >
-                <option value="">
-                  {developerLogLoading ? "게시물 불러오는 중..." : "연동 없음"}
-                </option>
-                {developerLogPostId &&
-                  !developerLogPosts.some(
-                    (post) => post.id === developerLogPostId,
-                  ) && (
-                    <option value={developerLogPostId}>
-                      현재 연결된 게시물
-                    </option>
-                  )}
-                {developerLogPosts.map((post) => (
-                  <option key={post.id} value={post.id}>
-                    {post.version ? `[${post.version}] ` : ""}
-                    {post.title || "제목 없는 게시물"}
+                {!NOTICE_CATEGORIES.some(
+                  (option) => option.val === category,
+                ) && (
+                  <option value={category}>
+                    {category === "notice" ? "공지" : "기존 분류"}
+                  </option>
+                )}
+                {NOTICE_CATEGORIES.map((option) => (
+                  <option key={option.val} value={option.val}>
+                    {option.label}
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
-                선택하면 학생 대시보드 배너 클릭 시 해당 개발자 일지로
-                이동합니다.
-              </p>
             </label>
-
-            <div>
-              <span className="mb-2 block text-sm font-extrabold text-gray-800">
-                대상
-              </span>
-              <div className="space-y-2">
-                <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-gray-800">
-                  <input
-                    type="radio"
-                    name="targetType"
-                    value="common"
-                    checked={targetType === "common"}
-                    onChange={() => setTargetType("common")}
-                    className="text-blue-600"
-                  />
+            <label className="block min-w-0">
+              <span className={labelClass}>대상</span>
+              <select
+                value={targetType}
+                onChange={(event) => setTargetType(event.target.value)}
+                className={inputClass}
+              >
+                <option
+                  value={noticeData?.targetType === "all" ? "all" : "common"}
+                >
                   전체 공통
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-gray-800">
+                </option>
+                <option value="class">반 선택</option>
+              </select>
+            </label>
+          </div>
+          {(category === "dday" || targetType === "class") && (
+            <div className="notice-image-editor__pair">
+              {category === "dday" && (
+                <label className="block min-w-0">
+                  <span className={labelClass}>목표 날짜</span>
                   <input
-                    type="radio"
-                    name="targetType"
-                    value="class"
-                    checked={targetType === "class"}
-                    onChange={() => setTargetType("class")}
-                    className="text-blue-600"
+                    type="date"
+                    value={targetDate}
+                    onChange={(event) => setTargetDate(event.target.value)}
+                    className={inputClass}
                   />
-                  반 선택
                 </label>
-              </div>
-
+              )}
               {targetType === "class" && (
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <select
-                    value={targetGrade}
-                    onChange={(event) => setTargetGrade(event.target.value)}
-                    className="h-10 rounded-lg border border-gray-300 bg-white text-center text-sm font-bold outline-none"
-                  >
-                    {[1, 2, 3].map((grade) => (
-                      <option key={grade} value={grade}>
-                        {grade}학년
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={targetClass}
-                    onChange={(event) => setTargetClass(event.target.value)}
-                    className="h-10 rounded-lg border border-gray-300 bg-white text-center text-sm font-bold outline-none"
-                  >
-                    {Array.from({ length: 12 }, (_, index) => index + 1).map(
-                      (className) => (
-                        <option key={className} value={className}>
-                          {className}반
+                <div className="notice-image-editor__pair">
+                  <label className="block min-w-0">
+                    <span className={labelClass}>학년</span>
+                    <select
+                      value={targetGrade}
+                      onChange={(event) => setTargetGrade(event.target.value)}
+                      className={inputClass}
+                    >
+                      {!["1", "2", "3"].includes(targetGrade) && (
+                        <option value={targetGrade}>{targetGrade}학년</option>
+                      )}
+                      {[1, 2, 3].map((grade) => (
+                        <option key={grade} value={grade}>
+                          {grade}학년
                         </option>
-                      ),
-                    )}
-                  </select>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block min-w-0">
+                    <span className={labelClass}>반</span>
+                    <select
+                      value={targetClass}
+                      onChange={(event) => setTargetClass(event.target.value)}
+                      className={inputClass}
+                    >
+                      {!Array.from({ length: 12 }, (_, index) =>
+                        String(index + 1),
+                      ).includes(targetClass) && (
+                        <option value={targetClass}>{targetClass}반</option>
+                      )}
+                      {Array.from({ length: 12 }, (_, index) => index + 1).map(
+                        (className) => (
+                          <option key={className} value={className}>
+                            {className}반
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
                 </div>
               )}
             </div>
-          </div>
+          )}
+          <label className="block min-w-0">
+            <span className={labelClass}>연동 게시물</span>
+            <select
+              value={developerLogPostId}
+              onChange={(event) => setDeveloperLogPostId(event.target.value)}
+              disabled={loading || developerLogLoading}
+              className={inputClass}
+              aria-describedby={`${fileInputId}-post-help`}
+            >
+              <option value="">
+                {developerLogLoading ? "게시물 불러오는 중..." : "연동 없음"}
+              </option>
+              {developerLogPostId &&
+                !developerLogPosts.some(
+                  (post) => post.id === developerLogPostId,
+                ) && (
+                  <option value={developerLogPostId}>현재 연결된 게시물</option>
+                )}
+              {developerLogPosts.map((post) => (
+                <option key={post.id} value={post.id}>
+                  {post.version ? `[${post.version}] ` : ""}
+                  {post.title || "제목 없는 게시물"}
+                </option>
+              ))}
+            </select>
+            <span
+              id={`${fileInputId}-post-help`}
+              className="mt-1 block text-xs leading-5 text-gray-500"
+            >
+              학생이 이미지를 누르면 연결한 개발자 일지로 이동합니다.
+            </span>
+          </label>
         </div>
-
-        <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
-          <div>
-            {noticeData && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={loading}
-                className="rounded-lg px-3 py-2 text-sm font-extrabold text-red-600 hover:bg-red-50 disabled:opacity-50"
-              >
-                삭제
-              </button>
-            )}
-          </div>
+      </fieldset>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+        <div>
+          {noticeData && (
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              disabled={loading}
+              className="min-h-11 rounded-lg px-3 text-sm font-extrabold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              삭제
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={handleSave}
+            onClick={closeEditor}
             disabled={loading}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-blue-700 disabled:opacity-50"
+            className="min-h-11 rounded-lg border border-gray-200 px-4 text-sm font-extrabold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? "저장 중..." : noticeData ? "수정 저장" : "게시하기"}
           </button>
         </div>
+      </div>
+    </form>
+  );
+
+  if (embedded) return editor;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={closeEditor}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${fileInputId}-title`}
+        className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+          <h3
+            id={`${fileInputId}-title`}
+            className="text-xl font-extrabold text-gray-900"
+          >
+            <i
+              className="fas fa-image mr-2 text-blue-600"
+              aria-hidden="true"
+            ></i>
+            {title}
+          </h3>
+          <button
+            type="button"
+            onClick={closeEditor}
+            disabled={loading}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
+            aria-label="닫기"
+          >
+            <i className="fas fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div className="p-4">{editor}</div>
       </div>
     </div>
   );

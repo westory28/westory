@@ -190,6 +190,8 @@ Icon-only controls:
 
 ### Modals and Panels
 
+- 알림장 관리 팝업은 기존 `d360227` 레이아웃을 따른다: 최대 80rem, 목록 16rem, 이미지 영역 16rem/최대 높이 180px, 목록 3개씩 표시. 1024px 미만에서는 편집기를 먼저 배치하고 팝업 본문 하나만 스크롤한다. 간격과 색상은 기존 토큰을 사용한다.
+
 - Backdrop: `--ws-overlay`.
 - Surface: `--ws-surface`.
 - Radius: `--radius-xl`.
