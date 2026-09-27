@@ -324,8 +324,6 @@ const TeacherPatchMemoController: React.FC = () => {
         retryNotesSubscription.current = false;
         setSubscriptionAttempt((attempt) => attempt + 1);
       }
-      // A failed warm-up must not erase a draft; submit reports actionable errors.
-      void prepareTeacherPatchNoteSession(uid).catch(() => {});
     }
   }, [open, uid, isTeacherRoute, canUsePatchMemo]);
 
@@ -334,14 +332,35 @@ const TeacherPatchMemoController: React.FC = () => {
       setNotes([]);
       return undefined;
     }
-    return subscribeTeacherPatchNotes(uid, setNotes, () => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    const handleError = () => {
+      if (cancelled) return;
       retryNotesSubscription.current = true;
       showToast({
         tone: "error",
         title: "패치 메모를 불러오지 못했습니다.",
         message: "권한이나 네트워크 상태를 확인해 주세요.",
       });
-    });
+    };
+    // Production reads require an active application session, including on
+    // initial login before the memo panel is opened.
+    void prepareTeacherPatchNoteSession(uid)
+      .then(() => {
+        if (cancelled) return;
+        unsubscribe = subscribeTeacherPatchNotes(
+          uid,
+          (nextNotes) => {
+            if (!cancelled) setNotes(nextNotes);
+          },
+          handleError,
+        );
+      })
+      .catch(handleError);
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [canUsePatchMemo, isTeacherRoute, showToast, uid, subscriptionAttempt]);
 
   useEffect(() => {

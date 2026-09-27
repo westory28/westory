@@ -47,7 +47,7 @@ const text = (node) => {
   return text(node.props?.children);
 };
 
-const harness = (operations = {}) => {
+const harness = async (operations = {}, options = {}) => {
   const slots = [];
   const effects = [];
   const calls = [];
@@ -58,6 +58,11 @@ const harness = (operations = {}) => {
   let listener;
   let errorListener;
   let subscriptions = 0;
+  let preparations = 0;
+  const authState = {
+    currentUser: { uid: "teacher" },
+    userData: { role: "admin" },
+  };
   const sameDeps = (a, b) =>
     a &&
     b &&
@@ -133,14 +138,16 @@ const harness = (operations = {}) => {
     react,
     "react-router-dom": { useLocation: () => location },
     "../../contexts/AuthContext": {
-      useAuth: () => ({
-        currentUser: { uid: "teacher" },
-        userData: { role: "admin" },
-      }),
+      useAuth: () => authState,
     },
-    "../../lib/permissions": { isAdminUser: () => true },
+    "../../lib/permissions": {
+      isAdminUser: () => authState.userData?.role === "admin",
+    },
     "../../lib/teacherPatchNoteCommands": {
-      prepareTeacherPatchNoteSession: async () => {},
+      prepareTeacherPatchNoteSession: async (uid) => {
+        preparations += 1;
+        await operations.prepareTeacherPatchNoteSession?.(uid);
+      },
       getTeacherPatchNoteErrorMessage: () => "저장 오류",
     },
     "../../lib/teacherPatchNotes": {
@@ -218,8 +225,12 @@ const harness = (operations = {}) => {
     }
   };
   render();
-  button("패치 메모 열기").props.onClick();
-  render();
+  await settle();
+  if (options.open !== false) {
+    button("패치 메모 열기").props.onClick();
+    render();
+    await settle();
+  }
   return {
     calls,
     toasts,
@@ -246,6 +257,19 @@ const harness = (operations = {}) => {
       render();
     },
     subscriptionCount: () => subscriptions,
+    preparationCount: () => preparations,
+    changeUser: (uid, role = "admin") => {
+      authState.currentUser = uid ? { uid } : null;
+      authState.userData = uid ? { role } : null;
+      dirty = true;
+      render();
+    },
+    changeRoute: (pathname) => {
+      location.pathname = pathname;
+      dirty = true;
+      render();
+    },
+    unmount: () => slots.forEach((slot) => slot?.cleanup?.()),
   };
 };
 
@@ -263,7 +287,7 @@ for (const operation of [
     `${operation}: late A response preserves B draft and revision`,
     async () => {
       const pending = deferred();
-      const h = harness({ [operation]: () => pending.promise });
+      const h = await harness({ [operation]: () => pending.promise });
       h.edit("A");
       const label =
         operation === "deleteTeacherPatchNote"
@@ -300,7 +324,7 @@ for (const operation of [
 await check(
   "Failed save keeps the draft after closing and reopening the panel",
   async () => {
-    const h = harness({
+    const h = await harness({
       createTeacherPatchNote: async () => {
         throw new Error("offline");
       },
@@ -321,7 +345,7 @@ await check(
   "Repeated submit events make one request and preserve inputs while pending",
   async () => {
     const pending = deferred();
-    const h = harness({ createTeacherPatchNote: () => pending.promise });
+    const h = await harness({ createTeacherPatchNote: () => pending.promise });
     h.type("Save once");
     const submit = h.button("추가");
     const first = submit.props.onClick();
@@ -348,7 +372,7 @@ await check(
 await check(
   "Reopening after a terminal subscription error resubscribes without losing the draft",
   async () => {
-    const h = harness();
+    const h = await harness();
     h.type("Keep draft during subscription recovery");
     assert.equal(h.subscriptionCount(), 1);
     h.failSubscription();
@@ -356,10 +380,82 @@ await check(
     h.render();
     h.button("패치 메모 열기").props.onClick();
     h.render();
+    await h.settle();
     assert.equal(h.subscriptionCount(), 2);
     assert.equal(
       h.textarea().props.value,
       "Keep draft during subscription recovery",
+    );
+  },
+);
+
+await check(
+  "Login waits for the application session before reading closed-panel memos",
+  async () => {
+    const pending = deferred();
+    const h = await harness(
+      { prepareTeacherPatchNoteSession: () => pending.promise },
+      { open: false },
+    );
+    assert.equal(h.preparationCount(), 1);
+    assert.equal(h.subscriptionCount(), 0);
+    assert.equal(h.toasts.length, 0);
+    pending.resolve();
+    await h.settle();
+    assert.equal(h.subscriptionCount(), 1);
+    assert.equal(h.toasts.length, 0);
+    h.button("패치 메모 열기").props.onClick();
+    await h.settle();
+    h.article("A");
+    assert.equal(h.preparationCount(), 1);
+  },
+);
+
+for (const transition of ["logout", "student", "route", "unmount"]) {
+  for (const fails of [false, true]) {
+    await check(
+      `Pending session ${fails ? "failure" : "success"} is ignored after ${transition}`,
+      async () => {
+        const pending = deferred();
+        const h = await harness(
+          { prepareTeacherPatchNoteSession: () => pending.promise },
+          { open: false },
+        );
+        if (transition === "logout") h.changeUser(null);
+        if (transition === "student") h.changeUser("student", "student");
+        if (transition === "route") h.changeRoute("/student/dashboard");
+        if (transition === "unmount") h.unmount();
+        if (fails) pending.reject(new Error("session failed"));
+        else pending.resolve();
+        await h.settle();
+        assert.equal(h.subscriptionCount(), 0);
+        assert.equal(h.toasts.length, 0);
+      },
+    );
+  }
+}
+
+await check(
+  "Failed login preparation is retried on panel open without losing a draft",
+  async () => {
+    let attempts = 0;
+    const h = await harness(
+      {
+        prepareTeacherPatchNoteSession: async () => {
+          if (++attempts === 1) throw new Error("offline");
+        },
+      },
+      { open: false },
+    );
+    assert.equal(h.subscriptionCount(), 0);
+    assert.equal(h.toasts.length, 1);
+    h.button("패치 메모 열기").props.onClick();
+    h.type("Retain draft during login recovery");
+    await h.settle();
+    assert.equal(h.subscriptionCount(), 1);
+    assert.equal(
+      h.textarea().props.value,
+      "Retain draft during login recovery",
     );
   },
 );

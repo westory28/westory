@@ -99,7 +99,7 @@ const getPatchNoteSession = async (ownerUid: string) => {
   }
 };
 
-// Prepare only when the memo panel opens; concurrent saves share this handshake.
+// Prepare before memo reads; concurrent reads and saves share this handshake.
 export const prepareTeacherPatchNoteSession = async (ownerUid: string) => {
   await getPatchNoteSession(ownerUid);
 };
