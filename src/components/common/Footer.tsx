@@ -5,6 +5,7 @@ import { InlineLoading } from "./LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
 import { normalizeInstagramUrl } from "../../lib/socialLinks";
+import "./Footer.css";
 
 type PolicyType = "terms" | "privacy";
 
@@ -15,7 +16,7 @@ const POLICY_TITLE: Record<PolicyType, string> = {
 
 const FALLBACK_FOOTER_TEXT = "Copyright © Westory. All rights reserved.";
 
-const Footer: React.FC = () => {
+const Footer: React.FC<{ teacher?: boolean }> = ({ teacher = false }) => {
   const { interfaceConfig } = useAuth();
   const [openPolicy, setOpenPolicy] = useState<PolicyType | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,7 +52,13 @@ const Footer: React.FC = () => {
 
   return (
     <>
-      <footer className="bg-white border-t border-stone-200 py-4 mt-auto">
+      <footer
+        className={
+          teacher
+            ? "teacher-layout-footer mt-auto"
+            : "bg-white border-t border-stone-200 py-4 mt-auto"
+        }
+      >
         <div className="container mx-auto text-center">
           <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
             <button

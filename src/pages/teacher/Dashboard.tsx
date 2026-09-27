@@ -1,27 +1,40 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import type FullCalendar from "@fullcalendar/react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { CalendarEvent } from "../../types";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import TeacherNoticeBoard from "./components/TeacherNoticeBoard";
-import SearchModal from "../student/components/SearchModal"; // Reuse search modal
-import EventModal from "./components/EventModal";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
 import { getYearSemester } from "../../lib/semesterScope";
-import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
-import { runAfterNextPaint, runWhenIdle } from "../../lib/browserTasks";
+import { runWhenIdle } from "../../lib/browserTasks";
+import { archiveScope, isSemesterArchive } from "../../lib/semesterArchive";
+import TeacherWeekSchedule from "./components/TeacherWeekSchedule";
+import {
+  calendarDateKey,
+  getKoreanDateKey,
+  getWeekStart,
+} from "./components/teacherDashboardWeek";
+import "./teacherDashboard.css";
 import {
   ensureKoreanPublicHolidaysSynced,
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
 
-const TeacherCalendarSection = lazyWithRetry(
-  () => import("./components/TeacherCalendarSection"),
-  "teacher-calendar-section",
+const SearchModal = lazyWithRetry(
+  () => import("../student/components/SearchModal"),
+  "teacher-dashboard-search",
+);
+const EventModal = lazyWithRetry(
+  () => import("./components/EventModal"),
+  "teacher-dashboard-event",
+);
+const ScheduleEventDetailModal = lazyWithRetry(
+  () => import("../../components/common/ScheduleEventDetailModal"),
+  "teacher-dashboard-event-detail",
 );
 
 const getVisibleCalendarEvents = (
@@ -46,9 +59,17 @@ const getVisibleCalendarEvents = (
 };
 
 const TeacherDashboard: React.FC = () => {
-  const { config } = useAuth();
+  const { config, userData } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState(false);
+  const initialDate =
+    isSemesterArchive && archiveScope
+      ? `${archiveScope.year}-${archiveScope.semester === "1" ? "03" : "08"}-01`
+      : getKoreanDateKey();
+  const [selectedDate, setSelectedDate] = useState<string | null>(initialDate);
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(initialDate));
 
   // UI State
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -59,15 +80,7 @@ const TeacherDashboard: React.FC = () => {
   );
   const [modalInitialDate, setModalInitialDate] = useState("");
   const [filterClass, setFilterClass] = useState("all");
-  const [secondaryPanelsReady, setSecondaryPanelsReady] = useState(false);
-
-  const calendarRef = useRef<FullCalendar>(null);
   const { categories } = useScheduleCategories();
-
-  useEffect(() => {
-    const cancel = runAfterNextPaint(() => setSecondaryPanelsReady(true));
-    return cancel;
-  }, []);
 
   // Fetch Events real-time
   useEffect(() => {
@@ -75,26 +88,41 @@ const TeacherDashboard: React.FC = () => {
 
     const path = `years/${year}/semesters/${semester}/calendar`;
     let active = true;
-    const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
-      const loadedEvents: CalendarEvent[] = [];
+    setEventsLoading(true);
+    setEventsError(false);
+    const unsubscribe = onSnapshot(
+      collection(db, path),
+      (snapshot) => {
+        const loadedEvents: CalendarEvent[] = [];
 
-      snapshot.forEach((doc) => {
-        const d = doc.data();
-        loadedEvents.push({ id: doc.id, ...d } as CalendarEvent);
-      });
-      if (active) setEvents(loadedEvents);
-      void getKoreanPublicHolidays(year)
-        .then((holidays) => {
-          if (!active) return;
-          setEvents(
-            mergeEventsWithKoreanPublicHolidays(loadedEvents, holidays),
-          );
-        })
-        .catch((error) => {
-          console.error("Failed to load Korean public holidays:", error);
-          if (active) setEvents(loadedEvents);
+        snapshot.forEach((doc) => {
+          const d = doc.data();
+          loadedEvents.push({ id: doc.id, ...d } as CalendarEvent);
         });
-    });
+        if (active) {
+          setEvents(loadedEvents);
+          setEventsLoading(false);
+        }
+        void getKoreanPublicHolidays(year)
+          .then((holidays) => {
+            if (!active) return;
+            setEvents(
+              mergeEventsWithKoreanPublicHolidays(loadedEvents, holidays),
+            );
+          })
+          .catch((error) => {
+            console.error("Failed to load Korean public holidays:", error);
+            if (active) setEvents(loadedEvents);
+          });
+      },
+      (error) => {
+        console.error("Failed to load calendar events:", error);
+        if (active) {
+          setEventsError(true);
+          setEventsLoading(false);
+        }
+      },
+    );
 
     return () => {
       active = false;
@@ -146,7 +174,7 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const handleEventClick = (event: CalendarEvent) => {
-    setSelectedDate(event.start);
+    setSelectedDate(calendarDateKey(event.start));
     setDetailEvent(event);
   };
 
@@ -158,132 +186,133 @@ const TeacherDashboard: React.FC = () => {
 
   const handleAddEvent = (dateStr?: string) => {
     setSelectedEvent(undefined);
-    setModalInitialDate(
-      dateStr || selectedDate || new Date().toISOString().split("T")[0],
-    );
+    setModalInitialDate(dateStr || selectedDate || getKoreanDateKey());
     setIsEventModalOpen(true);
   };
 
   const handleSelectSearchResults = (dateStr: string) => {
-    if (calendarRef.current) {
-      calendarRef.current.getApi().gotoDate(dateStr);
-      handleDateClick(dateStr);
+    const date = calendarDateKey(dateStr);
+    if (!date) return;
+    setWeekStart(getWeekStart(date));
+    handleDateClick(date);
+  };
+
+  const handleNoticeManagerOpened = () => {
+    if (searchParams.get("notice") === "manage") {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("notice");
+      setSearchParams(nextParams, { replace: true });
     }
   };
 
   return (
     <div
-      className="dashboard-container teacher-dashboard-container flex-1"
+      className="teacher-weekly-dashboard"
       data-patch-target="teacher-dashboard"
       data-patch-label="교사 대시보드"
     >
-      <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
-            대시보드
-          </h1>
-          {config && (
-            <span className="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md shrink-0">
-              {config.year}학년도 {config.semester}학기
-            </span>
-          )}
-        </div>
+      <div className="teacher-weekly-dashboard__greeting">
+        <h1>
+          <strong>
+            {String(userData?.name || "선생님").trim()}
+            {userData?.name ? " 선생님," : ","}
+          </strong>{" "}
+          오늘도 좋은 하루 되세요.
+        </h1>
+        {config && (
+          <span>
+            {config.year}학년도 {config.semester}학기
+          </span>
+        )}
       </div>
 
-      {/* Main Content Grid */}
       <div
-        className="teacher-dashboard-grid flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]"
+        className="teacher-weekly-dashboard__grid"
         data-patch-target="teacher-dashboard-grid"
         data-patch-label="대시보드 주요 영역"
       >
-        {/* 1. Notice Board (Mobile: Order 1 / Desktop: Order 2, Right Top) */}
         <div
-          className="teacher-dashboard-notice order-1 md:order-2 md:col-span-2 md:row-span-1"
-          data-patch-target="teacher-dashboard-notice"
-          data-patch-label="대시보드 알림장"
-        >
-          {secondaryPanelsReady ? (
-            <TeacherNoticeBoard />
-          ) : (
-            <div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">
-              알림장을 준비 중입니다.
-            </div>
-          )}
-        </div>
-
-        {/* 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) */}
-        <div
-          className="teacher-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2"
+          className="teacher-weekly-dashboard__schedule"
           data-patch-target="teacher-dashboard-calendar"
           data-patch-label="대시보드 학사 일정"
         >
-          <React.Suspense
-            fallback={
-              <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-gray-200 bg-white text-sm font-semibold text-gray-500 shadow-sm">
-                학사 일정을 준비하는 중입니다.
-              </div>
-            }
-          >
-            <TeacherCalendarSection
-              events={visibleEvents}
-              onDateClick={handleDateClick}
-              onDateDoubleClick={handleAddEvent}
-              onEventClick={handleEventClick}
-              onAddEvent={handleAddEvent}
-              onSearchClick={() => setIsSearchOpen(true)}
-              calendarRef={calendarRef}
-              filterClass={effectiveFilterClass}
-              availableClassTargets={availableClassTargets}
-              onFilterChange={setFilterClass}
-              selectedDate={selectedDate}
-            />
-          </React.Suspense>
+          <TeacherWeekSchedule
+            events={visibleEvents}
+            categories={categories}
+            weekStart={weekStart}
+            selectedDate={selectedDate}
+            loading={eventsLoading}
+            error={eventsError}
+            onWeekChange={setWeekStart}
+            onDateClick={handleDateClick}
+            onDateDoubleClick={handleAddEvent}
+            onEventClick={handleEventClick}
+            onSearchClick={() => setIsSearchOpen(true)}
+            onAddEvent={() => handleAddEvent()}
+            filterClass={effectiveFilterClass}
+            availableClassTargets={availableClassTargets}
+            onFilterChange={setFilterClass}
+          />
         </div>
-
-        {/* 3. Wis Ranking (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
         <div
-          className="teacher-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1"
+          className="teacher-weekly-dashboard__notice"
+          data-patch-target="teacher-dashboard-notice"
+          data-patch-label="대시보드 알림장"
+        >
+          <TeacherNoticeBoard
+            openManager={searchParams.get("notice") === "manage"}
+            onManagerOpened={handleNoticeManagerOpened}
+          />
+        </div>
+        <div
+          className="teacher-weekly-dashboard__ranking"
           data-patch-target="teacher-dashboard-ranking"
           data-patch-label="대시보드 위스 순위"
         >
-          <div className="min-h-[260px] h-full">
-            {secondaryPanelsReady ? (
-              <WisRankingPanel
-                config={config}
-                hallOfFamePath="/teacher/points?tab=hall-of-fame"
-              />
-            ) : (
-              <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-blue-100 bg-white p-4 text-sm font-semibold text-blue-700/70 shadow-sm">
-                위스 순위를 준비 중입니다.
-              </div>
-            )}
-          </div>
+          <WisRankingPanel
+            config={config}
+            hallOfFamePath="/teacher/points?tab=hall-of-fame"
+          />
         </div>
       </div>
 
-      <SearchModal
-        categories={categories}
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onSelectEvent={handleSelectSearchResults}
-      />
+      <React.Suspense
+        fallback={
+          <div className="teacher-dashboard-dialog-loading" role="status">
+            창을 여는 중입니다.
+          </div>
+        }
+      >
+        {isSearchOpen && (
+          <SearchModal
+            categories={categories}
+            isOpen={isSearchOpen}
+            onClose={() => setIsSearchOpen(false)}
+            onSelectEvent={handleSelectSearchResults}
+          />
+        )}
 
-      <EventModal
-        isOpen={isEventModalOpen}
-        onClose={() => setIsEventModalOpen(false)}
-        eventData={selectedEvent}
-        initialDate={modalInitialDate}
-        onSave={() => {
-          /* Real-time updates handle refresh */
-        }}
-      />
+        {isEventModalOpen && (
+          <EventModal
+            isOpen={isEventModalOpen}
+            onClose={() => setIsEventModalOpen(false)}
+            eventData={selectedEvent}
+            initialDate={modalInitialDate}
+            onSave={() => {
+              /* Real-time updates handle refresh */
+            }}
+          />
+        )}
 
-      <ScheduleEventDetailModal
-        event={detailEvent}
-        categories={categories}
-        onClose={() => setDetailEvent(null)}
-        onEdit={handleEditEvent}
-      />
+        {detailEvent && (
+          <ScheduleEventDetailModal
+            event={detailEvent}
+            categories={categories}
+            onClose={() => setDetailEvent(null)}
+            onEdit={handleEditEvent}
+          />
+        )}
+      </React.Suspense>
     </div>
   );
 };

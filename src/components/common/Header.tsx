@@ -1,10 +1,16 @@
 import { isSemesterArchive } from "../../lib/semesterArchive";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import PointRankBadge from "./PointRankBadge";
 import { useAppToast } from "./AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
 import { MENUS } from "../../constants/menus";
+import TeacherSidebar, {
+  type TeacherSidebarGroup,
+} from "../layout/TeacherSidebar";
+import TeacherNavigationIcon, {
+  type TeacherIconName,
+} from "../layout/TeacherNavigationIcon";
 import {
   getStudentRouteAccess,
   getStudentVisibleMenuItems,
@@ -26,6 +32,7 @@ import {
 import type { PointRankDisplay } from "../../lib/pointRanks";
 import {
   canAccessTeacherPortal,
+  canAccessTeacherPath,
   canManageSettings,
   canReadLessonManagement,
   canReadPoints,
@@ -110,7 +117,15 @@ const getDesktopSubmenuChildren = (
   );
 };
 
-const Header: React.FC = () => {
+const Header: React.FC<{
+  teacherLayout?: boolean;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
+}> = ({
+  teacherLayout = false,
+  sidebarCollapsed = false,
+  onToggleSidebar = () => {},
+}) => {
   const {
     currentUser,
     userData,
@@ -124,6 +139,7 @@ const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
   const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(
     SESSION_DURATION_SECONDS,
@@ -153,6 +169,7 @@ const Header: React.FC = () => {
         : "student";
 
   const isTeacherPortal = portal === "teacher";
+  const useTeacherSidebar = teacherLayout && isTeacherPortal;
   const canRenderStudentMenu =
     portal !== "student" ||
     (menuConfigReady &&
@@ -266,6 +283,100 @@ const Header: React.FC = () => {
     return targetScore === bestScore;
   };
 
+  const teacherIcons: Record<string, TeacherIconName> = {
+    "/teacher/lesson": "lesson",
+    "/teacher/quiz": "assessment",
+    "/teacher/exam": "score",
+    "/teacher/points": "wis",
+    "/teacher/students": "students",
+  };
+  const shopUrls = new Set([
+    "/teacher/points?tab=products",
+    "/teacher/points?tab=requests",
+  ]);
+  const dictionaryUrl = "/teacher/lesson/history-dictionary";
+  const resolvedTeacherMenus = useTeacherSidebar
+    ? menuItems.map((item) => ({
+        ...item,
+        resolvedChildren: getResolvedChildUrls(
+          item.url,
+          getVisibleChildren(item),
+          portal,
+        ),
+      }))
+    : [];
+  const teacherSidebarGroups: TeacherSidebarGroup[] = resolvedTeacherMenus.map(
+    (item) => {
+      const children = item.resolvedChildren.filter(
+        (child) =>
+          !shopUrls.has(child.resolvedUrl) &&
+          child.resolvedUrl !== dictionaryUrl,
+      );
+      return {
+        id: item.url.split("/").pop() || item.name,
+        name: item.url === "/teacher/students" ? "학생 명단 관리" : item.name,
+        icon: teacherIcons[item.url] || "lesson",
+        children: children.length
+          ? children
+          : [
+              {
+                name:
+                  item.url === "/teacher/students" ? "학생 명단" : item.name,
+                resolvedUrl: resolveTarget(item.url),
+              },
+            ],
+      };
+    },
+  );
+  if (
+    useTeacherSidebar &&
+    canAccessTeacherPath("/teacher/schedule", userData, currentUser?.email)
+  ) {
+    teacherSidebarGroups.push({
+      id: "calendar",
+      name: "캘린더",
+      icon: "calendar",
+      secondary: true,
+      children: [{ name: "학사 일정", resolvedUrl: "/teacher/schedule" }],
+    });
+  }
+  if (useTeacherSidebar && canManageSettings(userData, currentUser?.email)) {
+    teacherSidebarGroups.push({
+      id: "notice",
+      name: "알림장",
+      icon: "notice",
+      secondary: true,
+      children: [
+        {
+          name: "알림장 관리",
+          resolvedUrl: "/teacher/dashboard?notice=manage",
+        },
+      ],
+    });
+  }
+  const shopChildren = resolvedTeacherMenus
+    .flatMap((item) => item.resolvedChildren)
+    .filter((child) => shopUrls.has(child.resolvedUrl));
+  if (shopChildren.length)
+    teacherSidebarGroups.push({
+      id: "shop",
+      name: "상점",
+      icon: "shop",
+      secondary: true,
+      children: shopChildren,
+    });
+  const dictionaryChild = resolvedTeacherMenus
+    .flatMap((item) => item.resolvedChildren)
+    .find((child) => child.resolvedUrl === dictionaryUrl);
+  if (dictionaryChild)
+    teacherSidebarGroups.push({
+      id: "dictionary",
+      name: "사전",
+      icon: "dictionary",
+      secondary: true,
+      children: [dictionaryChild],
+    });
+
   const activeDesktopSubmenu = menuItems
     .map((item) => {
       const visibleChildren = getVisibleChildren(item);
@@ -352,6 +463,16 @@ const Header: React.FC = () => {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!useTeacherSidebar) return;
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeDesktopDrawer = () => {
+      if (desktop.matches) closeMobileMenu();
+    };
+    desktop.addEventListener("change", closeDesktopDrawer);
+    return () => desktop.removeEventListener("change", closeDesktopDrawer);
+  }, [useTeacherSidebar, closeMobileMenu]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return undefined;
@@ -512,81 +633,122 @@ const Header: React.FC = () => {
 
   return (
     <>
-      <header className={isTeacherPortal ? "teacher-header" : undefined}>
+      {useTeacherSidebar && (
+        <TeacherSidebar
+          groups={teacherSidebarGroups}
+          home={home}
+          showDashboard={canAccessTeacherPath(
+            "/teacher/dashboard",
+            userData,
+            currentUser?.email,
+          )}
+          showSettings={canManageSettings(userData, currentUser?.email)}
+          collapsed={sidebarCollapsed}
+          mobileOpen={mobileMenuOpen}
+          onToggleCollapsed={onToggleSidebar}
+          onCloseMobile={closeMobileMenu}
+          isChildActive={isChildActive}
+        />
+      )}
+      <header
+        className={
+          useTeacherSidebar
+            ? "teacher-header teacher-account-header"
+            : isTeacherPortal
+              ? "teacher-header"
+              : undefined
+        }
+      >
         <div className="header-container">
-          <div className="flex items-center gap-4 h-full">
-            <Link to={home} className="logo-text">
-              <span className="logo-we">We</span>
-              <span className="logo-story">story</span>
-            </Link>
-
-            <nav
-              className={`desktop-nav ml-4 ${!isTeacherPortal ? "student-desktop-nav" : ""}`}
+          {useTeacherSidebar && (
+            <button
+              id="teacher-navigation-toggle"
+              type="button"
+              className="teacher-navigation-toggle"
+              onClick={() => setMobileMenuOpen((previous) => !previous)}
+              aria-label="교사 메뉴 열기"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="teacher-navigation"
             >
-              {menuItems.map((item, idx) => {
-                const visibleChildren = getVisibleChildren(item);
-                const resolvedChildren = getResolvedChildUrls(
-                  item.url,
-                  visibleChildren,
-                  portal,
-                );
-                const hasChildren = visibleChildren.length > 0;
-                const active =
-                  isActive(item.url) ||
-                  resolvedChildren.some((child) =>
-                    isChildActive(child.resolvedUrl, resolvedChildren),
-                  );
+              <TeacherNavigationIcon name="menu" />
+            </button>
+          )}
+          {!useTeacherSidebar && (
+            <div className="flex items-center gap-4 h-full">
+              <Link to={home} className="logo-text">
+                <span className="logo-we">We</span>
+                <span className="logo-story">story</span>
+              </Link>
 
-                if (!hasChildren) {
+              <nav
+                className={`desktop-nav ml-4 ${!isTeacherPortal ? "student-desktop-nav" : ""}`}
+              >
+                {menuItems.map((item, idx) => {
+                  const visibleChildren = getVisibleChildren(item);
+                  const resolvedChildren = getResolvedChildUrls(
+                    item.url,
+                    visibleChildren,
+                    portal,
+                  );
+                  const hasChildren = visibleChildren.length > 0;
+                  const active =
+                    isActive(item.url) ||
+                    resolvedChildren.some((child) =>
+                      isChildActive(child.resolvedUrl, resolvedChildren),
+                    );
+
+                  if (!hasChildren) {
+                    const itemTarget = resolveTarget(item.url);
+                    return (
+                      <Link
+                        key={`${item.url}-${idx}`}
+                        to={itemTarget}
+                        className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""}`}
+                      >
+                        {item.name}
+                      </Link>
+                    );
+                  }
+
                   const itemTarget = resolveTarget(item.url);
                   return (
-                    <Link
+                    <div
                       key={`${item.url}-${idx}`}
-                      to={itemTarget}
-                      className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""}`}
+                      className="relative group h-full flex items-center"
                     >
-                      {item.name}
-                    </Link>
-                  );
-                }
-
-                const itemTarget = resolveTarget(item.url);
-                return (
-                  <div
-                    key={`${item.url}-${idx}`}
-                    className="relative group h-full flex items-center"
-                  >
-                    <Link
-                      to={itemTarget}
-                      className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""} flex items-center gap-1`}
-                    >
-                      {item.name}
-                      <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
-                    </Link>
-                    <div className="desktop-submenu-shell absolute left-0 top-[calc(100%-8px)] z-[100] transform pt-1 opacity-0 transition duration-150 group-hover:visible group-hover:opacity-100 invisible">
-                      <div className="rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
-                        {resolvedChildren.map((child, childIdx) => {
-                          const childTarget = child.resolvedUrl;
-                          return (
-                            <Link
-                              key={`${child.url}-${childIdx}`}
-                              to={childTarget}
-                              className={`block whitespace-nowrap rounded-lg px-4 py-3.5 text-[13px] font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"}`}
-                            >
-                              {child.name}
-                            </Link>
-                          );
-                        })}
+                      <Link
+                        to={itemTarget}
+                        className={`nav-link ${active ? "active" : ""} ${!isTeacherPortal ? "student-nav-link" : ""} flex items-center gap-1`}
+                      >
+                        {item.name}
+                        <i className="fas fa-chevron-down text-[10px] ml-1 opacity-50 group-hover:opacity-100 transition"></i>
+                      </Link>
+                      <div className="desktop-submenu-shell absolute left-0 top-[calc(100%-8px)] z-[100] transform pt-1 opacity-0 transition duration-150 group-hover:visible group-hover:opacity-100 invisible">
+                        <div className="rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
+                          {resolvedChildren.map((child, childIdx) => {
+                            const childTarget = child.resolvedUrl;
+                            return (
+                              <Link
+                                key={`${child.url}-${childIdx}`}
+                                to={childTarget}
+                                className={`block whitespace-nowrap rounded-lg px-4 py-3.5 text-[13px] font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"}`}
+                              >
+                                {child.name}
+                              </Link>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </nav>
-          </div>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
 
           <div className="header-right">
             {isTeacherPortal &&
+              !useTeacherSidebar &&
               canManageSettings(userData, currentUser?.email || "") && (
                 <Link
                   to="/teacher/settings"
@@ -619,12 +781,18 @@ const Header: React.FC = () => {
 
             <React.Suspense fallback={null}>
               <NotificationBell
-                className="hidden lg:block"
+                className={
+                  useTeacherSidebar
+                    ? "teacher-account-notification"
+                    : "hidden lg:block"
+                }
                 onUnreadCountChange={setMobileUnreadCount}
               />
             </React.Suspense>
 
-            <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
+            <div
+              className={`${useTeacherSidebar ? "teacher-account-session" : "hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1"} bg-stone-100 rounded-full border border-stone-200`}
+            >
               <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
               <span
                 className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
@@ -656,26 +824,28 @@ const Header: React.FC = () => {
               </span>
             </button>
 
-            <button
-              onClick={() => setMobileMenuOpen((prev) => !prev)}
-              data-session-ignore="true"
-              className="mobile-menu-btn"
-              aria-label="모바일 메뉴 열기"
-            >
-              <i className="fas fa-bars"></i>
-              {mobileUnreadCount > 0 && (
-                <span
-                  className="mobile-menu-btn-badge"
-                  aria-label={`읽지 않은 알림 ${mobileUnreadLabel}개`}
-                >
-                  {mobileUnreadLabel}
-                </span>
-              )}
-            </button>
+            {!useTeacherSidebar && (
+              <button
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                data-session-ignore="true"
+                className="mobile-menu-btn"
+                aria-label="모바일 메뉴 열기"
+              >
+                <i className="fas fa-bars"></i>
+                {mobileUnreadCount > 0 && (
+                  <span
+                    className="mobile-menu-btn-badge"
+                    aria-label={`읽지 않은 알림 ${mobileUnreadLabel}개`}
+                  >
+                    {mobileUnreadLabel}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
-        {mobileMenuOpen && (
+        {!useTeacherSidebar && mobileMenuOpen && (
           <div
             className="fixed inset-0 top-16 z-40 lg:hidden bg-transparent"
             onClick={() => setMobileMenuOpen(false)}
@@ -683,83 +853,90 @@ const Header: React.FC = () => {
           ></div>
         )}
 
-        <div id="mobile-menu" className={mobileMenuOpen ? "open" : ""}>
-          {mobileMenuOpen && (
-            <>
-              <div className="mobile-menu-status">
-                <div className="mobile-menu-status-card">
-                  <div className="mobile-menu-status-copy">
-                    <span className="mobile-menu-status-label">알림</span>
-                    <strong>
-                      {mobileUnreadCount > 0
-                        ? `${mobileUnreadLabel}개`
-                        : "새 알림 없음"}
-                    </strong>
+        {!useTeacherSidebar && (
+          <div id="mobile-menu" className={mobileMenuOpen ? "open" : ""}>
+            {mobileMenuOpen && (
+              <>
+                <div className="mobile-menu-status">
+                  <div className="mobile-menu-status-card">
+                    <div className="mobile-menu-status-copy">
+                      <span className="mobile-menu-status-label">알림</span>
+                      <strong>
+                        {mobileUnreadCount > 0
+                          ? `${mobileUnreadLabel}개`
+                          : "새 알림 없음"}
+                      </strong>
+                    </div>
+                    <React.Suspense fallback={null}>
+                      <NotificationBell className="mobile-menu-notification" />
+                    </React.Suspense>
                   </div>
-                  <React.Suspense fallback={null}>
-                    <NotificationBell className="mobile-menu-notification" />
-                  </React.Suspense>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => extendSession({ force: true })}
-                  title="시간 연장"
-                  data-session-ignore="true"
-                  className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds < 300 ? "is-warning" : ""}`}
-                >
-                  <div className="mobile-menu-status-copy">
-                    <span className="mobile-menu-status-label">남은 시간</span>
-                    <strong>{formatCountdown(remainingSeconds)}</strong>
-                  </div>
-                  <span className="mobile-menu-status-icon" aria-hidden="true">
-                    <i className="fas fa-redo-alt"></i>
-                  </span>
-                </button>
-              </div>
-              {menuItems.map((item, idx) => {
-                const visibleChildren = getVisibleChildren(item);
-                const resolvedChildren = getResolvedChildUrls(
-                  item.url,
-                  visibleChildren,
-                  portal,
-                );
-                const itemTarget = resolveTarget(item.url);
-                return (
-                  <div key={`${item.url}-mobile-${idx}`}>
-                    <Link
-                      to={itemTarget}
-                      className={`mobile-link ${isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren)) ? "active" : ""}`}
-                      onClick={() => setMobileMenuOpen(false)}
+                  <button
+                    type="button"
+                    onClick={() => extendSession({ force: true })}
+                    title="시간 연장"
+                    data-session-ignore="true"
+                    className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds < 300 ? "is-warning" : ""}`}
+                  >
+                    <div className="mobile-menu-status-copy">
+                      <span className="mobile-menu-status-label">
+                        남은 시간
+                      </span>
+                      <strong>{formatCountdown(remainingSeconds)}</strong>
+                    </div>
+                    <span
+                      className="mobile-menu-status-icon"
+                      aria-hidden="true"
                     >
-                      {item.name}
-                    </Link>
-                    {visibleChildren.length > 0 && (
-                      <div className="bg-gray-50 border-b border-gray-100 pb-1">
-                        {resolvedChildren.map((child, childIdx) => {
-                          const childTarget = child.resolvedUrl;
-                          return (
-                            <Link
-                              key={`${child.url}-mobile-child-${childIdx}`}
-                              to={childTarget}
-                              className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "text-blue-600 bg-blue-50" : "text-gray-500 hover:text-blue-600 hover:bg-gray-100"}`}
-                              onClick={() => setMobileMenuOpen(false)}
-                            >
-                              <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
-                              {child.name}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
+                      <i className="fas fa-redo-alt"></i>
+                    </span>
+                  </button>
+                </div>
+                {menuItems.map((item, idx) => {
+                  const visibleChildren = getVisibleChildren(item);
+                  const resolvedChildren = getResolvedChildUrls(
+                    item.url,
+                    visibleChildren,
+                    portal,
+                  );
+                  const itemTarget = resolveTarget(item.url);
+                  return (
+                    <div key={`${item.url}-mobile-${idx}`}>
+                      <Link
+                        to={itemTarget}
+                        className={`mobile-link ${isActive(item.url) || resolvedChildren.some((child) => isChildActive(child.resolvedUrl, resolvedChildren)) ? "active" : ""}`}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {item.name}
+                      </Link>
+                      {visibleChildren.length > 0 && (
+                        <div className="bg-gray-50 border-b border-gray-100 pb-1">
+                          {resolvedChildren.map((child, childIdx) => {
+                            const childTarget = child.resolvedUrl;
+                            return (
+                              <Link
+                                key={`${child.url}-mobile-child-${childIdx}`}
+                                to={childTarget}
+                                className={`block pl-12 pr-4 py-1.5 text-sm rounded-r-full mr-2 font-bold ${isChildActive(child.resolvedUrl, resolvedChildren) ? "text-blue-600 bg-blue-50" : "text-gray-500 hover:text-blue-600 hover:bg-gray-100"}`}
+                                onClick={() => setMobileMenuOpen(false)}
+                              >
+                                <i className="fas fa-angle-right mr-2 text-xs opacity-50"></i>
+                                {child.name}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
       </header>
 
-      {activeDesktopSubmenu && (
+      {!useTeacherSidebar && activeDesktopSubmenu && (
         <div className="hidden lg:block">
           <div className={desktopSubmenuContainerClass}>
             <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">

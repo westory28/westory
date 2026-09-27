@@ -38,7 +38,15 @@ const getCategoryLabel = (category?: string) => {
   return "공지";
 };
 
-const TeacherNoticeBoard: React.FC = () => {
+interface TeacherNoticeBoardProps {
+  openManager?: boolean;
+  onManagerOpened?: () => void;
+}
+
+const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
+  openManager = false,
+  onManagerOpened,
+}) => {
   const { config } = useAuth();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +55,13 @@ const TeacherNoticeBoard: React.FC = () => {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (!openManager) return;
+    setSelectedNotice(undefined);
+    setIsModalOpen(true);
+    onManagerOpened?.();
+  }, [openManager, onManagerOpened]);
 
   useEffect(() => {
     const { year, semester } = getYearSemester(config);
@@ -132,7 +147,7 @@ const TeacherNoticeBoard: React.FC = () => {
   }, [showCarousel, isPaused, notices.length]);
 
   return (
-    <div className="flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
+    <div className="teacher-notice-board flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="flex items-center text-lg font-extrabold text-gray-900">
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
@@ -170,7 +185,7 @@ const TeacherNoticeBoard: React.FC = () => {
                 title="알림장 이미지 수정"
               >
                 <div
-                  className="flex h-full min-h-[180px] w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
+                  className="teacher-notice-board__image-track flex h-full min-h-[180px] w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
                   style={{
                     aspectRatio: activeImageRatio,
                     transform: `translateX(-${activeIndex * 100}%)`,
@@ -181,9 +196,9 @@ const TeacherNoticeBoard: React.FC = () => {
                       key={notice.id}
                       src={notice.imageUrl}
                       alt="알림장"
-                      loading="lazy"
+                      loading={notice.id === activeNotice.id ? "eager" : "lazy"}
                       decoding="async"
-                      className="h-full min-h-[180px] w-full shrink-0 object-contain transition-transform duration-500 group-hover:scale-[1.01]"
+                      className="teacher-notice-board__image h-full min-h-[180px] w-full shrink-0 object-contain transition-transform duration-500 group-hover:scale-[1.01]"
                     />
                   ))}
                 </div>
@@ -193,7 +208,7 @@ const TeacherNoticeBoard: React.FC = () => {
               </span>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="teacher-notice-board__controls mt-4 flex flex-wrap items-center gap-2">
               {showCarousel && (
                 <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                   <button

@@ -1,0 +1,608 @@
+.teacher-weekly-dashboard {
+  width: 100%;
+  max-width: 1536px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 8px 24px 12px;
+  color: var(--ws-text, #1f2937);
+}
+
+.teacher-weekly-dashboard__greeting {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 12px;
+}
+
+.teacher-weekly-dashboard__greeting h1 {
+  margin: 0;
+  font-size: var(--ws-type-section-title, 1.25rem);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.teacher-weekly-dashboard__greeting h1 strong {
+  font-weight: 800;
+  color: var(--ws-text-strong, #111827);
+}
+
+.teacher-weekly-dashboard__greeting > span {
+  font-size: var(--ws-type-label, 0.75rem);
+  color: var(--ws-text-muted, #6b7280);
+  white-space: nowrap;
+}
+
+.teacher-weekly-dashboard__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.04fr) minmax(0, 1fr);
+  gap: 16px;
+  height: clamp(560px, calc(100dvh - 200px), 688px);
+}
+
+.teacher-weekly-dashboard__schedule {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  gap: 12px;
+}
+
+.teacher-weekly-dashboard__notice,
+.teacher-weekly-dashboard__ranking {
+  grid-column: 2;
+  min-width: 0;
+  min-height: 0;
+}
+
+.teacher-weekly-dashboard__notice {
+  grid-row: 1;
+}
+.teacher-weekly-dashboard__ranking {
+  grid-row: 2;
+}
+
+.teacher-week-schedule {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 20px;
+  background: var(--ws-surface, #fff);
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-xl, 16px);
+}
+
+.teacher-week-schedule__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  margin-bottom: 4px;
+}
+
+.teacher-week-schedule__heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--ws-type-section-title, 1.25rem);
+  font-weight: 800;
+  color: var(--ws-text-strong, #111827);
+}
+
+.teacher-week-schedule__heading h2 svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--ws-primary, #2563eb);
+}
+
+.teacher-dashboard-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  gap: 8px;
+  color: var(--ws-primary, #2563eb);
+  font-size: var(--ws-type-small, 0.875rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.teacher-week-schedule__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-height: 40px;
+}
+
+.teacher-week-schedule__range {
+  font-size: var(--ws-type-label, 0.75rem);
+  color: var(--ws-text-muted, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-week-schedule__navigation {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.teacher-week-schedule__navigation button,
+.teacher-week-schedule__filters button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 40px;
+  height: 40px;
+  padding-inline: 8px;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--ws-type-label, 0.75rem);
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.teacher-week-schedule__navigation button:hover,
+.teacher-week-schedule__filters button:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary, #2563eb);
+}
+
+.teacher-week-schedule__navigation svg,
+.teacher-week-schedule__filters svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.teacher-week-strip {
+  display: grid;
+  grid-template-columns: 48px repeat(7, minmax(0, 1fr));
+  align-items: center;
+  flex-shrink: 0;
+  padding: 8px 4px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+
+.teacher-week-strip__month {
+  text-align: center;
+  font-size: var(--ws-type-small, 0.875rem);
+  white-space: nowrap;
+  color: var(--ws-text-strong, #111827);
+}
+
+.teacher-week-strip__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 72px;
+  border-radius: var(--radius-md, 8px);
+  color: var(--ws-text, #1f2937);
+}
+
+.teacher-week-strip__day > span:first-child {
+  font-size: var(--ws-type-label, 0.75rem);
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.teacher-week-strip__day strong {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: var(--ws-type-body, 1rem);
+  font-weight: 700;
+}
+
+.teacher-week-strip__day.is-selected:not(.is-today) strong {
+  box-shadow: inset 0 0 0 1px var(--ws-primary, #2563eb);
+}
+
+.teacher-week-strip__day.is-saturday,
+.teacher-week-strip__day.is-saturday > span:first-child {
+  color: var(--ws-primary, #2563eb);
+}
+
+.teacher-week-strip__day.is-holiday,
+.teacher-week-strip__day.is-holiday > span:first-child {
+  color: var(--ws-danger-text, #b91c1c);
+}
+
+.teacher-week-strip__day.is-today strong {
+  color: white;
+  background: var(--ws-primary, #2563eb);
+}
+
+.teacher-week-strip__day:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.teacher-week-strip__marker {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+
+.teacher-week-strip__marker.has-events {
+  background: currentColor;
+}
+
+.teacher-week-schedule__filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.teacher-week-schedule__filters select {
+  min-width: 0;
+  max-width: 75%;
+  min-height: 40px;
+  background: transparent;
+  border: 0;
+  padding: 4px;
+  font-size: var(--ws-type-label, 0.75rem);
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.teacher-week-schedule__actions {
+  display: flex;
+  align-items: center;
+}
+
+.teacher-week-schedule__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: teacher-week-arrive var(--motion-fast, 160ms)
+    var(--ease-out, ease-out) both;
+}
+
+@keyframes teacher-week-arrive {
+  from {
+    opacity: 0.55;
+    transform: translateX(var(--week-slide-from, 16px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teacher-week-schedule__content {
+    animation: none;
+  }
+}
+
+.teacher-week-events {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.teacher-week-events__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 160px;
+  height: 100%;
+  padding: 24px 16px;
+  font-size: var(--ws-type-small, 0.875rem);
+  color: var(--ws-text-muted, #6b7280);
+  text-align: center;
+}
+
+.teacher-week-events__status a {
+  color: var(--ws-primary, #2563eb);
+}
+
+.teacher-week-event {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--ws-border-soft, #f3f4f6);
+  text-align: left;
+}
+
+.teacher-week-event:last-child {
+  border-bottom: 0;
+}
+.teacher-week-event:hover,
+.teacher-week-event.is-selected {
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+
+.teacher-week-event__date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ws-type-label, 0.75rem);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.teacher-week-event__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.teacher-week-event__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.teacher-week-event__body strong {
+  font-size: var(--ws-type-small, 0.875rem);
+  font-weight: 700;
+  line-height: 1.4;
+}
+.teacher-week-event__body > span,
+.teacher-week-event__period {
+  font-size: var(--ws-type-label, 0.75rem);
+  color: var(--ws-text-muted, #6b7280);
+}
+.teacher-week-event__period {
+  max-width: 72px;
+  text-align: right;
+}
+
+.teacher-weekly-dashboard :is(button, a, select):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Keep the production notice editor and image carousel; only size its dashboard presentation. */
+.teacher-weekly-dashboard .teacher-notice-board,
+.teacher-weekly-dashboard .wis-ranking-panel {
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: none;
+}
+
+.teacher-weekly-dashboard .teacher-notice-board__image-track,
+.teacher-weekly-dashboard .teacher-notice-board__image {
+  min-height: 0;
+}
+
+.teacher-weekly-dashboard .teacher-notice-board__controls {
+  margin-top: 8px;
+  gap: 4px;
+}
+.teacher-weekly-dashboard .teacher-notice-board__controls > .ml-5 {
+  margin-left: 4px;
+}
+.teacher-weekly-dashboard .teacher-notice-board__controls > .ml-auto {
+  gap: 4px;
+}
+.teacher-weekly-dashboard .teacher-notice-board__controls button {
+  min-height: 32px;
+}
+.teacher-weekly-dashboard .teacher-notice-board__controls > .ml-5 button {
+  min-height: 0;
+}
+.teacher-weekly-dashboard .teacher-notice-board__controls > button {
+  padding-inline: 4px;
+}
+.teacher-weekly-dashboard .teacher-notice-board__controls > .ml-auto button {
+  padding: 4px 8px;
+  font-size: var(--ws-type-label, 0.75rem);
+}
+
+.teacher-weekly-dashboard .wis-ranking-list {
+  min-height: 0;
+  gap: 4px !important;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.teacher-weekly-dashboard .wis-ranking-row {
+  min-height: 40px;
+  padding: 4px 8px !important;
+  box-shadow: none;
+}
+.teacher-weekly-dashboard .wis-ranking-row::before {
+  display: none;
+}
+.teacher-weekly-dashboard .wis-ranking-row:hover {
+  transform: none;
+  box-shadow: none;
+}
+.teacher-weekly-dashboard .wis-ranking-panel > .mb-3 {
+  margin-bottom: 8px;
+}
+
+.teacher-dashboard-dialog-loading {
+  position: fixed;
+  z-index: 100;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 16px 24px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--ws-surface, #fff);
+  box-shadow: var(--shadow-md);
+}
+
+@media (min-width: 1120px) and (max-width: 1599px) {
+  .teacher-weekly-dashboard .wis-ranking-row {
+    display: block !important;
+  }
+  .teacher-weekly-dashboard .wis-ranking-row > .wis-ranking-mobile-row {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+  }
+  .teacher-weekly-dashboard
+    .wis-ranking-row
+    > :is(
+      .wis-ranking-rank,
+      .wis-ranking-student,
+      .wis-ranking-class,
+      .wis-ranking-score
+    ) {
+    display: none !important;
+  }
+  .teacher-weekly-dashboard .wis-ranking-mobile-rank-cluster {
+    display: inline-grid;
+    grid-template-columns: 24px 16px;
+  }
+  .teacher-weekly-dashboard .wis-ranking-mobile-profile {
+    width: 24px;
+    height: 24px;
+  }
+  .teacher-weekly-dashboard .wis-ranking-mobile-student {
+    min-width: 0;
+  }
+  .teacher-weekly-dashboard .wis-ranking-mobile-name {
+    font-size: var(--ws-type-small, 0.875rem);
+  }
+  .teacher-weekly-dashboard .wis-ranking-mobile-class {
+    font-size: var(--ws-type-meta, 0.72rem);
+  }
+  .teacher-weekly-dashboard .wis-ranking-mobile-score {
+    margin-left: auto;
+    font-size: var(--ws-type-small, 0.875rem) !important;
+  }
+  .teacher-weekly-dashboard .wis-ranking-mobile-badge {
+    min-width: 0 !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  .teacher-weekly-dashboard .wis-ranking-row {
+    grid-template-columns: 56px minmax(0, 1fr) 72px auto;
+    gap: 8px;
+  }
+  .teacher-weekly-dashboard .wis-ranking-name,
+  .teacher-weekly-dashboard .wis-ranking-score {
+    font-size: var(--ws-type-small, 0.875rem);
+  }
+  .teacher-weekly-dashboard .wis-ranking-class {
+    font-size: var(--ws-type-label, 0.75rem);
+  }
+}
+
+@media (max-width: 1119px) {
+  .teacher-weekly-dashboard {
+    padding-inline: 16px;
+  }
+  .teacher-weekly-dashboard__grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    height: auto;
+  }
+  .teacher-weekly-dashboard__schedule,
+  .teacher-weekly-dashboard__notice,
+  .teacher-weekly-dashboard__ranking {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .teacher-week-schedule {
+    min-height: 416px;
+  }
+  .teacher-week-events {
+    flex: none;
+    max-height: 336px;
+  }
+  .teacher-weekly-dashboard__notice {
+    height: 360px;
+  }
+  .teacher-weekly-dashboard__ranking {
+    min-height: 280px;
+  }
+}
+
+@media (max-width: 639px) {
+  .teacher-weekly-dashboard {
+    padding: 4px 12px 12px;
+  }
+  .teacher-weekly-dashboard__greeting {
+    min-height: 56px;
+    margin-bottom: 8px;
+  }
+  .teacher-weekly-dashboard__greeting h1 {
+    font-size: var(--ws-type-body, 1rem);
+  }
+  .teacher-weekly-dashboard__greeting h1 strong {
+    display: block;
+  }
+  .teacher-weekly-dashboard__greeting > span {
+    font-size: var(--ws-type-meta, 0.72rem);
+  }
+  .teacher-week-schedule {
+    padding: 12px;
+  }
+  .teacher-week-schedule__heading h2 {
+    font-size: var(--ws-type-card-title, 1rem);
+  }
+  .teacher-week-schedule__heading h2 svg {
+    width: 20px;
+    height: 20px;
+  }
+  .teacher-dashboard-link {
+    font-size: var(--ws-type-label, 0.75rem);
+    gap: 4px;
+  }
+  .teacher-week-strip {
+    grid-template-columns: 32px repeat(7, minmax(0, 1fr));
+    padding-inline: 0;
+  }
+  .teacher-week-strip__month {
+    font-size: var(--ws-type-label, 0.75rem);
+  }
+  .teacher-week-strip__day strong {
+    width: 32px;
+    height: 32px;
+  }
+  .teacher-week-schedule__range {
+    font-size: var(--ws-type-meta, 0.72rem);
+  }
+  .teacher-week-event {
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .teacher-week-event__date {
+    gap: 4px;
+  }
+  .teacher-week-event__period {
+    max-width: 56px;
+  }
+  .teacher-weekly-dashboard__notice {
+    height: 344px;
+  }
+}

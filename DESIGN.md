@@ -106,6 +106,11 @@ Base unit: 4px. 새 margin, padding, gap은 아래 토큰을 우선 사용한다
 
 Layout tokens:
 
+- Teacher sidebar: 232px expanded, 72px collapsed; 44px menu rows (40px below 820px viewport height), 24px outline icons with 1.8px rounded strokes and 16px chevrons.
+- Teacher account toolbar: transparent, 48px minimum height; the existing name, notification, session extension and logout controls remain together.
+- Teacher weekly dashboard: 1536px maximum width, compact 48px greeting, 16px panel gap, desktop content height `clamp(560px, calc(100dvh - 200px), 688px)`; small screens use natural document scrolling.
+- Teacher navigation motion: accordion content unfolds with opacity, 4px vertical translation and 0.98 scale for 160ms. Week changes slide 16px in the requested direction for 160ms. Both honor reduced-motion preferences.
+- Teacher footer: transparent with 8px top, 16px horizontal and 12px bottom padding; existing policy links and copyright remain centered.
 - Page max width: `--ws-page-max: 1280px`.
 - Header height: `--ws-header-height: 64px`.
 - Header dropdown min width: `--ws-header-dropdown-min: 11rem`.

@@ -11,6 +11,7 @@ import {
 } from "../common/AppToastProvider";
 import Header from "../common/Header";
 import Footer from "../common/Footer";
+import "./teacherLayout.css";
 import { PageLoading } from "../common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -63,6 +64,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
   const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const [teacherSidebarCollapsed, setTeacherSidebarCollapsed] =
+    React.useState(false);
+  const toggleTeacherSidebar = React.useCallback(() => {
+    setTeacherSidebarCollapsed((previous) => !previous);
+  }, []);
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
     !isSemesterArchive &&
@@ -289,8 +295,14 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <Header />
+    <div
+      className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? `teacher-layout ${teacherSidebarCollapsed ? "is-sidebar-collapsed" : ""}` : ""}`}
+    >
+      <Header
+        teacherLayout={isTeacherRoute}
+        sidebarCollapsed={teacherSidebarCollapsed}
+        onToggleSidebar={toggleTeacherSidebar}
+      />
       <SemesterArchiveBanner />
       {studentEnhancementsReady && (
         <React.Suspense fallback={null}>
@@ -314,7 +326,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           children
         )}
       </main>
-      <Footer />
+      <Footer teacher={isTeacherRoute} />
     </div>
   );
 };

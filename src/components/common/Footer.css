@@ -1,0 +1,16 @@
+.teacher-layout-footer {
+  padding: 8px 16px 12px;
+  background: transparent;
+}
+
+.teacher-layout-footer > .container {
+  width: 100%;
+}
+
+.teacher-layout-footer p {
+  font-weight: 400;
+}
+
+.teacher-layout-footer .mb-2 {
+  margin-bottom: 4px;
+}
