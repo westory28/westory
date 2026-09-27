@@ -6,6 +6,7 @@
     --ws-header-dropdown-max: min(24rem, calc(100vw - 2rem));
     --ws-type-teacher-logo: 2rem;
     --ws-type-teacher-logo-compact: 1.62rem;
+    --ws-teacher-logo-optical-offset: -0.0625em;
     --ws-header-nav-indicator: 3px;
     --space-1: 4px;
     --space-2: 8px;
@@ -178,6 +179,10 @@ header {
 .teacher-header .logo-text {
     font-size: var(--ws-type-teacher-logo-compact);
     flex-shrink: 0;
+}
+
+.teacher-header .logo-text > span {
+    transform: translateY(var(--ws-teacher-logo-optical-offset));
 }
 
 .teacher-header .nav-link {
