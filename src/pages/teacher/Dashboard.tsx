@@ -24,10 +24,6 @@ import {
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
 
-const SearchModal = lazyWithRetry(
-  () => import("../student/components/SearchModal"),
-  "teacher-dashboard-search",
-);
 const EventModal = lazyWithRetry(
   () => import("./components/EventModal"),
   "teacher-dashboard-event",
@@ -72,7 +68,6 @@ const TeacherDashboard: React.FC = () => {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(initialDate));
 
   // UI State
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(
@@ -240,7 +235,7 @@ const TeacherDashboard: React.FC = () => {
             onDateClick={handleDateClick}
             onDateDoubleClick={handleAddEvent}
             onEventClick={handleEventClick}
-            onSearchClick={() => setIsSearchOpen(true)}
+            onSearchSelect={handleSelectSearchResults}
             onAddEvent={() => handleAddEvent()}
             filterClass={effectiveFilterClass}
             availableClassTargets={availableClassTargets}
@@ -276,16 +271,6 @@ const TeacherDashboard: React.FC = () => {
           </div>
         }
       >
-        {isSearchOpen && (
-          <SearchModal
-            categories={categories}
-            events={visibleEvents}
-            isOpen={isSearchOpen}
-            onClose={() => setIsSearchOpen(false)}
-            onSelectEvent={handleSelectSearchResults}
-          />
-        )}
-
         {isEventModalOpen && (
           <EventModal
             isOpen={isEventModalOpen}

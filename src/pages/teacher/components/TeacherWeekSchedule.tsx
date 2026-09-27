@@ -14,7 +14,10 @@ import {
   getScheduleEventColor,
   type ScheduleCategory,
 } from "../../../lib/scheduleCategories";
-import { getSchedulePeriodRangeLabel } from "../../../lib/schedulePeriods";
+import {
+  compareCalendarSchedule,
+  getSchedulePeriodRangeLabel,
+} from "../../../lib/schedulePeriods";
 import TeacherNavigationIcon from "../../../components/layout/TeacherNavigationIcon";
 import {
   calendarDateKey,
@@ -39,7 +42,7 @@ interface Props {
   onDateClick: (date: string) => void;
   onDateDoubleClick: (date: string) => void;
   onEventClick: (event: CalendarEvent) => void;
-  onSearchClick: () => void;
+  onSearchSelect: (date: string) => void;
   onAddEvent: () => void;
   onFilterChange: (value: string) => void;
 }
@@ -60,11 +63,37 @@ const TeacherWeekSchedule: React.FC<Props> = ({
   onDateClick,
   onDateDoubleClick,
   onEventClick,
-  onSearchClick,
+  onSearchSelect,
   onAddEvent,
   onFilterChange,
 }) => {
   const today = getKoreanDateKey();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const searchTerm = searchOpen ? query.trim().toLowerCase() : "";
+  const searchResults = useMemo(
+    () =>
+      !searchTerm
+        ? []
+        : events
+            .filter(
+              (event) =>
+                event.title?.toLowerCase().includes(searchTerm) ||
+                event.description?.toLowerCase().includes(searchTerm),
+            )
+            .sort(compareCalendarSchedule),
+    [events, searchTerm],
+  );
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setQuery("");
+    searchButtonRef.current?.focus();
+  };
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
   const [schoolLabels, setSchoolLabels] = useState<{
     grades: Record<string, string>;
     classes: Record<string, string>;
@@ -135,7 +164,11 @@ const TeacherWeekSchedule: React.FC<Props> = ({
     () => getWeekEvents(events, weekStart),
     [events, weekStart],
   );
+  const displayedEvents = searchTerm ? searchResults : weekEvents;
   const eventListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (eventListRef.current) eventListRef.current.scrollTop = 0;
+  }, [searchTerm]);
   const previousSelection = useRef({ selectedDate, weekStart });
   useEffect(() => {
     const list = eventListRef.current;
@@ -165,49 +198,76 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           <TeacherNavigationIcon name="calendar" />
           이번 주 학사 일정
         </h2>
-      </div>
-      <div className="teacher-week-schedule__filters">
-        <select
-          className="student-calendar-shell__filter-select"
-          aria-label="일정 대상 필터"
-          value={filterClass}
-          onChange={(event) => onFilterChange(event.target.value)}
-        >
-          <option value="all">전체 일정</option>
-          <option value="common">공통 일정</option>
-          {availableClassTargets.map((target) => (
-            <option key={target} value={target}>
-              {classLabel(target)}
-            </option>
-          ))}
-        </select>
-        <div className="teacher-week-schedule__actions">
-          <button
-            type="button"
-            className="student-calendar-shell__search-button"
-            onClick={onSearchClick}
-            aria-label="일정 검색"
+        <div className="teacher-week-schedule__filters">
+          <select
+            className="student-calendar-shell__filter-select"
+            aria-label="일정 대상 필터"
+            value={filterClass}
+            onChange={(event) => onFilterChange(event.target.value)}
           >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="10.5" cy="10.5" r="6" />
-              <path d="m15 15 5 5" />
-            </svg>
-            검색
-          </button>
-          <button
-            type="button"
-            className="student-calendar-shell__control-button student-calendar-shell__action-button"
-            onClick={onAddEvent}
-            aria-label="일정 추가"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            추가
-          </button>
-          <Link to="/teacher/schedule" className="teacher-dashboard-link">
-            전체 보기 <span aria-hidden="true">→</span>
-          </Link>
+            <option value="all">전체 일정</option>
+            <option value="common">공통 일정</option>
+            {availableClassTargets.map((target) => (
+              <option key={target} value={target}>
+                {classLabel(target)}
+              </option>
+            ))}
+          </select>
+          <div className="teacher-week-schedule__actions">
+            <div
+              className={`teacher-week-search${searchOpen ? " is-open" : ""}`}
+            >
+              <div
+                className="teacher-week-search__input-wrap"
+                aria-hidden={!searchOpen}
+              >
+                <input
+                  id="teacher-week-search-input"
+                  ref={searchInputRef}
+                  type="search"
+                  aria-label="일정 검색어"
+                  placeholder="일정 검색"
+                  value={query}
+                  disabled={!searchOpen}
+                  onChange={(event) => setQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") closeSearch();
+                  }}
+                />
+              </div>
+              <button
+                ref={searchButtonRef}
+                type="button"
+                className="student-calendar-shell__search-button teacher-week-schedule__icon-button"
+                onClick={() =>
+                  searchOpen ? closeSearch() : setSearchOpen(true)
+                }
+                aria-label={searchOpen ? "일정 검색 닫기" : "일정 검색"}
+                aria-expanded={searchOpen}
+                aria-controls="teacher-week-search-input"
+                title={searchOpen ? "검색 닫기" : "일정 검색"}
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="10.5" cy="10.5" r="6" />
+                  <path d="m15 15 5 5" />
+                </svg>
+              </button>
+            </div>
+            <button
+              type="button"
+              className="student-calendar-shell__control-button student-calendar-shell__action-button teacher-week-schedule__icon-button"
+              onClick={onAddEvent}
+              aria-label="일정 추가"
+              title="일정 추가"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            <Link to="/teacher/schedule" className="teacher-dashboard-link">
+              전체 보기 <span aria-hidden="true">→</span>
+            </Link>
+          </div>
         </div>
       </div>
       <div className="teacher-week-schedule__toolbar">
@@ -300,12 +360,19 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 <Link to="/teacher/schedule">캘린더에서 다시 확인</Link>
               </p>
             )}
-            {!loading && !error && !weekEvents.length && (
-              <p className="teacher-week-events__status">
-                이번 주에 등록된 일정이 없습니다.
+            {searchTerm && !loading && !error && (
+              <p className="teacher-week-search__summary" role="status">
+                검색 결과 {displayedEvents.length}건
               </p>
             )}
-            {weekEvents.map((event) => {
+            {!loading && !error && !displayedEvents.length && (
+              <p className="teacher-week-events__status">
+                {searchTerm
+                  ? "검색어와 일치하는 일정이 없습니다."
+                  : "이번 주에 등록된 일정이 없습니다."}
+              </p>
+            )}
+            {displayedEvents.map((event) => {
               const start = calendarDateKey(event.start);
               const end = calendarEventEndDate(event);
               const isToday = eventIncludesDate(event, today);
@@ -332,7 +399,12 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                   key={event.id}
                   type="button"
                   className={`teacher-week-event${selectedDate && eventIncludesDate(event, selectedDate) ? " is-selected" : ""}`}
-                  onClick={() => onEventClick(event)}
+                  onClick={() => {
+                    if (searchTerm) {
+                      onSearchSelect(event.start);
+                      closeSearch();
+                    } else onEventClick(event);
+                  }}
                   style={
                     {
                       "--schedule-event-color": eventColor,

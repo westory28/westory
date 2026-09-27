@@ -49,12 +49,18 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   const [openGroup, setOpenGroup] = useState<string | null>(
     activeGroup || null,
   );
+  const [animatingGroups, setAnimatingGroups] = useState<string[]>([]);
+  const menuAnimationTimer = useRef<number | undefined>(undefined);
   const panelRef = useRef<HTMLElement>(null);
   const previousMobileOpen = useRef(false);
 
   useEffect(() => {
     setOpenGroup(activeGroup || null);
+    setAnimatingGroups([]);
+    window.clearTimeout(menuAnimationTimer.current);
   }, [location.pathname, location.search, activeGroup]);
+
+  useEffect(() => () => window.clearTimeout(menuAnimationTimer.current), []);
 
   useEffect(() => {
     if (!mobileOpen) {
@@ -78,7 +84,10 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
         panel.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), [tabindex="0"]',
         ),
-      ).filter((element) => element.getClientRects().length > 0);
+      ).filter(
+        (element) =>
+          element.tabIndex >= 0 && element.getClientRects().length > 0,
+      );
       const first = elements[0];
       const last = elements[elements.length - 1];
       if (event.shiftKey && document.activeElement === first) {
@@ -95,7 +104,16 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
 
   const toggleGroup = (id: string) => {
     if (collapsed && !mobileOpen) onToggleCollapsed();
-    setOpenGroup((previous) => (previous === id && !collapsed ? null : id));
+    const nextGroup = openGroup === id && !collapsed ? null : id;
+    setAnimatingGroups(
+      [openGroup, nextGroup].filter((group): group is string => Boolean(group)),
+    );
+    setOpenGroup(nextGroup);
+    window.clearTimeout(menuAnimationTimer.current);
+    menuAnimationTimer.current = window.setTimeout(
+      () => setAnimatingGroups([]),
+      240,
+    );
   };
   const dashboardActive =
     location.pathname === "/teacher/dashboard" && !activeGroup;
@@ -156,6 +174,8 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
           )}
           {groups.map((group, index) => {
             const open = openGroup === group.id;
+            const expanded = open && (!collapsed || mobileOpen);
+            const animating = animatingGroups.includes(group.id);
             const active = activeGroup === group.id;
             const divider = group.secondary && !groups[index - 1]?.secondary;
             const groupId = `teacher-menu-${group.id}`;
@@ -180,7 +200,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                     <button
                       type="button"
                       className={`teacher-sidebar-item ${active ? "is-active" : ""} ${open ? "is-open" : ""}`}
-                      aria-expanded={open && (!collapsed || mobileOpen)}
+                      aria-expanded={expanded}
                       aria-controls={groupId}
                       onClick={() => toggleGroup(group.id)}
                       title={collapsed ? group.name : undefined}
@@ -196,26 +216,34 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                     </button>
                     <div
                       id={groupId}
-                      className="teacher-sidebar-children"
-                      hidden={!open || (collapsed && !mobileOpen)}
+                      className={`teacher-sidebar-submenu ${expanded ? "is-expanded" : ""} ${animating ? "is-animating" : ""}`}
+                      aria-hidden={!expanded}
                     >
-                      {group.children.map((child, childIndex) => {
-                        const selected = isChildActive(
-                          child.resolvedUrl,
-                          allChildren,
-                        );
-                        return (
-                          <Link
-                            key={`${child.resolvedUrl}-${childIndex}`}
-                            to={child.resolvedUrl}
-                            className={`teacher-sidebar-child ${selected ? "is-active" : ""}`}
-                            aria-current={selected ? "page" : undefined}
-                            onClick={onCloseMobile}
-                          >
-                            {child.name}
-                          </Link>
-                        );
-                      })}
+                      <div className="teacher-sidebar-submenu-clip">
+                        <div
+                          className="teacher-sidebar-children"
+                          hidden={!expanded && !animating}
+                        >
+                          {group.children.map((child, childIndex) => {
+                            const selected = isChildActive(
+                              child.resolvedUrl,
+                              allChildren,
+                            );
+                            return (
+                              <Link
+                                key={`${child.resolvedUrl}-${childIndex}`}
+                                to={child.resolvedUrl}
+                                className={`teacher-sidebar-child ${selected ? "is-active" : ""}`}
+                                aria-current={selected ? "page" : undefined}
+                                tabIndex={expanded ? undefined : -1}
+                                onClick={onCloseMobile}
+                              >
+                                {child.name}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}

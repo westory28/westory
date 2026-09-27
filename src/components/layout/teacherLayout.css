@@ -123,19 +123,26 @@
 .teacher-sidebar-children[hidden] {
   display: none;
 }
-.teacher-sidebar-children:not([hidden]) {
-  transform-origin: top;
-  animation: teacher-menu-unfold 160ms ease-out;
+.teacher-sidebar-submenu {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
 }
-@keyframes teacher-menu-unfold {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scaleY(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scaleY(1);
-  }
+.teacher-sidebar-submenu.is-expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+/* A short unfolding response only follows an explicit menu click. */
+.teacher-sidebar-submenu.is-animating {
+  transition:
+    grid-template-rows var(--motion-base, 200ms) var(--ease-out, ease-out),
+    opacity var(--motion-base, 200ms) var(--ease-out, ease-out);
+}
+.teacher-sidebar-submenu-clip {
+  min-height: 0;
+  overflow: hidden;
 }
 .teacher-sidebar-child {
   display: flex;
@@ -416,8 +423,5 @@
 @media (prefers-reduced-motion: reduce) {
   .teacher-sidebar-chevron {
     transition: none;
-  }
-  .teacher-sidebar-children:not([hidden]) {
-    animation: none;
   }
 }
