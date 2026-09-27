@@ -4,6 +4,9 @@
 :root {
     --ws-header-dropdown-min: 11rem;
     --ws-header-dropdown-max: min(24rem, calc(100vw - 2rem));
+    --ws-type-teacher-logo: 2rem;
+    --ws-type-teacher-logo-compact: 1.62rem;
+    --ws-header-nav-indicator: 3px;
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;
@@ -164,6 +167,37 @@ header {
 
     .header-right {
         gap: 0.2rem;
+    }
+}
+
+/* Keep teacher navigation labels centered independently of the active underline. */
+.teacher-header .header-container {
+    height: var(--space-16);
+}
+
+.teacher-header .logo-text {
+    font-size: var(--ws-type-teacher-logo-compact);
+    flex-shrink: 0;
+}
+
+.teacher-header .nav-link {
+    position: relative;
+    border-bottom: 0;
+}
+
+.teacher-header .nav-link.active::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: var(--ws-header-nav-indicator);
+    background-color: currentColor;
+}
+
+@media (min-width: 1024px) {
+    .teacher-header .logo-text {
+        font-size: var(--ws-type-teacher-logo);
     }
 }
 

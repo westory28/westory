@@ -507,7 +507,7 @@ const Header: React.FC = () => {
 
   return (
     <>
-      <header>
+      <header className={isTeacherPortal ? "teacher-header" : undefined}>
         <div className="header-container">
           <div className="flex items-center gap-4 h-full">
             <Link to={home} className="logo-text">

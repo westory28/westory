@@ -67,6 +67,8 @@ Font stack: `Noto Sans KR`, system sans-serif. Korean readability and school-dev
 | Role | Token | Size | Weight | Line height | Letter spacing |
 | --- | --- | --- | --- | --- | --- |
 | Logo | `--ws-type-logo` | `1.62rem` | 800 | 1 | `-0.025em` |
+| Teacher header logo (desktop) | `--ws-type-teacher-logo` | `2rem` | 800 | 1 | `-0.025em` |
+| Teacher header logo (mobile/tablet) | `--ws-type-teacher-logo-compact` | `1.62rem` | 800 | 1 | `-0.025em` |
 | Page title | `--ws-type-page-title` | `1.75rem` | 800 | 1.25 | 0 |
 | Section title | `--ws-type-section-title` | `1.25rem` | 800 | 1.3 | 0 |
 | Card title | `--ws-type-card-title` | `1rem` | 800 | 1.35 | 0 |
@@ -117,6 +119,9 @@ Layout tokens:
 ## 5. Components
 
 ### Header
+
+- Teacher header: keep the existing 64px row height and center the logo, navigation labels, and account actions on the same axis.
+- Teacher active navigation underline: `--ws-header-nav-indicator: 3px`; position independently of the label so it does not shift vertical alignment.
 
 - Background: `--ws-surface`.
 - Border: `1px solid --ws-border`.
