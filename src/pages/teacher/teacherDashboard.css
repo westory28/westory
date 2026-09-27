@@ -7,26 +7,12 @@
   color: var(--ws-text, #1f2937);
 }
 
-.teacher-weekly-dashboard__semester {
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin-bottom: 12px;
-}
-
-.teacher-weekly-dashboard__semester h1 {
-  margin: 0;
-}
-
 .teacher-weekly-dashboard__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1.04fr) minmax(312px, 1fr);
+  grid-template-rows: minmax(0, 1.04fr) minmax(328px, 1fr);
   gap: 16px;
-  height: clamp(560px, calc(100dvh - 200px), 688px);
+  height: clamp(620px, calc(100dvh - 140px), 880px);
 }
 
 .teacher-weekly-dashboard__schedule {
@@ -642,10 +628,6 @@
 @media (max-width: 639px) {
   .teacher-weekly-dashboard {
     padding: 4px 12px 12px;
-  }
-  .teacher-weekly-dashboard__semester {
-    min-height: 48px;
-    margin-bottom: 8px;
   }
   .teacher-week-schedule {
     padding: 12px;

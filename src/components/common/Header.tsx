@@ -177,6 +177,8 @@ const Header: React.FC<{
 
   const isTeacherPortal = portal === "teacher";
   const useTeacherSidebar = teacherLayout && isTeacherPortal;
+  const isTeacherDashboard =
+    useTeacherSidebar && location.pathname === "/teacher/dashboard";
   const canRenderStudentMenu =
     portal !== "student" ||
     (menuConfigReady &&
@@ -723,7 +725,7 @@ const Header: React.FC<{
       <header
         className={
           useTeacherSidebar
-            ? "teacher-header teacher-account-header"
+            ? `teacher-header teacher-account-header${isTeacherDashboard ? " teacher-dashboard-account-header" : ""}`
             : isTeacherPortal
               ? "teacher-header"
               : undefined
@@ -742,6 +744,11 @@ const Header: React.FC<{
             >
               <TeacherNavigationIcon name="menu" />
             </button>
+          )}
+          {isTeacherDashboard && config && (
+            <h1 className="teacher-dashboard-semester inline-flex shrink-0 rounded-full bg-blue-600 px-4 py-2 text-base font-bold text-white">
+              {config.year}학년도 {config.semester}학기
+            </h1>
           )}
           {!useTeacherSidebar && (
             <div className="flex items-center gap-4 h-full">

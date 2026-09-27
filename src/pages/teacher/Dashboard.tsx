@@ -206,14 +206,6 @@ const TeacherDashboard: React.FC = () => {
       data-patch-target="teacher-dashboard"
       data-patch-label="교사 대시보드"
     >
-      <div className="teacher-weekly-dashboard__semester">
-        {config && (
-          <h1 className="inline-flex shrink-0 rounded-full bg-blue-600 px-4 py-2 text-base font-bold text-white">
-            {config.year}학년도 {config.semester}학기
-          </h1>
-        )}
-      </div>
-
       <div
         className="teacher-weekly-dashboard__grid"
         data-patch-target="teacher-dashboard-grid"

@@ -425,3 +425,46 @@
     transition: none;
   }
 }
+
+/* Match the dashboard card edge while keeping account controls in their existing row. */
+.teacher-layout .teacher-dashboard-account-header .header-container {
+  padding-left: max(24px, calc((100% - 1536px) / 2 + 24px));
+  gap: 16px;
+}
+.teacher-dashboard-semester {
+  margin: 0 auto 0 0;
+  white-space: nowrap;
+}
+@media (max-width: 1119px) {
+  .teacher-layout .teacher-dashboard-account-header .header-container {
+    padding-left: 16px;
+    gap: 8px;
+  }
+}
+@media (max-width: 767px) {
+  .teacher-layout .teacher-dashboard-account-header,
+  .teacher-layout .teacher-dashboard-account-header .header-container {
+    height: auto;
+  }
+  .teacher-layout .teacher-dashboard-account-header .header-container {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    padding: 0 16px 8px;
+  }
+  .teacher-dashboard-account-header .header-right {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .teacher-dashboard-semester {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    margin: 0;
+  }
+}
+@media (max-width: 639px) {
+  .teacher-layout .teacher-dashboard-account-header .header-container {
+    padding-inline: 12px;
+  }
+}
