@@ -1,3 +1,4 @@
+import { isSemesterArchive } from "../../lib/semesterArchive";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
 import { LoadingOverlay } from "../../components/common/LoadingState";
@@ -845,7 +846,9 @@ const ManageLesson: React.FC = () => {
   const lessonLegacyRef = useRef(false);
   const lessonLoadIdRef = useRef(0);
   const lessonSavingRef = useRef(false);
-  const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+  const canEdit =
+    !isSemesterArchive &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
   const [savedLessonState, setSavedLessonState] =
     useState<NormalizedLessonData>(() => createEmptyNormalizedLessonData());
 

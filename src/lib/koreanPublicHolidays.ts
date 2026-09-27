@@ -1,3 +1,4 @@
+import { isSemesterArchive } from "./semesterArchive";
 import KoreanLunarCalendar from "korean-lunar-calendar";
 import type { Firestore } from "firebase/firestore";
 import type { CalendarEvent } from "../types";
@@ -388,6 +389,7 @@ export const ensureKoreanPublicHolidaysSynced = async ({
   semester: string | number;
   force?: boolean;
 }) => {
+  if (isSemesterArchive) return { count: 0, skipped: true };
   const markerKey = `westory:holiday-sync:v2:${year}:${semester}`;
   const today = new Date().toLocaleDateString("en-CA");
   if (!force && window.localStorage.getItem(markerKey) === today) {

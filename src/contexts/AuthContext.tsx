@@ -1,3 +1,4 @@
+import { archiveScope, isSemesterArchive } from "../lib/semesterArchive";
 import React, {
   createContext,
   useCallback,
@@ -367,12 +368,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       ? Math.min(configLoadedAt || 0, menuConfigLoadedAt || 0)
       : 0;
 
+  const effectiveConfig = React.useMemo(
+    () =>
+      config && isSemesterArchive && archiveScope
+        ? { ...config, ...archiveScope }
+        : config,
+    [config],
+  );
   const value = {
     user: currentUser,
     currentUser,
     userData,
-    userConfig: config,
-    config,
+    userConfig: effectiveConfig,
+    config: effectiveConfig,
     configReady,
     menuConfig,
     menuConfigReady,
