@@ -168,7 +168,7 @@ const TeacherWeekSchedule: React.FC<Props> = ({
     // Explicitly requested for user-triggered week changes, including reduced-motion mode.
     const animations = Array.from(
       content.querySelectorAll<HTMLElement>(
-        ".teacher-week-strip__number, .teacher-week-event__date-label, .teacher-week-event__title, .teacher-week-event__category, .teacher-week-event__period, .teacher-week-events__status",
+        ".teacher-week-strip__number, .teacher-week-event__date-label, .teacher-week-event__title, .teacher-week-event__category-label, .teacher-week-event__period-label, .teacher-week-events__status",
       ),
       (text) =>
         text.animate(
@@ -490,14 +490,28 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                           className="teacher-week-event__category"
                           title={`${event.targetType === "class" && event.targetClass ? `${classLabel(event.targetClass)} · ` : ""}${meta.label}`}
                         >
-                          {event.targetType === "class" && event.targetClass
-                            ? `${classLabel(event.targetClass)} · `
-                            : ""}
-                          {meta.label}
+                          <span className="teacher-week-event__category-label">
+                            {event.targetType === "class" && event.targetClass
+                              ? `${classLabel(event.targetClass)} · `
+                              : ""}
+                            {meta.label}
+                          </span>
                         </span>
                       )}
+                      {event.eventType !== "holiday" && (
+                        <span
+                          className="teacher-week-event__divider"
+                          aria-hidden="true"
+                        />
+                      )}
                       <span className="teacher-week-event__period">
-                        {periodLabel}
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle cx="12" cy="12" r="8.5" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                        <span className="teacher-week-event__period-label">
+                          {periodLabel}
+                        </span>
                       </span>
                     </span>
                   </span>

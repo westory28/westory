@@ -244,6 +244,13 @@
   vertical-align: middle;
 }
 
+.teacher-week-strip__number {
+  position: relative;
+  top: -0.05em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 .teacher-week-strip__day:hover {
   background: var(--ws-primary-soft, #eff6ff);
 }
@@ -466,8 +473,33 @@
 .teacher-week-event__category {
   min-width: 0;
   max-width: 120px;
+  padding-inline: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--ws-surface-subtle, #f8fafc);
+  color: var(--ws-text-muted, #6b7280);
+  font-size: var(--ws-type-label, 0.75rem);
+  line-height: 20px;
+  overflow: hidden;
+}
+.teacher-week-event__category-label {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.teacher-week-event__divider {
+  flex: 0 0 1px;
+  height: 12px;
+  background: var(--ws-border, #e5e7eb);
+}
+.teacher-week-event__period svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .teacher-week-event__body > span,
 .teacher-week-event__period {
@@ -475,6 +507,9 @@
   color: var(--ws-text-muted, #6b7280);
 }
 .teacher-week-event__period {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
   white-space: nowrap;
   text-align: right;
