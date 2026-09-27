@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import StorageImage from "../../../components/common/StorageImage";
 import {
   getLessonPdfExtractionHelpText,
@@ -59,7 +59,6 @@ type LessonEditorHeaderProps = {
   onLessonTitleChange: (value: string) => void;
   onToggleVisible: (value: boolean) => void;
   onSave: () => void;
-  onOpenTeacherPreview: () => void;
 };
 
 type LessonBodyEditorProps = {
@@ -193,7 +192,6 @@ type LessonPreviewLauncherProps = {
   lesson: LessonData;
   unitId: string;
   fallbackTitle?: string;
-  onOpenTeacherPreview: () => void;
 };
 
 function saveBadgeClass(tone: SaveStateTone = "saved") {
@@ -371,7 +369,6 @@ export function LessonEditorHeader({
   onLessonTitleChange,
   onToggleVisible,
   onSave,
-  onOpenTeacherPreview,
 }: LessonEditorHeaderProps) {
   return (
     <div className="border-b border-gray-200 bg-white px-4 py-3 lg:px-5">
@@ -404,14 +401,6 @@ export function LessonEditorHeader({
             className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {saveButtonLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onOpenTeacherPreview}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            <i className="fas fa-chalkboard-teacher text-sm"></i>
-            수업 화면
           </button>
         </div>
       </div>
@@ -473,7 +462,7 @@ function FootnoteSummaryCard({
   );
 }
 
-function FootnoteEditorDialog({
+export function FootnoteEditorDialog({
   session,
   footnotes,
   footnoteUsageMap,
@@ -1015,6 +1004,12 @@ export function LessonPdfSection({
   onRetryPdfExtraction,
   disablePdfSave,
 }: LessonPdfSectionProps) {
+  const libraryToggleRef = React.useRef<HTMLButtonElement>(null);
+  const libraryCloseRef = React.useRef<HTMLButtonElement>(null);
+  const closeLibrary = () => {
+    setActiveFloatingPanel(null);
+    libraryToggleRef.current?.focus({ preventScroll: true });
+  };
   const [activeFloatingPanel, setActiveFloatingPanel] = React.useState<
     "library" | null
   >(null);
@@ -1061,7 +1056,7 @@ export function LessonPdfSection({
       return pdfSaveFeedback.message;
     }
     if (hasUnsavedPdfChanges) {
-      return "저장하지 않은 PDF 편집 내용이 있습니다. 상단 저장 버튼이나 오른쪽 저장 버튼을 눌러 반영하세요. 저장 후 학생/수업 화면에 반영됩니다.";
+      return "저장하지 않은 PDF 편집 내용이 있습니다. 상단 저장 버튼이나 오른쪽 저장 버튼을 눌러 반영하세요. 저장 후 학생 화면에 반영됩니다.";
     }
     return pdfSaveFeedback?.message || "";
   }, [hasUnsavedPdfChanges, pdfSaveFeedback]);
@@ -1075,6 +1070,10 @@ export function LessonPdfSection({
     (blankEditorMode === "draft" && !!draftBlank) ||
     (blankEditorMode === "existing" && !!activeBlank);
   const isLibraryPanelOpen = activeFloatingPanel === "library";
+  React.useEffect(() => {
+    if (isLibraryPanelOpen)
+      libraryCloseRef.current?.focus({ preventScroll: true });
+  }, [isLibraryPanelOpen]);
   const footnoteAnchorsByFootnote = React.useMemo(() => {
     const grouped = new Map<string, LessonWorksheetFootnoteAnchor[]>();
     worksheetFootnoteAnchors.forEach((anchor) => {
@@ -1230,8 +1229,8 @@ export function LessonPdfSection({
       )}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
         <div className="border-b border-slate-200 bg-white px-3 py-3">
-          <div className="grid gap-3 xl:grid-cols-[minmax(20rem,1fr)_auto_auto] xl:items-center">
-            <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div className="min-w-0 basis-full">
               <div className="text-sm font-bold text-slate-900">PDF OCR</div>
               <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
                 <span className="inline-flex min-w-0 max-w-full items-center rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">
@@ -1312,7 +1311,10 @@ export function LessonPdfSection({
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
               <button
                 type="button"
+                ref={libraryToggleRef}
                 onClick={() => toggleFloatingPanel("library")}
+                aria-expanded={isLibraryPanelOpen}
+                aria-controls="lesson-pdf-library"
                 className={toolButtonClass(isLibraryPanelOpen, "blue")}
                 aria-label="빈칸, 각주, 시험 목록"
                 aria-pressed={isLibraryPanelOpen}
@@ -1423,7 +1425,7 @@ export function LessonPdfSection({
         </div>
         {!!worksheetPageImages.length ? (
           <div
-            className={`flex flex-col ${isLibraryPanelOpen ? "xl:flex-row" : ""}`}
+            className={`relative min-w-0 ${isLibraryPanelOpen ? "min-h-[min(28rem,70dvh)]" : ""}`}
           >
             <div className="min-w-0 flex-1 p-2 md:p-3">
               <React.Suspense
@@ -1468,10 +1470,18 @@ export function LessonPdfSection({
             </div>
             {isLibraryPanelOpen && (
               <aside
+                id="lesson-pdf-library"
                 aria-label="빈칸, 각주, 시험 목록"
-                className="flex max-h-[560px] w-full flex-col overflow-hidden border-t border-slate-200 bg-white xl:max-h-[calc(100vh-220px)] xl:w-80 xl:shrink-0 xl:border-l xl:border-t-0"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closeLibrary();
+                  }
+                }}
+                className="absolute bottom-3 right-3 top-3 z-20 flex max-h-[calc(100dvh-2rem)] w-80 max-w-[calc(100%_-_1.5rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"
               >
-                <div className="border-b border-slate-200 px-4 py-4">
+                <div className="shrink-0 border-b border-slate-200 px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-900">
@@ -1483,8 +1493,9 @@ export function LessonPdfSection({
                     </div>
                     <button
                       type="button"
-                      onClick={() => setActiveFloatingPanel(null)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                      ref={libraryCloseRef}
+                      onClick={closeLibrary}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
                       aria-label="목록 닫기"
                     >
                       <i className="fas fa-times text-xs"></i>
@@ -1542,7 +1553,7 @@ export function LessonPdfSection({
                     )}
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pr-3">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pr-3">
                   {activeLibraryTab === "blanks" ? (
                     <>
                       {sortedBlanks.length === 0 ? (
@@ -1615,14 +1626,6 @@ export function LessonPdfSection({
                         >
                           <i className="fas fa-plus text-[10px]"></i>새 각주
                         </button>
-                        <button
-                          type="button"
-                          onClick={onAddFootnoteAndInsert}
-                          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                        >
-                          <i className="fas fa-link text-[10px]"></i>
-                          본문용 각주
-                        </button>
                       </div>
                       {footnotes.length === 0 ? (
                         <div className="mt-4 rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-500">
@@ -1651,9 +1654,6 @@ export function LessonPdfSection({
                                   focusFootnote(footnote.id);
                                   onOpenFootnoteEditor?.(footnote.id);
                                 }}
-                                onInsertIntoBody={() =>
-                                  onInsertFootnoteToken?.(footnote.anchorKey)
-                                }
                                 onDelete={() => onDeleteFootnote?.(footnote.id)}
                                 anchors={anchors}
                                 onSelectAnchor={(anchor) => {
@@ -1859,7 +1859,6 @@ function FootnoteFloatingListItem({
   primaryAnchorPage = null,
   onSelect,
   onOpenEditor,
-  onInsertIntoBody,
   onDelete,
   anchors = [],
   onSelectAnchor,
@@ -1873,7 +1872,6 @@ function FootnoteFloatingListItem({
   primaryAnchorPage?: number | null;
   onSelect?: () => void;
   onOpenEditor?: () => void;
-  onInsertIntoBody?: () => void;
   onDelete?: () => void;
   anchors?: LessonWorksheetFootnoteAnchor[];
   onSelectAnchor?: (anchor: LessonWorksheetFootnoteAnchor) => void;
@@ -1924,7 +1922,7 @@ function FootnoteFloatingListItem({
           </div>
           <div className="mt-3 text-xs leading-5 text-slate-500">
             {previewText ||
-              "제목, 설명, 이미지, 유튜브를 간단히 채우고 PDF 위치와 본문 연결을 함께 관리할 수 있습니다."}
+              "제목, 설명, 이미지, 링크를 편집하고 PDF 위치를 지정할 수 있습니다."}
           </div>
         </button>
         <button
@@ -1944,14 +1942,6 @@ function FootnoteFloatingListItem({
         >
           <i className="fas fa-location-dot text-[10px]"></i>
           {primaryAnchorPage != null ? "위치 보기" : "항목 선택"}
-        </button>
-        <button
-          type="button"
-          onClick={onInsertIntoBody}
-          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-        >
-          <i className="fas fa-link text-[10px]"></i>
-          본문에 넣기
         </button>
         <button
           type="button"
@@ -2061,7 +2051,6 @@ export function LessonPreviewLauncher({
   lesson,
   unitId,
   fallbackTitle,
-  onOpenTeacherPreview,
 }: LessonPreviewLauncherProps) {
   return (
     <section className="space-y-6">
@@ -2074,14 +2063,6 @@ export function LessonPreviewLauncher({
             현재 학생 화면 확인
           </h3>
         </div>
-        <button
-          type="button"
-          onClick={onOpenTeacherPreview}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          <i className="fas fa-chalkboard-teacher text-sm"></i>
-          교사용 수업 화면 열기
-        </button>
       </div>
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <React.Suspense

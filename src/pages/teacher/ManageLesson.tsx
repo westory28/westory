@@ -30,7 +30,6 @@ import {
   getSemesterCollectionPath,
   getSemesterDocPath,
 } from "../../lib/semesterScope";
-import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { type ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import {
   clampRatio,
@@ -70,25 +69,11 @@ import {
 import { canWriteLessonManagement } from "../../lib/permissions";
 import { createManagedNotifications } from "../../lib/notifications";
 import { subscribeSourceArchiveAssets } from "../../lib/sourceArchive";
-import {
-  buildTeacherPresentationClassId,
-  buildTeacherPresentationClassLabel,
-  getRecentTeacherPresentationItems,
-  getTeacherPresentationRuntimeBadge,
-  getTeacherPresentationWarningState,
-  normalizeTeacherPresentationClassSummary,
-  readRecentTeacherPresentationClass,
-  resolveTeacherPresentationClassLabel,
-  sortTeacherPresentationClasses,
-  type TeacherPresentationClassSummary,
-  type TeacherPresentationRuntimeStatus,
-} from "../../lib/teacherPresentation";
 import { emitSessionActivity } from "../../lib/sessionActivity";
 import type { SourceArchiveAsset } from "../../types";
-import TeacherPresentationLauncher from "./components/TeacherPresentationLauncher";
 import LessonSourceArchivePickerModal from "./components/LessonSourceArchivePickerModal";
 import {
-  LessonBodyEditor,
+  FootnoteEditorDialog,
   LessonEditorHeader,
   LessonPdfSection,
   LessonPreviewLauncher,
@@ -98,11 +83,6 @@ import {
 } from "./components/LessonEditorPanels";
 
 type TreeNode = LessonTreeNode;
-
-const TeacherLessonPresentation = lazyWithRetry(
-  () => import("./components/TeacherLessonPresentation"),
-  "teacher-lesson-presentation",
-);
 
 const TABS: Array<{ id: LessonEditorTab; label: string; icon: string }> = [
   { id: "pdf", label: "PDF 편집", icon: "fa-file-pdf" },
@@ -306,75 +286,6 @@ type FootnoteEditorSession = {
   pendingAnchorPlacement: PendingFootnoteAnchorPlacement | null;
   insertIntoBody: boolean;
 };
-
-type PresentationClassOption = {
-  classId: string;
-  classLabel: string;
-  grade: string;
-  className: string;
-};
-
-const extractPresentationClassParts = (params: {
-  classId?: string | null;
-  classLabel?: string | null;
-  grade?: string | null;
-  className?: string | null;
-}) => {
-  const grade = String(params.grade || "").trim();
-  const className = String(params.className || "").trim();
-  if (grade && className) {
-    return { grade, className };
-  }
-
-  for (const candidate of [params.classLabel, params.classId]) {
-    const matches = String(candidate || "").match(/\d+/g);
-    if (matches && matches.length >= 2) {
-      return {
-        grade: matches[0],
-        className: matches[1],
-      };
-    }
-  }
-
-  return {
-    grade: "",
-    className: "",
-  };
-};
-
-const normalizePresentationClassOption = (params: {
-  classId?: string | null;
-  classLabel?: string | null;
-  grade?: string | null;
-  className?: string | null;
-}): PresentationClassOption => {
-  const { grade, className } = extractPresentationClassParts(params);
-  const classId =
-    grade && className
-      ? buildTeacherPresentationClassId(grade, className)
-      : String(params.classId || "").trim() || "preview-default";
-
-  return {
-    classId,
-    classLabel: resolveTeacherPresentationClassLabel({
-      classId,
-      classLabel: params.classLabel,
-      grade,
-      className,
-    }),
-    grade,
-    className,
-  };
-};
-
-const FIXED_PRESENTATION_CLASS_OPTIONS: PresentationClassOption[] = Array.from(
-  { length: 10 },
-  (_, index) =>
-    normalizePresentationClassOption({
-      grade: "3",
-      className: String(index + 1),
-    }),
-);
 
 const reindexFootnotes = (footnotes: LessonFootnote[]) =>
   sortLessonFootnotes(footnotes).map((footnote, index) => ({
@@ -730,7 +641,6 @@ const ManageLesson: React.FC = () => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editorTab, setEditorTab] = useState<LessonEditorTab>("pdf");
-  const [bodyEditorOpen, setBodyEditorOpen] = useState(false);
   const [lessonTitle, setLessonTitle] = useState("");
   const [lessonVideo, setLessonVideo] = useState("");
   const [lessonContent, setLessonContent] = useState("");
@@ -793,24 +703,6 @@ const ManageLesson: React.FC = () => {
   >(null);
   const [targetNode, setTargetNode] = useState<TreeNode | null>(null);
   const [modalInput, setModalInput] = useState("");
-  const [teacherPreviewOpen, setTeacherPreviewOpen] = useState(false);
-  const [presentationClassOptions, setPresentationClassOptions] = useState<
-    PresentationClassOption[]
-  >([]);
-  const [teacherPreviewClassId, setTeacherPreviewClassId] = useState("");
-  const [teacherPreviewClassLabel, setTeacherPreviewClassLabel] = useState("");
-  const [teacherPreviewClassSummaries, setTeacherPreviewClassSummaries] =
-    useState<Record<string, TeacherPresentationClassSummary>>({});
-  const [teacherPreviewClassLoadState, setTeacherPreviewClassLoadState] =
-    useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [
-    presentationClassOptionLoadState,
-    setPresentationClassOptionLoadState,
-  ] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [cachedTeacherPreviewSummary, setCachedTeacherPreviewSummary] =
-    useState<TeacherPresentationClassSummary | null>(null);
-  const [teacherPreviewRuntimeStatus, setTeacherPreviewRuntimeStatus] =
-    useState<TeacherPresentationRuntimeStatus | null>(null);
   const [lessonSaveState, setLessonSaveState] = useState<
     "saved" | "saving" | "dirty"
   >("saved");
@@ -929,160 +821,6 @@ const ManageLesson: React.FC = () => {
         .includes(keyword),
     );
   }, [sourceArchiveAssets, sourceArchiveSearch]);
-  const sortedPresentationClassOptions = useMemo(() => {
-    const optionMap = new Map<string, TeacherPresentationClassSummary>();
-
-    presentationClassOptions.forEach((option) => {
-      const normalizedOption = normalizePresentationClassOption(option);
-      const matchedSummary =
-        Object.values(teacherPreviewClassSummaries).find(
-          (summary) =>
-            normalizePresentationClassOption(summary).classId ===
-            normalizedOption.classId,
-        ) || null;
-      optionMap.set(normalizedOption.classId, {
-        ...(matchedSummary || {}),
-        classId: normalizedOption.classId,
-        classLabel: normalizedOption.classLabel,
-        grade: normalizedOption.grade,
-        className: normalizedOption.className,
-      });
-    });
-
-    Object.values(teacherPreviewClassSummaries).forEach((summary) => {
-      const normalizedSummary = normalizePresentationClassOption(summary);
-      optionMap.set(normalizedSummary.classId, {
-        ...(optionMap.get(normalizedSummary.classId) || {}),
-        ...summary,
-        classId: normalizedSummary.classId,
-        classLabel: normalizedSummary.classLabel,
-        grade: normalizedSummary.grade,
-        className: normalizedSummary.className,
-        hasSavedState: summary.hasSavedState ?? true,
-      });
-    });
-
-    if (cachedTeacherPreviewSummary) {
-      const normalizedCached = normalizePresentationClassOption(
-        cachedTeacherPreviewSummary,
-      );
-      optionMap.set(normalizedCached.classId, {
-        ...cachedTeacherPreviewSummary,
-        classId: normalizedCached.classId,
-        classLabel: normalizedCached.classLabel,
-        grade: normalizedCached.grade,
-        className: normalizedCached.className,
-        isFallback: !Object.values(teacherPreviewClassSummaries).some(
-          (summary) =>
-            normalizePresentationClassOption(summary).classId ===
-            normalizedCached.classId,
-        ),
-      });
-    }
-
-    return sortTeacherPresentationClasses(
-      Array.from(optionMap.values()),
-      teacherPreviewClassId,
-    );
-  }, [
-    cachedTeacherPreviewSummary,
-    presentationClassOptions,
-    teacherPreviewClassId,
-    teacherPreviewClassSummaries,
-  ]);
-  const selectedTeacherPreviewSummary = useMemo(() => {
-    const matchedSummary =
-      Object.values(teacherPreviewClassSummaries).find(
-        (summary) =>
-          normalizePresentationClassOption(summary).classId ===
-          teacherPreviewClassId,
-      ) || null;
-    if (matchedSummary) return matchedSummary;
-    if (!cachedTeacherPreviewSummary) return null;
-    return normalizePresentationClassOption(cachedTeacherPreviewSummary)
-      .classId === teacherPreviewClassId
-      ? cachedTeacherPreviewSummary
-      : null;
-  }, [
-    cachedTeacherPreviewSummary,
-    teacherPreviewClassId,
-    teacherPreviewClassSummaries,
-  ]);
-  const resolvedTeacherPreviewClassLabel = useMemo(() => {
-    const matchedOption = sortedPresentationClassOptions.find(
-      (option) => option.classId === teacherPreviewClassId,
-    );
-    if (matchedOption?.classLabel) {
-      return matchedOption.classLabel;
-    }
-
-    if (selectedTeacherPreviewSummary?.classLabel) {
-      return selectedTeacherPreviewSummary.classLabel;
-    }
-
-    if (cachedTeacherPreviewSummary) {
-      const normalizedCached = normalizePresentationClassOption(
-        cachedTeacherPreviewSummary,
-      );
-      if (normalizedCached.classId === teacherPreviewClassId) {
-        return normalizedCached.classLabel;
-      }
-    }
-
-    if (!teacherPreviewClassId) return "미리보기용 공용 상태";
-
-    return resolveTeacherPresentationClassLabel({
-      classId: teacherPreviewClassId,
-      classLabel: teacherPreviewClassLabel,
-    });
-  }, [
-    cachedTeacherPreviewSummary,
-    selectedTeacherPreviewSummary,
-    sortedPresentationClassOptions,
-    teacherPreviewClassId,
-    teacherPreviewClassLabel,
-  ]);
-  const recentTeacherPreviewSummary = useMemo(
-    () =>
-      sortTeacherPresentationClasses(
-        [
-          ...Object.values(teacherPreviewClassSummaries),
-          ...(cachedTeacherPreviewSummary ? [cachedTeacherPreviewSummary] : []),
-        ],
-        teacherPreviewClassId,
-      ).find((item) => item.hasSavedState) || null,
-    [
-      cachedTeacherPreviewSummary,
-      teacherPreviewClassId,
-      teacherPreviewClassSummaries,
-    ],
-  );
-  const recentTeacherPreviewItems = useMemo(
-    () =>
-      getRecentTeacherPresentationItems(
-        [
-          ...Object.values(teacherPreviewClassSummaries),
-          ...(cachedTeacherPreviewSummary ? [cachedTeacherPreviewSummary] : []),
-        ],
-        3,
-      ),
-    [cachedTeacherPreviewSummary, teacherPreviewClassSummaries],
-  );
-  const teacherPreviewWarningState = useMemo(
-    () =>
-      teacherPreviewRuntimeStatus
-        ? getTeacherPresentationWarningState({
-            saveState: teacherPreviewRuntimeStatus.saveState,
-            hasUnsavedChanges: teacherPreviewRuntimeStatus.hasUnsavedChanges,
-            classLabel: teacherPreviewRuntimeStatus.classLabel,
-          })
-        : null,
-    [teacherPreviewRuntimeStatus],
-  );
-  const selectedTeacherPreviewBadge = useMemo(
-    () => getTeacherPresentationRuntimeBadge(selectedTeacherPreviewSummary),
-    [selectedTeacherPreviewSummary],
-  );
   const pendingFootnoteEditorSnapshot = useMemo(() => {
     if (!footnoteEditorSession) return null;
 
@@ -1977,137 +1715,6 @@ const ManageLesson: React.FC = () => {
 
     return () => window.clearTimeout(timeoutId);
   }, [pdfExtractionRetryOverlay, selectedNodeId]);
-  useEffect(() => {
-    setCachedTeacherPreviewSummary(
-      normalizeTeacherPresentationClassSummary(
-        readRecentTeacherPresentationClass({
-          teacherUid: currentUser?.uid,
-          lessonId: selectedNodeId,
-        }),
-      ),
-    );
-  }, [currentUser?.uid, selectedNodeId]);
-  useEffect(() => {
-    const loadPresentationClasses = async () => {
-      setPresentationClassOptionLoadState("loading");
-      try {
-        setPresentationClassOptions(FIXED_PRESENTATION_CLASS_OPTIONS);
-        setPresentationClassOptionLoadState("ready");
-      } catch (error) {
-        console.error(
-          "Failed to load class options for teacher presentation:",
-          error,
-        );
-        setPresentationClassOptions([]);
-        setPresentationClassOptionLoadState("error");
-      }
-    };
-    void loadPresentationClasses();
-  }, []);
-  useEffect(() => {
-    const loadTeacherPreviewSummaries = async () => {
-      if (!teacherPreviewOpen || !selectedNodeId || !currentUser?.uid) return;
-      setTeacherPreviewClassLoadState("loading");
-      if (cachedTeacherPreviewSummary) {
-        setTeacherPreviewClassSummaries((prev) => ({
-          ...prev,
-          [cachedTeacherPreviewSummary.classId]: cachedTeacherPreviewSummary,
-        }));
-      }
-      try {
-        const snapshot = await getDocs(
-          collection(
-            db,
-            `${getSemesterCollectionPath(config, "lesson_presentations")}/${selectedNodeId}/teachers/${currentUser.uid}/classes`,
-          ),
-        );
-        const nextSummaries: Record<string, TeacherPresentationClassSummary> =
-          {};
-        snapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data() as {
-            classLabel?: string;
-            grade?: string;
-            className?: string;
-            currentPage?: number;
-            updatedAt?: { toDate?: () => Date };
-            lastUsedAt?: { toDate?: () => Date };
-          };
-          const normalizedSummary = normalizeTeacherPresentationClassSummary({
-            classId: docSnap.id,
-            classLabel: resolveTeacherPresentationClassLabel({
-              classId: docSnap.id,
-              classLabel: String(data.classLabel || "").trim(),
-              grade: String(data.grade || "").trim(),
-              className: String(data.className || "").trim(),
-            }),
-            grade: String(data.grade || "").trim(),
-            className: String(data.className || "").trim(),
-            currentPage:
-              typeof data.currentPage === "number" ? data.currentPage : null,
-            updatedAt: data.updatedAt?.toDate?.() || null,
-            lastUsedAt: data.lastUsedAt?.toDate?.() || null,
-            hasSavedState: true,
-          });
-          if (!normalizedSummary) return;
-          nextSummaries[docSnap.id] = normalizedSummary;
-        });
-        setTeacherPreviewClassSummaries((prev) => ({
-          ...prev,
-          ...nextSummaries,
-        }));
-        setTeacherPreviewClassLoadState("ready");
-      } catch (error) {
-        console.error("Failed to load teacher preview class summaries:", error);
-        setTeacherPreviewClassSummaries((prev) =>
-          cachedTeacherPreviewSummary
-            ? {
-                ...prev,
-                [cachedTeacherPreviewSummary.classId]:
-                  cachedTeacherPreviewSummary,
-              }
-            : prev,
-        );
-        setTeacherPreviewClassLoadState("error");
-      }
-    };
-    void loadTeacherPreviewSummaries();
-  }, [
-    cachedTeacherPreviewSummary,
-    config,
-    currentUser?.uid,
-    selectedNodeId,
-    teacherPreviewOpen,
-  ]);
-  useEffect(() => {
-    if (!sortedPresentationClassOptions.length) {
-      if (cachedTeacherPreviewSummary && !teacherPreviewClassId) {
-        setTeacherPreviewClassId(cachedTeacherPreviewSummary.classId);
-        setTeacherPreviewClassLabel(cachedTeacherPreviewSummary.classLabel);
-        return;
-      }
-      if (!teacherPreviewClassId) {
-        setTeacherPreviewClassId("preview-default");
-        setTeacherPreviewClassLabel("미리보기용 공용 상태");
-      }
-      return;
-    }
-    const matched = sortedPresentationClassOptions.find(
-      (option) => option.classId === teacherPreviewClassId,
-    );
-    if (matched) {
-      if (teacherPreviewClassLabel !== matched.classLabel) {
-        setTeacherPreviewClassLabel(matched.classLabel);
-      }
-      return;
-    }
-    setTeacherPreviewClassId(sortedPresentationClassOptions[0].classId);
-    setTeacherPreviewClassLabel(sortedPresentationClassOptions[0].classLabel);
-  }, [
-    cachedTeacherPreviewSummary,
-    sortedPresentationClassOptions,
-    teacherPreviewClassId,
-    teacherPreviewClassLabel,
-  ]);
   useEffect(
     () => () => {
       revokeBlobUrls(worksheetPageImages);
@@ -2146,51 +1753,6 @@ const ManageLesson: React.FC = () => {
     const timeout = window.setTimeout(() => setBodyInsertMessage(""), 2200);
     return () => window.clearTimeout(timeout);
   }, [bodyInsertMessage]);
-  useEffect(() => {
-    if (!teacherPreviewRuntimeStatus || !selectedNodeId || !currentUser?.uid) {
-      return;
-    }
-
-    const runtimeSummary = normalizeTeacherPresentationClassSummary({
-      classId: teacherPreviewRuntimeStatus.classId,
-      classLabel: teacherPreviewRuntimeStatus.classLabel,
-      currentPage: teacherPreviewRuntimeStatus.currentPage,
-      updatedAt: teacherPreviewRuntimeStatus.lastSavedAt,
-      lastUsedAt: teacherPreviewRuntimeStatus.lastSavedAt,
-      hasSavedState: Boolean(teacherPreviewRuntimeStatus.lastSavedAt),
-      runtimeState: teacherPreviewRuntimeStatus.saveState,
-      hasUnsavedChanges: teacherPreviewRuntimeStatus.hasUnsavedChanges,
-      statusText: teacherPreviewRuntimeStatus.statusText,
-    });
-
-    if (!runtimeSummary) return;
-    setTeacherPreviewClassSummaries((prev) => ({
-      ...prev,
-      [runtimeSummary.classId]: {
-        ...(prev[runtimeSummary.classId] || {}),
-        ...runtimeSummary,
-      },
-    }));
-    if (runtimeSummary.classId === teacherPreviewClassId) {
-      setCachedTeacherPreviewSummary(runtimeSummary);
-    }
-  }, [
-    currentUser?.uid,
-    selectedNodeId,
-    teacherPreviewClassId,
-    teacherPreviewRuntimeStatus,
-  ]);
-  useEffect(() => {
-    if (!teacherPreviewRuntimeStatus) return;
-    if (teacherPreviewRuntimeStatus.classId !== teacherPreviewClassId) return;
-    setTeacherPreviewClassLabel(
-      resolveTeacherPresentationClassLabel({
-        classId: teacherPreviewRuntimeStatus.classId,
-        classLabel: teacherPreviewRuntimeStatus.classLabel,
-      }),
-    );
-  }, [teacherPreviewClassId, teacherPreviewRuntimeStatus]);
-
   const resetBlankEditor = useCallback(() => {
     setBlankEditorMode(null);
     setActiveBlankId(null);
@@ -3078,13 +2640,6 @@ const ManageLesson: React.FC = () => {
     return draft.previewUrl || footnote.imageUrl || "";
   };
 
-  const handleBodySelectionChange = (selection: {
-    start: number;
-    end: number;
-  }) => {
-    setBodySelection(selection);
-  };
-
   const insertFootnoteTokenIntoContent = (anchorKey: string) => {
     const token = buildFootnoteToken(anchorKey);
     setLessonContent((prev) =>
@@ -3715,39 +3270,6 @@ const ManageLesson: React.FC = () => {
     }
   };
 
-  const handleTeacherPreviewRuntimeStatusChange = (
-    status: TeacherPresentationRuntimeStatus,
-  ) => {
-    setTeacherPreviewRuntimeStatus(status);
-  };
-
-  const handleTeacherPreviewClassChange = (nextId: string) => {
-    if (nextId === teacherPreviewClassId) return;
-    if (
-      teacherPreviewWarningState?.shouldWarnOnClassSwitch &&
-      !window.confirm(teacherPreviewWarningState.classSwitchMessage)
-    ) {
-      return;
-    }
-    const matched = sortedPresentationClassOptions.find(
-      (option) => option.classId === nextId,
-    );
-    setTeacherPreviewClassId(nextId);
-    setTeacherPreviewClassLabel(
-      resolveTeacherPresentationClassLabel({
-        classId: nextId,
-        classLabel:
-          matched?.classLabel || cachedTeacherPreviewSummary?.classLabel || "",
-        grade: matched?.grade || "",
-        className: matched?.className || "",
-      }),
-    );
-  };
-
-  const handleTeacherPreviewClose = () => {
-    setTeacherPreviewOpen(false);
-  };
-
   const TreeCard = ({ node, level }: { node: TreeNode; level: number }) => {
     const isExpanded = expandedIds.has(node.id);
     const isSelected = selectedNodeId === node.id;
@@ -3883,7 +3405,6 @@ const ManageLesson: React.FC = () => {
                   onLessonTitleChange={setLessonTitle}
                   onToggleVisible={setLessonVisibleToStudents}
                   onSave={() => void saveLesson({ source: "header" })}
-                  onOpenTeacherPreview={() => setTeacherPreviewOpen(true)}
                 />
                 <div className="border-b border-gray-200 bg-white px-4 py-2">
                   <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1">
@@ -3900,7 +3421,7 @@ const ManageLesson: React.FC = () => {
                     ))}
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-3 lg:p-4">
+                <div className="min-w-0 flex-1 p-3 lg:p-4">
                   {editorTab === "pdf" && (
                     <div className="space-y-4">
                       <LessonPdfSection
@@ -3978,74 +3499,33 @@ const ManageLesson: React.FC = () => {
                           pdfSaveState === "saving"
                         }
                       />
-                      <details
-                        className="rounded-xl border border-slate-200 bg-white"
-                        open={bodyEditorOpen || Boolean(footnoteEditorSession)}
-                        onToggle={(event) =>
-                          setBodyEditorOpen(event.currentTarget.open)
-                        }
-                      >
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-slate-800 [&::-webkit-details-marker]:hidden">
-                          <span>본문/각주 보조 편집</span>
-                          <span className="text-xs font-semibold text-slate-500">
-                            각주 {lessonFootnotes.length}개
-                          </span>
-                        </summary>
-                        <div className="border-t border-slate-200 p-4">
-                          <LessonBodyEditor
-                            lessonContent={lessonContent}
-                            onLessonContentChange={setLessonContent}
-                            bodyInsertMessage={bodyInsertMessage}
-                            footnotes={lessonFootnotes}
-                            footnoteUsageMap={footnoteUsageMap}
-                            footnoteAnchorCountMap={footnoteAnchorCountMap}
-                            selectedFootnoteId={activeFootnoteId}
-                            onBodySelectionChange={handleBodySelectionChange}
-                            onAddFootnote={handleAddFootnote}
-                            onAddFootnoteAndInsert={handleAddFootnoteAndInsert}
-                            onOpenFootnoteEditor={openEditFootnoteEditor}
-                            onFootnoteDraftChange={
-                              handleFootnoteEditorDraftChange
-                            }
-                            onSaveFootnoteEditor={handleSaveFootnoteEditor}
-                            onCloseFootnoteEditor={handleCloseFootnoteEditor}
-                            onMoveFootnote={handleMoveFootnote}
-                            onDeleteFootnote={handleDeleteFootnote}
-                            onInsertFootnoteToken={
-                              insertFootnoteTokenIntoContent
-                            }
-                            footnoteEditorSession={
-                              footnoteEditorSession
-                                ? {
-                                    mode: footnoteEditorSession.mode,
-                                    draft: footnoteEditorSession.draft,
-                                    pendingAnchorPlacement:
-                                      footnoteEditorSession.pendingAnchorPlacement
-                                        ? {
-                                            page: footnoteEditorSession
-                                              .pendingAnchorPlacement.page,
-                                          }
-                                        : null,
-                                    insertIntoBody:
-                                      footnoteEditorSession.insertIntoBody,
-                                  }
-                                : null
-                            }
-                            onSelectFootnoteImage={handleSelectFootnoteImage}
-                            onRemoveFootnoteImage={handleRemoveFootnoteImage}
-                            onOpenSourceArchivePicker={
-                              handleOpenSourceArchivePicker
-                            }
-                            onClearSourceArchiveImage={
-                              handleClearSourceArchiveImage
-                            }
-                            getFootnotePreviewUrl={getFootnotePreviewUrl}
-                            sourceArchivePickerOpen={Boolean(
-                              sourceArchivePickerFootnoteId,
-                            )}
-                          />
-                        </div>
-                      </details>
+                      {footnoteEditorSession && (
+                        <FootnoteEditorDialog
+                          session={footnoteEditorSession}
+                          footnotes={lessonFootnotes}
+                          footnoteUsageMap={footnoteUsageMap}
+                          footnoteAnchorCountMap={footnoteAnchorCountMap}
+                          onFootnoteDraftChange={
+                            handleFootnoteEditorDraftChange
+                          }
+                          onSaveFootnoteEditor={handleSaveFootnoteEditor}
+                          onCloseFootnoteEditor={handleCloseFootnoteEditor}
+                          onMoveFootnote={handleMoveFootnote}
+                          onDeleteFootnote={handleDeleteFootnote}
+                          onSelectFootnoteImage={handleSelectFootnoteImage}
+                          onRemoveFootnoteImage={handleRemoveFootnoteImage}
+                          onOpenSourceArchivePicker={
+                            handleOpenSourceArchivePicker
+                          }
+                          onClearSourceArchiveImage={
+                            handleClearSourceArchiveImage
+                          }
+                          getFootnotePreviewUrl={getFootnotePreviewUrl}
+                          isNestedModalOpen={Boolean(
+                            sourceArchivePickerFootnoteId,
+                          )}
+                        />
+                      )}
                     </div>
                   )}
                   {editorTab === "student-preview" && (
@@ -4054,51 +3534,7 @@ const ManageLesson: React.FC = () => {
                         lesson={lessonDraft}
                         unitId={selectedNodeId}
                         fallbackTitle={selectedNodeTitle}
-                        onOpenTeacherPreview={() => setTeacherPreviewOpen(true)}
                       />
-                      {teacherPreviewRuntimeStatus && !teacherPreviewOpen && (
-                        <div className="mt-4 rounded-3xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-                                마지막 교사용 판서 상태
-                              </div>
-                              <div className="mt-1 text-sm font-semibold text-slate-900">
-                                {teacherPreviewRuntimeStatus.classLabel}
-                              </div>
-                              <div className="mt-1 text-xs text-slate-500">
-                                {teacherPreviewRuntimeStatus.statusText}
-                              </div>
-                            </div>
-                            <div
-                              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
-                                selectedTeacherPreviewBadge.tone === "rose"
-                                  ? "bg-rose-100 text-rose-700"
-                                  : selectedTeacherPreviewBadge.tone === "amber"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : selectedTeacherPreviewBadge.tone ===
-                                        "blue"
-                                      ? "bg-blue-100 text-blue-700"
-                                      : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {selectedTeacherPreviewBadge.tone === "rose" && (
-                                <i className="fas fa-triangle-exclamation text-[11px]"></i>
-                              )}
-                              {selectedTeacherPreviewBadge.tone === "amber" && (
-                                <i className="fas fa-pen text-[11px]"></i>
-                              )}
-                              {selectedTeacherPreviewBadge.tone === "blue" && (
-                                <i className="fas fa-check text-[11px]"></i>
-                              )}
-                              {selectedTeacherPreviewBadge.tone === "slate" && (
-                                <i className="fas fa-clock text-[11px]"></i>
-                              )}
-                              {selectedTeacherPreviewBadge.text}
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </>
                   )}
                 </div>
@@ -4168,43 +3604,6 @@ const ManageLesson: React.FC = () => {
         onClose={() => setSourceArchivePickerFootnoteId(null)}
         onSelectAsset={handleSelectSourceArchiveAsset}
       />
-      {/* ManageLesson is the current official teacher-present entry point.
-          Future entry points should pass the same class context contract. */}
-      {teacherPreviewOpen && (
-        <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-sm">
-          <div className="h-full overflow-y-auto p-3 md:p-4">
-            <TeacherPresentationLauncher
-              recentItems={recentTeacherPreviewItems}
-              selectedSummary={selectedTeacherPreviewSummary}
-              selectedClassId={teacherPreviewClassId}
-              selectedClassLabel={resolvedTeacherPreviewClassLabel}
-              classOptions={sortedPresentationClassOptions}
-              optionLoadState={presentationClassOptionLoadState}
-              classLoadState={teacherPreviewClassLoadState}
-              cachedSummary={cachedTeacherPreviewSummary}
-              onSelectClass={handleTeacherPreviewClassChange}
-            />
-            <React.Suspense
-              fallback={
-                <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-6 text-center text-sm font-semibold text-slate-100">
-                  교사용 수업 화면을 준비하는 중입니다.
-                </div>
-              }
-            >
-              <TeacherLessonPresentation
-                key={`${lessonDraft.unitId || "lesson"}-${teacherPreviewClassId || "preview-default"}`}
-                lesson={lessonDraft}
-                fallbackTitle={selectedNodeTitle}
-                fullscreenPreview
-                classId={teacherPreviewClassId}
-                classLabel={resolvedTeacherPreviewClassLabel}
-                onRuntimeStatusChange={handleTeacherPreviewRuntimeStatusChange}
-                onClosePreview={handleTeacherPreviewClose}
-              />
-            </React.Suspense>
-          </div>
-        </div>
-      )}
       {(screenBusyMessage || pdfExtractionRetryOverlay) && (
         <LoadingOverlay
           message={

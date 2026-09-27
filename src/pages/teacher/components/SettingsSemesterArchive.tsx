@@ -11,7 +11,7 @@ import {
 } from "../../../lib/semesterArchive";
 
 const controlClass =
-  "w-full rounded-lg border border-gray-300 bg-white p-3 text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60";
+  "w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-3 sm:px-3 text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60";
 const secondaryButtonClass =
   "rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60";
 const semesterKey = (scope: SemesterScope) => `${scope.year}-${scope.semester}`;
@@ -119,13 +119,13 @@ const SettingsSemesterArchive: React.FC = () => {
                 <legend className="text-sm font-bold text-gray-700">
                   조회할 이전 학기
                 </legend>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2 sm:gap-4">
                   <div>
                     <label
                       htmlFor="archive-year"
                       className="mb-2 block text-sm font-bold text-gray-700"
                     >
-                      연도
+                      학년도
                     </label>
                     <select
                       id="archive-year"
@@ -144,7 +144,7 @@ const SettingsSemesterArchive: React.FC = () => {
                         ),
                       ].map((year) => (
                         <option key={year} value={year}>
-                          {year}학년도
+                          {year}
                         </option>
                       ))}
                     </select>
@@ -174,28 +174,28 @@ const SettingsSemesterArchive: React.FC = () => {
                         ))}
                     </select>
                   </div>
+                  <button
+                    type="button"
+                    disabled={!selected}
+                    aria-label="조회하기 (새 창)"
+                    className="whitespace-nowrap rounded-lg bg-blue-600 px-3 py-3 sm:px-6 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => {
+                      if (!selected) return;
+                      window.open(
+                        buildSemesterArchiveUrl(selected, window.location.href),
+                        "_blank",
+                        "popup,width=1440,height=960,noopener,noreferrer",
+                      );
+                      setOpened(true);
+                    }}
+                  >
+                    조회하기{" "}
+                    <i
+                      className="fas fa-arrow-up-right-from-square ml-2 hidden sm:inline"
+                      aria-hidden="true"
+                    />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  disabled={!selected}
-                  aria-label="조회하기 (새 창)"
-                  className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => {
-                    if (!selected) return;
-                    window.open(
-                      buildSemesterArchiveUrl(selected, window.location.href),
-                      "_blank",
-                      "popup,width=1440,height=960,noopener,noreferrer",
-                    );
-                    setOpened(true);
-                  }}
-                >
-                  조회하기{" "}
-                  <i
-                    className="fas fa-arrow-up-right-from-square ml-2"
-                    aria-hidden="true"
-                  />
-                </button>
                 {opened && (
                   <p role="status" className="text-sm leading-6 text-gray-500">
                     창이 열리지 않으면 브라우저의 팝업 차단을 해제한 뒤 다시

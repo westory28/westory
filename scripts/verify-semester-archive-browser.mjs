@@ -252,7 +252,7 @@ try {
   assert.equal(await parent.getByText("조회 자료", { exact: true }).count(), 0);
   assert.equal(await parent.locator("#archive-year option").count(), 2);
   assert.equal(await parent.locator("#archive-semester option").count(), 1);
-  await parent.getByLabel("연도", { exact: true }).selectOption("2025");
+  await parent.getByLabel("학년도", { exact: true }).selectOption("2025");
   assert.equal(await parent.locator("#archive-semester option").count(), 2);
   await parent.getByLabel("학기", { exact: true }).selectOption("2025-1");
   for (const width of [390, 768, 1280])
