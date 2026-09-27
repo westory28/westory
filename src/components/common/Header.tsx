@@ -4,6 +4,11 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import PointRankBadge from "./PointRankBadge";
 import { useAppToast } from "./AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
+import {
+  getHistoryDictionaryPanel,
+  HISTORY_DICTIONARY_PANELS,
+  HISTORY_DICTIONARY_PATH,
+} from "../../constants/historyDictionaryPanels";
 import { MENUS } from "../../constants/menus";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import TeacherSidebar, {
@@ -36,6 +41,7 @@ import {
   canAccessTeacherPath,
   canManageSettings,
   canReadLessonManagement,
+  canWriteLessonManagement,
   canReadPoints,
   canReadQuizManagement,
   canReadStudentList,
@@ -254,6 +260,13 @@ const Header: React.FC<{
 
     const queryParams = new URLSearchParams(query || "");
     const currentParams = new URLSearchParams(location.search);
+    if (path === HISTORY_DICTIONARY_PATH && useTeacherSidebar) {
+      const canWrite = canWriteLessonManagement(userData, currentUser?.email);
+      const panel = getHistoryDictionaryPanel(currentParams, canWrite);
+      return panel === (queryParams.get("panel") || "terms")
+        ? path.length * 10 + 100
+        : -1;
+    }
     for (const [key, value] of queryParams.entries()) {
       if (currentParams.get(key) !== value) return -1;
     }
@@ -297,7 +310,7 @@ const Header: React.FC<{
     const tab = new URLSearchParams(query).get("tab") || "";
     return path === "/teacher/points" && shopTabs.has(tab) ? tab : "";
   };
-  const dictionaryUrl = "/teacher/lesson/history-dictionary";
+  const dictionaryUrl = HISTORY_DICTIONARY_PATH;
   const resolvedTeacherMenus = useTeacherSidebar
     ? menuItems.map((item) => {
         const resolvedChildren = getResolvedChildUrls(
@@ -424,8 +437,14 @@ const Header: React.FC<{
       name: "사전",
       icon: "dictionary",
       secondary: true,
-      directUrl: dictionaryChild.resolvedUrl,
-      children: [dictionaryChild],
+      children: HISTORY_DICTIONARY_PANELS.filter(
+        (panel) =>
+          panel.id !== "upload" ||
+          canWriteLessonManagement(userData, currentUser?.email),
+      ).map((panel) => ({
+        name: panel.name,
+        resolvedUrl: `${dictionaryUrl}?panel=${panel.id}`,
+      })),
     });
 
   const activeDesktopSubmenu = menuItems

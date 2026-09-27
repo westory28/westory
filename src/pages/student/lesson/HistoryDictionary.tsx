@@ -16,6 +16,7 @@ import {
   saveStudentHistoryDictionaryWord,
   subscribeStudentHistoryDictionaryWords,
 } from "../../../lib/historyDictionary";
+import { getHistoryDictionaryErrorMessage } from "../../../lib/historyDictionarySession";
 import type {
   HistoryDictionaryTerm,
   StudentHistoryDictionaryWord,
@@ -108,7 +109,7 @@ const getTimestampMs = (value: unknown) => {
 };
 
 const HistoryDictionary: React.FC = () => {
-  const { currentUser, config } = useAuth();
+  const { currentUser, config, configReady } = useAuth();
   const { showToast } = useAppToast();
   const wordListRef = useRef<HTMLDivElement>(null);
   const wordSectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -233,12 +234,37 @@ const HistoryDictionary: React.FC = () => {
   }, [activeInitial, groupedVisibleWords]);
 
   useEffect(() => {
-    if (!currentUser?.uid) {
+    setWords([]);
+    setWord("");
+    setDefinition("");
+    setMemo("");
+    setTeacherChecked(false);
+    setWarningAccepted(false);
+    setRequestDialogOpen(false);
+    setSelectedWordId("");
+    setTeacherTerm(null);
+    if (!configReady || !config || !currentUser?.uid) {
       setWords([]);
       return undefined;
     }
-    return subscribeStudentHistoryDictionaryWords(currentUser.uid, setWords);
-  }, [currentUser?.uid]);
+    return subscribeStudentHistoryDictionaryWords(
+      currentUser.uid,
+      setWords,
+      config,
+      (error) =>
+        showToast({
+          tone: "error",
+          title: "저장한 단어를 불러오지 못했습니다.",
+          message: getHistoryDictionaryErrorMessage(error),
+        }),
+    );
+  }, [
+    currentUser?.uid,
+    configReady,
+    config?.year,
+    config?.semester,
+    showToast,
+  ]);
 
   useEffect(() => {
     setTeacherChecked(false);
@@ -295,7 +321,7 @@ const HistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "단어 저장에 실패했습니다.",
-        message: "단어와 뜻풀이를 확인한 뒤 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusy(false);
@@ -327,7 +353,7 @@ const HistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "단어 삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusy(false);
@@ -338,13 +364,21 @@ const HistoryDictionary: React.FC = () => {
     if (!currentWord || busy) return;
     setBusy(true);
     try {
-      const result = await loadPublishedHistoryDictionaryTerm(currentWord);
+      const result = await loadPublishedHistoryDictionaryTerm(
+        currentWord,
+        config,
+      );
       setTeacherTerm(result);
       setTeacherChecked(true);
     } catch (error) {
       console.error("Failed to check teacher dictionary term:", error);
       setTeacherTerm(null);
-      setTeacherChecked(true);
+      setTeacherChecked(false);
+      showToast({
+        tone: "error",
+        title: "선생님 뜻풀이를 확인하지 못했습니다.",
+        message: getHistoryDictionaryErrorMessage(error),
+      });
     } finally {
       setBusy(false);
     }
@@ -354,7 +388,7 @@ const HistoryDictionary: React.FC = () => {
     if (!teacherTerm || busy) return;
     setBusy(true);
     try {
-      await saveStudentHistoryDictionaryWord(teacherTerm.id);
+      await saveStudentHistoryDictionaryWord(teacherTerm.id, config);
       setDefinition(teacherTerm.definition);
       showToast({
         tone: "success",
@@ -366,7 +400,7 @@ const HistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "선생님 뜻풀이 저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusy(false);
@@ -401,7 +435,7 @@ const HistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "요청을 보내지 못했습니다.",
-        message: "단어를 확인한 뒤 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusy(false);

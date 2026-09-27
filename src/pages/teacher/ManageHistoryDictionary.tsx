@@ -6,6 +6,9 @@ import React, {
   useState,
 } from "react";
 import { useSearchParams } from "react-router-dom";
+import { getHistoryDictionaryPanel } from "../../constants/historyDictionaryPanels";
+import { getHistoryDictionaryErrorMessage } from "../../lib/historyDictionarySession";
+import { canWriteLessonManagement } from "../../lib/permissions";
 import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
@@ -81,8 +84,6 @@ const INITIAL_FILTERS = [
   "ㅍ",
   "ㅎ",
 ];
-
-type ActiveDictionaryPanel = "terms" | "studentWords" | "requests" | "upload";
 
 interface HistoryDictionaryUploadRow {
   id: string;
@@ -209,7 +210,8 @@ const mergeRequestSources = (
 };
 
 const ManageHistoryDictionary: React.FC = () => {
-  const { config, currentUser } = useAuth();
+  const { config, configReady, currentUser, userData } = useAuth();
+  const canWrite = canWriteLessonManagement(userData, currentUser?.email);
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -241,8 +243,7 @@ const ManageHistoryDictionary: React.FC = () => {
   const [requestSearch, setRequestSearch] = useState("");
   const [termSearch, setTermSearch] = useState("");
   const [studentWordSearch, setStudentWordSearch] = useState("");
-  const [activePanel, setActivePanel] =
-    useState<ActiveDictionaryPanel>("terms");
+  const activePanel = getHistoryDictionaryPanel(searchParams, canWrite);
   const [activeInitial, setActiveInitial] = useState(ALL_INITIAL);
   const [scrollActiveInitial, setScrollActiveInitial] = useState(ALL_INITIAL);
   const [activeStudentWordInitial, setActiveStudentWordInitial] =
@@ -251,26 +252,55 @@ const ManageHistoryDictionary: React.FC = () => {
     useState(ALL_INITIAL);
 
   useEffect(() => {
-    const unsubscribeRequests =
-      subscribeTeacherHistoryDictionaryRequests(setRequests);
+    setRequests([]);
+    setTerms([]);
+    setSelectedRequestId("");
+    setSelectedTermId("");
+    setSelectedStudentWordId("");
+    setWord("");
+    setDefinition("");
+    setRelatedUnitId("");
+    setTags([]);
+    setTagInput("");
+    setUploadRows([]);
+    setUploadFileName("");
+    if (!configReady || !config || !currentUser?.uid) return;
+    const unsubscribeRequests = subscribeTeacherHistoryDictionaryRequests(
+      setRequests,
+      config,
+      (error) =>
+        showToast({
+          tone: "error",
+          title: "학생 요청 단어를 불러오지 못했습니다.",
+          message: getHistoryDictionaryErrorMessage(error),
+        }),
+    );
     const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
       setTerms,
-      () => {
+      (error) => {
         showToast({
           tone: "error",
           title: "등록된 단어 목록을 불러오지 못했습니다.",
-          message:
-            "새로고침 후에도 계속 비어 있으면 Firestore 읽기 권한을 확인해야 합니다.",
+          message: getHistoryDictionaryErrorMessage(error),
         });
       },
+      config,
     );
     return () => {
       unsubscribeRequests();
       unsubscribeTerms();
     };
-  }, [showToast]);
+  }, [
+    configReady,
+    config?.year,
+    config?.semester,
+    currentUser?.uid,
+    showToast,
+  ]);
 
   useEffect(() => {
+    setStudentWords([]);
+    if (!configReady || !config || !currentUser?.uid) return;
     let cancelled = false;
 
     const loadStudentWords = async () => {
@@ -287,8 +317,7 @@ const ManageHistoryDictionary: React.FC = () => {
           showToast({
             tone: "error",
             title: "학생 등록 단어를 불러오지 못했습니다.",
-            message:
-              "교사 권한 확인 후에도 계속 비어 있으면 Functions 배포 상태를 확인해야 합니다.",
+            message: getHistoryDictionaryErrorMessage(error),
           });
         }
       }
@@ -298,13 +327,17 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config?.semester, config?.year, showToast]);
+  }, [
+    configReady,
+    config?.semester,
+    config?.year,
+    currentUser?.uid,
+    showToast,
+  ]);
 
   useEffect(() => {
-    if (!config || !currentUser?.uid) {
-      setNotificationRequests([]);
-      return;
-    }
+    setNotificationRequests([]);
+    if (!configReady || !config || !currentUser?.uid) return;
     let cancelled = false;
 
     const loadFallbackRequests = async () => {
@@ -329,34 +362,15 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config?.semester, config?.year, currentUser?.uid]);
+  }, [configReady, config?.semester, config?.year, currentUser?.uid]);
 
   useEffect(() => {
-    const panel = searchParams.get("panel");
-    const requestId = searchParams.get("requestId");
-    if (panel === "upload") {
-      setActivePanel("upload");
-      setSelectedRequestId("");
-      setSelectedTermId("");
-      setSelectedStudentWordId("");
-    }
-    if (panel === "studentWords") {
-      setActivePanel("studentWords");
-      setSelectedRequestId("");
-      setSelectedTermId("");
-    }
-    if (panel === "requests") {
-      setActivePanel("requests");
-      setSelectedTermId("");
-      setSelectedStudentWordId("");
-    }
-    if (requestId) {
-      setActivePanel("requests");
-      setSelectedTermId("");
-      setSelectedStudentWordId("");
-      setSelectedRequestId(requestId);
-    }
-  }, [searchParams]);
+    if (activePanel !== "terms") setSelectedTermId("");
+    if (activePanel !== "studentWords") setSelectedStudentWordId("");
+    setSelectedRequestId(
+      activePanel === "requests" ? searchParams.get("requestId") || "" : "",
+    );
+  }, [activePanel, searchParams]);
 
   const mergedRequests = useMemo(
     () => mergeRequestSources(requests, notificationRequests),
@@ -644,7 +658,6 @@ const ManageHistoryDictionary: React.FC = () => {
   }, [selectedStudentWord]);
 
   const handleSelectRequest = (requestId: string) => {
-    setActivePanel("requests");
     setSelectedRequestId(requestId);
     setSelectedTermId("");
     setSelectedStudentWordId("");
@@ -652,7 +665,6 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleSelectTerm = (term: HistoryDictionaryTerm) => {
-    setActivePanel("terms");
     setSelectedTermId(term.id);
     setSelectedRequestId("");
     setSelectedStudentWordId("");
@@ -660,7 +672,6 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleSelectStudentWord = (item: StudentHistoryDictionaryWord) => {
-    setActivePanel("studentWords");
     setSelectedStudentWordId(item.id);
     setSelectedRequestId("");
     setSelectedTermId("");
@@ -668,7 +679,6 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleNewTerm = () => {
-    setActivePanel("terms");
     setSelectedRequestId("");
     setSelectedTermId("__new__");
     setSelectedStudentWordId("");
@@ -742,8 +752,6 @@ const ManageHistoryDictionary: React.FC = () => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-
-    setActivePanel("upload");
     setSelectedRequestId("");
     setSelectedTermId("");
     setSearchParams({ panel: "upload" });
@@ -927,7 +935,7 @@ const ManageHistoryDictionary: React.FC = () => {
         message: `${result.savedCount}개 항목을 학생용 풀이로 저장했습니다.`,
       });
       try {
-        const latestTerms = await loadTeacherHistoryDictionaryTerms();
+        const latestTerms = await loadTeacherHistoryDictionaryTerms(config);
         setTerms(latestTerms);
         setTermSearch("");
         setActiveInitial(ALL_INITIAL);
@@ -943,14 +951,13 @@ const ManageHistoryDictionary: React.FC = () => {
         });
       }
       handleClearUploadPreview();
-      setActivePanel("terms");
       setSearchParams({});
     } catch (error) {
       console.error("Failed to register history dictionary Excel rows:", error);
       showToast({
         tone: "error",
         title: "일괄 등록 중 일부 항목을 저장하지 못했습니다.",
-        message: "목록을 새로 확인한 뒤 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusyMessage("");
@@ -990,7 +997,7 @@ const ManageHistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "역사 사전 저장에 실패했습니다.",
-        message: "입력 내용을 확인한 뒤 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusyMessage("");
@@ -1052,7 +1059,7 @@ const ManageHistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "학생 등록 단어 수정에 실패했습니다.",
-        message: "단어 중복 여부와 입력 내용을 확인한 뒤 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusyMessage("");
@@ -1079,7 +1086,7 @@ const ManageHistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "뜻풀이 승인에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusyMessage("");
@@ -1120,7 +1127,7 @@ const ManageHistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "요청 단어 삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusyMessage("");
@@ -1174,7 +1181,7 @@ const ManageHistoryDictionary: React.FC = () => {
       showToast({
         tone: "error",
         title: "학생 등록 단어 삭제에 실패했습니다.",
-        message: "권한 또는 위스 회수 상태를 확인한 뒤 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setBusyMessage("");
@@ -1184,88 +1191,7 @@ const ManageHistoryDictionary: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-4 xl:grid-cols-[13rem_minmax(30rem,1.25fr)_minmax(24rem,0.95fr)]">
-          <aside className="self-start overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <nav
-              className="divide-y divide-slate-200"
-              aria-label="역사 사전 관리 메뉴"
-            >
-              {[
-                {
-                  id: "terms" as const,
-                  label: "등록된 단어",
-                  description: "등록 풀이 수정",
-                },
-                {
-                  id: "studentWords" as const,
-                  label: "학생 등록 단어",
-                  description: "직접 저장 확인",
-                },
-                {
-                  id: "requests" as const,
-                  label: "학생 요청 단어",
-                  description: "요청 풀이 작성",
-                },
-                {
-                  id: "upload" as const,
-                  label: "Excel 업로드",
-                  description: "양식 일괄 등록",
-                },
-              ].map((item) => {
-                const active = activePanel === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setActivePanel(item.id);
-                      if (item.id === "terms") {
-                        setSelectedRequestId("");
-                        setSelectedStudentWordId("");
-                        setSearchParams({});
-                      } else if (item.id === "studentWords") {
-                        setSelectedRequestId("");
-                        setSelectedTermId("");
-                        setSearchParams({ panel: "studentWords" });
-                      } else if (item.id === "requests") {
-                        setSelectedTermId("");
-                        setSelectedStudentWordId("");
-                        setSearchParams({ panel: "requests" });
-                      } else {
-                        setSelectedRequestId("");
-                        setSelectedTermId("");
-                        setSelectedStudentWordId("");
-                        setSearchParams({ panel: "upload" });
-                      }
-                    }}
-                    className={`relative block min-h-[3.75rem] w-full px-4 py-3 text-left transition ${
-                      active
-                        ? "bg-blue-50 text-blue-700"
-                        : "bg-white text-slate-800 hover:bg-slate-50"
-                    }`}
-                  >
-                    {active && (
-                      <span
-                        className="absolute inset-y-0 left-0 w-1 bg-blue-600"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span className="block text-sm font-extrabold">
-                      {item.label}
-                    </span>
-                    <span
-                      className={`mt-1 block text-xs font-bold ${
-                        active ? "text-blue-600" : "text-slate-500"
-                      }`}
-                    >
-                      {item.description}
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
-          </aside>
-
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]">
           {activePanel === "terms" ? (
             <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">

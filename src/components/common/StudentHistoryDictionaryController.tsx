@@ -10,6 +10,7 @@ import {
   saveStudentHistoryDictionaryWord,
   subscribeStudentHistoryDictionaryWords,
 } from "../../lib/historyDictionary";
+import { getHistoryDictionaryErrorMessage } from "../../lib/historyDictionarySession";
 import type {
   HistoryDictionaryTerm,
   StudentHistoryDictionaryWord,
@@ -33,7 +34,7 @@ const formatStatusLabel = (status: StudentHistoryDictionaryWord["status"]) =>
   status === "saved" ? "저장됨" : "요청 중";
 
 const StudentHistoryDictionaryController: React.FC = () => {
-  const { currentUser, config } = useAuth();
+  const { currentUser, config, configReady } = useAuth();
   const { showToast } = useAppToast();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -75,12 +76,37 @@ const StudentHistoryDictionaryController: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!currentUser?.uid || !isStudentRoute) {
+    setWords([]);
+    setWord("");
+    setDefinition("");
+    setMemo("");
+    setTeacherChecked(false);
+    setWarningAccepted(false);
+    setRequestDialogOpen(false);
+    setTerm(null);
+    if (!configReady || !config || !currentUser?.uid || !isStudentRoute) {
       setWords([]);
       return undefined;
     }
-    return subscribeStudentHistoryDictionaryWords(currentUser.uid, setWords);
-  }, [currentUser?.uid, isStudentRoute]);
+    return subscribeStudentHistoryDictionaryWords(
+      currentUser.uid,
+      setWords,
+      config,
+      (error) =>
+        showToast({
+          tone: "error",
+          title: "저장한 단어를 불러오지 못했습니다.",
+          message: getHistoryDictionaryErrorMessage(error),
+        }),
+    );
+  }, [
+    currentUser?.uid,
+    isStudentRoute,
+    configReady,
+    config?.year,
+    config?.semester,
+    showToast,
+  ]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -130,7 +156,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       showToast({
         tone: "error",
         title: "단어를 저장하지 못했습니다.",
-        message: "단어와 뜻풀이를 확인한 뒤 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setLoading(false);
@@ -164,7 +190,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       showToast({
         tone: "error",
         title: "단어 삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setLoading(false);
@@ -176,13 +202,21 @@ const StudentHistoryDictionaryController: React.FC = () => {
     setCheckingTeacherTerm(true);
     setTeacherChecked(false);
     try {
-      const result = await loadPublishedHistoryDictionaryTerm(currentWord);
+      const result = await loadPublishedHistoryDictionaryTerm(
+        currentWord,
+        config,
+      );
       setTerm(result);
       setTeacherChecked(true);
     } catch (error) {
       console.error("Failed to check teacher dictionary term:", error);
       setTerm(null);
-      setTeacherChecked(true);
+      setTeacherChecked(false);
+      showToast({
+        tone: "error",
+        title: "선생님 뜻풀이를 확인하지 못했습니다.",
+        message: getHistoryDictionaryErrorMessage(error),
+      });
     } finally {
       setCheckingTeacherTerm(false);
     }
@@ -192,7 +226,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
     if (!term || loading) return;
     setLoading(true);
     try {
-      await saveStudentHistoryDictionaryWord(term.id);
+      await saveStudentHistoryDictionaryWord(term.id, config);
       setDefinition(term.definition);
       showToast({
         tone: "success",
@@ -204,7 +238,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       showToast({
         tone: "error",
         title: "선생님 뜻풀이 저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setLoading(false);
@@ -239,7 +273,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
       showToast({
         tone: "error",
         title: "요청을 보내지 못했습니다.",
-        message: "단어를 확인한 뒤 다시 시도해 주세요.",
+        message: getHistoryDictionaryErrorMessage(error),
       });
     } finally {
       setLoading(false);

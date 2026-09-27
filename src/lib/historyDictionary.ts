@@ -1,6 +1,9 @@
+import { getIdTokenResult } from "firebase/auth";
 import {
   collection,
-  collectionGroup,
+  doc,
+  documentId,
+  getDocFromServer,
   getDocs,
   limit,
   onSnapshot,
@@ -9,8 +12,12 @@ import {
   where,
   type Unsubscribe,
 } from "firebase/firestore";
-import { db, getHttpsCallable } from "./firebase";
-import { getYearSemester } from "./semesterScope";
+import { auth, db } from "./firebase";
+import {
+  ensureHistoryDictionarySession,
+  getHistoryDictionaryCallable,
+} from "./historyDictionarySession";
+import { getSemesterCollectionPath } from "./semesterScope";
 import type {
   HistoryDictionaryRequest,
   HistoryDictionaryTerm,
@@ -34,86 +41,6 @@ const mapDoc = <T extends { id: string }>(docSnap: {
   id: string;
   data: () => Record<string, unknown>;
 }) => ({ id: docSnap.id, ...docSnap.data() }) as T;
-
-const getTimestampMs = (value: unknown) => {
-  if (!value) return 0;
-  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
-    return (value as { toDate: () => Date }).toDate().getTime();
-  }
-  return Number((value as { seconds?: number }).seconds || 0) * 1000;
-};
-
-const mapStudentWordRequestDoc = (docSnap: {
-  id: string;
-  ref: { parent: { parent: { id: string } | null } };
-  data: () => Record<string, unknown>;
-}): HistoryDictionaryRequest => {
-  const data = docSnap.data();
-  const uid = String(data.uid || docSnap.ref.parent.parent?.id || "");
-  const normalizedWord = normalizeHistoryDictionaryWord(
-    String(data.normalizedWord || data.word || ""),
-  );
-  return {
-    id: String(data.requestId || docSnap.id),
-    word: String(data.word || ""),
-    normalizedWord,
-    uid,
-    studentName: String(data.studentName || data.name || "학생"),
-    grade: String(data.grade || ""),
-    class: String(data.class || ""),
-    number: String(data.number || ""),
-    memo: String(data.memo || ""),
-    status: "requested",
-    matchedTermId: String(data.termId || ""),
-    resolvedTermId: "",
-    resolvedBy: "",
-    createdAt: data.createdAt || data.updatedAt || null,
-    updatedAt: data.updatedAt || data.createdAt || null,
-    resolvedAt: null,
-  };
-};
-
-const mapTeacherStudentWordDoc = (docSnap: {
-  id: string;
-  ref: { parent: { parent: { id: string } | null } };
-  data: () => Record<string, unknown>;
-}): StudentHistoryDictionaryWord => {
-  const data = docSnap.data();
-  const uid = String(data.uid || docSnap.ref.parent.parent?.id || "");
-  return {
-    id: `${uid}:${docSnap.id}`,
-    uid,
-    termId: String(data.termId || docSnap.id),
-    word: String(data.word || ""),
-    normalizedWord: normalizeHistoryDictionaryWord(
-      String(data.normalizedWord || data.word || ""),
-    ),
-    definition: String(data.definition || ""),
-    studentLevel: String(data.studentLevel || ""),
-    tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
-    status: data.status === "requested" ? "requested" : "saved",
-    requestId: String(data.requestId || ""),
-    studentName: String(data.studentName || data.name || "학생"),
-    grade: String(data.grade || ""),
-    class: String(data.class || ""),
-    number: String(data.number || ""),
-    definitionSource: String(data.definitionSource || ""),
-    memo: String(data.memo || ""),
-    year: String(data.year || ""),
-    semester: String(data.semester || ""),
-    reviewedBy: String(data.reviewedBy || ""),
-    reviewedAt: data.reviewedAt || null,
-    rewardTermId: String(data.rewardTermId || ""),
-    rewardTransactionId: String(data.rewardTransactionId || ""),
-    rewardAmount: Number(data.rewardAmount || 0),
-    rewardAwardedAt: data.rewardAwardedAt || null,
-    createdAt: data.createdAt || null,
-    updatedAt: data.updatedAt || null,
-  };
-};
 
 const timestampFromMs = (value: unknown) => {
   const millis = Number(value || 0);
@@ -156,203 +83,362 @@ const mapTeacherStudentWordData = (
   updatedAt: timestampFromMs(data.updatedAtMs),
 });
 
-const mergeHistoryDictionaryRequests = (
-  rootRequests: HistoryDictionaryRequest[],
-  studentWordRequests: HistoryDictionaryRequest[],
-) => {
-  const byKey = new Map<string, HistoryDictionaryRequest>();
+const getYearSemester = (config: ConfigLike) => {
+  const year = String(config?.year || "");
+  const semester = String(config?.semester || "");
+  if (!/^\d{4}$/.test(year) || !["1", "2"].includes(semester)) {
+    throw new Error(
+      "사전의 학기 정보를 확인하지 못했습니다. 화면을 새로고침해 주세요.",
+    );
+  }
+  return { year, semester };
+};
+const scopedPath = (config: ConfigLike, name: string) =>
+  getSemesterCollectionPath(getYearSemester(config), name);
 
-  rootRequests.forEach((request) => {
-    const key = request.id || `${request.uid}:${request.normalizedWord}`;
-    byKey.set(key, request);
-  });
-
-  studentWordRequests.forEach((request) => {
-    const key = request.id || `${request.uid}:${request.normalizedWord}`;
-    if (!byKey.has(key)) {
-      byKey.set(key, request);
-    }
-  });
-
-  return Array.from(byKey.values()).sort(
-    (a, b) =>
-      getTimestampMs(b.updatedAt || b.createdAt) -
-      getTimestampMs(a.updatedAt || a.createdAt),
+type WriteVersion = string | null;
+const versions = new Map<string, WriteVersion>();
+const versionFor = (data: Record<string, unknown>): WriteVersion => {
+  if (!data.updatedAt) return "legacy";
+  const value = data.updatedAt as { seconds: number; nanoseconds: number };
+  if (
+    !Number.isSafeInteger(value.seconds) ||
+    !Number.isSafeInteger(value.nanoseconds)
+  ) {
+    throw new Error(
+      "저장 버전을 확인하지 못했습니다. 목록을 다시 불러와 주세요.",
+    );
+  }
+  return `${value.seconds}:${value.nanoseconds}`;
+};
+const rememberDocument = <T extends { id: string }>(snapshot: {
+  id: string;
+  ref: { path: string };
+  data: () => Record<string, unknown>;
+}) => {
+  versions.set(snapshot.ref.path, versionFor(snapshot.data()));
+  return mapDoc<T>(snapshot);
+};
+const readVersion = async (path: string): Promise<WriteVersion> => {
+  if (versions.has(path)) return versions.get(path)!;
+  const snapshot = await getDocFromServer(doc(db, path));
+  const version = snapshot.exists() ? versionFor(snapshot.data()) : null;
+  versions.set(path, version);
+  return version;
+};
+const sha1 = async (value: string) =>
+  Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-1", new TextEncoder().encode(value)),
+    ),
+  )
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+const termIdFor = async (word: string) =>
+  `term_${await sha1(normalizeHistoryDictionaryWord(word))}`;
+const pendingCommands = new Map<
+  string,
+  { commandId: string; commandType: string; payload: Record<string, unknown> }
+>();
+const conflictedIntents = new Set<string>();
+const versionConflictError = () =>
+  Object.assign(
+    new Error(
+      "자료가 변경되었습니다. 입력 내용을 보관한 뒤 화면을 새로고침해 주세요.",
+    ),
+    { code: "history-dictionary/version-conflict" },
   );
+let versionOwner = "";
+const readRequestVersion = async (path: string, studentUid: string) => {
+  if (versions.has(path)) return versions.get(path)!;
+  const split = path.lastIndexOf("/");
+  // Missing request documents cannot satisfy resource.data.uid rules. A scoped
+  // owner query can safely establish that this request has not been created.
+  const constraints = [where(documentId(), "==", path.slice(split + 1))];
+  if (studentUid) constraints.push(where("uid", "==", studentUid));
+  const snapshot = await getDocs(
+    query(collection(db, path.slice(0, split)), ...constraints, limit(1)),
+  );
+  const version = snapshot.empty ? null : versionFor(snapshot.docs[0].data());
+  versions.set(path, version);
+  return version;
 };
 
-export const loadPublishedHistoryDictionaryTerm = async (word: string) => {
+const executeDictionaryCommand = async (
+  commandType: string,
+  input: Record<string, unknown>,
+) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("다시 로그인해 주세요.");
+  const uid = user.uid;
+  const authTime = (await getIdTokenResult(user)).authTime;
+  const assertIdentity = async () => {
+    const currentTime = (await getIdTokenResult(user)).authTime;
+    if (auth.currentUser !== user || currentTime !== authTime) {
+      throw new Error("로그인 상태가 변경되었습니다. 다시 로그인해 주세요.");
+    }
+  };
+  await ensureHistoryDictionarySession();
+  await assertIdentity();
+  if (versionOwner && versionOwner !== uid) {
+    versions.clear();
+    pendingCommands.clear();
+    conflictedIntents.clear();
+  }
+  versionOwner = uid;
+  const scope = getYearSemester(input as ConfigLike);
+  const root = scopedPath(scope, "").replace(/\/$/, "");
+  const key = JSON.stringify([uid, authTime, commandType, input]);
+  if (conflictedIntents.has(key)) throw versionConflictError();
+  let envelope = pendingCommands.get(key);
+  const payload = { ...input };
+  if (!envelope) {
+    const student = [
+      "requestHistoryDictionaryTerm",
+      "saveStudentHistoryDictionaryWord",
+      "saveStudentHistoryDictionaryEntry",
+      "deleteStudentHistoryDictionaryWord",
+    ].includes(commandType);
+    const targetUid = student
+      ? uid
+      : String(input.uid || input.fallbackUid || "");
+    const termId =
+      String(input.termId || "") ||
+      (input.word || input.normalizedWord
+        ? await termIdFor(String(input.word || input.normalizedWord))
+        : "");
+    const requestId =
+      commandType === "requestHistoryDictionaryTerm"
+        ? `req_${await sha1(`${scope.year}:${scope.semester}:${uid}:${normalizeHistoryDictionaryWord(String(input.word))}`)}`
+        : String(input.requestId || input.fallbackRequestId || "");
+    if (
+      student ||
+      [
+        "deleteStudentHistoryDictionaryWordByTeacher",
+        "updateStudentHistoryDictionaryWordByTeacher",
+      ].includes(commandType)
+    ) {
+      payload.expectedWordVersion = await readVersion(
+        `${root}/dictionary_students/${targetUid}/history_dictionary_words/${termId}`,
+      );
+    }
+    if (
+      [
+        "saveStudentHistoryDictionaryWord",
+        "saveHistoryDictionaryTerm",
+        "approveHistoryDictionaryTermForRequests",
+      ].includes(commandType)
+    ) {
+      payload.expectedTermVersion = await readVersion(
+        `${root}/${TERMS_COLLECTION}/${termId}`,
+      );
+    }
+    if (requestId)
+      payload.expectedRequestVersion = await readRequestVersion(
+        `${root}/${REQUESTS_COLLECTION}/${requestId}`,
+        student ? uid : "",
+      );
+    envelope = { commandId: crypto.randomUUID(), commandType, payload };
+    pendingCommands.set(key, envelope);
+  }
+  const callable = await getHistoryDictionaryCallable("executeCommand");
+  await assertIdentity();
+  let response;
+  try {
+    response = await callable(envelope);
+  } catch (error) {
+    const failure = error as { code?: string; details?: { reason?: string } };
+    if (failure.details?.reason === "HISTORY_DICTIONARY_VERSION_CONFLICT") {
+      pendingCommands.delete(key);
+      conflictedIntents.add(key);
+      for (const path of versions.keys())
+        if (path.startsWith(`${root}/`)) versions.delete(path);
+      throw versionConflictError();
+    }
+    if (
+      [
+        "functions/invalid-argument",
+        "functions/permission-denied",
+        "functions/failed-precondition",
+        "functions/unauthenticated",
+      ].includes(failure.code || "")
+    )
+      pendingCommands.delete(key);
+    throw error;
+  }
+  const data = response.data as { status: string; result: unknown };
+  if (data.status !== "SUCCEEDED")
+    throw new Error("저장 결과를 확인하지 못했습니다. 다시 시도해 주세요.");
+  pendingCommands.delete(key);
+  for (const path of versions.keys())
+    if (path.startsWith(`${root}/`)) versions.delete(path);
+  return { data: data.result };
+};
+const command = async (name: string) => (input: Record<string, unknown>) =>
+  executeDictionaryCommand(name, input);
+
+const subscribeAfterSession = (
+  start: (fail: (error: Error) => void) => Unsubscribe,
+  onError?: (error: Error) => void,
+): Unsubscribe => {
+  let cancelled = false;
+  let unsubscribe: Unsubscribe | undefined;
+  const fail = (error: unknown) => {
+    if (cancelled) return;
+    const normalized =
+      error instanceof Error ? error : new Error(String(error));
+    console.error("Failed to load history dictionary:", normalized);
+    onError?.(normalized);
+  };
+  void ensureHistoryDictionarySession()
+    .then(() => {
+      if (!cancelled) unsubscribe = start(fail);
+    })
+    .catch(fail);
+  return () => {
+    cancelled = true;
+    unsubscribe?.();
+  };
+};
+
+export const loadPublishedHistoryDictionaryTerm = async (
+  word: string,
+  config: ConfigLike,
+) => {
   const normalizedWord = normalizeHistoryDictionaryWord(word);
   if (!normalizedWord) return null;
-
+  const path = scopedPath(config, TERMS_COLLECTION);
+  await ensureHistoryDictionarySession();
   const snapshot = await getDocs(
     query(
-      collection(db, TERMS_COLLECTION),
+      collection(db, path),
       where("normalizedWord", "==", normalizedWord),
       limit(1),
     ),
   );
   const term = snapshot.empty
     ? null
-    : mapDoc<HistoryDictionaryTerm>(snapshot.docs[0]);
+    : rememberDocument<HistoryDictionaryTerm>(snapshot.docs[0]);
   return term?.status === "published" ? term : null;
 };
 
 export const subscribeStudentHistoryDictionaryWords = (
   uid: string,
   onChange: (words: StudentHistoryDictionaryWord[]) => void,
+  config: ConfigLike,
+  onError?: (error: Error) => void,
 ): Unsubscribe =>
-  onSnapshot(
-    query(
-      collection(db, `users/${uid}/history_dictionary_words`),
-      orderBy("updatedAt", "desc"),
-      limit(20),
-    ),
-    (snapshot) => {
-      onChange(
-        snapshot.docs.map((item) => mapDoc<StudentHistoryDictionaryWord>(item)),
-      );
-    },
+  subscribeAfterSession(
+    (fail) =>
+      onSnapshot(
+        query(
+          collection(
+            db,
+            scopedPath(
+              config,
+              `dictionary_students/${uid}/history_dictionary_words`,
+            ),
+          ),
+          orderBy("updatedAt", "desc"),
+          limit(20),
+        ),
+        (snapshot) =>
+          onChange(
+            snapshot.docs.map((item) =>
+              rememberDocument<StudentHistoryDictionaryWord>(item),
+            ),
+          ),
+        fail,
+      ),
+    onError,
   );
 
 export const subscribeTeacherHistoryDictionaryRequests = (
   onChange: (requests: HistoryDictionaryRequest[]) => void,
-): Unsubscribe => {
-  let rootRequests: HistoryDictionaryRequest[] = [];
-  let studentWordRequests: HistoryDictionaryRequest[] = [];
-
-  const emit = () => {
-    onChange(mergeHistoryDictionaryRequests(rootRequests, studentWordRequests));
-  };
-
-  const unsubscribeRootRequests = onSnapshot(
-    query(
-      collection(db, REQUESTS_COLLECTION),
-      orderBy("updatedAt", "desc"),
-      limit(100),
-    ),
-    (snapshot) => {
-      rootRequests = snapshot.docs.map((item) =>
-        mapDoc<HistoryDictionaryRequest>(item),
-      );
-      emit();
-    },
-    (error) => {
-      console.error("Failed to subscribe history dictionary requests:", error);
-      rootRequests = [];
-      emit();
-    },
-  );
-
-  const unsubscribeStudentWordRequests = onSnapshot(
-    query(
-      collectionGroup(db, "history_dictionary_words"),
-      where("status", "==", "requested"),
-      limit(100),
-    ),
-    (snapshot) => {
-      studentWordRequests = snapshot.docs.map((item) =>
-        mapStudentWordRequestDoc(item),
-      );
-      emit();
-    },
-    (error) => {
-      console.error(
-        "Failed to subscribe student history dictionary word requests:",
-        error,
-      );
-      studentWordRequests = [];
-      emit();
-    },
-  );
-
-  return () => {
-    unsubscribeRootRequests();
-    unsubscribeStudentWordRequests();
-  };
-};
-
-export const subscribeTeacherStudentHistoryDictionaryWords = (
-  onChange: (words: StudentHistoryDictionaryWord[]) => void,
+  config: ConfigLike,
   onError?: (error: Error) => void,
 ): Unsubscribe =>
-  onSnapshot(
-    query(
-      collectionGroup(db, "history_dictionary_words"),
-      where("status", "==", "saved"),
-      limit(500),
-    ),
-    (snapshot) => {
-      onChange(
-        snapshot.docs
-          .map((item) => mapTeacherStudentWordDoc(item))
-          .filter((item) =>
-            ["student", "teacher_reviewed"].includes(
-              item.definitionSource || "",
+  subscribeAfterSession(
+    (fail) =>
+      onSnapshot(
+        query(
+          collection(db, scopedPath(config, REQUESTS_COLLECTION)),
+          orderBy("updatedAt", "desc"),
+          limit(100),
+        ),
+        (snapshot) =>
+          onChange(
+            snapshot.docs.map((item) =>
+              rememberDocument<HistoryDictionaryRequest>(item),
             ),
-          )
-          .sort(
-            (a, b) =>
-              getTimestampMs(b.updatedAt || b.createdAt) -
-              getTimestampMs(a.updatedAt || a.createdAt),
           ),
-      );
-    },
-    (error) => {
-      console.error(
-        "Failed to subscribe student history dictionary words:",
-        error,
-      );
-      onError?.(error);
-      onChange([]);
-    },
+        fail,
+      ),
+    onError,
   );
 
 export const loadTeacherStudentHistoryDictionaryWords = async (
-  config?: ConfigLike,
+  config: ConfigLike,
 ) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
+  const scope = getYearSemester(config);
+  const callable = await getHistoryDictionaryCallable(
     "listStudentHistoryDictionaryWordsForTeacher",
   );
-  const result = await callable({ year, semester });
+  const result = await callable(scope);
   const data = result.data as { words?: Record<string, unknown>[] };
   return Array.isArray(data.words)
-    ? data.words.map(mapTeacherStudentWordData)
+    ? data.words.map((item) => {
+        if (typeof item.writeVersion === "string") {
+          versions.set(
+            scopedPath(
+              scope,
+              `dictionary_students/${String(item.uid)}/history_dictionary_words/${String(item.termId)}`,
+            ),
+            item.writeVersion,
+          );
+        }
+        return mapTeacherStudentWordData(item);
+      })
     : [];
 };
 
 export const subscribeTeacherHistoryDictionaryTerms = (
   onChange: (terms: HistoryDictionaryTerm[]) => void,
-  onError?: (error: Error) => void,
+  onError: ((error: Error) => void) | undefined,
+  config: ConfigLike,
 ): Unsubscribe =>
-  onSnapshot(
-    query(
-      collection(db, TERMS_COLLECTION),
-      orderBy("updatedAt", "desc"),
-      limit(TEACHER_TERMS_LIMIT),
-    ),
-    (snapshot) => {
-      onChange(
-        snapshot.docs.map((item) => mapDoc<HistoryDictionaryTerm>(item)),
-      );
-    },
-    (error) => {
-      console.error("Failed to subscribe history dictionary terms:", error);
-      onError?.(error);
-      onChange([]);
-    },
+  subscribeAfterSession(
+    (fail) =>
+      onSnapshot(
+        query(
+          collection(db, scopedPath(config, TERMS_COLLECTION)),
+          orderBy("updatedAt", "desc"),
+          limit(TEACHER_TERMS_LIMIT),
+        ),
+        (snapshot) =>
+          onChange(
+            snapshot.docs.map((item) =>
+              rememberDocument<HistoryDictionaryTerm>(item),
+            ),
+          ),
+        fail,
+      ),
+    onError,
   );
 
-export const loadTeacherHistoryDictionaryTerms = async () => {
+export const loadTeacherHistoryDictionaryTerms = async (config: ConfigLike) => {
+  const path = scopedPath(config, TERMS_COLLECTION);
+  await ensureHistoryDictionarySession();
   const snapshot = await getDocs(
     query(
-      collection(db, TERMS_COLLECTION),
+      collection(db, path),
       orderBy("updatedAt", "desc"),
       limit(TEACHER_TERMS_LIMIT),
     ),
   );
-  return snapshot.docs.map((item) => mapDoc<HistoryDictionaryTerm>(item));
+  return snapshot.docs.map((item) =>
+    rememberDocument<HistoryDictionaryTerm>(item),
+  );
 };
 
 export const requestHistoryDictionaryTerm = async (
@@ -364,7 +450,7 @@ export const requestHistoryDictionaryTerm = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("requestHistoryDictionaryTerm");
+  const callable = await command("requestHistoryDictionaryTerm");
   await callable({
     year,
     semester,
@@ -374,9 +460,13 @@ export const requestHistoryDictionaryTerm = async (
   });
 };
 
-export const saveStudentHistoryDictionaryWord = async (termId: string) => {
-  const callable = await getHttpsCallable("saveStudentHistoryDictionaryWord");
-  await callable({ termId });
+export const saveStudentHistoryDictionaryWord = async (
+  termId: string,
+  config: ConfigLike,
+) => {
+  const { year, semester } = getYearSemester(config);
+  const callable = await command("saveStudentHistoryDictionaryWord");
+  await callable({ year, semester, termId });
 };
 
 export const saveStudentHistoryDictionaryEntry = async (input: {
@@ -385,7 +475,7 @@ export const saveStudentHistoryDictionaryEntry = async (input: {
   definition: string;
 }) => {
   const { year, semester } = getYearSemester(input.config);
-  const callable = await getHttpsCallable("saveStudentHistoryDictionaryEntry");
+  const callable = await command("saveStudentHistoryDictionaryEntry");
   const result = await callable({
     year,
     semester,
@@ -408,7 +498,7 @@ export const deleteStudentHistoryDictionaryWord = async (
   termId: string,
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("deleteStudentHistoryDictionaryWord");
+  const callable = await command("deleteStudentHistoryDictionaryWord");
   const result = await callable({
     year,
     semester,
@@ -439,9 +529,7 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
-    "deleteStudentHistoryDictionaryWordByTeacher",
-  );
+  const callable = await command("deleteStudentHistoryDictionaryWordByTeacher");
   const result = await callable({
     year: input.year || year,
     semester: input.semester || semester,
@@ -476,9 +564,7 @@ export const updateStudentHistoryDictionaryWordByTeacher = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
-    "updateStudentHistoryDictionaryWordByTeacher",
-  );
+  const callable = await command("updateStudentHistoryDictionaryWordByTeacher");
   const result = await callable({
     year: input.year || year,
     semester: input.semester || semester,
@@ -507,7 +593,7 @@ export const saveHistoryDictionaryTerm = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("saveHistoryDictionaryTerm");
+  const callable = await command("saveHistoryDictionaryTerm");
   await callable({
     year,
     semester,
@@ -534,7 +620,7 @@ export const saveHistoryDictionaryTermsBulk = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("saveHistoryDictionaryTermsBulk");
+  const callable = await command("saveHistoryDictionaryTermsBulk");
   const result = await callable({
     year,
     semester,
@@ -560,9 +646,7 @@ export const approveHistoryDictionaryTermForRequests = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
-    "approveHistoryDictionaryTermForRequests",
-  );
+  const callable = await command("approveHistoryDictionaryTermForRequests");
   await callable({
     year,
     semester,
