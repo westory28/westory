@@ -166,17 +166,23 @@ const TeacherWeekSchedule: React.FC<Props> = ({
     const content = contentRef.current;
     if (fromWeek === weekStart || !content) return;
     // Explicitly requested for user-triggered week changes, including reduced-motion mode.
-    const animation = content.animate(
-      [
-        {
-          transform: `translateX(${weekStart < fromWeek ? -48 : 48}px)`,
-          opacity: 0.35,
-        },
-        { transform: "translateX(0)", opacity: 1 },
-      ],
-      { duration: 240, easing: "ease-out" },
+    const animations = Array.from(
+      content.querySelectorAll<HTMLElement>(
+        ".teacher-week-strip__number, .teacher-week-event__date-label, .teacher-week-event__title, .teacher-week-event__category, .teacher-week-event__period, .teacher-week-events__status",
+      ),
+      (text) =>
+        text.animate(
+          [
+            {
+              transform: `translateX(${weekStart < fromWeek ? -12 : 12}px)`,
+              opacity: 0.35,
+            },
+            { transform: "translateX(0)", opacity: 1 },
+          ],
+          { duration: 140, easing: "ease-out" },
+        ),
     );
-    return () => animation.cancel();
+    return () => animations.forEach((animation) => animation.cancel());
   }, [weekStart]);
   const days = useMemo(
     () =>
@@ -340,12 +346,30 @@ const TeacherWeekSchedule: React.FC<Props> = ({
               const holiday = dayEvents.some(
                 (event) => event.eventType === "holiday",
               );
+              const ribbonEvent = dayEvents.find(
+                (event) => event.eventType !== "holiday",
+              );
+              const ribbonColor = ribbonEvent
+                ? readableEventColor(
+                    getScheduleEventColor(ribbonEvent, categories),
+                  )
+                : undefined;
               return (
                 <button
-                  key={date}
+                  key={index}
                   type="button"
-                  className={`teacher-week-strip__day${date === today ? " is-today" : ""}${date === selectedDate ? " is-selected" : ""}${holiday || index === 6 ? " is-holiday" : index === 5 ? " is-saturday" : ""}`}
-                  aria-label={`${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${["월", "화", "수", "목", "금", "토", "일"][index]}요일, 일정 ${dayEvents.length}개`}
+                  className={`teacher-week-strip__day${date === today ? " is-today" : ""}${date === selectedDate ? " is-selected" : ""}${ribbonEvent ? " has-ribbon" : ""}${holiday || index === 6 ? " is-holiday" : index === 5 ? " is-saturday" : ""}`}
+                  aria-label={`${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${["월", "화", "수", "목", "금", "토", "일"][index]}요일, 일정 ${dayEvents.length}개${ribbonEvent ? `, 표시 리본: ${ribbonEvent.title}` : ""}`}
+                  title={
+                    ribbonEvent ? `표시 리본: ${ribbonEvent.title}` : undefined
+                  }
+                  style={
+                    ribbonColor
+                      ? ({
+                          "--week-ribbon-color": ribbonColor,
+                        } as React.CSSProperties)
+                      : undefined
+                  }
                   aria-current={date === today ? "date" : undefined}
                   aria-pressed={date === selectedDate}
                   onClick={() => onDateClick(date)}
@@ -354,7 +378,11 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                   <span>
                     {["월", "화", "수", "목", "금", "토", "일"][index]}
                   </span>
-                  <strong>{Number(date.slice(8, 10))}</strong>
+                  <strong>
+                    <span className="teacher-week-strip__number">
+                      {Number(date.slice(8, 10))}
+                    </span>
+                  </strong>
                   <span
                     className={`teacher-week-strip__marker${dayEvents.length ? " has-events" : ""}`}
                     aria-hidden="true"
@@ -445,7 +473,9 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                     title={dateLabel}
                     className={`teacher-week-event__date${event.eventType !== "holiday" ? " teacher-week-event__date-badge" : ""}`}
                   >
-                    {dateLabel}
+                    <span className="teacher-week-event__date-label">
+                      {dateLabel}
+                    </span>
                   </span>
                   <span className="teacher-week-event__body">
                     <strong

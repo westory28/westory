@@ -221,6 +221,29 @@
   background: var(--ws-primary, #2563eb);
 }
 
+.teacher-week-strip__day.has-ribbon strong {
+  color: white;
+  background: var(--week-ribbon-color);
+}
+
+.teacher-week-strip__day.has-ribbon.is-today strong {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.teacher-week-strip__day strong {
+  overflow: hidden;
+}
+
+.teacher-week-strip__number,
+.teacher-week-event__date-label {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
 .teacher-week-strip__day:hover {
   background: var(--ws-primary-soft, #eff6ff);
 }
