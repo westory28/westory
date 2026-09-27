@@ -1,9 +1,10 @@
+import { isSemesterArchive } from "./semesterArchive";
 const memoryStorage = new Map<string, string>();
 
 const isBrowser = typeof window !== "undefined";
 
 const readStorage = (key: string): string | null => {
-  if (!isBrowser) return memoryStorage.get(key) ?? null;
+  if (!isBrowser || isSemesterArchive) return memoryStorage.get(key) ?? null;
 
   try {
     const sessionValue = window.sessionStorage.getItem(key);
@@ -24,7 +25,7 @@ const readStorage = (key: string): string | null => {
 
 const writeStorage = (key: string, value: string) => {
   memoryStorage.set(key, value);
-  if (!isBrowser) return;
+  if (!isBrowser || isSemesterArchive) return;
 
   try {
     window.sessionStorage.setItem(key, value);
@@ -41,7 +42,7 @@ const writeStorage = (key: string, value: string) => {
 
 const removeStorage = (key: string) => {
   memoryStorage.delete(key);
-  if (!isBrowser) return;
+  if (!isBrowser || isSemesterArchive) return;
 
   try {
     window.sessionStorage.removeItem(key);
@@ -57,7 +58,7 @@ const removeStorage = (key: string) => {
 };
 
 const readLocalOnly = (key: string): string | null => {
-  if (!isBrowser) return memoryStorage.get(key) ?? null;
+  if (!isBrowser || isSemesterArchive) return memoryStorage.get(key) ?? null;
   try {
     const value = window.localStorage.getItem(key);
     if (value !== null) return value;
@@ -69,7 +70,7 @@ const readLocalOnly = (key: string): string | null => {
 
 const writeLocalOnly = (key: string, value: string) => {
   memoryStorage.set(key, value);
-  if (!isBrowser) return;
+  if (!isBrowser || isSemesterArchive) return;
   try {
     window.localStorage.setItem(key, value);
   } catch (error) {

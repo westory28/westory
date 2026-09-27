@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/verify-semester-archive.mjs",
     "build": "vite build",
+    "verify:semester-archive": "node scripts/verify-semester-archive.mjs",
     "preview": "vite preview",
     "security:check-supply-chain": "node scripts/check-supply-chain-iocs.mjs",
     "verify:assessment-attempt-safety": "node scripts/verify-assessment-attempt-safety.mjs",

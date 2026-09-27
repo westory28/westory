@@ -121,6 +121,7 @@ Layout tokens:
 ### Header
 
 - Teacher header: keep the existing 64px row height and center the logo, navigation labels, and account actions on the same axis.
+- Teacher logo optical offset: `--ws-teacher-logo-optical-offset: -0.0625em` (2px upward at 32px). Apply only to the lettering to balance the descending `y`, scale with the compact logo, and preserve the link's hit area.
 - Teacher active navigation underline: `--ws-header-nav-indicator: 3px`; position independently of the label so it does not shift vertical alignment.
 
 - Background: `--ws-surface`.

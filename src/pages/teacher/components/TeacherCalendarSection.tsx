@@ -1,3 +1,4 @@
+import { archiveScope, isSemesterArchive } from "../../../lib/semesterArchive";
 import React, { useEffect, useMemo, useState } from "react";
 import "./eventCalendar.css";
 import FullCalendar from "@fullcalendar/react";
@@ -563,6 +564,11 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
         data-calendar-view={currentViewType}
       >
         <FullCalendar
+          initialDate={
+            isSemesterArchive && archiveScope
+              ? `${archiveScope.year}-${archiveScope.semester === "1" ? "03" : "08"}-01`
+              : undefined
+          }
           ref={calendarRef}
           plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
           initialView="dayGridMonth"

@@ -1,3 +1,9 @@
+import { isSemesterArchive } from "../../lib/semesterArchive";
+import {
+  SemesterArchiveBanner,
+  SemesterArchiveUnavailable,
+  isArchiveUnavailableRoute,
+} from "../common/SemesterArchiveBoundary";
 import React, { useEffect } from "react";
 import {
   inferToastFromAlertMessage,
@@ -59,7 +65,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isTeacherRoute = location.pathname.startsWith("/teacher");
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
-    currentUser && isTeacherRoute && isAdminUser(userData, currentUser.email),
+    !isSemesterArchive &&
+    currentUser &&
+    isTeacherRoute &&
+    isAdminUser(userData, currentUser.email),
   );
   const isVisibilityControlledStudentRoute = isStudentVisibilityControlledPath(
     location.pathname,
@@ -282,6 +291,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <Header />
+      <SemesterArchiveBanner />
       {studentEnhancementsReady && (
         <React.Suspense fallback={null}>
           <StudentRankPromotionController />
@@ -298,7 +308,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           isStudentQuizRunRoute ? "flex flex-col" : ""
         }`}
       >
-        {children}
+        {isArchiveUnavailableRoute(location.pathname) ? (
+          <SemesterArchiveUnavailable />
+        ) : (
+          children
+        )}
       </main>
       <Footer />
     </div>

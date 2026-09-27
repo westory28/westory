@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import { isSemesterArchive } from "../../lib/semesterArchive";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import PointRankBadge from "./PointRankBadge";
 import { useAppToast } from "./AppToastProvider";
@@ -300,6 +301,10 @@ const Header: React.FC = () => {
       : "mx-auto max-w-7xl px-4 pt-6 lg:px-6";
 
   const performLogout = async (isTimeout: boolean) => {
+    if (isSemesterArchive) {
+      window.close();
+      return;
+    }
     try {
       removeStorage(SESSION_EXPIRY_KEY);
       removeStorage(ROLE_SESSION_KEY);
@@ -640,13 +645,15 @@ const Header: React.FC = () => {
               onClick={handleLogout}
               data-session-ignore="true"
               className="btn-logout"
-              aria-label="로그아웃"
+              aria-label={isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
             >
               <i
                 className="fas fa-right-from-bracket btn-logout-icon"
                 aria-hidden="true"
               ></i>
-              <span className="btn-logout-label">로그아웃</span>
+              <span className="btn-logout-label">
+                {isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
+              </span>
             </button>
 
             <button
