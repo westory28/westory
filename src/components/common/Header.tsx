@@ -5,6 +5,7 @@ import PointRankBadge from "./PointRankBadge";
 import { useAppToast } from "./AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
 import { MENUS } from "../../constants/menus";
+import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import TeacherSidebar, {
   type TeacherSidebarGroup,
 } from "../layout/TeacherSidebar";
@@ -298,14 +299,38 @@ const Header: React.FC<{
   };
   const dictionaryUrl = "/teacher/lesson/history-dictionary";
   const resolvedTeacherMenus = useTeacherSidebar
-    ? menuItems.map((item) => ({
-        ...item,
-        resolvedChildren: getResolvedChildUrls(
+    ? menuItems.map((item) => {
+        const resolvedChildren = getResolvedChildUrls(
           item.url,
           getVisibleChildren(item),
           portal,
-        ),
-      }))
+        );
+        if (
+          item.url === "/teacher/points" &&
+          !resolvedChildren.some((child) => {
+            const [path, query] = child.resolvedUrl.split("?");
+            return (
+              path === "/teacher/points" &&
+              new URLSearchParams(query).get("tab") === "ranks"
+            );
+          })
+        ) {
+          const ranksUrl = "/teacher/points?tab=ranks";
+          const policyIndex = resolvedChildren.findIndex(
+            (child) => child.resolvedUrl === "/teacher/points?tab=policy",
+          );
+          resolvedChildren.splice(
+            policyIndex < 0 ? resolvedChildren.length : policyIndex + 1,
+            0,
+            {
+              name: TEACHER_POINT_TAB_LABELS.ranks,
+              url: ranksUrl,
+              resolvedUrl: ranksUrl,
+            },
+          );
+        }
+        return { ...item, resolvedChildren };
+      })
     : [];
   const teacherSidebarGroups: TeacherSidebarGroup[] = resolvedTeacherMenus.map(
     (item) => {

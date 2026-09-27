@@ -232,15 +232,16 @@
 .teacher-week-schedule__filters {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
   flex-shrink: 0;
-  margin-block: 12px 4px;
+  margin-block: 4px 8px;
 }
 
 .teacher-week-schedule__filters .student-calendar-shell__filter-select {
   min-width: 0;
-  max-width: 45%;
+  max-width: 100%;
   min-height: 44px;
   font-size: var(--ws-type-small, 0.875rem);
 }
@@ -253,7 +254,17 @@
 .teacher-week-schedule__actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.teacher-week-schedule__viewport {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .teacher-week-schedule__content {
@@ -261,31 +272,14 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  animation: teacher-week-arrive var(--motion-fast, 160ms)
-    var(--ease-out, ease-out) both;
-}
-
-@keyframes teacher-week-arrive {
-  from {
-    opacity: 0.55;
-    transform: translateX(var(--week-slide-from, 16px));
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .teacher-week-schedule__content {
-    animation: none;
-  }
+  min-width: 0;
 }
 
 .teacher-week-events {
   position: relative;
   flex: 1;
   min-height: 0;
+  margin-top: 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -316,7 +310,7 @@
   gap: 12px;
   width: 100%;
   min-height: 80px;
-  padding: 12px 4px;
+  padding: 8px 4px;
   border-bottom: 1px solid var(--ws-border-soft, #f3f4f6);
   text-align: left;
 }
@@ -354,6 +348,19 @@
   font-size: 1.125rem;
   font-weight: 700;
   line-height: 1.5;
+}
+
+.teacher-week-event__ribbon {
+  padding: 4px 8px;
+  border: 1px solid var(--schedule-event-color);
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(
+    in srgb,
+    var(--schedule-event-color) 22%,
+    var(--ws-surface, #fff)
+  );
+  color: var(--ws-text-strong, #111827);
+  overflow-wrap: anywhere;
 }
 .teacher-week-event__body > span,
 .teacher-week-event__period {

@@ -409,7 +409,7 @@ const ManagePoints: React.FC = () => {
     refreshInterfaceConfig,
   } = useAuth();
   const { showToast } = useAppToast();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const canRead = canReadPoints(userData, currentUser?.email);
   const canManage = canManagePoints(userData, currentUser?.email);
@@ -859,6 +859,11 @@ const ManagePoints: React.FC = () => {
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
+    setGrantFeedback("");
+    setPolicyFeedbackMessage("");
+    setPolicyFeedbackTone(null);
+    setProductFeedback("");
+    setOrderFeedback("");
     if (
       requestedTab === "grant" ||
       requestedTab === "policy" ||
@@ -1063,15 +1068,6 @@ const ManagePoints: React.FC = () => {
   const handleOverviewPageChange = (page: number) => {
     const nextPage = Math.min(Math.max(page, 1), overviewTotalPages);
     setOverviewPage(nextPage);
-  };
-
-  const handleTabChange = (tab: TeacherPointTab) => {
-    setGrantFeedback("");
-    setPolicyFeedbackMessage("");
-    setPolicyFeedbackTone(null);
-    setProductFeedback("");
-    setOrderFeedback("");
-    setSearchParams(tab === "overview" ? {} : { tab });
   };
 
   const updatePolicyDraft = (updater: (prev: PointPolicy) => PointPolicy) => {
@@ -1849,25 +1845,6 @@ const ManagePoints: React.FC = () => {
           activeTab === "hall-of-fame" ? "max-w-[96rem] 2xl:px-6" : "max-w-7xl",
         ].join(" ")}
       >
-        <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
-          {(Object.keys(TEACHER_POINT_TAB_LABELS) as TeacherPointTab[]).map(
-            (tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => handleTabChange(tab)}
-                className={`border-b-2 px-6 py-3 text-sm font-bold transition whitespace-nowrap ${
-                  activeTab === tab
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {TEACHER_POINT_TAB_LABELS[tab]}
-              </button>
-            ),
-          )}
-        </div>
-
         {!canManage && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
             읽기 전용 권한으로 접속 중입니다.

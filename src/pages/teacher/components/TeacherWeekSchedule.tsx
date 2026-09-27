@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
@@ -99,9 +105,28 @@ const TeacherWeekSchedule: React.FC<Props> = ({
     return `${gradeLabel} ${classroomLabel}`.trim() || value;
   };
   const previousWeek = useRef(weekStart);
-  const slideFrom = weekStart < previousWeek.current ? "-16px" : "16px";
-  useEffect(() => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const fromWeek = previousWeek.current;
     previousWeek.current = weekStart;
+    const content = contentRef.current;
+    if (
+      fromWeek === weekStart ||
+      !content ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    const animation = content.animate(
+      [
+        {
+          transform: `translateX(${weekStart < fromWeek ? -48 : 48}px)`,
+          opacity: 0.35,
+        },
+        { transform: "translateX(0)", opacity: 1 },
+      ],
+      { duration: 240, easing: "ease-out" },
+    );
+    return () => animation.cancel();
   }, [weekStart]);
   const days = useMemo(
     () =>
@@ -144,9 +169,50 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           <TeacherNavigationIcon name="calendar" />
           이번 주 학사 일정
         </h2>
-        <Link to="/teacher/schedule" className="teacher-dashboard-link">
-          전체 보기 <span aria-hidden="true">→</span>
-        </Link>
+      </div>
+      <div className="teacher-week-schedule__filters">
+        <select
+          className="student-calendar-shell__filter-select"
+          aria-label="일정 대상 필터"
+          value={filterClass}
+          onChange={(event) => onFilterChange(event.target.value)}
+        >
+          <option value="all">전체 일정</option>
+          <option value="common">공통 일정</option>
+          {availableClassTargets.map((target) => (
+            <option key={target} value={target}>
+              {classLabel(target)}
+            </option>
+          ))}
+        </select>
+        <div className="teacher-week-schedule__actions">
+          <button
+            type="button"
+            className="student-calendar-shell__search-button"
+            onClick={onSearchClick}
+            aria-label="일정 검색"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="6" />
+              <path d="m15 15 5 5" />
+            </svg>
+            검색
+          </button>
+          <button
+            type="button"
+            className="student-calendar-shell__control-button student-calendar-shell__action-button"
+            onClick={onAddEvent}
+            aria-label="일정 추가"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            추가
+          </button>
+          <Link to="/teacher/schedule" className="teacher-dashboard-link">
+            전체 보기 <span aria-hidden="true">→</span>
+          </Link>
+        </div>
       </div>
       <div className="teacher-week-schedule__toolbar">
         <span className="teacher-week-schedule__range" aria-live="polite">
@@ -182,155 +248,127 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           </button>
         </div>
       </div>
-      <div
-        key={weekStart}
-        className="teacher-week-schedule__content"
-        style={{ "--week-slide-from": slideFrom } as React.CSSProperties}
-      >
-        <div className="teacher-week-strip" aria-label="주간 날짜">
-          <strong className="teacher-week-strip__month">
-            {month === lastMonth ? `${month}월` : `${month}·${lastMonth}월`}
-          </strong>
-          {days.map((date, index) => {
-            const dayEvents = weekEvents.filter((event) =>
-              eventIncludesDate(event, date),
-            );
-            const holiday = dayEvents.some(
-              (event) => event.eventType === "holiday",
-            );
-            return (
-              <button
-                key={date}
-                type="button"
-                className={`teacher-week-strip__day${date === today ? " is-today" : ""}${date === selectedDate ? " is-selected" : ""}${holiday || index === 6 ? " is-holiday" : index === 5 ? " is-saturday" : ""}`}
-                aria-label={`${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${["월", "화", "수", "목", "금", "토", "일"][index]}요일, 일정 ${dayEvents.length}개`}
-                aria-current={date === today ? "date" : undefined}
-                aria-pressed={date === selectedDate}
-                onClick={() => onDateClick(date)}
-                onDoubleClick={() => onDateDoubleClick(date)}
-              >
-                <span>{["월", "화", "수", "목", "금", "토", "일"][index]}</span>
-                <strong>{Number(date.slice(8, 10))}</strong>
-                <span
-                  className={`teacher-week-strip__marker${dayEvents.length ? " has-events" : ""}`}
-                  aria-hidden="true"
-                />
-              </button>
-            );
-          })}
-        </div>
-        <div className="teacher-week-schedule__filters">
-          <select
-            className="student-calendar-shell__filter-select"
-            aria-label="일정 대상 필터"
-            value={filterClass}
-            onChange={(event) => onFilterChange(event.target.value)}
-          >
-            <option value="all">전체 일정</option>
-            <option value="common">공통 일정</option>
-            {availableClassTargets.map((target) => (
-              <option key={target} value={target}>
-                {classLabel(target)}
-              </option>
-            ))}
-          </select>
-          <div className="teacher-week-schedule__actions">
-            <button
-              type="button"
-              className="student-calendar-shell__search-button"
-              onClick={onSearchClick}
-              aria-label="일정 검색"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="10.5" cy="10.5" r="6" />
-                <path d="m15 15 5 5" />
-              </svg>
-              검색
-            </button>
-            <button
-              type="button"
-              className="student-calendar-shell__control-button student-calendar-shell__action-button"
-              onClick={onAddEvent}
-              aria-label="일정 추가"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              추가
-            </button>
-          </div>
-        </div>
+      <div className="teacher-week-schedule__viewport">
         <div
-          ref={eventListRef}
-          className="teacher-week-events"
-          aria-busy={loading}
+          key={weekStart}
+          ref={contentRef}
+          className="teacher-week-schedule__content"
         >
-          {loading && (
-            <p className="teacher-week-events__status" role="status">
-              일정을 불러오는 중입니다.
-            </p>
-          )}
-          {!loading && error && (
-            <p className="teacher-week-events__status" role="alert">
-              일정을 불러오지 못했습니다.{" "}
-              <Link to="/teacher/schedule">캘린더에서 다시 확인</Link>
-            </p>
-          )}
-          {!loading && !error && !weekEvents.length && (
-            <p className="teacher-week-events__status">
-              이번 주에 등록된 일정이 없습니다.
-            </p>
-          )}
-          {weekEvents.map((event) => {
-            const start = calendarDateKey(event.start);
-            const end = calendarEventEndDate(event);
-            const isToday = eventIncludesDate(event, today);
-            const meta = getScheduleCategoryMeta(event.eventType, categories);
-            const dateLabel =
-              end > start
-                ? `${shortDate(start)}–${shortDate(end)}`
-                : isToday
-                  ? "오늘"
-                  : shortDate(start);
-            const periodLabel =
-              event.eventType === "holiday"
-                ? "종일"
-                : getSchedulePeriodRangeLabel(
-                    event.startPeriod ?? event.period,
-                    event.endPeriod,
-                  );
-            return (
-              <button
-                key={event.id}
-                type="button"
-                className={`teacher-week-event${selectedDate && eventIncludesDate(event, selectedDate) ? " is-selected" : ""}`}
-                onClick={() => onEventClick(event)}
-              >
-                <span className="teacher-week-event__date">
+          <div className="teacher-week-strip" aria-label="주간 날짜">
+            <strong className="teacher-week-strip__month">
+              {month === lastMonth ? `${month}월` : `${month}·${lastMonth}월`}
+            </strong>
+            {days.map((date, index) => {
+              const dayEvents = weekEvents.filter((event) =>
+                eventIncludesDate(event, date),
+              );
+              const holiday = dayEvents.some(
+                (event) => event.eventType === "holiday",
+              );
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  className={`teacher-week-strip__day${date === today ? " is-today" : ""}${date === selectedDate ? " is-selected" : ""}${holiday || index === 6 ? " is-holiday" : index === 5 ? " is-saturday" : ""}`}
+                  aria-label={`${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${["월", "화", "수", "목", "금", "토", "일"][index]}요일, 일정 ${dayEvents.length}개`}
+                  aria-current={date === today ? "date" : undefined}
+                  aria-pressed={date === selectedDate}
+                  onClick={() => onDateClick(date)}
+                  onDoubleClick={() => onDateDoubleClick(date)}
+                >
+                  <span>
+                    {["월", "화", "수", "목", "금", "토", "일"][index]}
+                  </span>
+                  <strong>{Number(date.slice(8, 10))}</strong>
                   <span
-                    className="teacher-week-event__dot"
-                    style={{
-                      backgroundColor: getScheduleEventColor(event, categories),
-                    }}
+                    className={`teacher-week-strip__marker${dayEvents.length ? " has-events" : ""}`}
                     aria-hidden="true"
                   />
-                  {dateLabel}
-                </span>
-                <span className="teacher-week-event__body">
-                  <strong>{event.title}</strong>
-                  <span>
-                    {event.targetType === "class" && event.targetClass
-                      ? `${classLabel(event.targetClass)} · `
-                      : ""}
-                    {event.eventType === "holiday" ? "공휴일" : meta.label}
+                </button>
+              );
+            })}
+          </div>
+          <div
+            ref={eventListRef}
+            className="teacher-week-events"
+            aria-busy={loading}
+          >
+            {loading && (
+              <p className="teacher-week-events__status" role="status">
+                일정을 불러오는 중입니다.
+              </p>
+            )}
+            {!loading && error && (
+              <p className="teacher-week-events__status" role="alert">
+                일정을 불러오지 못했습니다.{" "}
+                <Link to="/teacher/schedule">캘린더에서 다시 확인</Link>
+              </p>
+            )}
+            {!loading && !error && !weekEvents.length && (
+              <p className="teacher-week-events__status">
+                이번 주에 등록된 일정이 없습니다.
+              </p>
+            )}
+            {weekEvents.map((event) => {
+              const start = calendarDateKey(event.start);
+              const end = calendarEventEndDate(event);
+              const isToday = eventIncludesDate(event, today);
+              const meta = getScheduleCategoryMeta(event.eventType, categories);
+              const eventColor =
+                event.eventType === "holiday"
+                  ? "var(--ws-danger, #ef4444)"
+                  : getScheduleEventColor(event, categories);
+              const dateLabel =
+                end > start
+                  ? `${shortDate(start)}–${shortDate(end)}`
+                  : isToday
+                    ? "오늘"
+                    : shortDate(start);
+              const periodLabel =
+                event.eventType === "holiday"
+                  ? "종일"
+                  : getSchedulePeriodRangeLabel(
+                      event.startPeriod ?? event.period,
+                      event.endPeriod,
+                    );
+              return (
+                <button
+                  key={event.id}
+                  type="button"
+                  className={`teacher-week-event${selectedDate && eventIncludesDate(event, selectedDate) ? " is-selected" : ""}`}
+                  onClick={() => onEventClick(event)}
+                  style={
+                    {
+                      "--schedule-event-color": eventColor,
+                    } as React.CSSProperties
+                  }
+                >
+                  <span className="teacher-week-event__date">
+                    <span
+                      className="teacher-week-event__dot"
+                      style={{ backgroundColor: eventColor }}
+                      aria-hidden="true"
+                    />
+                    {dateLabel}
                   </span>
-                </span>
-                <span className="teacher-week-event__period">
-                  {periodLabel}
-                </span>
-              </button>
-            );
-          })}
+                  <span className="teacher-week-event__body">
+                    <strong className="teacher-week-event__ribbon">
+                      {event.title}
+                    </strong>
+                    <span>
+                      {event.targetType === "class" && event.targetClass
+                        ? `${classLabel(event.targetClass)} · `
+                        : ""}
+                      {event.eventType === "holiday" ? "공휴일" : meta.label}
+                    </span>
+                  </span>
+                  <span className="teacher-week-event__period">
+                    {periodLabel}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>

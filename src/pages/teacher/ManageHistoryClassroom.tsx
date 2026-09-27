@@ -10,11 +10,10 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import HistoryClassroomAssignmentView from "../../components/common/HistoryClassroomAssignmentView";
 import LessonWorksheetStage from "../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../contexts/AuthContext";
-import { cloneDefaultMenus, sanitizeMenuConfig } from "../../constants/menus";
 import { db, getHttpsCallable } from "../../lib/firebase";
 import {
   buildAnswerOptions,
@@ -695,7 +694,6 @@ const cloneMapResourceBlanks = (
 
 const ManageHistoryClassroom: React.FC = () => {
   const { config, userData } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [maps, setMaps] = useState<MapResource[]>([]);
@@ -830,12 +828,6 @@ const ManageHistoryClassroom: React.FC = () => {
   const preserveBlankResetRef = React.useRef(false);
   const blankEditorComposingRef = React.useRef(false);
   const blankEditorCommitLockRef = React.useRef(false);
-  const [tabLabels, setTabLabels] = useState({
-    manage: "문제 등록",
-    log: "제출 현황",
-    bank: "문제 은행",
-    historyClassroom: "역사교실",
-  });
 
   const loadExemptionData = React.useCallback(async () => {
     setLoadingExemptions(true);
@@ -1025,39 +1017,6 @@ const ManageHistoryClassroom: React.FC = () => {
     setExemptionModalTab("requests");
     setHighlightedExemptionRequestId(searchParams.get("requestId") || "");
   }, [searchParams]);
-
-  useEffect(() => {
-    const resolveMenuLabels = async () => {
-      try {
-        const menuSnap = await getDoc(doc(db, "site_settings", "menu_config"));
-        const menuConfig = menuSnap.exists()
-          ? sanitizeMenuConfig(menuSnap.data())
-          : cloneDefaultMenus();
-        const teacherQuizMenu = (menuConfig.teacher || []).find(
-          (menu) => menu.url === "/teacher/quiz",
-        );
-        const children = teacherQuizMenu?.children || [];
-        setTabLabels({
-          manage:
-            children.find((child) => child.url === "/teacher/quiz")?.name ||
-            "문제 등록",
-          log:
-            children.find((child) => child.url === "/teacher/quiz?tab=log")
-              ?.name || "제출 현황",
-          bank:
-            children.find((child) => child.url === "/teacher/quiz?tab=bank")
-              ?.name || "문제 은행",
-          historyClassroom:
-            children.find(
-              (child) => child.url === "/teacher/quiz/history-classroom",
-            )?.name || "역사교실",
-        });
-      } catch (error) {
-        console.error("Failed to load quiz menu labels:", error);
-      }
-    };
-    void resolveMenuLabels();
-  }, []);
 
   useEffect(() => {
     if (preserveBlankResetRef.current) {
@@ -3311,36 +3270,6 @@ const ManageHistoryClassroom: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:py-8">
-      <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
-        <button
-          type="button"
-          onClick={() => navigate("/teacher/quiz")}
-          className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition whitespace-nowrap hover:bg-gray-50"
-        >
-          {tabLabels.manage}
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate("/teacher/quiz?tab=log")}
-          className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition whitespace-nowrap hover:bg-gray-50"
-        >
-          {tabLabels.log}
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate("/teacher/quiz?tab=bank")}
-          className="border-b-2 border-transparent px-6 py-3 text-sm font-bold text-gray-600 transition whitespace-nowrap hover:bg-gray-50"
-        >
-          {tabLabels.bank}
-        </button>
-        <button
-          type="button"
-          className="border-b-2 border-blue-500 px-6 py-3 text-sm font-bold text-blue-600 transition whitespace-nowrap"
-        >
-          {tabLabels.historyClassroom}
-        </button>
-      </div>
-
       <section className="mb-5 px-1 py-2">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4">

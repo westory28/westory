@@ -6,7 +6,7 @@ import QuizBankTab from "./components/QuizBankTab";
 import QuizSettingsModal from "./components/QuizSettingsModal";
 import { db } from "../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { getSemesterDocPath } from "../../lib/semesterScope";
 import {
@@ -22,7 +22,6 @@ interface TreeUnit {
 
 const ManageQuiz: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"manage" | "log" | "bank">(
     "manage",
@@ -93,38 +92,6 @@ const ManageQuiz: React.FC = () => {
       <main
         className={`w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-3 ${isManageTab ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "pb-8"}`}
       >
-        <div className="flex border-b border-gray-200 mb-3 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
-          {canWrite && (
-            <button
-              onClick={() => setActiveTab("manage")}
-              className={`shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "manage" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
-            >
-              문제 등록
-            </button>
-          )}
-          <button
-            onClick={() => setActiveTab("log")}
-            className={`shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "log" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
-          >
-            응시 현황
-          </button>
-          <button
-            onClick={() => setActiveTab("bank")}
-            className={`shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "bank" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
-          >
-            문제 은행
-          </button>
-          {canWrite && (
-            <button
-              type="button"
-              onClick={() => navigate("/teacher/quiz/history-classroom")}
-              className="shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 border-transparent text-gray-600 transition hover:bg-gray-50"
-            >
-              역사교실
-            </button>
-          )}
-        </div>
-
         {!canWrite && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
             읽기 전용 권한입니다. 문제 등록, 수정, 삭제는 관리자만 가능합니다.
