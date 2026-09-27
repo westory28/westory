@@ -110,12 +110,8 @@ const TeacherWeekSchedule: React.FC<Props> = ({
     const fromWeek = previousWeek.current;
     previousWeek.current = weekStart;
     const content = contentRef.current;
-    if (
-      fromWeek === weekStart ||
-      !content ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    )
-      return;
+    if (fromWeek === weekStart || !content) return;
+    // Explicitly requested for user-triggered week changes, including reduced-motion mode.
     const animation = content.animate(
       [
         {
