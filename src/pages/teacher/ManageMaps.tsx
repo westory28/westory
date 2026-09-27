@@ -11,7 +11,6 @@ import {
 } from "firebase/firestore";
 import {
   deleteObject,
-  getBlob,
   getDownloadURL,
   ref,
   uploadBytes,
@@ -850,7 +849,6 @@ const ManageMaps: React.FC = () => {
     const storage = await getFirebaseStorage();
     const { getPdfPageImageExtension } =
       await import("../../lib/pdfMapProcessor");
-    const cacheVersion = Date.now();
 
     for (const page of processed.pageImages) {
       const pageExtension = getPdfPageImageExtension(page.blob);
@@ -872,7 +870,7 @@ const ManageMaps: React.FC = () => {
       );
       uploadedPages.push({
         page: page.page,
-        imageUrl: `${pageUrl}${pageUrl.includes("?") ? "&" : "?"}v=${cacheVersion}`,
+        imageUrl: pageUrl,
         width: page.width,
         height: page.height,
       });
@@ -1264,60 +1262,19 @@ const ManageMaps: React.FC = () => {
     if (!canEdit) return;
     if (draft.type !== "pdf" || !draft.id) return;
 
+    let sourceFile = selectedFile;
+    if (!sourceFile) {
+      alert("PDF 재처리를 위해 같은 PDF 파일을 다시 선택해 주세요.");
+      sourceFile = await requestLocalPdfFile();
+      if (!sourceFile) {
+        return;
+      }
+      setSelectedFile(sourceFile);
+    }
+
     setSaving(true);
 
     try {
-      let sourceFile: File | null = null;
-      if (draft.storagePath) {
-        try {
-          const storage = await getFirebaseStorage();
-          const blob = await withTimeout(
-            getBlob(ref(storage, draft.storagePath)),
-            45000,
-            "pdf-source-download",
-          );
-          sourceFile = new File(
-            [blob],
-            draft.fileName || `${draft.title}.pdf`,
-            {
-              type: "application/pdf",
-            },
-          );
-        } catch (error) {
-          console.warn("Failed to load stored PDF for reprocessing:", error);
-        }
-      }
-      if (!sourceFile && draft.fileUrl) {
-        try {
-          const response = await withTimeout(
-            fetch(draft.fileUrl),
-            45000,
-            "pdf-source-download",
-          );
-          if (!response.ok) throw new Error("pdf-source-download-failed");
-          const blob = await response.blob();
-          sourceFile = new File(
-            [blob],
-            draft.fileName || `${draft.title}.pdf`,
-            {
-              type: "application/pdf",
-            },
-          );
-        } catch (error) {
-          console.warn(
-            "Failed to load PDF download URL for reprocessing:",
-            error,
-          );
-        }
-      }
-      if (!sourceFile) {
-        alert(
-          "저장된 PDF를 불러오지 못했습니다. 같은 PDF 파일을 선택해 주세요.",
-        );
-        sourceFile = selectedFile || (await requestLocalPdfFile());
-        if (!sourceFile) return;
-      }
-
       const { processPdfMapFile } = await import("../../lib/pdfMapProcessor");
       const processed = await processPdfMapFile(sourceFile);
       const uploadedPages = await uploadProcessedPdfPages(
@@ -1328,9 +1285,7 @@ const ManageMaps: React.FC = () => {
       const payload: MapResource = {
         ...normalizeMapResource(draft.id, draft),
         pdfPageImages: uploadedPages,
-        pdfRegions: draft.pdfRegions?.length
-          ? draft.pdfRegions
-          : processed.regions,
+        pdfRegions: processed.regions,
       };
 
       await persistMapPayload(payload, draft.storageScope || "semester");
