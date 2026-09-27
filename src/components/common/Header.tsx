@@ -746,7 +746,7 @@ const Header: React.FC<{
             </button>
           )}
           {isTeacherDashboard && config && (
-            <h1 className="teacher-dashboard-semester inline-flex shrink-0 rounded-full bg-blue-600 px-4 py-2 text-base font-bold text-white">
+            <h1 className="teacher-dashboard-semester inline-flex shrink-0 items-center self-center rounded-full bg-blue-600 px-4 py-1 text-base font-bold leading-6 text-white">
               {config.year}학년도 {config.semester}학기
             </h1>
           )}
