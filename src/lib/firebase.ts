@@ -1,3 +1,4 @@
+import { assertArchiveWritable, isSemesterArchive } from "./semesterArchive";
 import { initializeApp } from "firebase/app";
 import {
   browserLocalPersistence,
@@ -80,7 +81,7 @@ const isMobileBrowser = (): boolean => {
 };
 
 const authPersistenceReady =
-  typeof window === "undefined"
+  typeof window === "undefined" || isSemesterArchive
     ? Promise.resolve()
     : (async () => {
         // Old mobile browsers often stall on IndexedDB-backed persistence.
@@ -149,7 +150,11 @@ try {
 } catch (e) {
   console.warn("Analytics not supported:", e);
 }
-if (typeof window !== "undefined" && firebaseConfig.measurementId) {
+if (
+  !isSemesterArchive &&
+  typeof window !== "undefined" &&
+  firebaseConfig.measurementId
+) {
   window.setTimeout(() => {
     void import("firebase/analytics")
       .then(async ({ getAnalytics, isSupported }) => {
@@ -163,6 +168,7 @@ if (typeof window !== "undefined" && firebaseConfig.measurementId) {
 }
 
 const getFirebaseFunctions = () => {
+  assertArchiveWritable();
   if (!functionsPromise) {
     functionsPromise = import("firebase/functions")
       .then(({ connectFunctionsEmulator, getFunctions }) => {
@@ -195,6 +201,7 @@ const getFirebaseFunctions = () => {
 const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
   name: string,
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
+  assertArchiveWritable();
   const [functions, { httpsCallable }] = await Promise.all([
     getFirebaseFunctions(),
     import("firebase/functions"),

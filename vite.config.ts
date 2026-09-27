@@ -20,9 +20,21 @@ export default defineConfig(({ mode }) => {
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
     },
     resolve: {
-      alias: {
-        "@": path.resolve(__dirname, "."),
-      },
+      alias: [
+        {
+          find: /^firebase\/firestore$/,
+          replacement: path.resolve(__dirname, "src/lib/archiveFirestore.ts"),
+        },
+        {
+          find: /^firebase\/storage$/,
+          replacement: path.resolve(__dirname, "src/lib/archiveStorage.ts"),
+        },
+        {
+          find: /^firebase\/auth$/,
+          replacement: path.resolve(__dirname, "src/lib/archiveAuth.ts"),
+        },
+        { find: "@", replacement: path.resolve(__dirname, ".") },
+      ],
     },
     build: {
       rollupOptions: {

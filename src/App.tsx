@@ -1,3 +1,8 @@
+import {
+  SemesterArchiveBoundary,
+  SemesterArchiveHome,
+} from "./components/common/SemesterArchiveBoundary";
+import { isSemesterArchive } from "./lib/semesterArchive";
 import React, { Suspense } from "react";
 import {
   HashRouter as Router,
@@ -166,6 +171,14 @@ const renderWithLayout = (children: React.ReactNode, _message?: string) => (
   </AppDialogProvider>
 );
 
+const ArchiveRouteContent: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => (
+  <SemesterArchiveBoundary>
+    <Suspense fallback={<RouteContentFallback />}>{children}</Suspense>
+  </SemesterArchiveBoundary>
+);
+
 const App: React.FC = () => {
   const bootRedirectHash = getBootRedirectHash();
   if (bootRedirectHash) {
@@ -179,10 +192,15 @@ const App: React.FC = () => {
     <AuthProvider>
       <AppToastProvider>
         <Router>
-          <Suspense fallback={<RouteContentFallback />}>
+          <ArchiveRouteContent>
             <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
               <Routes>
-                <Route path="/" element={<Login />} />
+                <Route
+                  path="/"
+                  element={
+                    isSemesterArchive ? <SemesterArchiveHome /> : <Login />
+                  }
+                />
                 <Route
                   path="/student/dashboard"
                   element={renderWithLayout(
@@ -426,7 +444,7 @@ const App: React.FC = () => {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
-          </Suspense>
+          </ArchiveRouteContent>
         </Router>
       </AppToastProvider>
     </AuthProvider>

@@ -1,3 +1,4 @@
+import { isSemesterArchive } from "./semesterArchive";
 import { getSemesterCollectionPath } from "./semesterScope";
 
 export type TeacherPresentationClassContext = {
@@ -286,7 +287,9 @@ export const buildTeacherPresentationRecentClassStorageKey = (
   )}:${sanitizeTeacherPresentationKey(lessonId)}`;
 
 const canUseBrowserStorage = () =>
-  typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  !isSemesterArchive &&
+  typeof window !== "undefined" &&
+  typeof window.localStorage !== "undefined";
 
 export const readRecentTeacherPresentationClass = (
   params: TeacherPresentationRecentContext,

@@ -1,3 +1,4 @@
+import { archiveScope, isSemesterArchive } from "../../lib/semesterArchive";
 import {
   getScheduleEventColor,
   getScheduleEventTextColor,
@@ -119,7 +120,9 @@ const ManageSchedule = () => {
         const configDoc = await getDoc(doc(db, "site_settings", "config"));
         if (configDoc.exists()) {
           setCurrentConfig(
-            configDoc.data() as { year: string; semester: string },
+            (isSemesterArchive && archiveScope
+              ? archiveScope
+              : configDoc.data()) as { year: string; semester: string },
           );
         }
       } catch (error) {
@@ -365,6 +368,11 @@ const ManageSchedule = () => {
             data-calendar-view={currentViewType}
           >
             <FullCalendar
+              initialDate={
+                isSemesterArchive && archiveScope
+                  ? `${archiveScope.year}-${archiveScope.semester === "1" ? "03" : "08"}-01`
+                  : undefined
+              }
               ref={calendarRef}
               plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
               initialView="dayGridMonth"

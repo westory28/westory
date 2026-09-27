@@ -1,3 +1,4 @@
+import { isSemesterArchive } from "../../../lib/semesterArchive";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -7112,6 +7113,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     loadedRosters: PerformanceScoreRoster[],
     syncRunId: number,
   ) => {
+    if (isSemesterArchive) return;
     const activeStudentUids = new Set(
       students.map((student) => student.uid).filter(Boolean),
     );
@@ -7431,7 +7433,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   };
 
   useEffect(() => {
-    if (!students.length || !rosters.length || rostersLoading) return;
+    if (
+      isSemesterArchive ||
+      !students.length ||
+      !rosters.length ||
+      rostersLoading
+    )
+      return;
     if (rosterStudentLinkRepairKeyRef.current === rosterStudentLinkRepairKey) {
       return;
     }
@@ -7445,7 +7453,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     options: { includeStudentDocuments?: boolean } = {},
   ) => {
     const activeStudentUids = new Set(
-      students.map((student) => student.uid).filter(Boolean),
+      isSemesterArchive
+        ? []
+        : students.map((student) => student.uid).filter(Boolean),
     );
     const rosterRows = (roster.rows || []).filter(
       (row) =>
@@ -9045,7 +9055,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           normalizeSchoolValue(row.grade) === normalizeSchoolValue(gradeValue)),
     );
     const activeStudentUids = new Set(
-      students.map((student) => student.uid).filter(Boolean),
+      isSemesterArchive
+        ? []
+        : students.map((student) => student.uid).filter(Boolean),
     );
     const linkedRows = classRows.filter(
       (row) =>
