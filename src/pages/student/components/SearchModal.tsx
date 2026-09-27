@@ -36,6 +36,7 @@ const LABELS = {
 
 interface SearchModalProps {
   categories: ScheduleCategory[];
+  events?: CalendarEvent[];
   isOpen: boolean;
   onClose: () => void;
   onSelectEvent: (dateStr: string) => void;
@@ -43,6 +44,7 @@ interface SearchModalProps {
 
 const SearchModal: React.FC<SearchModalProps> = ({
   categories,
+  events,
   isOpen,
   onClose,
   onSelectEvent,
@@ -73,20 +75,23 @@ const SearchModal: React.FC<SearchModalProps> = ({
     setResults([]);
 
     try {
-      const path = `years/${config.year}/semesters/${config.semester}/calendar`;
-      const userClassStr = getStudentClassKey(userData.grade, userData.class);
-      const visibleEvents = await loadVisibleCalendarEvents(
-        db,
-        path,
-        userClassStr,
-      );
+      let searchableEvents = events;
+      if (searchableEvents === undefined) {
+        const path = `years/${config.year}/semesters/${config.semester}/calendar`;
+        const userClassStr = getStudentClassKey(userData.grade, userData.class);
+        const visibleEvents = await loadVisibleCalendarEvents(
+          db,
+          path,
+          userClassStr,
+        );
+        const holidays = await getKoreanPublicHolidays(config.year);
+        searchableEvents = mergeEventsWithKoreanPublicHolidays(
+          visibleEvents,
+          holidays,
+        );
+      }
       const qLower = q.toLowerCase();
-
-      const holidays = await getKoreanPublicHolidays(config.year);
-      const matched = mergeEventsWithKoreanPublicHolidays(
-        visibleEvents,
-        holidays,
-      )
+      const matched = searchableEvents
         .filter((event) => {
           const titleMatch = event.title?.toLowerCase().includes(qLower);
           const descMatch = event.description?.toLowerCase().includes(qLower);

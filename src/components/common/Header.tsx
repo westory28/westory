@@ -290,10 +290,12 @@ const Header: React.FC<{
     "/teacher/points": "wis",
     "/teacher/students": "students",
   };
-  const shopUrls = new Set([
-    "/teacher/points?tab=products",
-    "/teacher/points?tab=requests",
-  ]);
+  const shopTabs = new Set(["products", "requests"]);
+  const getShopTab = (url: string) => {
+    const [path, query] = url.split("?");
+    const tab = new URLSearchParams(query).get("tab") || "";
+    return path === "/teacher/points" && shopTabs.has(tab) ? tab : "";
+  };
   const dictionaryUrl = "/teacher/lesson/history-dictionary";
   const resolvedTeacherMenus = useTeacherSidebar
     ? menuItems.map((item) => ({
@@ -309,13 +311,15 @@ const Header: React.FC<{
     (item) => {
       const children = item.resolvedChildren.filter(
         (child) =>
-          !shopUrls.has(child.resolvedUrl) &&
-          child.resolvedUrl !== dictionaryUrl,
+          !getShopTab(child.resolvedUrl) && child.resolvedUrl !== dictionaryUrl,
       );
       return {
         id: item.url.split("/").pop() || item.name,
         name: item.url === "/teacher/students" ? "학생 명단 관리" : item.name,
         icon: teacherIcons[item.url] || "lesson",
+        directUrl: item.resolvedChildren.length
+          ? undefined
+          : resolveTarget(item.url),
         children: children.length
           ? children
           : [
@@ -337,6 +341,7 @@ const Header: React.FC<{
       name: "캘린더",
       icon: "calendar",
       secondary: true,
+      directUrl: "/teacher/schedule",
       children: [{ name: "학사 일정", resolvedUrl: "/teacher/schedule" }],
     });
   }
@@ -346,6 +351,7 @@ const Header: React.FC<{
       name: "알림장",
       icon: "notice",
       secondary: true,
+      directUrl: "/teacher/dashboard?notice=manage",
       children: [
         {
           name: "알림장 관리",
@@ -354,10 +360,29 @@ const Header: React.FC<{
       ],
     });
   }
-  const shopChildren = resolvedTeacherMenus
+  const configuredShopChildren = resolvedTeacherMenus
     .flatMap((item) => item.resolvedChildren)
-    .filter((child) => shopUrls.has(child.resolvedUrl));
-  if (shopChildren.length)
+    .filter((child) => getShopTab(child.resolvedUrl));
+  // Keep configured labels and query parameters, and restore any supported
+  // shop destination omitted from an older saved menu configuration.
+  const configuredShopTabs = new Set(
+    configuredShopChildren.map((child) => getShopTab(child.resolvedUrl)),
+  );
+  const defaultShopChildren = getResolvedChildUrls(
+    "/teacher/points",
+    MENUS.teacher.find((item) => item.url === "/teacher/points")?.children ||
+      [],
+    "teacher",
+  ).filter(
+    (child) =>
+      getShopTab(child.resolvedUrl) &&
+      !configuredShopTabs.has(getShopTab(child.resolvedUrl)),
+  );
+  const shopChildren = [...configuredShopChildren, ...defaultShopChildren];
+  if (
+    resolvedTeacherMenus.some((item) => item.url === "/teacher/points") &&
+    shopChildren.length
+  )
     teacherSidebarGroups.push({
       id: "shop",
       name: "상점",
@@ -374,6 +399,7 @@ const Header: React.FC<{
       name: "사전",
       icon: "dictionary",
       secondary: true,
+      directUrl: dictionaryChild.resolvedUrl,
       children: [dictionaryChild],
     });
 

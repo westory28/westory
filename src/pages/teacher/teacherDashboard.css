@@ -7,38 +7,24 @@
   color: var(--ws-text, #1f2937);
 }
 
-.teacher-weekly-dashboard__greeting {
+.teacher-weekly-dashboard__semester {
   min-height: 48px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 4px 16px;
   margin-bottom: 12px;
 }
 
-.teacher-weekly-dashboard__greeting h1 {
+.teacher-weekly-dashboard__semester h1 {
   margin: 0;
-  font-size: var(--ws-type-section-title, 1.25rem);
-  font-weight: 400;
-  line-height: 1.5;
-}
-
-.teacher-weekly-dashboard__greeting h1 strong {
-  font-weight: 800;
-  color: var(--ws-text-strong, #111827);
-}
-
-.teacher-weekly-dashboard__greeting > span {
-  font-size: var(--ws-type-label, 0.75rem);
-  color: var(--ws-text-muted, #6b7280);
-  white-space: nowrap;
 }
 
 .teacher-weekly-dashboard__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1.04fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.04fr) minmax(312px, 1fr);
   gap: 16px;
   height: clamp(560px, calc(100dvh - 200px), 688px);
 }
@@ -93,7 +79,7 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: var(--ws-type-section-title, 1.25rem);
+  font-size: 1.5rem;
   font-weight: 800;
   color: var(--ws-text-strong, #111827);
 }
@@ -126,7 +112,7 @@
 }
 
 .teacher-week-schedule__range {
-  font-size: var(--ws-type-label, 0.75rem);
+  font-size: var(--ws-type-small, 0.875rem);
   color: var(--ws-text-muted, #6b7280);
   font-variant-numeric: tabular-nums;
 }
@@ -137,30 +123,28 @@
   flex-shrink: 0;
 }
 
-.teacher-week-schedule__navigation button,
-.teacher-week-schedule__filters button {
+.teacher-week-schedule__navigation button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-width: 40px;
-  height: 40px;
+  min-width: 44px;
+  height: 44px;
   padding-inline: 8px;
   border-radius: var(--radius-md, 8px);
-  font-size: var(--ws-type-label, 0.75rem);
+  font-size: var(--ws-type-small, 0.875rem);
   color: var(--ws-text-muted, #6b7280);
 }
 
-.teacher-week-schedule__navigation button:hover,
-.teacher-week-schedule__filters button:hover {
+.teacher-week-schedule__navigation button:hover {
   background: var(--ws-primary-soft, #eff6ff);
   color: var(--ws-primary, #2563eb);
 }
 
 .teacher-week-schedule__navigation svg,
 .teacher-week-schedule__filters svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
@@ -180,7 +164,7 @@
 
 .teacher-week-strip__month {
   text-align: center;
-  font-size: var(--ws-type-small, 0.875rem);
+  font-size: var(--ws-type-body, 1rem);
   white-space: nowrap;
   color: var(--ws-text-strong, #111827);
 }
@@ -192,23 +176,23 @@
   justify-content: center;
   gap: 4px;
   min-width: 0;
-  min-height: 72px;
+  min-height: 88px;
   border-radius: var(--radius-md, 8px);
   color: var(--ws-text, #1f2937);
 }
 
 .teacher-week-strip__day > span:first-child {
-  font-size: var(--ws-type-label, 0.75rem);
+  font-size: var(--ws-type-small, 0.875rem);
   color: var(--ws-text-muted, #6b7280);
 }
 
 .teacher-week-strip__day strong {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  font-size: var(--ws-type-body, 1rem);
+  font-size: 1.5rem;
   font-weight: 700;
 }
 
@@ -251,23 +235,25 @@
   justify-content: space-between;
   gap: 8px;
   flex-shrink: 0;
-  margin-top: 4px;
+  margin-block: 12px 4px;
 }
 
-.teacher-week-schedule__filters select {
+.teacher-week-schedule__filters .student-calendar-shell__filter-select {
   min-width: 0;
-  max-width: 75%;
-  min-height: 40px;
-  background: transparent;
-  border: 0;
-  padding: 4px;
-  font-size: var(--ws-type-label, 0.75rem);
-  color: var(--ws-text-muted, #6b7280);
+  max-width: 45%;
+  min-height: 44px;
+  font-size: var(--ws-type-small, 0.875rem);
+}
+
+.teacher-week-schedule__actions button {
+  gap: 8px;
+  font-size: var(--ws-type-body, 1rem);
 }
 
 .teacher-week-schedule__actions {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .teacher-week-schedule__content {
@@ -325,12 +311,12 @@
 
 .teacher-week-event {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr) auto;
+  grid-template-columns: 104px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 56px;
-  padding: 8px 4px;
+  min-height: 80px;
+  padding: 12px 4px;
   border-bottom: 1px solid var(--ws-border-soft, #f3f4f6);
   text-align: left;
 }
@@ -347,14 +333,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--ws-type-label, 0.75rem);
+  font-size: var(--ws-type-small, 0.875rem);
   font-weight: 500;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .teacher-week-event__dot {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -365,17 +351,17 @@
   gap: 4px;
 }
 .teacher-week-event__body strong {
-  font-size: var(--ws-type-small, 0.875rem);
+  font-size: 1.125rem;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 .teacher-week-event__body > span,
 .teacher-week-event__period {
-  font-size: var(--ws-type-label, 0.75rem);
+  font-size: var(--ws-type-small, 0.875rem);
   color: var(--ws-text-muted, #6b7280);
 }
 .teacher-week-event__period {
-  max-width: 72px;
+  max-width: 88px;
   text-align: right;
 }
 
@@ -551,31 +537,22 @@
   .teacher-weekly-dashboard {
     padding: 4px 12px 12px;
   }
-  .teacher-weekly-dashboard__greeting {
-    min-height: 56px;
+  .teacher-weekly-dashboard__semester {
+    min-height: 48px;
     margin-bottom: 8px;
-  }
-  .teacher-weekly-dashboard__greeting h1 {
-    font-size: var(--ws-type-body, 1rem);
-  }
-  .teacher-weekly-dashboard__greeting h1 strong {
-    display: block;
-  }
-  .teacher-weekly-dashboard__greeting > span {
-    font-size: var(--ws-type-meta, 0.72rem);
   }
   .teacher-week-schedule {
     padding: 12px;
   }
   .teacher-week-schedule__heading h2 {
-    font-size: var(--ws-type-card-title, 1rem);
+    font-size: 1.125rem;
   }
   .teacher-week-schedule__heading h2 svg {
     width: 20px;
     height: 20px;
   }
   .teacher-dashboard-link {
-    font-size: var(--ws-type-label, 0.75rem);
+    font-size: var(--ws-type-small, 0.875rem);
     gap: 4px;
   }
   .teacher-week-strip {
@@ -583,14 +560,24 @@
     padding-inline: 0;
   }
   .teacher-week-strip__month {
-    font-size: var(--ws-type-label, 0.75rem);
+    font-size: var(--ws-type-small, 0.875rem);
   }
   .teacher-week-strip__day strong {
     width: 32px;
     height: 32px;
+    font-size: 1.25rem;
   }
-  .teacher-week-schedule__range {
-    font-size: var(--ws-type-meta, 0.72rem);
+  .teacher-week-schedule__toolbar {
+    flex-wrap: wrap;
+  }
+  .teacher-week-schedule__navigation {
+    margin-left: auto;
+  }
+  .teacher-week-schedule__filters {
+    flex-wrap: wrap;
+  }
+  .teacher-week-schedule__actions {
+    margin-left: auto;
   }
   .teacher-week-event {
     grid-template-columns: 72px minmax(0, 1fr) auto;
@@ -598,6 +585,9 @@
   }
   .teacher-week-event__date {
     gap: 4px;
+  }
+  .teacher-week-event__body strong {
+    font-size: var(--ws-type-body, 1rem);
   }
   .teacher-week-event__period {
     max-width: 56px;

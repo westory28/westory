@@ -111,6 +111,9 @@ Layout tokens:
 - Teacher weekly dashboard: 1536px maximum width, compact 48px greeting, 16px panel gap, desktop content height `clamp(560px, calc(100dvh - 200px), 688px)`; small screens use natural document scrolling.
 - Teacher navigation motion: accordion content unfolds with opacity, 4px vertical translation and 0.98 scale for 160ms. Week changes slide 16px in the requested direction for 160ms. Both honor reduced-motion preferences.
 - Teacher footer: transparent with 8px top, 16px horizontal and 12px bottom padding; existing policy links and copyright remain centered.
+- Dashboard semester heading: left-aligned blue pill, 16px bold white text with 8px/16px padding, replacing greetings in both portals.
+- Weekly calendar readability: desktop title/date numbers 24px, event title 18px, date/period metadata 14–16px; event rows 80px. Mobile event titles remain 16px and section titles 18px. Search/add/filter controls reuse the current calendar's bordered search, blue add, and 44px control sizing.
+- Teacher dashboard ranking: reserve at least 312px in the desktop grid so all five ranking rows fit at shorter viewport heights.
 - Page max width: `--ws-page-max: 1280px`.
 - Header height: `--ws-header-height: 64px`.
 - Header dropdown min width: `--ws-header-dropdown-min: 11rem`.

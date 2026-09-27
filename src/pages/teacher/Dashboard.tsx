@@ -59,7 +59,7 @@ const getVisibleCalendarEvents = (
 };
 
 const TeacherDashboard: React.FC = () => {
-  const { config, userData } = useAuth();
+  const { config } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -211,18 +211,11 @@ const TeacherDashboard: React.FC = () => {
       data-patch-target="teacher-dashboard"
       data-patch-label="교사 대시보드"
     >
-      <div className="teacher-weekly-dashboard__greeting">
-        <h1>
-          <strong>
-            {String(userData?.name || "선생님").trim()}
-            {userData?.name ? " 선생님," : ","}
-          </strong>{" "}
-          오늘도 좋은 하루 되세요.
-        </h1>
+      <div className="teacher-weekly-dashboard__semester">
         {config && (
-          <span>
+          <h1 className="inline-flex shrink-0 rounded-full bg-blue-600 px-4 py-2 text-base font-bold text-white">
             {config.year}학년도 {config.semester}학기
-          </span>
+          </h1>
         )}
       </div>
 
@@ -286,6 +279,7 @@ const TeacherDashboard: React.FC = () => {
         {isSearchOpen && (
           <SearchModal
             categories={categories}
+            events={visibleEvents}
             isOpen={isSearchOpen}
             onClose={() => setIsSearchOpen(false)}
             onSelectEvent={handleSelectSearchResults}

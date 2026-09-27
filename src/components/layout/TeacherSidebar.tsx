@@ -9,6 +9,7 @@ export interface TeacherSidebarGroup {
   name: string;
   icon: TeacherIconName;
   children: Array<{ name: string; resolvedUrl: string }>;
+  directUrl?: string;
   secondary?: boolean;
 }
 
@@ -163,44 +164,61 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                 key={group.id}
                 className={`teacher-sidebar-group ${divider ? "has-divider" : ""}`}
               >
-                <button
-                  type="button"
-                  className={`teacher-sidebar-item ${active ? "is-active" : ""} ${open ? "is-open" : ""}`}
-                  aria-expanded={open && (!collapsed || mobileOpen)}
-                  aria-controls={groupId}
-                  onClick={() => toggleGroup(group.id)}
-                  title={collapsed ? group.name : undefined}
-                >
-                  <TeacherNavigationIcon name={group.icon} />
-                  <span className="teacher-sidebar-label">{group.name}</span>
-                  <TeacherNavigationIcon
-                    name="chevron"
-                    className="teacher-sidebar-chevron"
-                  />
-                </button>
-                <div
-                  id={groupId}
-                  className="teacher-sidebar-children"
-                  hidden={!open || (collapsed && !mobileOpen)}
-                >
-                  {group.children.map((child, childIndex) => {
-                    const selected = isChildActive(
-                      child.resolvedUrl,
-                      allChildren,
-                    );
-                    return (
-                      <Link
-                        key={`${child.resolvedUrl}-${childIndex}`}
-                        to={child.resolvedUrl}
-                        className={`teacher-sidebar-child ${selected ? "is-active" : ""}`}
-                        aria-current={selected ? "page" : undefined}
-                        onClick={onCloseMobile}
-                      >
-                        {child.name}
-                      </Link>
-                    );
-                  })}
-                </div>
+                {group.directUrl ? (
+                  <Link
+                    to={group.directUrl}
+                    className={`teacher-sidebar-item ${active ? "is-active" : ""}`}
+                    aria-current={active ? "page" : undefined}
+                    onClick={onCloseMobile}
+                    title={collapsed ? group.name : undefined}
+                  >
+                    <TeacherNavigationIcon name={group.icon} />
+                    <span className="teacher-sidebar-label">{group.name}</span>
+                  </Link>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className={`teacher-sidebar-item ${active ? "is-active" : ""} ${open ? "is-open" : ""}`}
+                      aria-expanded={open && (!collapsed || mobileOpen)}
+                      aria-controls={groupId}
+                      onClick={() => toggleGroup(group.id)}
+                      title={collapsed ? group.name : undefined}
+                    >
+                      <TeacherNavigationIcon name={group.icon} />
+                      <span className="teacher-sidebar-label">
+                        {group.name}
+                      </span>
+                      <TeacherNavigationIcon
+                        name="chevron"
+                        className="teacher-sidebar-chevron"
+                      />
+                    </button>
+                    <div
+                      id={groupId}
+                      className="teacher-sidebar-children"
+                      hidden={!open || (collapsed && !mobileOpen)}
+                    >
+                      {group.children.map((child, childIndex) => {
+                        const selected = isChildActive(
+                          child.resolvedUrl,
+                          allChildren,
+                        );
+                        return (
+                          <Link
+                            key={`${child.resolvedUrl}-${childIndex}`}
+                            to={child.resolvedUrl}
+                            className={`teacher-sidebar-child ${selected ? "is-active" : ""}`}
+                            aria-current={selected ? "page" : undefined}
+                            onClick={onCloseMobile}
+                          >
+                            {child.name}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}

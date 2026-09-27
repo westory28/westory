@@ -29,7 +29,6 @@ import {
   getPointActivityTransaction,
 } from "../../lib/points";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
-import { readSiteSettingDoc } from "../../lib/siteSettings";
 import { getYearSemester } from "../../lib/semesterScope";
 import {
   getKoreanPublicHolidays,
@@ -54,21 +53,6 @@ const CalendarSection = lazy(() => import("./components/CalendarSection"));
 const NoticeBoard = lazy(() => import("./components/NoticeBoard"));
 const SearchModal = lazy(() => import("./components/SearchModal"));
 
-const normalizeClassValue = (value: unknown): string => {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) return "";
-  const digits = normalized.match(/\d+/)?.[0] || "";
-  if (!digits) return normalized;
-  const parsed = Number(digits);
-  if (!Number.isFinite(parsed) || parsed <= 0) return "";
-  return String(parsed);
-};
-
-const withSuffix = (label: string, suffix: string) => {
-  if (!label) return "";
-  return label.endsWith(suffix) ? label : `${label}${suffix}`;
-};
-
 const DashboardCalendarFallback: React.FC = () => (
   <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
     <div className="mb-4 flex items-center justify-between">
@@ -91,14 +75,7 @@ const StudentDashboard: React.FC = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
-  const [welcomeText, setWelcomeText] = useState("학생 정보를 불러오는 중");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [gradeLabelMap, setGradeLabelMap] = useState<Record<string, string>>(
-    {},
-  );
-  const [classLabelMap, setClassLabelMap] = useState<Record<string, string>>(
-    {},
-  );
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceChecked, setAttendanceChecked] = useState(false);
   const [attendanceMessage, setAttendanceMessage] = useState("");
@@ -169,55 +146,6 @@ const StudentDashboard: React.FC = () => {
     if (remainingDays <= 0) return "이번 달 개근 달성";
     return `개근까지 ${remainingDays}일`;
   }, [todayAttendanceSourceId, visibleAttendanceDates]);
-
-  useEffect(() => {
-    const loadSchoolConfig = async () => {
-      try {
-        const data = await readSiteSettingDoc<{
-          grades?: Array<{ value?: string; label?: string }>;
-          classes?: Array<{ value?: string; label?: string }>;
-        }>("school_config");
-        if (!data) return;
-        const nextGradeMap: Record<string, string> = {};
-        const nextClassMap: Record<string, string> = {};
-        (data.grades || []).forEach((g) => {
-          const value = String(g?.value ?? "").trim();
-          const label = String(g?.label ?? "").trim();
-          if (value && label) nextGradeMap[value] = label;
-        });
-        (data.classes || []).forEach((c) => {
-          const value = String(c?.value ?? "").trim();
-          const label = String(c?.label ?? "").trim();
-          if (value && label) nextClassMap[value] = label;
-        });
-        setGradeLabelMap(nextGradeMap);
-        setClassLabelMap(nextClassMap);
-      } catch (error) {
-        console.error("Failed to load school labels:", error);
-      }
-    };
-
-    const cancel = runWhenIdle(() => {
-      void loadSchoolConfig();
-    }, 500);
-
-    return cancel;
-  }, []);
-
-  useEffect(() => {
-    if (!userData) return;
-    const gradeValue = normalizeClassValue(userData.grade);
-    const classValue = normalizeClassValue(userData.class);
-    const gradeLabel = gradeLabelMap[gradeValue] || gradeValue;
-    const classLabel = classLabelMap[classValue] || classValue;
-    if (gradeLabel && classLabel) {
-      setWelcomeText(
-        `${withSuffix(gradeLabel, "학년")} ${withSuffix(classLabel, "반")}의 대시보드`,
-      );
-    } else {
-      setWelcomeText(`${(userData.name || "학생").trim()}의 대시보드`);
-    }
-  }, [userData, gradeLabelMap, classLabelMap]);
 
   useEffect(() => {
     const { year: currentYear, semester: currentSemester } =
@@ -419,15 +347,12 @@ const StudentDashboard: React.FC = () => {
 
   return (
     <div className="dashboard-container student-dashboard-container mx-auto w-full max-w-7xl px-4 py-6">
-      <div className="mb-6 flex shrink-0 flex-col items-center justify-between gap-3 md:flex-row">
+      <div className="mb-4 flex shrink-0 items-start justify-start">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 md:text-3xl">
-            {welcomeText}
-          </h1>
           {config && (
-            <span className="shrink-0 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white shadow-md md:text-sm">
+            <h1 className="inline-flex shrink-0 rounded-full bg-blue-600 px-4 py-2 text-base font-bold text-white">
               {config.year}학년도 {config.semester}학기
-            </span>
+            </h1>
           )}
         </div>
       </div>

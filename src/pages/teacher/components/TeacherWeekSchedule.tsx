@@ -115,9 +115,17 @@ const TeacherWeekSchedule: React.FC<Props> = ({
     [events, weekStart],
   );
   const eventListRef = useRef<HTMLDivElement>(null);
+  const previousSelection = useRef({ selectedDate, weekStart });
   useEffect(() => {
     const list = eventListRef.current;
     if (!list) return;
+    const dateChanged = previousSelection.current.selectedDate !== selectedDate;
+    const weekChanged = previousSelection.current.weekStart !== weekStart;
+    previousSelection.current = { selectedDate, weekStart };
+    if (!dateChanged) {
+      if (weekChanged) list.scrollTop = 0;
+      return;
+    }
     const selectedRow = list.querySelector<HTMLElement>(
       ".teacher-week-event.is-selected",
     );
@@ -213,6 +221,7 @@ const TeacherWeekSchedule: React.FC<Props> = ({
         </div>
         <div className="teacher-week-schedule__filters">
           <select
+            className="student-calendar-shell__filter-select"
             aria-label="일정 대상 필터"
             value={filterClass}
             onChange={(event) => onFilterChange(event.target.value)}
@@ -228,6 +237,7 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           <div className="teacher-week-schedule__actions">
             <button
               type="button"
+              className="student-calendar-shell__search-button"
               onClick={onSearchClick}
               aria-label="일정 검색"
             >
@@ -237,7 +247,12 @@ const TeacherWeekSchedule: React.FC<Props> = ({
               </svg>
               검색
             </button>
-            <button type="button" onClick={onAddEvent} aria-label="일정 추가">
+            <button
+              type="button"
+              className="student-calendar-shell__control-button student-calendar-shell__action-button"
+              onClick={onAddEvent}
+              aria-label="일정 추가"
+            >
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
               </svg>
