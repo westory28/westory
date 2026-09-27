@@ -224,14 +224,6 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           <TeacherNavigationIcon name="calendar" />
           이번 주 학사 일정
         </h2>
-        <Link
-          to="/teacher/schedule"
-          className="teacher-week-schedule__calendar-link"
-          aria-label="전체 캘린더 보기"
-          title="전체 캘린더 보기"
-        >
-          <TeacherNavigationIcon name="calendar" />
-        </Link>
       </div>
       <div className="teacher-week-schedule__toolbar">
         <span
@@ -306,6 +298,14 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 </svg>
               </button>
             </div>
+            <Link
+              to="/teacher/schedule"
+              className="teacher-week-schedule__calendar-link"
+              aria-label="전체 캘린더 보기"
+              title="전체 캘린더 보기"
+            >
+              <TeacherNavigationIcon name="calendar" />
+            </Link>
             <button
               type="button"
               className="student-calendar-shell__control-button student-calendar-shell__action-button teacher-week-schedule__icon-button"
@@ -442,25 +442,34 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                   }
                 >
                   <span
+                    title={dateLabel}
                     className={`teacher-week-event__date${event.eventType !== "holiday" ? " teacher-week-event__date-badge" : ""}`}
                   >
                     {dateLabel}
                   </span>
                   <span className="teacher-week-event__body">
-                    <strong className="teacher-week-event__title">
+                    <strong
+                      className="teacher-week-event__title"
+                      title={event.title}
+                    >
                       {event.title}
                     </strong>
-                    {event.eventType !== "holiday" && (
-                      <span>
-                        {event.targetType === "class" && event.targetClass
-                          ? `${classLabel(event.targetClass)} · `
-                          : ""}
-                        {meta.label}
+                    <span className="teacher-week-event__metadata">
+                      {event.eventType !== "holiday" && (
+                        <span
+                          className="teacher-week-event__category"
+                          title={`${event.targetType === "class" && event.targetClass ? `${classLabel(event.targetClass)} · ` : ""}${meta.label}`}
+                        >
+                          {event.targetType === "class" && event.targetClass
+                            ? `${classLabel(event.targetClass)} · `
+                            : ""}
+                          {meta.label}
+                        </span>
+                      )}
+                      <span className="teacher-week-event__period">
+                        {periodLabel}
                       </span>
-                    )}
-                  </span>
-                  <span className="teacher-week-event__period">
-                    {periodLabel}
+                    </span>
                   </span>
                 </button>
               );
