@@ -168,18 +168,6 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
             <TeacherNavigationIcon name="close" />
           </button>
         </div>
-        <div className="teacher-sidebar-desktop-control">
-          <button
-            type="button"
-            className="teacher-sidebar-collapse"
-            onClick={onToggleCollapsed}
-            aria-label={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
-            aria-expanded={!collapsed}
-            title={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
-          >
-            <TeacherNavigationIcon name="collapse" />
-          </button>
-        </div>
         <nav className="teacher-sidebar-nav" aria-label="교사 주 메뉴">
           {showDashboard && (
             <Link
@@ -312,6 +300,16 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
               <span className="teacher-sidebar-label">설정</span>
             </Link>
           )}
+          <button
+            type="button"
+            className="teacher-sidebar-collapse"
+            onClick={onToggleCollapsed}
+            aria-label={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
+            aria-expanded={!collapsed}
+            title={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
+          >
+            <TeacherNavigationIcon name="collapse" />
+          </button>
         </div>
       </aside>
     </>

@@ -64,15 +64,16 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
   const isTeacherRoute = location.pathname.startsWith("/teacher");
-  const [teacherSidebarCollapsed, setTeacherSidebarCollapsed] =
-    React.useState(true);
+  const [teacherSidebarCollapsed, setTeacherSidebarCollapsed] = React.useState(
+    () => location.pathname.startsWith("/teacher/settings"),
+  );
   const toggleTeacherSidebar = React.useCallback(() => {
     setTeacherSidebarCollapsed((previous) => !previous);
   }, []);
   useEffect(() => {
-    if (location.pathname.startsWith("/teacher/settings")) {
-      setTeacherSidebarCollapsed(true);
-    }
+    setTeacherSidebarCollapsed(
+      location.pathname.startsWith("/teacher/settings"),
+    );
   }, [location.pathname]);
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(

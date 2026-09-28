@@ -505,8 +505,8 @@ const SettingsGeneral: React.FC<{ onOpenArchive: () => void }> = ({
     );
 
   return (
-    <div className="w-full min-w-0 space-y-6">
-      <div>
+    <div className="teacher-settings-general">
+      <div className="teacher-settings-general-heading">
         <h3 className="text-xl font-extrabold text-gray-900">기본 환경 설정</h3>
         <p className="mt-2 text-sm text-gray-500">
           운영 학기를 전환하고 학생 메뉴의 표시 여부를 설정합니다.
@@ -600,13 +600,13 @@ const SettingsGeneral: React.FC<{ onOpenArchive: () => void }> = ({
               {readinessLoading
                 ? "선택한 학기의 준비 현황을 확인하고 있습니다."
                 : readinessError
-                  ? "준비 현황을 불러오지 못했습니다. 아래 확인 사항을 점검하세요."
+                  ? "준비 현황을 불러오지 못했습니다. 전환 전 확인 사항을 점검하세요."
                   : readiness?.status === "danger"
-                    ? "필수 항목이 비어 있어 전환을 권장하지 않습니다. 아래 확인 사항을 먼저 점검하세요."
-                    : "아래 전환 전 확인 사항을 점검한 뒤 적용하세요."}
+                    ? "필수 항목이 비어 있어 전환을 권장하지 않습니다. 전환 전 확인 사항을 먼저 점검하세요."
+                    : "전환 전 확인 사항을 점검한 뒤 적용하세요."}
             </p>
           )}
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="teacher-settings-actions mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={onOpenArchive}
@@ -735,7 +735,7 @@ const SettingsGeneral: React.FC<{ onOpenArchive: () => void }> = ({
         </p>
         <fieldset
           disabled={saving}
-          className="mt-4 divide-y divide-gray-200 border-y border-gray-200"
+          className="teacher-settings-menu-options mt-4 divide-y divide-gray-200 border-y border-gray-200"
         >
           {(
             [
@@ -759,7 +759,7 @@ const SettingsGeneral: React.FC<{ onOpenArchive: () => void }> = ({
             </label>
           ))}
         </fieldset>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="teacher-settings-actions mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-gray-500">
             메뉴 저장은 운영 학기를 바꾸지 않습니다.
           </p>

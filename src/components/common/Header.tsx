@@ -755,10 +755,6 @@ const Header: React.FC<{
               </Link>
             </div>
           )}
-          {useTeacherSidebar &&
-            location.pathname.startsWith("/teacher/settings") && (
-              <span className="teacher-header-location">설정</span>
-            )}
           {isTeacherDashboard && config && (
             <h1 className="teacher-dashboard-semester inline-flex shrink-0 items-center self-center rounded-full bg-blue-600 px-4 py-1 text-base font-bold leading-6 text-white">
               {config.year}학년도 {config.semester}학기
