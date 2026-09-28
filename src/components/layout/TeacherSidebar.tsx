@@ -147,26 +147,28 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
         aria-label="교사 메뉴"
       >
         <div className="teacher-sidebar-brand-row">
-          <Link
-            to={home}
-            className="teacher-sidebar-brand"
-            onClick={onCloseMobile}
-            aria-label="Westory 첫 화면"
-            title={collapsed ? semesterLabel : undefined}
-          >
-            <span className="teacher-sidebar-wordmark">
-              <span className="logo-we">We</span>
-              <span className="logo-story">story</span>
-            </span>
-            <span className="teacher-sidebar-tagline">
-              우리가 써 내려가는 이야기
-            </span>
-          </Link>
-          {semesterLabel && (
-            <span className="teacher-brand-semester teacher-sidebar-semester">
-              {semesterLabel}
-            </span>
-          )}
+          <div className="teacher-sidebar-brand-content">
+            <Link
+              to={home}
+              className="teacher-sidebar-brand"
+              onClick={onCloseMobile}
+              aria-label="Westory 첫 화면"
+              title={collapsed ? semesterLabel : undefined}
+            >
+              <span className="teacher-sidebar-wordmark">
+                <span className="logo-we">We</span>
+                <span className="logo-story">story</span>
+              </span>
+              <span className="teacher-sidebar-tagline">
+                우리가 써 내려가는 이야기
+              </span>
+            </Link>
+            {semesterLabel && (
+              <span className="teacher-brand-semester teacher-sidebar-semester">
+                {semesterLabel}
+              </span>
+            )}
+          </div>
           <button
             type="button"
             className="teacher-sidebar-close"
