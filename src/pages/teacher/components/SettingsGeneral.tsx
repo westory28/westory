@@ -505,7 +505,7 @@ const SettingsGeneral: React.FC<{ onOpenArchive: () => void }> = ({
     );
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       <div>
         <h3 className="text-xl font-extrabold text-gray-900">기본 환경 설정</h3>
         <p className="mt-2 text-sm text-gray-500">

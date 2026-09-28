@@ -470,7 +470,7 @@ const SettingsInterface: React.FC = () => {
 
       <div className="p-6 lg:p-8">
         {activeTab === "landing" && (
-          <div className="max-w-3xl space-y-8">
+          <div className="w-full min-w-0 space-y-8">
             <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
               <div className="border-b border-gray-100 pb-4 mb-6">
                 <h3 className="text-lg font-bold text-gray-900">

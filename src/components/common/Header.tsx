@@ -733,18 +733,32 @@ const Header: React.FC<{
       >
         <div className="header-container">
           {useTeacherSidebar && (
-            <button
-              id="teacher-navigation-toggle"
-              type="button"
-              className="teacher-navigation-toggle"
-              onClick={() => setMobileMenuOpen((previous) => !previous)}
-              aria-label="교사 메뉴 열기"
-              aria-expanded={mobileMenuOpen}
-              aria-controls="teacher-navigation"
-            >
-              <TeacherNavigationIcon name="menu" />
-            </button>
+            <div className="teacher-header-start">
+              <button
+                id="teacher-navigation-toggle"
+                type="button"
+                className="teacher-navigation-toggle"
+                onClick={() => setMobileMenuOpen((previous) => !previous)}
+                aria-label="교사 메뉴 열기"
+                aria-expanded={mobileMenuOpen}
+                aria-controls="teacher-navigation"
+              >
+                <TeacherNavigationIcon name="menu" />
+              </button>
+              <Link
+                to={home}
+                className="logo-text"
+                aria-label="Westory 첫 화면"
+              >
+                <span className="logo-we">We</span>
+                <span className="logo-story">story</span>
+              </Link>
+            </div>
           )}
+          {useTeacherSidebar &&
+            location.pathname.startsWith("/teacher/settings") && (
+              <span className="teacher-header-location">설정</span>
+            )}
           {isTeacherDashboard && config && (
             <h1 className="teacher-dashboard-semester inline-flex shrink-0 items-center self-center rounded-full bg-blue-600 px-4 py-1 text-base font-bold leading-6 text-white">
               {config.year}학년도 {config.semester}학기

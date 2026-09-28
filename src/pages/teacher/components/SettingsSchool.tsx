@@ -144,7 +144,7 @@ const SettingsSchool: React.FC = () => {
     );
 
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="w-full min-w-0 space-y-8">
       {/* Section 1: School Level */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
         <div className="border-b border-gray-100 pb-4 mb-6">

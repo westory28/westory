@@ -12,6 +12,13 @@ export type TeacherIconName =
   | "shop"
   | "dictionary"
   | "settings"
+  | "sliders"
+  | "history"
+  | "school"
+  | "palette"
+  | "access"
+  | "bell"
+  | "privacy"
   | "chevron"
   | "collapse"
   | "menu"
@@ -75,6 +82,39 @@ const paths: Record<Exclude<TeacherIconName, "wis">, React.ReactNode> = {
       <circle cx="12" cy="12" r="3" />
     </>
   ),
+  sliders: (
+    <>
+      <path d="M3 6h4m4 0h10M3 12h10m4 0h4M3 18h4m4 0h10" />
+      <circle cx="9" cy="6" r="2" />
+      <circle cx="15" cy="12" r="2" />
+      <circle cx="9" cy="18" r="2" />
+    </>
+  ),
+  history: <path d="M3 4v5h5M3 9a9 9 0 1 1 0 6m9-9v6l4 2" />,
+  school: (
+    <>
+      <path d="m7 7 5-4 5 4v14H7Zm0 3H3v11h18V10h-4M10 21v-5h4v5" />
+      <circle cx="12" cy="10" r="2" />
+    </>
+  ),
+  palette: (
+    <>
+      <path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 .8-2.8H17a4 4 0 0 0 4-4C21 6.4 17 3 12 3Z" />
+      <circle cx="7" cy="10" r=".5" />
+      <circle cx="10" cy="7" r=".5" />
+      <circle cx="14" cy="7" r=".5" />
+      <circle cx="17" cy="10" r=".5" />
+    </>
+  ),
+  access: (
+    <>
+      <circle cx="8" cy="7" r="3" />
+      <path d="M2 21v-3a6 6 0 0 1 10-4m4 0v-2a2 2 0 0 1 4 0v2" />
+      <rect x="14" y="14" width="8" height="7" rx="1" />
+    </>
+  ),
+  bell: <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />,
+  privacy: <path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm-4 9 3 3 5-6" />,
   chevron: <path d="m8 10 4 4 4-4" />,
   collapse: (
     <>

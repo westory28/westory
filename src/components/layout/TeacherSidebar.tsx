@@ -28,6 +28,14 @@ interface TeacherSidebarProps {
   ) => boolean;
 }
 
+const compactLabels: Record<string, string> = {
+  lesson: "학습 자료",
+  quiz: "평가",
+  exam: "점수",
+  points: "위스",
+  students: "학생",
+};
+
 const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   groups,
   home,
@@ -104,7 +112,8 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
 
   const toggleGroup = (id: string) => {
     if (collapsed && !mobileOpen) onToggleCollapsed();
-    const nextGroup = openGroup === id && !collapsed ? null : id;
+    const nextGroup =
+      openGroup === id && (!collapsed || mobileOpen) ? null : id;
     setAnimatingGroups(
       [openGroup, nextGroup].filter((group): group is string => Boolean(group)),
     );
@@ -159,6 +168,18 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
             <TeacherNavigationIcon name="close" />
           </button>
         </div>
+        <div className="teacher-sidebar-desktop-control">
+          <button
+            type="button"
+            className="teacher-sidebar-collapse"
+            onClick={onToggleCollapsed}
+            aria-label={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
+            aria-expanded={!collapsed}
+            title={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
+          >
+            <TeacherNavigationIcon name="collapse" />
+          </button>
+        </div>
         <nav className="teacher-sidebar-nav" aria-label="교사 주 메뉴">
           {showDashboard && (
             <Link
@@ -189,11 +210,22 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                     to={group.directUrl}
                     className={`teacher-sidebar-item ${active ? "is-active" : ""}`}
                     aria-current={active ? "page" : undefined}
+                    aria-label={group.name}
                     onClick={onCloseMobile}
                     title={collapsed ? group.name : undefined}
                   >
                     <TeacherNavigationIcon name={group.icon} />
-                    <span className="teacher-sidebar-label">{group.name}</span>
+                    <span className="teacher-sidebar-label">
+                      <span className="teacher-sidebar-full-label">
+                        {group.name}
+                      </span>
+                      <span
+                        className="teacher-sidebar-compact-label"
+                        aria-hidden="true"
+                      >
+                        {compactLabels[group.id] || group.name}
+                      </span>
+                    </span>
                   </Link>
                 ) : (
                   <>
@@ -201,13 +233,22 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                       type="button"
                       className={`teacher-sidebar-item ${active ? "is-active" : ""} ${open ? "is-open" : ""}`}
                       aria-expanded={expanded}
+                      aria-label={group.name}
                       aria-controls={groupId}
                       onClick={() => toggleGroup(group.id)}
                       title={collapsed ? group.name : undefined}
                     >
                       <TeacherNavigationIcon name={group.icon} />
                       <span className="teacher-sidebar-label">
-                        {group.name}
+                        <span className="teacher-sidebar-full-label">
+                          {group.name}
+                        </span>
+                        <span
+                          className="teacher-sidebar-compact-label"
+                          aria-hidden="true"
+                        >
+                          {compactLabels[group.id] || group.name}
+                        </span>
                       </span>
                       <TeacherNavigationIcon
                         name="chevron"
@@ -256,7 +297,10 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
             <Link
               to="/teacher/settings"
               className={`teacher-sidebar-settings ${location.pathname.startsWith("/teacher/settings") ? "is-active" : ""}`}
-              onClick={onCloseMobile}
+              onClick={() => {
+                onCloseMobile();
+                if (!collapsed) onToggleCollapsed();
+              }}
               aria-current={
                 location.pathname.startsWith("/teacher/settings")
                   ? "page"
@@ -268,15 +312,6 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
               <span className="teacher-sidebar-label">설정</span>
             </Link>
           )}
-          <button
-            type="button"
-            className="teacher-sidebar-collapse"
-            onClick={onToggleCollapsed}
-            aria-label={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
-            aria-expanded={!collapsed}
-          >
-            <TeacherNavigationIcon name="collapse" />
-          </button>
         </div>
       </aside>
     </>

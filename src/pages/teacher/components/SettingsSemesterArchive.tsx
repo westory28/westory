@@ -73,7 +73,7 @@ const SettingsSemesterArchive: React.FC = () => {
   );
 
   return (
-    <div className="w-full min-w-0 max-w-3xl rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+    <div className="w-full min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="mb-6 border-b border-gray-100 pb-4">
         <h3 className="text-lg font-bold text-gray-900">이전 학기 조회</h3>
         <p className="mt-1 text-sm leading-6 text-gray-500">
