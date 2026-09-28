@@ -2,6 +2,8 @@
   --teacher-sidebar-width: 232px;
   --teacher-sidebar-collapsed-width: 88px;
   --teacher-header-height: 48px;
+  --teacher-account-top-space: 0px;
+  --teacher-account-height: calc(var(--teacher-header-height) + var(--teacher-account-top-space));
   padding-left: var(--teacher-sidebar-width);
 }
 
@@ -309,7 +311,7 @@
   gap: 16px;
   height: var(--teacher-header-height);
   min-height: var(--teacher-header-height);
-  max-width: none;
+  max-width: 1536px;
   padding: 0 24px;
 }
 .teacher-header-start {
@@ -359,16 +361,14 @@
 .teacher-account-header .btn-logout-label {
   display: inline;
 }
-.teacher-layout .teacher-dashboard-account-header .header-container {
-  max-width: 1536px;
-  padding-inline: 24px;
-}
-
 @media (min-width: 1024px) {
-  .teacher-layout .teacher-dashboard-account-header {
-    height: calc(var(--teacher-header-height) + 24px);
-    min-height: calc(var(--teacher-header-height) + 24px);
-    padding-top: 24px;
+  .teacher-layout {
+    --teacher-account-top-space: 24px;
+  }
+  .teacher-layout .teacher-account-header {
+    height: var(--teacher-account-height);
+    min-height: var(--teacher-account-height);
+    padding-top: var(--teacher-account-top-space);
   }
 }
 
@@ -537,13 +537,13 @@
 }
 
 @media (max-width: 1119px) {
-  .teacher-layout .teacher-dashboard-account-header .header-container {
+  .teacher-layout .teacher-account-header .header-container {
     padding-inline: 16px;
   }
 }
 
 @media (max-width: 639px) {
-  .teacher-layout .teacher-dashboard-account-header .header-container {
+  .teacher-layout .teacher-account-header .header-container {
     padding-inline: 12px;
   }
 }

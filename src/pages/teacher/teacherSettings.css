@@ -3,7 +3,7 @@
   grid-template-columns: 228px minmax(0, 1fr);
   grid-template-rows: 1fr auto;
   width: 100%;
-  min-height: calc(100dvh - var(--teacher-header-height, 48px));
+  min-height: calc(100dvh - var(--teacher-account-height, 48px));
   background: var(--ws-bg, #f9fafb);
 }
 
@@ -149,7 +149,7 @@
 
 @media (min-width: 1024px) {
   .teacher-settings-navigation {
-    margin-top: calc(-1 * var(--teacher-header-height, 48px));
+    margin-top: calc(-1 * var(--teacher-account-height, 48px));
   }
 }
 

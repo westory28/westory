@@ -177,8 +177,6 @@ const Header: React.FC<{
 
   const isTeacherPortal = portal === "teacher";
   const useTeacherSidebar = teacherLayout && isTeacherPortal;
-  const isTeacherDashboard =
-    useTeacherSidebar && location.pathname === "/teacher/dashboard";
   const canRenderStudentMenu =
     portal !== "student" ||
     (menuConfigReady &&
@@ -728,7 +726,7 @@ const Header: React.FC<{
       <header
         className={
           useTeacherSidebar
-            ? `teacher-header teacher-account-header${isTeacherDashboard ? " teacher-dashboard-account-header" : ""}`
+            ? "teacher-header teacher-account-header"
             : isTeacherPortal
               ? "teacher-header"
               : undefined
