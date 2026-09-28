@@ -330,15 +330,6 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
           </div>
         </div>
       )}
-      <p
-        className="teacher-notice-board__size-hint"
-        title={`현재 표시 영역 ${viewportSize.width} × ${viewportSize.height}px. 16:9 맞춤 표시 크기의 2배 기준, 최대 1200 × 675px.`}
-      >
-        {recommendedImageSize
-          ? `권장 이미지 ${recommendedImageSize.width} × ${recommendedImageSize.height}px · 16:9`
-          : "이미지 권장 크기를 확인하는 중입니다."}
-      </p>
-
       {(isModalOpen || isOrderModalOpen) && (
         <NoticeManagerModal
           notices={notices}

@@ -279,8 +279,8 @@ No visible UI work is complete until the design contract and verification eviden
 
 ### Teacher notice image sizing
 
-- The dashboard notice viewport fills the space remaining after the heading, controls and one compact sizing hint. Images and the carousel track use the measured slot without intrinsic aspect ratios imposing a minimum height; images use `contain` and never zoom on hover.
-- Measure the viewport with `ResizeObserver`. Recommend a 16:9 source at twice its contained image size, rounded to whole 16:9 units and capped at the existing 1200×675 upload maximum. Show current CSS pixel dimensions in a native title. The existing 16:9 center crop/compression contract remains unchanged; other editor entry points keep the 1200×675 fallback recommendation.
-- Reuse small muted helper text and the existing 4/8px spacing. Keep the hint available for both empty and populated boards.
+- The dashboard notice viewport fills the space remaining after the heading and controls. Images and the carousel track use the measured slot without intrinsic aspect ratios imposing a minimum height; images use `contain` and never zoom on hover.
+- Measure the viewport with `ResizeObserver`. In the image registration/editing dialog only, recommend a 16:9 source at twice its contained image size, rounded to whole 16:9 units and capped at the existing 1200×675 upload maximum. The existing 16:9 center crop/compression contract remains unchanged; other editor entry points keep the 1200×675 fallback recommendation.
+- Do not show image size guidance below the dashboard notice image, including the empty state.
 
 - Weekly event rows keep date, title, category/class metadata and period on one line on desktop. Text never breaks inside a date, category or period; long titles/metadata use ellipsis with full native titles, reserving at least 80px for the desktop title before shortening category metadata. On narrow screens the category and complete period share a single metadata line below the title. Period labels have no maximum-width cap. Existing 4/8/12px spacing is reused.

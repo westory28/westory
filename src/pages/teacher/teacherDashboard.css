@@ -542,14 +542,6 @@
   inset: 0;
 }
 
-.teacher-weekly-dashboard .teacher-notice-board__size-hint {
-  flex-shrink: 0;
-  margin: 4px 0 0;
-  color: var(--ws-text-muted, #6b7280);
-  font-size: var(--ws-type-label, 0.75rem);
-  line-height: 1.5;
-}
-
 .teacher-weekly-dashboard .teacher-notice-board__controls {
   flex-shrink: 0;
   margin-top: 8px;
