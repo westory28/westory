@@ -18,6 +18,7 @@ import {
 } from "../constants/menus";
 import { normalizeStaffPermissions } from "../lib/permissions";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
+import { prepareApplicationSession } from "../lib/applicationSession";
 import {
   invalidateSiteSettingDocCache,
   readFreshSiteSettingDoc,
@@ -116,22 +117,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const promise = (async () => {
       try {
         const data = await readFreshSiteSettingDoc<SystemConfig>("config");
+        if (auth.currentUser !== user) return;
         setConfig(normalizeSystemConfig(data));
         setConfigReady(true);
         setConfigLoadedAt(Date.now());
         markLoginPerf("westory-auth-config-ready");
       } catch (e) {
+        if (auth.currentUser !== user) return;
         console.error("Failed to load system config", e);
         setConfig(null);
         setConfigReady(true);
         setConfigLoadedAt(Date.now());
-      } finally {
-        systemConfigLoadRef.current = null;
       }
     })();
 
     systemConfigLoadRef.current = promise;
-    return promise;
+    try {
+      await promise;
+    } finally {
+      if (systemConfigLoadRef.current === promise)
+        systemConfigLoadRef.current = null;
+    }
   }, []);
 
   const loadAuthedMenuConfig = useCallback(async (user: User | null) => {
@@ -150,21 +156,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const promise = (async () => {
       try {
         const data = await readFreshSiteSettingDoc<MenuConfig>("menu_config");
+        if (auth.currentUser !== user) return;
         setMenuConfig(data ? sanitizeMenuConfig(data) : cloneDefaultMenus());
         setMenuConfigReady(true);
         setMenuConfigLoadedAt(Date.now());
       } catch (e) {
+        if (auth.currentUser !== user) return;
         console.error("Failed to load menu config", e);
         setMenuConfig(null);
         setMenuConfigReady(true);
         setMenuConfigLoadedAt(Date.now());
-      } finally {
-        menuConfigLoadRef.current = null;
       }
     })();
 
     menuConfigLoadRef.current = promise;
-    return promise;
+    try {
+      await promise;
+    } finally {
+      if (menuConfigLoadRef.current === promise)
+        menuConfigLoadRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -175,6 +186,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     let unsubscribe: () => void = () => undefined;
     let unsubscribeUserDoc: (() => void) | null = null;
     let visibilitySettingsReady: Promise<void> | null = null;
+    let authRevision = 0;
+    let active = true;
     const loadingGuard = window.setTimeout(() => {
       setLoading(false);
     }, 15000);
@@ -185,7 +198,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     unsubscribe = onAuthStateChanged(
       auth,
-      (user) => {
+      async (user) => {
+        const revision = ++authRevision;
         markLoginPerf("westory-auth-current-user-resolved", {
           hasUser: user ? "true" : "false",
         });
@@ -194,12 +208,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           "westory-app-load-start",
           "westory-auth-current-user-resolved",
         );
-        setCurrentUser(user);
         if (unsubscribeUserDoc) {
           unsubscribeUserDoc();
           unsubscribeUserDoc = null;
         }
+        systemConfigLoadRef.current = null;
+        menuConfigLoadRef.current = null;
+        setUserData(null);
+        setCurrentUser(null);
+        setConfig(null);
+        setConfigReady(false);
+        setMenuConfig(null);
+        setMenuConfigReady(false);
         if (user) {
+          setLoading(true);
+          try {
+            await prepareApplicationSession(user);
+          } catch (error) {
+            if (!active || revision !== authRevision) return;
+            console.error("Failed to prepare application session", error);
+            setLoading(false);
+            window.clearTimeout(loadingGuard);
+            return;
+          }
+          if (!active || revision !== authRevision || auth.currentUser !== user)
+            return;
+          setCurrentUser(user);
           firstUserDocReadyRef.current = null;
           setConfigReady(false);
           setMenuConfigReady(false);
@@ -211,6 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           unsubscribeUserDoc = onSnapshot(
             userRef,
             async (userSnap) => {
+              if (!active || revision !== authRevision) return;
               try {
                 const normalizedRole: UserData["role"] = "student";
                 if (firstUserDocReadyRef.current !== user.uid) {
@@ -265,6 +300,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               }
             },
             (e) => {
+              if (!active || revision !== authRevision) return;
               console.error("Failed to subscribe user data", e);
               setLoading(false);
               window.clearTimeout(loadingGuard);
@@ -292,6 +328,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     );
 
     return () => {
+      active = false;
+      authRevision += 1;
       window.clearTimeout(loadingGuard);
       if (unsubscribeUserDoc) {
         unsubscribeUserDoc();

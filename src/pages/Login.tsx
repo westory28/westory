@@ -29,6 +29,7 @@ import {
 } from "../lib/firebase";
 import { InlineLoading, PageLoading } from "../components/common/LoadingState";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
+import { prepareApplicationSession } from "../lib/applicationSession";
 import { readSiteSettingDoc } from "../lib/siteSettings";
 import {
   readLocalOnly,
@@ -1140,6 +1141,8 @@ const Login: React.FC = () => {
       await rejectUnauthorizedEmailLogin(user.email);
       return;
     }
+
+    await prepareApplicationSession(user);
 
     const isTeacherEmail = user.email === TEACHER_EMAIL;
     const userRef = doc(db, "users", user.uid);

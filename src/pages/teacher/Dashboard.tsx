@@ -55,7 +55,16 @@ const getVisibleCalendarEvents = (
 };
 
 const TeacherDashboard: React.FC = () => {
-  const { config } = useAuth();
+  const { currentUser, config, configReady, loading: authLoading } = useAuth();
+  const { year, semester } = getYearSemester(config);
+  const scopeReady = Boolean(
+    !authLoading &&
+    currentUser &&
+    configReady &&
+    config &&
+    /^\d{4}$/.test(String(config.year)) &&
+    ["1", "2"].includes(String(config.semester)),
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -79,35 +88,41 @@ const TeacherDashboard: React.FC = () => {
 
   // Fetch Events real-time
   useEffect(() => {
-    const { year, semester } = getYearSemester(config);
+    if (!scopeReady) {
+      setEvents([]);
+      setEventsLoading(authLoading || !configReady);
+      setEventsError(Boolean(currentUser && configReady && !authLoading));
+      return;
+    }
 
     const path = `years/${year}/semesters/${semester}/calendar`;
     let active = true;
+    let snapshotVersion = 0;
     setEventsLoading(true);
     setEventsError(false);
     const unsubscribe = onSnapshot(
       collection(db, path),
       (snapshot) => {
+        if (!active) return;
+        const version = ++snapshotVersion;
         const loadedEvents: CalendarEvent[] = [];
 
         snapshot.forEach((doc) => {
           const d = doc.data();
           loadedEvents.push({ id: doc.id, ...d } as CalendarEvent);
         });
-        if (active) {
-          setEvents(loadedEvents);
-          setEventsLoading(false);
-        }
+        setEvents(loadedEvents);
+        setEventsError(false);
+        setEventsLoading(false);
         void getKoreanPublicHolidays(year)
           .then((holidays) => {
-            if (!active) return;
+            if (!active || version !== snapshotVersion) return;
             setEvents(
               mergeEventsWithKoreanPublicHolidays(loadedEvents, holidays),
             );
           })
           .catch((error) => {
             console.error("Failed to load Korean public holidays:", error);
-            if (active) setEvents(loadedEvents);
           });
       },
       (error) => {
@@ -123,10 +138,10 @@ const TeacherDashboard: React.FC = () => {
       active = false;
       unsubscribe();
     };
-  }, [config]);
+  }, [authLoading, configReady, currentUser?.uid, scopeReady, year, semester]);
 
   useEffect(() => {
-    const { year, semester } = getYearSemester(config);
+    if (!scopeReady) return;
     return runWhenIdle(() => {
       void ensureKoreanPublicHolidaysSynced({ db, year, semester }).catch(
         (error) => {
@@ -134,7 +149,7 @@ const TeacherDashboard: React.FC = () => {
         },
       );
     }, 1200);
-  }, [config]);
+  }, [currentUser?.uid, scopeReady, year, semester]);
 
   const availableClassTargets = useMemo(() => {
     const targets = new Set<string>();
