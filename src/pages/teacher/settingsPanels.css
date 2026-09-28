@@ -1,0 +1,111 @@
+.teacher-settings-panel-grid,
+.teacher-settings-panel-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  width: 100%;
+  min-width: 0;
+}
+
+.teacher-settings-panel-grid > *,
+.teacher-settings-panel-stack > * {
+  min-width: 0;
+}
+
+.teacher-settings-school {
+  max-width: var(--ws-page-max, 1280px);
+  margin-inline: auto;
+}
+
+.teacher-settings-panel-save {
+  grid-column: 1 / -1;
+}
+
+.teacher-settings-panel-heading {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.teacher-settings-panel-heading button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.teacher-settings-school-levels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.teacher-settings-school table {
+  table-layout: fixed;
+}
+
+.teacher-settings-school th:first-child {
+  width: 40px;
+}
+
+.teacher-settings-school th:nth-child(2) {
+  width: 64px;
+}
+
+.teacher-settings-school th:last-child {
+  width: 64px;
+}
+
+.teacher-settings-school input {
+  min-width: 0;
+}
+
+.teacher-settings-interface-body {
+  padding: 16px;
+}
+
+.teacher-settings-sitemap-tabs {
+  max-width: 100%;
+}
+
+.teacher-settings-sitemap-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.teacher-settings-sitemap-preview > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.teacher-settings-sitemap-child {
+  flex-wrap: wrap;
+}
+
+.teacher-settings-sitemap-child > span:first-child {
+  flex-basis: 80px;
+}
+
+.teacher-settings-sitemap-child button {
+  white-space: nowrap;
+}
+
+@container teacher-settings (min-width: 480px) {
+  .teacher-settings-sitemap-preview,
+  .teacher-settings-school-levels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container teacher-settings (min-width: 800px) {
+  .teacher-settings-panel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teacher-settings-interface-body {
+    padding: 24px;
+  }
+
+  .teacher-settings-sitemap-preview {
+    grid-template-columns: repeat(var(--sitemap-columns), minmax(0, 1fr));
+  }
+}

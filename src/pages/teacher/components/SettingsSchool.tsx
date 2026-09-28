@@ -3,6 +3,7 @@ import { db } from "../../../lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
+import "../settingsPanels.css";
 
 interface GradeItem {
   value: string;
@@ -144,130 +145,132 @@ const SettingsSchool: React.FC = () => {
     );
 
   return (
-    <div className="w-full min-w-0 space-y-8">
-      {/* Section 1: School Level */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
-        <div className="border-b border-gray-100 pb-4 mb-6">
-          <h3 className="text-lg font-bold text-gray-900">
-            <i className="fas fa-school text-blue-500 mr-2"></i>학교급 설정
-          </h3>
-          <p className="text-sm text-gray-500 mt-1">
-            운영 중인 학교급을 선택합니다.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div
-            onClick={() => setSchoolLevel("middle")}
-            className={`cursor-pointer border-2 rounded-xl p-5 transition-all flex items-center gap-3 hover:border-blue-300 ${schoolLevel === "middle" ? "border-blue-600 bg-blue-50" : "border-gray-200"}`}
-          >
-            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
-              🏫
-            </div>
-            <div>
-              <p className="font-bold text-gray-800">중학교</p>
-              <p className="text-xs text-gray-500">Middle School</p>
-            </div>
-          </div>
-          <div
-            onClick={() => setSchoolLevel("high")}
-            className={`cursor-pointer border-2 rounded-xl p-5 transition-all flex items-center gap-3 hover:border-blue-300 ${schoolLevel === "high" ? "border-blue-600 bg-blue-50" : "border-gray-200"}`}
-          >
-            <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-lg">
-              🎓
-            </div>
-            <div>
-              <p className="font-bold text-gray-800">고등학교</p>
-              <p className="text-xs text-gray-500">High School</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Section 2: Grades */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
-        <div className="border-b border-gray-100 pb-4 mb-6 flex items-center justify-between">
-          <div>
+    <div className="teacher-settings-panel-grid teacher-settings-school">
+      <div className="teacher-settings-panel-stack">
+        {/* Section 1: School Level */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
+          <div className="border-b border-gray-100 pb-4 mb-6">
             <h3 className="text-lg font-bold text-gray-900">
-              <i className="fas fa-layer-group text-green-500 mr-2"></i>학년
-              관리
+              <i className="fas fa-school text-blue-500 mr-2"></i>학교급 설정
             </h3>
             <p className="text-sm text-gray-500 mt-1">
-              학년 목록과 표시 명칭을 관리합니다.
+              운영 중인 학교급을 선택합니다.
             </p>
           </div>
-          <button
-            onClick={handleAddGrade}
-            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow transition transform active:scale-95 text-sm flex items-center gap-1"
-          >
-            <i className="fas fa-plus"></i> 학년 추가
-          </button>
+          <div className="teacher-settings-school-levels">
+            <div
+              onClick={() => setSchoolLevel("middle")}
+              className={`cursor-pointer border-2 rounded-xl p-5 transition-all flex items-center gap-3 hover:border-blue-300 ${schoolLevel === "middle" ? "border-blue-600 bg-blue-50" : "border-gray-200"}`}
+            >
+              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
+                🏫
+              </div>
+              <div>
+                <p className="font-bold text-gray-800">중학교</p>
+                <p className="text-xs text-gray-500">Middle School</p>
+              </div>
+            </div>
+            <div
+              onClick={() => setSchoolLevel("high")}
+              className={`cursor-pointer border-2 rounded-xl p-5 transition-all flex items-center gap-3 hover:border-blue-300 ${schoolLevel === "high" ? "border-blue-600 bg-blue-50" : "border-gray-200"}`}
+            >
+              <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-lg">
+                🎓
+              </div>
+              <div>
+                <p className="font-bold text-gray-800">고등학교</p>
+                <p className="text-xs text-gray-500">High School</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 border border-blue-100 mb-4">
-          <i className="fas fa-info-circle mr-1"></i> '표시 명칭'을 수정하면
-          학생 가입 화면과 명단에서 해당 명칭으로 표시됩니다.
-        </div>
-        <div className="rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="bg-gray-50 p-3 text-sm font-bold text-gray-500 text-left border-b-2 border-gray-200 w-16 text-center">
-                  #
-                </th>
-                <th className="bg-gray-50 p-3 text-sm font-bold text-gray-500 text-left border-b-2 border-gray-200 w-24">
-                  값
-                </th>
-                <th className="bg-gray-50 p-3 text-sm font-bold text-gray-500 text-left border-b-2 border-gray-200">
-                  표시 명칭
-                </th>
-                <th className="bg-gray-50 p-3 text-sm font-bold text-gray-500 text-center border-b-2 border-gray-200 w-16">
-                  삭제
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {grades.map((g, i) => (
-                <tr key={i} className="border-b border-gray-100">
-                  <td className="p-2 text-center text-sm font-bold text-gray-400">
-                    {i + 1}
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={g.value}
-                      readOnly
-                      className="w-full border border-gray-200 rounded p-2 text-center font-mono bg-gray-50 text-gray-500"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={g.label}
-                      onChange={(e) =>
-                        handleGradeLabelChange(i, e.target.value)
-                      }
-                      placeholder="표시 명칭"
-                      className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    />
-                  </td>
-                  <td className="p-2 text-center">
-                    <button
-                      onClick={() => handleRemoveGrade(i)}
-                      className="text-red-400 hover:text-red-600 transition p-1"
-                      title="삭제"
-                    >
-                      <i className="fas fa-trash-alt"></i>
-                    </button>
-                  </td>
+
+        {/* Section 2: Grades */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
+          <div className="teacher-settings-panel-heading border-b border-gray-100 pb-4 mb-6 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">
+                <i className="fas fa-layer-group text-green-500 mr-2"></i>학년
+                관리
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                학년 목록과 표시 명칭을 관리합니다.
+              </p>
+            </div>
+            <button
+              onClick={handleAddGrade}
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow transition transform active:scale-95 text-sm flex items-center gap-1"
+            >
+              <i className="fas fa-plus"></i> 학년 추가
+            </button>
+          </div>
+          <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700 border border-blue-100 mb-4">
+            <i className="fas fa-info-circle mr-1"></i> '표시 명칭'을 수정하면
+            학생 가입 화면과 명단에서 해당 명칭으로 표시됩니다.
+          </div>
+          <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="bg-gray-50 p-3 text-sm font-bold text-gray-500 text-left border-b-2 border-gray-200 w-16 text-center">
+                    #
+                  </th>
+                  <th className="bg-gray-50 p-3 text-sm font-bold text-gray-500 text-left border-b-2 border-gray-200 w-24">
+                    값
+                  </th>
+                  <th className="bg-gray-50 p-3 text-sm font-bold text-gray-500 text-left border-b-2 border-gray-200">
+                    표시 명칭
+                  </th>
+                  <th className="bg-gray-50 p-3 text-sm font-bold text-gray-500 text-center border-b-2 border-gray-200 w-16">
+                    삭제
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {grades.map((g, i) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    <td className="p-2 text-center text-sm font-bold text-gray-400">
+                      {i + 1}
+                    </td>
+                    <td className="p-2">
+                      <input
+                        type="text"
+                        value={g.value}
+                        readOnly
+                        className="w-full border border-gray-200 rounded p-2 text-center font-mono bg-gray-50 text-gray-500"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <input
+                        type="text"
+                        value={g.label}
+                        onChange={(e) =>
+                          handleGradeLabelChange(i, e.target.value)
+                        }
+                        placeholder="표시 명칭"
+                        className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                      />
+                    </td>
+                    <td className="p-2 text-center">
+                      <button
+                        onClick={() => handleRemoveGrade(i)}
+                        className="text-red-400 hover:text-red-600 transition p-1"
+                        title="삭제"
+                      >
+                        <i className="fas fa-trash-alt"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       {/* Section 3: Classes */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
-        <div className="border-b border-gray-100 pb-4 mb-6 flex items-center justify-between">
+        <div className="teacher-settings-panel-heading border-b border-gray-100 pb-4 mb-6 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-gray-900">
               <i className="fas fa-users text-orange-500 mr-2"></i>학급(반) 관리
@@ -346,7 +349,7 @@ const SettingsSchool: React.FC = () => {
         </div>
       </div>
 
-      <div className="text-right pb-8">
+      <div className="teacher-settings-panel-save text-right pb-8">
         <button
           onClick={handleSave}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-xl shadow-lg transition transform active:scale-95 text-base"

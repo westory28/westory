@@ -1,15 +1,22 @@
 .teacher-settings-workspace {
   display: grid;
   grid-template-columns: 228px minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
   width: 100%;
   min-height: calc(100dvh - var(--teacher-header-height, 48px));
   background: var(--ws-bg, #f9fafb);
 }
 
 .teacher-settings-navigation {
+  grid-row: 1 / -1;
   min-width: 0;
   border-right: 1px solid var(--ws-border, #e5e7eb);
   background: var(--ws-surface, #ffffff);
+}
+
+.teacher-settings-footer {
+  grid-column: 2;
+  min-width: 0;
 }
 
 .teacher-settings-navigation-inner {

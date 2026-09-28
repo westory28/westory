@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import Footer from "../../components/common/Footer";
 import TeacherNavigationIcon, {
   type TeacherIconName,
 } from "../../components/layout/TeacherNavigationIcon";
@@ -101,6 +102,9 @@ const Settings: React.FC = () => {
         {activeTab === "notifications" && <SettingsNotifications />}
         {activeTab === "privacy" && <SettingsPrivacy />}
       </section>
+      <div className="teacher-settings-footer">
+        <Footer teacher />
+      </div>
     </div>
   );
 };

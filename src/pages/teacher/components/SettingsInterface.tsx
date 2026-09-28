@@ -13,6 +13,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { notifyMenuConfigUpdated } from "../../../lib/appEvents";
 import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
 import { normalizeInstagramUrl } from "../../../lib/socialLinks";
+import "../settingsPanels.css";
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS,
   DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
@@ -450,7 +451,7 @@ const SettingsInterface: React.FC = () => {
     );
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="teacher-settings-interface bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="border-b border-gray-100 p-3">
         <div className="flex flex-wrap gap-2">
           <button
@@ -468,9 +469,9 @@ const SettingsInterface: React.FC = () => {
         </div>
       </div>
 
-      <div className="p-6 lg:p-8">
+      <div className="teacher-settings-interface-body">
         {activeTab === "landing" && (
-          <div className="w-full min-w-0 space-y-8">
+          <div className="teacher-settings-panel-grid">
             <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
               <div className="border-b border-gray-100 pb-4 mb-6">
                 <h3 className="text-lg font-bold text-gray-900">
@@ -567,7 +568,7 @@ const SettingsInterface: React.FC = () => {
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
               <div className="border-b border-gray-100 pb-4 mb-6">
-                <div className="flex items-center justify-between">
+                <div className="teacher-settings-panel-heading flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">
                       <i className="fas fa-hourglass-half text-orange-500 mr-2"></i>
@@ -577,7 +578,7 @@ const SettingsInterface: React.FC = () => {
                       메인 화면에 D-Day 카운트를 표시합니다.
                     </p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
+                  <label className="relative inline-flex shrink-0 items-center cursor-pointer">
                     <input
                       type="checkbox"
                       name="ddayEnabled"
@@ -624,7 +625,7 @@ const SettingsInterface: React.FC = () => {
               </div>
             </div>
 
-            <div className="text-right pb-2">
+            <div className="teacher-settings-panel-save text-right pb-2">
               <button
                 onClick={() => void saveInterfaceConfig()}
                 disabled={savingInterface}
@@ -653,7 +654,7 @@ const SettingsInterface: React.FC = () => {
                 <div
                   role="tablist"
                   aria-label="사이트맵 미리보기 대상"
-                  className="inline-flex rounded-xl bg-gray-100 p-1"
+                  className="teacher-settings-sitemap-tabs inline-flex rounded-xl bg-gray-100 p-1"
                 >
                   {(["student", "teacher"] as PortalType[]).map((portal) => {
                     const stats = getPortalMenuStats(portal);
@@ -664,7 +665,7 @@ const SettingsInterface: React.FC = () => {
                         role="tab"
                         aria-selected={activePortal === portal}
                         onClick={() => setActivePortal(portal)}
-                        className={`min-w-[136px] rounded-lg px-4 py-2 text-sm font-bold transition ${
+                        className={`min-w-0 flex-1 rounded-lg px-4 py-2 text-sm font-bold transition ${
                           activePortal === portal
                             ? "bg-blue-600 text-white shadow-sm"
                             : "text-gray-600 hover:bg-white hover:text-gray-900"
@@ -729,7 +730,17 @@ const SettingsInterface: React.FC = () => {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div
+                className="teacher-settings-sitemap-preview"
+                style={
+                  {
+                    "--sitemap-columns": Math.max(
+                      1,
+                      menuConfig[activePortal].length,
+                    ),
+                  } as React.CSSProperties
+                }
+              >
                 {menuConfig[activePortal].map((item, idx) => (
                   <div
                     key={`preview-${activePortal}-${item.url}-${idx}`}
@@ -746,7 +757,7 @@ const SettingsInterface: React.FC = () => {
                           {item.children.map((child, childIdx) => (
                             <li
                               key={`preview-child-${child.url}-${childIdx}`}
-                              className="flex items-center justify-between gap-2 border-b border-dashed border-gray-200 pb-1 text-sm"
+                              className="teacher-settings-sitemap-child flex items-center justify-between gap-2 border-b border-dashed border-gray-200 pb-1 text-sm"
                             >
                               <span
                                 className={`min-w-0 flex-1 ${child.hidden ? "text-gray-400 line-through" : "text-gray-700"}`}

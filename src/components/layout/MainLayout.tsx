@@ -326,7 +326,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           children
         )}
       </main>
-      <Footer teacher={isTeacherRoute} />
+      {(!/^\/teacher\/settings\/?$/.test(location.pathname) ||
+        isArchiveUnavailableRoute(location.pathname)) && (
+        <Footer teacher={isTeacherRoute} />
+      )}
     </div>
   );
 };
