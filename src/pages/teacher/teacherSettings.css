@@ -140,6 +140,12 @@
   }
 }
 
+@media (min-width: 1024px) {
+  .teacher-settings-navigation {
+    margin-top: calc(-1 * var(--teacher-header-height, 48px));
+  }
+}
+
 @media (max-width: 1279px) {
   .teacher-settings-content {
     padding: 24px;

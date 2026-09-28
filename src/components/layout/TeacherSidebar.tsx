@@ -285,10 +285,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
             <Link
               to="/teacher/settings"
               className={`teacher-sidebar-settings ${location.pathname.startsWith("/teacher/settings") ? "is-active" : ""}`}
-              onClick={() => {
-                onCloseMobile();
-                if (!collapsed) onToggleCollapsed();
-              }}
+              onClick={onCloseMobile}
               aria-current={
                 location.pathname.startsWith("/teacher/settings")
                   ? "page"
