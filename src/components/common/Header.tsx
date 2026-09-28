@@ -709,6 +709,9 @@ const Header: React.FC<{
         <TeacherSidebar
           groups={teacherSidebarGroups}
           home={home}
+          semesterLabel={
+            config ? `${config.year}학년도 ${config.semester}학기` : undefined
+          }
           showDashboard={canAccessTeacherPath(
             "/teacher/dashboard",
             userData,
@@ -742,12 +745,12 @@ const Header: React.FC<{
                 <span className="logo-we">We</span>
                 <span className="logo-story">story</span>
               </Link>
+              {config && (
+                <span className="teacher-brand-semester">
+                  {config.year}학년도 {config.semester}학기
+                </span>
+              )}
             </div>
-          )}
-          {isTeacherDashboard && config && (
-            <h1 className="teacher-dashboard-semester inline-flex shrink-0 items-center self-center rounded-full bg-blue-600 px-4 py-1 text-base font-bold leading-6 text-white">
-              {config.year}학년도 {config.semester}학기
-            </h1>
           )}
           {!useTeacherSidebar && (
             <div className="flex items-center gap-4 h-full">

@@ -16,6 +16,7 @@ export interface TeacherSidebarGroup {
 interface TeacherSidebarProps {
   groups: TeacherSidebarGroup[];
   home: string;
+  semesterLabel?: string;
   showDashboard: boolean;
   showSettings: boolean;
   collapsed: boolean;
@@ -39,6 +40,7 @@ const compactLabels: Record<string, string> = {
 const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   groups,
   home,
+  semesterLabel,
   showDashboard,
   showSettings,
   collapsed,
@@ -150,6 +152,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
             className="teacher-sidebar-brand"
             onClick={onCloseMobile}
             aria-label="Westory 첫 화면"
+            title={collapsed ? semesterLabel : undefined}
           >
             <span className="teacher-sidebar-wordmark">
               <span className="logo-we">We</span>
@@ -159,6 +162,11 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
               우리가 써 내려가는 이야기
             </span>
           </Link>
+          {semesterLabel && (
+            <span className="teacher-brand-semester teacher-sidebar-semester">
+              {semesterLabel}
+            </span>
+          )}
           <button
             type="button"
             className="teacher-sidebar-close"
