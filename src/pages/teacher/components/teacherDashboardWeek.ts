@@ -30,7 +30,7 @@ export const shiftCalendarDate = (date: string, days: number) =>
 
 export const getWeekStart = (date: string) => {
   const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
-  return shiftCalendarDate(date, -(weekday === 0 ? 6 : weekday - 1));
+  return shiftCalendarDate(date, -weekday);
 };
 
 export const calendarEventEndDate = (event: CalendarEvent) => {

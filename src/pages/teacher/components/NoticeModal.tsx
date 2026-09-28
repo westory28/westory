@@ -36,6 +36,7 @@ interface NoticeModalProps {
   onBusyChange?: (busy: boolean) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onPreview?: (url: string) => void;
+  recommendedImageSize?: { width: number; height: number };
 }
 
 const NOTICE_CATEGORIES = [
@@ -71,6 +72,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
   onBusyChange,
   onDirtyChange,
   onPreview,
+  recommendedImageSize,
 }) => {
   const { config } = useAuth();
   const { showToast } = useAppToast();
@@ -382,7 +384,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
               <img
                 src={previewUrl}
                 alt="알림장 미리보기"
-                className="aspect-[16/9] max-h-[180px] w-full object-cover"
+                className="aspect-[16/9] max-h-[180px] w-full object-contain"
               />
             ) : (
               <div className="flex aspect-[16/9] max-h-[180px] items-center justify-center text-sm font-bold text-gray-500">
@@ -406,8 +408,11 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
             id={`${fileInputId}-help`}
             className="text-xs leading-5 text-gray-500"
           >
-            권장 {NOTICE_IMAGE_RECOMMENDED_WIDTH} ×{" "}
-            {NOTICE_IMAGE_RECOMMENDED_HEIGHT}px · 16:9 중앙 맞춤·압축
+            권장 {recommendedImageSize?.width ?? NOTICE_IMAGE_RECOMMENDED_WIDTH}{" "}
+            × {recommendedImageSize?.height ?? NOTICE_IMAGE_RECOMMENDED_HEIGHT}
+            px
+            {recommendedImageSize ? " · 현재 화면 기준" : ""}
+            {" · 16:9 중앙 맞춤·압축"}
           </p>
           {noticeData && (
             <p className="text-xs leading-5 text-gray-500">

@@ -109,6 +109,7 @@ Layout tokens:
 - Teacher sidebar: 232px expanded, 72px collapsed; 44px menu rows (40px below 820px viewport height), 24px outline icons with 1.8px rounded strokes and 16px chevrons.
 - Teacher account toolbar: transparent, 48px minimum height; the existing name, notification, session extension and logout controls remain together.
 - Teacher weekly dashboard: 1536px maximum width, 16px panel gap, desktop content height `clamp(620px, calc(100dvh - 140px), 880px)`; small screens use natural document scrolling.
+- Teacher dashboard weeks run Sunday through Saturday, matching the full calendar. Week navigation, current-week reset and search selection share this boundary; Sunday is red, Saturday is blue, and public-holiday red takes precedence.
 - Teacher navigation motion: accordion content unfolds with grid rows 0fr↔1fr and opacity for 200ms on an explicit teacher menu click, including reduced-motion mode as requested; this height transition is a scoped exception to transform-only motion. Initial navigation does not animate. Week changes move only date numerals and event text by 12px for 140ms in the requested direction; the calendar frame, day hit areas, ribbon circles, row dividers and navigation arrows stay fixed. Interrupted transitions cancel cleanly. At the user's explicit request, user-triggered week changes retain this animation in reduced-motion mode; initial rendering does not animate.
 - Teacher footer: transparent with 8px top, 16px horizontal and 12px bottom padding; existing policy links and copyright remain centered.
 - Dashboard semester heading: left-aligned blue pill, 16px bold white text with 8px/16px padding, replacing greetings in both portals. On the teacher dashboard only, use 4px vertical padding and a 24px line height for a slim 32px badge; center it vertically in the existing 48px account row with 8px clearance above and below, aligned with the left edge of the cards. Below 768px, let it occupy a second header row to avoid account-control overlap. The student heading and all other route headers remain unchanged.
@@ -273,5 +274,11 @@ For visible frontend work, use this sequence before editing UI code:
 6. Record evidence under `.superloopy/sessions/<session-id>/evidence/` or the active Superloopy evidence root.
 
 No visible UI work is complete until the design contract and verification evidence agree.
+
+### Teacher notice image sizing
+
+- The dashboard notice viewport fills the space remaining after the heading, controls and one compact sizing hint. Images and the carousel track use the measured slot without intrinsic aspect ratios imposing a minimum height; images use `contain` and never zoom on hover.
+- Measure the viewport with `ResizeObserver`. Recommend a 16:9 source at twice its contained image size, rounded to whole 16:9 units and capped at the existing 1200×675 upload maximum. Show current CSS pixel dimensions in a native title. The existing 16:9 center crop/compression contract remains unchanged; other editor entry points keep the 1200×675 fallback recommendation.
+- Reuse small muted helper text and the existing 4/8px spacing. Keep the hint available for both empty and populated boards.
 
 - Weekly event rows keep date, title, category/class metadata and period on one line on desktop. Text never breaks inside a date, category or period; long titles/metadata use ellipsis with full native titles, reserving at least 80px for the desktop title before shortening category metadata. On narrow screens the category and complete period share a single metadata line below the title. Period labels have no maximum-width cap. Existing 4/8/12px spacing is reused.

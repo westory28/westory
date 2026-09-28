@@ -358,8 +358,8 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 <button
                   key={index}
                   type="button"
-                  className={`teacher-week-strip__day${date === today ? " is-today" : ""}${date === selectedDate ? " is-selected" : ""}${ribbonEvent ? " has-ribbon" : ""}${holiday || index === 6 ? " is-holiday" : index === 5 ? " is-saturday" : ""}`}
-                  aria-label={`${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${["월", "화", "수", "목", "금", "토", "일"][index]}요일, 일정 ${dayEvents.length}개${ribbonEvent ? `, 표시 리본: ${ribbonEvent.title}` : ""}`}
+                  className={`teacher-week-strip__day${date === today ? " is-today" : ""}${date === selectedDate ? " is-selected" : ""}${ribbonEvent ? " has-ribbon" : ""}${holiday || index === 0 ? " is-holiday" : index === 6 ? " is-saturday" : ""}`}
+                  aria-label={`${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${["일", "월", "화", "수", "목", "금", "토"][index]}요일, 일정 ${dayEvents.length}개${ribbonEvent ? `, 표시 리본: ${ribbonEvent.title}` : ""}`}
                   title={
                     ribbonEvent ? `표시 리본: ${ribbonEvent.title}` : undefined
                   }
@@ -376,7 +376,7 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                   onDoubleClick={() => onDateDoubleClick(date)}
                 >
                   <span>
-                    {["월", "화", "수", "목", "금", "토", "일"][index]}
+                    {["일", "월", "화", "수", "목", "금", "토"][index]}
                   </span>
                   <strong>
                     <span className="teacher-week-strip__number">

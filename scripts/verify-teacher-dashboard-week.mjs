@@ -37,10 +37,14 @@ assert.equal(
   week.getKoreanDateKey(new Date("2026-09-27T15:00:00Z")),
   "2026-09-28",
 );
-assert.equal(week.getWeekStart("2026-09-27"), "2026-09-21");
-assert.equal(week.getWeekStart("2026-09-28"), "2026-09-28");
-assert.equal(week.getWeekStart("2026-01-01"), "2025-12-29");
-assert.equal(week.shiftCalendarDate("2026-09-28", 6), "2026-10-04");
+assert.equal(week.getWeekStart("2026-09-27"), "2026-09-27");
+assert.equal(week.getWeekStart("2026-09-28"), "2026-09-27");
+assert.equal(week.getWeekStart("2026-10-03"), "2026-09-27");
+assert.equal(week.getWeekStart("2026-10-04"), "2026-10-04");
+assert.equal(week.getWeekStart("2026-01-01"), "2025-12-28");
+assert.equal(week.shiftCalendarDate("2026-09-27", 6), "2026-10-03");
+assert.equal(week.shiftCalendarDate("2026-09-27", -7), "2026-09-20");
+assert.equal(week.shiftCalendarDate("2026-09-27", 7), "2026-10-04");
 assert.equal(week.shiftCalendarDate("2024-02-28", 1), "2024-02-29");
 assert.equal(week.calendarDateKey("2026-02-30"), "");
 assert.equal(week.calendarDateKey("invalid"), "");
@@ -50,7 +54,7 @@ assert.equal(week.calendarDateKey("2026-09-27T15:00:00Z"), "2026-09-28");
 const inclusive = event("inclusive", "2026-09-25", "2026-09-28");
 assert.equal(week.eventIncludesDate(inclusive, "2026-09-28"), true);
 assert.equal(week.eventIncludesDate(inclusive, "2026-09-29"), false);
-assert.equal(week.getWeekEvents([inclusive], "2026-09-28").length, 1);
+assert.equal(week.getWeekEvents([inclusive], "2026-09-27").length, 1);
 assert.equal(
   week.eventIncludesDate(event("one-day", "2026-09-27"), "2026-09-28"),
   false,
@@ -64,7 +68,8 @@ const midnight = event(
 );
 assert.equal(week.eventIncludesDate(midnight, "2026-09-27"), true);
 assert.equal(week.eventIncludesDate(midnight, "2026-09-28"), false);
-assert.equal(week.getWeekEvents([midnight], "2026-09-28").length, 0);
+assert.equal(week.getWeekEvents([midnight], "2026-09-27").length, 1);
+assert.equal(week.getWeekEvents([midnight], "2026-09-20").length, 0);
 assert.equal(
   week.calendarEventEndDate(
     event("local-midnight", "2026-09-27", "2026-09-28T00:00:00"),
@@ -73,18 +78,19 @@ assert.equal(
 );
 
 const events = [
-  event("outside-after", "2026-09-28"),
+  event("outside-after", "2026-09-27"),
   event("period3", "2026-09-22", undefined, "period3"),
-  event("outside-before", "2026-09-20"),
+  event("outside-before", "2026-09-19"),
   event("period1", "2026-09-22", undefined, "period1"),
-  event("cross-week", "2026-09-20", "2026-09-21"),
-  event("sunday", "2026-09-27"),
+  event("cross-week", "2026-09-19", "2026-09-20"),
+  event("sunday", "2026-09-20"),
+  event("saturday", "2026-09-26"),
   event("invalid", "invalid"),
 ];
 const before = events.map((item) => item.id);
 assert.deepEqual(
-  week.getWeekEvents(events, "2026-09-21").map((item) => item.id),
-  ["cross-week", "period1", "period3", "sunday"],
+  week.getWeekEvents(events, "2026-09-20").map((item) => item.id),
+  ["cross-week", "sunday", "period1", "period3", "saturday"],
 );
 assert.deepEqual(
   events.map((item) => item.id),
@@ -95,11 +101,11 @@ assert.equal(
     Array.from({ length: 12 }, (_, index) =>
       event(`event-${index}`, "2026-09-25"),
     ),
-    "2026-09-21",
+    "2026-09-20",
   ).length,
   12,
 );
 
 console.log(
-  "Teacher dashboard week checks passed: KST, Monday/Sunday/year boundaries, inclusive stored ranges, timed midnight, sorting and complete weekly list.",
+  "Teacher dashboard week checks passed: KST, Sunday–Saturday/month/year boundaries, inclusive stored ranges, timed midnight, sorting and complete weekly list.",
 );

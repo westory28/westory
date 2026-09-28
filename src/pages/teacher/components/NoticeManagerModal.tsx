@@ -17,6 +17,7 @@ interface Props {
   notices: ManagedNotice[];
   initialNotice?: ManagedNotice;
   initialOrder?: boolean;
+  recommendedImageSize?: { width: number; height: number };
   onClose: () => void;
 }
 
@@ -50,6 +51,7 @@ const NoticeManagerModal: React.FC<Props> = ({
   notices,
   initialNotice,
   initialOrder = false,
+  recommendedImageSize,
   onClose,
 }) => {
   const titleId = useId();
@@ -214,6 +216,7 @@ const NoticeManagerModal: React.FC<Props> = ({
                   isOpen
                   embedded
                   noticeData={selected}
+                  recommendedImageSize={recommendedImageSize}
                   onClose={reset}
                   onSave={() => {
                     setDirty(false);
