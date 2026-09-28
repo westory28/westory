@@ -734,17 +734,6 @@ const Header: React.FC<{
         <div className="header-container">
           {useTeacherSidebar && (
             <div className="teacher-header-start">
-              <button
-                id="teacher-navigation-toggle"
-                type="button"
-                className="teacher-navigation-toggle"
-                onClick={() => setMobileMenuOpen((previous) => !previous)}
-                aria-label="교사 메뉴 열기"
-                aria-expanded={mobileMenuOpen}
-                aria-controls="teacher-navigation"
-              >
-                <TeacherNavigationIcon name="menu" />
-              </button>
               <Link
                 to={home}
                 className="logo-text"
@@ -930,6 +919,19 @@ const Header: React.FC<{
               </button>
             )}
           </div>
+          {useTeacherSidebar && (
+            <button
+              id="teacher-navigation-toggle"
+              type="button"
+              className="teacher-navigation-toggle"
+              onClick={() => setMobileMenuOpen((previous) => !previous)}
+              aria-label="교사 메뉴 열기"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="teacher-navigation"
+            >
+              <TeacherNavigationIcon name="menu" />
+            </button>
+          )}
         </div>
 
         {!useTeacherSidebar && mobileMenuOpen && (
