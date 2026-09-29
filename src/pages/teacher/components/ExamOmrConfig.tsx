@@ -132,9 +132,9 @@ const ExamOmrConfig: React.FC = () => {
   };
 
   return (
-    <div className="h-full relative pb-20">
+    <div className="teacher-floating-bar-space h-full relative pb-20">
       {/* Bottom Floater */}
-      <div className="fixed bottom-3 md:bottom-4 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow-2xl rounded-2xl px-3 md:px-6 py-2.5 md:py-3 w-[calc(100%-1rem)] max-w-[720px] md:w-auto flex items-center justify-between md:justify-center gap-3 md:gap-4 z-50 animate-fadeUp">
+      <div className="teacher-floating-bar-above-patch fixed bottom-3 md:bottom-4 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow-2xl rounded-2xl px-3 md:px-6 py-2.5 md:py-3 w-[calc(100%-1rem)] max-w-[720px] md:w-auto flex items-center justify-between md:justify-center gap-3 md:gap-4 z-50 animate-fadeUp">
         <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-bold">
           <span className="text-gray-500">총점</span>
           <span className="text-xl md:text-2xl font-extrabold text-blue-600">

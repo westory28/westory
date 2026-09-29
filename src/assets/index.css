@@ -127,11 +127,45 @@
   .notice-image-editor__period { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-.teacher-floating-action-above-patch {
-  right: calc(env(safe-area-inset-right, 0px) + var(--space-4));
-  bottom: calc(
+/* Include body portals, and only reserve the memo slot while it is mounted. */
+body:has(button[data-patch-memo-root]) {
+  --ws-page-float-bottom: calc(
     env(safe-area-inset-bottom, 0px) + var(--space-16) + var(--space-10)
   );
+}
+
+body:has(button[data-patch-memo-root]) .teacher-floating-action-above-patch {
+  right: calc(env(safe-area-inset-right, 0px) + var(--space-4));
+  bottom: var(--ws-page-float-bottom);
+}
+
+body:has(button[data-patch-memo-root]) .teacher-floating-action-space {
+  padding-bottom: calc(var(--ws-page-float-bottom) + var(--space-20));
+}
+
+body:has(button[data-history-dictionary-launcher]) .pdf-map-tag-panel {
+  --ws-page-float-bottom: calc(
+    env(safe-area-inset-bottom, 0px) + var(--space-20) + var(--space-16) + var(--space-2)
+  );
+}
+
+body:has(button[data-patch-memo-root], button[data-history-dictionary-launcher]) .pdf-map-tag-panel {
+  bottom: var(--ws-page-float-bottom);
+  display: flex;
+  flex-direction: column;
+  max-height: min(58dvh, calc(100dvh - var(--ws-page-float-bottom) - var(--space-16)));
+}
+
+.pdf-map-tag-panel > :first-child { flex-shrink: 0; }
+.pdf-map-tag-panel > :last-child { min-height: 0; }
+
+@media (max-width: 767px) {
+  body:has(button[data-patch-memo-root]) .teacher-floating-bar-above-patch {
+    bottom: var(--ws-page-float-bottom);
+  }
+  body:has(button[data-patch-memo-root]) .teacher-floating-bar-space {
+    padding-bottom: calc(var(--ws-page-float-bottom) + var(--space-20));
+  }
 }
 
 .think-cloud-desktop-create-action {
@@ -139,15 +173,20 @@
 }
 
 @media (min-width: 640px) {
-  .teacher-floating-action-above-patch {
-    right: calc(env(safe-area-inset-right, 0px) + var(--space-6));
-    bottom: calc(
+  body:has(button[data-patch-memo-root]) {
+    --ws-page-float-bottom: calc(
       env(safe-area-inset-bottom, 0px) + var(--space-16) + var(--space-12)
     );
+  }
+  body:has(button[data-patch-memo-root]) .teacher-floating-action-above-patch {
+    right: calc(env(safe-area-inset-right, 0px) + var(--space-6));
   }
 }
 
 @media (min-width: 1024px) {
+  body:has(button[data-history-dictionary-launcher]) .student-score-save-status {
+    right: calc(env(safe-area-inset-right, 0px) + 3.5rem + var(--space-6) + var(--space-3));
+  }
   .think-cloud-desktop-create-action {
     display: flex;
   }

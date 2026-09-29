@@ -645,7 +645,7 @@ const SettingsInterface: React.FC = () => {
         )}
 
         {activeTab === "sitemap" && (
-          <div className="space-y-5 pb-24">
+          <div className="teacher-floating-action-space space-y-5 pb-24">
             <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
@@ -1078,7 +1078,7 @@ const SettingsInterface: React.FC = () => {
               ))}
             </div>
 
-            <div className="fixed bottom-4 left-4 right-4 z-40 flex justify-end sm:bottom-6 sm:left-auto sm:right-6">
+            <div className="teacher-floating-action-above-patch fixed bottom-4 left-4 right-4 z-40 flex justify-end sm:bottom-6 sm:left-auto sm:right-6">
               <button
                 type="button"
                 onClick={() => void saveMenuConfig()}

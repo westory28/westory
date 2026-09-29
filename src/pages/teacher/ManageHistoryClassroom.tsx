@@ -6828,7 +6828,7 @@ const ManageHistoryClassroom: React.FC = () => {
       )}
 
       {isMapManagerOpen && (
-        <div className="fixed bottom-5 right-5 z-[65] flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
+        <div className="teacher-floating-action-above-patch fixed bottom-5 right-5 z-[65] flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
           {floatingPanelOpen && (
             <div className="w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5">
               <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">

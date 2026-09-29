@@ -626,12 +626,12 @@ const ScoreDashboard: React.FC = () => {
 
       {/* Save Indicator */}
       {saving && (
-        <div className="fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-2.5 rounded-full text-xs flex items-center gap-2 shadow-lg z-50 animate-fadeIn">
+        <div className="student-score-save-status fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-2.5 rounded-full text-xs flex items-center gap-2 shadow-lg z-50 animate-fadeIn">
           <i className="fas fa-sync fa-spin"></i> 저장 중...
         </div>
       )}
       {!saving && lastSavedAt && !saveError && (
-        <div className="fixed bottom-5 right-5 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-xs flex items-center gap-2 shadow-lg z-50 animate-fadeIn">
+        <div className="student-score-save-status fixed bottom-5 right-5 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-xs flex items-center gap-2 shadow-lg z-50 animate-fadeIn">
           <i className="fas fa-check"></i> 저장 완료
         </div>
       )}

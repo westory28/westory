@@ -337,6 +337,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
     <>
       <button
         ref={buttonRef}
+        data-history-dictionary-launcher="true"
         type="button"
         style={
           location.pathname.startsWith("/student/lesson/note") && saveAnchor

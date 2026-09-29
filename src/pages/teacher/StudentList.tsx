@@ -617,7 +617,9 @@ const StudentList: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <div className="mx-auto flex w-full max-w-6xl flex-1 animate-fadeIn flex-col px-3 py-6">
+      <div
+        className={`mx-auto flex w-full max-w-6xl flex-1 animate-fadeIn flex-col px-3 py-6 ${!readOnly && selectedIds.size > 0 ? "teacher-floating-bar-space" : ""}`}
+      >
         <div className="flex min-h-[600px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="flex flex-col items-start justify-between gap-3 border-b bg-gray-50 p-5 md:flex-row md:items-center">
             <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
@@ -915,7 +917,7 @@ const StudentList: React.FC = () => {
         </div>
 
         {!readOnly && selectedIds.size > 0 && (
-          <div className="fixed bottom-4 left-1/2 z-40 flex w-[calc(100%-1rem)] max-w-[720px] -translate-x-1/2 animate-slideUp flex-wrap items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-2xl md:bottom-8 md:w-auto md:flex-nowrap md:gap-4 md:rounded-full md:px-6 md:py-3">
+          <div className="teacher-floating-bar-above-patch fixed bottom-4 left-1/2 z-40 flex w-[calc(100%-1rem)] max-w-[720px] -translate-x-1/2 animate-slideUp flex-wrap items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-2xl md:bottom-8 md:w-auto md:flex-nowrap md:gap-4 md:rounded-full md:px-6 md:py-3">
             <div className="flex items-center justify-center gap-2 whitespace-nowrap leading-tight">
               <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">
                 {selectedIds.size}명

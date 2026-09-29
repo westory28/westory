@@ -134,6 +134,12 @@ Layout tokens:
 
 ## 5. Components
 
+### Floating actions
+
+- Keep the existing 56px patch memo launcher at the lower right. When it is present, right-aligned page actions use the existing clearance of 104px from the bottom below 640px and 112px above it, plus the bottom safe-area inset. Centered student-selection and OMR bars need this clearance only below 768px. Preserve the ordinary positions when the memo launcher is absent. Use a body-level presence selector so portaled PDF controls follow the same rule.
+- Reserve scroll-end space for raised save/selection controls using the same clearance plus 80px. PDF tag sheets reserve room above the active global launcher: teacher memo clearance, or 152px plus the safe-area inset above the student's dictionary. Keep their contents scrollable within the remaining dynamic viewport, with a 64px top allowance.
+- Student score save status stays at its existing bottom position; from 1024px, place its right edge 92px plus the safe-area inset from the screen edge (24px edge + 56px dictionary + 12px gap).
+
 ### Assessment stacked bars
 
 - Student assessment ratios use one horizontal 0–100% stacked bar per subject. A score view uses the same item order and colors on a 0–100 point axis; unentered scores remain labeled as unentered.

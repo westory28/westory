@@ -1290,13 +1290,13 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
             <button
               type="button"
               onClick={() => setIsMobileTagPanelOpen((prev) => !prev)}
-              className="absolute bottom-5 right-5 z-20 inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl transition hover:bg-blue-700"
+              className="teacher-floating-action-above-patch absolute bottom-5 right-5 z-20 inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl transition hover:bg-blue-700"
               aria-label="태그 목록 열기"
             >
               <i className="fas fa-tags text-lg"></i>
             </button>
             {isMobileTagPanelOpen && (
-              <div className="absolute inset-x-0 bottom-0 z-30 max-h-[58vh] rounded-t-[28px] border-t border-gray-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.2)]">
+              <div className="pdf-map-tag-panel absolute inset-x-0 bottom-0 z-30 max-h-[58vh] rounded-t-[28px] border-t border-gray-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.2)]">
                 <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
                   <div>
                     <div className="text-sm font-extrabold text-gray-900">
