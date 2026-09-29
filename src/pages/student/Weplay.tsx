@@ -13,6 +13,7 @@ import {
   type WeplaySession,
 } from "../../lib/weplay";
 import HistoryRainGame from "./weplay/HistoryRainGame";
+import NavalBattleResult from "../../components/common/weplay/NavalBattleResult";
 import "./weplay/weplay.css";
 import "./weplay/lobby.css";
 
@@ -189,63 +190,75 @@ export default function Weplay() {
               )}
             </div>
           )}
-          {result && (
-            <section className="weplay-panel" aria-label="게임 결과">
-              <h2>이번 기록 · {WEPLAY_DIFFICULTY_LABELS[result.difficulty]}</h2>
-              <div className="weplay-result">
-                <strong>
-                  {result.correctCount} / {result.totalWords}개
-                </strong>
-                <span>{result.score.toLocaleString()}점</span>
-                <strong>
-                  {result.mode === "practice"
-                    ? "연습 · 위스 변동 없음"
-                    : `${signed(result.netWis)}위스`}
-                </strong>
-              </div>
-              {result.battle && (
-                <p className="weplay-battle-summary">
+          {result?.battle ? (
+            <NavalBattleResult
+              result={result}
+              onReplay={() => {
+                setResult(null);
+                requestKey.current = "";
+              }}
+            />
+          ) : (
+            result && (
+              <section className="weplay-panel" aria-label="게임 결과">
+                <h2>
+                  이번 기록 · {WEPLAY_DIFFICULTY_LABELS[result.difficulty]}
+                </h2>
+                <div className="weplay-result">
                   <strong>
-                    {result.battle.outcome === "defeat"
-                      ? "함선 침몰"
-                      : "해역 방어 완료"}
+                    {result.correctCount} / {result.totalWords}개
                   </strong>
-                  <span>적선 {result.battle.sunkShips}척 격침</span>
-                  <span>
-                    화포 {result.battle.cannonShots}회 · 필살기{" "}
-                    {result.battle.specialCount}회
-                  </span>
-                </p>
-              )}
-              {result.mode === "challenge" && (
-                <p>
-                  도전 비용 {result.cost}위스 · 결과 지급 {result.reward}위스
-                </p>
-              )}
-              {result.missedWords.length > 0 && (
-                <details>
-                  <summary>놓친 단어 {result.missedWords.length}개</summary>
-                  <ul className="weplay-missed">
-                    {result.missedWords.map((word) => (
-                      <li key={word.id}>
-                        <strong>{word.text}</strong>
-                        <span>{word.context || word.lessonTitle}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setResult(null);
-                  requestKey.current = "";
-                }}
-                className="weplay-primary"
-              >
-                다시 하기
-              </button>
-            </section>
+                  <span>{result.score.toLocaleString()}점</span>
+                  <strong>
+                    {result.mode === "practice"
+                      ? "연습 · 위스 변동 없음"
+                      : `${signed(result.netWis)}위스`}
+                  </strong>
+                </div>
+                {result.battle && (
+                  <p className="weplay-battle-summary">
+                    <strong>
+                      {result.battle.outcome === "defeat"
+                        ? "함선 침몰"
+                        : "해역 방어 완료"}
+                    </strong>
+                    <span>적선 {result.battle.sunkShips}척 격침</span>
+                    <span>
+                      화포 {result.battle.cannonShots}회 · 필살기{" "}
+                      {result.battle.specialCount}회
+                    </span>
+                  </p>
+                )}
+                {result.mode === "challenge" && (
+                  <p>
+                    도전 비용 {result.cost}위스 · 결과 지급 {result.reward}위스
+                  </p>
+                )}
+                {result.missedWords.length > 0 && (
+                  <details>
+                    <summary>놓친 단어 {result.missedWords.length}개</summary>
+                    <ul className="weplay-missed">
+                      {result.missedWords.map((word) => (
+                        <li key={word.id}>
+                          <strong>{word.text}</strong>
+                          <span>{word.context || word.lessonTitle}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResult(null);
+                    requestKey.current = "";
+                  }}
+                  className="weplay-primary"
+                >
+                  다시 하기
+                </button>
+              </section>
+            )
           )}
           {lobby && !result && (
             <section

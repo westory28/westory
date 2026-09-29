@@ -617,7 +617,7 @@ try {
   ({ db, api, call } = setup());
   const naval = await call("startWeplayGame", { mode: "challenge", requestKey: "early-defeat", difficulty: "spicy" });
   const special = naval.words.find((word) => word.kind === "special");
-  now = naval.startsAtMs + special.spawnAtMs + 3000;
+  now = naval.startsAtMs + special.spawnAtMs + 5000;
   const expiredSpecial = await call("submitWeplayAnswer", { sessionId: naval.id, wordId: special.id, eventId: "late-special", answer: special.text });
   assert.equal(expiredSpecial.reason, "expired");
   assert.equal(expiredSpecial.battle.specialCount, 0);
@@ -635,7 +635,7 @@ try {
   assert.equal(early.reward, 0);
   assert.deepEqual(await call("finishWeplayGame", { sessionId: naval.id }), early);
   assert.equal(db.data.get(`${prefix}/point_wallets/student-a`).balance, 28);
-  checks.push("Special expires at exactly three seconds; early finish denied until authoritative defeat; post-defeat hits denied; repeated defeat settlement charges once");
+  checks.push("Special expires at exactly five seconds; early finish denied until authoritative defeat; post-defeat hits denied; repeated defeat settlement charges once");
 
   now = Date.parse("2026-09-29T01:00:00Z");
   ({ db, api, call } = setup());
@@ -679,7 +679,7 @@ try {
   ({ db, api, call } = setup());
   const onlySpecial = await call("startWeplayGame", { mode: "challenge", requestKey: "special-only", difficulty: "mild" });
   const tactic = onlySpecial.words.find((word) => word.kind === "special");
-  now = onlySpecial.startsAtMs + tactic.spawnAtMs + 1500;
+  now = onlySpecial.startsAtMs + tactic.spawnAtMs + 4000;
   const tacticResponse = await call("submitWeplayAnswer", { sessionId: onlySpecial.id, eventId: "special-only-answer", wordId: tactic.id, answer: tactic.text });
   assert.equal(tacticResponse.accepted, true);
   assert.equal(tacticResponse.correctCount, 0);
@@ -692,7 +692,7 @@ try {
   assert.equal(specialResult.reward, 0);
   assert.equal(specialResult.score, 500);
   assert([...db.data.values()].some((value) => value.sessionId === onlySpecial.id && value.score === 500 && value.achievedAtMs));
-  checks.push("Reload preserves server-accepted event timestamps; special-only damage scores enter rankings without inflating normal-word rewards");
+  checks.push("Special succeeds at four seconds; reload preserves server-accepted event timestamps; special-only damage scores enter rankings without inflating normal-word rewards");
   for (const check of checks) console.log(`PASS ${check}`);
 } finally {
   Date.now = oldNow;

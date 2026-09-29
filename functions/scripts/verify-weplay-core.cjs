@@ -37,7 +37,7 @@ test('extracts only teacher HTML/PDF blank answers, deduplicates, excludes footn
   assert.equal(normalizeAnswer(' ＡＢＣ\t 삼국 시대 '), 'abc삼국시대');
 });
 
-test('one 90-second battle has 20/20/20 normal words and two three-second tactics', () => {
+test('one 90-second battle has 20/20/20 normal words and two five-second tactics', () => {
   const allWords = buildWords(catalog(), 'class-period');
   const words = allWords.filter((word) => word.kind === 'normal');
   assert.equal(words.length, 60);
@@ -46,7 +46,7 @@ test('one 90-second battle has 20/20/20 normal words and two three-second tactic
   assert.deepEqual([1, 2, 3].map((stage) => words.filter((word) => word.stage === stage).length), [20, 20, 20]);
   assert.deepEqual([words[0].fallDurationMs, words[20].fallDurationMs, words[40].fallDurationMs], [10000, 8000, 6000]);
   for (const word of words) assert.ok(word.spawnAtMs + word.fallDurationMs <= word.stage * 30000);
-  assert.deepEqual(allWords.filter((word) => word.kind === 'special').map((word) => [word.spawnAtMs, word.fallDurationMs]), [[30000, 3000], [60000, 3000]]);
+  assert.deepEqual(allWords.filter((word) => word.kind === 'special').map((word) => [word.spawnAtMs, word.fallDurationMs]), [[30000, 5000], [60000, 5000]]);
   assert.deepEqual(buildWords(catalog(), 'class-period'), allWords);
   assert.throws(() => buildWords(catalog().slice(0, 2), 'seed'));
   for (const difficulty of DIFFICULTIES) {

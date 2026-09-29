@@ -60,12 +60,13 @@ test('perfect normal typing can win without specials at 90/120/180 seconds; idle
   }
 });
 
-test('special challenge expires at exactly three seconds, deals 45 damage, never inflates payout', () => {
+test('special challenge succeeds at four seconds, expires at five seconds, and never inflates payout', () => {
   const session = sessionFor('mild');
   const word = session.words.find((item) => item.kind === 'special');
   assert.equal(word.text, '혼일강리역대국도지도');
-  assert.equal(core.assessAnswer(session, word.id, word.text, session.startsAtMs + word.spawnAtMs + 2999).accepted, true);
-  assert.equal(core.assessAnswer(session, word.id, word.text, session.startsAtMs + word.spawnAtMs + 3000).reason, 'expired');
+  assert.equal(core.assessAnswer(session, word.id, word.text, session.startsAtMs + word.spawnAtMs + 4000).accepted, true);
+  assert.equal(core.assessAnswer(session, word.id, word.text, session.startsAtMs + word.spawnAtMs + 4999).accepted, true);
+  assert.equal(core.assessAnswer(session, word.id, word.text, session.startsAtMs + word.spawnAtMs + 5000).reason, 'expired');
   const state = simulateWeplayBattle(session, word.spawnAtMs + 1500, [{ wordId: word.id, elapsedMs: word.spawnAtMs + 1500 }]);
   assert.equal(state.specialCount, 1);
   assert.equal(state.enemyHp, 55);
@@ -74,6 +75,37 @@ test('special challenge expires at exactly three seconds, deals 45 damage, never
   assert.equal(state.score, 500);
   const all = session.words.map((item) => ({ wordId: item.id, elapsedMs: item.spawnAtMs + 500 }));
   assert.equal(simulateWeplayBattle(session, 90000, all).rewardCorrectCount, 20);
+});
+
+test('server and real teacher preview preserve each special snapshot window, including stored three-second games', async () => {
+  // Run the actual TS preview transport with an injected monotonic clock and
+  // disconnected SDK imports. No Firebase or browser network calls are possible.
+  const loadTs = (relative, imports, clock = {}) => {
+    const source = fs.readFileSync(path.resolve(__dirname, '../../src/lib', relative), 'utf8');
+    const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+    const exports = {};
+    new Function('require', 'exports', 'performance', output)((name) => {
+      assert.ok(Object.prototype.hasOwnProperty.call(imports, name), `Unexpected dependency: ${name}`);
+      return imports[name];
+    }, exports, clock);
+    return exports;
+  };
+  const definitions = loadTs('weplay.ts', { './firebase': {}, './semesterScope': {} });
+  for (const storedWindow of [5000, 3000]) for (const offset of [2999, 3000, 4000, 4999, 5000]) {
+    let clockMs = 0;
+    const session = { ...sessionFor('mild'), id: 'preview-special-window', serverNowMs: 100000 };
+    const word = session.words.find((item) => item.kind === 'special');
+    word.fallDurationMs = storedWindow;
+    const { createWeplayPreviewTransport } = loadTs('weplayPreview.ts', { './weplay': definitions, './weplayBattle': compiled.exports }, { now: () => clockMs });
+    const preview = createWeplayPreviewTransport(session);
+    clockMs = word.spawnAtMs + offset;
+    const server = core.assessAnswer(session, word.id, word.text, session.startsAtMs + clockMs);
+    const local = await preview.answer({ sessionId: session.id, wordId: word.id, answer: word.text });
+    assert.equal(local.accepted, server.accepted, `${storedWindow}ms snapshot at +${offset}ms`);
+    assert.equal(local.accepted, offset < storedWindow);
+    assert.equal(local.battle.specialCount, offset < storedWindow ? 1 : 0);
+    assert.equal(local.correctCount, 0);
+  }
 });
 
 test('defeat permanently closes combat; accepted events beyond death cannot resurrect the fleet', () => {
