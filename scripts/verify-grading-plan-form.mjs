@@ -60,6 +60,7 @@ function mount() {
     },
   };
   const dependencies = {
+    "./examGradingPlan.css": {},
     react: ReactMock,
     "../../../lib/firebase": { db: {} },
     "firebase/firestore": firestore,

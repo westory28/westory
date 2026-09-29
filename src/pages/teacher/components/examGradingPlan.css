@@ -1,0 +1,283 @@
+.grading-workspace {
+  --ws-surface: #ffffff;
+  --ws-surface-subtle: #f8fafc;
+  --ws-text: #1f2937;
+  --ws-text-muted: #6b7280;
+  --ws-border: #e5e7eb;
+  --ws-border-soft: #f3f4f6;
+  --ws-primary: #2563eb;
+  --ws-primary-hover: #1d4ed8;
+  --ws-primary-soft: #eff6ff;
+  --ws-primary-text: #1e3a8a;
+  --ws-accent: #f59e0b;
+  --ws-accent-text: #92400e;
+  --ws-success: #16a34a;
+  --ws-danger-text: #b91c1c;
+  --ws-danger-soft: #fef2f2;
+  --ws-ring: #3b82f6;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+.grading-editor,
+.grading-editor-list {
+  min-width: 0;
+  padding: var(--space-6);
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-border);
+  border-radius: 12px;
+}
+.grading-editor__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--ws-border);
+}
+.grading-editor__header h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--ws-text);
+  margin: 0;
+}
+.grading-editor__header p {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ws-text-muted);
+  margin: var(--space-2) 0 0;
+}
+.grading-editor button {
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.grading-editor button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.grading-editor button:focus-visible {
+  outline: 2px solid var(--ws-ring);
+  outline-offset: 2px;
+}
+.grading-editor__reset {
+  flex-shrink: 0;
+  color: var(--ws-text-muted);
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-border);
+}
+.grading-editor__reset:hover,
+.grading-editor__preview:hover {
+  background: var(--ws-surface-subtle);
+}
+.grading-editor__fields {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: var(--space-6) 0 0;
+}
+.grading-editor__identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--space-4);
+}
+.grading-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ws-text);
+}
+.grading-editor__field input,
+.grading-editor__field select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  font: inherit;
+  font-weight: 400;
+  box-sizing: border-box;
+}
+.grading-editor__field input::placeholder {
+  color: var(--ws-text-muted);
+}
+.grading-editor__field input:focus,
+.grading-editor__field select:focus {
+  outline: 2px solid var(--ws-ring);
+  outline-offset: 1px;
+  border-color: var(--ws-primary);
+}
+.grading-editor__field input:disabled,
+.grading-editor__field select:disabled {
+  background: var(--ws-surface-subtle);
+  opacity: 0.6;
+}
+.grading-editor__items-heading {
+  margin-top: var(--space-8);
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.grading-editor__items-heading h4 {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0;
+  color: var(--ws-text);
+}
+.grading-editor__items-heading > span {
+  font-size: 0.75rem;
+  color: var(--ws-text-muted);
+}
+.grading-editor__ratio {
+  margin-bottom: var(--space-2);
+}
+.grading-editor__ratio-text {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 0.75rem;
+  color: var(--ws-text-muted);
+}
+.grading-editor__ratio-text strong {
+  margin-left: var(--space-1);
+  font-size: 0.875rem;
+  color: var(--ws-text);
+}
+.grading-editor__ratio[data-ready="true"]
+  .grading-editor__ratio-text
+  > span:last-child {
+  color: var(--ws-primary-text);
+}
+.grading-editor__ratio-track {
+  height: 8px;
+  margin-top: var(--space-2);
+  display: flex;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--ws-border-soft);
+}
+.grading-editor__ratio-track > span {
+  display: block;
+  flex-shrink: 0;
+}
+.grading-editor__item {
+  padding: var(--space-4) 0 var(--space-6);
+  border-bottom: 1px solid var(--ws-border);
+}
+.grading-editor__item-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.grading-editor__item-heading > span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ws-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.grading-editor__item-heading i {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+}
+.grading-editor__remove {
+  color: var(--ws-text-muted);
+  background: transparent;
+  border: 0;
+}
+.grading-editor__remove:hover {
+  color: var(--ws-danger-text);
+  background: var(--ws-danger-soft);
+}
+.grading-editor__item-values {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.grading-editor__number {
+  position: relative;
+  display: block;
+}
+.grading-editor__number input {
+  padding-right: var(--space-10);
+}
+.grading-editor__number > span {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ws-text-muted);
+  pointer-events: none;
+}
+.grading-editor__number input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.grading-editor__add {
+  width: 100%;
+  margin-top: var(--space-4);
+  color: var(--ws-primary-text);
+  background: var(--ws-primary-soft);
+  border: 1px dashed var(--ws-border);
+}
+.grading-editor__add:hover {
+  border-color: var(--ws-primary);
+}
+.grading-editor__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+.grading-editor__preview {
+  color: var(--ws-text);
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-border);
+}
+.grading-editor__save {
+  color: var(--ws-surface);
+  background: var(--ws-primary);
+  border: 1px solid var(--ws-primary);
+}
+.grading-editor__save:hover {
+  background: var(--ws-primary-hover);
+}
+@media (max-width: 639px) {
+  .grading-editor,
+  .grading-editor-list {
+    padding: var(--space-4);
+  }
+  .grading-editor__identity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .grading-editor__item-values {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grading-editor__type {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1280px) {
+  .grading-workspace {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

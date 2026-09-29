@@ -140,6 +140,12 @@ Layout tokens:
 - Segment palette reuses `--ws-primary`, `--ws-accent`, `--ws-success`, `--ws-text-muted`, `--ws-ring`, and `--ws-accent-text` in item order. Each segment has a matching visible item name and value; color is never the only label.
 - Use existing 40px bar height, 8px radius, 8/12/16/24px spacing and 12/14/16px type. Long assessment names wrap. Charts remain one column on mobile and update directly from the current data without decorative motion.
 
+### Teacher assessment editor
+
+- Use separate white, bordered editor and list surfaces with 12px radius, 24px padding (16px on mobile), and a 24px gap. At 1280px viewport and above use equal columns; smaller screens place the editor first. No nested fixed-height item scroller or sticky editor.
+- Inputs are 44px high with 8px radius and 14px text. Grade and subject share a row above 640px. Each assessment has a full-width area name followed by type, maximum score and weight; below 640px the type spans a row and the two numeric fields share a row.
+- Use visible labels and units, 40px minimum action targets, and existing primary/surface/border/text tokens. A 8px stacked ratio strip reuses the student chart palette; show the numeric total and remaining/excess ratio in text. Primary save stays blue for both creation and editing.
+
 ### Header
 
 - Teacher header: keep the existing 64px row height and center the logo, navigation labels, and account actions on the same axis.

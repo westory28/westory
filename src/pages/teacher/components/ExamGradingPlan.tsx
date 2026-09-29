@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import "./examGradingPlan.css";
 import { db } from "../../../lib/firebase";
 import {
   collection,
@@ -434,8 +435,22 @@ const ExamGradingPlan: React.FC = () => {
     ? previewCategoryMeta[previewActiveType]
     : null;
 
+  const draftRatioTotal = items.reduce(
+    (sum, item) => sum + (Number.isFinite(item.ratio) ? item.ratio : 0),
+    0,
+  );
+  const draftRatioReady = Math.abs(draftRatioTotal - 100) < 0.000001;
+  const draftRatioColors = [
+    "var(--ws-primary)",
+    "var(--ws-accent)",
+    "var(--ws-success)",
+    "var(--ws-text-muted)",
+    "var(--ws-ring)",
+    "var(--ws-accent-text)",
+  ];
+
   return (
-    <div className="grid h-full grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-8">
+    <div className="grading-workspace">
       {previewOpen && previewPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
           <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -714,66 +729,122 @@ const ExamGradingPlan: React.FC = () => {
         </div>
       )}
 
-      {/* Left: Form */}
-      <div className="lg:col-span-5">
-        <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 lg:sticky lg:top-4 lg:p-6">
-          <div className="flex justify-between items-center mb-4 border-b border-blue-200 pb-3">
-            <h3 className="font-bold text-lg text-blue-900">
-              {editId ? "🔄 평가 기준 수정" : "✏️ 평가 기준 등록"}
+      <section
+        className="grading-editor"
+        aria-labelledby="grading-editor-title"
+      >
+        <div className="grading-editor__header">
+          <div>
+            <h3 id="grading-editor-title">
+              {editId ? "평가 기준 수정" : "평가 기준 등록"}
             </h3>
-            <button
-              onClick={resetForm}
-              disabled={saving}
-              className="text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 transition"
-            >
-              <i className="fas fa-undo mr-1"></i>초기화
-            </button>
+            <p>과목별 평가 항목과 반영 비율을 설정하세요.</p>
           </div>
-
-          <fieldset disabled={saving} className="min-w-0 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-blue-800 mb-1">
-                대상 학년
-              </label>
-              <select
-                value={grade}
-                onChange={(e) => setGrade(e.target.value)}
-                className="w-full border border-blue-200 rounded p-2 text-sm bg-white focus:ring-2 focus:ring-blue-400 font-bold text-gray-700"
-              >
+          <button
+            type="button"
+            onClick={resetForm}
+            disabled={saving}
+            className="grading-editor__reset"
+          >
+            초기화
+          </button>
+        </div>
+        <fieldset disabled={saving} className="grading-editor__fields">
+          <legend className="sr-only">평가 기준 입력</legend>
+          <div className="grading-editor__identity">
+            <label className="grading-editor__field">
+              <span>대상 학년</span>
+              <select value={grade} onChange={(e) => setGrade(e.target.value)}>
                 <option value="1">1학년</option>
                 <option value="2">2학년</option>
                 <option value="3">3학년</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-blue-800 mb-1">
-                과목명
-              </label>
+            </label>
+            <label className="grading-editor__field">
+              <span>과목명</span>
               <input
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="예: 국어, 역사, 사회"
                 {...koreanInputProps}
-                className="w-full border border-blue-200 rounded p-2 text-sm focus:ring-2 focus:ring-blue-400"
               />
+            </label>
+          </div>
+          <div className="grading-editor__items-heading">
+            <h4>평가 항목</h4>
+            <span>{items.length}개 항목</span>
+          </div>
+          <div className="grading-editor__ratio" data-ready={draftRatioReady}>
+            <div className="grading-editor__ratio-text" aria-live="polite">
+              <span>
+                반영 비율 합계{" "}
+                <strong>{formatPreviewNumber(draftRatioTotal)}%</strong>
+              </span>
+              <span>
+                {draftRatioReady
+                  ? "100% 설정 완료"
+                  : draftRatioTotal > 100
+                    ? formatPreviewNumber(draftRatioTotal - 100) + "% 초과"
+                    : formatPreviewNumber(100 - draftRatioTotal) + "% 남음"}
+              </span>
             </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-xs font-bold text-blue-800">
-                  평가 항목
-                </label>
-                <span className="text-[10px] text-blue-600">
-                  * 합계 100% 필수
-                </span>
-              </div>
-              <div className="space-y-2 bg-white p-2 rounded border border-blue-100 max-h-60 overflow-y-auto">
-                {items.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex gap-1 items-center bg-gray-50 p-1 rounded mb-1"
+            <div className="grading-editor__ratio-track" aria-hidden="true">
+              {items.map((item, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    width:
+                      Math.max(0, Math.min(100, Number(item.ratio) || 0)) + "%",
+                    background: draftRatioColors[idx % draftRatioColors.length],
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="grading-editor__items">
+            {items.map((item, idx) => (
+              <div
+                key={idx}
+                className="grading-editor__item"
+                role="group"
+                aria-label={"평가 항목 " + (idx + 1)}
+              >
+                <div className="grading-editor__item-heading">
+                  <span>
+                    <i
+                      style={{
+                        background:
+                          draftRatioColors[idx % draftRatioColors.length],
+                      }}
+                      aria-hidden="true"
+                    />
+                    {"항목 " + (idx + 1)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItem(idx)}
+                    aria-label={"평가 항목 " + (idx + 1) + " 삭제"}
+                    className="grading-editor__remove"
                   >
+                    삭제
+                  </button>
+                </div>
+                <label className="grading-editor__field">
+                  <span>영역명</span>
+                  <input
+                    type="text"
+                    placeholder="예: 서술형, 발표, 포트폴리오"
+                    value={item.name}
+                    onChange={(e) =>
+                      handleItemChange(idx, "name", e.target.value)
+                    }
+                    {...koreanInputProps}
+                  />
+                </label>
+                <div className="grading-editor__item-values">
+                  <label className="grading-editor__field grading-editor__type">
+                    <span>평가 유형</span>
                     <select
                       value={item.type}
                       onChange={(e) =>
@@ -783,87 +854,84 @@ const ExamGradingPlan: React.FC = () => {
                           e.target.value as GradingItem["type"],
                         )
                       }
-                      className="border border-gray-300 rounded px-1 py-1.5 text-xs w-[60px] bg-white"
                     >
-                      <option value="정기">정기</option>
-                      <option value="수행">수행</option>
+                      <option value="정기">정기시험</option>
+                      <option value="수행">수행평가</option>
                     </select>
-                    <input
-                      type="text"
-                      placeholder="예: 서술형, 발표, 포트폴리오"
-                      value={item.name}
-                      onChange={(e) =>
-                        handleItemChange(idx, "name", e.target.value)
-                      }
-                      {...koreanInputProps}
-                      className="border border-gray-300 rounded px-2 py-1.5 text-xs flex-1 min-w-0"
-                    />
-                    <input
-                      type="number"
-                      placeholder="만점"
-                      value={item.maxScore || ""}
-                      onChange={(e) =>
-                        handleItemChange(
-                          idx,
-                          "maxScore",
-                          Number(e.target.value),
-                        )
-                      }
-                      className="border border-gray-300 rounded px-1 py-1.5 text-xs w-[45px] text-center"
-                    />
-                    <input
-                      type="number"
-                      placeholder="%"
-                      value={item.ratio || ""}
-                      onChange={(e) =>
-                        handleItemChange(idx, "ratio", Number(e.target.value))
-                      }
-                      className="border border-gray-300 rounded px-1 py-1.5 text-xs w-[40px] text-center font-bold text-blue-600"
-                    />
-                    <button
-                      onClick={() => handleRemoveItem(idx)}
-                      className="text-gray-300 hover:text-red-500 w-5 flex justify-center"
-                    >
-                      <i className="fas fa-times"></i>
-                    </button>
-                  </div>
-                ))}
+                  </label>
+                  <label className="grading-editor__field">
+                    <span>만점</span>
+                    <span className="grading-editor__number">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="any"
+                        placeholder="만점"
+                        value={item.maxScore || ""}
+                        onChange={(e) =>
+                          handleItemChange(
+                            idx,
+                            "maxScore",
+                            Number(e.target.value),
+                          )
+                        }
+                      />
+                      <span aria-hidden="true">점</span>
+                    </span>
+                  </label>
+                  <label className="grading-editor__field">
+                    <span>반영 비율</span>
+                    <span className="grading-editor__number">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        max="100"
+                        step="any"
+                        placeholder="%"
+                        value={item.ratio || ""}
+                        onChange={(e) =>
+                          handleItemChange(idx, "ratio", Number(e.target.value))
+                        }
+                      />
+                      <span aria-hidden="true">%</span>
+                    </span>
+                  </label>
+                </div>
               </div>
-              <button
-                onClick={handleAddItem}
-                className="w-full mt-2 border border-dashed border-blue-300 text-blue-500 text-xs py-2 rounded hover:bg-blue-50 font-bold transition"
-              >
-                + 항목 추가
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[0.8fr_1.2fr]">
-              <button
-                type="button"
-                onClick={() => openPreview()}
-                className="w-full rounded-lg border border-blue-200 bg-white py-3 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50 active:scale-95"
-              >
-                <i className="fas fa-chart-simple mr-2"></i>미리보기
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                aria-busy={saving}
-                className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${editId ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
-              >
-                {saving
-                  ? "저장 중…"
-                  : editId
-                    ? "수정사항 저장"
-                    : "기준 저장하기"}
-              </button>
-            </div>
-          </fieldset>
-        </div>
-      </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleAddItem}
+            className="grading-editor__add"
+          >
+            + 항목 추가
+          </button>
+          <div className="grading-editor__actions">
+            <button
+              type="button"
+              onClick={() => openPreview()}
+              className="grading-editor__preview"
+            >
+              미리보기
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              aria-busy={saving}
+              className="grading-editor__save"
+            >
+              {saving ? "저장 중…" : editId ? "수정사항 저장" : "기준 저장하기"}
+            </button>
+          </div>
+        </fieldset>
+      </section>
 
       {/* Right: List */}
-      <div className="lg:col-span-7">
+      <div className="grading-editor-list">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="font-bold text-gray-700 text-lg">등록된 기준 목록</h3>
           <div className="flex items-center gap-2">
@@ -880,7 +948,7 @@ const ExamGradingPlan: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-4 lg:h-[calc(100vh-300px)] lg:overflow-y-auto lg:pr-2">
+        <div className="space-y-4">
           {loading ? (
             <div className="text-center p-10 text-gray-400">
               데이터를 불러오는 중...

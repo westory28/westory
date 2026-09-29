@@ -32,7 +32,13 @@ const ManageExam: React.FC = () => {
             : "max-w-7xl"
         } mx-auto px-4 py-6 flex-1 flex flex-col`}
       >
-        <div className="relative min-h-[500px] flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6">
+        <div
+          className={
+            activeTab === "preview"
+              ? "relative min-h-[500px] flex-1 min-w-0"
+              : "relative min-h-[500px] flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6"
+          }
+        >
           {activeTab === "preview" && <ExamGradingPlan />}
           {activeTab === "omr" && <ExamOmrConfig />}
           {activeTab === "performance" && <PerformanceScoreManager />}
