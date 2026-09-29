@@ -6,6 +6,16 @@ import ts from "typescript";
 
 const require = createRequire(import.meta.url);
 const React = require("react");
+const koreanText = {};
+vm.runInNewContext(
+  ts.transpileModule(readFileSync("src/lib/koreanText.ts", "utf8"), {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.CommonJS,
+    },
+  }).outputText,
+  { exports: koreanText },
+);
 const source = readFileSync(
   "src/pages/teacher/components/ExamGradingPlan.tsx",
   "utf8",
@@ -61,8 +71,11 @@ function mount() {
   };
   const dependencies = {
     "./examGradingPlan.css": {},
+    "./KoreanTextInput": { __esModule: true, default: "input" },
+    "./GradingScoreHelp": { __esModule: true, default: "help" },
     react: ReactMock,
     "../../../lib/firebase": { db: {} },
+    "../../../lib/koreanText": koreanText,
     "firebase/firestore": firestore,
     "../../../contexts/AuthContext": { useAuth: () => ({ userConfig: scope }) },
     "../../../lib/semesterScope": {
@@ -126,7 +139,9 @@ function mount() {
     };
   };
   const change = (element, value) =>
-    element.props.onChange({ target: { value } });
+    element.props.onValueChange
+      ? element.props.onValueChange(value)
+      : element.props.onChange({ target: { value } });
   return {
     render,
     change,
@@ -206,6 +221,14 @@ assert.equal(
   "Do not silently drop incomplete criteria",
 );
 assert.equal(incomplete.toasts.at(-1).tone, "warning");
+const detached = mount();
+detached.change(detached.render().subject, " ㄱㅜㄱㅇㅓ ");
+detached.change(detached.render().names[0], " ㅎㅏㄴㄱㅡㄹ English ");
+detached.change(detached.render().maxScores[0], "100");
+detached.change(detached.render().ratios[0], "100");
+await detached.render().save.props.onClick();
+assert.equal(detached.writes[0].data.subject, "국어");
+assert.equal(detached.writes[0].data.items[0].name, "한글 English");
 console.log(
   "Grading plan form verified: IME/mixed text preservation, failure recovery, duplicate-save guard, semester metadata, and incomplete-item validation.",
 );

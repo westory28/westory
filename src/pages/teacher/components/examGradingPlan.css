@@ -48,6 +48,60 @@
   color: var(--ws-text-muted);
   margin: var(--space-2) 0 0;
 }
+.grading-score-help-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.grading-score-help {
+  position: relative;
+  display: inline-flex;
+  text-align: left;
+}
+.grading-score-help > button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  color: var(--ws-text-muted);
+  border-radius: 8px;
+}
+.grading-score-help > button > span {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+}
+.grading-score-help > button:focus-visible {
+  outline: 2px solid var(--ws-ring);
+}
+.grading-score-help__popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 30;
+  width: min(320px, calc(100vw - 104px));
+  padding: 12px;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+  white-space: normal;
+  line-height: 1.6;
+  font-weight: 400;
+}
+.grading-score-help__popover > span {
+  display: block;
+}
+.grading-score-help__popover > span + span {
+  margin-top: 8px;
+}
 .grading-editor button {
   min-height: 40px;
   padding: var(--space-2) var(--space-3);

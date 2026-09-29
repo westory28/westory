@@ -281,6 +281,8 @@ Depth strategy: light surfaces use borders first, then restrained shadows only w
 
 ## Superloopy Frontend Gate
 
+Optional help uses a circular 16px information glyph beside its heading or main label, with a 40px button target. Keep its text hidden until hover, focus, click or tap; dismiss on Escape, outside click or focus exit. Use existing 12px padding, 8px radius, surface/border/text colors and popover shadow, with a maximum width of 320px bounded by its container. Delete redundant introductory or instructional sentences rather than moving them into permanent captions. Preserve essential validation and consent text.
+
 For visible frontend work, use this sequence before editing UI code:
 
 1. Read `AGENTS.md`, `UI_RULES.md`, and this `DESIGN.md`.

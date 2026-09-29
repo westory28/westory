@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "./examGradingPlan.css";
+import KoreanTextInput from "./KoreanTextInput";
+import GradingScoreHelp from "./GradingScoreHelp";
 import { db } from "../../../lib/firebase";
 import {
   collection,
@@ -13,6 +15,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
+import { normalizeKoreanText } from "../../../lib/koreanText";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
@@ -22,8 +25,6 @@ import {
   buildScoreRows,
   getScoreKey,
   getSubjectPriorityIndex,
-  isThreeLevelSubject,
-  SCORE_ACHIEVEMENT_GUIDANCE,
   getTypeLabel,
   normalizePlanItemType,
   type ScoreItemType,
@@ -189,7 +190,7 @@ const ExamGradingPlan: React.FC = () => {
 
     const validItems = items.map((item) => ({
       ...item,
-      name: item.name.trim(),
+      name: normalizeKoreanText(item.name).trim(),
     }));
     if (
       validItems.length === 0 ||
@@ -222,7 +223,7 @@ const ExamGradingPlan: React.FC = () => {
 
     const scope = getYearSemester(userConfig);
     const data = {
-      subject: subject.trim(),
+      subject: normalizeKoreanText(subject).trim(),
       targetGrade: grade,
       items: validItems,
       academicYear: scope.year,
@@ -277,11 +278,11 @@ const ExamGradingPlan: React.FC = () => {
   };
 
   const buildDraftPreviewPlan = (): Omit<GradingPlan, "id"> => ({
-    subject: subject.trim() || "미리보기 과목",
+    subject: normalizeKoreanText(subject).trim() || "미리보기 과목",
     targetGrade: grade,
     items: items.map((item, idx) => ({
       ...item,
-      name: item.name.trim() || `${idx + 1}번 항목`,
+      name: normalizeKoreanText(item.name).trim() || `${idx + 1}번 항목`,
       maxScore: Number(item.maxScore || 0),
       ratio: Number(item.ratio || 0),
     })),
@@ -443,10 +444,6 @@ const ExamGradingPlan: React.FC = () => {
                 <h3 className="text-lg font-black text-slate-900">
                   평가 반영 미리보기
                 </h3>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  {previewPlan.targetGrade || grade}학년 {previewPlan.subject}{" "}
-                  기준으로 학생 입력 결과를 확인합니다.
-                </p>
               </div>
               <button
                 type="button"
@@ -461,8 +458,7 @@ const ExamGradingPlan: React.FC = () => {
             <div className="overflow-y-auto px-5 py-5">
               {previewValidItems.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-bold text-slate-400">
-                  만점과 반영 비율이 입력된 평가 항목이 있어야 미리보기를 볼 수
-                  있습니다.
+                  만점과 반영 비율을 입력해 주세요.
                 </div>
               ) : (
                 <div className="grading-preview-columns">
@@ -550,13 +546,11 @@ const ExamGradingPlan: React.FC = () => {
                         <h4 className="text-sm font-black text-slate-800">
                           실시간 반영 그래프
                         </h4>
-                        <p className="mt-1 text-xs font-semibold text-slate-400">
-                          입력한 점수의 평가별 반영 결과입니다.
-                        </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs font-bold text-slate-400">
+                        <div className="grading-score-help-label text-xs font-bold text-slate-400">
                           환산 점수
+                          <GradingScoreHelp subject={previewPlan.subject} />
                         </div>
                         <div className="text-3xl font-black text-blue-600">
                           {formatPreviewScore(previewTotalScore)}
@@ -684,37 +678,22 @@ const ExamGradingPlan: React.FC = () => {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {previewEnteredItems.length === 0 ? (
-                          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-400">
-                            점수를 입력하면 항목별 반영 점수가 표시됩니다.
+                        {previewEnteredItems.map((item) => (
+                          <span
+                            key={item.key}
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600"
+                          >
+                            {previewCategoryMeta[item.type].shortLabel} ·{" "}
+                            {item.name} · {formatPreviewScore(item.weighted)}{" "}
+                            반영
                           </span>
-                        ) : (
-                          previewEnteredItems.map((item) => (
-                            <span
-                              key={item.key}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600"
-                            >
-                              {previewCategoryMeta[item.type].shortLabel} ·{" "}
-                              {item.name} · {formatPreviewScore(item.weighted)}{" "}
-                              반영
-                            </span>
-                          ))
-                        )}
+                        ))}
                       </div>
                     </div>
 
-                    <p className="mt-3 text-xs font-bold leading-5 text-slate-400">
-                      막대를 선택하면 평가별 반영 점수를 확인할 수 있습니다.
-                    </p>
-                    <p className="mt-3 text-xs leading-5 text-slate-600">
-                      {isThreeLevelSubject(previewPlan.subject)
-                        ? SCORE_ACHIEVEMENT_GUIDANCE.artsPE
-                        : SCORE_ACHIEVEMENT_GUIDANCE.general}
-                    </p>
                     {previewRatioTotal !== 100 && (
                       <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
-                        저장하려면 반영 비율 합계가 100%가 되어야 합니다. 현재
-                        미리보기는 입력된 비율 그대로 계산합니다.
+                        저장하려면 반영 비율 합계가 100%여야 합니다.
                       </div>
                     )}
                   </section>
@@ -734,7 +713,6 @@ const ExamGradingPlan: React.FC = () => {
             <h3 id="grading-editor-title">
               {editId ? "평가 기준 수정" : "평가 기준 등록"}
             </h3>
-            <p>과목별 평가 항목과 반영 비율을 설정하세요.</p>
           </div>
           <button
             type="button"
@@ -758,10 +736,10 @@ const ExamGradingPlan: React.FC = () => {
             </label>
             <label className="grading-editor__field">
               <span>과목명</span>
-              <input
+              <KoreanTextInput
                 type="text"
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onValueChange={setSubject}
                 placeholder="예: 국어, 역사, 사회"
                 {...koreanInputProps}
               />
@@ -828,12 +806,12 @@ const ExamGradingPlan: React.FC = () => {
                 </div>
                 <label className="grading-editor__field">
                   <span>영역명</span>
-                  <input
+                  <KoreanTextInput
                     type="text"
                     placeholder="예: 서술형, 발표, 포트폴리오"
                     value={item.name}
-                    onChange={(e) =>
-                      handleItemChange(idx, "name", e.target.value)
+                    onValueChange={(value) =>
+                      handleItemChange(idx, "name", value)
                     }
                     {...koreanInputProps}
                   />
