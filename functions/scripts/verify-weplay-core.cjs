@@ -4,6 +4,7 @@ const {
   DEFAULT_POLICY, TOTAL_WORDS, GAME_DURATION_MS, DIFFICULTIES, FALL_DURATIONS, normalizeAnswer,
   validatePolicy, effectiveLessons, extractLessonWords, buildWords,
   assessAnswer, gameReward, periodBounds, compareEntries,
+  DEFAULT_GAME_SETTINGS, validateGameSettings, readGameSettings, filterGameLessons, uniqueWordCount,
 } = require('../weplayCore');
 
 const policy = () => structuredClone(DEFAULT_POLICY);
@@ -97,4 +98,28 @@ test('ranking tie breaks by earlier achievement then stable uid', () => {
     { uid: 'd', score: 200, achievedAtMs: 99 },
   ];
   assert.deepEqual(entries.sort(compareEntries).map((entry) => entry.uid), ['d', 'c', 'a', 'b']);
+});
+
+test('game settings validate student access and canonical selected unit IDs', () => {
+  assert.deepEqual(readGameSettings(null), DEFAULT_GAME_SETTINGS);
+  assert.deepEqual(validateGameSettings({ enabled: true, sourceMode: 'selected', unitIds: ['b', ' a ', 'b'] }), { enabled: true, sourceMode: 'selected', unitIds: ['a', 'b'] });
+  assert.deepEqual(validateGameSettings({ enabled: false, sourceMode: 'selected', unitIds: [] }).unitIds, []);
+  assert.deepEqual(validateGameSettings({ enabled: false, sourceMode: 'all', unitIds: ['deleted-unit'] }).unitIds, []);
+  for (const invalid of [null, { enabled: 'true', sourceMode: 'all', unitIds: [] }, { enabled: true, sourceMode: 'unknown', unitIds: [] }, { enabled: true, sourceMode: 'selected', unitIds: [''] }, { enabled: true, sourceMode: 'selected', unitIds: ['a/b'] }, { enabled: true, sourceMode: 'all', unitIds: Array(201).fill('a') }]) {
+    assert.throws(() => validateGameSettings(invalid));
+  }
+  assert.throws(() => readGameSettings({ enabled: true, sourceMode: 'all', unitIds: [], version: -1 }));
+});
+
+test('teacher preview retains hidden scoped lessons while student filtering never revives legacy answers', () => {
+  const scoped = [{ unitId: 'private', isVisibleToStudents: false, contentHtml: '[비공개]' }, { unitId: 'public', contentHtml: '[공개 정답]' }];
+  const legacy = [{ unitId: 'private', contentHtml: '[옛 정답]' }];
+  const studentLessons = effectiveLessons(scoped, legacy);
+  const teacherLessons = effectiveLessons(scoped, legacy, { includeHidden: true });
+  assert.deepEqual(studentLessons.map((lesson) => lesson.unitId), ['public']);
+  assert.equal(teacherLessons.find((lesson) => lesson.unitId === 'private').contentHtml, '[비공개]');
+  const settings = { enabled: true, sourceMode: 'selected', unitIds: ['private'] };
+  assert.deepEqual(filterGameLessons(studentLessons, settings), []);
+  assert.deepEqual(filterGameLessons(teacherLessons, settings).map((lesson) => lesson.unitId), ['private']);
+  assert.equal(uniqueWordCount([{ text: '공개 정답' }, { text: '공개정답' }]), 1);
 });

@@ -2,6 +2,7 @@ import React from "react";
 
 export type TeacherIconName =
   | "home"
+  | "game"
   | "lesson"
   | "assessment"
   | "score"
@@ -25,6 +26,12 @@ export type TeacherIconName =
   | "close";
 
 const paths: Record<Exclude<TeacherIconName, "wis">, React.ReactNode> = {
+  game: (
+    <>
+      <path d="M7 7h10a4 4 0 0 1 4 4v7a2 2 0 0 1-3 1l-3-3H9l-3 3a2 2 0 0 1-3-1v-7a4 4 0 0 1 4-4Z" />
+      <path d="M8 10v4m-2-2h4m6-1h.01M18 13h.01" />
+    </>
+  ),
   home: (
     <>
       <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" />

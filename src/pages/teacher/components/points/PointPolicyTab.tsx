@@ -12,6 +12,7 @@ import type { PointPolicy, SystemConfig } from "../../../../types";
 interface PointPolicyTabProps {
   config: Pick<SystemConfig, "year" | "semester"> | null;
   active: boolean;
+  requestedSectionId?: string | null;
   policy: PointPolicy;
   canManage: boolean;
   hasUnsavedChanges: boolean;
@@ -262,6 +263,7 @@ const SectionPanel = ({
 const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
   config,
   active,
+  requestedSectionId,
   policy,
   canManage,
   hasUnsavedChanges,
@@ -271,7 +273,9 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
   onSubmit,
 }) => {
   const [activeSectionId, setActiveSectionId] = React.useState(
-    policySections[0].id,
+    () =>
+      policySections.find((item) => item.id === requestedSectionId)?.id ||
+      policySections[0].id,
   );
 
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -280,110 +284,25 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
   )!;
   const isWeplaySection = activeSectionId === "policy-weplay";
 
+  React.useEffect(() => {
+    if (
+      active &&
+      requestedSectionId &&
+      policySections.some((item) => item.id === requestedSectionId)
+    ) {
+      setActiveSectionId(requestedSectionId);
+      setMenuOpen(false);
+    }
+  }, [active, requestedSectionId]);
+
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
         if (!isWeplaySection) onSubmit();
       }}
-      className="space-y-6"
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-normal text-slate-900">
-            위스 운영 정책
-          </h2>
-          {!isWeplaySection && (
-            <p className="mt-1 text-sm text-slate-500">
-              학생 행동 자동 지급, 보너스 규칙, 직접 조정 허용 범위를
-              설정합니다.
-            </p>
-          )}
-        </div>
-        <div
-          className={
-            isWeplaySection
-              ? "hidden"
-              : "flex flex-col gap-3 sm:flex-row sm:items-center"
-          }
-        >
-          <div
-            className={[
-              "rounded-lg border px-4 py-2.5 text-sm font-semibold",
-              hasUnsavedChanges
-                ? "border-amber-200 bg-amber-50 text-amber-800"
-                : "border-slate-200 bg-slate-50 text-slate-600",
-            ].join(" ")}
-          >
-            {hasUnsavedChanges
-              ? "저장되지 않은 변경사항"
-              : "저장된 정책과 동일"}
-          </div>
-          <button
-            type="submit"
-            disabled={!canManage || isWeplaySection}
-            className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-5 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-          >
-            운영 정책 저장
-          </button>
-        </div>
-      </div>
-
-      {!isWeplaySection && saveFeedbackMessage && saveFeedbackTone && (
-        <div
-          className={`rounded-lg px-4 py-3 text-sm font-semibold ${feedbackToneClassName[saveFeedbackTone]}`}
-        >
-          {saveFeedbackMessage}
-        </div>
-      )}
-
-      <div
-        className={
-          isWeplaySection ? "hidden" : "grid grid-cols-1 gap-4 xl:grid-cols-3"
-        }
-      >
-        <QuickPolicyToggle
-          badge="전체 자동 보상"
-          title={POINT_POLICY_FIELD_LABELS.autoRewardEnabled}
-          description="끄면 학생 활동 자동 적립이 모두 멈춥니다."
-          checked={policy.autoRewardEnabled}
-          disabled={!canManage}
-          onChange={(checked) =>
-            onPolicyChange((prev) => ({
-              ...prev,
-              autoRewardEnabled: checked,
-            }))
-          }
-        />
-        <QuickPolicyToggle
-          badge="교사 권한"
-          title={POINT_POLICY_FIELD_LABELS.manualAdjustEnabled}
-          description="지급 및 환수 탭의 실행 가능 여부를 정합니다."
-          checked={policy.manualAdjustEnabled}
-          disabled={!canManage}
-          onChange={(checked) =>
-            onPolicyChange((prev) => ({
-              ...prev,
-              manualAdjustEnabled: checked,
-            }))
-          }
-        />
-        <QuickPolicyToggle
-          badge="차감 제한"
-          title={POINT_POLICY_FIELD_LABELS.allowNegativeBalance}
-          description="보유 위스보다 많이 환수할 수 있는지 정합니다."
-          checked={policy.allowNegativeBalance}
-          disabled={!canManage}
-          onChange={(checked) =>
-            onPolicyChange((prev) => ({
-              ...prev,
-              allowNegativeBalance: checked,
-            }))
-          }
-        />
-      </div>
-
-      <div className="teacher-sub-workspace">
+      <div className="teacher-sub-workspace teacher-sub-workspace--page">
         <TeacherSubNavigation
           title="위스 운영 정책"
           activeLabel={activeSection.label}
@@ -411,6 +330,102 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
         </TeacherSubNavigation>
 
         <div className="teacher-sub-content space-y-5">
+          {!canManage && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+              읽기 전용 권한으로 접속 중입니다.
+            </div>
+          )}
+          <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-extrabold tracking-normal text-slate-900">
+                위스 운영 정책
+              </h2>
+            </div>
+            <div
+              className={
+                isWeplaySection
+                  ? "hidden"
+                  : "flex flex-col gap-3 sm:flex-row sm:items-center"
+              }
+            >
+              <div
+                className={[
+                  "rounded-lg border px-4 py-2.5 text-sm font-semibold",
+                  hasUnsavedChanges
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-slate-200 bg-slate-50 text-slate-600",
+                ].join(" ")}
+              >
+                {hasUnsavedChanges
+                  ? "저장되지 않은 변경사항"
+                  : "저장된 정책과 동일"}
+              </div>
+              <button
+                type="submit"
+                disabled={!canManage || isWeplaySection}
+                className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-5 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                운영 정책 저장
+              </button>
+            </div>
+          </div>
+
+          {!isWeplaySection && saveFeedbackMessage && saveFeedbackTone && (
+            <div
+              className={`rounded-lg px-4 py-3 text-sm font-semibold ${feedbackToneClassName[saveFeedbackTone]}`}
+            >
+              {saveFeedbackMessage}
+            </div>
+          )}
+
+          <div
+            className={
+              isWeplaySection
+                ? "hidden"
+                : "grid grid-cols-1 gap-4 xl:grid-cols-3"
+            }
+          >
+            <QuickPolicyToggle
+              badge="전체 자동 보상"
+              title={POINT_POLICY_FIELD_LABELS.autoRewardEnabled}
+              description="끄면 학생 활동 자동 적립이 모두 멈춥니다."
+              checked={policy.autoRewardEnabled}
+              disabled={!canManage}
+              onChange={(checked) =>
+                onPolicyChange((prev) => ({
+                  ...prev,
+                  autoRewardEnabled: checked,
+                }))
+              }
+            />
+            <QuickPolicyToggle
+              badge="교사 권한"
+              title={POINT_POLICY_FIELD_LABELS.manualAdjustEnabled}
+              description="지급 및 환수 탭의 실행 가능 여부를 정합니다."
+              checked={policy.manualAdjustEnabled}
+              disabled={!canManage}
+              onChange={(checked) =>
+                onPolicyChange((prev) => ({
+                  ...prev,
+                  manualAdjustEnabled: checked,
+                }))
+              }
+            />
+            <QuickPolicyToggle
+              badge="차감 제한"
+              title={POINT_POLICY_FIELD_LABELS.allowNegativeBalance}
+              description="보유 위스보다 많이 환수할 수 있는지 정합니다."
+              checked={policy.allowNegativeBalance}
+              disabled={!canManage}
+              onChange={(checked) =>
+                onPolicyChange((prev) => ({
+                  ...prev,
+                  allowNegativeBalance: checked,
+                }))
+              }
+            />
+          </div>
+
           <WeplayPolicyPanel
             config={config}
             canManage={canManage}

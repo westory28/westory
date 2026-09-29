@@ -80,7 +80,7 @@ export default function Weplay() {
     };
   }, [load]);
   const start = async () => {
-    if (starting || !lobby) return;
+    if (starting || !lobby || lobby.gameEnabled === false) return;
     const startedScope = scope;
     setStarting(true);
     setError("");
@@ -331,7 +331,12 @@ export default function Weplay() {
                   </p>
                 </>
               )}
-              {availableCount === 0 && (
+              {lobby.gameEnabled === false && (
+                <p role="status">
+                  지금은 게임을 쉬고 있습니다. 나중에 다시 이용해 주세요.
+                </p>
+              )}
+              {availableCount === 0 && lobby.gameEnabled !== false && (
                 <p role="status">
                   공개된 수업 자료에 게임용 빈칸 단어가 아직 없습니다.
                 </p>
@@ -347,6 +352,7 @@ export default function Weplay() {
                 disabled={
                   starting ||
                   loading ||
+                  lobby.gameEnabled === false ||
                   availableCount < 3 ||
                   (mode === "challenge" && cannotChallenge)
                 }

@@ -140,6 +140,8 @@ export const canAccessTeacherPath = (
     return canAccessTeacherDashboard(userData, email);
   if (pathname.startsWith("/teacher/lesson"))
     return canReadLessonManagement(userData, email);
+  if (pathname.startsWith("/teacher/weplay"))
+    return canReadLessonManagement(userData, email);
   if (pathname.startsWith("/teacher/quiz"))
     return canReadQuizManagement(userData, email);
   if (pathname.startsWith("/teacher/students"))

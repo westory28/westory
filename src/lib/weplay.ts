@@ -73,6 +73,7 @@ export interface WeplaySession {
   serverNowMs: number;
 }
 export interface WeplayLobby {
+  gameEnabled?: boolean;
   policy: WeplayPolicy;
   balance: number;
   dailyUsed: number;
@@ -136,6 +137,53 @@ export const submitWeplayAnswer = (
 ) => call<WeplayAnswerResponse>("submitWeplayAnswer", config, data);
 export const finishWeplayGame = (config: WeplayConfig, sessionId: string) =>
   call<WeplayResult>("finishWeplayGame", config, { sessionId });
+
+export const WEPLAY_GAMES = [
+  { id: "history-rain", name: "역사가 내려와" },
+] as const;
+export type WeplayGameId = (typeof WEPLAY_GAMES)[number]["id"];
+export interface WeplayGameSettings {
+  enabled: boolean;
+  sourceMode: "all" | "selected";
+  unitIds: string[];
+  version?: number;
+}
+export interface WeplayManagement {
+  settings: WeplayGameSettings;
+  lessons: {
+    unitId: string;
+    title: string;
+    isVisibleToStudents: boolean;
+    wordCount: number;
+    words: string[];
+  }[];
+  availableWordCount: number;
+  previewWordCount: number;
+}
+export const getWeplayManagement = (
+  config: WeplayConfig,
+  gameId: WeplayGameId,
+) => call<WeplayManagement>("getWeplayManagement", config, { gameId });
+export const saveWeplayGameSettings = (
+  config: WeplayConfig,
+  gameId: WeplayGameId,
+  settings: WeplayGameSettings,
+) =>
+  call<WeplayManagement>("saveWeplayGameSettings", config, {
+    gameId,
+    settings,
+  });
+export const previewWeplayGame = (
+  config: WeplayConfig,
+  gameId: WeplayGameId,
+  difficulty: WeplayDifficulty,
+  unitIds: string[],
+) =>
+  call<WeplaySession>("previewWeplayGame", config, {
+    gameId,
+    difficulty,
+    unitIds,
+  });
 
 export const normalizeWeplayAnswer = (text: string) =>
   text.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase();

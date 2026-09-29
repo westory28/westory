@@ -5682,6 +5682,8 @@ exports.createHistoryClassroomExemptionRequest = onCall({ region: REGION }, asyn
 Object.assign(exports, require('./weplay').createWeplayFunctions({
   db, onCall, onSchedule, HttpsError, FieldValue, REGION,
   assertAllowedWestoryUser, assertPointManager, assertPointReader, getUserProfile,
+  assertWeplayReader: assertHistoryDictionaryManager,
+  assertWeplayManager: assertHistoryDictionaryWriteManager,
   ensureWallet, loadPolicy, getCurrentRankEarnedTotal, buildWalletBase,
   buildWalletRankState, createTransactionPayload, markWisHallOfFameDirtySafely,
 }));

@@ -7,6 +7,8 @@ const ANSWER_GRACE_MS = 750;
 const PERIOD_SETTLEMENT_DELAY_MS = 180000;
 const DIFFICULTIES = ['mild', 'medium', 'spicy'];
 const FALL_DURATIONS = { mild: [12000, 10000, 8000], medium: [10000, 8000, 6000], spicy: [8000, 6000, 4000] };
+const GAME_ID = 'history-rain';
+const DEFAULT_GAME_SETTINGS = { enabled: true, sourceMode: 'all', unitIds: [], version: 0 };
 const DEFAULT_POLICY = {
   enabled: true,
   challengeCost: 2,
@@ -68,6 +70,31 @@ function readPolicy(data) {
   return { ...validatePolicy(data), version: Number(data.version || 0) };
 }
 
+function validateUnitIds(input) {
+  if (!Array.isArray(input) || input.length > 200 || input.some((id) => typeof id !== 'string' || !id.trim() || id.trim().length > 128 || /[\/\u0000-\u001f]/.test(id))) {
+    throw new Error('출제 자료는 200개 이내의 올바른 단원 번호로 선택해 주세요.');
+  }
+  return [...new Set(input.map((id) => id.trim()))].sort();
+}
+
+function validateGameSettings(input) {
+  if (!input || typeof input.enabled !== 'boolean') throw new Error('학생 사용 허용 여부를 확인해 주세요.');
+  if (!['all', 'selected'].includes(input.sourceMode)) throw new Error('출제 자료 범위를 확인해 주세요.');
+  const unitIds = validateUnitIds(input.unitIds);
+  return { enabled: input.enabled, sourceMode: input.sourceMode, unitIds: input.sourceMode === 'all' ? [] : unitIds };
+}
+
+function readGameSettings(data) {
+  if (!data) return structuredClone(DEFAULT_GAME_SETTINGS);
+  return { ...validateGameSettings(data), version: integer(data.version ?? 0, 0, Number.MAX_SAFE_INTEGER, '설정 버전') };
+}
+
+const filterGameLessons = (lessons, settings) => settings.sourceMode === 'selected'
+  ? lessons.filter((lesson) => settings.unitIds.includes(String(lesson.unitId || '').trim()))
+  : lessons;
+
+const uniqueWordCount = (words) => new Set(words.map((word) => normalizeAnswer(word.text))).size;
+
 const decodeText = (value) => String(value || '')
   .replace(/<[^>]*>/g, ' ')
   .replace(/&#(x[0-9a-f]+|\d+);/gi, (_, n) => {
@@ -84,7 +111,7 @@ const timestampMs = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-function effectiveLessons(scoped, legacy) {
+function effectiveLessons(scoped, legacy, options = {}) {
   const latest = (items) => {
     const map = new Map();
     [...items].sort((a, b) => Math.max(timestampMs(b.updatedAt), timestampMs(b.createdAt)) - Math.max(timestampMs(a.updatedAt), timestampMs(a.createdAt)))
@@ -97,7 +124,7 @@ function effectiveLessons(scoped, legacy) {
   const scopedMap = latest(scoped);
   const legacyMap = latest(legacy);
   return [...scopedMap.values(), ...[...legacyMap.entries()].filter(([id]) => !scopedMap.has(id)).map(([, lesson]) => lesson)]
-    .filter((lesson) => lesson.isVisibleToStudents !== false && !lesson.deletedAt);
+    .filter((lesson) => (options.includeHidden === true || lesson.isVisibleToStudents !== false) && !lesson.deletedAt);
 }
 
 function extractLessonWords(lessons) {
@@ -130,7 +157,7 @@ function extractLessonWords(lessons) {
 function buildWords(catalog, seed, difficulty = 'medium') {
   if (!DIFFICULTIES.includes(difficulty)) throw new Error('게임 난이도를 선택해 주세요.');
   const unique = [...new Map(catalog.map((word) => [normalizeAnswer(word.text), word])).values()];
-  if (unique.length < 3) throw new Error('공개된 수업 자료에 서로 다른 빈칸 정답이 3개 이상 필요합니다.');
+  if (unique.length < 3) throw new Error('출제 범위에 서로 다른 빈칸 정답이 3개 이상 필요합니다.');
   const sorted = unique.sort((a, b) => hash(`${seed}:${normalizeAnswer(a.text)}`).localeCompare(hash(`${seed}:${normalizeAnswer(b.text)}`)));
   return Array.from({ length: TOTAL_WORDS }, (_, index) => {
     const stage = index < 7 ? 1 : index < 14 ? 2 : 3;
@@ -177,4 +204,4 @@ const compareEntries = (a, b) => Number(b.score || 0) - Number(a.score || 0)
   || Number(a.achievedAtMs || 0) - Number(b.achievedAtMs || 0)
   || String(a.uid).localeCompare(String(b.uid));
 
-module.exports = { TOTAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };
+module.exports = { TOTAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, DEFAULT_GAME_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };

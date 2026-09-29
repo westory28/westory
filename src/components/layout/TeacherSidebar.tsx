@@ -36,6 +36,7 @@ const compactLabels: Record<string, string> = {
   quiz: "평가",
   exam: "점수",
   points: "위스",
+  weplay: "위플레이",
   students: "학생",
 };
 

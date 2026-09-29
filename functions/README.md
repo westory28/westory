@@ -42,6 +42,33 @@ The isolated emulator script refuses a production project and checks real export
 handlers, Firestore transaction contention, point ledger effects, policy snapshots,
 rank rewards, deleted-user recovery, and authenticated direct-access denial.
 
+### Game management and teacher preview
+
+`getWeplayManagement`, `saveWeplayGameSettings`, and `previewWeplayGame` accept
+`gameId: "history-rain"` and the usual year/semester scope. Game settings live at
+`weplay_games/history-rain`: `enabled`, `sourceMode` (`all` or `selected`),
+`unitIds`, and server-controlled `version`. A missing document preserves the
+original enabled/all behavior. Students receive only the intersection of the
+selected source range and currently visible lessons. Disabling the game blocks
+new practice and challenge starts; already started games can still finish.
+Starts recheck the settings/version in their transaction and reject a stale
+catalog instead of charging for a changed source range. Settings saves reject a
+supplied stale version. These settings do not modify lesson visibility or Wis
+policy documents.
+
+Management reads and previews use the existing teacher/admin/`lesson_read`
+authorization. Only a teacher or the admin can save settings; a student's
+teacher-portal flag or delegated point permission does not grant write access.
+Management includes the latest public and private lessons, including empty
+ones, and reports the eligible student/teacher preview word counts separately.
+Teacher previews may explicitly override the source unit IDs. They use the same
+60-second word builder and difficulty curves, but return an in-memory practice
+session only: no session document, queue, record, wallet, or ranking is written.
+
+```powershell
+firebase emulators:exec --config firebase.weplay-test.json --project demo-westory-weplay --only firestore,auth "node functions/scripts/verify-weplay-management-emulator.cjs"
+```
+
 Current callable functions:
 - `applyPointActivityReward`
 - `createPointPurchaseRequest`

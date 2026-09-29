@@ -96,7 +96,7 @@ qa.call = async (name,data) => {
   let response;
   if (name === "getWeplayPolicy") response={policy:clone(qa.policy),currentRankingPeriod:clone(period)};
   else if (name === "saveWeplayPolicy") {qa.policy=clone(data.policy);qa.saved=clone(data);response={policy:clone(qa.policy),currentRankingPeriod:clone(period)}}
-  else if (name === "getWeplayLobby") response={policy:clone(qa.policy),balance:qa.balance,dailyUsed:0,dailyRemaining:3,lessons:qa.empty?[]:[{unitId:"unit-1",title:"조선의 문화",wordCount:2},{unitId:"unit-2",title:"통일 신라와 발해",wordCount:2}],wordCount:qa.empty?0:4,activeSession:qa.session?.status==="active"?clone({...qa.session,serverNowMs:Date.now()}):null,records:clone(qa.records),period:clone(period),rankingByDifficulty:Object.fromEntries(["mild","medium","spicy"].map((level,index)=>[level,[{rank:1,studentLabel:String(index+1)+"번",score:1800-index*100,correctCount:18-index,isMe:false},{rank:2,studentLabel:"9번",score:1500,correctCount:15,isMe:true}]])),serverNowMs:Date.now()};
+  else if (name === "getWeplayLobby") response={gameEnabled:!mode.startsWith("disabled"),policy:clone(qa.policy),balance:qa.balance,dailyUsed:0,dailyRemaining:3,lessons:qa.empty?[]:[{unitId:"unit-1",title:"조선의 문화",wordCount:2},{unitId:"unit-2",title:"통일 신라와 발해",wordCount:2}],wordCount:qa.empty?0:4,activeSession:qa.session?.status==="active"?clone({...qa.session,serverNowMs:Date.now()}):null,records:clone(qa.records),period:clone(period),rankingByDifficulty:Object.fromEntries(["mild","medium","spicy"].map((level,index)=>[level,[{rank:1,studentLabel:String(index+1)+"번",score:1800-index*100,correctCount:18-index,isMe:false},{rank:2,studentLabel:"9번",score:1500,correctCount:15,isMe:true}]])),serverNowMs:Date.now()};
   else if (name === "startWeplayGame") {qa.session??=session(data.mode,data.difficulty);response=clone(qa.session)}
   else if (name === "submitWeplayAnswer") {
     const s=qa.session;const word=s.words.find(word=>word.id===data.wordId);
@@ -131,7 +131,7 @@ if(mode.startsWith("game")){qa.session=session("practice");qa.session.startsAtMs
 if(mode==="game-long")qa.session.words=qa.session.words.map(word=>({...word,text:"대한민국임시정부수립과정"}));
 if(mode==="empty")qa.empty=true;
 if(mode==="poor")qa.balance=0;
-if(mode==="resume")qa.session=session("challenge");
+if(mode==="resume"||mode==="disabled-resume")qa.session=session("challenge");
 if(mode==="load-error")qa.fail.getWeplayLobby=1;
 if(mode==="policy-error")qa.fail.getWeplayPolicy=1;
 qa.menuChecks=()=>{
@@ -500,7 +500,14 @@ try {
   );
   await lobby.close();
 
-  for (const view of ["empty", "poor", "load-error", "resume"]) {
+  for (const view of [
+    "empty",
+    "poor",
+    "load-error",
+    "resume",
+    "disabled",
+    "disabled-resume",
+  ]) {
     const page = await pageFor(view, 390);
     if (view === "empty") {
       assert.equal(
@@ -514,6 +521,35 @@ try {
           exact: true,
         })
         .waitFor();
+    } else if (view === "disabled") {
+      await page
+        .getByText("지금은 게임을 쉬고 있습니다. 나중에 다시 이용해 주세요.", {
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "연습 시작", exact: true })
+          .isDisabled(),
+        true,
+      );
+      await page
+        .getByRole("button", { name: "위스 도전", exact: true })
+        .click();
+      assert.equal(
+        await page.getByRole("button", { name: /위스 도전 시작/ }).isDisabled(),
+        true,
+      );
+      assert.equal(
+        await page.evaluate(
+          () =>
+            window.weplayQa.calls.filter(
+              (call) => call.name === "startWeplayGame",
+            ).length,
+        ),
+        0,
+      );
+      await capture(page, "weplay-disabled-390");
     } else if (view === "poor") {
       assert.equal(
         await page

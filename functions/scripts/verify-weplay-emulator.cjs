@@ -210,7 +210,7 @@ async function main() {
   assert.ok(account.idToken, JSON.stringify(account));
   await db.doc(`users/${account.localId}`).set({ role: 'student', email: 'rules@yongshin-ms.ms.kr' });
   const endpoint = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${project}/databases/(default)/documents`;
-  for (const resource of [`${prefix}/weplay_sessions/${session.id}`, `${prefix}/weplay_policies/current`, `${prefix}/weplay_periods/${periodId}`]) {
+  for (const resource of [`${prefix}/weplay_sessions/${session.id}`, `${prefix}/weplay_policies/current`, `${prefix}/weplay_games/history-rain`, `${prefix}/weplay_periods/${periodId}`]) {
     const read = await fetch(`${endpoint}/${resource}`, { headers: { authorization: `Bearer ${account.idToken}` } });
     assert.equal(read.status, 403, `Direct read must be denied: ${resource}`);
     const write = await fetch(`${endpoint}/${resource}`, { method: 'PATCH', headers: { authorization: `Bearer ${account.idToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ fields: { score: { integerValue: '999999' } } }) });

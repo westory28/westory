@@ -204,6 +204,8 @@ const Header: React.FC<{
       ? baseMenuItems.filter((item) => {
           if (item.url === "/teacher/lesson")
             return canReadLessonManagement(userData, currentUser?.email || "");
+          if (item.url === "/teacher/weplay")
+            return canReadLessonManagement(userData, currentUser?.email || "");
           if (item.url === "/teacher/quiz")
             return canReadQuizManagement(userData, currentUser?.email || "");
           if (item.url === "/teacher/students")
@@ -310,6 +312,7 @@ const Header: React.FC<{
     "/teacher/exam": "score",
     "/teacher/points": "wis",
     "/teacher/students": "students",
+    "/teacher/weplay": "game",
   };
   const shopTabs = new Set(["products", "requests"]);
   const getShopTab = (url: string) => {

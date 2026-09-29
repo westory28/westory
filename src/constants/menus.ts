@@ -126,6 +126,11 @@ export const MENUS: MenuConfig = {
       ],
     },
     {
+      name: "위플레이 관리",
+      url: "/teacher/weplay",
+      icon: "M6 8h12a3 3 0 013 3v6a2 2 0 01-3 1l-3-2H9l-3 2a2 2 0 01-3-1v-6a3 3 0 013-3zm1 2v4m-2-2h4m7 0h.01m3 2h.01",
+    },
+    {
       name: "학생 관리",
       url: "/teacher/students",
       icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",

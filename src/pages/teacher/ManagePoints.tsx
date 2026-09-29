@@ -1840,12 +1840,18 @@ const ManagePoints: React.FC = () => {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main
-        className={[
-          "mx-auto flex w-full flex-1 flex-col px-4 py-6",
-          activeTab === "hall-of-fame" ? "max-w-[96rem] 2xl:px-6" : "max-w-7xl",
-        ].join(" ")}
+        className={
+          activeTab === "policy"
+            ? "flex w-full flex-1 flex-col"
+            : [
+                "mx-auto flex w-full flex-1 flex-col px-4 py-6",
+                activeTab === "hall-of-fame"
+                  ? "max-w-[96rem] 2xl:px-6"
+                  : "max-w-7xl",
+              ].join(" ")
+        }
       >
-        {!canManage && (
+        {!canManage && activeTab !== "policy" && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
             읽기 전용 권한으로 접속 중입니다.
           </div>
@@ -1946,6 +1952,7 @@ const ManagePoints: React.FC = () => {
               <PointPolicyTab
                 config={config}
                 active={activeTab === "policy"}
+                requestedSectionId={searchParams.get("section")}
                 policy={policyDraft}
                 canManage={canManage}
                 hasUnsavedChanges={policyDirty}
