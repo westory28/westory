@@ -126,10 +126,12 @@ const getDesktopSubmenuChildren = (
 
 const Header: React.FC<{
   teacherLayout?: boolean;
+  studentLayout?: boolean;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }> = ({
   teacherLayout = false,
+  studentLayout = false,
   sidebarCollapsed = false,
   onToggleSidebar = () => {},
 }) => {
@@ -180,6 +182,8 @@ const Header: React.FC<{
 
   const isTeacherPortal = portal === "teacher";
   const useTeacherSidebar = teacherLayout && isTeacherPortal;
+  const useStudentSidebar = studentLayout && !isTeacherPortal;
+  const usePortalSidebar = useTeacherSidebar || useStudentSidebar;
   const canRenderStudentMenu =
     portal !== "student" ||
     (menuConfigReady &&
@@ -450,6 +454,36 @@ const Header: React.FC<{
       })),
     });
 
+  const studentIcons: Record<string, TeacherIconName> = {
+    lesson: "lesson",
+    quiz: "assessment",
+    "history-classroom": "assessment",
+    score: "score",
+    points: "wis",
+    mypage: "students",
+    calendar: "calendar",
+    history: "history",
+  };
+  const studentSidebarGroups: TeacherSidebarGroup[] = useStudentSidebar
+    ? menuItems.map((item) => {
+        const children = getResolvedChildUrls(
+          item.url,
+          getVisibleChildren(item),
+          "student",
+        );
+        const id = item.url.split("/")[2] || item.name;
+        return {
+          id,
+          name: item.name,
+          icon: studentIcons[id] || "lesson",
+          directUrl: children.length ? undefined : resolveTarget(item.url),
+          children: children.length
+            ? children
+            : [{ name: item.name, resolvedUrl: resolveTarget(item.url) }],
+        };
+      })
+    : [];
+
   const activeDesktopSubmenu = menuItems
     .map((item) => {
       const visibleChildren = getVisibleChildren(item);
@@ -546,7 +580,7 @@ const Header: React.FC<{
     closeDesktopDrawer();
     desktop.addEventListener("change", closeDesktopDrawer);
     return () => desktop.removeEventListener("change", closeDesktopDrawer);
-  }, [useTeacherSidebar, closeMobileMenu]);
+  }, [usePortalSidebar, closeMobileMenu]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return undefined;
@@ -741,12 +775,12 @@ const Header: React.FC<{
         <React.Suspense fallback={null}>
           <NotificationBell
             className={
-              useTeacherSidebar || mobile
+              usePortalSidebar || mobile
                 ? "teacher-account-notification"
                 : "hidden lg:block"
             }
             panelClassName={
-              useTeacherSidebar && mobileTeacherHeader
+              usePortalSidebar && mobileTeacherHeader
                 ? "teacher-mobile-notification-panel"
                 : undefined
             }
@@ -769,11 +803,11 @@ const Header: React.FC<{
           </button>
         ) : (
           <div
-            className={`${useTeacherSidebar ? "teacher-account-session" : "hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1"} bg-stone-100 rounded-full border border-stone-200`}
+            className={`${usePortalSidebar ? "teacher-account-session" : "hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1"} bg-stone-100 rounded-full border border-stone-200`}
           >
             <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
             <span
-              className={`${useTeacherSidebar ? "teacher-account-countdown" : ""} font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
+              className={`${usePortalSidebar ? "teacher-account-countdown" : ""} font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
             >
               {formatCountdown(remainingSeconds)}
             </span>
@@ -811,19 +845,27 @@ const Header: React.FC<{
 
   return (
     <>
-      {useTeacherSidebar && (
+      {usePortalSidebar && (
         <TeacherSidebar
-          groups={teacherSidebarGroups}
+          portal={portal}
+          groups={
+            useStudentSidebar ? studentSidebarGroups : teacherSidebarGroups
+          }
           home={home}
           semesterLabel={
             config ? `${config.year}학년도 ${config.semester}학기` : undefined
           }
-          showDashboard={canAccessTeacherPath(
-            "/teacher/dashboard",
-            userData,
-            currentUser?.email,
-          )}
-          showSettings={canManageSettings(userData, currentUser?.email)}
+          showDashboard={
+            useStudentSidebar ||
+            canAccessTeacherPath(
+              "/teacher/dashboard",
+              userData,
+              currentUser?.email,
+            )
+          }
+          showSettings={
+            useTeacherSidebar && canManageSettings(userData, currentUser?.email)
+          }
           collapsed={sidebarCollapsed}
           mobileOpen={mobileMenuOpen}
           mobileAccount={
@@ -836,7 +878,7 @@ const Header: React.FC<{
       )}
       <header
         className={
-          useTeacherSidebar
+          usePortalSidebar
             ? "teacher-header teacher-account-header"
             : isTeacherPortal
               ? "teacher-header"
@@ -844,7 +886,7 @@ const Header: React.FC<{
         }
       >
         <div className="header-container">
-          {useTeacherSidebar && (
+          {usePortalSidebar && (
             <div className="teacher-header-start">
               <Link
                 to={home}
@@ -856,7 +898,7 @@ const Header: React.FC<{
               </Link>
             </div>
           )}
-          {!useTeacherSidebar && (
+          {!usePortalSidebar && (
             <div className="flex items-center gap-4 h-full">
               <Link to={home} className="logo-text">
                 <span className="logo-we">We</span>
@@ -931,7 +973,7 @@ const Header: React.FC<{
 
           <div className="header-right">
             {!mobileTeacherHeader && accountControls()}
-            {!useTeacherSidebar && mobileTeacherHeader && (
+            {!usePortalSidebar && mobileTeacherHeader && (
               <>
                 {!mobileMenuOpen && (
                   <React.Suspense fallback={null}>
@@ -962,22 +1004,30 @@ const Header: React.FC<{
               </>
             )}
           </div>
-          {useTeacherSidebar && (
+          {usePortalSidebar && (
             <button
-              id="teacher-navigation-toggle"
+              id={`${portal}-navigation-toggle`}
               type="button"
               className="teacher-navigation-toggle"
               onClick={() => setMobileMenuOpen((previous) => !previous)}
-              aria-label="교사 메뉴 열기"
+              aria-label={`${isTeacherPortal ? "교사" : "학생"} 메뉴 열기`}
               aria-expanded={mobileMenuOpen}
-              aria-controls="teacher-navigation"
+              aria-controls={`${portal}-navigation`}
             >
               <TeacherNavigationIcon name="menu" />
+              {useStudentSidebar && mobileUnreadCount > 0 && (
+                <span
+                  className="mobile-menu-btn-badge"
+                  aria-label={`읽지 않은 알림 ${mobileUnreadLabel}개`}
+                >
+                  {mobileUnreadLabel}
+                </span>
+              )}
             </button>
           )}
         </div>
 
-        {!useTeacherSidebar && mobileMenuOpen && (
+        {!usePortalSidebar && mobileMenuOpen && (
           <div
             className="fixed inset-0 top-16 z-40 lg:hidden bg-transparent"
             onClick={() => setMobileMenuOpen(false)}
@@ -985,7 +1035,7 @@ const Header: React.FC<{
           ></div>
         )}
 
-        {!useTeacherSidebar && (
+        {!usePortalSidebar && (
           <div id="mobile-menu" className={mobileMenuOpen ? "open" : ""}>
             {mobileMenuOpen && (
               <>
@@ -1036,7 +1086,7 @@ const Header: React.FC<{
         )}
       </header>
 
-      {!useTeacherSidebar && activeDesktopSubmenu && (
+      {!usePortalSidebar && activeDesktopSubmenu && (
         <div className="hidden lg:block">
           <div className={desktopSubmenuContainerClass}>
             <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">

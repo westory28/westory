@@ -1,0 +1,94 @@
+/* The global rail, toolbar and drawer use the shared teacher layout contract. */
+.student-layout > main {
+  min-width: 0;
+}
+
+.student-layout .teacher-sidebar-bottom {
+  justify-content: flex-end;
+}
+
+.student-layout .teacher-navigation-toggle {
+  position: relative;
+}
+
+.student-layout .teacher-mobile-account .header-user-link {
+  flex-wrap: wrap;
+}
+
+.student-layout .teacher-mobile-account .header-user-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.student-lesson-page {
+  min-height: calc(100dvh - var(--teacher-account-height));
+}
+
+.student-lesson-workspace {
+  max-width: 1536px;
+  padding: 16px 24px;
+}
+
+@media (min-width: 1024px) {
+  .student-layout .student-lesson-sidebar {
+    top: 16px;
+    width: 232px;
+    max-height: calc(100dvh - 32px);
+    flex-shrink: 0;
+  }
+}
+
+@media (min-width: 1440px) {
+  .student-layout .student-lesson-sidebar {
+    width: 320px;
+  }
+}
+
+@media (max-width: 1119px) {
+  .student-lesson-workspace {
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .student-layout .teacher-sidebar-child {
+    min-height: 40px;
+  }
+
+  .student-layout .student-lesson-sidebar {
+    margin-top: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    z-index: 80;
+    overscroll-behavior: contain;
+  }
+
+  .student-lesson-sidebar.translate-x-full {
+    visibility: hidden;
+  }
+
+  .student-lesson-backdrop {
+    z-index: 79;
+  }
+
+  .student-lesson-sidebar-heading {
+    flex-shrink: 0;
+  }
+
+  .student-lesson-sidebar-heading button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .student-layout:has(.student-lesson-backdrop) #student-lesson-toggle {
+    visibility: hidden;
+  }
+}
+
+@media (max-width: 639px) {
+  .student-lesson-workspace {
+    padding-inline: 12px;
+  }
+}

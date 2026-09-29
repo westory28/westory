@@ -19,8 +19,8 @@ const Note: React.FC = () => {
   );
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-gray-50">
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-4 px-3 py-4 md:px-5 lg:flex-row lg:items-start lg:px-8 xl:px-10">
+    <div className="student-lesson-page bg-gray-50">
+      <div className="student-lesson-workspace mx-auto flex flex-col gap-4 lg:flex-row lg:items-start">
         <LessonSidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
@@ -34,6 +34,7 @@ const Note: React.FC = () => {
           </div>
 
           <button
+            id="student-lesson-toggle"
             type="button"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             aria-label={isSidebarOpen ? "수업 목차 닫기" : "수업 목차 열기"}

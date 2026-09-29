@@ -151,15 +151,15 @@ const NoticeBoard: React.FC = () => {
   }, [incomingIndex, isPaused, isSliding, move, showCarousel]);
 
   return (
-    <div className="flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
+    <div className="student-notice-board flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="flex items-center text-lg font-extrabold text-gray-900">
+        <h2 className="flex items-center text-lg font-extrabold text-gray-900">
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
-        </h3>
+        </h2>
       </div>
 
-      <div className="min-h-0 flex-1">
+      <div className="student-notice-board__body min-h-0 flex-1">
         {loading && (
           <InlineLoading
             className="flex h-full min-h-[180px] items-center"
@@ -175,12 +175,12 @@ const NoticeBoard: React.FC = () => {
         )}
 
         {!loading && activeNotice && (
-          <div className="flex h-full flex-col">
+          <div className="student-notice-board__carousel flex h-full flex-col">
             <button
               type="button"
               onClick={() => openLinkedPost(activeNotice)}
               disabled={!activeNotice.developerLogPostId}
-              className={`relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100 text-left focus:outline-none focus:ring-4 focus:ring-blue-100 ${
+              className={`student-notice-board__viewport relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100 text-left focus:outline-none focus:ring-4 focus:ring-blue-100 ${
                 activeNotice.developerLogPostId
                   ? "cursor-pointer transition hover:ring-4 hover:ring-blue-100"
                   : "cursor-default"
@@ -198,7 +198,7 @@ const NoticeBoard: React.FC = () => {
                   alt="알림장"
                   loading="eager"
                   decoding="async"
-                  className={`absolute inset-0 h-full w-full object-cover object-center will-change-transform ${
+                  className={`student-notice-board__image absolute inset-0 h-full w-full object-contain object-center will-change-transform ${
                     isSliding
                       ? slideDirection === 1
                         ? "-translate-x-full"
@@ -219,7 +219,7 @@ const NoticeBoard: React.FC = () => {
                   alt="알림장"
                   loading="eager"
                   decoding="async"
-                  className={`absolute inset-0 h-full w-full object-cover object-center will-change-transform ${
+                  className={`student-notice-board__image absolute inset-0 h-full w-full object-contain object-center will-change-transform ${
                     isSliding
                       ? "translate-x-0"
                       : slideDirection === 1
@@ -248,12 +248,12 @@ const NoticeBoard: React.FC = () => {
             </button>
 
             {showCarousel && (
-              <div className="relative mt-3 flex min-h-8 items-center justify-center">
-                <div className="absolute left-0 top-1/2 inline-flex -translate-y-1/2 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
+              <div className="student-notice-board__controls">
+                <div className="student-notice-board__playback inline-flex shrink-0 overflow-hidden rounded-md border border-gray-200 bg-white">
                   <button
                     type="button"
                     onClick={() => move(-1)}
-                    className="inline-flex h-8 w-8 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    className="inline-flex items-center justify-center text-blue-700 transition hover:bg-blue-50"
                     aria-label="이전 알림"
                   >
                     <i className="fas fa-chevron-left text-[10px]"></i>
@@ -261,7 +261,7 @@ const NoticeBoard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsPaused((prev) => !prev)}
-                    className="inline-flex h-8 w-8 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+                    className="inline-flex items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
                     aria-label={
                       isPaused
                         ? "알림 자동 넘김 재생"
@@ -276,26 +276,27 @@ const NoticeBoard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => move(1)}
-                    className="inline-flex h-8 w-8 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    className="inline-flex items-center justify-center text-blue-700 transition hover:bg-blue-50"
                     aria-label="다음 알림"
                   >
                     <i className="fas fa-chevron-right text-[10px]"></i>
                   </button>
                 </div>
 
-                <div className="flex items-center justify-center gap-1.5">
+                <div className="student-notice-board__pagination">
                   {notices.map((notice, index) => (
                     <button
                       key={`${notice.id}-dot`}
                       type="button"
                       onClick={() => selectNotice(index)}
-                      className={`h-2.5 rounded-full transition ${
-                        selectedIndex === index
-                          ? "w-6 bg-blue-600"
-                          : "w-2.5 bg-gray-200"
-                      }`}
+                      className="student-notice-board__page-button"
+                      aria-current={
+                        selectedIndex === index ? "true" : undefined
+                      }
                       aria-label={`${index + 1}번째 알림 보기`}
-                    />
+                    >
+                      <span aria-hidden="true" />
+                    </button>
                   ))}
                 </div>
               </div>

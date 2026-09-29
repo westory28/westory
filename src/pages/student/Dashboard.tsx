@@ -48,24 +48,15 @@ import {
 } from "../../lib/wisHallOfFameRecognition";
 import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
+import "./studentDashboard.css";
 
 const CalendarSection = lazy(() => import("./components/CalendarSection"));
 const NoticeBoard = lazy(() => import("./components/NoticeBoard"));
 const SearchModal = lazy(() => import("./components/SearchModal"));
 
 const DashboardCalendarFallback: React.FC = () => (
-  <div className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-xl bg-white p-4 shadow-sm md:min-h-0">
-    <div className="mb-4 flex items-center justify-between">
-      <h2 className="text-lg font-bold text-gray-800">
-        <i className="far fa-calendar-alt mr-2 text-blue-600"></i>학사 일정
-      </h2>
-      <span className="text-xs font-semibold text-gray-400">
-        초기 로드 최적화 중
-      </span>
-    </div>
-    <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-blue-100 bg-blue-50/50 px-6 text-center text-sm font-medium text-blue-700">
-      학사 일정을 먼저 준비하고 있습니다.
-    </div>
+  <div className="student-dashboard-placeholder" role="status">
+    학사 일정을 불러오는 중입니다.
   </div>
 );
 
@@ -346,37 +337,28 @@ const StudentDashboard: React.FC = () => {
   };
 
   return (
-    <div className="dashboard-container student-dashboard-container mx-auto w-full max-w-7xl px-4 py-6">
-      <div className="mb-4 flex shrink-0 items-start justify-start">
-        <div className="flex items-center gap-3">
-          {config && (
-            <h1 className="inline-flex shrink-0 rounded-full bg-blue-600 px-4 py-2 text-base font-bold text-white">
-              {config.year}학년도 {config.semester}학기
-            </h1>
-          )}
-        </div>
-      </div>
-
-      <div className="student-dashboard-grid flex h-auto min-h-[500px] flex-col gap-4 md:grid md:grid-cols-5 md:grid-rows-2">
-        <div className="student-dashboard-notice order-1 md:order-2 md:col-span-2 md:row-span-1">
+    <div className="student-portal-dashboard">
+      <h1 className="sr-only">학생 홈</h1>
+      <div className="student-portal-dashboard__grid">
+        <div className="student-portal-dashboard__notice">
           {secondaryPanelsReady ? (
             <Suspense
               fallback={
-                <div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">
-                  알림장을 준비 중입니다.
+                <div className="student-dashboard-placeholder" role="status">
+                  알림장을 불러오는 중입니다.
                 </div>
               }
             >
               <NoticeBoard />
             </Suspense>
           ) : (
-            <div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">
-              알림장을 준비 중입니다.
+            <div className="student-dashboard-placeholder" role="status">
+              알림장을 불러오는 중입니다.
             </div>
           )}
         </div>
 
-        <div className="student-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2">
+        <div className="student-portal-dashboard__calendar">
           <Suspense fallback={<DashboardCalendarFallback />}>
             <CalendarSection
               categories={categories}
@@ -396,15 +378,15 @@ const StudentDashboard: React.FC = () => {
           </Suspense>
         </div>
 
-        <div className="student-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1">
+        <div className="student-portal-dashboard__ranking">
           {secondaryPanelsReady ? (
             <WisRankingPanel
               config={config}
               hallOfFamePath="/student/points?tab=hall-of-fame"
             />
           ) : (
-            <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-blue-100 bg-white p-4 text-sm font-semibold text-blue-700/70 shadow-sm">
-              위스 순위를 준비 중입니다.
+            <div className="student-dashboard-placeholder" role="status">
+              위스 순위를 불러오는 중입니다.
             </div>
           )}
         </div>

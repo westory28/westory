@@ -14,6 +14,7 @@ export interface TeacherSidebarGroup {
 }
 
 interface TeacherSidebarProps {
+  portal?: "teacher" | "student";
   groups: TeacherSidebarGroup[];
   home: string;
   semesterLabel?: string;
@@ -39,6 +40,7 @@ const compactLabels: Record<string, string> = {
 };
 
 const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
+  portal = "teacher",
   groups,
   home,
   semesterLabel,
@@ -52,6 +54,9 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   isChildActive,
 }) => {
   const location = useLocation();
+  const navigationId = `${portal}-navigation`;
+  const portalLabel = portal === "student" ? "학생" : "교사";
+  const homeLabel = portal === "student" ? "첫 화면" : "대시보드";
   const allChildren = groups.flatMap((group) => group.children);
   const activeGroup = groups.find((group) =>
     group.children.some((child) =>
@@ -77,7 +82,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   useEffect(() => {
     if (!mobileOpen) {
       if (previousMobileOpen.current) {
-        document.getElementById("teacher-navigation-toggle")?.focus();
+        document.getElementById(`${navigationId}-toggle`)?.focus();
       }
       previousMobileOpen.current = false;
       return;
@@ -112,7 +117,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [mobileOpen, onCloseMobile]);
+  }, [mobileOpen, onCloseMobile, navigationId]);
 
   const toggleGroup = (id: string) => {
     if (collapsed && !mobileOpen) onToggleCollapsed();
@@ -128,8 +133,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
       240,
     );
   };
-  const dashboardActive =
-    location.pathname === "/teacher/dashboard" && !activeGroup;
+  const dashboardActive = location.pathname === home && !activeGroup;
 
   return (
     <>
@@ -141,12 +145,12 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
         />
       )}
       <aside
-        id="teacher-navigation"
+        id={navigationId}
         ref={panelRef}
         className={`teacher-sidebar ${collapsed ? "is-collapsed" : ""} ${mobileOpen ? "is-mobile-open" : ""}`}
         role={mobileOpen ? "dialog" : undefined}
         aria-modal={mobileOpen ? true : undefined}
-        aria-label="교사 메뉴"
+        aria-label={`${portalLabel} 메뉴`}
       >
         <div className="teacher-sidebar-brand-row">
           <div className="teacher-sidebar-brand-content">
@@ -183,17 +187,20 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
         {mobileAccount && (
           <div className="teacher-mobile-account">{mobileAccount}</div>
         )}
-        <nav className="teacher-sidebar-nav" aria-label="교사 주 메뉴">
+        <nav
+          className="teacher-sidebar-nav"
+          aria-label={`${portalLabel} 주 메뉴`}
+        >
           {showDashboard && (
             <Link
-              to="/teacher/dashboard"
+              to={home}
               className={`teacher-sidebar-item ${dashboardActive ? "is-active" : ""}`}
               aria-current={dashboardActive ? "page" : undefined}
               onClick={onCloseMobile}
-              title={collapsed ? "대시보드" : undefined}
+              title={collapsed ? homeLabel : undefined}
             >
               <TeacherNavigationIcon name="home" />
-              <span className="teacher-sidebar-label">대시보드</span>
+              <span className="teacher-sidebar-label">{homeLabel}</span>
             </Link>
           )}
           {groups.map((group, index) => {
@@ -202,7 +209,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
             const animating = animatingGroups.includes(group.id);
             const active = activeGroup === group.id;
             const divider = group.secondary && !groups[index - 1]?.secondary;
-            const groupId = `teacher-menu-${group.id}`;
+            const groupId = `${portal}-menu-${group.id}`;
             return (
               <div
                 key={group.id}
@@ -296,7 +303,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
           })}
         </nav>
         <div className="teacher-sidebar-bottom">
-          {showSettings && (
+          {portal === "teacher" && showSettings && (
             <Link
               to="/teacher/settings"
               className={`teacher-sidebar-settings ${location.pathname.startsWith("/teacher/settings") ? "is-active" : ""}`}

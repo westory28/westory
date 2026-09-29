@@ -12,6 +12,7 @@ import {
 import Header from "../common/Header";
 import Footer from "../common/Footer";
 import "./teacherLayout.css";
+import "./studentLayout.css";
 import { PageLoading } from "../common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -296,10 +297,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div
-      className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? `teacher-layout ${teacherSidebarCollapsed ? "is-sidebar-collapsed" : ""}` : ""}`}
+      className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? "teacher-layout" : isStudentRoute ? "student-layout" : ""} ${teacherSidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
     >
       <Header
         teacherLayout={isTeacherRoute}
+        studentLayout={isStudentRoute}
         sidebarCollapsed={teacherSidebarCollapsed}
         onToggleSidebar={toggleTeacherSidebar}
       />
@@ -328,7 +330,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </main>
       {(!/^\/teacher\/settings\/?$/.test(location.pathname) ||
         isArchiveUnavailableRoute(location.pathname)) && (
-        <Footer teacher={isTeacherRoute} />
+        <Footer teacher={isTeacherRoute || isStudentRoute} />
       )}
     </div>
   );

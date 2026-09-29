@@ -251,6 +251,13 @@ Component radius tokens:
 
 ## 6. Motion
 
+### Student portal layout alignment
+
+- Student routes reuse the teacher portal's 232px desktop sidebar (88px collapsed), 1024px drawer breakpoint, transparent account toolbar, outline icons, surface colors, spacing and footer. The shared navigation receives only the existing visible student menus and student routes; teacher settings and management actions remain absent.
+- On mobile, show the Westory logo and menu trigger in the header; place the semester, student profile/rank, notifications, session controls and logout inside the right drawer. Preserve focus trapping, Escape/backdrop dismissal, body scroll locking, and focus return. Use the existing 320px drawer width, safe-area padding and 40px action targets.
+- Student dashboard: reuse the teacher dashboard's 1536px maximum width, 16px gaps and 24/16/12px responsive gutters. Keep the student's calendar/list/search/attendance interactions. Desktop places the calendar on the left and notice/ranking on the right; below 1120px use natural page scrolling in notice, calendar, ranking order. The semester appears in navigation, without a second dashboard badge.
+- Student content uses the same main-column alignment while retaining page-specific reading widths and student controls. No additional palette, font, shadow or motion system is introduced.
+
 Motion supports orientation only. Do not use motion to decorate routine admin surfaces.
 
 | Token | Value | Use |
