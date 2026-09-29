@@ -51,10 +51,11 @@ const pages=[{page:1,imageUrl:'/worksheet.svg',width:1000,height:1400},{page:3,i
 const blanks=[{id:'first',page:1,leftRatio:.15,topRatio:.2,widthRatio:.18,heightRatio:.03,answer:'고조선',prompt:'첫 번째 빈칸',source:'ocr'},{id:'tiny',page:1,leftRatio:.4,topRatio:.2,widthRatio:.03,heightRatio:.012,answer:'왕',prompt:'왕',source:'manual'},{id:'third',page:3,leftRatio:.15,topRatio:.2,widthRatio:.18,heightRatio:.03,answer:'삼국 시대',prompt:'다음 페이지 빈칸',source:'manual'}];
 const regions=[{label:'고조선',page:1,left:155,top:285,width:150,height:28}];
 const params=new URLSearchParams(location.search), mode=params.get('mode')||'student-solve',kind=params.get('kind')||'stage';
+if(params.has('modal'))for(const p of pages){p.width=params.has('landscape')?4200:3000;p.height=params.has('landscape')?2400:4200;}
 if(params.has('lower'))blanks.push({id:'lower',page:1,leftRatio:.65,topRatio:.9,widthRatio:.18,heightRatio:.03,answer:'고려',prompt:'자료 하단 빈칸',source:'manual'});
 function Fixture(){const [answers,setAnswers]=useState(params.has('readonly')?{first:'삼국'}:(params.has('locked')||params.has('completed')||params.has('submitting'))?{first:'고조선'}:{}),[page,setPage]=useState(1),[selected,setSelected]=useState('');
-const assignment={id:'fixture',title:'고대 국가의 형성',description:'',sourceType:kind==='history-lesson'?'lesson':'map',lessonUnitId:'unit-1',lessonTitle:'고조선',lessonUnitPath:['I. 고대','1. 고조선'],mapTitle:'한반도',mapResourceId:'map-1',pdfPageImages:pages,pdfRegions:regions,blanks:blanks.map(b=>({id:b.id,page:b.page,left:b.leftRatio*1000,top:b.topRatio*1400,width:b.widthRatio*1000,height:b.heightRatio*1400,answer:b.answer,prompt:b.prompt,source:b.source})),answerOptions:['고조선','삼국 시대','왕'],passThresholdPercent:80,timeLimitMinutes:params.has('timer')?10:0};
-return <main style={{padding:12,maxWidth:1440,margin:'0 auto',minWidth:0}}><h1 className="mb-4 text-lg font-bold">{kind==='stage'?mode:'역사교실 검증'}</h1><output data-testid="selected">{selected}</output>{kind==='stage'?<Stage pageImages={pages} blanks={blanks} textRegions={regions} mode={mode} teacherTool="pan" annotationEnabled={false} studentAnswers={Object.fromEntries(Object.entries(answers).map(([id,value])=>[id,{value}]))} onStudentAnswerChange={(id,value)=>setAnswers(a=>({...a,[id]:value}))} onSelectBlank={setSelected} teacherCurrentPage={page} studentCurrentPage={page} onTeacherCurrentPageChange={setPage} onStudentCurrentPageChange={setPage}/>:<HistoryView assignment={assignment} currentPage={page} onCurrentPageChange={setPage} answers={answers} onAnswerChange={(id,value)=>setAnswers(a=>({...a,[id]:value}))} interactiveViewport={true} onSubmit={()=>setSelected('submitted')} readOnly={params.get('readonly')==='1'} answersLocked={params.has('locked')} completed={params.has('completed')} submitting={params.has('submitting')} countdownLabel={params.has('timer')?'09:32':null} timeProgressPercent={55} answerChecks={params.has('readonly')?[{blankId:'first',correct:false,correctAnswer:'고조선'}]:[]} helperItems={[]}/>}<output data-testid="page">{page}</output><output data-testid="answers" className="sr-only">{JSON.stringify(answers)}</output></main>}
+const assignment={id:'fixture',title:'고대 국가의 형성',description:'',sourceType:kind==='history-lesson'?'lesson':'map',lessonUnitId:'unit-1',lessonTitle:'고조선',lessonUnitPath:['I. 고대','1. 고조선'],mapTitle:'한반도',mapResourceId:'map-1',pdfPageImages:pages,pdfRegions:regions,blanks:blanks.map(b=>({id:b.id,page:b.page,left:b.leftRatio*pages[0].width,top:b.topRatio*pages[0].height,width:b.widthRatio*pages[0].width,height:b.heightRatio*pages[0].height,answer:b.answer,prompt:b.prompt,source:b.source})),answerOptions:params.has('modal')?Array.from({length:30},(_,i)=>'참고 보기 단어 '+(i+1)):['고조선','삼국 시대','왕'],passThresholdPercent:80,timeLimitMinutes:params.has('timer')?10:0};
+return <main data-modal-fixture={params.has('modal')?'true':undefined} style={params.has('modal')?{position:'fixed',inset:'5vh 12px',maxHeight:'90vh',overflow:'auto',padding:16,background:'white'}:{padding:12,maxWidth:1440,margin:'0 auto',minWidth:0}}><h1 className="mb-4 text-lg font-bold">{kind==='stage'?mode:'역사교실 검증'}</h1><output data-testid="selected">{selected}</output>{kind==='stage'?<Stage pageImages={pages} blanks={blanks} textRegions={regions} mode={mode} teacherTool="pan" annotationEnabled={false} studentAnswers={Object.fromEntries(Object.entries(answers).map(([id,value])=>[id,{value}]))} onStudentAnswerChange={(id,value)=>setAnswers(a=>({...a,[id]:value}))} onSelectBlank={setSelected} teacherCurrentPage={page} studentCurrentPage={page} onTeacherCurrentPageChange={setPage} onStudentCurrentPageChange={setPage}/>:<HistoryView layoutVariant={params.has('modal')?'modalPreview':'default'} assignment={assignment} currentPage={page} onCurrentPageChange={setPage} answers={answers} onAnswerChange={(id,value)=>setAnswers(a=>({...a,[id]:value}))} interactiveViewport={!params.has('auto')} onSubmit={()=>setSelected('submitted')} readOnly={params.get('readonly')==='1'} answersLocked={params.has('locked')} completed={params.has('completed')} submitting={params.has('submitting')} countdownLabel={params.has('timer')?'09:32':null} timeProgressPercent={55} answerChecks={params.has('readonly')?[{blankId:'first',correct:false,correctAnswer:'고조선'}]:[]} helperItems={(params.has('modal')||params.has('help'))?['다른 화면으로 이동하면 응시가 종료됩니다.']:[]}/>}<output data-testid="page">{page}</output><output data-testid="answers" className="sr-only">{JSON.stringify(answers)}</output></main>}
 createRoot(document.getElementById('root')).render(<Fixture/>);`;
 const result = await build({
   stdin: { contents: source, loader: "tsx", resolveDir: root },
@@ -257,6 +258,169 @@ async function pinch(page, kind) {
   await waitLayout(page);
 }
 try {
+  for (const width of [390, 768, 1280]) {
+    for (const orientation of ["portrait", "landscape"]) {
+      const page = await browser.newPage({
+        viewport: { width, height: 1024 },
+        hasTouch: true,
+      });
+      await page.goto(
+        `http://127.0.0.1:${server.address().port}/?kind=history-lesson&readonly=1&modal=1${orientation === "landscape" ? "&landscape=1" : ""}`,
+      );
+      await page.waitForFunction(
+        () => document.querySelector("section img")?.naturalWidth > 0,
+      );
+      const sizes = [];
+      for (let i = 0; i < 5; i++) {
+        await page.waitForTimeout(300);
+        sizes.push(await measure(page, "history-lesson"));
+      }
+      console.log(
+        `modal ${width} ${orientation} sizes: ${sizes.map((v) => Math.round(v.image.width) + "x" + Math.round(v.image.height)).join(" → ")}`,
+      );
+      await page.screenshot({
+        path: path.join(evidence, `history-modal-${width}-${orientation}.png`),
+        fullPage: true,
+      });
+      reports.push({ label: `modal-fit-${width}-${orientation}`, sizes });
+      if (!process.env.MODAL_REPRO) {
+        const last = sizes.at(-1);
+        assertOriginalRects(last, "large modal source blank geometry");
+        assert(
+          last.image.width > Math.min(180, width * 0.35),
+          "modal source remains visibly sized",
+        );
+        assert(
+          Math.abs(sizes[0].image.width - last.image.width) < 2,
+          "modal initial fit must stabilize without repeated collapse",
+        );
+        assert(!last.overflow, "modal must not widen the document");
+        assert.equal(
+          await page.getByText("안내", { exact: true }).count(),
+          0,
+          "bottom helper card is removed",
+        );
+        assert.equal(
+          await page
+            .getByRole("button", { name: "응시 주의사항", exact: true })
+            .count(),
+          0,
+          "teacher review does not expose the student warning button",
+        );
+        assert.equal(
+          await page
+            .getByText("다른 화면으로 이동하면 응시가 종료됩니다.", {
+              exact: true,
+            })
+            .count(),
+          0,
+          "teacher review has no student exit warning",
+        );
+        await page
+          .getByRole("button", { name: "자료 확대", exact: true })
+          .click();
+        await waitLayout(page);
+        const zoomed = await measure(page, "history-lesson");
+        assertOriginalRects(zoomed, "large modal zoom blank geometry");
+        assert(
+          zoomed.image.width > last.image.width,
+          "modal zoom increases only the source",
+        );
+        await page.getByRole("button", { name: "다음", exact: true }).click();
+        await waitLayout(page);
+        assert.equal(
+          await page.locator('[data-testid="page"]').textContent(),
+          "3",
+        );
+        await page
+          .getByRole("button", { name: "자료 확대", exact: true })
+          .click();
+        await waitLayout(page);
+        await page
+          .getByRole("button", { name: "전체 보기", exact: true })
+          .click();
+        await page.waitForTimeout(500);
+        assert(
+          (await measure(page, "history-lesson")).image.width >
+            Math.min(180, width * 0.35),
+          "page navigation and fit preserve a visible source",
+        );
+        if (width === 768 && orientation === "landscape") {
+          await page.goto(
+            `http://127.0.0.1:${server.address().port}/?kind=history-lesson&readonly=1&modal=1&landscape=1&auto=1`,
+          );
+          await page
+            .getByRole("button", { name: "자료 확대", exact: true })
+            .waitFor();
+          await page.waitForTimeout(500);
+          assert(
+            Math.abs(
+              (await measure(page, "history-lesson")).image.width -
+                last.image.width,
+            ) < 2,
+            "ordinary teacher modal enables source fitting without an explicit interactive viewport",
+          );
+        }
+      }
+      await page.close();
+    }
+  }
+  if (!process.env.MODAL_REPRO) {
+    for (const width of [390, 768, 1280]) {
+      const page = await browser.newPage({
+        viewport: { width, height: 1024 },
+        hasTouch: true,
+      });
+      await page.goto(
+        `http://127.0.0.1:${server.address().port}/?kind=history-lesson&help=1`,
+      );
+      const info = page.getByRole("button", {
+        name: "응시 주의사항",
+        exact: true,
+      });
+      await info.waitFor();
+      assert.equal(
+        await page.getByRole("tooltip").count(),
+        0,
+        "student warning starts hidden",
+      );
+      assert.equal(
+        await page.getByText("안내", { exact: true }).count(),
+        0,
+        "no bottom warning card",
+      );
+      await info.hover();
+      await info.focus();
+      assert.equal(
+        await page.getByRole("tooltip").count(),
+        0,
+        "warning opens only on requested click",
+      );
+      await info.click();
+      await page.getByRole("tooltip").waitFor();
+      assert(
+        await page
+          .getByRole("tooltip")
+          .getByText("다른 화면으로 이동하면 응시가 종료됩니다.", {
+            exact: true,
+          })
+          .isVisible(),
+      );
+      await page.keyboard.press("Escape");
+      await page.getByRole("tooltip").waitFor({ state: "hidden" });
+      await info.tap();
+      await page.getByRole("tooltip").waitFor();
+      await page.locator("section img").click({ position: { x: 20, y: 20 } });
+      await page.getByRole("tooltip").waitFor({ state: "hidden" });
+      reports.push({ label: `student-help-click-only-${width}` });
+      await page.screenshot({
+        path: path.join(evidence, `history-help-${width}.png`),
+        fullPage: true,
+      });
+      await page.close();
+    }
+  }
+
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
@@ -473,7 +637,15 @@ try {
           path: path.join(evidence, `${label}.png`),
           fullPage: true,
         });
-        reports.push({ label, viewport, before, zoomed, reset, input, errors });
+        reports.push({
+          label,
+          viewport,
+          before,
+          zoomed,
+          reset,
+          input,
+          errors,
+        });
         await page.close();
         console.log(`${label}: passed`);
       }

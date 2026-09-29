@@ -1045,6 +1045,7 @@ const ManageHistoryClassroom: React.FC = () => {
   const [resettingAttemptUid, setResettingAttemptUid] = useState("");
   const resettingAttemptRef = React.useRef(false);
   const assignmentCollectionPathsRef = React.useRef<Record<string, string>>({});
+  const [expandedAttemptUids, setExpandedAttemptUids] = useState<string[]>([]);
   const [attemptResetFeedback, setAttemptResetFeedback] = useState<
     Record<string, string>
   >({});
@@ -3018,6 +3019,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setDeletingAssignment(false);
     setResettingAttemptUid("");
     setAttemptResetFeedback({});
+    setExpandedAttemptUids([]);
     setPreviewOpen(false);
     setPreviewCurrentPage(1);
     setPreviewAnswers({});
@@ -6164,119 +6166,235 @@ const ManageHistoryClassroom: React.FC = () => {
                         미응시 {editingAttemptStatusCounts.overdueAbsent}
                       </span>
                     </div>
-                    <div className="mt-3 min-h-0 space-y-2 overflow-y-auto overscroll-contain lg:flex-1">
-                      {editingAttemptStatusRows.map((row) => {
-                        const studentResults =
-                          editingResultsByStudentUid.get(row.student.uid) || [];
-                        const savedStudent =
-                          !!editingAssignment &&
-                          getHistoryClassroomAssignedStudentUids(
-                            editingAssignment,
-                          ).includes(row.student.uid);
-                        return (
-                          <article
-                            key={row.student.uid}
-                            aria-label={`${row.student.name} 응시 현황`}
-                            className="min-w-0 rounded-xl border border-gray-200 bg-white p-3"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="min-w-0 break-words text-sm font-bold text-gray-900">
-                                {formatStudentBadgeLabel(row.student)}
-                              </div>
-                              <span
-                                className={`rounded-full border px-2 py-1 text-[11px] font-bold ${row.toneClassName}`}
+                    <div className="mt-3 min-h-0 overflow-auto overscroll-contain lg:flex-1">
+                      <table className="w-full min-w-[32rem] table-fixed whitespace-nowrap text-left text-xs">
+                        <colgroup>
+                          <col className="w-10" />
+                          <col className="w-10" />
+                          <col className="w-10" />
+                          <col />
+                          <col className="w-16" />
+                          <col className="w-24" />
+                          <col className="w-16" />
+                        </colgroup>
+                        <thead className="sticky top-0 z-10 bg-gray-50 text-gray-500">
+                          <tr>
+                            {[
+                              "학년",
+                              "반",
+                              "번호",
+                              "이름",
+                              "점수",
+                              "상태",
+                              "리셋",
+                            ].map((label) => (
+                              <th
+                                key={label}
+                                scope="col"
+                                className="px-2 py-2.5 font-bold"
                               >
-                                {row.statusLabel}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                              <div className="min-w-0 text-xs font-semibold text-gray-600">
-                                {row.detailLabel}
-                              </div>
-                              {row.canResetAttempt && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleResetStudentAttemptCooldown(
-                                      row.student,
+                                {label}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {editingAttemptStatusRows.map((row) => {
+                            const studentResults =
+                              editingResultsByStudentUid.get(row.student.uid) ||
+                              [];
+                            const latestResult =
+                              studentResults.find(
+                                (result) =>
+                                  result.status === "passed" || result.passed,
+                              ) || studentResults[0];
+                            const savedStudent =
+                              !!editingAssignment &&
+                              getHistoryClassroomAssignedStudentUids(
+                                editingAssignment,
+                              ).includes(row.student.uid);
+                            const expanded = expandedAttemptUids.includes(
+                              row.student.uid,
+                            );
+                            const historyId = `history-attempt-details-${row.student.uid}`;
+                            const feedback =
+                              attemptResetFeedback[row.student.uid];
+                            const toggleHistory = () => {
+                              if (!studentResults.length) return;
+                              setExpandedAttemptUids((prev) =>
+                                prev.includes(row.student.uid)
+                                  ? prev.filter(
+                                      (uid) => uid !== row.student.uid,
                                     )
+                                  : [...prev, row.student.uid],
+                              );
+                            };
+                            return (
+                              <React.Fragment key={row.student.uid}>
+                                <tr
+                                  aria-label={`${row.student.name} 응시 현황`}
+                                  aria-expanded={
+                                    studentResults.length ? expanded : undefined
                                   }
-                                  disabled={
-                                    !!resettingAttemptUid ||
-                                    savingEdit ||
-                                    deletingAssignment ||
-                                    !savedStudent
-                                  }
-                                  className="min-h-[44px] shrink-0 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                  title={
-                                    !savedStudent
-                                      ? "학생 배정을 먼저 저장해 주세요."
+                                  aria-controls={
+                                    studentResults.length
+                                      ? historyId
                                       : undefined
                                   }
+                                  tabIndex={
+                                    studentResults.length ? 0 : undefined
+                                  }
+                                  onClick={toggleHistory}
+                                  onKeyDown={(event) => {
+                                    if (
+                                      event.target === event.currentTarget &&
+                                      (event.key === "Enter" ||
+                                        event.key === " ")
+                                    ) {
+                                      event.preventDefault();
+                                      toggleHistory();
+                                    }
+                                  }}
+                                  className={`h-12 border-b border-gray-100 text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${studentResults.length ? "cursor-pointer hover:bg-blue-50/50" : ""}`}
                                 >
-                                  {resettingAttemptUid === row.student.uid
-                                    ? "해제 중..."
-                                    : "재응시 제한 해제"}
-                                </button>
-                              )}
-                            </div>
-                            {attemptResetFeedback[row.student.uid] && (
-                              <p
-                                role="status"
-                                className="mt-2 text-xs font-semibold text-gray-700"
-                              >
-                                {attemptResetFeedback[row.student.uid]}
-                              </p>
-                            )}
-                            {studentResults.length > 0 && (
-                              <details className="mt-2 border-t border-gray-100">
-                                <summary className="min-h-[44px] cursor-pointer py-3 text-xs font-bold text-gray-600">
-                                  제출 내역 {studentResults.length}건
-                                </summary>
-                                <ol className="space-y-2">
-                                  {studentResults.map((result) => (
-                                    <li
-                                      key={result.id}
-                                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 p-2"
+                                  <td className="px-2 py-0.5">
+                                    {row.student.grade || "-"}
+                                  </td>
+                                  <td className="px-2 py-0.5">
+                                    {row.student.className || "-"}
+                                  </td>
+                                  <td className="px-2 py-0.5">
+                                    {row.student.number || "-"}
+                                  </td>
+                                  <th
+                                    scope="row"
+                                    className="truncate px-2 py-0.5 font-bold text-gray-900"
+                                    title={row.student.name}
+                                  >
+                                    {studentResults.length > 0 && (
+                                      <span
+                                        aria-hidden="true"
+                                        className="mr-1 text-gray-400"
+                                      >
+                                        {expanded ? "▾" : "▸"}
+                                      </span>
+                                    )}
+                                    {row.student.name}
+                                  </th>
+                                  <td className="px-2 py-0.5 font-semibold">
+                                    {latestResult
+                                      ? `${latestResult.percent}%`
+                                      : "-"}
+                                  </td>
+                                  <td
+                                    className="px-2 py-0.5"
+                                    title={feedback || row.detailLabel}
+                                  >
+                                    <span
+                                      className={`inline-block rounded-full border px-2 py-1 text-[11px] font-bold ${row.toneClassName}`}
                                     >
-                                      <div className="min-w-0 text-xs text-gray-600">
-                                        <div>
-                                          {formatResultSubmittedAtLabel(
-                                            result.createdAt,
-                                          )}
-                                        </div>
-                                        <div className="mt-1 font-bold text-gray-900">
-                                          {result.score}/{result.total} ·{" "}
-                                          {result.percent}% ·{" "}
-                                          {describeHistoryResultStatus(
-                                            result.status,
-                                          )}
-                                        </div>
-                                      </div>
+                                      {feedback
+                                        ? feedback.includes("못했습니다")
+                                          ? "해제 실패"
+                                          : "해제됨"
+                                        : row.statusLabel}
+                                    </span>
+                                    {feedback && (
+                                      <span role="status" className="sr-only">
+                                        {feedback}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-1 py-0.5">
+                                    {row.canResetAttempt && (
                                       <button
                                         type="button"
-                                        onClick={() => {
-                                          setPreviewOpen(false);
-                                          setReviewResultId(result.id);
+                                        aria-label={`${row.student.name} 재응시 제한 리셋`}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          void handleResetStudentAttemptCooldown(
+                                            row.student,
+                                          );
                                         }}
-                                        className="min-h-[44px] shrink-0 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"
-                                        aria-label={`${row.student.name} 제출 자료 확인`}
+                                        disabled={
+                                          !!resettingAttemptUid ||
+                                          savingEdit ||
+                                          deletingAssignment ||
+                                          !savedStudent
+                                        }
+                                        className="min-h-[44px] w-full rounded-lg border border-blue-200 bg-blue-50 px-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                        title={
+                                          !savedStudent
+                                            ? "학생 배정을 먼저 저장해 주세요."
+                                            : undefined
+                                        }
                                       >
-                                        자료 보기
+                                        {resettingAttemptUid === row.student.uid
+                                          ? "처리 중"
+                                          : "리셋"}
                                       </button>
-                                    </li>
-                                  ))}
-                                </ol>
-                              </details>
-                            )}
-                          </article>
-                        );
-                      })}
-                      {!editingAttemptStatusRows.length && (
-                        <p className="py-6 text-center text-sm text-gray-400">
-                          배정된 학생이 없습니다.
-                        </p>
-                      )}
+                                    )}
+                                  </td>
+                                </tr>
+                                {studentResults.length > 0 && (
+                                  <tr hidden={!expanded} id={historyId}>
+                                    <td
+                                      colSpan={7}
+                                      className="border-b border-gray-200 bg-gray-50 px-3 py-2"
+                                    >
+                                      <div className="mb-1 text-[11px] font-bold text-gray-500">
+                                        제출 내역 {studentResults.length}건
+                                      </div>
+                                      <ol>
+                                        {studentResults.map((result) => (
+                                          <li
+                                            key={result.id}
+                                            className="flex min-h-[44px] items-center justify-between gap-3 border-t border-gray-200/70"
+                                          >
+                                            <span className="text-gray-500">
+                                              {formatResultSubmittedAtLabel(
+                                                result.createdAt,
+                                              )}
+                                            </span>
+                                            <span className="ml-auto font-semibold text-gray-700">
+                                              {result.score}/{result.total} ·{" "}
+                                              {result.percent}% ·{" "}
+                                              {describeHistoryResultStatus(
+                                                result.status,
+                                              )}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setPreviewOpen(false);
+                                                setReviewResultId(result.id);
+                                              }}
+                                              className="min-h-[44px] shrink-0 px-2 font-bold text-blue-700 hover:text-blue-900"
+                                              aria-label={`${row.student.name} 제출 자료 확인`}
+                                            >
+                                              자료 보기
+                                            </button>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                          {!editingAttemptStatusRows.length && (
+                            <tr>
+                              <td
+                                colSpan={7}
+                                className="py-6 text-center text-gray-400"
+                              >
+                                배정된 학생이 없습니다.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </section>
                 </div>

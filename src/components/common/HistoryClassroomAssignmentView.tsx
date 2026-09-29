@@ -1,5 +1,6 @@
 import React, {
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -333,6 +334,13 @@ const HistoryClassroomAssignmentView: React.FC<
     [answerChecks],
   );
   const isPointAwardedNotice = pointNotice.includes("+");
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [modalAvailableHeight, setModalAvailableHeight] = useState(0);
+  const helpButtonRef = useRef<HTMLButtonElement | null>(null);
+  const helpPopoverRef = useRef<HTMLDivElement | null>(null);
+  const helpId = useId();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const showHelp = !readOnly && !completed && helperItems.length > 0;
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(144);
@@ -395,7 +403,46 @@ const HistoryClassroomAssignmentView: React.FC<
     scale: 1,
   });
 
-  const enableInteractiveViewport = interactiveViewport && Boolean(pageImage);
+  const enableInteractiveViewport =
+    (interactiveViewport || isModalPreview) && Boolean(pageImage);
+  useLayoutEffect(() => {
+    if (!isModalPreview) return;
+    const container = containerRef.current?.parentElement;
+    if (!container) return;
+    const measure = () => {
+      if (container.clientHeight > 0)
+        setModalAvailableHeight(container.clientHeight);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isModalPreview]);
+  useEffect(() => {
+    if (!showHelp) setHelpOpen(false);
+  }, [showHelp]);
+  useEffect(() => {
+    if (!helpOpen) return;
+    const outside = (event: Event) => {
+      const target = event.target as Node;
+      if (
+        !helpButtonRef.current?.contains(target) &&
+        !helpPopoverRef.current?.contains(target)
+      )
+        setHelpOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHelpOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("focusin", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("focusin", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [helpOpen]);
   useEffect(() => {
     // Warm subsequent pages while connected so paging can survive brief Wi-Fi loss.
     const images = (assignment.pdfPageImages || []).map((page) => {
@@ -424,12 +471,17 @@ const HistoryClassroomAssignmentView: React.FC<
     window.addEventListener("online", retry);
     return () => window.removeEventListener("online", retry);
   }, [imageLoadError]);
-  const viewportHeight = isModalPreview
-    ? null
-    : Math.min(
-        1000,
-        Math.max(160, floatingViewport.height - toolbarHeight - 32),
-      );
+  const viewportHeight = Math.min(
+    1000,
+    Math.max(
+      160,
+      (isModalPreview
+        ? modalAvailableHeight || floatingViewport.height * 0.9 - 80
+        : floatingViewport.height) -
+        toolbarHeight -
+        32,
+    ),
+  );
   const answeredCount = assignment.blanks.filter((blank) =>
     String(answers[blank.id] || "").trim(),
   ).length;
@@ -944,9 +996,10 @@ const HistoryClassroomAssignmentView: React.FC<
 
   return (
     <div
+      ref={containerRef}
       className={
         isModalPreview
-          ? "mx-auto w-full max-w-[108rem] px-5 py-5 lg:px-6"
+          ? "mx-auto w-full max-w-[108rem] px-3 py-2"
           : "mx-auto w-full px-2 py-2 sm:px-3"
       }
     >
@@ -959,9 +1012,9 @@ const HistoryClassroomAssignmentView: React.FC<
           data-history-actions="true"
           className="flex min-w-0 items-center gap-2"
         >
-          <div className="min-w-0 flex-1">
+          <div className="relative min-w-0 flex-1">
             <h1
-              className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900"
+              className={`min-w-0 flex-1 truncate text-sm font-bold text-gray-900 ${showHelp ? "pr-6" : ""}`}
               title={[
                 assignment.title,
                 lessonPath,
@@ -972,6 +1025,24 @@ const HistoryClassroomAssignmentView: React.FC<
             >
               {assignment.title}
             </h1>
+            {showHelp && (
+              <button
+                ref={helpButtonRef}
+                type="button"
+                aria-label="응시 주의사항"
+                aria-expanded={helpOpen}
+                aria-controls={helpId}
+                onClick={() => setHelpOpen((open) => !open)}
+                className="absolute right-0 top-0 flex h-11 w-11 items-start justify-end pt-0.5 text-gray-600"
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-xs font-bold"
+                >
+                  i
+                </span>
+              </button>
+            )}
             <div
               data-history-answer-progress="true"
               className="break-keep text-xs font-bold leading-4 text-gray-600"
@@ -1042,6 +1113,18 @@ const HistoryClassroomAssignmentView: React.FC<
                   : submitLabel}
           </button>
         </div>
+        {showHelp && helpOpen && (
+          <div
+            ref={helpPopoverRef}
+            id={helpId}
+            role="tooltip"
+            className="absolute right-0 top-full z-40 mt-1 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-3 text-sm leading-6 text-gray-700 shadow-lg"
+          >
+            {helperItems.map((item, index) => (
+              <p key={`${item}-${index}`}>{item}</p>
+            ))}
+          </div>
+        )}
         {resultText && (
           <div
             role="status"
@@ -1128,13 +1211,7 @@ const HistoryClassroomAssignmentView: React.FC<
           </div>
         </div>
       </div>
-      <div
-        className={
-          isModalPreview
-            ? "grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]"
-            : "space-y-2"
-        }
-      >
+      <div className="space-y-2">
         <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-1">
           {assignment.description && (
             <p className="p-2 text-sm text-gray-600">
@@ -1170,16 +1247,9 @@ const HistoryClassroomAssignmentView: React.FC<
           )}
           {pageImage && (
             <div
-              className={`rounded-lg border border-gray-200 bg-gray-100 ${
-                isModalPreview
-                  ? "flex-1 min-h-[38rem] overflow-auto p-4 lg:min-h-[46rem]"
-                  : "overflow-hidden p-1"
-              }`}
-              style={
-                !isModalPreview && viewportHeight
-                  ? { height: viewportHeight }
-                  : undefined
-              }
+              data-history-viewport="true"
+              className="overflow-hidden rounded-lg border border-gray-200 bg-gray-100 p-1"
+              style={{ height: viewportHeight }}
             >
               <div
                 ref={enableInteractiveViewport ? viewportRef : undefined}
@@ -1454,13 +1524,7 @@ const HistoryClassroomAssignmentView: React.FC<
           )}
         </section>
 
-        <aside
-          className={
-            isModalPreview
-              ? "self-start space-y-3 lg:sticky lg:top-5"
-              : "space-y-2"
-          }
-        >
+        <aside className="space-y-2">
           <div className="flex flex-wrap gap-x-3 gap-y-1 px-2 text-xs font-bold text-gray-600">
             {lessonPath && <span>{lessonPath}</span>}
             <span>통과 기준 {assignment.passThresholdPercent}% 이상</span>
@@ -1495,17 +1559,6 @@ const HistoryClassroomAssignmentView: React.FC<
               </div>
             )}
           </div>
-
-          {helperItems.length > 0 && (
-            <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="text-sm font-bold text-gray-700">안내</div>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
-                {helperItems.map((item, index) => (
-                  <li key={`${item}-${index}`}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </aside>
       </div>
     </div>

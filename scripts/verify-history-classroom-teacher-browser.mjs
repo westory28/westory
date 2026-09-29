@@ -709,42 +709,109 @@ try {
       })
       .click();
     const panel = page.getByRole("region", { name: "응시 현황 및 제출 내역" });
-    assert.equal(await panel.getByRole("article").count(), 3);
-    const pending = panel.getByRole("article", {
+    assert.equal(await panel.locator("tr[aria-label]").count(), 3);
+    const pending = panel.getByRole("row", {
       name: "검증학생 응시 현황",
       exact: true,
     });
-    const cancelled = panel.getByRole("article", {
+    const cancelled = panel.getByRole("row", {
       name: "종료학생 응시 현황",
       exact: true,
     });
-    const passed = panel.getByRole("article", {
+    const passed = panel.getByRole("row", {
       name: "통과학생 응시 현황",
       exact: true,
     });
     assert.equal(
-      await passed
-        .getByRole("button", { name: "재응시 제한 해제", exact: true })
-        .count(),
+      await passed.getByRole("button", { name: /재응시 제한 리셋$/ }).count(),
       0,
       "any passed result remains completed",
     );
-    await cancelled.locator("summary").click();
+    assert.deepEqual(await panel.getByRole("columnheader").allTextContents(), [
+      "학년",
+      "반",
+      "번호",
+      "이름",
+      "점수",
+      "상태",
+      "리셋",
+    ]);
+    for (const row of [pending, cancelled, passed]) {
+      const geometry = await row.boundingBox();
+      assert(
+        geometry.height >= 44 && geometry.height <= 52,
+        `compact one-line student row: ${JSON.stringify(geometry)}`,
+      );
+    }
+    await cancelled.click();
+    assert.equal(await cancelled.getAttribute("aria-expanded"), "true");
+    await cancelled.focus();
+    await cancelled.press("Enter");
+    assert.equal(await cancelled.getAttribute("aria-expanded"), "false");
+    await cancelled.press("Space");
+    assert.equal(await cancelled.getAttribute("aria-expanded"), "true");
+    const cancelledHistory = page.locator(
+      `#${await cancelled.getAttribute("aria-controls")}`,
+    );
     assert.equal(
-      await cancelled.getByRole("listitem").count(),
+      await cancelledHistory.getByRole("listitem").count(),
       2,
       "all prior submissions remain accessible",
     );
     assert.equal(
-      await cancelled
+      await cancelledHistory
         .getByRole("button", { name: "종료학생 제출 자료 확인" })
         .count(),
       2,
     );
-    await cancelled
+    await cancelledHistory
       .getByRole("button", { name: "종료학생 제출 자료 확인" })
       .first()
       .click();
+    const reviewImage = page.getByRole("img", {
+      name: `${changed.data.title} 1`,
+      exact: true,
+    });
+    await reviewImage.waitFor();
+    const reviewWidths = [];
+    for (let sample = 0; sample < 5; sample++) {
+      await page.waitForTimeout(300);
+      reviewWidths.push((await reviewImage.boundingBox()).width);
+    }
+    assert(
+      reviewWidths.at(-1) > 150,
+      `teacher result page must remain readable: ${reviewWidths}`,
+    );
+    assert(
+      Math.abs(reviewWidths[0] - reviewWidths.at(-1)) < 2,
+      `teacher result fit must not shrink repeatedly: ${reviewWidths}`,
+    );
+    await page.getByRole("button", { name: "자료 확대", exact: true }).click();
+    await page.waitForTimeout(350);
+    assert(
+      (await reviewImage.boundingBox()).width > reviewWidths.at(-1),
+      "result review zoom enlarges source",
+    );
+    await page.getByRole("button", { name: "다음", exact: true }).click();
+    await page
+      .getByRole("img", { name: `${changed.data.title} 3`, exact: true })
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "응시 주의사항", exact: true })
+        .count(),
+      0,
+      "read-only review does not show student test instructions",
+    );
+    assert.equal(
+      await page.getByText("안내", { exact: true }).count(),
+      0,
+      "no redundant bottom guidance card",
+    );
+    await page.screenshot({
+      path: path.join(evidence, `teacher-result-review-${viewport.width}.png`),
+      fullPage: true,
+    });
     await page
       .getByRole("button", { name: "닫기", exact: true })
       .last()
@@ -755,7 +822,7 @@ try {
       .selectOption("수업 태도");
     await page.evaluate(() => (window.__fixture.pauseWrite = true));
     const resetButton = pending.getByRole("button", {
-      name: "재응시 제한 해제",
+      name: "검증학생 재응시 제한 리셋",
       exact: true,
     });
     await resetButton.evaluate((button) => {
@@ -796,18 +863,25 @@ try {
       "double click writes once",
     );
     await page.evaluate(() => (window.__fixture.failNextWrite = true));
-    await cancelled
-      .getByRole("button", { name: "재응시 제한 해제", exact: true })
-      .click();
+    await cancelled.getByRole("button", { name: /재응시 제한 리셋$/ }).click();
     await waitWrite(page, 7);
     await cancelled
       .getByText("해제하지 못했습니다. 다시 시도해 주세요.", { exact: true })
       .waitFor();
-    await cancelled
-      .getByRole("button", { name: "재응시 제한 해제", exact: true })
-      .click();
+    await cancelled.getByRole("button", { name: /재응시 제한 리셋$/ }).click();
     await waitWrite(page, 8);
     await cancelled.getByText("재응시 대기 해제됨", { exact: true }).waitFor();
+    assert.equal(
+      await cancelled.getAttribute("aria-expanded"),
+      "true",
+      "reset click does not toggle submission history",
+    );
+    assert.equal(
+      await cancelled
+        .getByRole("button", { name: /재응시 제한 리셋$/ })
+        .textContent(),
+      "리셋",
+    );
     await pending.scrollIntoViewIfNeeded();
     const statusGeometry = await panel.evaluate((el) => {
       const r = el.getBoundingClientRect();
@@ -831,6 +905,9 @@ try {
           "tablet touch controls remain at least 44px",
         );
     }
+    await panel.locator("table").evaluate((table) => {
+      table.parentElement.scrollLeft = 0;
+    });
     await page.screenshot({
       path: path.join(evidence, `teacher-attempts-${viewport.width}.png`),
       fullPage: true,
@@ -874,8 +951,8 @@ try {
       })
       .click();
     await page
-      .getByRole("article", { name: "검증학생 응시 현황", exact: true })
-      .getByRole("button", { name: "재응시 제한 해제", exact: true })
+      .getByRole("row", { name: "검증학생 응시 현황", exact: true })
+      .getByRole("button", { name: /재응시 제한 리셋$/ })
       .click();
     const legacyReset = await waitWrite(page, 10);
     assert.equal(legacyReset.path, legacyPath);
@@ -892,8 +969,8 @@ try {
     await page.getByPlaceholder("학년 반 번호 또는 이름 검색").fill("추가학생");
     await page.getByRole("button", { name: /추가학생.*3-2/ }).click();
     const unsavedReset = page
-      .getByRole("article", { name: "추가학생 응시 현황", exact: true })
-      .getByRole("button", { name: "재응시 제한 해제", exact: true });
+      .getByRole("row", { name: "추가학생 응시 현황", exact: true })
+      .getByRole("button", { name: /재응시 제한 리셋$/ });
     assert(
       await unsavedReset.isDisabled(),
       "unsaved assignment cannot issue a live reset",
@@ -919,6 +996,7 @@ try {
       geometry,
       editGeometry,
       statusGeometry,
+      reviewWidths,
       errors,
       alerts,
       ...capture,
