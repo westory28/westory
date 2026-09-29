@@ -241,4 +241,3 @@ const createStudentAttendanceHandler = ({ db, now = () => new Date() }) => async
 };
 
 module.exports = { createStudentAttendanceHandler, accountIdFor, ledgerIdFor };
-
