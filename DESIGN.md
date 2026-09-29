@@ -142,9 +142,10 @@ Layout tokens:
 
 ### Teacher assessment editor
 
-- Use separate white, bordered editor and list surfaces with 12px radius, 24px padding (16px on mobile), and a 24px gap. At 1280px viewport and above use equal columns; smaller screens place the editor first. No nested fixed-height item scroller or sticky editor.
+- Use separate white, bordered editor and list surfaces with 12px radius, 24px padding (16px on mobile), and a 24px gap. The grading page uses the existing 96rem maximum width; at 1280px viewport and above use a 5:7 editor-to-list split. Smaller screens place the editor first. List actions sit below the item labels to preserve their full width. Keep percentages unbroken, and allow long names to wrap only when they cannot fit. No nested fixed-height item scroller or sticky editor.
 - Inputs are 44px high with 8px radius and 14px text. Grade and subject share a row above 640px. Each assessment has a full-width area name followed by type, maximum score and weight; below 640px the type spans a row and the two numeric fields share a row.
 - Use visible labels and units, 40px minimum action targets, and existing primary/surface/border/text tokens. A 8px stacked ratio strip reuses the student chart palette; show the numeric total and remaining/excess ratio in text. Primary save stays blue for both creation and editing.
+- Preview dialogs use a 72rem maximum width and equal columns from 1024px. Score inputs stay in an 80px right-hand column at every viewport, matching the student score card, with 44px height. Description text occupies the flexible left column and metadata phrases wrap as whole units. The graph total stays at the right of its heading. Reuse 8/12/16/24px spacing and the existing typography and palette.
 
 ### Header
 

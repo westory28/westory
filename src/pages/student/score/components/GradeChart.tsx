@@ -1,5 +1,9 @@
 import React, { useState } from "react";
-import { getTypeLabel, type ScoreRow } from "../../../../lib/studentScores";
+import {
+  getTypeLabel,
+  SCORE_ACHIEVEMENT_GUIDANCE,
+  type ScoreRow,
+} from "../../../../lib/studentScores";
 import "./GradeChart.css";
 
 const segmentColors = [
@@ -114,6 +118,13 @@ const GradeChart: React.FC<{ rows: ScoreRow[] }> = ({ rows }) => {
           );
         })
       )}
+      <p className="assessment-chart__hint">
+        {SCORE_ACHIEVEMENT_GUIDANCE.general}
+        <br />
+        {SCORE_ACHIEVEMENT_GUIDANCE.artsPE}
+        <br />
+        {SCORE_ACHIEVEMENT_GUIDANCE.rounding}
+      </p>
     </section>
   );
 };

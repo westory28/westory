@@ -26,10 +26,12 @@ const ManageExam: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <main
-        className={`w-full ${
+        className={`${activeTab === "preview" ? "grading-page" : ""} w-full ${
           activeTab === "performance" || activeTab === "written-essay"
             ? "max-w-[1500px]"
-            : "max-w-7xl"
+            : activeTab === "preview"
+              ? ""
+              : "max-w-7xl"
         } mx-auto px-4 py-6 flex-1 flex flex-col`}
       >
         <div

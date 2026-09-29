@@ -21,6 +21,9 @@ import {
 import {
   buildScoreRows,
   getScoreKey,
+  getSubjectPriorityIndex,
+  isThreeLevelSubject,
+  SCORE_ACHIEVEMENT_GUIDANCE,
   getTypeLabel,
   normalizePlanItemType,
   type ScoreItemType,
@@ -364,31 +367,12 @@ const ExamGradingPlan: React.FC = () => {
     if (sortMode === "name") {
       sorted.sort((a, b) => a.subject.localeCompare(b.subject));
     } else if (sortMode === "importance") {
-      const order = [
-        "국어",
-        "영어",
-        "수학",
-        "사회",
-        "역사",
-        "도덕",
-        "과학",
-        "기술",
-        "가정",
-        "기술가정",
-        "기가",
-        "정보",
-        "음악",
-        "미술",
-        "체육",
-      ];
-      sorted.sort((a, b) => {
-        const idxA = order.findIndex((k) => a.subject.includes(k));
-        const idxB = order.findIndex((k) => b.subject.includes(k));
-        const valA = idxA === -1 ? 999 : idxA;
-        const valB = idxB === -1 ? 999 : idxB;
-        if (valA !== valB) return valA - valB;
-        return a.subject.localeCompare(b.subject);
-      });
+      sorted.sort(
+        (a, b) =>
+          getSubjectPriorityIndex(a.subject) -
+            getSubjectPriorityIndex(b.subject) ||
+          a.subject.localeCompare(b.subject),
+      );
     }
     return sorted;
   };
@@ -453,7 +437,7 @@ const ExamGradingPlan: React.FC = () => {
     <div className="grading-workspace">
       {previewOpen && previewPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="grading-preview-dialog flex max-h-[88vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
@@ -481,7 +465,7 @@ const ExamGradingPlan: React.FC = () => {
                   있습니다.
                 </div>
               ) : (
-                <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+                <div className="grading-preview-columns">
                   <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <h4 className="text-sm font-black text-slate-800">
@@ -500,18 +484,24 @@ const ExamGradingPlan: React.FC = () => {
                         return (
                           <label
                             key={`${item.name}-${idx}`}
-                            className="block rounded-lg border border-slate-200 bg-white px-3 py-3"
+                            className="grading-preview-item block rounded-lg border border-slate-200 bg-white px-3 py-3"
                           >
-                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-black text-slate-800">
+                            <div className="grading-preview-score-row">
+                              <div className="grading-preview-description">
+                                <div className="grading-preview-name text-sm font-black text-slate-800">
                                   {item.name || `${idx + 1}번 항목`}
                                 </div>
-                                <div className="text-xs font-bold text-slate-400">
-                                  {getTypeLabel(
-                                    normalizePlanItemType(item.type, item.name),
-                                  )}{" "}
-                                  · {maxScore}점 만점 · {item.ratio}% 반영
+                                <div className="grading-preview-meta text-xs font-bold text-slate-400">
+                                  <span>
+                                    {getTypeLabel(
+                                      normalizePlanItemType(
+                                        item.type,
+                                        item.name,
+                                      ),
+                                    )}
+                                  </span>
+                                  <span>{maxScore}점 만점</span>
+                                  <span>{item.ratio}% 반영</span>
                                 </div>
                               </div>
                               <input
@@ -542,7 +532,10 @@ const ExamGradingPlan: React.FC = () => {
                                   }));
                                 }}
                                 placeholder="점수"
-                                className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-bold focus:border-blue-500 focus:outline-none"
+                                aria-label={
+                                  (item.name || `${idx + 1}번 항목`) + " 점수"
+                                }
+                                className="grading-preview-score-input rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-bold focus:border-blue-500 focus:outline-none"
                               />
                             </div>
                           </label>
@@ -552,14 +545,13 @@ const ExamGradingPlan: React.FC = () => {
                   </section>
 
                   <section className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                    <div className="grading-preview-graph-heading mb-4">
                       <div>
                         <h4 className="text-sm font-black text-slate-800">
                           실시간 반영 그래프
                         </h4>
                         <p className="mt-1 text-xs font-semibold text-slate-400">
-                          학생 성적 리포트와 같은 누적 막대로 반영 점수를
-                          확인합니다.
+                          입력한 점수의 평가별 반영 결과입니다.
                         </p>
                       </div>
                       <div className="text-right">
@@ -712,8 +704,12 @@ const ExamGradingPlan: React.FC = () => {
                     </div>
 
                     <p className="mt-3 text-xs font-bold leading-5 text-slate-400">
-                      PC에서는 막대에 마우스를 올리고, 모바일과 태블릿에서는
-                      막대를 터치하면 반영 점수를 확인할 수 있습니다.
+                      막대를 선택하면 평가별 반영 점수를 확인할 수 있습니다.
+                    </p>
+                    <p className="mt-3 text-xs leading-5 text-slate-600">
+                      {isThreeLevelSubject(previewPlan.subject)
+                        ? SCORE_ACHIEVEMENT_GUIDANCE.artsPE
+                        : SCORE_ACHIEVEMENT_GUIDANCE.general}
                     </p>
                     {previewRatioTotal !== 100 && (
                       <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
@@ -943,7 +939,7 @@ const ExamGradingPlan: React.FC = () => {
             >
               <option value="latest">등록순 (최신)</option>
               <option value="name">과목명 (가나다)</option>
-              <option value="importance">중요도순 (국영수...)</option>
+              <option value="importance">중요도순 (국어·수학·사회…)</option>
             </select>
           </div>
         </div>
@@ -961,7 +957,7 @@ const ExamGradingPlan: React.FC = () => {
             filteredPlans.map((p) => (
               <div
                 key={p.id}
-                className="group relative flex flex-col gap-4 overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md lg:flex-row lg:items-center lg:justify-between lg:p-5"
+                className="grading-plan-card group relative flex flex-col gap-4 overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md lg:p-5"
               >
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
                 <div className="min-w-0 flex-1 pl-4">
@@ -974,11 +970,11 @@ const ExamGradingPlan: React.FC = () => {
                     </h4>
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-start gap-2">
+                    <div className="grading-plan-category">
                       <span className="mt-0.5 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded px-2 py-1 whitespace-nowrap">
                         정기시험
                       </span>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grading-plan-items">
                         {p.items.filter((i) => isRegularExamItem(i.type))
                           .length === 0 ? (
                           <span className="text-xs text-gray-400 py-1">
@@ -990,13 +986,13 @@ const ExamGradingPlan: React.FC = () => {
                             .map((i, idx) => (
                               <span
                                 key={`regular-${idx}`}
-                                className="inline-flex max-w-full items-center rounded border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs text-gray-600"
+                                className="grading-plan-chip rounded border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs text-gray-600"
                               >
-                                <span className="mr-1 min-w-0 break-keep font-bold">
+                                <span className="grading-plan-name font-bold">
                                   {i.name}
                                 </span>
                                 <span className="text-gray-300 mx-1">|</span>
-                                <span className="text-blue-600 font-bold">
+                                <span className="grading-plan-percent text-blue-600 font-bold">
                                   {i.ratio}%
                                 </span>
                               </span>
@@ -1004,11 +1000,11 @@ const ExamGradingPlan: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-start gap-2">
+                    <div className="grading-plan-category">
                       <span className="mt-0.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 whitespace-nowrap">
                         수행평가
                       </span>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grading-plan-items">
                         {p.items.filter((i) => isPerformanceItem(i.type))
                           .length === 0 ? (
                           <span className="text-xs text-gray-400 py-1">
@@ -1020,13 +1016,13 @@ const ExamGradingPlan: React.FC = () => {
                             .map((i, idx) => (
                               <span
                                 key={`performance-${idx}`}
-                                className="inline-flex max-w-full items-center rounded border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs text-gray-600"
+                                className="grading-plan-chip rounded border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs text-gray-600"
                               >
-                                <span className="mr-1 min-w-0 break-keep font-bold">
+                                <span className="grading-plan-name font-bold">
                                   {i.name}
                                 </span>
                                 <span className="text-gray-300 mx-1">|</span>
-                                <span className="text-blue-600 font-bold">
+                                <span className="grading-plan-percent text-blue-600 font-bold">
                                   {i.ratio}%
                                 </span>
                               </span>
@@ -1036,7 +1032,7 @@ const ExamGradingPlan: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2 border-gray-100 opacity-100 transition duration-200 lg:ml-4 lg:flex-col lg:border-l lg:pl-4 lg:opacity-0 lg:group-hover:opacity-100">
+                <div className="grading-plan-actions">
                   <button
                     onClick={() => openPreview(p)}
                     className="text-emerald-600 hover:bg-emerald-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-emerald-100 shadow-sm"

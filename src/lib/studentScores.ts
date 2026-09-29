@@ -59,21 +59,24 @@ export interface SubjectScoreInsight {
 
 export const SUBJECT_PRIORITY = [
   "국어",
-  "영어",
   "수학",
   "사회",
   "역사",
   "도덕",
   "과학",
-  "기술",
-  "가정",
-  "기술가정",
+  "영어",
   "기가",
-  "정보",
+  "체육",
   "음악",
   "미술",
-  "체육",
 ];
+
+export const SCORE_ACHIEVEMENT_GUIDANCE = {
+  general:
+    "일반 교과: A 90점 이상 · B 80~89점 · C 70~79점 · D 60~69점 · E 60점 미만",
+  artsPE: "음악·미술·체육: A 80점 이상 · B 60~79점 · C 60점 미만 (3단계)",
+  rounding: "성취도는 환산 점수를 정수로 반올림하여 판정합니다.",
+};
 
 export const getScoreKey = (planId: string, itemIndex: number) =>
   `${planId}_${itemIndex}`;
@@ -145,7 +148,11 @@ export const getAchievementColor = (score: number, subject: string) =>
   getScoreBandColor(getGradeBand(score, subject));
 
 export const getSubjectPriorityIndex = (subject: string) => {
-  const idx = SUBJECT_PRIORITY.findIndex((key) => subject.includes(key));
+  const idx = SUBJECT_PRIORITY.findIndex((key) =>
+    key === "기가"
+      ? ["기가", "기술", "가정"].some((alias) => subject.includes(alias))
+      : subject.includes(key),
+  );
   return idx === -1 ? 999 : idx;
 };
 

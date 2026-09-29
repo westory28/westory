@@ -571,7 +571,7 @@ const ScoreDashboard: React.FC = () => {
           >
             <option value="latest">등록순 (최신)</option>
             <option value="name">과목명 (가나다)</option>
-            <option value="importance">중요도순 (국영수...)</option>
+            <option value="importance">중요도순 (국어·수학·사회…)</option>
           </select>
         </div>
         <button
