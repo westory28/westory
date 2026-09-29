@@ -854,193 +854,212 @@ const HistoryClassroomIndex: React.FC = () => {
                   return (
                     <article
                       key={item.assignment.id}
-                      className="rounded-[24px] border border-slate-200 bg-white px-5 py-5 shadow-sm transition hover:border-blue-200 hover:shadow-md"
+                      className="flex flex-col gap-2 rounded-[24px] border border-slate-200 bg-white px-5 py-3 shadow-sm transition hover:border-blue-200 hover:shadow-md sm:flex-row sm:items-center sm:gap-4"
                     >
-                      <h2 className="text-xl font-black text-slate-950 [overflow-wrap:anywhere]">
-                        {item.assignment.title}
-                      </h2>
-                      {item.assignment.sourceType === "lesson" &&
-                        lessonBreadcrumb && (
-                          <p className="mt-1 text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]">
-                            {lessonBreadcrumb}
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-xl font-black text-slate-950 [overflow-wrap:anywhere]">
+                          {item.assignment.title}
+                        </h2>
+                        {(item.assignmentReason ||
+                          item.assignment.description) && (
+                          <p
+                            data-history-reason="true"
+                            className="mt-1 text-sm leading-5 text-slate-600 [overflow-wrap:anywhere]"
+                          >
+                            {item.assignmentReason ||
+                              item.assignment.description}
                           </p>
                         )}
-                      <dl
-                        data-history-primary-info="true"
-                        className="my-4 grid grid-cols-3 divide-x divide-slate-200"
-                      >
-                        <div className="min-w-0 pr-3">
-                          <dt className="text-xs text-slate-500">문제</dt>
-                          <dd className="mt-1 text-lg font-bold text-slate-900">
-                            {item.assignment.blanks.length}문제
-                          </dd>
-                        </div>
-                        <div className="min-w-0 px-3">
-                          <dt className="text-xs text-slate-500">제한 시간</dt>
-                          <dd className="mt-1 text-lg font-bold text-slate-900">
-                            {item.assignment.timeLimitMinutes > 0
-                              ? `${item.assignment.timeLimitMinutes}분`
-                              : "없음"}
-                          </dd>
-                        </div>
-                        <div className="min-w-0 pl-3">
-                          <dt className="text-xs text-slate-500">통과 기준</dt>
-                          <dd className="mt-1 text-lg font-bold text-slate-900">
-                            {item.assignment.passThresholdPercent}%
-                          </dd>
-                        </div>
-                      </dl>
-                      {(item.assignmentReason ||
-                        item.assignment.description) && (
-                        <p className="text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
-                          {item.assignmentReason || item.assignment.description}
-                        </p>
-                      )}
-                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-slate-500">
-                        <span>
-                          재도전 제한 {item.assignment.cooldownMinutes || 0}분
-                        </span>
-                        <span>{item.dueLabel}</span>
-                        <span>
-                          시도 {item.attemptCount}회
-                          {item.bestPercent != null
-                            ? ` · 최고 ${item.bestPercent}%`
-                            : ""}
-                        </span>
-                        {item.passedAttempt ? (
+                        {item.assignment.sourceType === "lesson" &&
+                          lessonBreadcrumb && (
+                            <p
+                              data-history-breadcrumb="true"
+                              className="mt-1 text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]"
+                            >
+                              {lessonBreadcrumb}
+                            </p>
+                          )}
+                        <dl
+                          data-history-primary-info="true"
+                          className="my-2 grid grid-cols-3 divide-x divide-slate-200"
+                        >
+                          <div className="min-w-0 pr-3">
+                            <dt className="text-xs text-slate-500">문제</dt>
+                            <dd className="mt-1 text-lg font-bold text-slate-900">
+                              {item.assignment.blanks.length}문제
+                            </dd>
+                          </div>
+                          <div className="min-w-0 px-3">
+                            <dt className="text-xs text-slate-500">
+                              제한 시간
+                            </dt>
+                            <dd className="mt-1 text-lg font-bold text-slate-900">
+                              {item.assignment.timeLimitMinutes > 0
+                                ? `${item.assignment.timeLimitMinutes}분`
+                                : "없음"}
+                            </dd>
+                          </div>
+                          <div className="min-w-0 pl-3">
+                            <dt className="text-xs text-slate-500">
+                              통과 기준
+                            </dt>
+                            <dd className="mt-1 text-lg font-bold text-slate-900">
+                              {item.assignment.passThresholdPercent}%
+                            </dd>
+                          </div>
+                        </dl>
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-slate-500">
                           <span>
-                            {item.passedAttempt.score}/
-                            {item.passedAttempt.total}문제 ·{" "}
-                            {item.passedAttemptNumber}번째 시도
+                            재도전 제한 {item.assignment.cooldownMinutes || 0}분
                           </span>
-                        ) : (
-                          item.latest && (
+                          <span>{item.dueLabel}</span>
+                          <span>
+                            시도 {item.attemptCount}회
+                            {item.bestPercent != null
+                              ? ` · 최고 ${item.bestPercent}%`
+                              : ""}
+                          </span>
+                          {item.passedAttempt ? (
                             <span>
-                              최근 {item.latest.score}/{item.latest.total}문제 ·{" "}
-                              {getResultLabel(item.latest.status)}
+                              {item.passedAttempt.score}/
+                              {item.passedAttempt.total}문제 ·{" "}
+                              {item.passedAttemptNumber}번째 시도
                             </span>
-                          )
+                          ) : (
+                            item.latest && (
+                              <span>
+                                최근 {item.latest.score}/{item.latest.total}문제
+                                · {getResultLabel(item.latest.status)}
+                              </span>
+                            )
+                          )}
+                        </div>
+                        {(item.canRecoverPending ||
+                          item.status !== "retry") && (
+                          <div
+                            data-history-status-panel="true"
+                            className="mt-2 flex flex-wrap items-center gap-2"
+                          >
+                            <div
+                              className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 ${statusMeta.textClassName}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 24 24"
+                                  className="h-5 w-5 shrink-0"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  {item.canRecoverPending ? (
+                                    <>
+                                      <path d="M4 7v5h5M20 17v-5h-5" />
+                                      <path d="M6 17a7 7 0 0 0 12-1M18 7A7 7 0 0 0 6 8" />
+                                    </>
+                                  ) : item.status === "cooldown" ? (
+                                    <>
+                                      <circle cx="12" cy="12" r="9" />
+                                      <path d="M12 7v5l3 2" />
+                                    </>
+                                  ) : item.status === "passed" ? (
+                                    <>
+                                      <circle cx="12" cy="12" r="9" />
+                                      <path d="m8 12 3 3 5-6" />
+                                    </>
+                                  ) : item.status === "closed" ? (
+                                    <>
+                                      <circle cx="12" cy="12" r="9" />
+                                      <path d="m9 9 6 6m0-6-6 6" />
+                                    </>
+                                  ) : (
+                                    <path d="m8 4 12 8-12 8Z" />
+                                  )}
+                                </svg>
+                                <div className="text-base font-bold leading-6">
+                                  {item.canRecoverPending
+                                    ? item.hasRecoveredResult
+                                      ? "제출 완료"
+                                      : "제출 대기"
+                                    : statusMeta.label}
+                                </div>
+                              </div>
+                              {!item.canRecoverPending &&
+                                item.status === "cooldown" && (
+                                  <div
+                                    role="timer"
+                                    aria-label="재도전까지 남은 시간"
+                                    className="text-base font-semibold tabular-nums"
+                                  >
+                                    약 {item.remainMinutes}분 후 가능
+                                  </div>
+                                )}
+                            </div>
+                          </div>
                         )}
                       </div>
                       <div
-                        data-history-status-panel="true"
-                        className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-3"
+                        data-history-actions="true"
+                        className="flex shrink-0 flex-wrap items-center justify-end gap-2 self-end empty:hidden sm:max-w-40 sm:flex-col sm:items-stretch sm:self-center"
                       >
-                        <div
-                          className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 ${statusMeta.textClassName}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <svg
-                              aria-hidden="true"
-                              viewBox="0 0 24 24"
-                              className="h-5 w-5 shrink-0"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              {item.canRecoverPending ? (
-                                <>
-                                  <path d="M4 7v5h5M20 17v-5h-5" />
-                                  <path d="M6 17a7 7 0 0 0 12-1M18 7A7 7 0 0 0 6 8" />
-                                </>
-                              ) : item.status === "cooldown" ? (
-                                <>
-                                  <circle cx="12" cy="12" r="9" />
-                                  <path d="M12 7v5l3 2" />
-                                </>
-                              ) : item.status === "passed" ? (
-                                <>
-                                  <circle cx="12" cy="12" r="9" />
-                                  <path d="m8 12 3 3 5-6" />
-                                </>
-                              ) : item.status === "closed" ? (
-                                <>
-                                  <circle cx="12" cy="12" r="9" />
-                                  <path d="m9 9 6 6m0-6-6 6" />
-                                </>
-                              ) : (
-                                <path d="m8 4 12 8-12 8Z" />
-                              )}
-                            </svg>
-                            <div className="text-base font-bold leading-6">
-                              {item.canRecoverPending
-                                ? item.hasRecoveredResult
-                                  ? "제출 완료"
-                                  : "제출 대기"
-                                : statusMeta.label}
+                        {canStart && (
+                          <button
+                            type="button"
+                            disabled={!canStart}
+                            onClick={() => {
+                              if (!canStart) return;
+                              navigate(
+                                `/student/history-classroom/run?id=${item.assignment.id}`,
+                              );
+                            }}
+                            className={`min-h-11 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed ${item.canRecoverPending ? getStatusMeta("available").buttonClassName : statusMeta.buttonClassName}`}
+                          >
+                            {item.canRecoverPending
+                              ? item.hasRecoveredResult
+                                ? "제출 결과 확인"
+                                : "제출 재시도"
+                              : item.status === "retry"
+                                ? "다시 도전하기"
+                                : item.status === "available"
+                                  ? "응시하기"
+                                  : statusMeta.label}
+                          </button>
+                        )}
+
+                        {canRequestExemption && item.availableExemption && (
+                          <button
+                            type="button"
+                            disabled={Boolean(requestingAssignmentId)}
+                            onClick={() => {
+                              if (!item.availableExemption) return;
+                              void handleRequestExemption(
+                                item.assignment.id,
+                                item.availableExemption.id,
+                              );
+                            }}
+                            className="min-h-11 whitespace-nowrap rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+                          >
+                            {isRequestingExemption
+                              ? "요청 보내는 중"
+                              : "면제권 사용 요청"}
+                          </button>
+                        )}
+
+                        {!item.passedAttempt &&
+                          item.exemptionState === "requested" && (
+                            <div className="text-sm font-semibold text-indigo-700">
+                              면제권 사용 요청 중
                             </div>
-                          </div>
-                          {!item.canRecoverPending &&
-                            item.status === "cooldown" && (
-                              <div
-                                role="timer"
-                                aria-label="재도전까지 남은 시간"
-                                className="text-base font-semibold tabular-nums"
-                              >
-                                약 {item.remainMinutes}분 후 가능
-                              </div>
-                            )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 empty:hidden max-sm:w-full">
-                          {canStart && (
-                            <button
-                              type="button"
-                              disabled={!canStart}
-                              onClick={() => {
-                                if (!canStart) return;
-                                navigate(
-                                  `/student/history-classroom/run?id=${item.assignment.id}`,
-                                );
-                              }}
-                              className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed max-sm:flex-1 ${item.canRecoverPending ? getStatusMeta("available").buttonClassName : statusMeta.buttonClassName}`}
-                            >
-                              {item.canRecoverPending
-                                ? item.hasRecoveredResult
-                                  ? "제출 결과 확인"
-                                  : "제출 재시도"
-                                : item.status === "retry"
-                                  ? "다시 도전하기"
-                                  : item.status === "available"
-                                    ? "응시하기"
-                                    : statusMeta.label}
-                            </button>
                           )}
 
-                          {canRequestExemption && item.availableExemption && (
-                            <button
-                              type="button"
-                              disabled={Boolean(requestingAssignmentId)}
-                              onClick={() => {
-                                if (!item.availableExemption) return;
-                                void handleRequestExemption(
-                                  item.assignment.id,
-                                  item.availableExemption.id,
-                                );
-                              }}
-                              className="min-h-11 whitespace-nowrap rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 max-sm:flex-1"
-                            >
-                              {isRequestingExemption
-                                ? "요청 보내는 중"
-                                : "면제권 사용 요청"}
-                            </button>
+                        {!item.passedAttempt &&
+                          item.exemptionState === "used" && (
+                            <div className="text-sm font-semibold text-emerald-700">
+                              면제권 사용됨
+                            </div>
                           )}
-
-                          {!item.passedAttempt &&
-                            item.exemptionState === "requested" && (
-                              <div className="text-sm font-semibold text-indigo-700">
-                                면제권 사용 요청 중
-                              </div>
-                            )}
-
-                          {!item.passedAttempt &&
-                            item.exemptionState === "used" && (
-                              <div className="text-sm font-semibold text-emerald-700">
-                                면제권 사용됨
-                              </div>
-                            )}
-                        </div>
                       </div>
                     </article>
                   );
