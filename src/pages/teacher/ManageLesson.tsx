@@ -3290,7 +3290,7 @@ const ManageLesson: React.FC = () => {
               className={`fas ${isLeaf ? "fa-file-alt" : isExpanded ? "fa-folder-open" : "fa-folder"}`}
               aria-hidden="true"
             />
-            <span className="min-w-0 break-words">{node.title}</span>
+            <span className="teacher-navigation-label">{node.title}</span>
             {!isLeaf && (
               <i
                 className={`fas fa-caret-${isExpanded ? "down" : "right"}`}

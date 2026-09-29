@@ -69,7 +69,10 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({ onSelect }) => {
       </button>
       {treeData.map((big) => (
         <div key={big.id}>
-          <div className="px-3 py-2 text-sm font-bold text-gray-700 break-words">
+          <div
+            className="teacher-navigation-label px-3 py-2 text-sm font-bold text-gray-700"
+            title={big.title}
+          >
             {big.title}
           </div>
           {big.children?.map((mid) => (
@@ -82,7 +85,7 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({ onSelect }) => {
               title={mid.title}
             >
               <i className="far fa-folder" aria-hidden="true" />
-              <span className="min-w-0 break-words">{mid.title}</span>
+              <span className="teacher-navigation-label">{mid.title}</span>
             </button>
           ))}
         </div>

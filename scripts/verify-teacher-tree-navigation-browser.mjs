@@ -129,6 +129,43 @@ try {
         name: "긴 한국어 수업 자료 제목을 확인하는 항목 이름 수정",
       })
       .click();
+    const rowLayouts = await lessonNav
+      .locator(".teacher-sub-tree-row")
+      .evaluateAll((rows) =>
+        rows.map((row) => {
+          const selection = row.querySelector(".teacher-settings-section");
+          const label = selection.querySelector(".teacher-navigation-label");
+          const box = selection.getBoundingClientRect();
+          return {
+            nowrap: getComputedStyle(label).whiteSpace,
+            labelWidth: label.getBoundingClientRect().width,
+            sameRow: [
+              ...row.querySelectorAll(".teacher-sub-tree-actions > button"),
+            ].every((button) => {
+              const action = button.getBoundingClientRect();
+              return (
+                Math.abs(
+                  action.top + action.height / 2 - (box.top + box.height / 2),
+                ) < 1 && action.left >= box.right - 1
+              );
+            }),
+            fits: row.scrollWidth <= row.clientWidth,
+          };
+        }),
+      );
+    for (const layout of rowLayouts) {
+      assert.equal(layout.nowrap, "nowrap");
+      assert.ok(
+        layout.labelWidth > 24,
+        "menu label remains readable beside actions",
+      );
+      assert.equal(
+        layout.sameRow,
+        true,
+        "management actions stay beside their own item",
+      );
+      assert.equal(layout.fits, true);
+    }
     assert.equal(await page.getByTestId("action").textContent(), "rename:leaf");
     await lessonNav
       .getByRole("button", {

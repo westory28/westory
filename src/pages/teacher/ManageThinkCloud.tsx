@@ -988,7 +988,12 @@ const ManageThinkCloud: React.FC = () => {
                   aria-current={isSelected ? "page" : undefined}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="min-w-0 break-words">{session.title}</p>
+                    <p
+                      className="teacher-navigation-label"
+                      title={session.title}
+                    >
+                      {session.title}
+                    </p>
                     {isActive && (
                       <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
                         LIVE

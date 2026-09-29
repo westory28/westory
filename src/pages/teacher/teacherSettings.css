@@ -34,6 +34,7 @@
 .teacher-settings-heading h1,
 .teacher-settings-heading h2 {
   margin: 0;
+  white-space: nowrap;
   color: var(--ws-text-strong, #111827);
   font-size: var(--ws-type-section-title, 1.25rem);
   font-weight: 800;
@@ -72,7 +73,22 @@
 
 .teacher-sub-navigation .teacher-settings-section {
   min-width: 0;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+}
+
+.teacher-navigation-label,
+.teacher-settings-section > span:not(.sr-only),
+.teacher-settings-menu-toggle > span:not(.sr-only) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teacher-settings-section > i,
+.teacher-settings-section > svg,
+.teacher-settings-menu-toggle > svg {
+  flex-shrink: 0;
 }
 
 .teacher-sub-content {
@@ -97,7 +113,7 @@
 
 .teacher-sub-tree-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   min-width: 0;
 }
@@ -105,6 +121,8 @@
 .teacher-sub-tree-row > .teacher-settings-section {
   flex: 1;
   min-width: 0;
+  gap: 6px;
+  padding: 10px 8px;
 }
 
 .teacher-sub-tree-children {
@@ -116,7 +134,15 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: flex-end;
-  width: 100%;
+}
+
+.teacher-sub-tree-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 44px;
 }
 
 @media (max-width: 1279px) {
@@ -170,6 +196,7 @@
 .teacher-settings-section,
 .teacher-settings-menu-toggle {
   display: flex;
+  white-space: nowrap;
   width: 100%;
   min-height: 44px;
   align-items: center;

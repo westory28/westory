@@ -50,12 +50,13 @@ const TeacherMapNavigation: React.FC<TeacherMapNavigationProps> = ({
             }}
             className={`teacher-settings-section min-w-0 flex-1${selectedId === item.id ? " is-active" : ""}`}
             aria-current={selectedId === item.id ? "page" : undefined}
+            title={item.title}
           >
             <i
               className={`fas ${reorderMode ? "fa-grip-lines" : "fa-map"} shrink-0`}
               aria-hidden="true"
             />
-            <span className="min-w-0 break-words">{item.title}</span>
+            <span className="teacher-navigation-label">{item.title}</span>
           </button>
           {renderItemAction && (
             <div className="shrink-0 pr-2">{renderItemAction(item)}</div>

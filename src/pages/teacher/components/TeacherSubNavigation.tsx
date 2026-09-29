@@ -74,7 +74,7 @@ const TeacherSubNavigation: React.FC<TeacherSubNavigationProps> = ({
           aria-controls={menuId}
           onClick={() => setOpen(!expanded)}
         >
-          <span>{activeLabel}</span>
+          <span title={activeLabel}>{activeLabel}</span>
           <TeacherNavigationIcon
             name="chevron"
             className={expanded ? "is-open" : ""}
