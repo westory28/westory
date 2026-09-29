@@ -326,3 +326,5 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 - Teacher submenu width: 288px desktop / 256px tablet (768–1023px); lesson curriculum: 360px / 320px. Below 768px retain full-width disclosure. Truncated teacher menu labels expose full names with native title tooltips. Student submenu dimensions stay unchanged.
 
 - Student weekly schedule keeps date, title, category and period on one row at every viewport, including reduced-motion mode. Reduced motion uses static single-line ellipsis instead of title animation or wrapping.
+
+- Teacher submenu workspaces use 24px outer padding to separate the menu from the global sidebar, with a 24px menu/content gap. Use 256px desktop / 240px tablet menus and 288px desktop / 256px tablet lesson contents. Mobile retains its existing disclosure and spacing. Student dimensions remain unchanged.
