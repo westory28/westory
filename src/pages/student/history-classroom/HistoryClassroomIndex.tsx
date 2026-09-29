@@ -860,9 +860,22 @@ const HistoryClassroomIndex: React.FC = () => {
                         <h2 className="text-xl font-black text-slate-950 [overflow-wrap:anywhere]">
                           {item.assignment.title}
                         </h2>
+                        {(item.assignmentReason ||
+                          item.assignment.description) && (
+                          <p
+                            data-history-reason="true"
+                            className="mt-1 text-sm leading-5 text-slate-600 [overflow-wrap:anywhere]"
+                          >
+                            {item.assignmentReason ||
+                              item.assignment.description}
+                          </p>
+                        )}
                         {item.assignment.sourceType === "lesson" &&
                           lessonBreadcrumb && (
-                            <p className="mt-1 text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]">
+                            <p
+                              data-history-breadcrumb="true"
+                              className="mt-1 text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]"
+                            >
                               {lessonBreadcrumb}
                             </p>
                           )}
@@ -895,13 +908,6 @@ const HistoryClassroomIndex: React.FC = () => {
                             </dd>
                           </div>
                         </dl>
-                        {(item.assignmentReason ||
-                          item.assignment.description) && (
-                          <p className="text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
-                            {item.assignmentReason ||
-                              item.assignment.description}
-                          </p>
-                        )}
                         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-slate-500">
                           <span>
                             재도전 제한 {item.assignment.cooldownMinutes || 0}분
@@ -928,68 +934,71 @@ const HistoryClassroomIndex: React.FC = () => {
                             )
                           )}
                         </div>
-                        <div
-                          data-history-status-panel="true"
-                          className="mt-2 flex flex-wrap items-center gap-2"
-                        >
+                        {(item.canRecoverPending ||
+                          item.status !== "retry") && (
                           <div
-                            className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 ${statusMeta.textClassName}`}
+                            data-history-status-panel="true"
+                            className="mt-2 flex flex-wrap items-center gap-2"
                           >
-                            <div className="flex items-center gap-2">
-                              <svg
-                                aria-hidden="true"
-                                viewBox="0 0 24 24"
-                                className="h-5 w-5 shrink-0"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                {item.canRecoverPending ? (
-                                  <>
-                                    <path d="M4 7v5h5M20 17v-5h-5" />
-                                    <path d="M6 17a7 7 0 0 0 12-1M18 7A7 7 0 0 0 6 8" />
-                                  </>
-                                ) : item.status === "cooldown" ? (
-                                  <>
-                                    <circle cx="12" cy="12" r="9" />
-                                    <path d="M12 7v5l3 2" />
-                                  </>
-                                ) : item.status === "passed" ? (
-                                  <>
-                                    <circle cx="12" cy="12" r="9" />
-                                    <path d="m8 12 3 3 5-6" />
-                                  </>
-                                ) : item.status === "closed" ? (
-                                  <>
-                                    <circle cx="12" cy="12" r="9" />
-                                    <path d="m9 9 6 6m0-6-6 6" />
-                                  </>
-                                ) : (
-                                  <path d="m8 4 12 8-12 8Z" />
-                                )}
-                              </svg>
-                              <div className="text-base font-bold leading-6">
-                                {item.canRecoverPending
-                                  ? item.hasRecoveredResult
-                                    ? "제출 완료"
-                                    : "제출 대기"
-                                  : statusMeta.label}
-                              </div>
-                            </div>
-                            {!item.canRecoverPending &&
-                              item.status === "cooldown" && (
-                                <div
-                                  role="timer"
-                                  aria-label="재도전까지 남은 시간"
-                                  className="text-base font-semibold tabular-nums"
+                            <div
+                              className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 ${statusMeta.textClassName}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 24 24"
+                                  className="h-5 w-5 shrink-0"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
                                 >
-                                  약 {item.remainMinutes}분 후 가능
+                                  {item.canRecoverPending ? (
+                                    <>
+                                      <path d="M4 7v5h5M20 17v-5h-5" />
+                                      <path d="M6 17a7 7 0 0 0 12-1M18 7A7 7 0 0 0 6 8" />
+                                    </>
+                                  ) : item.status === "cooldown" ? (
+                                    <>
+                                      <circle cx="12" cy="12" r="9" />
+                                      <path d="M12 7v5l3 2" />
+                                    </>
+                                  ) : item.status === "passed" ? (
+                                    <>
+                                      <circle cx="12" cy="12" r="9" />
+                                      <path d="m8 12 3 3 5-6" />
+                                    </>
+                                  ) : item.status === "closed" ? (
+                                    <>
+                                      <circle cx="12" cy="12" r="9" />
+                                      <path d="m9 9 6 6m0-6-6 6" />
+                                    </>
+                                  ) : (
+                                    <path d="m8 4 12 8-12 8Z" />
+                                  )}
+                                </svg>
+                                <div className="text-base font-bold leading-6">
+                                  {item.canRecoverPending
+                                    ? item.hasRecoveredResult
+                                      ? "제출 완료"
+                                      : "제출 대기"
+                                    : statusMeta.label}
                                 </div>
-                              )}
+                              </div>
+                              {!item.canRecoverPending &&
+                                item.status === "cooldown" && (
+                                  <div
+                                    role="timer"
+                                    aria-label="재도전까지 남은 시간"
+                                    className="text-base font-semibold tabular-nums"
+                                  >
+                                    약 {item.remainMinutes}분 후 가능
+                                  </div>
+                                )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                       <div
                         data-history-actions="true"

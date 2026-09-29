@@ -608,7 +608,6 @@ try {
       },
       {
         state: "retry",
-        label: "다시 도전 가능",
         action: "다시 도전하기",
         enabled: true,
       },
@@ -625,10 +624,26 @@ try {
       const item = card(expected.state);
       await item.waitFor();
       const panel = item.locator('[data-history-status-panel="true"]');
-      assert(
-        await panel.isVisible(),
-        `${expected.state} has a unified footer state row`,
-      );
+      if (expected.state === "retry") {
+        assert.equal(
+          await panel.count(),
+          0,
+          "retry omits the redundant status row",
+        );
+        assert.equal(
+          await item.getByText("다시 도전 가능", { exact: true }).count(),
+          0,
+        );
+        assert(
+          (await item.boundingBox()).height < (width === 390 ? 347 : 226),
+          "retry card is shorter",
+        );
+      } else {
+        assert(
+          await panel.isVisible(),
+          `${expected.state} preserves its status`,
+        );
+      }
       if (expected.label)
         assert(
           await panel.getByText(expected.label, { exact: true }).isVisible(),
@@ -713,49 +728,61 @@ try {
         ),
         20,
       );
-      const breadcrumb = item.locator("h2 + p");
+      const reason = item.locator('[data-history-reason="true"]');
+      const breadcrumb = item.locator('[data-history-breadcrumb="true"]');
+      assert.equal(await reason.count(), 1, "assignment reason appears once");
+      const reasonBox = await reason.boundingBox();
+      const headingBox = await heading.boundingBox();
+      const breadcrumbBox = await breadcrumb.boundingBox();
+      assert(
+        reasonBox.y >= headingBox.y + headingBox.height &&
+          reasonBox.y + reasonBox.height <= breadcrumbBox.y,
+        "reason sits directly below the title before the curriculum path",
+      );
       assert.equal(
         await breadcrumb.textContent(),
         "I. 문명의 발생과 고대 세계의 형성 및 발전 > 동아시아 고대 국가들의 성장과 주변 나라와의 교류",
         "duplicate leaf is omitted from the visible breadcrumb",
       );
-      const footerStyle = await panel.evaluate((el) => {
-        const style = getComputedStyle(el);
-        return {
-          background: style.backgroundColor,
-          left: style.borderLeftWidth,
-          right: style.borderRightWidth,
-          bottom: style.borderBottomWidth,
-        };
-      });
-      assert.deepEqual(
-        footerStyle,
-        {
-          background: "rgba(0, 0, 0, 0)",
-          left: "0px",
-          right: "0px",
-          bottom: "0px",
-        },
-        "status uses a divider row without a separate colored box",
-      );
-      if (expected.label)
-        assert.equal(
-          await panel
-            .getByText(expected.label, { exact: true })
-            .evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
-          16,
+      if (expected.state !== "retry") {
+        const footerStyle = await panel.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return {
+            background: style.backgroundColor,
+            left: style.borderLeftWidth,
+            right: style.borderRightWidth,
+            bottom: style.borderBottomWidth,
+          };
+        });
+        assert.deepEqual(
+          footerStyle,
+          {
+            background: "rgba(0, 0, 0, 0)",
+            left: "0px",
+            right: "0px",
+            bottom: "0px",
+          },
+          "status uses a divider row without a separate colored box",
         );
-      const primaryBox = await primary.boundingBox();
-      const panelBox = await panel.boundingBox();
-      assert(
-        panelBox.y >= primaryBox.y + primaryBox.height &&
-          Math.abs(panelBox.width - primaryBox.width) < 2,
-        "status footer spans the same card width below the primary information",
-      );
-      assert(
-        panelBox.x >= 0 && panelBox.x + panelBox.width <= width + 1,
-        `${expected.state} panel stays inside viewport`,
-      );
+        if (expected.label)
+          assert.equal(
+            await panel
+              .getByText(expected.label, { exact: true })
+              .evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+            16,
+          );
+        const primaryBox = await primary.boundingBox();
+        const panelBox = await panel.boundingBox();
+        assert(
+          panelBox.y >= primaryBox.y + primaryBox.height &&
+            Math.abs(panelBox.width - primaryBox.width) < 2,
+          "status footer spans the same card width below the primary information",
+        );
+        assert(
+          panelBox.x >= 0 && panelBox.x + panelBox.width <= width + 1,
+          `${expected.state} panel stays inside viewport`,
+        );
+      }
       if (expected.state === "cooldown") {
         const remaining = panel.getByText(/약 [1-5]분 후 가능/);
         assert(
