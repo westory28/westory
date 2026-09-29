@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -334,7 +335,10 @@ const ThinkCloud: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+      <PortalWorkspace
+        as="main"
+        className="teacher-sub-workspace teacher-sub-workspace--page flex-1"
+      >
         <PortalSubNavigation
           title="생각모아"
           activeLabel={selectedSession?.title || "주제 선택"}
@@ -518,7 +522,7 @@ const ThinkCloud: React.FC = () => {
             </>
           )}
         </div>
-      </main>
+      </PortalWorkspace>
     </div>
   );
 };

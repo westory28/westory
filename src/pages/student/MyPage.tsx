@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../components/common/PortalSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -3037,7 +3038,10 @@ const MyPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+      <PortalWorkspace
+        as="main"
+        className="teacher-sub-workspace teacher-sub-workspace--page flex-1"
+      >
         <PortalSubNavigation
           title="마이페이지"
           activeLabel={
@@ -4619,7 +4623,7 @@ const MyPage: React.FC = () => {
             )}
           </div>
         </section>
-      </main>
+      </PortalWorkspace>
 
       {selectedQuizAttempt && (
         <div

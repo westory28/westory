@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../components/common/PortalWorkspace";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -219,7 +220,7 @@ export default function ManageWeplay() {
       </main>
     );
   return (
-    <div className="teacher-sub-workspace teacher-sub-workspace--page teacher-weplay-workspace">
+    <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-weplay-workspace">
       <TeacherSubNavigation
         title="위플레이 관리"
         activeLabel={game.name}
@@ -487,6 +488,6 @@ export default function ManageWeplay() {
           </>
         )}
       </main>
-    </div>
+    </PortalWorkspace>
   );
 }

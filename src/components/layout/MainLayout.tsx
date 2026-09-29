@@ -10,7 +10,10 @@ import {
   useAppToast,
 } from "../common/AppToastProvider";
 import Header from "../common/Header";
-import Footer from "../common/Footer";
+import {
+  PortalFallbackFooter,
+  PortalWorkspaceFooterProvider,
+} from "../common/PortalWorkspace";
 import "./teacherLayout.css";
 import "./studentLayout.css";
 import { PageLoading } from "../common/LoadingState";
@@ -296,43 +299,45 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <div
-      className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? "teacher-layout" : isStudentRoute ? "student-layout" : ""} ${teacherSidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
-    >
-      <Header
-        teacherLayout={isTeacherRoute}
-        studentLayout={isStudentRoute}
-        sidebarCollapsed={teacherSidebarCollapsed}
-        onToggleSidebar={toggleTeacherSidebar}
-      />
-      <SemesterArchiveBanner />
-      {studentEnhancementsReady && (
-        <React.Suspense fallback={null}>
-          <StudentRankPromotionController />
-          <StudentHistoryDictionaryController />
-        </React.Suspense>
-      )}
-      {teacherEnhancementsReady && (
-        <React.Suspense fallback={null}>
-          <TeacherPatchMemoController />
-        </React.Suspense>
-      )}
-      <main
-        className={`min-h-0 w-full flex-1 ${
-          isStudentQuizRunRoute ? "flex flex-col" : ""
-        }`}
+    <PortalWorkspaceFooterProvider>
+      <div
+        className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? "teacher-layout" : isStudentRoute ? "student-layout" : ""} ${teacherSidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
       >
-        {isArchiveUnavailableRoute(location.pathname) ? (
-          <SemesterArchiveUnavailable />
-        ) : (
-          children
+        <Header
+          teacherLayout={isTeacherRoute}
+          studentLayout={isStudentRoute}
+          sidebarCollapsed={teacherSidebarCollapsed}
+          onToggleSidebar={toggleTeacherSidebar}
+        />
+        <SemesterArchiveBanner />
+        {studentEnhancementsReady && (
+          <React.Suspense fallback={null}>
+            <StudentRankPromotionController />
+            <StudentHistoryDictionaryController />
+          </React.Suspense>
         )}
-      </main>
-      {(!/^\/teacher\/settings\/?$/.test(location.pathname) ||
-        isArchiveUnavailableRoute(location.pathname)) && (
-        <Footer teacher={isTeacherRoute || isStudentRoute} />
-      )}
-    </div>
+        {teacherEnhancementsReady && (
+          <React.Suspense fallback={null}>
+            <TeacherPatchMemoController />
+          </React.Suspense>
+        )}
+        <main
+          className={`min-h-0 w-full flex-1 ${
+            isStudentQuizRunRoute ? "flex flex-col" : ""
+          }`}
+        >
+          {isArchiveUnavailableRoute(location.pathname) ? (
+            <SemesterArchiveUnavailable />
+          ) : (
+            children
+          )}
+        </main>
+        {(!/^\/teacher\/settings\/?$/.test(location.pathname) ||
+          isArchiveUnavailableRoute(location.pathname)) && (
+          <PortalFallbackFooter teacher={isTeacherRoute || isStudentRoute} />
+        )}
+      </div>
+    </PortalWorkspaceFooterProvider>
   );
 };
 

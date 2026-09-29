@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useState } from "react";
+import PortalWorkspace from "../../components/common/PortalWorkspace";
+import React, { useEffect, useState } from "react";
 import QuizUnitTree from "./components/QuizUnitTree";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import QuizEditor from "./components/QuizEditor";
@@ -87,7 +88,8 @@ const ManageQuiz: React.FC = () => {
   };
 
   return (
-    <div
+    <PortalWorkspace
+      footerActive={isManageTab && canWrite}
       className={
         isManageTab && canWrite
           ? "teacher-sub-workspace teacher-sub-workspace--page"
@@ -164,7 +166,7 @@ const ManageQuiz: React.FC = () => {
           canEdit={canWrite}
         />
       </main>
-    </div>
+    </PortalWorkspace>
   );
 };
 

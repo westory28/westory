@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import React, { useEffect, useMemo, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
@@ -163,7 +164,10 @@ const StudentMaps: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+      <PortalWorkspace
+        as="main"
+        className="teacher-sub-workspace teacher-sub-workspace--page flex-1"
+      >
         <PortalSubNavigation
           title="지도"
           activeLabel={
@@ -285,7 +289,7 @@ const StudentMaps: React.FC = () => {
             </div>
           )}
         </section>
-      </main>
+      </PortalWorkspace>
     </div>
   );
 };

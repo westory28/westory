@@ -28,6 +28,20 @@
   justify-content: flex-end;
 }
 
+.student-layout .teacher-sidebar-settings {
+  min-width: 0;
+  min-height: 44px;
+  color: var(--ws-primary);
+  border-color: var(--ws-border-blue, #dbeafe);
+  background: var(--ws-primary-soft);
+}
+
+.student-layout .teacher-sidebar-settings .teacher-sidebar-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .student-layout .teacher-navigation-toggle {
   position: relative;
 }

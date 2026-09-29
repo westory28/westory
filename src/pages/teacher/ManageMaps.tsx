@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../components/common/PortalWorkspace";
 import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1489,7 +1490,10 @@ const ManageMaps: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+      <PortalWorkspace
+        as="main"
+        className="teacher-sub-workspace teacher-sub-workspace--page flex-1"
+      >
         <TeacherMapNavigation
           heading="지도"
           items={sidebarItems}
@@ -1663,7 +1667,7 @@ const ManageMaps: React.FC = () => {
             </div>
           )}
         </section>
-      </main>
+      </PortalWorkspace>
 
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">

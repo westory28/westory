@@ -58,6 +58,33 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   const navigationId = `${portal}-navigation`;
   const portalLabel = portal === "student" ? "학생" : "교사";
   const homeLabel = portal === "student" ? "첫 화면" : "대시보드";
+  const myPageGroup =
+    portal === "student"
+      ? groups.find((group) => group.id === "mypage" && group.directUrl)
+      : undefined;
+  const primaryGroups = groups.filter((group) => group !== myPageGroup);
+  const bottomLink =
+    portal === "teacher" && showSettings
+      ? {
+          url: "/teacher/settings",
+          label: "설정",
+          title: "관리자 설정",
+          compactLabel: "설정",
+          icon: "settings" as const,
+        }
+      : myPageGroup
+        ? {
+            url: myPageGroup.directUrl || "/student/mypage",
+            label: myPageGroup.name,
+            title: myPageGroup.name,
+            compactLabel: "내 정보",
+            icon: myPageGroup.icon,
+          }
+        : undefined;
+  const bottomLinkActive = bottomLink
+    ? location.pathname === bottomLink.url.split("?")[0] ||
+      location.pathname.startsWith(`${bottomLink.url.split("?")[0]}/`)
+    : false;
   const allChildren = groups.flatMap((group) => group.children);
   const activeGroup = groups.find((group) =>
     group.children.some((child) =>
@@ -204,12 +231,13 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
               <span className="teacher-sidebar-label">{homeLabel}</span>
             </Link>
           )}
-          {groups.map((group, index) => {
+          {primaryGroups.map((group, index) => {
             const open = openGroup === group.id;
             const expanded = open && (!collapsed || mobileOpen);
             const animating = animatingGroups.includes(group.id);
             const active = activeGroup === group.id;
-            const divider = group.secondary && !groups[index - 1]?.secondary;
+            const divider =
+              group.secondary && !primaryGroups[index - 1]?.secondary;
             const groupId = `${portal}-menu-${group.id}`;
             return (
               <div
@@ -304,20 +332,27 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
           })}
         </nav>
         <div className="teacher-sidebar-bottom">
-          {portal === "teacher" && showSettings && (
+          {bottomLink && (
             <Link
-              to="/teacher/settings"
-              className={`teacher-sidebar-settings ${location.pathname.startsWith("/teacher/settings") ? "is-active" : ""}`}
+              to={bottomLink.url}
+              className={`teacher-sidebar-settings ${bottomLinkActive ? "is-active" : ""}`}
               onClick={onCloseMobile}
-              aria-current={
-                location.pathname.startsWith("/teacher/settings")
-                  ? "page"
-                  : undefined
-              }
-              title="관리자 설정"
+              aria-current={bottomLinkActive ? "page" : undefined}
+              aria-label={bottomLink.label}
+              title={bottomLink.title}
             >
-              <TeacherNavigationIcon name="settings" />
-              <span className="teacher-sidebar-label">설정</span>
+              <TeacherNavigationIcon name={bottomLink.icon} />
+              <span className="teacher-sidebar-label">
+                <span className="teacher-sidebar-full-label">
+                  {bottomLink.label}
+                </span>
+                <span
+                  className="teacher-sidebar-compact-label"
+                  aria-hidden="true"
+                >
+                  {bottomLink.compactLabel}
+                </span>
+              </span>
             </Link>
           )}
           <button

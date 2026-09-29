@@ -62,6 +62,7 @@ const Footer: React.FC<{ teacher?: boolean }> = ({ teacher = false }) => {
         <div className="container mx-auto text-center">
           <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
             <button
+              type="button"
               onClick={() => openPolicyModal("terms")}
               className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
             >
@@ -69,6 +70,7 @@ const Footer: React.FC<{ teacher?: boolean }> = ({ teacher = false }) => {
             </button>
             <span className="text-stone-300 text-xs">|</span>
             <button
+              type="button"
               onClick={() => openPolicyModal("privacy")}
               className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
             >
@@ -118,6 +120,7 @@ const Footer: React.FC<{ teacher?: boolean }> = ({ teacher = false }) => {
                 {POLICY_TITLE[openPolicy]}
               </h2>
               <button
+                type="button"
                 onClick={() => setOpenPolicy(null)}
                 className="text-gray-400 hover:text-gray-700 text-xl transition"
               >

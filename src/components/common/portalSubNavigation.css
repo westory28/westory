@@ -97,7 +97,24 @@
 }
 
 .teacher-sub-workspace--page {
+  grid-template-rows: 1fr auto;
   min-height: calc(100dvh - var(--teacher-account-height, 48px));
+}
+
+.teacher-sub-workspace--page > .teacher-sub-navigation {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+.teacher-sub-workspace--page > .teacher-sub-content {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.teacher-sub-workspace-footer {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
 }
 
 @media (min-width: 1024px) {

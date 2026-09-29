@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../../../components/common/PortalWorkspace";
 import NumericInput from "../../../../components/common/NumericInput";
 import React from "react";
 import TeacherSubNavigation from "../TeacherSubNavigation";
@@ -302,7 +303,10 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
         if (!isWeplaySection) onSubmit();
       }}
     >
-      <div className="teacher-sub-workspace teacher-sub-workspace--page">
+      <PortalWorkspace
+        footerActive={active}
+        className="teacher-sub-workspace teacher-sub-workspace--page"
+      >
         <TeacherSubNavigation
           title="위스 운영 정책"
           activeLabel={activeSection.label}
@@ -1042,7 +1046,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
             </SectionPanel>
           )}
         </div>
-      </div>
+      </PortalWorkspace>
     </form>
   );
 };

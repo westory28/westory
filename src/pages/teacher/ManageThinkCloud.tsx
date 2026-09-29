@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../components/common/PortalWorkspace";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
@@ -917,7 +918,10 @@ const ManageThinkCloud: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+      <PortalWorkspace
+        as="main"
+        className="teacher-sub-workspace teacher-sub-workspace--page flex-1"
+      >
         <TeacherSubNavigation
           title="생각모아"
           activeLabel={
@@ -1023,7 +1027,7 @@ const ManageThinkCloud: React.FC = () => {
             <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>
           )}
         </div>
-      </main>
+      </PortalWorkspace>
 
       {cloudModalOpen && (
         <div

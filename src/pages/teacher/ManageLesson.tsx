@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../components/common/PortalWorkspace";
 import { isSemesterArchive } from "../../lib/semesterArchive";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
@@ -3372,7 +3373,7 @@ const ManageLesson: React.FC = () => {
   };
 
   return (
-    <div className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--lesson">
+    <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--lesson">
       <LessonTreePanel
         treeData={treeData}
         sidebarOpen={sidebarOpen}
@@ -3625,7 +3626,7 @@ const ManageLesson: React.FC = () => {
           }
         />
       )}
-    </div>
+    </PortalWorkspace>
   );
 };
 

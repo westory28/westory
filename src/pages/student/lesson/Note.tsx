@@ -1,3 +1,4 @@
+import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import React, { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import LessonSidebar from "./components/LessonSidebar";
@@ -20,7 +21,7 @@ const Note: React.FC = () => {
 
   return (
     <div className="student-lesson-page bg-gray-50">
-      <div className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--lesson">
+      <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--lesson">
         <LessonSidebar
           isOpen={isSidebarOpen}
           onOpenChange={setIsSidebarOpen}
@@ -34,7 +35,7 @@ const Note: React.FC = () => {
             <LessonContent unitId={unitId} fallbackTitle={title} />
           </div>
         </main>
-      </div>
+      </PortalWorkspace>
     </div>
   );
 };
