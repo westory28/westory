@@ -458,6 +458,7 @@ const Header: React.FC<{
     });
 
   const studentIcons: Record<string, TeacherIconName> = {
+    weplay: "game",
     lesson: "lesson",
     quiz: "assessment",
     "history-classroom": "assessment",
