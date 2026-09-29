@@ -67,6 +67,12 @@ export const MENUS: MenuConfig = {
       url: "/student/mypage",
       icon: "M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 1.79-8 4v1h16v-1c0-2.21-3.582-4-8-4z",
     },
+    {
+      name: "위플레이",
+      url: "/student/weplay",
+      icon: "M6 8h12l3 10-3 2-4-4h-4l-4 4-3-2L6 8zm1 3v4m-2-2h4m7-1h.01M18 14h.01",
+      children: [{ name: "역사가 내려와", url: "/student/weplay" }],
+    },
   ],
   teacher: [
     {

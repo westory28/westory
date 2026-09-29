@@ -1832,6 +1832,16 @@ const assertPointManager = async (request) => {
   return { uid, email, profile };
 };
 
+const assertPointReader = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  if (email === ADMIN_EMAIL) return { uid, email, profile: null };
+  const { profile } = await getUserProfile(uid);
+  if (!hasStaffPermission(profile, 'point_read') && !hasStaffPermission(profile, 'point_manage')) {
+    throw new HttpsError('permission-denied', 'point_read permission is required.');
+  }
+  return { uid, email, profile };
+};
+
 const assertHallOfFameManager = async (request) => {
   const { uid, email } = assertAllowedWestoryUser(request);
   if (email === ADMIN_EMAIL) {
@@ -2605,7 +2615,7 @@ const calculatePointWalletTotals = (transactionDocs) => {
   const spentTotal = safeTransactionDocs.reduce((total, docSnap) => {
     const pointTransaction = docSnap.data() || {};
     const type = String(pointTransaction.type || '').trim();
-    if (type !== 'purchase_hold' && type !== 'purchase_cancel') {
+    if (type !== 'purchase_hold' && type !== 'purchase_cancel' && type !== 'weplay_cost') {
       return total;
     }
     return total - Number(pointTransaction.delta || 0);
@@ -3008,6 +3018,7 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
     'history_classroom_results',
     'history_classroom_exemptions',
     'history_classroom_exemption_requests',
+    'weplay_sessions',
   ];
   const legacyUidCollections = [
     'quiz_results',
@@ -3027,6 +3038,36 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
     ),
   ]);
   queryResults.flat().forEach((ref) => refsByPath.set(ref.path, ref));
+
+  queryResults.flat().filter((ref) => ref.parent.id === 'weplay_sessions').forEach((sessionRef) => {
+    const queueRef = db.doc(`weplay_session_queue/${sessionRef.id}`);
+    refsByPath.set(queueRef.path, queueRef);
+  });
+  const weplayPlayerRef = db.doc(`${semesterRoot}/weplay_players/${uid}`);
+  refsByPath.set(weplayPlayerRef.path, weplayPlayerRef);
+  const [weplayRecords, weplayPeriods] = await Promise.all([
+    weplayPlayerRef.collection('records').get(),
+    db.collection(`${semesterRoot}/weplay_periods`).get(),
+  ]);
+  addQueryDocRefs(refsByPath, weplayRecords);
+  weplayPeriods.docs.forEach((periodDoc) => {
+    ['mild', 'medium', 'spicy'].forEach((difficulty) => {
+      const entryId = crypto.createHash('sha256').update(`${uid}:${difficulty}`).digest('hex');
+      ['entries', 'awards'].forEach((collectionName) => {
+        const entryRef = periodDoc.ref.collection(collectionName).doc(entryId);
+        refsByPath.set(entryRef.path, entryRef);
+      });
+    });
+  });
+  for (const periodDoc of weplayPeriods.docs) {
+    if (!Array.isArray(periodDoc.data().frozenWinners)) continue;
+    await db.runTransaction(async (transaction) => {
+      const period = (await transaction.get(periodDoc.ref)).data() || {};
+      const winners = Array.isArray(period.frozenWinners) ? period.frozenWinners : [];
+      if (!winners.some((winner) => winner.uid === uid)) return;
+      transaction.update(periodDoc.ref, { frozenWinners: winners.map((winner) => winner.uid === uid ? { ...winner, uid: '' } : winner) });
+    });
+  }
 
   const pointWalletRef = db.doc(getPointWalletPath(year, semester, uid));
   refsByPath.set(pointWalletRef.path, pointWalletRef);
@@ -3525,6 +3566,12 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
   const targetEmail = String(targetProfile.email || '').trim().toLowerCase();
   const preserveUserDocument = String(targetProfile.role || '').trim() === 'teacher'
     || targetEmail === ADMIN_EMAIL;
+
+  // Stop new games and automatic payouts before deleting their wallet/data.
+  // A failed deletion remains blocked until the manager retries the deletion.
+  if (userSnap.exists && !preserveUserDocument) {
+    await userRef.set({ weplayDeletionPending: true }, { merge: true });
+  }
 
   const [
     performanceScoreRefs,
@@ -5631,6 +5678,13 @@ exports.createHistoryClassroomExemptionRequest = onCall({ region: REGION }, asyn
 
   return result;
 });
+
+Object.assign(exports, require('./weplay').createWeplayFunctions({
+  db, onCall, onSchedule, HttpsError, FieldValue, REGION,
+  assertAllowedWestoryUser, assertPointManager, assertPointReader, getUserProfile,
+  ensureWallet, loadPolicy, getCurrentRankEarnedTotal, buildWalletBase,
+  buildWalletRankState, createTransactionPayload, markWisHallOfFameDirtySafely,
+}));
 
 exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
   const manager = await assertQuizManager(request);

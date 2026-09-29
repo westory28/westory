@@ -18,6 +18,10 @@ import { AppDialogProvider } from "./components/common/AppDialogProvider";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
+const StudentWeplay = lazyWithRetry(
+  () => import("./pages/student/Weplay"),
+  "student-weplay",
+);
 
 const StudentDashboard = lazyWithRetry(
   () => import("./pages/student/Dashboard"),
@@ -418,6 +422,13 @@ const App: React.FC = () => {
                   element={renderWithLayout(
                     <StudentPoints />,
                     "위스 화면을 준비하는 중입니다.",
+                  )}
+                />
+                <Route
+                  path="/student/weplay"
+                  element={renderWithLayout(
+                    <StudentWeplay />,
+                    "위플레이를 준비하는 중입니다.",
                   )}
                 />
                 <Route

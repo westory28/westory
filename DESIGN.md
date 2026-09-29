@@ -318,6 +318,11 @@ No visible UI work is complete until the design contract and verification eviden
 
 Teacher menu names and lesson tree labels stay on one line. Long labels use ellipsis with the full title available on hover. Lesson add, rename and delete controls remain on the same row as their item, including narrow screens.
 
+### Weplay history rain
+
+- Student Weplay uses the existing 1280px page width, white surfaces, blue primary, neutral borders, 12px radius, and 8/12/16/24px spacing. Students choose 착한맛, 중간맛 or 매운맛 before a 60-second game. Each has three 20-second phases (초반/중반/후반), with fall durations 12/10/8 seconds, 10/8/6 seconds or 8/6/4 seconds respectively. The game field is 320px high at all widths, with three equal lanes and 72px word rows so accepted words of up to 12 characters fit without clipping or overlap. Words move only by transform according to server timing. Reduced motion replaces falling words with stationary rows and remaining seconds. Input and submit remain in normal flow immediately below the field, with 44px targets and 16px text. No decorative animation, extra palette or persistent introductory copy.
+- Teacher Weplay policy reuses the existing policy submenu, form rows, numeric controls and save feedback. Each difficulty has separate class rankings and first/second/third rewards. The cost, result payouts and daily attempt limit are shared across difficulties. Financial cost, maximum loss/return and rule effective dates remain visible because they affect participation and saving decisions.
+
 ### Student weekly dashboard and shared submenus
 
 - The student dashboard uses the teacher weekly schedule pattern: seven-day strip, previous/next week, current week, selected-day event list, search and full-calendar access. Keep student attendance and class-visible schedule data; omit teacher editing and class-management controls.

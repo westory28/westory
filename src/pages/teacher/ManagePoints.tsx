@@ -1941,16 +1941,20 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && activeTab === "policy" && (
-            <PointPolicyTab
-              policy={policyDraft}
-              canManage={canManage}
-              hasUnsavedChanges={policyDirty}
-              saveFeedbackMessage={policyFeedbackMessage}
-              saveFeedbackTone={policyFeedbackTone}
-              onPolicyChange={updatePolicyDraft}
-              onSubmit={handleSavePolicy}
-            />
+          {!loading && (
+            <div hidden={activeTab !== "policy"}>
+              <PointPolicyTab
+                config={config}
+                active={activeTab === "policy"}
+                policy={policyDraft}
+                canManage={canManage}
+                hasUnsavedChanges={policyDirty}
+                saveFeedbackMessage={policyFeedbackMessage}
+                saveFeedbackTone={policyFeedbackTone}
+                onPolicyChange={updatePolicyDraft}
+                onSubmit={handleSavePolicy}
+              />
+            </div>
           )}
 
           {!loading && activeTab === "ranks" && (

@@ -49,7 +49,10 @@ const ALWAYS_ALLOWED_STUDENT_PREFIXES = [
   "/student/calendar",
 ];
 
-const MENU_CONFIG_CONTROLLED_STUDENT_PREFIXES = ["/student/points"];
+const MENU_CONFIG_CONTROLLED_STUDENT_PREFIXES = [
+  "/student/points",
+  "/student/weplay",
+];
 
 const HIDDEN_CHILD_DESCENDANT_PATHS: Record<string, string[]> = {
   "/student/quiz": ["/student/quiz/run"],

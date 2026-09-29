@@ -131,6 +131,9 @@ export type PointTransactionType =
   | "history_classroom_bonus"
   | "manual_adjust"
   | "manual_reclaim"
+  | "weplay_cost"
+  | "weplay_reward"
+  | "weplay_rank_reward"
   | "purchase_hold"
   | "purchase_confirm"
   | "purchase_cancel";
