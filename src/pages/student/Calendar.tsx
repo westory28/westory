@@ -20,6 +20,8 @@ import {
   getSchedulePeriodOrder,
 } from "../../lib/schedulePeriods";
 import { loadVisibleCalendarEvents } from "../../lib/visibleSchedule";
+import AttendanceStamp from "./components/AttendanceStamp";
+import { useAttendanceDates } from "./hooks/useAttendanceDates";
 
 interface CalendarEvent {
   labelColor?: string;
@@ -74,6 +76,11 @@ const Calendar = () => {
     semester: string;
   } | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const attendance = useAttendanceDates(user?.uid, currentConfig);
+  const attendanceDateSet = useMemo(
+    () => new Set(attendance.dates),
+    [attendance.dates],
+  );
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -237,7 +244,7 @@ const Calendar = () => {
   };
 
   return (
-    <div className="bg-gray-50 flex flex-col min-h-screen">
+    <div className="student-calendar-page bg-gray-50 flex flex-col min-h-screen">
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 h-full flex flex-col">
         <div className="mb-4 shrink-0">
           <h1 className="text-2xl font-bold text-gray-800">
@@ -269,7 +276,18 @@ const Calendar = () => {
             </div>
           </div>
 
-          <div className="flex-1 calendar-wrapper">
+          {attendance.error && (
+            <div className="student-calendar-attendance-error" role="status">
+              <span>출석 기록을 불러오지 못했습니다.</span>
+              <button type="button" onClick={attendance.retry}>
+                다시 시도
+              </button>
+            </div>
+          )}
+          <div
+            className="flex-1 calendar-wrapper"
+            aria-busy={attendance.loading}
+          >
             <FullCalendar
               plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
               initialView="dayGridMonth"
@@ -315,6 +333,29 @@ const Calendar = () => {
               }}
               height="auto" // Allow it to grow
               fixedWeekCount={false}
+              dayCellContent={(arg) => {
+                const date = toLocalYmd(arg.date);
+                return (
+                  <span className="student-calendar-date-label">
+                    <span>{arg.dayNumberText}</span>
+                    {attendanceDateSet.has(date) && (
+                      <AttendanceStamp date={date} />
+                    )}
+                  </span>
+                );
+              }}
+              dayHeaderContent={(arg) => {
+                const date = toLocalYmd(arg.date);
+                return (
+                  <span className="student-calendar-date-label">
+                    <span>{arg.text}</span>
+                    {arg.view.type === "listMonth" &&
+                      attendanceDateSet.has(date) && (
+                        <AttendanceStamp date={date} />
+                      )}
+                  </span>
+                );
+              }}
               dayCellClassNames={(arg) => {
                 const dateStr = toLocalYmd(arg.date);
                 const classes: string[] = [];
@@ -393,6 +434,18 @@ const Calendar = () => {
       )}
 
       <style>{`
+                .student-calendar-page .student-calendar-date-label {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    flex-wrap: wrap;
+                    gap: 4px;
+                    max-width: 100%;
+                }
+                .student-calendar-page .fc-daygrid-day-number { min-width: 0; max-width: 100%; }
+                .student-calendar-attendance-error { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; color: var(--ws-danger-text, #b91c1c); font-size: 0.875rem; }
+                .student-calendar-attendance-error button { min-height: 44px; padding: 0 12px; color: var(--ws-primary, #2563eb); font-weight: 700; }
+                .student-calendar-attendance-error button:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
                 .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
                 .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
                 .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; font-weight: 600; border: none; }

@@ -148,7 +148,7 @@
   color: var(--ws-text, #1f2937);
 }
 
-.student-week-strip__day > span:first-child {
+.student-week-strip__weekday {
   font-size: var(--ws-type-small, 0.875rem);
   color: var(--ws-text-muted, #6b7280);
 }
@@ -168,12 +168,12 @@
 }
 
 .student-week-strip__day.is-saturday,
-.student-week-strip__day.is-saturday > span:first-child {
+.student-week-strip__day.is-saturday > .student-week-strip__weekday {
   color: var(--ws-primary, #2563eb);
 }
 
 .student-week-strip__day.is-holiday,
-.student-week-strip__day.is-holiday > span:first-child {
+.student-week-strip__day.is-holiday > .student-week-strip__weekday {
   color: var(--ws-danger-text, #b91c1c);
 }
 
@@ -533,18 +533,11 @@
 }
 
 .student-week-strip__attendance {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--ws-surface, #fff);
-  color: var(--ws-primary-text, #1e3a8a);
-  font-size: var(--ws-type-label, 0.75rem);
-  line-height: 1;
+  width: 36px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .student-schedule-title {

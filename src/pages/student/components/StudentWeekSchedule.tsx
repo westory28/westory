@@ -18,6 +18,7 @@ import {
 } from "../../../lib/schedulePeriods";
 import NavigationIcon from "../../../components/layout/TeacherNavigationIcon";
 import StudentScheduleTitle from "./StudentScheduleTitle";
+import AttendanceStamp from "./AttendanceStamp";
 import "./studentWeekSchedule.css";
 import {
   calendarDateKey,
@@ -127,7 +128,10 @@ const StudentWeekSchedule: React.FC<Props> = ({
     () => new Set(attendanceDates),
     [attendanceDates],
   );
-  const attendanceHasError = /오류|실패/.test(attendanceMessage);
+  const attendanceHasError =
+    /오류|실패|못했습니다|수 없습니다|변경되었습니다|중지되어/.test(
+      attendanceMessage,
+    );
   const attendanceDescription = [attendanceMessage, attendanceGoalText]
     .filter(Boolean)
     .join(" · ");
@@ -347,21 +351,19 @@ const StudentWeekSchedule: React.FC<Props> = ({
                   aria-pressed={date === selectedDate}
                   onClick={() => onDateClick(date)}
                 >
-                  <span>
+                  <span
+                    className="student-week-strip__attendance"
+                    aria-hidden="true"
+                  >
+                    {attendanceDateSet.has(date) && <AttendanceStamp />}
+                  </span>
+                  <span className="student-week-strip__weekday">
                     {["일", "월", "화", "수", "목", "금", "토"][index]}
                   </span>
                   <strong>
                     <span className="student-week-strip__number">
                       {Number(date.slice(8, 10))}
                     </span>
-                    {attendanceDateSet.has(date) && (
-                      <span
-                        className="student-week-strip__attendance"
-                        aria-hidden="true"
-                      >
-                        ✓
-                      </span>
-                    )}
                   </strong>
                   <span
                     className={`student-week-strip__marker${dayEvents.length ? " has-events" : ""}`}

@@ -1,0 +1,9 @@
+.student-attendance-stamp {
+  display: inline-block;
+  width: 36px;
+  height: 24px;
+  max-width: 100%;
+  flex: 0 1 auto;
+  object-fit: contain;
+  vertical-align: middle;
+}

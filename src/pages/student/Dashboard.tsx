@@ -1,24 +1,22 @@
-import React, { Suspense, lazy, useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from "firebase/firestore";
+import React, {
+  Suspense,
+  lazy,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
+import { useAttendanceDates } from "./hooks/useAttendanceDates";
+import { checkStudentAttendance, attendanceErrorMessage } from "./attendance";
 import { runAfterNextPaint, runWhenIdle } from "../../lib/browserTasks";
 import { markLoginPerf, measureLoginPerf } from "../../lib/loginPerf";
 import { notifyPointsUpdated } from "../../lib/appEvents";
 import {
   buildAttendanceSourceId,
   buildPointRewardFeedback,
-  claimPointActivityReward,
-  getPointActivityTransaction,
 } from "../../lib/points";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
 import { getYearSemester } from "../../lib/semesterScope";
@@ -72,9 +70,11 @@ const StudentDashboard: React.FC = () => {
   const [eventsError, setEventsError] = useState(false);
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [attendanceChecked, setAttendanceChecked] = useState(false);
+  const [confirmedAttendance, setConfirmedAttendance] = useState({
+    identity: "",
+    date: "",
+  });
   const [attendanceMessage, setAttendanceMessage] = useState("");
-  const [attendanceDates, setAttendanceDates] = useState<string[]>([]);
   const [secondaryPanelsReady, setSecondaryPanelsReady] = useState(false);
   const [hallOfFameRecognition, setHallOfFameRecognition] =
     useState<HallOfFameRecognition | null>(null);
@@ -83,7 +83,19 @@ const StudentDashboard: React.FC = () => {
   const { year, semester } = getYearSemester(config);
   const { categories } = useScheduleCategories();
   const todayDate = getKoreanDateKey();
-  const attendanceScope = `${year}_${semester}`;
+  const attendanceIdentity = `${user?.uid || ""}/${year}_${semester}`;
+  const activeAttendanceIdentity = useRef(attendanceIdentity);
+  activeAttendanceIdentity.current = attendanceIdentity;
+  const {
+    dates: attendanceDates,
+    confirmedDates,
+    error: attendanceHistoryError,
+    retry: retryAttendanceHistory,
+  } = useAttendanceDates(user?.uid, config ? { year, semester } : null);
+  const attendanceChecked =
+    confirmedDates.includes(todayDate) ||
+    (confirmedAttendance.identity === attendanceIdentity &&
+      confirmedAttendance.date === todayDate);
   const todayAttendanceSourceId = buildAttendanceSourceId();
 
   useEffect(() => {
@@ -188,57 +200,8 @@ const StudentDashboard: React.FC = () => {
   }, [config?.year, config?.semester, userData?.class, userData?.grade]);
 
   useEffect(() => {
-    if (!userData?.uid) return;
-    const loadAttendanceStatus = async () => {
-      try {
-        const attendanceTx = await getPointActivityTransaction(
-          config,
-          userData.uid,
-          "attendance",
-          todayAttendanceSourceId,
-        );
-        if (attendanceTx) {
-          setAttendanceChecked(true);
-          setAttendanceMessage(
-            `오늘 출석이 이미 반영되었습니다. +${attendanceTx.delta}위스`,
-          );
-        } else {
-          setAttendanceChecked(false);
-          setAttendanceMessage("");
-        }
-      } catch (error) {
-        console.error("Failed to load attendance point status:", error);
-      }
-    };
-
-    const cancel = runWhenIdle(() => {
-      void loadAttendanceStatus();
-    }, 700);
-
-    return cancel;
-  }, [config, todayAttendanceSourceId, userData?.uid]);
-
-  useEffect(() => {
-    if (!user) {
-      setAttendanceDates([]);
-      return;
-    }
-
-    const attendanceQuery = query(
-      collection(db, "users", user.uid, "attendance"),
-      where("scope", "==", attendanceScope),
-    );
-
-    const unsubscribe = onSnapshot(attendanceQuery, (snapshot) => {
-      const nextDates = snapshot.docs
-        .map((item) => String(item.data().date || "").trim())
-        .filter(Boolean)
-        .sort();
-      setAttendanceDates(nextDates);
-    });
-
-    return () => unsubscribe();
-  }, [attendanceScope, user]);
+    setAttendanceMessage("");
+  }, [attendanceIdentity]);
 
   useEffect(() => {
     if (!userData?.uid) {
@@ -288,40 +251,21 @@ const StudentDashboard: React.FC = () => {
   };
 
   const handleAttendanceCheck = async () => {
-    if (!userData?.uid || attendanceLoading || attendanceChecked) return;
+    if (!user?.uid || !config || attendanceLoading || attendanceChecked) return;
+    const requestIdentity = attendanceIdentity;
     setAttendanceLoading(true);
     setAttendanceMessage("");
     try {
-      const result = await claimPointActivityReward({
-        config,
-        activityType: "attendance",
-        sourceId: todayAttendanceSourceId,
-        sourceLabel: `${todayAttendanceSourceId.replace("attendance-", "")} 출석 체크`,
-      });
-
-      await setDoc(
-        doc(
-          db,
-          "users",
-          userData.uid,
-          "attendance",
-          `${attendanceScope}_${todayDate}`,
-        ),
-        {
-          uid: userData.uid,
-          scope: attendanceScope,
-          year,
-          semester,
-          date: todayDate,
-          checkedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      setAttendanceChecked(true);
-      setWeekStart(getWeekStart(todayDate));
-      setSelectedDate(todayDate);
-      handleDateClick(todayDate);
+      const result = await checkStudentAttendance(year, semester);
+      if (activeAttendanceIdentity.current !== requestIdentity) return;
+      if (!result.attendanceRecorded || !result.attendanceDate) {
+        throw new Error("Attendance was not confirmed by the server");
+      }
+      const recordedDate = result.attendanceDate;
+      setConfirmedAttendance({ identity: requestIdentity, date: recordedDate });
+      setWeekStart(getWeekStart(recordedDate));
+      setSelectedDate(recordedDate);
+      retryAttendanceHistory();
       notifyPointsUpdated();
 
       const rewardFeedback = buildPointRewardFeedback({
@@ -341,12 +285,14 @@ const StudentDashboard: React.FC = () => {
         setAttendanceMessage("출석 상태를 최신 정보로 반영했습니다.");
       }
     } catch (error) {
-      console.error("Failed to apply attendance point reward:", error);
-      setAttendanceMessage("출석 체크 처리 중 오류가 발생했습니다.");
+      if (activeAttendanceIdentity.current !== requestIdentity) return;
+      console.error("Failed to check attendance:", error);
+      const message = attendanceErrorMessage(error);
+      setAttendanceMessage(message);
       showToast({
         tone: "error",
         title: "출석 체크에 실패했습니다.",
-        message: "네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+        message,
       });
     } finally {
       setAttendanceLoading(false);
@@ -376,6 +322,14 @@ const StudentDashboard: React.FC = () => {
         </div>
 
         <div className="student-portal-dashboard__calendar">
+          {attendanceHistoryError && (
+            <div className="student-attendance-history-error" role="alert">
+              출석 기록을 불러오지 못했습니다.
+              <button type="button" onClick={retryAttendanceHistory}>
+                다시 시도
+              </button>
+            </div>
+          )}
           <Suspense fallback={<DashboardCalendarFallback />}>
             <StudentWeekSchedule
               categories={categories}

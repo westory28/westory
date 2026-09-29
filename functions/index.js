@@ -12,6 +12,10 @@ Object.assign(exports, require('./lessonPdfBeta'));
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';
+exports.checkStudentAttendance = onCall(
+  { region: REGION },
+  require('./studentAttendance').createStudentAttendanceHandler({ db }),
+);
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
 const LESSON_CORE_POINT_RESET_TEST_LABEL = '방테스트';

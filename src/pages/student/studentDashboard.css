@@ -233,3 +233,20 @@
     transition: none !important;
   }
 }
+
+.student-attendance-history-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--ws-danger-text);
+  font-size: var(--ws-type-small);
+}
+
+.student-attendance-history-error button {
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--ws-primary);
+  font-weight: 700;
+}

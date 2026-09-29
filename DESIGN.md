@@ -375,3 +375,7 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 - Student lesson contents now match the 320px desktop / 288px tablet width. Inside the existing 16px list gutter, use 8px row padding and a 6px icon gap, matching teacher tree rows. On student lesson pages with save controls, place the dictionary launcher 12px above the measured save-control box and align their right edges; remeasure when controls resize or the viewport changes. Other pages retain their existing launcher position.
 
 - Student map categories expand their map items directly beneath them in the existing submenu (16px indent, 8px inner spacing). Replace the horizontal map tabs and category badge with a compact selected-map heading (16px padding); reduce the outer viewer gutter to 8px to give maps more space. Category selection keeps the mobile menu open for choosing a map; item selection closes it. Keep existing viewer, zoom, tags and reward behavior.
+
+### Student attendance stamp
+
+- Reuse one transparent red raster stamp reading 출석 for confirmed attendance only. Reserve a 36×24px stamp slot above each weekday in the student weekly strip; retain date buttons and their existing event markers. Full calendar month cells show the same 36×24px stamp beside the day number, fitting within narrow cells without horizontal overflow. Use existing danger-text ink and spacing tokens; no stamp animation or teacher UI changes. Attendance data remains scoped to the signed-in student and semester, with visible read/save errors and retry.
