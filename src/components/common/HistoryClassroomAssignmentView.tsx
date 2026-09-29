@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import WorksheetBlankInput from "./WorksheetBlankInput";
+import HistoryBlankFeedback from "./HistoryBlankFeedback";
 import {
   getHistoryClassroomBlankRenderRect,
   isHistoryClassroomBlankCorrect,
@@ -40,6 +41,8 @@ interface HistoryClassroomAssignmentViewProps {
   interactiveViewport?: boolean;
   resolveBlankOverlap?: boolean;
   answerChecks?: HistoryClassroomAnswerCheck[];
+  hintUseCount?: number;
+  onUseHint?: () => boolean;
 }
 
 const DEFAULT_HELPER_ITEMS = [
@@ -297,6 +300,8 @@ const HistoryClassroomAssignmentView: React.FC<
   interactiveViewport = false,
   resolveBlankOverlap = false,
   answerChecks = [],
+  hintUseCount,
+  onUseHint,
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
   const pages = assignment.pdfPageImages || [];
@@ -341,6 +346,99 @@ const HistoryClassroomAssignmentView: React.FC<
   const helpId = useId();
   const [helpOpen, setHelpOpen] = useState(false);
   const showHelp = !readOnly && !completed && helperItems.length > 0;
+  const hintButtonRef = useRef<HTMLButtonElement | null>(null);
+  const hintPopupRef = useRef<HTMLDivElement | null>(null);
+  const hintCloseRef = useRef<HTMLButtonElement | null>(null);
+  const hintDeadlineRef = useRef(0);
+  const localHintCountRef = useRef(0);
+  const [localHintCount, setLocalHintCount] = useState(0);
+  const [hintOpen, setHintOpen] = useState(false);
+  const [hintRemainingMs, setHintRemainingMs] = useState(5000);
+  const hintId = useId();
+  const hintCount = Math.max(0, Math.min(3, hintUseCount ?? localHintCount));
+  const hintAvailable = !readOnly && !completed && !answersLocked;
+  const remainingOptions = assignment.answerOptions.filter((option) => {
+    const matchingBlanks = assignment.blanks.filter((blank) =>
+      isHistoryClassroomBlankCorrect(option, blank.answer),
+    );
+    return (
+      !matchingBlanks.length ||
+      matchingBlanks.some(
+        (blank) =>
+          !isHistoryClassroomBlankCorrect(
+            answers[blank.id] || "",
+            blank.answer,
+          ),
+      )
+    );
+  });
+  const closeHint = () => {
+    const restoreFocus = hintPopupRef.current?.contains(document.activeElement);
+    hintDeadlineRef.current = 0;
+    setHintOpen(false);
+    if (restoreFocus) hintButtonRef.current?.focus();
+  };
+  const openHint = () => {
+    if (
+      !hintAvailable ||
+      submitting ||
+      hintDeadlineRef.current ||
+      hintCount >= 3 ||
+      !remainingOptions.length
+    )
+      return;
+    if (onUseHint) {
+      if (!onUseHint()) return;
+    } else {
+      if (localHintCountRef.current >= 3) return;
+      localHintCountRef.current += 1;
+      setLocalHintCount(localHintCountRef.current);
+    }
+    setHelpOpen(false);
+    hintDeadlineRef.current = Date.now() + 5000;
+    setHintRemainingMs(5000);
+    setHintOpen(true);
+  };
+  useEffect(() => {
+    localHintCountRef.current = 0;
+    setLocalHintCount(0);
+    closeHint();
+  }, [assignment.id]);
+  useEffect(() => {
+    if (!hintAvailable || submitting) closeHint();
+  }, [hintAvailable, submitting]);
+  useEffect(() => {
+    if (!hintOpen) return;
+    hintCloseRef.current?.focus();
+    const tick = () => {
+      const remaining = Math.max(0, hintDeadlineRef.current - Date.now());
+      setHintRemainingMs(remaining);
+      if (!remaining) closeHint();
+    };
+    const outside = (event: PointerEvent) => {
+      if (
+        !hintPopupRef.current?.contains(event.target as Node) &&
+        !hintButtonRef.current?.contains(event.target as Node)
+      )
+        closeHint();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        closeHint();
+      }
+    };
+    const interval = window.setInterval(tick, 100);
+    const timeout = window.setTimeout(closeHint, 5000);
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape, true);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape, true);
+    };
+  }, [hintOpen]);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(144);
@@ -1032,7 +1130,10 @@ const HistoryClassroomAssignmentView: React.FC<
                 aria-label="응시 주의사항"
                 aria-expanded={helpOpen}
                 aria-controls={helpId}
-                onClick={() => setHelpOpen((open) => !open)}
+                onClick={() => {
+                  closeHint();
+                  setHelpOpen((open) => !open);
+                }}
                 className="absolute right-0 top-0 flex h-11 w-11 items-start justify-end pt-0.5 text-gray-600"
               >
                 <span
@@ -1125,6 +1226,85 @@ const HistoryClassroomAssignmentView: React.FC<
             ))}
           </div>
         )}
+        {hintAvailable && hintOpen && (
+          <div
+            ref={hintPopupRef}
+            id={hintId}
+            role="dialog"
+            aria-label="남은 단어"
+            aria-modal="false"
+            className="absolute right-0 top-full z-40 mt-1 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-blue-200 bg-white p-3 shadow-lg"
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-gray-900">남은 단어</h2>
+              <div className="ml-auto flex items-center gap-1">
+                <div className="relative h-8 w-8 text-red-600">
+                  <svg
+                    data-history-hint-timer="true"
+                    aria-hidden="true"
+                    viewBox="0 0 36 36"
+                    className="h-8 w-8 -rotate-90"
+                  >
+                    <circle
+                      cx="18"
+                      cy="18"
+                      r="14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeOpacity="0.15"
+                      strokeWidth="3"
+                    />
+                    <circle
+                      cx="18"
+                      cy="18"
+                      r="14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      pathLength="100"
+                      strokeDasharray="100"
+                      strokeDashoffset={100 - hintRemainingMs / 50}
+                    />
+                  </svg>
+                  <span
+                    role="timer"
+                    aria-label="힌트 남은 시간"
+                    className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums"
+                  >
+                    {Math.ceil(hintRemainingMs / 1000)}
+                  </span>
+                </div>
+                <button
+                  ref={hintCloseRef}
+                  type="button"
+                  aria-label="힌트 닫기"
+                  onClick={closeHint}
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-xl text-gray-600 hover:bg-gray-100"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label="힌트 단어 목록"
+              className="flex max-h-[40dvh] flex-wrap gap-2 overflow-y-auto overscroll-contain"
+            >
+              {remainingOptions.map((option) => (
+                <span
+                  key={option}
+                  className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 break-all"
+                >
+                  {option}
+                </span>
+              ))}
+              {!remainingOptions.length && (
+                <p className="text-sm text-gray-600">남은 단어가 없습니다.</p>
+              )}
+            </div>
+          </div>
+        )}
         {resultText && (
           <div
             role="status"
@@ -1141,14 +1321,34 @@ const HistoryClassroomAssignmentView: React.FC<
             {pointNotice}
           </div>
         )}
-        <div className="flex items-center justify-between gap-1">
-          <div className="shrink-0 text-xs font-bold text-gray-600">
+        <div className="flex flex-wrap items-center justify-between gap-1">
+          <div className="flex shrink-0 items-center gap-1 text-xs font-bold text-gray-600">
             <span className="hidden sm:inline">페이지 </span>
             <span
               aria-label={`페이지 ${Math.max(1, currentPageIndex + 1)} / ${pageCount}`}
             >
               {Math.max(1, currentPageIndex + 1)} / {pageCount}
             </span>
+            {hintAvailable && (
+              <button
+                ref={hintButtonRef}
+                type="button"
+                aria-label={`힌트, ${3 - hintCount}회 남음`}
+                aria-haspopup="dialog"
+                aria-expanded={hintOpen}
+                aria-controls={hintId}
+                aria-disabled={
+                  hintOpen ||
+                  hintCount >= 3 ||
+                  submitting ||
+                  !remainingOptions.length
+                }
+                onClick={openHint}
+                className="min-h-11 shrink-0 rounded-lg px-2 text-xs font-bold text-blue-700 hover:bg-blue-50 aria-disabled:cursor-default aria-disabled:opacity-40"
+              >
+                힌트 {3 - hintCount}/3
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {enableInteractiveViewport && (
@@ -1382,138 +1582,125 @@ const HistoryClassroomAssignmentView: React.FC<
                         const lockedDisplayText =
                           reviewText || trimmedAnswerValue || placeholder;
                         return (
-                          <div
-                            key={blank.id}
-                            data-blank-box="true"
-                            data-blank-id={blank.id}
-                            className={`absolute overflow-hidden rounded-[2px] border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
-                              isFocused ? "z-20" : "z-10"
-                            } ${reviewToneClass}`}
-                            title={
-                              hasReview
-                                ? reviewCorrect
-                                  ? "정답"
-                                  : `오답 · 정답: ${reviewText || blank.answer}`
-                                : undefined
-                            }
-                            style={{
-                              left: `${leftPx}px`,
-                              top: `${topPx}px`,
-                              width: `${chipWidth}px`,
-                              height: `${chipHeight}px`,
-                              backgroundColor: "#ffffff",
-                              opacity: 1,
-                            }}
-                          >
-                            {isInputLocked ? (
-                              <span
-                                aria-hidden
-                                className={`absolute inset-0 ${
-                                  hasReview
-                                    ? reviewCorrect
-                                      ? "bg-emerald-50"
-                                      : "bg-rose-50"
-                                    : isFilled
-                                      ? "bg-orange-50"
-                                      : "bg-white"
-                                }`}
-                              />
-                            ) : null}
-                            <WorksheetBlankInput
-                              focusOutline={false}
-                              type="text"
-                              ref={(node) => {
-                                blankInputRefs.current[blank.id] = node;
-                              }}
-                              value={
-                                isInputLocked ? lockedDisplayText : answerValue
+                          <React.Fragment key={blank.id}>
+                            <div
+                              data-blank-box="true"
+                              data-blank-id={blank.id}
+                              className={`absolute overflow-hidden rounded-[2px] border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                                isFocused ? "z-20" : "z-10"
+                              } ${reviewToneClass}`}
+                              title={
+                                hasReview
+                                  ? reviewCorrect
+                                    ? "정답"
+                                    : `오답 · 정답: ${reviewText || blank.answer}`
+                                  : undefined
                               }
-                              onChange={(event) =>
-                                onAnswerChange?.(blank.id, event.target.value)
-                              }
-                              onFocus={() => {
-                                setFocusedBlankId(blank.id);
-                                deferredBlurIdsRef.current.delete(blank.id);
-                                setBlankFeedback((current) =>
-                                  current?.blankId === blank.id
-                                    ? null
-                                    : current,
-                                );
+                              style={{
+                                left: `${leftPx}px`,
+                                top: `${topPx}px`,
+                                width: `${chipWidth}px`,
+                                height: `${chipHeight}px`,
+                                backgroundColor: "#ffffff",
+                                opacity: 1,
                               }}
-                              onBlur={(event) => {
-                                setFocusedBlankId("");
-                                if (
-                                  composingBlankIdsRef.current.has(blank.id)
-                                ) {
-                                  deferredBlurIdsRef.current.add(blank.id);
-                                  return;
+                            >
+                              {isInputLocked ? (
+                                <span
+                                  aria-hidden
+                                  className={`absolute inset-0 ${
+                                    hasReview
+                                      ? reviewCorrect
+                                        ? "bg-emerald-50"
+                                        : "bg-rose-50"
+                                      : isFilled
+                                        ? "bg-orange-50"
+                                        : "bg-white"
+                                  }`}
+                                />
+                              ) : null}
+                              <WorksheetBlankInput
+                                focusOutline={false}
+                                type="text"
+                                ref={(node) => {
+                                  blankInputRefs.current[blank.id] = node;
+                                }}
+                                value={
+                                  isInputLocked
+                                    ? lockedDisplayText
+                                    : answerValue
                                 }
-                                showBlankFeedback(
-                                  blank,
-                                  event.currentTarget.value,
-                                );
-                              }}
-                              onCompositionStart={() =>
-                                composingBlankIdsRef.current.add(blank.id)
-                              }
-                              onCompositionEnd={(event) => {
-                                composingBlankIdsRef.current.delete(blank.id);
-                                if (
-                                  deferredBlurIdsRef.current.delete(blank.id)
-                                ) {
+                                onChange={(event) =>
+                                  onAnswerChange?.(blank.id, event.target.value)
+                                }
+                                onFocus={() => {
+                                  setFocusedBlankId(blank.id);
+                                  deferredBlurIdsRef.current.delete(blank.id);
+                                  setBlankFeedback((current) =>
+                                    current?.blankId === blank.id
+                                      ? null
+                                      : current,
+                                  );
+                                }}
+                                onBlur={(event) => {
+                                  setFocusedBlankId("");
+                                  if (
+                                    composingBlankIdsRef.current.has(blank.id)
+                                  ) {
+                                    deferredBlurIdsRef.current.add(blank.id);
+                                    return;
+                                  }
                                   showBlankFeedback(
                                     blank,
                                     event.currentTarget.value,
                                   );
+                                }}
+                                onCompositionStart={() =>
+                                  composingBlankIdsRef.current.add(blank.id)
                                 }
-                              }}
-                              readOnly={isInputLocked}
-                              autoComplete="off"
-                              autoCorrect="off"
-                              autoCapitalize="off"
-                              spellCheck={false}
-                              inputMode="text"
-                              lang="ko"
-                              aria-label={
-                                blank.prompt ||
-                                `${assignment.blanks.findIndex((item) => item.id === blank.id) + 1}번 답안 입력`
-                              }
-                              placeholder={placeholder}
-                              className={`relative z-[1] border-0 bg-transparent text-center font-bold outline-none ${hasReview ? (reviewCorrect ? "text-emerald-900" : "text-rose-900") : isFilled ? "text-orange-800 placeholder:text-orange-300" : "text-slate-700 placeholder:text-slate-400"}`}
-                              style={{
-                                letterSpacing: 0,
-                                touchAction: "manipulation",
-                              }}
-                            />
+                                onCompositionEnd={(event) => {
+                                  composingBlankIdsRef.current.delete(blank.id);
+                                  if (
+                                    deferredBlurIdsRef.current.delete(blank.id)
+                                  ) {
+                                    showBlankFeedback(
+                                      blank,
+                                      event.currentTarget.value,
+                                    );
+                                  }
+                                }}
+                                readOnly={isInputLocked}
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck={false}
+                                inputMode="text"
+                                lang="ko"
+                                aria-label={
+                                  blank.prompt ||
+                                  `${assignment.blanks.findIndex((item) => item.id === blank.id) + 1}번 답안 입력`
+                                }
+                                placeholder={placeholder}
+                                className={`relative z-[1] border-0 bg-transparent text-center font-bold outline-none ${hasReview ? (reviewCorrect ? "text-emerald-900" : "text-rose-900") : isFilled ? "text-orange-800 placeholder:text-orange-300" : "text-slate-700 placeholder:text-slate-400"}`}
+                                style={{
+                                  letterSpacing: 0,
+                                  touchAction: "manipulation",
+                                }}
+                              />
+                            </div>
                             {feedbackEnabled &&
                               blankFeedback?.blankId === blank.id && (
-                                <span
+                                <HistoryBlankFeedback
                                   key={blankFeedback.sequence}
-                                  data-blank-feedback="true"
-                                  data-correct={blankFeedback.correct}
-                                  role="status"
-                                  aria-label={
-                                    blankFeedback.correct ? "정답" : "오답"
-                                  }
-                                  className="history-blank-feedback pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/90"
-                                >
-                                  <svg
-                                    aria-hidden="true"
-                                    viewBox="0 0 32 32"
-                                    className={`h-full max-w-full ${blankFeedback.correct ? "text-blue-600" : "text-red-600"}`}
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                  >
-                                    {blankFeedback.correct ? (
-                                      <circle cx="16" cy="16" r="12" />
-                                    ) : (
-                                      <path d="M7 7L25 25M25 7L7 25" />
-                                    )}
-                                  </svg>
-                                </span>
+                                  correct={blankFeedback.correct}
+                                  scale={totalScale}
+                                  style={{
+                                    left: leftPx + chipWidth / 2,
+                                    top: topPx + chipHeight / 2,
+                                  }}
+                                />
                               )}
-                          </div>
+                          </React.Fragment>
                         );
                       })}
                     </div>
@@ -1529,36 +1716,38 @@ const HistoryClassroomAssignmentView: React.FC<
             {lessonPath && <span>{lessonPath}</span>}
             <span>통과 기준 {assignment.passThresholdPercent}% 이상</span>
           </div>
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="text-sm font-bold text-gray-700">참고 보기</div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {assignment.answerOptions.map((option) => {
-                const normalizedOption =
-                  normalizeHistoryClassroomAnswer(option);
-                const isAnswered =
-                  Boolean(normalizedOption) &&
-                  normalizedAnsweredOptions.has(normalizedOption);
+          {(readOnly || completed) && (
+            <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="text-sm font-bold text-gray-700">참고 보기</div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {assignment.answerOptions.map((option) => {
+                  const normalizedOption =
+                    normalizeHistoryClassroomAnswer(option);
+                  const isAnswered =
+                    Boolean(normalizedOption) &&
+                    normalizedAnsweredOptions.has(normalizedOption);
 
-                return (
-                  <span
-                    key={option}
-                    className={`inline-flex max-w-full items-center rounded-full px-3 py-2 text-sm font-bold transition-colors ${
-                      isAnswered
-                        ? "border border-orange-300 bg-orange-50 text-orange-800 shadow-sm"
-                        : "border border-gray-200 bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    <span className="break-all">{option}</span>
-                  </span>
-                );
-              })}
-            </div>
-            {!assignment.answerOptions.length && (
-              <div className="mt-3 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                등록된 참고 보기가 없습니다.
+                  return (
+                    <span
+                      key={option}
+                      className={`inline-flex max-w-full items-center rounded-full px-3 py-2 text-sm font-bold transition-colors ${
+                        isAnswered
+                          ? "border border-orange-300 bg-orange-50 text-orange-800 shadow-sm"
+                          : "border border-gray-200 bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      <span className="break-all">{option}</span>
+                    </span>
+                  );
+                })}
               </div>
-            )}
-          </div>
+              {!assignment.answerOptions.length && (
+                <div className="mt-3 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                  등록된 참고 보기가 없습니다.
+                </div>
+              )}
+            </div>
+          )}
         </aside>
       </div>
     </div>

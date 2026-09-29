@@ -59,8 +59,10 @@ import {
 
 import {
   canUseHistoryClassroomLegacySave,
+  HISTORY_CLASSROOM_HINT_LIMIT,
   getHistoryClassroomRetryDelay,
   isHistoryClassroomTransientSaveError,
+  normalizeHistoryClassroomHintUseCount,
   readHistoryClassroomPendingSubmission,
   type HistoryClassroomPendingSubmission,
   type HistoryClassroomSubmissionReason,
@@ -361,6 +363,8 @@ const HistoryClassroomRunner: React.FC = () => {
     useState<HistoryClassroomAssignment | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [hintUseCount, setHintUseCount] = useState(0);
+  const hintUseCountRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -430,6 +434,7 @@ const HistoryClassroomRunner: React.FC = () => {
           offlineStartedAt: networkOfflineStartedAtRef.current,
           currentPage: currentPageRef.current,
           answers: answersRef.current,
+          hintUseCount: hintUseCountRef.current,
           pendingSubmission: pendingSubmissionRef.current,
           savedAt: Date.now(),
         }),
@@ -491,6 +496,10 @@ const HistoryClassroomRunner: React.FC = () => {
             ? storedAttempt
             : null;
         if (isResetDraft) clearAttemptProgress(assignmentId, userData.uid);
+        hintUseCountRef.current = normalizeHistoryClassroomHintUseCount(
+          scopedStoredAttempt?.hintUseCount,
+        );
+        setHintUseCount(hintUseCountRef.current);
         const queuedSubmission = readHistoryClassroomPendingSubmission(
           scopedStoredAttempt?.pendingSubmission,
         );
@@ -1684,6 +1693,24 @@ const HistoryClassroomRunner: React.FC = () => {
     persistAttemptProgress();
   };
 
+  const handleUseHint = () => {
+    if (
+      !assignmentRef.current ||
+      completedRef.current ||
+      submittingRef.current ||
+      pendingSubmissionRef.current ||
+      cancellationInFlightRef.current ||
+      hintUseCountRef.current >= HISTORY_CLASSROOM_HINT_LIMIT
+    )
+      return false;
+    // Update the ref before React renders so rapid calls cannot exceed the limit.
+    hintUseCountRef.current += 1;
+    setHintUseCount(hintUseCountRef.current);
+    persistAttemptProgress();
+    emitSessionActivity();
+    return true;
+  };
+
   const submitAnswers = async (
     reason: HistoryClassroomSubmissionReason = "manual",
   ) => {
@@ -1828,6 +1855,8 @@ const HistoryClassroomRunner: React.FC = () => {
         interactiveViewport
         answerChecks={resultSummary?.answerChecks || []}
         onAnswerChange={handleAnswerChange}
+        hintUseCount={hintUseCount}
+        onUseHint={handleUseHint}
         onSubmit={() => void submitAnswers()}
         submitting={submitting}
         answersLocked={pendingSubmitAfterOnline}
@@ -1901,156 +1930,70 @@ const HistoryClassroomRunner: React.FC = () => {
           }}
         >
           <div
-            className="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            className="flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="shrink-0 border-b border-slate-200 px-5 py-4 sm:px-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-xs font-bold uppercase tracking-[0.2em] text-blue-500">
-                    제출 결과
-                  </div>
-                  <h2
-                    id="history-classroom-result-title"
-                    className="mt-1 text-2xl font-black text-slate-900"
-                  >
-                    {resultSummary.passed ? "통과" : "미통과"}
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    전체 {resultSummary.total}문제 중 정답{" "}
-                    {resultSummary.correctCount}개, 오답{" "}
-                    {resultSummary.wrongCount}개, 달성 비율{" "}
-                    {resultSummary.percent}%입니다.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResultDialogOpen(false);
-                    setResultText("");
-                  }}
-                  className="rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  닫기
-                </button>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="text-xs font-bold text-slate-500">
-                    전체 문제 수
-                  </div>
-                  <div className="mt-1 text-2xl font-black text-slate-900">
-                    {resultSummary.total}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                  <div className="text-xs font-bold text-emerald-700">
-                    맞은 개수
-                  </div>
-                  <div className="mt-1 text-2xl font-black text-emerald-700">
-                    {resultSummary.correctCount}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-                  <div className="text-xs font-bold text-rose-700">
-                    틀린 개수
-                  </div>
-                  <div className="mt-1 text-2xl font-black text-rose-700">
-                    {resultSummary.wrongCount}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
-                  <div className="text-xs font-bold text-blue-700">
-                    통과 여부
-                  </div>
-                  <div className="mt-1 text-lg font-black text-blue-700">
-                    {resultSummary.passed ? "통과" : "미통과"}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                  <div className="text-xs font-bold text-amber-700">
-                    통과 기준
-                  </div>
-                  <div className="mt-1 text-lg font-black text-amber-800">
-                    {resultSummary.passThresholdPercent}% 이상
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="text-xs font-bold text-slate-500">
-                    달성 비율
-                  </div>
-                  <div className="mt-1 text-lg font-black text-slate-900">
-                    {resultSummary.percent}%
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-3xl border border-slate-200 bg-white">
-                <div className="border-b border-slate-200 px-4 py-3 sm:px-5">
-                  <div className="text-sm font-bold text-slate-900">
-                    틀린 문항
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    학생 입력값과 정답을 함께 확인하세요.
-                  </div>
-                </div>
-                <div className="max-h-[min(42vh,24rem)] overflow-y-auto p-4 sm:p-5">
-                  {resultSummary.wrongItems.length > 0 ? (
-                    <div className="space-y-3">
-                      {resultSummary.wrongItems.map((item) => (
-                        <div
-                          key={item.blankId}
-                          className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-sm font-bold text-rose-800">
-                              문항 {item.blankNumber}
-                            </div>
-                            <div className="text-xs font-semibold text-slate-500">
-                              {item.blankId}
-                            </div>
-                          </div>
-                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            <div>
-                              <div className="text-xs font-bold text-slate-500">
-                                학생 입력값
-                              </div>
-                              <div className="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
-                                {item.studentAnswer || "입력 없음"}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-bold text-slate-500">
-                                정답
-                              </div>
-                              <div className="mt-1 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
-                                {item.correctAnswer || "정답 없음"}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-5 text-center text-sm font-bold text-emerald-700">
-                      틀린 문항이 없습니다.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-5 py-3 sm:px-6">
+              <h2
+                id="history-classroom-result-title"
+                className="text-2xl font-black text-slate-900"
+              >
+                {resultSummary.passed ? "통과" : "미통과"}
+              </h2>
               <button
                 type="button"
                 onClick={() => {
                   setResultDialogOpen(false);
                   setResultText("");
                 }}
-                className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700"
+                className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
+            <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
+              <p
+                aria-label="정답 수"
+                className="text-3xl font-black text-slate-900"
+              >
+                {resultSummary.correctCount}
+                <span className="text-base font-semibold text-slate-600">
+                  /{resultSummary.total}문제
+                </span>
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                {resultSummary.percent}% · 통과 기준{" "}
+                {resultSummary.passThresholdPercent}%
+              </p>
+              <section
+                className="mt-5"
+                aria-labelledby="history-classroom-missed-answers-title"
+              >
+                <h3
+                  id="history-classroom-missed-answers-title"
+                  className="text-sm font-bold text-slate-700"
+                >
+                  못 쓴 답들
+                </h3>
+                <p className="mt-2 text-base leading-7 text-slate-900 [overflow-wrap:anywhere]">
+                  {Array.from(
+                    new Set(
+                      resultSummary.wrongItems
+                        .map((item) => item.correctAnswer.trim())
+                        .filter(Boolean),
+                    ),
+                  ).join(", ") || "없음"}
+                </p>
+              </section>
+            </div>
+            <div className="shrink-0 border-t border-slate-200 px-5 py-3 sm:px-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setResultDialogOpen(false);
+                  setResultText("");
+                }}
+                className="min-h-11 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700"
               >
                 확인
               </button>

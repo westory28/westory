@@ -315,6 +315,7 @@ try {
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
     { width: 1280, height: 900 },
   ]) {
     const page = await browser.newPage({ viewport, hasTouch: true });
@@ -741,6 +742,22 @@ try {
       assert(
         geometry.height >= 44 && geometry.height <= 52,
         `compact one-line student row: ${JSON.stringify(geometry)}`,
+      );
+    }
+    for (const row of [pending, cancelled]) {
+      const reset = row.getByRole("button", { name: /재응시 제한 리셋$/ });
+      const geometry = await reset.evaluate((el) => {
+        const hit = el.getBoundingClientRect();
+        const visual = el.querySelector("span").getBoundingClientRect();
+        return { hitHeight: hit.height, visualHeight: visual.height };
+      });
+      assert(
+        geometry.hitHeight >= 44,
+        "compact reset retains a 44px touch area",
+      );
+      assert(
+        Math.abs(geometry.visualHeight - 28) < 1,
+        `reset visual height is 28px: ${JSON.stringify(geometry)}`,
       );
     }
     await cancelled.click();

@@ -6322,16 +6322,22 @@ const ManageHistoryClassroom: React.FC = () => {
                                           deletingAssignment ||
                                           !savedStudent
                                         }
-                                        className="min-h-[44px] w-full rounded-lg border border-blue-200 bg-blue-50 px-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="group flex min-h-[44px] w-full items-center justify-center text-xs font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                         title={
                                           !savedStudent
                                             ? "학생 배정을 먼저 저장해 주세요."
                                             : undefined
                                         }
                                       >
-                                        {resettingAttemptUid === row.student.uid
-                                          ? "처리 중"
-                                          : "리셋"}
+                                        <span
+                                          data-history-reset-label="true"
+                                          className="flex h-7 items-center rounded-lg border border-blue-200 bg-blue-50 px-2 group-hover:bg-blue-100"
+                                        >
+                                          {resettingAttemptUid ===
+                                          row.student.uid
+                                            ? "처리 중"
+                                            : "리셋"}
+                                        </span>
                                       </button>
                                     )}
                                   </td>

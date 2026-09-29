@@ -258,6 +258,151 @@ async function pinch(page, kind) {
   await waitLayout(page);
 }
 try {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+    { width: 1280, height: 900 },
+  ]) {
+    const page = await browser.newPage({ viewport, hasTouch: true });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const url = `http://127.0.0.1:${server.address().port}/?kind=history-lesson&timer=1`;
+    await page.goto(url);
+    const hint = (remaining) =>
+      page.getByRole("button", {
+        name: `힌트, ${remaining}회 남음`,
+        exact: true,
+      });
+    const popup = page.getByRole("dialog", { name: "남은 단어", exact: true });
+    await hint(3).waitFor();
+    assert.equal(
+      await page.getByText("참고 보기", { exact: true }).count(),
+      0,
+      "student permanent answer card is removed",
+    );
+    await page
+      .getByRole("textbox", { name: "첫 번째 빈칸", exact: true })
+      .fill("고조선");
+    await page
+      .getByRole("textbox", { name: "왕", exact: true })
+      .fill("삼국 시대");
+    await hint(3).tap();
+    await popup.waitFor();
+    const openedAt = Date.now();
+    assert(await hint(2).isDisabled(), "open hint cannot consume a second use");
+    await hint(2).evaluate((el) => {
+      el.click();
+      el.click();
+    });
+    assert(
+      await hint(2).isDisabled(),
+      "repeated clicks preserve the remaining count",
+    );
+    assert.equal(
+      await popup.getByText("고조선", { exact: true }).count(),
+      0,
+      "correct blank answer is excluded",
+    );
+    assert(
+      await popup.getByText("왕", { exact: true }).isVisible(),
+      "incorrectly answered blank keeps its answer",
+    );
+    assert(
+      await popup.getByText("삼국 시대", { exact: true }).isVisible(),
+      "wrong text in another blank does not remove an unanswered word",
+    );
+    const popupBox = await popup.boundingBox();
+    assert(
+      popupBox.x >= 0 && popupBox.x + popupBox.width <= viewport.width + 1,
+      "hint popup stays inside tablet width",
+    );
+    assert(
+      popupBox.y >= 0 && popupBox.y + popupBox.height <= viewport.height + 1,
+      "hint popup stays inside viewport height",
+    );
+    const timer = popup.getByRole("timer", {
+      name: "힌트 남은 시간",
+      exact: true,
+    });
+    assert.match(
+      await timer.textContent(),
+      /5/,
+      "hint timer starts at five seconds",
+    );
+    const ring = popup.locator('[data-history-hint-timer="true"]');
+    const ringBox = await ring.boundingBox();
+    assert(
+      Math.abs(ringBox.width - ringBox.height) < 1 && ringBox.width > 0,
+      "hint timer is circular",
+    );
+    const readOffset = () =>
+      ring
+        .locator('circle[pathLength="100"]')
+        .getAttribute("stroke-dashoffset");
+    const initialOffset = Number(await readOffset());
+    await page.waitForTimeout(1250);
+    assert(
+      Number(await readOffset()) > initialOffset,
+      "hint ring decreases as time passes",
+    );
+    assert.match(
+      await timer.textContent(),
+      /[34]/,
+      "hint seconds decrease independently from exam timer",
+    );
+    assert.equal(
+      await page
+        .getByRole("timer", { name: "남은 시간", exact: true })
+        .textContent(),
+      "09:32",
+    );
+    await page.screenshot({
+      path: path.join(evidence, `history-hint-${viewport.width}.png`),
+      fullPage: true,
+    });
+    await page.waitForTimeout(Math.max(0, 4250 - (Date.now() - openedAt)));
+    assert(await popup.isVisible(), "hint remains open before five seconds");
+    await popup.waitFor({ state: "hidden", timeout: 1800 });
+    const closedAtMs = Date.now() - openedAt;
+    assert(
+      closedAtMs >= 4700 && closedAtMs <= 6100,
+      `hint auto closes around five seconds: ${closedAtMs}`,
+    );
+    await hint(2).tap();
+    await popup.getByRole("button", { name: "힌트 닫기", exact: true }).click();
+    await popup.waitFor({ state: "hidden" });
+    await hint(1).tap();
+    await page.keyboard.press("Escape");
+    await popup.waitFor({ state: "hidden" });
+    assert(await hint(0).isDisabled(), "three uses exhaust the hint allowance");
+    await hint(0).evaluate((el) => el.click());
+    assert.equal(await popup.count(), 0, "a fourth hint cannot open");
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      "hint flow never widens document",
+    );
+    if (viewport.width === 390) {
+      await page.goto(url);
+      await hint(3).click();
+      await popup.waitFor();
+      await page.locator("section img").click({ position: { x: 20, y: 300 } });
+      await popup.waitFor({ state: "hidden" });
+      assert(
+        await hint(2).isEnabled(),
+        "outside dismissal consumes only one use",
+      );
+    }
+    assert.deepEqual(errors, [], "hint flow has no runtime errors");
+    reports.push({
+      label: `hint-limit-countdown-${viewport.width}x${viewport.height}`,
+      closedAtMs,
+      popupBox,
+    });
+    await page.close();
+  }
   for (const width of [390, 768, 1280]) {
     for (const orientation of ["portrait", "landscape"]) {
       const page = await browser.newPage({
@@ -306,6 +451,15 @@ try {
             .count(),
           0,
           "teacher review does not expose the student warning button",
+        );
+        assert.equal(
+          await page.getByRole("button", { name: /^힌트,/ }).count(),
+          0,
+          "teacher read-only has no limited student hint",
+        );
+        assert(
+          await page.getByText("참고 보기", { exact: true }).isVisible(),
+          "teacher reference words remain available",
         );
         assert.equal(
           await page
@@ -757,6 +911,7 @@ try {
     { width: 320, height: 740 },
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
     { width: 1280, height: 900 },
   ]) {
     const page = await browser.newPage({ viewport, hasTouch: true });
@@ -875,7 +1030,7 @@ try {
     assert.equal(await feedback.first().getAttribute("data-correct"), "true");
     const correctColor = await feedback
       .first()
-      .locator("svg")
+      .locator('[data-feedback-symbol="true"]')
       .evaluate((el) => getComputedStyle(el).color);
     const correctRgb = correctColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
     assert(
@@ -905,12 +1060,18 @@ try {
       "underlying input remains touch reachable during feedback",
     );
     if (viewport.width === 768)
-      assert.equal(
+      assert.deepEqual(
         await feedback
           .first()
-          .evaluate((el) => getComputedStyle(el).animationName),
-        "none",
-        "reduced motion removes the feedback animation",
+          .evaluate((el) => [
+            ...new Set(
+              [el, ...el.querySelectorAll("*")].map(
+                (node) => getComputedStyle(node).animationName,
+              ),
+            ),
+          ]),
+        ["none"],
+        "reduced motion removes every burst animation",
       );
     await page.waitForTimeout(180);
     await page.screenshot({
@@ -935,6 +1096,7 @@ try {
     await input.press("Tab");
     await waitLayout(page);
     assert.equal(await feedback.first().getAttribute("data-correct"), "false");
+    const wrongStartedAt = Date.now();
     assert.equal(
       await feedback.first().locator("circle").count(),
       0,
@@ -949,6 +1111,12 @@ try {
       path: path.join(evidence, `history-feedback-wrong-${viewport.width}.png`),
       fullPage: true,
     });
+    await feedback.waitFor({ state: "hidden", timeout: 1800 });
+    const effectDuration = Date.now() - wrongStartedAt;
+    assert(
+      effectDuration >= 950 && effectDuration <= 1800,
+      `feedback ends after about 1200ms: ${effectDuration}`,
+    );
     await input.tap();
     await input.fill("   ");
     await input.press("Tab");
@@ -1047,7 +1215,25 @@ try {
       after,
       "blur feedback keeps source geometry while zooming",
     );
-    await assertProgress(2);
+    const tiny = page.getByRole("textbox", { name: "왕", exact: true });
+    await tiny.fill("왕");
+    await tiny.press("Tab");
+    // Measure the settled symbol, after its intentional entrance scale.
+    await page.waitForTimeout(450);
+    const burstBox = await feedback
+      .locator('[data-feedback-symbol="true"]')
+      .boundingBox();
+    assert(
+      burstBox.width >= 42 && burstBox.height >= 42,
+      `tiny blank burst remains visible after page scaling: ${JSON.stringify(burstBox)}`,
+    );
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      "burst does not expand document width",
+    );
+    await assertProgress(3);
     assert.deepEqual(errors, []);
     reports.push({
       label: `blur-feedback-timer-progress-${viewport.width}`,

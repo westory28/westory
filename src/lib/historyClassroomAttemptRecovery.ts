@@ -3,6 +3,15 @@ export type HistoryClassroomSubmissionReason =
   | "time-limit"
   | "due-window";
 
+export const HISTORY_CLASSROOM_HINT_LIMIT = 3;
+
+export const normalizeHistoryClassroomHintUseCount = (raw: unknown): number => {
+  const count = Number(raw);
+  return Number.isFinite(count)
+    ? Math.max(0, Math.min(HISTORY_CLASSROOM_HINT_LIMIT, Math.floor(count)))
+    : 0;
+};
+
 export interface HistoryClassroomPendingSubmission {
   status: "failed" | "cancelled";
   reason: HistoryClassroomSubmissionReason;

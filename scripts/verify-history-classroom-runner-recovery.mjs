@@ -85,6 +85,14 @@ const mock = `const scope='years/2026/semesters/2';
 const stored=JSON.parse(localStorage.getItem('runnerFixtureBackend')||'null');
 const params=new URLSearchParams(location.search);
 export const fixture=window.__fixture=stored||{assignment:${JSON.stringify(assignment)},results:{},calls:[],directWrites:[],notifications:[],points:[],failures:[],loseNextResponse:false,forceZero:false};
+if(params.get('resultCase')==='long'&&!stored){
+ fixture.assignment.passThresholdPercent=90;
+ fixture.assignment.blanks=Array.from({length:46},(_,index)=>({
+ ...fixture.assignment.blanks[0],id:'internal-blank-'+index,prompt:index===0?'첫 빈칸':'검증 빈칸 '+index,
+ answer:index<3?'고조선':index<5?'백제':index===5?'공백없는매우긴역사정답'.repeat(20):'확인할 정답 '+index,
+ top:150+(index%20)*50,left:index<20?100:450,
+ }));
+}
 if(params.get('untimed')==='1')fixture.assignment.timeLimitMinutes=0;
 if(params.get('due')==='1'&&!stored)fixture.assignment.dueAt={seconds:(Date.now()+6000)/1000};
 const persist=()=>localStorage.setItem('runnerFixtureBackend',JSON.stringify(fixture));
@@ -113,7 +121,7 @@ fixture.calls.push(structuredClone(input));persist();
 const failure=fixture.failures.shift();if(failure){persist();const error=new Error(typeof failure==='string'?failure:failure.message);error.code=typeof failure==='string'?failure:failure.code;throw error;}
 if(!navigator.onLine){const error=new Error('network unavailable');error.code='functions/unavailable';throw error;}
 let result=fixture.results[input.resultId];
-if(!result){const checks=fixture.assignment.blanks.map((b,i)=>({blankId:b.id,blankNumber:i+1,page:b.page,studentAnswer:input.answers[b.id]||'',correctAnswer:b.answer,correct:!fixture.forceZero&&(input.answers[b.id]||'').replace(/\s/g,'')===b.answer.replace(/\s/g,'')}));const score=checks.filter(c=>c.correct).length,percent=score/checks.length*100,passed=input.status!=='cancelled'&&percent>=80;result=fixture.results[input.resultId]={assignmentId:input.assignmentId,uid:'student-1',resultId:input.resultId,score,total:checks.length,percent,passed,passThresholdPercent:fixture.forceZero?90:80,status:input.status==='cancelled'?'cancelled':passed?'passed':'failed',answerChecks:checks,createdAt:{seconds:Date.now()/1000}};persist();}
+if(!result){const checks=fixture.assignment.blanks.map((b,i)=>({blankId:b.id,blankNumber:i+1,page:b.page,studentAnswer:input.answers[b.id]||'',correctAnswer:b.answer,correct:!fixture.forceZero&&(input.answers[b.id]||'').replace(/\s/g,'')===b.answer.replace(/\s/g,'')}));const score=checks.filter(c=>c.correct).length,percent=Math.round(score/checks.length*100),passed=input.status!=='cancelled'&&percent>=80;result=fixture.results[input.resultId]={assignmentId:input.assignmentId,uid:'student-1',resultId:input.resultId,score,total:checks.length,percent,passed,passThresholdPercent:fixture.forceZero?90:fixture.assignment.passThresholdPercent,status:input.status==='cancelled'?'cancelled':passed?'passed':'failed',answerChecks:checks,createdAt:{seconds:Date.now()/1000}};persist();}
 if(fixture.loseNextResponse){fixture.loseNextResponse=false;persist();return new Promise(()=>{});}return {data:result};};
 export const notifyPointsUpdated=()=>{};
 export const notifyHistoryClassroomSubmitted=async()=>{};
@@ -144,6 +152,18 @@ const bundle = await build({
     {
       name: "local-only-boundaries",
       setup(build) {
+        build.onResolve(
+          { filter: /components\/common\/HistoryClassroomAssignmentView$/ },
+          () => ({
+            path: "actual-view-with-hint-probe",
+            namespace: "hint-probe",
+          }),
+        );
+        build.onLoad({ filter: /.*/, namespace: "hint-probe" }, () => ({
+          contents: `import React from 'react';import View from ${JSON.stringify(path.join(root, "src/components/common/HistoryClassroomAssignmentView.tsx").replaceAll("\\", "/"))};export default function Probe(props){window.__useHint=props.onUseHint;window.__hintCount=props.hintUseCount;window.__changeAnswer=props.onAnswerChange;return React.createElement(View,props);}`,
+          loader: "jsx",
+          resolveDir: root,
+        }));
         build.onResolve(
           {
             filter:
@@ -262,16 +282,156 @@ const submit = (page) =>
     .getByRole("button", { name: /^(제출|제출하기|답안 제출|다시 제출)$/ })
     .click();
 try {
+  for (const width of [390, 768, 1280]) {
+    for (const mode of ["mixed", "empty", "correct", "cancelled"]) {
+      const t = await open(
+        `compact-result-${mode}-${width}`,
+        width,
+        ["mixed", "empty"].includes(mode) ? "?resultCase=long" : "",
+      );
+      if (mode === "mixed") {
+        await t.page.evaluate(() => {
+          for (let index = 0; index < 3; index++)
+            window.__changeAnswer("internal-blank-" + index, "고조선");
+          window.__changeAnswer("internal-blank-3", "학생오입력숨김");
+        });
+      } else if (mode === "correct") {
+        await fillFirst(t.page);
+        await t.page.getByRole("button", { name: "다음", exact: true }).click();
+        await t.page.locator('input[placeholder="둘째 빈칸"]').fill("백제");
+      }
+      if (mode === "cancelled") {
+        await t.page.evaluate(() => {
+          const link = document.createElement("a");
+          link.href = "/#/student/history-classroom";
+          link.textContent = "검증 나가기";
+          document.body.appendChild(link);
+        });
+        await t.page.getByRole("link", { name: "검증 나가기" }).click();
+        await t.page
+          .getByRole("button", { name: "나가기", exact: true })
+          .click();
+        await advance(t.page, 100);
+        assert.equal((await getCalls(t.page))[0].status, "cancelled");
+        assert.equal(
+          await t.page.getByRole("dialog", { name: /^(통과|미통과)$/ }).count(),
+          0,
+          "cancelled attempt keeps its exit flow",
+        );
+      } else {
+        await submit(t.page);
+        const dialog = t.page.getByRole("dialog", {
+          name: mode === "correct" ? "통과" : "미통과",
+          exact: true,
+        });
+        await dialog.waitFor();
+        const expectedScore = mode === "mixed" ? 3 : mode === "correct" ? 2 : 0;
+        const expectedTotal = mode === "correct" ? 2 : 46;
+        assert.equal(
+          await dialog.getByLabel("정답 수", { exact: true }).textContent(),
+          `${expectedScore}/${expectedTotal}문제`,
+        );
+        const missed = dialog
+          .getByRole("region", { name: "못 쓴 답들", exact: true })
+          .locator("p");
+        const savedResult = await t.page.evaluate(
+          () => Object.values(window.__fixture.results)[0],
+        );
+        const expectedAnswers = [
+          ...new Set(
+            savedResult.answerChecks
+              .filter((check) => !check.correct)
+              .map((check) => check.correctAnswer.trim())
+              .filter(Boolean),
+          ),
+        ];
+        assert.equal(
+          await missed.textContent(),
+          expectedAnswers.join(", ") || "없음",
+          "one deduplicated answer list includes blanks and wrong input",
+        );
+        assert.equal(
+          await missed.locator("*").count(),
+          0,
+          "no individual wrong-question cards",
+        );
+        const content = await dialog.textContent();
+        assert(
+          !content.includes("internal-blank-") &&
+            !content.includes("학생오입력숨김") &&
+            !content.includes("학생 입력값"),
+          "no internal ids or wrong input exposed",
+        );
+        const geometry = await dialog.evaluate((el) => {
+          const panel = el.firstElementChild,
+            r = panel.getBoundingClientRect();
+          return {
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom,
+            width: innerWidth,
+            height: innerHeight,
+            overflow: panel.scrollWidth > panel.clientWidth + 1,
+          };
+        });
+        assert(
+          geometry.left >= 0 &&
+            geometry.right <= width &&
+            !geometry.overflow &&
+            geometry.top >= 0 &&
+            geometry.bottom <= geometry.height,
+          JSON.stringify(geometry),
+        );
+        if (mode === "mixed")
+          assert(
+            await dialog
+              .getByText("7% · 통과 기준 90%", { exact: true })
+              .isVisible(),
+          );
+        if (mode === "empty")
+          assert.equal(
+            expectedAnswers.filter((answer) => answer === "백제").length,
+            1,
+          );
+        assert(
+          (
+            await dialog
+              .getByRole("button", { name: "확인", exact: true })
+              .boundingBox()
+          ).height >= 44,
+        );
+      }
+      await finish(t);
+    }
+  }
   // Offline keeps editing and pauses the deadline; normal reload restores page,
   // answer and deadline even after the old eight-second rotation window.
   for (const width of [390, 768, 1280]) {
     const t = await open(`offline-reload-${width}`, width);
+    assert.equal(
+      (await draft(t.page)).hintUseCount,
+      0,
+      "new attempt starts with no hints used",
+    );
+    assert.equal(await t.page.evaluate(() => window.__useHint()), true);
+    assert.equal(
+      (await draft(t.page)).hintUseCount,
+      1,
+      "hint use is persisted synchronously",
+    );
     await fillFirst(t.page);
     await advance(t.page, 1000);
     await t.context.setOffline(true);
     await advance(t.page, 1000);
     const before = await draft(t.page);
     assert(before.offlineStartedAt);
+    assert.equal(await t.page.evaluate(() => window.__useHint()), true);
+    assert.equal(
+      (await draft(t.page)).hintUseCount,
+      2,
+      "offline hint use stays with the attempt",
+    );
     await t.page.locator('input[placeholder="첫 빈칸"]').fill("고조선 보존");
     await advance(t.page, 15000);
     assert.equal(
@@ -297,6 +457,30 @@ try {
       before.resultId,
       "same attempt survives normal reload",
     );
+    assert.equal(
+      (await draft(t.page)).hintUseCount,
+      2,
+      "same attempt restores hints after offline/reload",
+    );
+    assert.equal(await t.page.evaluate(() => window.__hintCount), 2);
+    assert.deepEqual(
+      await t.page.evaluate(() => [
+        window.__useHint(),
+        window.__useHint(),
+        window.__useHint(),
+      ]),
+      [true, false, false],
+      "rapid calls cannot exceed three uses before React rerenders",
+    );
+    assert.equal((await draft(t.page)).hintUseCount, 3);
+    await t.page.reload();
+    await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
+    assert.equal(await t.page.evaluate(() => window.__hintCount), 3);
+    assert.equal(
+      await t.page.evaluate(() => window.__useHint()),
+      false,
+      "refresh does not replenish hints",
+    );
     await finish(t);
   }
   {
@@ -308,6 +492,11 @@ try {
     await advance(t.page, 100);
     const saved = await draft(t.page);
     assert.equal(saved.pendingSubmission.answers["blank-a"], "고조선");
+    assert.equal(
+      await t.page.evaluate(() => window.__useHint()),
+      false,
+      "queued submissions cannot consume hints",
+    );
     assert.equal((await getCalls(t.page)).length, 0);
     await t.context.setOffline(false);
     await advance(t.page, 100);
@@ -380,11 +569,11 @@ try {
     assert.equal(calls.length, 2);
     assert.equal(calls[0].resultId, calls[1].resultId);
     assert(
-      await t.page.getByText(/전체 2문제 중 정답 0개/).isVisible(),
+      await t.page.getByText("0/2문제", { exact: true }).isVisible(),
       "zero server score must not fall back to local score",
     );
     assert(
-      await t.page.getByText("90% 이상", { exact: true }).isVisible(),
+      await t.page.getByText("0% · 통과 기준 90%", { exact: true }).isVisible(),
       "server pass threshold is used with its score",
     );
     await finish(t);
@@ -621,6 +810,7 @@ try {
   }
   for (const mode of ["pending", "committed", "active", "passed"]) {
     const t = await open(`teacher-reset-reentry-${mode}`);
+    assert.equal(await t.page.evaluate(() => window.__useHint()), true);
     await fillFirst(t.page);
     const before = await draft(t.page);
     if (mode !== "active") {
@@ -666,12 +856,40 @@ try {
       );
       assert.notEqual((await draft(t.page)).resultId, before.resultId);
       assert.equal((await draft(t.page)).pendingSubmission, null);
+      assert.equal(
+        (await draft(t.page)).hintUseCount,
+        0,
+        "teacher reset starts a fresh hint allowance",
+      );
     }
     assert.equal((await getCalls(t.page)).length, mode === "active" ? 0 : 1);
     assert.equal(
       await t.page.evaluate(() => Object.keys(window.__fixture.results).length),
       ["committed", "passed"].includes(mode) ? 1 : 0,
     );
+    await finish(t);
+  }
+  for (const [raw, expected] of [
+    [null, 0],
+    [-8, 0],
+    [99, 3],
+    ["invalid", 0],
+    [2.9, 2],
+  ]) {
+    const t = await open(`hint-normalization-${String(raw)}`);
+    await t.page.addInitScript(
+      ({ key, raw }) => {
+        const saved = JSON.parse(localStorage.getItem(key));
+        if (raw === null) delete saved.hintUseCount;
+        else saved.hintUseCount = raw;
+        localStorage.setItem(key, JSON.stringify(saved));
+      },
+      { key, raw },
+    );
+    await t.page.reload();
+    await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
+    assert.equal((await draft(t.page)).hintUseCount, expected);
+    assert.equal(await t.page.evaluate(() => window.__hintCount), expected);
     await finish(t);
   }
   {
