@@ -190,6 +190,7 @@ const bundled = await build({
   target: "es2022",
   outfile: path.join(os.tmpdir(), "weplay-teacher-fixture.js"),
   loader: { ".svg": "dataurl" },
+  external: ["/assets/*"],
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -280,6 +281,8 @@ const server = http.createServer(async (request, response) => {
         difficulty: data.difficulty,
         difficultySettings: config,
         status: "active",
+        battleVersion: 1,
+        acceptedEvents: [],
         startsAtMs: data.now + 3000,
         endsAtMs: data.now + 3000 + config.durationSeconds * 1000,
         serverNowMs: data.now,
@@ -293,6 +296,12 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   const name = new URL(request.url, "http://127.0.0.1").pathname;
+  if (name.startsWith('/assets/')) {
+    const target = path.resolve(root, 'public', '.' + name);
+    if (!target.startsWith(path.join(root, 'public') + path.sep)) { response.writeHead(400); response.end(); return; }
+    response.setHeader('Content-Type', 'image/webp');
+    response.end(await fs.readFile(target)); return;
+  }
   response.setHeader(
     "Content-Type",
     name.endsWith(".js")
@@ -390,7 +399,7 @@ try {
         true,
       );
     assert.equal(
-      await table.getByRole("columnheader", { name: "낙하 시간 (초)" }).count(),
+      await table.getByRole("columnheader", { name: "입력 시간 (초)" }).count(),
       1,
     );
     const scroll = page.getByRole("region", { name: "난이도별 설정 표" });
@@ -407,7 +416,7 @@ try {
     await page.keyboard.press("Tab");
     assert.equal(
       await page
-        .getByRole("spinbutton", { name: "착한맛 초반 낙하 시간", exact: true })
+        .getByRole("spinbutton", { name: "착한맛 초반 입력 시간", exact: true })
         .evaluate((el) => el === document.activeElement),
       true,
     );
@@ -502,11 +511,11 @@ try {
   assert.equal(await input("전체 제한시간").inputValue(), "");
   assert.equal(await save.isDisabled(), true);
   assert.equal(await preview.isDisabled(), true);
-  await input("전체 제한시간").fill("30");
+  await input("전체 제한시간").fill("120");
   for (const [label, value] of [
-    ["초반 낙하 시간", "5"],
-    ["중반 낙하 시간", "4"],
-    ["후반 낙하 시간", "3"],
+    ["초반 입력 시간", "20"],
+    ["중반 입력 시간", "15"],
+    ["후반 입력 시간", "10"],
   ])
     await input(label).fill(value);
   await input("최소 단어 길이").fill("4");
@@ -516,9 +525,9 @@ try {
     await page
       .getByRole("spinbutton", { name: "중간맛 전체 제한시간", exact: true })
       .inputValue(),
-    "60",
+    "90",
   );
-  assert.equal(await input("전체 제한시간").inputValue(), "30");
+  assert.equal(await input("전체 제한시간").inputValue(), "120");
   await capture(page, "settings-edited-390");
   await page.evaluate(
     () => (window.weplayTeacherQa.fail.saveWeplayGameSettings = 1),
@@ -528,7 +537,7 @@ try {
     .getByRole("alert")
     .filter({ hasText: "연결이 원활하지 않습니다" })
     .waitFor();
-  assert.equal(await input("전체 제한시간").inputValue(), "30");
+  assert.equal(await input("전체 제한시간").inputValue(), "120");
   assert.equal(
     await page.evaluate(() => window.weplayTeacherQa.writes.length),
     0,
@@ -536,9 +545,9 @@ try {
   await preview.click();
   await page.getByLabel("단어 입력", { exact: true }).waitFor();
   const session = await page.evaluate(() => window.weplayTeacherQa.session);
-  assert.equal(session.endsAtMs - session.startsAtMs, 30000);
+  assert.equal(session.endsAtMs - session.startsAtMs, 120000);
   assert.deepEqual(
-    [...new Set(session.words.map((word) => word.text))].sort(),
+    [...new Set(session.words.filter((word) => word.kind !== "special").map((word) => word.text))].sort(),
     ["연습단어", "직접단어", "추가단어"].sort(),
   );
   assert.deepEqual(
@@ -546,28 +555,28 @@ try {
       (stage) =>
         session.words.find((word) => word.stage === stage).fallDurationMs,
     ),
-    [5000, 4000, 3000],
+    [20000, 15000, 10000],
   );
   await page.clock.runFor(3050);
   assert.equal(
     await page.getByLabel("단어 입력", { exact: true }).isEnabled(),
     true,
   );
-  await page.clock.runFor(10000);
+  await page.clock.runFor(40000);
   assert.equal(
     await page
-      .locator('.weplay-stages li[aria-current="step"] strong')
+      .locator('.naval-battle-status span').last()
       .textContent(),
-    "중반",
+    "중반 · 격침 0척",
   );
-  await page.clock.runFor(10000);
+  await page.clock.runFor(40000);
   assert.equal(
     await page
-      .locator('.weplay-stages li[aria-current="step"] strong')
+      .locator('.naval-battle-status span').last()
       .textContent(),
-    "후반",
+    "후반 · 격침 0척",
   );
-  await page.clock.runFor(11100);
+  await page.clock.runFor(41100);
   await page
     .getByRole("heading", { name: "체험 결과 · 착한맛", exact: true })
     .waitFor();
@@ -599,7 +608,7 @@ try {
   );
   assert.deepEqual(settings.customWords, ["직접단어", "추가단어", "연습단어"]);
   assert.deepEqual(settings.excludedWords, ["훈민정음"]);
-  assert.equal(settings.difficulties.mild.durationSeconds, 30);
+  assert.equal(settings.difficulties.mild.durationSeconds, 120);
   assert.equal(settings.difficulties.mild.minWordLength, 4);
   assert.equal(await save.isDisabled(), true);
   await page.close();
@@ -607,7 +616,7 @@ try {
     "Individual exclusion/reinclusion, duplicate normalization, custom add/remove, custom-only play, raw numeric blank, per-difficulty values, failed-save preservation/retry; exact draft sent and persisted",
   );
   checks.push(
-    "Unsaved 30-second custom-only preview: 5/4/3 seconds, 10/20/30 stage/end boundaries, no student API calls or database writes",
+    "Unsaved 120-second custom-only preview: 20/15/10 seconds, 40/80/120 stage/end boundaries, no student API calls or database writes",
   );
   for (const view of ["readonly", "denied", "empty", "load-error"]) {
     const p = await pageFor(view, 390);

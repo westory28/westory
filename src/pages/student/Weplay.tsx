@@ -6,6 +6,7 @@ import {
   weplayErrorMessage,
   WEPLAY_DIFFICULTY_LABELS,
   DEFAULT_WEPLAY_DIFFICULTIES,
+  getWeplayNormalWordCount,
   type WeplayDifficulty,
   type WeplayLobby,
   type WeplayResult,
@@ -13,6 +14,7 @@ import {
 } from "../../lib/weplay";
 import HistoryRainGame from "./weplay/HistoryRainGame";
 import "./weplay/weplay.css";
+import "./weplay/lobby.css";
 
 const signed = (value: number) => `${value > 0 ? "+" : ""}${value}`;
 const date = (value: number) =>
@@ -163,7 +165,7 @@ export default function Weplay() {
       <header className="weplay-heading">
         <div>
           <span>위플레이</span>
-          <h1>역사가 내려와</h1>
+          <h1>내가 충무공이라고?!</h1>
         </div>
         {lobby && <strong>내 위스 {lobby.balance.toLocaleString()}</strong>}
       </header>
@@ -201,6 +203,20 @@ export default function Weplay() {
                     : `${signed(result.netWis)}위스`}
                 </strong>
               </div>
+              {result.battle && (
+                <p className="weplay-battle-summary">
+                  <strong>
+                    {result.battle.outcome === "defeat"
+                      ? "함선 침몰"
+                      : "해역 방어 완료"}
+                  </strong>
+                  <span>적선 {result.battle.sunkShips}척 격침</span>
+                  <span>
+                    화포 {result.battle.cannonShots}회 · 필살기{" "}
+                    {result.battle.specialCount}회
+                  </span>
+                </p>
+              )}
               {result.mode === "challenge" && (
                 <p>
                   도전 비용 {result.cost}위스 · 결과 지급 {result.reward}위스
@@ -232,156 +248,192 @@ export default function Weplay() {
             </section>
           )}
           {lobby && !result && (
-            <section className="weplay-panel" aria-label="게임 시작">
-              <div className="weplay-mode" role="group" aria-label="게임 모드">
-                <button
-                  type="button"
-                  aria-pressed={mode === "practice"}
-                  disabled={starting}
-                  onClick={() => {
-                    setMode("practice");
-                    requestKey.current = "";
-                  }}
-                >
-                  연습
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={mode === "challenge"}
-                  disabled={starting}
-                  onClick={() => {
-                    setMode("challenge");
-                    requestKey.current = "";
-                  }}
-                >
-                  위스 도전
-                </button>
+            <section
+              className="weplay-panel weplay-launch"
+              aria-label="게임 시작"
+            >
+              <div className="weplay-launch-art" aria-hidden="true">
+                <img
+                  className="weplay-launch-allied"
+                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/allied-ship.webp`}
+                  alt=""
+                />
+                <img
+                  className="weplay-launch-enemy"
+                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/enemy-ship.webp`}
+                  alt=""
+                />
               </div>
-              <div
-                className="weplay-mode weplay-difficulty"
-                role="group"
-                aria-label="난이도"
-              >
-                {(
-                  Object.keys(WEPLAY_DIFFICULTY_LABELS) as WeplayDifficulty[]
-                ).map((value) => (
+              <div className="weplay-launch-controls">
+                <div
+                  className="weplay-mode"
+                  role="group"
+                  aria-label="게임 모드"
+                >
                   <button
-                    key={value}
                     type="button"
+                    aria-pressed={mode === "practice"}
                     disabled={starting}
-                    aria-pressed={difficulty === value}
                     onClick={() => {
-                      setDifficulty(value);
-                      setRankingDifficulty(value);
+                      setMode("practice");
                       requestKey.current = "";
                     }}
                   >
-                    {WEPLAY_DIFFICULTY_LABELS[value]}
+                    연습
                   </button>
-                ))}
-              </div>
-              <p className="weplay-rule">
-                {difficultySettings.durationSeconds}초 · 20개 단어
-              </p>
-              {mode === "practice" ? (
-                <>
-                  <label className="weplay-select">
-                    수업 범위
-                    <select
-                      value={lesson}
+                  <button
+                    type="button"
+                    aria-pressed={mode === "challenge"}
+                    disabled={starting}
+                    onClick={() => {
+                      setMode("challenge");
+                      requestKey.current = "";
+                    }}
+                  >
+                    위스 도전
+                  </button>
+                </div>
+                <div
+                  className="weplay-mode weplay-difficulty"
+                  role="group"
+                  aria-label="난이도"
+                >
+                  {(
+                    Object.keys(WEPLAY_DIFFICULTY_LABELS) as WeplayDifficulty[]
+                  ).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
                       disabled={starting}
-                      onChange={(event) => {
-                        setLesson(event.target.value);
+                      aria-pressed={difficulty === value}
+                      onClick={() => {
+                        setDifficulty(value);
+                        setRankingDifficulty(value);
                         requestKey.current = "";
                       }}
                     >
-                      <option value="">전체 단어</option>
-                      {lobby.lessons.map((item) => (
-                        <option key={item.unitId} value={item.unitId}>
-                          {item.title} (
-                          {item.wordCountsByDifficulty?.[difficulty] ??
-                            item.wordCount}
-                          개)
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <p>위스 변동 없음</p>
-                </>
-              ) : (
-                <>
-                  <div className="weplay-stakes">
-                    <strong>도전 비용 {lobby.policy.challengeCost}위스</strong>
-                    <span>
-                      최대 손실 {maxLoss}위스 · 최대 순이익{" "}
-                      {Math.max(0, maxReward - lobby.policy.challengeCost)}위스
-                    </span>
-                    <span>
-                      오늘 남은 도전 {lobby.dailyRemaining}회 · 난이도 공통
-                    </span>
-                  </div>
-                  <details>
-                    <summary>결과별 지급 위스</summary>
-                    <ul className="weplay-rewards">
-                      {lobby.policy.resultRewards.map((row, index, rows) => (
-                        <li key={row.minCorrect}>
-                          <span>
-                            {row.minCorrect}~
-                            {(rows[index + 1]?.minCorrect ?? 21) - 1}개 성공
-                          </span>
-                          <strong>{row.amount}위스</strong>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                  {!lobby.policy.enabled && (
-                    <p>지금은 연습 게임을 이용할 수 있습니다.</p>
-                  )}
-                  {lobby.policy.enabled && lobby.dailyRemaining <= 0 && (
-                    <p>오늘의 도전을 모두 마쳤습니다.</p>
-                  )}
-                  {lobby.policy.enabled &&
-                    lobby.balance < lobby.policy.challengeCost && (
-                      <p>도전에 필요한 위스가 부족합니다.</p>
+                      {WEPLAY_DIFFICULTY_LABELS[value]}
+                    </button>
+                  ))}
+                </div>
+                <p className="weplay-rule">
+                  {difficultySettings.durationSeconds}초 ·{" "}
+                  {difficulty === "mild" ? 2 : difficulty === "medium" ? 3 : 4}
+                  단어마다 화포 발사
+                </p>
+                {mode === "practice" ? (
+                  <>
+                    <label className="weplay-select">
+                      수업 범위
+                      <select
+                        value={lesson}
+                        disabled={starting}
+                        onChange={(event) => {
+                          setLesson(event.target.value);
+                          requestKey.current = "";
+                        }}
+                      >
+                        <option value="">전체 단어</option>
+                        {lobby.lessons.map((item) => (
+                          <option key={item.unitId} value={item.unitId}>
+                            {item.title} (
+                            {item.wordCountsByDifficulty?.[difficulty] ??
+                              item.wordCount}
+                            개)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p>위스 변동 없음</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="weplay-stakes">
+                      <strong>
+                        도전 비용 {lobby.policy.challengeCost}위스
+                      </strong>
+                      <span>
+                        최대 손실 {maxLoss}위스 · 최대 순이익{" "}
+                        {Math.max(0, maxReward - lobby.policy.challengeCost)}
+                        위스
+                      </span>
+                      <span>
+                        오늘 남은 도전 {lobby.dailyRemaining}회 · 난이도 공통
+                      </span>
+                    </div>
+                    <details>
+                      <summary>결과별 지급 위스</summary>
+                      <ul className="weplay-rewards">
+                        {lobby.policy.resultRewards.map((row, index, rows) => (
+                          <li key={row.minCorrect}>
+                            <span>
+                              성공률 {row.minCorrect * 5}% 이상
+                              {rows[index + 1]
+                                ? ` ${rows[index + 1].minCorrect * 5}% 미만`
+                                : ""}
+                            </span>
+                            <strong>{row.amount}위스</strong>
+                          </li>
+                        ))}
+                      </ul>
+                      <p>
+                        일반 단어{" "}
+                        {getWeplayNormalWordCount(
+                          difficultySettings.durationSeconds,
+                        )}
+                        개 기준 · 필살기는 전투 점수에 반영
+                      </p>
+                    </details>
+                    {!lobby.policy.enabled && (
+                      <p>지금은 연습 게임을 이용할 수 있습니다.</p>
                     )}
-                  <p>
-                    도중에 나가도 시간은 계속 흐르고, 처리한 단어만 정산됩니다.
+                    {lobby.policy.enabled && lobby.dailyRemaining <= 0 && (
+                      <p>오늘의 도전을 모두 마쳤습니다.</p>
+                    )}
+                    {lobby.policy.enabled &&
+                      lobby.balance < lobby.policy.challengeCost && (
+                        <p>도전에 필요한 위스가 부족합니다.</p>
+                      )}
+                    <p>
+                      도중에 나가도 시간은 계속 흐르고, 처리한 단어만
+                      정산됩니다.
+                    </p>
+                  </>
+                )}
+                {lobby.gameEnabled === false && (
+                  <p role="status">
+                    지금은 게임을 쉬고 있습니다. 나중에 다시 이용해 주세요.
                   </p>
-                </>
-              )}
-              {lobby.gameEnabled === false && (
-                <p role="status">
-                  지금은 게임을 쉬고 있습니다. 나중에 다시 이용해 주세요.
-                </p>
-              )}
-              {availableCount === 0 && lobby.gameEnabled !== false && (
-                <p role="status">
-                  선택한 난이도와 범위에 출제할 단어가 없습니다.
-                </p>
-              )}
-              {availableCount > 0 && availableCount < 3 && (
-                <p role="status">
-                  서로 다른 단어가 3개 이상인 난이도와 범위를 선택해 주세요.
-                </p>
-              )}
-              <button
-                type="button"
-                className="weplay-primary"
-                disabled={
-                  starting ||
-                  loading ||
-                  lobby.gameEnabled === false ||
-                  availableCount < 3 ||
-                  (mode === "challenge" && cannotChallenge)
-                }
-                onClick={() => void start()}
-              >
-                {starting
-                  ? "시작 준비 중…"
-                  : mode === "practice"
-                    ? "연습 시작"
-                    : `위스 도전 시작 · ${lobby.policy.challengeCost}위스`}
-              </button>
+                )}
+                {availableCount === 0 && lobby.gameEnabled !== false && (
+                  <p role="status">
+                    선택한 난이도와 범위에 출제할 단어가 없습니다.
+                  </p>
+                )}
+                {availableCount > 0 && availableCount < 3 && (
+                  <p role="status">
+                    서로 다른 단어가 3개 이상인 난이도와 범위를 선택해 주세요.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="weplay-primary"
+                  disabled={
+                    starting ||
+                    loading ||
+                    lobby.gameEnabled === false ||
+                    availableCount < 3 ||
+                    (mode === "challenge" && cannotChallenge)
+                  }
+                  onClick={() => void start()}
+                >
+                  {starting
+                    ? "시작 준비 중…"
+                    : mode === "practice"
+                      ? "연습 시작"
+                      : `위스 도전 시작 · ${lobby.policy.challengeCost}위스`}
+                </button>
+              </div>
             </section>
           )}
           {lobby && (

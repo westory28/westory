@@ -337,7 +337,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
       }}
     >
       <header className="weplay-policy__header">
-        <h3 id="weplay-policy-title">역사가 내려와</h3>
+        <h3 id="weplay-policy-title">내가 충무공이라고?!</h3>
         {ready && (
           <span
             className={
@@ -423,16 +423,16 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
             <h4>결과별 지급액</h4>
             <p className="weplay-policy__notice">
               종료 시 지급하는 금액입니다. 실제 위스 증감은 지급액에서 도전
-              비용을 뺀 값입니다.
+              비용을 뺀 값입니다. 전체 일반 단어의 성공 비율로 정산하며,
+              필살기는 전투 점수에만 반영됩니다.
             </p>
             <div className="weplay-policy__rewards">
               {draft.resultRewards.map((reward, index) => {
-                const maximum =
-                  (draft.resultRewards[index + 1]?.minCorrect ?? 21) - 1;
+                const next = draft.resultRewards[index + 1]?.minCorrect;
                 const label =
-                  reward.minCorrect === maximum
-                    ? `${reward.minCorrect}개 처리`
-                    : `${reward.minCorrect}~${maximum}개 처리`;
+                  next === undefined
+                    ? `성공률 ${reward.minCorrect * 5}% 이상`
+                    : `성공률 ${reward.minCorrect * 5}% 이상 ${next * 5}% 미만`;
                 return (
                   <NumberField
                     key={reward.minCorrect}

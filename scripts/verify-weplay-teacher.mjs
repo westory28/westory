@@ -189,6 +189,7 @@ const bundled = await build({
   target: "es2022",
   outfile: path.join(os.tmpdir(), "weplay-teacher-fixture.js"),
   loader: { ".svg": "dataurl" },
+  external: ["/assets/*"],
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -420,7 +421,7 @@ try {
               name: "위플레이 관리 메뉴",
               exact: true,
             })
-            .getByRole("link", { name: "역사가 내려와", exact: true })
+            .getByRole("link", { name: "내가 충무공이라고?!", exact: true })
             .click();
           assert.equal(await menu.getAttribute("aria-expanded"), "false");
           const heights = await page

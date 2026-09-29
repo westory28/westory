@@ -1,7 +1,9 @@
 const crypto = require('node:crypto');
+const { simulateWeplayBattle } = require('./weplayBattle');
 
 const TOTAL_WORDS = 20;
-const GAME_DURATION_MS = 60000;
+const GAME_DURATION_MS = 90000;
+const BATTLE_NORMAL_WORDS = 60;
 const START_DELAY_MS = 3000;
 const ANSWER_GRACE_MS = 750;
 const PERIOD_SETTLEMENT_DELAY_MS = 240000;
@@ -9,7 +11,7 @@ const DIFFICULTIES = ['mild', 'medium', 'spicy'];
 const FALL_DURATIONS = { mild: [12000, 10000, 8000], medium: [10000, 8000, 6000], spicy: [8000, 6000, 4000] };
 const GAME_ID = 'history-rain';
 const DEFAULT_DIFFICULTY_SETTINGS = Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, {
-  durationSeconds: 60, fallSeconds: FALL_DURATIONS[difficulty].map((ms) => ms / 1000), minWordLength: 1, maxWordLength: 12,
+  durationSeconds: 90, fallSeconds: FALL_DURATIONS[difficulty].map((ms) => ms / 1000), minWordLength: 1, maxWordLength: 12,
 }]));
 const DEFAULT_GAME_SETTINGS = { enabled: true, sourceMode: 'all', unitIds: [], excludedWords: [], customWords: [], difficulties: DEFAULT_DIFFICULTY_SETTINGS, version: 0 };
 const DEFAULT_POLICY = {
@@ -105,10 +107,10 @@ function validateWordList(input, normalize = false) {
 }
 
 function validateDifficultySettings(input) {
-  const durationSeconds = integer(input?.durationSeconds, 30, 180, '전체 제한 시간');
-  if (!Array.isArray(input?.fallSeconds) || input.fallSeconds.length !== 3) throw new Error('초반·중반·후반 낙하 시간을 설정해 주세요.');
-  const fallSeconds = input.fallSeconds.map((seconds) => integer(seconds, 1, Math.min(30, Math.floor((durationSeconds / 3 - 1) * 0.64)), '낙하 시간'));
-  if (fallSeconds[0] <= fallSeconds[1] || fallSeconds[1] <= fallSeconds[2]) throw new Error('낙하 시간은 초반·중반·후반 순으로 짧아져야 합니다.');
+  const durationSeconds = integer(input?.durationSeconds, 90, 180, '전체 제한 시간');
+  if (!Array.isArray(input?.fallSeconds) || input.fallSeconds.length !== 3) throw new Error('초반·중반·후반 입력 시간을 설정해 주세요.');
+  const fallSeconds = input.fallSeconds.map((seconds) => integer(seconds, 1, Math.min(30, Math.floor((durationSeconds / 3 - 1) * 0.64)), '입력 시간'));
+  if (fallSeconds[0] <= fallSeconds[1] || fallSeconds[1] <= fallSeconds[2]) throw new Error('입력 시간은 초반·중반·후반 순으로 짧아져야 합니다.');
   const minWordLength = integer(input?.minWordLength, 1, 12, '최소 단어 길이');
   const maxWordLength = integer(input?.maxWordLength, 1, 12, '최대 단어 길이');
   if (minWordLength > maxWordLength) throw new Error('최소 단어 길이는 최대 길이보다 클 수 없습니다.');
@@ -121,7 +123,15 @@ function validateDifficulties(input) {
 
 function readGameSettings(data) {
   if (!data) return structuredClone(DEFAULT_GAME_SETTINGS);
-  return { ...validateGameSettings(data), version: integer(data.version ?? 0, 0, Number.MAX_SAFE_INTEGER, '설정 버전') };
+  return { ...validateGameSettings({ ...data, difficulties: readDifficulties(data.difficulties) }), version: integer(data.version ?? 0, 0, Number.MAX_SAFE_INTEGER, '설정 버전') };
+}
+
+// Upgrade stored pre-battle settings on read; active session snapshots stay intact.
+function readDifficulties(input) {
+  return validateDifficulties(Object.fromEntries(DIFFICULTIES.map((difficulty) => {
+    const value = input?.[difficulty] || DEFAULT_DIFFICULTY_SETTINGS[difficulty];
+    return [difficulty, { ...value, durationSeconds: Math.max(90, value.durationSeconds) }];
+  })));
 }
 
 const filterGameLessons = (lessons, settings) => settings.sourceMode === 'selected'
@@ -200,31 +210,45 @@ function extractLessonWords(lessons) {
 
 // A class receives the same deterministic word/length order during a ranking period.
 // The current visible lesson catalog is re-read on every new game so hidden material never leaks.
-function buildWords(catalog, seed, difficulty = 'medium', difficultySettings = DEFAULT_DIFFICULTY_SETTINGS[difficulty]) {
+function buildWords(catalog, seed, difficulty = 'medium', difficultySettings = DEFAULT_DIFFICULTY_SETTINGS[difficulty], options = {}) {
   if (!DIFFICULTIES.includes(difficulty)) throw new Error('게임 난이도를 선택해 주세요.');
   const config = validateDifficultySettings(difficultySettings);
   const unique = [...new Map(filterDifficultyWords(catalog, config).map((word) => [normalizeAnswer(word.text), word])).values()];
   if (unique.length < 3) throw new Error('출제 범위에 서로 다른 빈칸 정답이 3개 이상 필요합니다.');
   const sorted = unique.sort((a, b) => hash(`${seed}:${normalizeAnswer(a.text)}`).localeCompare(hash(`${seed}:${normalizeAnswer(b.text)}`)));
-  return Array.from({ length: TOTAL_WORDS }, (_, index) => {
-    const stage = index < 7 ? 1 : index < 14 ? 2 : 3;
-    const localIndex = index < 7 ? index : index < 14 ? index - 7 : index - 14;
+  const normalCount = Math.round(config.durationSeconds * BATTLE_NORMAL_WORDS / 90);
+  const normalWords = Array.from({ length: normalCount }, (_, index) => {
+    const stage = Math.floor(index * 3 / normalCount) + 1;
+    const localIndex = index - Math.ceil((stage - 1) * normalCount / 3);
     const fallDurationMs = config.fallSeconds[stage - 1] * 1000;
     const phaseDurationMs = config.durationSeconds * 1000 / 3;
-    const count = stage < 3 ? 7 : 6;
+    const count = Math.ceil(stage * normalCount / 3) - Math.ceil((stage - 1) * normalCount / 3);
     const spawnAtMs = Math.floor((stage - 1) * phaseDurationMs + localIndex * (phaseDurationMs - fallDurationMs - 1000) / (count - 1));
-    return { ...sorted[index % sorted.length], id: `word-${index + 1}`, stage, spawnAtMs, fallDurationMs };
+    return { ...sorted[index % sorted.length], id: `word-${index + 1}`, kind: 'normal', stage, spawnAtMs, fallDurationMs };
   });
+  const excluded = new Set(options.excludedWords || []);
+  const longWords = [...new Map(catalog.filter((word) => Array.from(normalizeAnswer(word.text)).length >= 6).map((word) => [normalizeAnswer(word.text), word])).values()]
+    .sort((a, b) => hash(`${seed}:special:${a.text}`).localeCompare(hash(`${seed}:special:${b.text}`)));
+  const fallback = ['혼일강리역대국도지도', '생즉사사즉생', '학익진전술을펼쳐라'].filter((text) => !excluded.has(normalizeAnswer(text)))
+    .map((text) => ({ text, unitId: '__weplay_tactic__', lessonTitle: '전술 도전', context: '' }));
+  const specials = longWords.length ? longWords : fallback;
+  return [...normalWords, ...[1, 2].flatMap((phase, index) => specials.length ? [{
+    ...specials[index % specials.length], id: `special-${phase}`, kind: 'special', tactic: phase === 1 ? 'crane-wing' : 'last-stand',
+    stage: phase + 1, spawnAtMs: Math.floor(config.durationSeconds * 1000 * phase / 3), fallDurationMs: 3000,
+  }] : [])];
 }
 
 function assessAnswer(session, wordId, answer, nowMs) {
   if (session.status !== 'active') return { accepted: false, reason: 'finished' };
+  if (session.battleVersion === 1 && simulateWeplayBattle(session, nowMs - session.startsAtMs).outcome === 'defeat') return { accepted: false, reason: 'defeated' };
   const word = session.words.find((entry) => entry.id === wordId);
   if (!word) return { accepted: false, reason: 'unknown_word' };
   if ((session.acceptedWordIds || []).includes(wordId)) return { accepted: false, reason: 'already_accepted' };
   const elapsed = nowMs - session.startsAtMs;
   if (elapsed < word.spawnAtMs + 100) return { accepted: false, reason: 'not_started' };
-  if (elapsed > word.spawnAtMs + word.fallDurationMs + ANSWER_GRACE_MS || nowMs > session.endsAtMs) return { accepted: false, reason: 'expired' };
+  const grace = session.battleVersion === 1 && word.kind === 'special' ? 0 : ANSWER_GRACE_MS;
+  const deadline = word.spawnAtMs + word.fallDurationMs + grace;
+  if (session.battleVersion === 1 ? elapsed >= deadline || nowMs >= session.endsAtMs : elapsed > deadline || nowMs > session.endsAtMs) return { accepted: false, reason: 'expired' };
   if (normalizeAnswer(answer) !== normalizeAnswer(word.text)) return { accepted: false, reason: 'incorrect' };
   return { accepted: true };
 }
@@ -252,4 +276,4 @@ const compareEntries = (a, b) => Number(b.score || 0) - Number(a.score || 0)
   || Number(a.achievedAtMs || 0) - Number(b.achievedAtMs || 0)
   || String(a.uid).localeCompare(String(b.uid));
 
-module.exports = { TOTAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, validateDifficulties, validateDifficultySettings, gameCatalog, filterDifficultyWords, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };
+module.exports = { TOTAL_WORDS, BATTLE_NORMAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, readDifficulties, validateDifficulties, validateDifficultySettings, gameCatalog, filterDifficultyWords, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };

@@ -37,19 +37,22 @@ test('extracts only teacher HTML/PDF blank answers, deduplicates, excludes footn
   assert.equal(normalizeAnswer(' ＡＢＣ\t 삼국 시대 '), 'abc삼국시대');
 });
 
-test('one 60-second game has 7/7/6 words, increasing speed, every word ends inside its stage', () => {
-  const words = buildWords(catalog(), 'class-period');
-  assert.equal(words.length, TOTAL_WORDS);
-  assert.equal(GAME_DURATION_MS, 60000);
-  assert.deepEqual([1, 2, 3].map((stage) => words.filter((word) => word.stage === stage).length), [7, 7, 6]);
-  assert.deepEqual([words[0].fallDurationMs, words[7].fallDurationMs, words[14].fallDurationMs], [10000, 8000, 6000]);
-  for (const word of words) assert.ok(word.spawnAtMs + word.fallDurationMs <= word.stage * 20000);
-  assert.deepEqual(buildWords(catalog(), 'class-period'), words);
+test('one 90-second battle has 20/20/20 normal words and two three-second tactics', () => {
+  const allWords = buildWords(catalog(), 'class-period');
+  const words = allWords.filter((word) => word.kind === 'normal');
+  assert.equal(words.length, 60);
+  assert.equal(TOTAL_WORDS, 20, 'Financial thresholds stay unchanged');
+  assert.equal(GAME_DURATION_MS, 90000);
+  assert.deepEqual([1, 2, 3].map((stage) => words.filter((word) => word.stage === stage).length), [20, 20, 20]);
+  assert.deepEqual([words[0].fallDurationMs, words[20].fallDurationMs, words[40].fallDurationMs], [10000, 8000, 6000]);
+  for (const word of words) assert.ok(word.spawnAtMs + word.fallDurationMs <= word.stage * 30000);
+  assert.deepEqual(allWords.filter((word) => word.kind === 'special').map((word) => [word.spawnAtMs, word.fallDurationMs]), [[30000, 3000], [60000, 3000]]);
+  assert.deepEqual(buildWords(catalog(), 'class-period'), allWords);
   assert.throws(() => buildWords(catalog().slice(0, 2), 'seed'));
   for (const difficulty of DIFFICULTIES) {
-    const deck = buildWords(catalog(), 'same-class', difficulty);
-    assert.deepEqual([deck[0].fallDurationMs, deck[7].fallDurationMs, deck[14].fallDurationMs], FALL_DURATIONS[difficulty]);
-    for (const word of deck) assert.ok(word.spawnAtMs + word.fallDurationMs <= word.stage * 20000 - 1000);
+    const deck = buildWords(catalog(), 'same-class', difficulty).filter((word) => word.kind === 'normal');
+    assert.deepEqual([deck[0].fallDurationMs, deck[20].fallDurationMs, deck[40].fallDurationMs], FALL_DURATIONS[difficulty]);
+    for (const word of deck) assert.ok(word.spawnAtMs + word.fallDurationMs <= word.stage * 30000 - 1000);
   }
   assert.throws(() => buildWords(catalog(), 'seed', 'invalid'));
 });
@@ -122,18 +125,18 @@ test('editable words normalize, deduplicate, respect exclusions and selected les
   assert.deepEqual(readGameSettings({ enabled: true, sourceMode: 'all', unitIds: [], version: 3 }).difficulties, DEFAULT_DIFFICULTY_SETTINGS);
 });
 
-test('configured 30/95/180 second games preserve stage bounds, word length filtering, and strict acceleration', () => {
+test('configured 90/95/180 second games preserve stage bounds, word length filtering, and strict acceleration', () => {
   assert.ok(PERIOD_SETTLEMENT_DELAY_MS > 180000 + START_DELAY_MS + 5000, 'Ranking freeze must follow even a maximum duration session started at the period boundary.');
   const words = ['가', '가나', '가나다', '가나다라', '가나다라마'].map((text) => ({ text }));
-  for (const [durationSeconds, fallSeconds] of [[30, [5, 4, 3]], [95, [19, 12, 6]], [180, [30, 20, 10]]]) {
+  for (const [durationSeconds, fallSeconds] of [[90, [5, 4, 3]], [95, [19, 12, 6]], [180, [30, 20, 10]]]) {
     const config = { durationSeconds, fallSeconds, minWordLength: 2, maxWordLength: 4 };
-    const deck = buildWords(words, 'seed', 'mild', config);
-    assert.equal(deck.length, 20);
+    const deck = buildWords(words, 'seed', 'mild', config).filter((word) => word.kind === 'normal');
+    assert.equal(deck.length, Math.round(durationSeconds * 2 / 3));
     assert.ok(deck.every((word) => word.text.length >= 2 && word.text.length <= 4));
     for (const word of deck) assert.ok(word.spawnAtMs + word.fallDurationMs <= word.stage * durationSeconds * 1000 / 3 - 999);
-    assert.deepEqual([deck[0].fallDurationMs, deck[7].fallDurationMs, deck[14].fallDurationMs], fallSeconds.map((seconds) => seconds * 1000));
+    assert.deepEqual([1, 2, 3].map((stage) => deck.find((word) => word.stage === stage).fallDurationMs), fallSeconds.map((seconds) => seconds * 1000));
   }
-  for (const patch of [{ durationSeconds: 29 }, { durationSeconds: 181 }, { durationSeconds: 60.5 }, { fallSeconds: [10, 10, 8] }, { fallSeconds: [8, 10, 6] }, { fallSeconds: [13, 10, 8] }, { minWordLength: 4, maxWordLength: 3 }]) assert.throws(() => validateDifficultySettings({ ...DEFAULT_DIFFICULTY_SETTINGS.mild, ...patch }));
+  for (const patch of [{ durationSeconds: 89 }, { durationSeconds: 181 }, { durationSeconds: 90.5 }, { fallSeconds: [10, 10, 8] }, { fallSeconds: [8, 10, 6] }, { fallSeconds: [19, 10, 8] }, { minWordLength: 4, maxWordLength: 3 }]) assert.throws(() => validateDifficultySettings({ ...DEFAULT_DIFFICULTY_SETTINGS.mild, ...patch }));
   assert.throws(() => buildWords(words, 'seed', 'mild', { ...DEFAULT_DIFFICULTY_SETTINGS.mild, minWordLength: 4 }));
 });
 

@@ -43,6 +43,28 @@ export interface WeplayWord {
   stage: 1 | 2 | 3;
   spawnAtMs: number;
   fallDurationMs: number;
+  kind?: "normal" | "special";
+  tactic?: "crane-wing" | "last-stand";
+}
+export interface WeplayAcceptedEvent {
+  wordId: string;
+  elapsedMs: number;
+}
+export interface WeplayBattleState {
+  playerHp: number;
+  enemyHp: number;
+  ammo: number;
+  cannonShots: number;
+  specialCount: number;
+  sunkShips: number;
+  damageDealt: number;
+  enemyShots: number;
+  nextEnemyAttackAtMs: number;
+  defeatAtMs: number | null;
+  outcome: "active" | "victory" | "defeat";
+  score: number;
+  normalCorrectCount: number;
+  rewardCorrectCount: number;
 }
 export interface WeplayResult {
   sessionId: string;
@@ -57,6 +79,9 @@ export interface WeplayResult {
   balance: number;
   finishedAtMs: number;
   missedWords: WeplayWord[];
+  battleVersion?: 1;
+  battle?: WeplayBattleState;
+  rewardCorrectCount?: number;
 }
 export interface WeplaySession {
   id: string;
@@ -72,6 +97,9 @@ export interface WeplaySession {
   result: WeplayResult | null;
   serverNowMs: number;
   difficultySettings?: WeplayDifficultySettings;
+  battleVersion?: 1;
+  acceptedEvents?: WeplayAcceptedEvent[];
+  battle?: WeplayBattleState;
 }
 export interface WeplayLobby {
   gameEnabled?: boolean;
@@ -115,6 +143,8 @@ export interface WeplayAnswerResponse {
   correctCount: number;
   acceptedWordIds: string[];
   serverNowMs: number;
+  acceptedEvents?: WeplayAcceptedEvent[];
+  battle?: WeplayBattleState;
 }
 async function call<T>(
   name: string,
@@ -149,8 +179,10 @@ export const finishWeplayGame = (config: WeplayConfig, sessionId: string) =>
   call<WeplayResult>("finishWeplayGame", config, { sessionId });
 
 export const WEPLAY_GAMES = [
-  { id: "history-rain", name: "역사가 내려와" },
+  { id: "history-rain", name: "내가 충무공이라고?!" },
 ] as const;
+export const getWeplayNormalWordCount = (durationSeconds: number) =>
+  Math.round((durationSeconds * 2) / 3);
 export type WeplayGameId = (typeof WEPLAY_GAMES)[number]["id"];
 export interface WeplayDifficultySettings {
   durationSeconds: number;
@@ -163,19 +195,19 @@ export const DEFAULT_WEPLAY_DIFFICULTIES: Record<
   WeplayDifficultySettings
 > = {
   mild: {
-    durationSeconds: 60,
+    durationSeconds: 90,
     fallSeconds: [12, 10, 8],
     minWordLength: 1,
     maxWordLength: 12,
   },
   medium: {
-    durationSeconds: 60,
+    durationSeconds: 90,
     fallSeconds: [10, 8, 6],
     minWordLength: 1,
     maxWordLength: 12,
   },
   spicy: {
-    durationSeconds: 60,
+    durationSeconds: 90,
     fallSeconds: [8, 6, 4],
     minWordLength: 1,
     maxWordLength: 12,
@@ -203,6 +235,10 @@ export const normalizeWeplayGameSettings = (
         {
           ...DEFAULT_WEPLAY_DIFFICULTIES[difficulty],
           ...settings.difficulties?.[difficulty],
+          durationSeconds: Math.max(
+            90,
+            settings.difficulties?.[difficulty]?.durationSeconds || 90,
+          ),
           fallSeconds: [
             ...(settings.difficulties?.[difficulty]?.fallSeconds ||
               DEFAULT_WEPLAY_DIFFICULTIES[difficulty].fallSeconds),

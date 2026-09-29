@@ -28,14 +28,14 @@ const errorFor = (value: Values) => {
   if (Object.values(value).some((item) => !/^\d+$/.test(item)))
     return "모든 설정에 정수를 입력해 주세요.";
   const duration = Number(value.durationSeconds);
-  if (duration < 30 || duration > 180)
-    return "전체 제한시간은 30~180초로 입력해 주세요.";
+  if (duration < 90 || duration > 180)
+    return "전체 제한시간은 90~180초로 입력해 주세요.";
   const falls = [value.first, value.middle, value.last].map(Number);
   const maximum = Math.min(30, Math.floor((duration / 3 - 1) * 0.64));
   if (falls.some((fall) => fall < 1 || fall > maximum))
-    return `현재 제한시간에서 낙하 시간은 1~${maximum}초로 입력해 주세요.`;
+    return `현재 제한시간에서 입력 시간은 1~${maximum}초로 입력해 주세요.`;
   if (!(falls[0] > falls[1] && falls[1] > falls[2]))
-    return "낙하 시간은 초반 > 중반 > 후반 순으로 짧아져야 합니다.";
+    return "입력 시간은 초반 > 중반 > 후반 순으로 짧아져야 합니다.";
   const min = Number(value.minWordLength),
     max = Number(value.maxWordLength);
   if (min < 1 || max > 12 || min > max)
@@ -96,22 +96,22 @@ export default function WeplayDifficultyEditor({
     {
       field: "durationSeconds",
       label: "전체 제한시간",
-      min: 30,
+      min: 90,
       max: 180,
     },
     {
       field: "first",
-      label: "초반 낙하 시간",
+      label: "초반 입력 시간",
       min: 1,
     },
     {
       field: "middle",
-      label: "중반 낙하 시간",
+      label: "중반 입력 시간",
       min: 1,
     },
     {
       field: "last",
-      label: "후반 낙하 시간",
+      label: "후반 입력 시간",
       min: 1,
     },
     {
@@ -155,7 +155,7 @@ export default function WeplayDifficultyEditor({
                 제한시간 <span>(초)</span>
               </th>
               <th scope="colgroup" colSpan={3}>
-                낙하 시간 <span>(초)</span>
+                입력 시간 <span>(초)</span>
               </th>
               <th scope="colgroup" colSpan={2}>
                 단어 길이 <span>(자)</span>

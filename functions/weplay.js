@@ -3,8 +3,9 @@ const {
   hash, validatePolicy, readPolicy, effectiveLessons, extractLessonWords,
   buildWords, assessAnswer, gameReward, periodBounds, compareEntries,
   GAME_ID, validateUnitIds, validateGameSettings, readGameSettings, uniqueWordCount,
-  DEFAULT_DIFFICULTY_SETTINGS, gameCatalog, filterDifficultyWords,
+  DEFAULT_DIFFICULTY_SETTINGS, readDifficulties, gameCatalog, filterDifficultyWords,
 } = require('./weplayCore');
+const { simulateWeplayBattle } = require('./weplayBattle');
 const { randomUUID } = require('node:crypto');
 
 // The existing point wallet, transaction, permission, and rank helpers are injected
@@ -69,9 +70,10 @@ function createWeplayFunctions(deps) {
   const publicSession = (data) => ({
     id: data.id, mode: data.mode, difficulty: data.difficulty, status: data.status,
     startsAtMs: data.startsAtMs, endsAtMs: data.endsAtMs, words: data.words,
-    acceptedWordIds: data.acceptedWordIds || [], correctCount: (data.acceptedWordIds || []).length,
+    acceptedWordIds: data.acceptedWordIds || [], correctCount: data.words.filter((word) => word.kind !== 'special' && (data.acceptedWordIds || []).includes(word.id)).length,
     policy: data.policy, result: data.result || null, serverNowMs: Date.now(),
     difficultySettings: data.difficultySettings || DEFAULT_DIFFICULTY_SETTINGS[data.difficulty],
+    ...(data.battleVersion === 1 ? { battleVersion: 1, acceptedEvents: data.acceptedEvents || [], battle: simulateWeplayBattle(data, Date.now() - data.startsAtMs) } : {}),
   });
 
   async function readLessons(scope, includeHidden = false) {
@@ -165,11 +167,11 @@ function createWeplayFunctions(deps) {
     const id = `preview_${randomUUID()}`;
     let words;
     const difficultySettings = previewSettings.difficulties[difficulty];
-    try { words = buildWords(gameCatalog(lessons, previewSettings), id, difficulty, difficultySettings); }
+    try { words = buildWords(gameCatalog(lessons, previewSettings), id, difficulty, difficultySettings, previewSettings); }
     catch (error) { throw new HttpsError('failed-precondition', error.message); }
     const startsAtMs = Date.now() + START_DELAY_MS;
     // Preview sessions never enter Firestore, the settlement queues, or the ledger.
-    return publicSession({ id, mode: 'practice', difficulty, difficultySettings, status: 'active', startsAtMs, endsAtMs: startsAtMs + difficultySettings.durationSeconds * 1000, words, acceptedWordIds: [], policy: policyFromSnap(policySnap), result: null });
+    return publicSession({ id, mode: 'practice', difficulty, difficultySettings, status: 'active', startsAtMs, endsAtMs: startsAtMs + difficultySettings.durationSeconds * 1000, words, acceptedWordIds: [], battleVersion: 1, acceptedEvents: [], policy: policyFromSnap(policySnap), result: null });
   });
 
   async function ensurePeriod(scope) {
@@ -179,14 +181,17 @@ function createWeplayFunctions(deps) {
       const meta = (await transaction.get(metaRef)).data() || {};
       const current = meta.periodId ? (await transaction.get(ref(scope, 'weplay_periods', meta.periodId))).data() : null;
       const now = Date.now();
-      if (current && current.endsAtMs > now && current.status === 'open') return current;
-      const bounds = periodBounds(now, policy.rankingPeriod, current?.endsAtMs || 0);
-      const id = `period_${bounds.startsAtMs}`;
+      if (current && current.endsAtMs > now && current.status === 'open' && current.battleVersion === 1) return { ...current, difficulties: readDifficulties(current.difficulties) };
+      // Old rain scores and promised podium awards remain in their original period.
+      // Naval combat gets a separate period; never reinterpret existing entries.
+      const migrating = current && current.endsAtMs > now && current.battleVersion !== 1;
+      const bounds = migrating ? { startsAtMs: now, endsAtMs: current.endsAtMs } : periodBounds(now, policy.rankingPeriod, current?.endsAtMs || 0);
+      const id = `period_${bounds.startsAtMs}_naval_v1`;
       const periodRef = ref(scope, 'weplay_periods', id);
       const existing = await transaction.get(periodRef);
       if (existing.exists) return existing.data();
       const settings = settingsFromSnap(await transaction.get(ref(scope, 'weplay_games', GAME_ID)));
-      const period = { id, ...bounds, rankingPeriod: policy.rankingPeriod, rankingRewards: policy.rankingRewards, policyVersion: policy.version, difficulties: settings.difficulties, status: 'open', createdAt: FieldValue.serverTimestamp() };
+      const period = { id, ...bounds, battleVersion: 1, rankingPeriod: migrating ? current.rankingPeriod : policy.rankingPeriod, rankingRewards: migrating ? current.rankingRewards : policy.rankingRewards, policyVersion: migrating ? current.policyVersion : policy.version, difficulties: settings.difficulties, status: 'open', createdAt: FieldValue.serverTimestamp() };
       transaction.create(periodRef, period);
       transaction.set(metaRef, { periodId: id }, { merge: true });
       transaction.set(db.doc(`weplay_period_queue/${hash(`${scope.year}:${scope.semester}:${id}`)}`), {
@@ -231,14 +236,16 @@ function createWeplayFunctions(deps) {
       const session = sessionSnap.data();
       if (ownerUid && ownerUid !== session.uid) throw new HttpsError('permission-denied', '본인의 게임만 정산할 수 있습니다.');
       if (session.status === 'finished') return { result: session.result, changed: false };
-      if (Date.now() < session.endsAtMs) throw new HttpsError('failed-precondition', '게임이 끝난 뒤 정산할 수 있습니다.');
+      const battle = session.battleVersion === 1 ? simulateWeplayBattle(session, Date.now() - session.startsAtMs) : null;
+      if (Date.now() < session.endsAtMs && battle?.outcome !== 'defeat') throw new HttpsError('failed-precondition', '게임이 끝난 뒤 정산할 수 있습니다.');
       const playerRef = ref(scope, 'weplay_players', session.uid);
       const player = (await transaction.get(playerRef)).data() || {};
       const currentProfile = (await transaction.get(db.doc(`users/${session.uid}`))).data();
       const eligible = !!currentProfile && currentProfile.role === 'student' && !currentProfile.deletedAt && currentProfile.isDeleted !== true && currentProfile.weplayDeletionPending !== true;
       const accepted = new Set(session.acceptedWordIds || []);
-      const correctCount = session.words.filter((word) => accepted.has(word.id)).length;
-      const reward = session.mode === 'challenge' && eligible ? gameReward(session.policy, correctCount) : 0;
+      const correctCount = battle ? battle.normalCorrectCount : session.words.filter((word) => accepted.has(word.id)).length;
+      const rewardCorrectCount = battle ? battle.rewardCorrectCount : correctCount;
+      const reward = session.mode === 'challenge' && eligible ? gameReward(session.policy, rewardCorrectCount) : 0;
       const loaded = reward > 0
         ? await loadWallet(transaction, scope, session.uid, currentProfile)
         : { wallet: (await transaction.get(ref(scope, 'point_wallets', session.uid))).data() || {} };
@@ -251,19 +258,20 @@ function createWeplayFunctions(deps) {
       const cost = session.mode === 'challenge' ? session.policy.challengeCost : 0;
       let balance = Number(loaded.wallet.balance || 0);
       if (rewardSnap.exists) throw new HttpsError('failed-precondition', '정산 기록을 확인해 주세요.');
-      if (reward > 0) balance = await writePointChange(transaction, scope, session.uid, currentProfile, reward, 'weplay_reward', sessionId, '역사가 내려와 도전 정산', session.policy.version, loaded);
+      if (reward > 0) balance = await writePointChange(transaction, scope, session.uid, currentProfile, reward, 'weplay_reward', sessionId, `${session.battleVersion === 1 ? '내가 충무공이라고?!' : '역사가 내려와'} 도전 정산`, session.policy.version, loaded);
       const resultData = {
-        sessionId, mode: session.mode, difficulty: session.difficulty, correctCount, totalWords: TOTAL_WORDS, score: correctCount * 100,
-        reward, cost, netWis: reward - cost, balance, finishedAtMs: session.endsAtMs,
-        missedWords: session.words.filter((word) => !accepted.has(word.id)),
+        sessionId, mode: session.mode, difficulty: session.difficulty, correctCount, totalWords: battle ? session.words.filter((word) => word.kind !== 'special').length : TOTAL_WORDS, score: battle ? battle.score : correctCount * 100,
+        reward, cost, netWis: reward - cost, balance, finishedAtMs: battle?.defeatAtMs !== null && battle?.defeatAtMs !== undefined ? session.startsAtMs + battle.defeatAtMs : session.endsAtMs,
+        missedWords: session.words.filter((word) => word.kind !== 'special' && !accepted.has(word.id)),
+        ...(battle ? { battleVersion: 1, battle, rewardCorrectCount } : {}),
       };
       transaction.update(sessionRef, { status: 'finished', result: resultData, settledAt: FieldValue.serverTimestamp() });
       if (eligible) transaction.set(playerRef.collection('records').doc(sessionId), resultData);
       if (eligible && player.activeSessionId === sessionId) transaction.set(playerRef, { activeSessionId: null }, { merge: true });
       transaction.delete(db.doc(`weplay_session_queue/${sessionId}`));
       // Zero-point abandoned games are recorded privately, but never earn a podium.
-      if (eligible && session.mode === 'challenge' && correctCount > 0 && entryRef && period && period.status !== 'closed') {
-        const candidate = { uid: session.uid, difficulty: session.difficulty, classKey: session.classKey, studentLabel: session.studentLabel, score: resultData.score, correctCount, achievedAtMs: session.endsAtMs, sessionId };
+      if (eligible && session.mode === 'challenge' && resultData.score > 0 && entryRef && period && period.status !== 'closed') {
+        const candidate = { uid: session.uid, difficulty: session.difficulty, classKey: session.classKey, studentLabel: session.studentLabel, score: resultData.score, correctCount, achievedAtMs: resultData.finishedAtMs, sessionId };
         if (!entry || compareEntries(candidate, entry) < 0) transaction.set(entryRef, candidate);
       }
       return { result: resultData, changed: reward > 0 };
@@ -277,7 +285,7 @@ function createWeplayFunctions(deps) {
     if (!player.activeSessionId) return null;
     const session = (await ref(scope, 'weplay_sessions', player.activeSessionId).get()).data();
     if (!session || session.status !== 'active') return null;
-    if (Date.now() >= session.endsAtMs + 5000) {
+    if (Date.now() >= session.endsAtMs + 5000 || (session.battleVersion === 1 && simulateWeplayBattle(session, Date.now() - session.startsAtMs).outcome === 'defeat')) {
       await settleSession(scope, session.id, uid);
       return null;
     }
@@ -322,7 +330,7 @@ function createWeplayFunctions(deps) {
       ref(scope, 'weplay_players', uid).collection('records').orderBy('finishedAtMs', 'desc').limit(10).get(),
     ]);
     const { settings, catalog } = catalogResult;
-    const challengeDifficulties = period.difficulties || DEFAULT_DIFFICULTY_SETTINGS;
+    const challengeDifficulties = readDifficulties(period.difficulties);
     const counts = (words, difficulties) => Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, uniqueWordCount(filterDifficultyWords(words, difficulties[difficulty]))]));
     const policy = policyFromSnap(policySnap);
     const player = playerSnap.data() || {};
@@ -354,14 +362,14 @@ function createWeplayFunctions(deps) {
     const { settings: catalogSettings, catalog: allWords } = await readCatalog(scope);
     if (!catalogSettings.enabled) throw new HttpsError('failed-precondition', '현재 학생 게임 이용을 허용하지 않습니다.');
     const period = mode === 'challenge' ? await ensurePeriod(scope) : null;
-    const difficultySettings = (mode === 'challenge' ? period.difficulties || DEFAULT_DIFFICULTY_SETTINGS : catalogSettings.difficulties)[difficulty];
+    const difficultySettings = (mode === 'challenge' ? readDifficulties(period.difficulties) : catalogSettings.difficulties)[difficulty];
     const unitIds = request.data?.unitIds;
     if (unitIds !== undefined && (!Array.isArray(unitIds) || unitIds.length > 200 || unitIds.some((id) => typeof id !== 'string' || id.length > 128))) invalid('출제 범위를 확인해 주세요.');
     const catalog = mode === 'practice' && unitIds?.length ? allWords.filter((word) => unitIds.includes(word.unitId)) : allWords;
     const key = classKey(profile);
     if (mode === 'challenge' && !key) throw new HttpsError('failed-precondition', '학년과 반을 등록한 뒤 도전해 주세요.');
     let words;
-    try { words = buildWords(catalog, mode === 'challenge' ? `${scope.year}:${scope.semester}:${period.id}:${key}:${difficulty}` : sessionId, difficulty, difficultySettings); }
+    try { words = buildWords(catalog, mode === 'challenge' ? `${scope.year}:${scope.semester}:${period.id}:${key}:${difficulty}` : sessionId, difficulty, difficultySettings, catalogSettings); }
     catch (error) { throw new HttpsError('failed-precondition', error.message); }
     const output = await db.runTransaction(async (transaction) => {
       const sessionRef = ref(scope, 'weplay_sessions', sessionId);
@@ -401,11 +409,11 @@ function createWeplayFunctions(deps) {
       const profileSnapshot = buildWalletBase(uid, profile);
       const session = {
         id: sessionId, uid, mode, difficulty, difficultySettings, status: 'active', startsAtMs: now + START_DELAY_MS, endsAtMs: now + START_DELAY_MS + difficultySettings.durationSeconds * 1000,
-        words, acceptedWordIds: [], answerEvents: {}, answerEventCount: 0, policy, gameSettingsVersion: gameSettings.version,
+        words, acceptedWordIds: [], battleVersion: 1, acceptedEvents: [], answerEvents: {}, answerEventCount: 0, policy, gameSettingsVersion: gameSettings.version,
         profile: profileSnapshot, classKey: key, studentLabel: studentLabel(profile),
         periodId: period?.id || null, result: null, createdAt: FieldValue.serverTimestamp(),
       };
-      if (mode === 'challenge' && policy.challengeCost > 0) await writePointChange(transaction, scope, uid, profile, -policy.challengeCost, 'weplay_cost', sessionId, '역사가 내려와 도전 비용', policy.version, loaded);
+      if (mode === 'challenge' && policy.challengeCost > 0) await writePointChange(transaction, scope, uid, profile, -policy.challengeCost, 'weplay_cost', sessionId, '내가 충무공이라고?! 도전 비용', policy.version, loaded);
       transaction.create(sessionRef, session);
       transaction.set(playerRef, { activeSessionId: sessionId, dateKey: today, challengeUsed: used + (mode === 'challenge' ? 1 : 0) }, { merge: true });
       transaction.set(db.doc(`weplay_session_queue/${sessionId}`), { ...scope, sessionId, dueAtMs: session.endsAtMs + 5000 });
@@ -432,15 +440,23 @@ function createWeplayFunctions(deps) {
       if (!session) throw new HttpsError('not-found', '게임 기록을 찾을 수 없습니다.');
       if (session.uid !== uid) throw new HttpsError('permission-denied', '본인의 게임만 입력할 수 있습니다.');
       const previous = Object.prototype.hasOwnProperty.call(session.answerEvents || {}, eventId) ? session.answerEvents[eventId] : null;
-      if (previous) return { ...previous, correctCount: (session.acceptedWordIds || []).length, acceptedWordIds: session.acceptedWordIds || [], serverNowMs: Date.now() };
-      if (Number(session.answerEventCount || 0) >= 120) throw new HttpsError('resource-exhausted', '입력 횟수를 초과했습니다.');
-      const verdict = assessAnswer(session, wordId, answer, receivedAtMs);
+      const response = (verdict, value) => {
+        const battle = value.battleVersion === 1 ? simulateWeplayBattle(value, Date.now() - value.startsAtMs) : null;
+        return { ...verdict, correctCount: battle ? battle.normalCorrectCount : (value.acceptedWordIds || []).length, acceptedWordIds: value.acceptedWordIds || [], serverNowMs: Date.now(), ...(battle ? { acceptedEvents: value.acceptedEvents || [], battle } : {}) };
+      };
+      if (previous) return response(previous, session);
+      if (Number(session.answerEventCount || 0) >= (session.battleVersion === 1 ? Math.min(400, session.words.length * 3) : 120)) throw new HttpsError('resource-exhausted', '입력 횟수를 초과했습니다.');
+      // Serialize timestamps too: a late transaction must not insert a hit before
+      // an already accepted hit and retroactively change defeat/combat outcomes.
+      const effectiveAtMs = Math.max(receivedAtMs, session.startsAtMs + Math.max(0, ...(session.acceptedEvents || []).map((event) => event.elapsedMs)));
+      const verdict = assessAnswer(session, wordId, answer, effectiveAtMs);
       const acceptedWordIds = verdict.accepted ? [...session.acceptedWordIds, wordId] : session.acceptedWordIds;
+      const acceptedEvents = verdict.accepted && session.battleVersion === 1 ? [...(session.acceptedEvents || []), { wordId, elapsedMs: effectiveAtMs - session.startsAtMs }] : session.acceptedEvents || [];
       if (session.status === 'active') transaction.update(sessionRef, {
-        acceptedWordIds, [`answerEvents.${eventId}`]: verdict,
+        acceptedWordIds, ...(session.battleVersion === 1 ? { acceptedEvents } : {}), [`answerEvents.${eventId}`]: verdict,
         answerEventCount: Number(session.answerEventCount || 0) + 1,
       });
-      return { ...verdict, correctCount: acceptedWordIds.length, acceptedWordIds, serverNowMs: Date.now() };
+      return response(verdict, { ...session, acceptedWordIds, acceptedEvents });
     });
   });
 
@@ -498,7 +514,7 @@ function createWeplayFunctions(deps) {
           const eligible = !!profile && profile.role === 'student' && !profile.deletedAt && profile.isDeleted !== true && profile.weplayDeletionPending !== true;
           const loaded = eligible && amount > 0 ? await loadWallet(transaction, scope, winner.uid, profile) : null;
           const difficultyLabel = { mild: '착한맛', medium: '중간맛', spicy: '매운맛' }[winner.difficulty];
-          if (loaded) await writePointChange(transaction, scope, winner.uid, profile, amount, 'weplay_rank_reward', sourceId, `역사가 내려와 ${difficultyLabel} 학급 ${index + 1}위`, period.policyVersion, loaded);
+          if (loaded) await writePointChange(transaction, scope, winner.uid, profile, amount, 'weplay_rank_reward', sourceId, `${period.battleVersion === 1 ? '내가 충무공이라고?!' : '역사가 내려와'} ${difficultyLabel} 학급 ${index + 1}위`, period.policyVersion, loaded);
           transaction.create(awardRef, { uid: winner.uid, difficulty: winner.difficulty, rank: index + 1, amount: eligible ? amount : 0, skipped: !eligible, classKey: winner.classKey, awardedAt: FieldValue.serverTimestamp() });
           if (eligible) transaction.set(periodRef.collection('entries').doc(entryId), { finalRank: index + 1, rankReward: amount }, { merge: true });
           return eligible && amount > 0;

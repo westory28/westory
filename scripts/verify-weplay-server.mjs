@@ -12,6 +12,7 @@ const { createWeplayFunctions } = require(
   path.join(root, "functions/weplay.js"),
 );
 const core = require(path.join(root, "functions/weplayCore.js"));
+const { simulateWeplayBattle } = require(path.join(root, "functions/weplayBattle.js"));
 const clone = (value) =>
   value === undefined ? undefined : structuredClone(value);
 const scope = { year: "2026", semester: "2" };
@@ -249,6 +250,8 @@ function setup() {
     assertAllowedWestoryUser: auth,
     assertPointManager: manager,
     assertPointReader: manager,
+    assertWeplayReader: manager,
+    assertWeplayManager: manager,
     getUserProfile: async (uid) => ({
       profile: clone(db.data.get(`users/${uid}`) || {}),
     }),
@@ -444,7 +447,7 @@ try {
     ]),
   );
   await call("saveWeplayPolicy", { policy: changed }, "teacher");
-  for (const word of active.words) {
+  for (const word of [...active.words].sort((a, b) => a.spawnAtMs - b.spawnAtMs)) {
     now = active.startsAtMs + word.spawnAtMs + 101;
     const data = {
       sessionId: active.id,
@@ -470,7 +473,9 @@ try {
     call("finishWeplayGame", { sessionId: active.id }),
   ]);
   assert.deepEqual(results[0], results[1]);
-  assert.equal(results[0].correctCount, 20);
+  assert.equal(results[0].correctCount, 60);
+  assert.equal(results[0].rewardCorrectCount, 20);
+  assert.equal(results[0].battle.specialCount, 2);
   assert.equal(results[0].reward, 5);
   assert.equal(results[0].cost, 2);
   assert.equal(results[0].netWis, 3);
@@ -502,7 +507,7 @@ try {
     1,
   );
   checks.push(
-    "Duplicate events/word submissions and finalization; 20 correct; in-flight policy snapshot; concurrent scheduled ranking award exactly once",
+    "Duplicate events/word submissions and finalization; 60 normal correct + 2 specials normalize to 20 reward units; in-flight policy snapshot; concurrent scheduled ranking award exactly once",
   );
 
   now = Date.parse("2026-09-29T01:00:00Z");
@@ -543,6 +548,7 @@ try {
   });
   const saved = db.data.get(`${prefix}/weplay_sessions/${deleted.id}`);
   saved.acceptedWordIds = saved.words.map((word) => word.id);
+  saved.acceptedEvents = saved.words.map((word) => ({ wordId: word.id, elapsedMs: word.spawnAtMs + 500 }));
   db.data.delete("users/student-a");
   db.data.delete(`${prefix}/point_wallets/student-a`);
   now = deleted.endsAtMs + 10000;
@@ -606,6 +612,87 @@ try {
   checks.push(
     "Per-class and per-difficulty final awards: 10/5/3; same player receives independent mild/medium/spicy awards; other class stays isolated; repeated scheduler no duplicate",
   );
+
+  now = Date.parse("2026-09-29T01:00:00Z");
+  ({ db, api, call } = setup());
+  const naval = await call("startWeplayGame", { mode: "challenge", requestKey: "early-defeat", difficulty: "spicy" });
+  const special = naval.words.find((word) => word.kind === "special");
+  now = naval.startsAtMs + special.spawnAtMs + 3000;
+  const expiredSpecial = await call("submitWeplayAnswer", { sessionId: naval.id, wordId: special.id, eventId: "late-special", answer: special.text });
+  assert.equal(expiredSpecial.reason, "expired");
+  assert.equal(expiredSpecial.battle.specialCount, 0);
+  const defeat = simulateWeplayBattle(naval, 90000).defeatAtMs;
+  now = naval.startsAtMs + defeat - 1;
+  await rejectCode(call("finishWeplayGame", { sessionId: naval.id }), "failed-precondition");
+  now += 1;
+  const deadWord = naval.words.find((word) => word.kind === "normal" && word.spawnAtMs <= defeat && word.spawnAtMs + word.fallDurationMs > defeat);
+  const defeatedAnswer = await call("submitWeplayAnswer", { sessionId: naval.id, wordId: deadWord.id, eventId: "after-defeat", answer: deadWord.text });
+  assert.equal(defeatedAnswer.reason, "defeated");
+  const early = await call("finishWeplayGame", { sessionId: naval.id });
+  assert.equal(early.battle.outcome, "defeat");
+  assert.equal(early.finishedAtMs, naval.startsAtMs + defeat);
+  assert.equal(early.correctCount, 0);
+  assert.equal(early.reward, 0);
+  assert.deepEqual(await call("finishWeplayGame", { sessionId: naval.id }), early);
+  assert.equal(db.data.get(`${prefix}/point_wallets/student-a`).balance, 28);
+  checks.push("Special expires at exactly three seconds; early finish denied until authoritative defeat; post-defeat hits denied; repeated defeat settlement charges once");
+
+  now = Date.parse("2026-09-29T01:00:00Z");
+  ({ db, api, call } = setup());
+  const settings = clone(core.DEFAULT_GAME_SETTINGS);
+  for (const difficulty of Object.values(settings.difficulties)) difficulty.durationSeconds = 60;
+  db.data.set(`${prefix}/weplay_games/history-rain`, settings);
+  const legacyId = "legacy-rain-session";
+  const legacyPeriod = { id: "period_legacy", ...core.periodBounds(now, "weekly"), rankingPeriod: "weekly", rankingRewards: clone(core.DEFAULT_POLICY.rankingRewards), policyVersion: 0, difficulties: clone(settings.difficulties), status: "open" };
+  db.data.set(`${prefix}/weplay_periods/${legacyPeriod.id}`, clone(legacyPeriod));
+  db.data.set(`${prefix}/weplay_meta/current`, { periodId: legacyPeriod.id });
+  db.data.set(`weplay_period_queue/legacy`, { ...scope, periodId: legacyPeriod.id, dueAtMs: legacyPeriod.endsAtMs + core.PERIOD_SETTLEMENT_DELAY_MS });
+  const legacyWords = core.buildWords([{ text: "고려" }, { text: "신라" }, { text: "백제" }], "legacy").slice(0, 20).map(({ kind, ...word }) => word);
+  const legacy = { id: legacyId, uid: "student-a", mode: "challenge", difficulty: "medium", status: "active", startsAtMs: now - 55000, endsAtMs: now + 5000, words: legacyWords, acceptedWordIds: legacyWords.map((word) => word.id), answerEvents: {}, policy: clone(core.DEFAULT_POLICY), difficultySettings: clone(settings.difficulties.medium), periodId: legacyPeriod.id, classKey: "2-1", studentLabel: "1번 검○", result: null };
+  db.data.set(`${prefix}/weplay_sessions/${legacyId}`, clone(legacy));
+  db.data.set(`${prefix}/weplay_players/student-a`, { activeSessionId: legacyId });
+  db.data.get(`${prefix}/point_wallets/student-a`).balance = 28;
+  const migratedLobby = await call("getWeplayLobby");
+  assert.equal(migratedLobby.difficulties.medium.durationSeconds, 90);
+  assert.equal(migratedLobby.challengeDifficulties.medium.durationSeconds, 90);
+  assert.equal(migratedLobby.activeSession.endsAtMs, legacy.endsAtMs);
+  assert.equal(migratedLobby.activeSession.difficultySettings.durationSeconds, 60);
+  assert.equal(migratedLobby.activeSession.battleVersion, undefined);
+  assert.match(migratedLobby.period.id, /_naval_v1$/);
+  assert.notEqual(migratedLobby.period.id, legacyPeriod.id);
+  assert.deepEqual(db.data.get(`${prefix}/weplay_periods/${legacyPeriod.id}`), legacyPeriod);
+  assert(db.data.has("weplay_period_queue/legacy"));
+  await rejectCode(call("finishWeplayGame", { sessionId: legacyId }), "failed-precondition");
+  now = legacy.endsAtMs + 1;
+  const legacyResult = await call("finishWeplayGame", { sessionId: legacyId });
+  assert.equal(legacyResult.battleVersion, undefined);
+  assert.equal(legacyResult.correctCount, 20);
+  assert.equal(legacyResult.totalWords, 20);
+  assert.equal(legacyResult.score, 2000);
+  assert.equal(legacyResult.reward, 5);
+  assert.equal(db.data.get(`${prefix}/point_wallets/student-a`).balance, 33);
+  assert([...db.data.keys()].some((key) => key.startsWith(`${prefix}/weplay_periods/${legacyPeriod.id}/entries/`)));
+  assert(![...db.data.keys()].some((key) => key.startsWith(`${prefix}/weplay_periods/${migratedLobby.period.id}/entries/`)));
+  checks.push("Legacy active 60-second session keeps its duration/20-word payout/old ranking; stored settings migrate to90; naval periods isolate scores and retain promised old podium awards");
+
+  now = Date.parse("2026-09-29T01:00:00Z");
+  ({ db, api, call } = setup());
+  const onlySpecial = await call("startWeplayGame", { mode: "challenge", requestKey: "special-only", difficulty: "mild" });
+  const tactic = onlySpecial.words.find((word) => word.kind === "special");
+  now = onlySpecial.startsAtMs + tactic.spawnAtMs + 1500;
+  const tacticResponse = await call("submitWeplayAnswer", { sessionId: onlySpecial.id, eventId: "special-only-answer", wordId: tactic.id, answer: tactic.text });
+  assert.equal(tacticResponse.accepted, true);
+  assert.equal(tacticResponse.correctCount, 0);
+  assert.equal(tacticResponse.acceptedEvents.length, 1);
+  const reloaded = await call("getWeplayLobby");
+  assert.deepEqual(reloaded.activeSession.acceptedEvents, tacticResponse.acceptedEvents);
+  now = onlySpecial.endsAtMs + 1;
+  const specialResult = await call("finishWeplayGame", { sessionId: onlySpecial.id });
+  assert.equal(specialResult.rewardCorrectCount, 0);
+  assert.equal(specialResult.reward, 0);
+  assert.equal(specialResult.score, 500);
+  assert([...db.data.values()].some((value) => value.sessionId === onlySpecial.id && value.score === 500 && value.achievedAtMs));
+  checks.push("Reload preserves server-accepted event timestamps; special-only damage scores enter rankings without inflating normal-word rewards");
   for (const check of checks) console.log(`PASS ${check}`);
 } finally {
   Date.now = oldNow;

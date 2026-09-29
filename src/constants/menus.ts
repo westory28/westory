@@ -71,7 +71,7 @@ export const MENUS: MenuConfig = {
       name: "위플레이",
       url: "/student/weplay",
       icon: "M6 8h12l3 10-3 2-4-4h-4l-4 4-3-2L6 8zm1 3v4m-2-2h4m7-1h.01M18 14h.01",
-      children: [{ name: "역사가 내려와", url: "/student/weplay" }],
+      children: [{ name: "내가 충무공이라고?!", url: "/student/weplay" }],
     },
   ],
   teacher: [

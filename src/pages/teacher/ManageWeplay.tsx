@@ -15,6 +15,7 @@ import {
   weplayErrorMessage,
   WEPLAY_GAMES,
   WEPLAY_DIFFICULTY_LABELS,
+  getWeplayNormalWordCount,
   type WeplayGameSettings,
   type WeplayManagement,
   type WeplayDifficulty,
@@ -307,6 +308,15 @@ export default function ManageWeplay() {
                         </strong>
                         <span>{result.score.toLocaleString()}점</span>
                       </p>
+                      {result.battle && (
+                        <p>
+                          {result.battle.outcome === "defeat"
+                            ? "함선 침몰"
+                            : "해역 방어 완료"}
+                          {" · "}적선 {result.battle.sunkShips}척 격침 · 필살기{" "}
+                          {result.battle.specialCount}회
+                        </p>
+                      )}
                       <p>위스·랭킹·학생 기록에 반영되지 않습니다.</p>
                       {result.missedWords.length > 0 && (
                         <details>
@@ -442,8 +452,11 @@ export default function ManageWeplay() {
                       ))}
                     </div>
                     <span className="teacher-weplay-note">
-                      {draft.difficulties[difficulty].durationSeconds}초 · 20개
-                      단어
+                      {draft.difficulties[difficulty].durationSeconds}초 ·{" "}
+                      {getWeplayNormalWordCount(
+                        draft.difficulties[difficulty].durationSeconds,
+                      )}
+                      개 단어
                     </span>
                     <button
                       className="teacher-weplay-button is-primary"

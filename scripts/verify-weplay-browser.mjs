@@ -36,7 +36,18 @@ const temporary = await fs.mkdtemp(
 );
 const modulePath = (relative) =>
   JSON.stringify(path.join(root, relative).replaceAll("\\", "/"));
-const core = require(path.join(root, "functions/weplayCore.js"));
+const currentCore = require(path.join(root, "functions/weplayCore.js"));
+// These regression fixtures deliberately represent already-started rain sessions.
+// New naval sessions are exercised in verify-weplay-naval-browser.mjs.
+const core = { ...currentCore, GAME_DURATION_MS: 60000, buildWords(catalog, seed, difficulty = 'medium', config = { durationSeconds: 60, fallSeconds: currentCore.FALL_DURATIONS[difficulty].map(ms => ms / 1000) }) {
+  return Array.from({ length: 20 }, (_, index) => {
+    const stage = index < 7 ? 1 : index < 14 ? 2 : 3;
+    const localIndex = index < 7 ? index : index < 14 ? index - 7 : index - 14;
+    const phase = config.durationSeconds * 1000 / 3;
+    const fallDurationMs = config.fallSeconds[stage - 1] * 1000;
+    return { ...catalog[index % catalog.length], id: `word-${index + 1}`, stage, spawnAtMs: Math.floor((stage - 1) * phase + localIndex * (phase - fallDurationMs - 1000) / (stage < 3 ? 6 : 5)), fallDurationMs };
+  });
+} };
 const policy = structuredClone(core.DEFAULT_POLICY);
 const catalog = [
   {
@@ -131,7 +142,7 @@ qa.call = async (name,data) => {
   else if (name === "finishWeplayGame") {qa.session.result??=result();qa.session.status="finished";qa.records=[qa.session.result];response=clone(qa.session.result)}
   else throw new Error("Unexpected callable: "+name);
   if(name === "getWeplayLobby" && mode === "configured") {
-    response.difficulties=Object.fromEntries(["mild","medium","spicy"].map(level=>[level,{durationSeconds:30,fallSeconds:[5,4,3],minWordLength:1,maxWordLength:4}]));
+    response.difficulties=Object.fromEntries(["mild","medium","spicy"].map(level=>[level,{durationSeconds:120,fallSeconds:[20,15,10],minWordLength:1,maxWordLength:4}]));
     response.challengeDifficulties=${JSON.stringify(core.DEFAULT_DIFFICULTY_SETTINGS)};
     response.wordCountsByDifficulty={mild:3,medium:2,spicy:0};
     response.challengeWordCountsByDifficulty={mild:4,medium:4,spicy:4};
@@ -186,7 +197,8 @@ const bundle = await build({
   target: "es2022",
   outfile: path.join(temporary, "fixture.js"),
   loader: { ".svg": "dataurl" },
-  define: { "process.env.NODE_ENV": '"production"' },
+  external: ["/assets/*"],
+  define: { "process.env.NODE_ENV": '"production"', "import.meta.env.BASE_URL": '"/"' },
   plugins: [
     {
       name: "qa-service-boundary",
@@ -231,8 +243,14 @@ try {
 }
 const html =
   '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>위플레이 QA</title><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
-const server = http.createServer((request, response) => {
+const server = http.createServer(async (request, response) => {
   const pathname = new URL(request.url, "http://127.0.0.1").pathname;
+  if (pathname.startsWith('/assets/')) {
+    const target = path.resolve(root, 'public', '.' + pathname);
+    if (!target.startsWith(path.join(root, 'public') + path.sep)) { response.writeHead(400); response.end(); return; }
+    response.setHeader('Content-Type', 'image/webp');
+    response.end(await fs.readFile(target)); return;
+  }
   response.setHeader(
     "Content-Type",
     pathname.endsWith(".js")
@@ -298,7 +316,7 @@ try {
   for (const width of [390, 768, 1280]) {
     const page = await pageFor("student", width);
     await page
-      .getByRole("heading", { name: "역사가 내려와", exact: true })
+      .getByRole("heading", { name: "내가 충무공이라고?!", exact: true })
       .waitFor();
     await capture(page, `weplay-lobby-${width}`);
     await page.close();
@@ -928,7 +946,7 @@ try {
   }
   const configuredLobby = await pageFor("configured", 390);
   await configuredLobby
-    .getByText("30초 · 20개 단어", { exact: true })
+    .getByText("120초 · 2단어마다 화포 발사", { exact: true })
     .waitFor();
   assert.equal(
     await configuredLobby
@@ -951,7 +969,7 @@ try {
     .getByRole("button", { name: "위스 도전", exact: true })
     .click();
   await configuredLobby
-    .getByText("60초 · 20개 단어", { exact: true })
+    .getByText("90초 · 3단어마다 화포 발사", { exact: true })
     .waitFor();
   assert.equal(
     await configuredLobby

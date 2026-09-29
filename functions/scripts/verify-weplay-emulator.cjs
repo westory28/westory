@@ -20,13 +20,17 @@ const rejectCode = (promise, code) => assert.rejects(promise, (error) => error.c
 const walletBalance = async (uid = 'student-a') => (await get(`${prefix}/point_wallets/${uid}`))?.balance;
 const costs = () => db.collection(`${prefix}/point_transactions`).where('type', '==', 'weplay_cost').get();
 const payouts = () => db.collection(`${prefix}/point_transactions`).where('type', '==', 'weplay_reward').get();
-const finishSoon = async (session) => db.doc(`${prefix}/weplay_sessions/${session.id}`).update({ endsAtMs: Date.now() - 1000 });
+const finishSoon = async (session) => {
+  const endsAtMs = Date.now() - 1000;
+  return db.doc(`${prefix}/weplay_sessions/${session.id}`).update({ startsAtMs: endsAtMs - (session.endsAtMs - session.startsAtMs), endsAtMs });
+};
 
-async function solve(session, correct = 20, uid = 'student-a') {
+async function solve(session, correct = 60, uid = 'student-a') {
   for (const word of session.words.slice(0, correct)) {
     // Move the emulator fixture through the real server-defined fall windows;
     // every hit still passes through the exported production callable handler.
-    await db.doc(`${prefix}/weplay_sessions/${session.id}`).update({ startsAtMs: Date.now() - word.spawnAtMs - 400, endsAtMs: Date.now() + 60000 });
+    const startsAtMs = Date.now() - word.spawnAtMs - 400;
+    await db.doc(`${prefix}/weplay_sessions/${session.id}`).update({ startsAtMs, endsAtMs: startsAtMs + (session.endsAtMs - session.startsAtMs) });
     const data = { sessionId: session.id, eventId: `hit-${word.id}`, wordId: word.id, answer: word.text };
     const requests = [call('submitWeplayAnswer', data, uid)];
     if (word.id === session.words[0].id) requests.push(call('submitWeplayAnswer', data, uid));
@@ -94,8 +98,9 @@ async function main() {
   await finishSoon(session);
   const finishes = await Promise.all(Array.from({ length: 5 }, () => call('finishWeplayGame', { sessionId: session.id, score: 999999, reward: 999999 })));
   finishes.forEach((result) => assert.deepEqual(result, finishes[0]));
-  assert.equal(finishes[0].correctCount, 20);
-  assert.equal(finishes[0].score, 2000);
+  assert.equal(finishes[0].correctCount, 60);
+  assert.equal(finishes[0].rewardCorrectCount, 20);
+  assert.equal(finishes[0].score, 11000);
   assert.equal(finishes[0].reward, 5);
   assert.equal(finishes[0].cost, 2);
   assert.equal(await walletBalance(), 33);
@@ -154,7 +159,8 @@ async function main() {
 
   await call('saveWeplayPolicy', { policy: DEFAULT_POLICY }, 'manager');
   const deleted = await call('startWeplayGame', { mode: 'challenge', requestKey: 'deleted' }, 'deleted');
-  await db.doc(`${prefix}/weplay_sessions/${deleted.id}`).update({ acceptedWordIds: deleted.words.map((word) => word.id), endsAtMs: Date.now() - 10000 });
+  await db.doc(`${prefix}/weplay_sessions/${deleted.id}`).update({ acceptedWordIds: deleted.words.map((word) => word.id), acceptedEvents: deleted.words.map((word) => ({ wordId: word.id, elapsedMs: word.spawnAtMs + 500 })) });
+  await finishSoon(deleted);
   await db.doc(`weplay_session_queue/${deleted.id}`).update({ dueAtMs: Date.now() - 1 });
   await db.doc('users/deleted').delete();
   await db.doc(`${prefix}/point_wallets/deleted`).delete();
@@ -220,4 +226,7 @@ async function main() {
   console.log('Weplay Firestore emulator verification completed: all groups passed.');
 }
 
-main().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => {
+  const { getApps, deleteApp } = require('firebase-admin/app');
+  await Promise.all(getApps().map(deleteApp));
+});

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import NavalBattleGame from "./NavalBattleGame";
 import {
   finishWeplayGame,
   normalizeWeplayAnswer,
@@ -21,7 +22,7 @@ export interface HistoryRainTransport {
   finish: () => Promise<WeplayResult>;
 }
 
-interface Props {
+export interface HistoryRainGameProps {
   session: WeplaySession;
   config: WeplayConfig;
   onComplete: (result: WeplayResult) => void;
@@ -29,13 +30,21 @@ interface Props {
   transport?: HistoryRainTransport;
 }
 
-export default function HistoryRainGame({
+export default function HistoryRainGame({ ...props }: HistoryRainGameProps) {
+  return props.session.battleVersion === 1 ? (
+    <NavalBattleGame {...props} />
+  ) : (
+    <LegacyHistoryRainGame {...props} />
+  );
+}
+
+function LegacyHistoryRainGame({
   session,
   config,
   onComplete,
   preview = false,
   transport,
-}: Props) {
+}: HistoryRainGameProps) {
   const [now, setNow] = useState(session.serverNowMs);
   const clock = useRef({
     server: session.serverNowMs,

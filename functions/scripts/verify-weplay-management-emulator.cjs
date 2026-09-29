@@ -16,6 +16,7 @@ const call = (name, data = {}, uid = 'teacher') => api[name].run({
   data: { ...scope, gameId: 'history-rain', difficulty: 'medium', ...data },
 });
 const get = async (path) => (await db.doc(path).get()).data();
+const finishFixture = async (session) => { const endsAtMs = Date.now() - 1000; await db.doc(`${prefix}/weplay_sessions/${session.id}`).update({ startsAtMs: endsAtMs - (session.endsAtMs - session.startsAtMs), endsAtMs }); };
 const rejectCode = (promise, code) => assert.rejects(promise, (error) => error.code === code);
 const snapshotDatabase = async () => {
   const result = [];
@@ -86,15 +87,15 @@ async function main() {
     const preview = await call('previewWeplayGame', { difficulty }, uid);
     assert.ok(preview.id.startsWith('preview_'));
     assert.equal(preview.mode, 'practice');
-    assert.equal(preview.endsAtMs - preview.startsAtMs, 60000);
-    assert.equal(preview.words.length, 20);
-    assert.ok(preview.words.every((word) => word.unitId === 'private'));
+    assert.equal(preview.endsAtMs - preview.startsAtMs, 90000);
+    assert.equal(preview.words.length, 62);
+    assert.ok(preview.words.filter((word) => word.kind !== 'special').every((word) => word.unitId === 'private'));
     assert.equal(preview.words[0].fallDurationMs, { mild: 12000, medium: 10000, spicy: 8000 }[difficulty]);
     await rejectCode(call('submitWeplayAnswer', { sessionId: preview.id, eventId: 'try', wordId: 'word-1', answer: preview.words[0].text }, 'student'), 'not-found');
     await rejectCode(call('finishWeplayGame', { sessionId: preview.id }, 'student'), 'not-found');
   }
   const override = await call('previewWeplayGame', { unitIds: ['public'] });
-  assert.ok(override.words.every((word) => word.unitId === 'public'));
+  assert.ok(override.words.filter((word) => word.kind !== 'special').every((word) => word.unitId === 'public'));
   await rejectCode(call('previewWeplayGame', { unitIds: [] }), 'failed-precondition');
   await rejectCode(call('previewWeplayGame', { unitIds: ['unknown'] }), 'invalid-argument');
   assert.deepEqual(await snapshotDatabase(), beforePreview, 'Teacher previews must perform zero Firestore writes, including queues and wallets.');
@@ -110,19 +111,19 @@ async function main() {
   assert.equal(lobby.wordCount, 3);
   assert.deepEqual(lobby.lessons.map((lesson) => lesson.unitId), ['public']);
   const live = await call('startWeplayGame', { mode: 'practice', requestKey: 'allowed-practice' }, 'student');
-  assert.ok(live.words.every((word) => word.unitId === 'public'));
+  assert.ok(live.words.filter((word) => word.kind !== 'special').every((word) => word.unitId === 'public'));
   const paused = await call('saveWeplayGameSettings', { settings: { ...mixed.settings, enabled: false } });
   assert.equal((await call('getWeplayLobby', {}, 'student')).gameEnabled, false);
   const pausedSnapshot = await snapshotDatabase();
   const pausedPreview = await call('previewWeplayGame', { unitIds: ['private'] });
-  assert.ok(pausedPreview.words.every((word) => word.unitId === 'private'));
+  assert.ok(pausedPreview.words.filter((word) => word.kind !== 'special').every((word) => word.unitId === 'private'));
   assert.deepEqual(await snapshotDatabase(), pausedSnapshot, 'Teacher preview must remain available without writes while student play is disabled.');
   await rejectCode(call('startWeplayGame', { mode: 'practice', requestKey: 'paused-practice' }, 'student'), 'failed-precondition');
   await rejectCode(call('startWeplayGame', { mode: 'challenge', requestKey: 'paused-challenge' }, 'student'), 'failed-precondition');
   await db.doc(`${prefix}/weplay_sessions/${live.id}`).update({ startsAtMs: Date.now() - 400 });
   const answer = await call('submitWeplayAnswer', { sessionId: live.id, eventId: 'active-after-pause', wordId: live.words[0].id, answer: live.words[0].text }, 'student');
   assert.equal(answer.accepted, true);
-  await db.doc(`${prefix}/weplay_sessions/${live.id}`).update({ endsAtMs: Date.now() - 1 });
+  await finishFixture(live);
   const finished = await call('finishWeplayGame', { sessionId: live.id }, 'student');
   assert.equal(finished.correctCount, 1);
   assert.equal(finished.netWis, 0);
@@ -176,39 +177,39 @@ async function main() {
   console.log('PASS missing selected lessons remain empty; explicit all/disabled save clears stale IDs and recovers without publishing or substituting hidden material');
 
   const draft = { ...recovered.settings, enabled: true, customWords: ['직접추가가', '직접추가나', '직접추가다'], excludedWords: ['고조선', '삼국 시대', '훈민정음'], difficulties: structuredClone(DEFAULT_DIFFICULTY_SETTINGS) };
-  draft.difficulties.medium = { durationSeconds: 30, fallSeconds: [5, 4, 3], minWordLength: 5, maxWordLength: 5 };
+  draft.difficulties.medium = { durationSeconds: 120, fallSeconds: [5, 4, 3], minWordLength: 5, maxWordLength: 5 };
   const beforeDraft = await snapshotDatabase();
   const draftPreview = await call('previewWeplayGame', { settings: draft });
-  assert.equal(draftPreview.endsAtMs - draftPreview.startsAtMs, 30000);
-  assert.ok(draftPreview.words.every((word) => word.unitId === '__weplay_custom__'));
+  assert.equal(draftPreview.endsAtMs - draftPreview.startsAtMs, 120000);
+  assert.ok(draftPreview.words.filter((word) => word.kind !== 'special').every((word) => word.unitId === '__weplay_custom__'));
   assert.deepEqual(await snapshotDatabase(), beforeDraft, 'Full draft preview has zero writes.');
-  for (const patch of [{ durationSeconds: 0 }, { fallSeconds: [5, 5, 3] }, { fallSeconds: [6, 4, 3] }]) {
+  for (const patch of [{ durationSeconds: 0 }, { fallSeconds: [5, 5, 3] }, { fallSeconds: [26, 4, 3] }]) {
     await rejectCode(call('previewWeplayGame', { settings: { ...draft, difficulties: { ...draft.difficulties, medium: { ...draft.difficulties.medium, ...patch } } } }), 'invalid-argument');
   }
   const configured = await call('saveWeplayGameSettings', { settings: draft });
   assert.equal(configured.availableWordCount, 3);
   lobby = await call('getWeplayLobby', {}, 'student');
-  assert.equal(lobby.difficulties.medium.durationSeconds, 30);
-  assert.equal(lobby.challengeDifficulties.medium.durationSeconds, 60);
+  assert.equal(lobby.difficulties.medium.durationSeconds, 120);
+  assert.equal(lobby.challengeDifficulties.medium.durationSeconds, 90);
   assert.equal(lobby.wordCountsByDifficulty.medium, 3);
   assert.equal(lobby.lessons[0].wordCountsByDifficulty.medium, 3);
   assert.equal(lobby.settings, undefined, 'Student lobby must not leak excluded/private source settings.');
   const configuredPractice = await call('startWeplayGame', { mode: 'practice', requestKey: 'configured-practice' }, 'student');
-  assert.equal(configuredPractice.endsAtMs - configuredPractice.startsAtMs, 30000);
+  assert.equal(configuredPractice.endsAtMs - configuredPractice.startsAtMs, 120000);
   assert.deepEqual(configuredPractice.difficultySettings, draft.difficulties.medium);
   const editedAgain = await call('saveWeplayGameSettings', { settings: { ...configured.settings, difficulties: DEFAULT_DIFFICULTY_SETTINGS } });
-  assert.equal((await get(`${prefix}/weplay_sessions/${configuredPractice.id}`)).difficultySettings.durationSeconds, 30);
-  await db.doc(`${prefix}/weplay_sessions/${configuredPractice.id}`).update({ endsAtMs: Date.now() - 1 });
+  assert.equal((await get(`${prefix}/weplay_sessions/${configuredPractice.id}`)).difficultySettings.durationSeconds, 120);
+  await finishFixture(configuredPractice);
   await call('finishWeplayGame', { sessionId: configuredPractice.id }, 'student');
   const configuredAgain = await call('saveWeplayGameSettings', { settings: { ...editedAgain.settings, difficulties: draft.difficulties } });
   const challenge = await call('startWeplayGame', { mode: 'challenge', requestKey: 'fixed-period-challenge' }, 'student');
-  assert.equal(challenge.endsAtMs - challenge.startsAtMs, 60000, 'Existing period uses fixed difficulty snapshot.');
+  assert.equal(challenge.endsAtMs - challenge.startsAtMs, 90000, 'Existing period uses fixed difficulty snapshot.');
   assert.deepEqual(challenge.difficultySettings, DEFAULT_DIFFICULTY_SETTINGS.medium);
-  await db.doc(`${prefix}/weplay_sessions/${challenge.id}`).update({ endsAtMs: Date.now() - 1 });
+  await finishFixture(challenge);
   await call('finishWeplayGame', { sessionId: challenge.id }, 'student');
   await db.doc(`${prefix}/weplay_periods/${lobby.period.id}`).update({ endsAtMs: Date.now() - 1 });
   const nextPeriod = await call('getWeplayLobby', {}, 'student');
-  assert.equal(nextPeriod.challengeDifficulties.medium.durationSeconds, 30, 'Next period snapshots newly saved difficulty settings.');
+  assert.equal(nextPeriod.challengeDifficulties.medium.durationSeconds, 120, 'Next period snapshots newly saved difficulty settings.');
   await call('saveWeplayGameSettings', { settings: { ...configuredAgain.settings, enabled: false } });
   assert.equal((await get(`${prefix}/lessons/private`)).isVisibleToStudents, false);
   console.log('PASS editable words, full draft zero-write preview, configured timing and lengths, active session snapshot, period difficulty fairness and next-period changes');
@@ -227,4 +228,7 @@ async function main() {
   console.log('Weplay management emulator verification completed: all groups passed.');
 }
 
-main().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => {
+  const { getApps, deleteApp } = require('firebase-admin/app');
+  await Promise.all(getApps().map(deleteApp));
+});

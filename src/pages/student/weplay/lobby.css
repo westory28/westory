@@ -1,0 +1,15 @@
+.weplay-launch { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 0; overflow: hidden; }
+.weplay-launch-art { position: relative; min-height: 320px; overflow: hidden; background: #163c4e url('/assets/weplay/naval/sea-battle.webp') center / cover; }
+.weplay-launch-art img { position: absolute; height: auto; object-fit: contain; }
+.weplay-launch-allied { z-index: 1; width: 80%; left: -8%; bottom: 8%; }
+.weplay-launch-enemy { width: 58%; right: -4%; top: 14%; }
+.weplay-launch-controls { min-width: 0; padding: 24px; }
+.weplay-launch-controls > .weplay-primary { width: 100%; }
+.weplay-battle-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+@media (max-width: 767px) {
+  .weplay-launch { grid-template-columns: minmax(0, 1fr); padding: 0; }
+  .weplay-launch-art { min-height: 180px; max-height: 180px; }
+  .weplay-launch-allied { width: 62%; bottom: -16%; left: 0; }
+  .weplay-launch-enemy { width: 40%; right: 2%; top: 0; }
+  .weplay-launch-controls { padding: 16px; }
+}
