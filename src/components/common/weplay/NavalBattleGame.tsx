@@ -26,7 +26,9 @@ type Effect = {
   id: number;
   kind: "cannon" | "enemy" | "special" | "sunk";
   tactic?: string;
+  damage?: number;
 };
+type Impact = { id: number; side: "enemy" | "allied"; damage: number };
 function Sprite({
   className,
   rect,
@@ -85,9 +87,8 @@ export default function NavalBattleGame({
   const [error, setError] = useState("");
   const [finishing, setFinishing] = useState(false);
   const [effects, setEffects] = useState<Effect[]>([]);
-  const [reducedMotion, setReducedMotion] = useState(
-    () => matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
+  const [impacts, setImpacts] = useState<Impact[]>([]);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [compactViewport, setCompactViewport] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(
@@ -145,6 +146,8 @@ export default function NavalBattleGame({
   const finishRef = useRef<() => void>(() => undefined);
   const effectSequence = useRef(0);
   const effectTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const effectFinishAt = useRef(0);
+  const enemySinkingUntil = useRef(0);
   const elapsed = Math.max(0, now - session.startsAtMs);
   const duration = session.endsAtMs - session.startsAtMs;
   const started = now >= session.startsAtMs;
@@ -152,6 +155,17 @@ export default function NavalBattleGame({
     () => simulateWeplayBattle(session, elapsed, events),
     [session, elapsed, events],
   );
+  const latestBattle = useRef(battle);
+  latestBattle.current = battle;
+  const [displayBattle, setDisplayBattle] = useState(() => ({
+    playerHp: battle.playerHp,
+    enemyHp: battle.enemyHp,
+    sunkShips: battle.sunkShips,
+  }));
+  const arrivedEnemy = useRef({
+    enemyHp: battle.enemyHp,
+    sunkShips: battle.sunkShips,
+  });
   const ended = now >= session.endsAtMs || battle.outcome === "defeat";
   const remaining = Math.max(
     0,
@@ -159,6 +173,12 @@ export default function NavalBattleGame({
   );
   const phase = Math.min(3, Math.floor(elapsed / (duration / 3)) + 1);
   const rules = WEPLAY_BATTLE_CONFIG[session.difficulty];
+  const enemyImpact = impacts
+    .filter((impact) => impact.side === "enemy")
+    .at(-1);
+  const alliedImpact = impacts
+    .filter((impact) => impact.side === "allied")
+    .at(-1);
   const visible = session.words.filter(
     (word) =>
       !accepted.has(word.id) &&
@@ -219,9 +239,6 @@ export default function NavalBattleGame({
         setNow(clock.current.server + performance.now() - clock.current.local),
       50,
     );
-    const media = matchMedia("(prefers-reduced-motion: reduce)");
-    const motionChanged = () => setReducedMotion(media.matches);
-    media.addEventListener("change", motionChanged);
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener("beforeunload", warn);
     const viewport = window.visualViewport;
@@ -248,7 +265,6 @@ export default function NavalBattleGame({
     return () => {
       alive.current = false;
       window.clearInterval(timer);
-      media.removeEventListener("change", motionChanged);
       window.removeEventListener("beforeunload", warn);
       viewport?.removeEventListener("resize", viewportChanged);
       viewport?.removeEventListener("scroll", viewportChanged);
@@ -266,11 +282,24 @@ export default function NavalBattleGame({
   }, [started, ended]);
   useEffect(() => {
     const previous = previousBattle.current;
+    if (battle.enemyShots < previous.enemyShots)
+      setDisplayBattle((current) => ({
+        ...current,
+        playerHp: battle.playerHp,
+      }));
     const next: Effect[] = [];
     if (battle.cannonShots > previous.cannonShots)
-      next.push({ id: ++effectSequence.current, kind: "cannon" });
+      next.push({
+        id: ++effectSequence.current,
+        kind: "cannon",
+        damage: (battle.cannonShots - previous.cannonShots) * 12,
+      });
     if (battle.enemyShots > previous.enemyShots)
-      next.push({ id: ++effectSequence.current, kind: "enemy" });
+      next.push({
+        id: ++effectSequence.current,
+        kind: "enemy",
+        damage: (battle.enemyShots - previous.enemyShots) * rules.enemyDamage,
+      });
     if (battle.specialCount > previous.specialCount) {
       const latest = [...events]
         .reverse()
@@ -282,32 +311,92 @@ export default function NavalBattleGame({
       next.push({
         id: ++effectSequence.current,
         kind: "special",
+        damage: (battle.specialCount - previous.specialCount) * 45,
         tactic: session.words.find((word) => word.id === latest?.wordId)
           ?.tactic,
       });
     }
-    if (battle.sunkShips > previous.sunkShips)
-      next.push({ id: ++effectSequence.current, kind: "sunk" });
+    const sunk = battle.sunkShips > previous.sunkShips;
     previousBattle.current = {
       cannonShots: battle.cannonShots,
       enemyShots: battle.enemyShots,
       specialCount: battle.specialCount,
       sunkShips: battle.sunkShips,
     };
-    if (!next.length) return;
-    setEffects((current) => [...current.slice(-5), ...next]);
-    const timer = setTimeout(() => {
-      if (alive.current)
-        setEffects((current) =>
-          current.filter(
-            (item) => !next.some((effect) => effect.id === item.id),
-          ),
+    if (!next.length && !sunk) return;
+    effectFinishAt.current = Math.max(
+      effectFinishAt.current,
+      performance.now() + 1600,
+    );
+    const later = (callback: () => void, delay: number) => {
+      const timer = setTimeout(() => {
+        if (alive.current) callback();
+        effectTimers.current = effectTimers.current.filter(
+          (item) => item !== timer,
         );
-      effectTimers.current = effectTimers.current.filter(
-        (item) => item !== timer,
+      }, delay);
+      effectTimers.current.push(timer);
+    };
+    const show = (items: Effect[], lifetime = 1600) => {
+      setEffects((current) => [...current.slice(-5), ...items]);
+      later(
+        () =>
+          setEffects((current) =>
+            current.filter(
+              (item) => !items.some((effect) => effect.id === item.id),
+            ),
+          ),
+        lifetime,
       );
-    }, 1400);
-    effectTimers.current.push(timer);
+    };
+    show(next);
+    later(() => {
+      const enemyHit = next.some((effect) => effect.kind !== "enemy");
+      const alliedHit = next.some((effect) => effect.kind === "enemy");
+      if (enemyHit || sunk)
+        arrivedEnemy.current = {
+          enemyHp: battle.enemyHp,
+          sunkShips: battle.sunkShips,
+        };
+      if (sunk) enemySinkingUntil.current = performance.now() + 1100;
+      setDisplayBattle((current) => ({
+        ...current,
+        playerHp:
+          alliedHit && battle.enemyShots <= latestBattle.current.enemyShots
+            ? battle.playerHp
+            : current.playerHp,
+        ...(sunk
+          ? { enemyHp: 0 }
+          : enemyHit && performance.now() >= enemySinkingUntil.current
+            ? arrivedEnemy.current
+            : {}),
+      }));
+      const hits: Impact[] = next.map((effect) => ({
+        id: effect.id,
+        side: effect.kind === "enemy" ? "allied" : "enemy",
+        damage: effect.damage || 0,
+      }));
+      setImpacts((current) => [...current.slice(-3), ...hits]);
+      later(
+        () =>
+          setImpacts((current) =>
+            current.filter(
+              (impact) => !hits.some((hit) => hit.id === impact.id),
+            ),
+          ),
+        900,
+      );
+      if (sunk) {
+        show([{ id: ++effectSequence.current, kind: "sunk" }], 1100);
+        later(() => {
+          if (performance.now() >= enemySinkingUntil.current)
+            setDisplayBattle((current) => ({
+              ...current,
+              ...arrivedEnemy.current,
+            }));
+        }, 1100);
+      }
+    }, 420);
   }, [
     battle.cannonShots,
     battle.enemyShots,
@@ -345,13 +434,14 @@ export default function NavalBattleGame({
     if (!ended || finishOnce.current) return;
     let timer: ReturnType<typeof setTimeout>;
     const settle = () => {
-      if (pending.current.size) timer = setTimeout(settle, 250);
+      if (pending.current.size || performance.now() < effectFinishAt.current)
+        timer = setTimeout(settle, 100);
       else {
         finishOnce.current = true;
         finishRef.current();
       }
     };
-    timer = setTimeout(settle, 1000);
+    timer = setTimeout(settle, 1800);
     return () => clearTimeout(timer);
   }, [ended]);
 
@@ -453,6 +543,43 @@ export default function NavalBattleGame({
         className={`naval-scene${effects.some((effect) => effect.kind === "sunk") ? " has-sinking" : ""}`}
       >
         <div className="naval-vignette" aria-hidden="true" />
+        <div
+          className="naval-fuse"
+          role="progressbar"
+          aria-label="전투 진행 시간"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(duration / 1000)}
+          aria-valuenow={Math.min(
+            Math.round(duration / 1000),
+            Math.floor(elapsed / 1000),
+          )}
+          aria-valuetext={`${Math.min(Math.round(duration / 1000), Math.floor(elapsed / 1000))}초 / ${Math.round(duration / 1000)}초 · ${["초반", "중반", "후반"][phase - 1]}`}
+        >
+          <ol className="naval-fuse-phases" aria-label="전투 구간">
+            {[1, 2, 3].map((value) => (
+              <li
+                key={value}
+                aria-current={phase === value ? "step" : undefined}
+              >
+                <strong>{["초반", "중반", "후반"][value - 1]}</strong>
+                <span>
+                  {Math.round(((value - 1) * duration) / 3000)}–
+                  {Math.round((value * duration) / 3000)}초
+                </span>
+              </li>
+            ))}
+          </ol>
+          <div className="naval-fuse-rope" aria-hidden="true">
+            <span
+              className="naval-fuse-burnt"
+              style={{ width: `${Math.min(1, elapsed / duration) * 100}%` }}
+            />
+            <i
+              className={`naval-fuse-ember${ended ? " is-ended" : ""}`}
+              style={{ left: `${Math.min(99, (elapsed / duration) * 100)}%` }}
+            />
+          </div>
+        </div>
         <div className="naval-topbar">
           <Sprite
             className="naval-title-art"
@@ -482,15 +609,21 @@ export default function NavalBattleGame({
         </div>
         <div className="naval-battle-status">
           <span>
-            {mode} · {WEPLAY_DIFFICULTY_LABELS[session.difficulty]}
+            {mode}
+            <strong
+              className={`naval-difficulty-badge naval-difficulty-badge--${session.difficulty}`}
+            >
+              {WEPLAY_DIFFICULTY_LABELS[session.difficulty]}
+            </strong>
           </span>
           <span>
             {["초반", "중반", "후반"][phase - 1]} · 격침 {battle.sunkShips}척
           </span>
         </div>
         <div
-          className="naval-health naval-health--allied"
-          aria-label={`아군 체력 ${battle.playerHp}`}
+          key={`allied-health-${alliedImpact?.id || 0}`}
+          className={`naval-health naval-health--allied${alliedImpact ? " is-hit" : ""}`}
+          aria-label={`아군 체력 ${displayBattle.playerHp}`}
         >
           <div className="naval-health-heading">
             <span className="naval-health-crest" aria-hidden="true">
@@ -498,13 +631,13 @@ export default function NavalBattleGame({
             </span>
             <strong>아군 기함</strong>
             <span>
-              {battle.playerHp} / {WEPLAY_BATTLE_MAX_HP}
+              {displayBattle.playerHp} / {WEPLAY_BATTLE_MAX_HP}
             </span>
           </div>
           <div className="naval-health-track">
             <meter
               aria-label="아군 체력"
-              value={battle.playerHp}
+              value={displayBattle.playerHp}
               min={0}
               max={WEPLAY_BATTLE_MAX_HP}
             >
@@ -513,22 +646,23 @@ export default function NavalBattleGame({
           </div>
         </div>
         <div
-          className="naval-health naval-health--enemy"
-          aria-label={`적군 체력 ${battle.enemyHp}`}
+          key={`enemy-health-${enemyImpact?.id || 0}`}
+          className={`naval-health naval-health--enemy${enemyImpact ? " is-hit" : ""}`}
+          aria-label={`적군 체력 ${displayBattle.enemyHp}`}
         >
           <div className="naval-health-heading">
             <span className="naval-health-crest" aria-hidden="true">
               敵
             </span>
-            <strong>적 기함 {battle.sunkShips + 1}</strong>
+            <strong>적 기함 {displayBattle.sunkShips + 1}</strong>
             <span>
-              {battle.enemyHp} / {WEPLAY_BATTLE_MAX_HP}
+              {displayBattle.enemyHp} / {WEPLAY_BATTLE_MAX_HP}
             </span>
           </div>
           <div className="naval-health-track">
             <meter
               aria-label="적군 체력"
-              value={battle.enemyHp}
+              value={displayBattle.enemyHp}
               min={0}
               max={WEPLAY_BATTLE_MAX_HP}
             >
@@ -567,20 +701,32 @@ export default function NavalBattleGame({
           ))}
         </div>
         <img
-          className={`naval-ship naval-ship--allied${battle.playerHp <= 25 ? " is-damaged" : ""}`}
+          key={`allied-ship-${alliedImpact?.id || 0}`}
+          className={`naval-ship naval-ship--allied${displayBattle.playerHp <= 25 ? " is-damaged" : ""}${alliedImpact ? " is-hit" : ""}`}
           src={`${ART}allied-ship.webp`}
           alt="아군 기함"
           draggable={false}
         />
         <img
-          key={battle.sunkShips}
-          className="naval-ship naval-ship--enemy"
+          key={`enemy-ship-${displayBattle.sunkShips}-${enemyImpact?.id || 0}`}
+          className={`naval-ship naval-ship--enemy${enemyImpact ? " is-hit" : ""}`}
           src={`${ART}enemy-ship.webp`}
           alt="적 기함"
           draggable={false}
         />
         <Sprite className="naval-commander" rect={[0, 175, 430, 452]} />
         <div className="naval-effects" aria-hidden="true">
+          {impacts.map((impact) => (
+            <strong
+              className={`naval-damage naval-damage--${impact.side}`}
+              key={`damage-${impact.id}`}
+            >
+              −{impact.damage}
+              <small>
+                {impact.side === "enemy" ? "적 기함 명중" : "아군 피격"}
+              </small>
+            </strong>
+          ))}
           {effects.map((effect) => (
             <div
               key={effect.id}
@@ -662,7 +808,7 @@ export default function NavalBattleGame({
             </span>
             <strong>{special.text}</strong>
             <div>
-              <span>3초 안에 입력</span>
+              <span>{special.fallDurationMs / 1000}초 안에 입력</span>
               <b>
                 {Math.max(
                   0,
@@ -713,7 +859,7 @@ export default function NavalBattleGame({
             </small>
           )}
         </div>
-        {(!started || ended) && (
+        {(!started || (ended && finishOnce.current)) && (
           <div className="naval-screen-message" role="status">
             <strong>
               {!started

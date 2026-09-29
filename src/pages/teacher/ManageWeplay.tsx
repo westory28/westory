@@ -28,6 +28,7 @@ import HistoryRainGame, {
   type HistoryRainTransport,
 } from "../../components/common/weplay/HistoryRainGame";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
+import NavalBattleResult from "../../components/common/weplay/NavalBattleResult";
 import TeacherNavigationIcon from "../../components/layout/TeacherNavigationIcon";
 import "../../components/common/weplay/weplay.css";
 import "./ManageWeplay.css";
@@ -291,13 +292,21 @@ export default function ManageWeplay() {
                   <h2>교사 체험</h2>
                   <button
                     className="teacher-weplay-button"
+                    disabled={starting}
                     onClick={exitPreview}
                   >
                     {result ? "관리로 돌아가기" : "체험 종료"}
                   </button>
                 </div>
                 <div className="weplay-page">
-                  {result ? (
+                  {result?.battle ? (
+                    <NavalBattleResult
+                      result={result}
+                      preview
+                      replaying={starting}
+                      onReplay={() => void startPreview()}
+                    />
+                  ) : result ? (
                     <div className="weplay-panel">
                       <h2>
                         체험 결과 ·{" "}

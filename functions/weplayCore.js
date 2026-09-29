@@ -234,7 +234,7 @@ function buildWords(catalog, seed, difficulty = 'medium', difficultySettings = D
   const specials = longWords.length ? longWords : fallback;
   return [...normalWords, ...[1, 2].flatMap((phase, index) => specials.length ? [{
     ...specials[index % specials.length], id: `special-${phase}`, kind: 'special', tactic: phase === 1 ? 'crane-wing' : 'last-stand',
-    stage: phase + 1, spawnAtMs: Math.floor(config.durationSeconds * 1000 * phase / 3), fallDurationMs: 3000,
+    stage: phase + 1, spawnAtMs: Math.floor(config.durationSeconds * 1000 * phase / 3), fallDurationMs: 5000,
   }] : [])];
 }
 
