@@ -851,11 +851,6 @@ const Header: React.FC<{
                 <span className="logo-we">We</span>
                 <span className="logo-story">story</span>
               </Link>
-              {config && (
-                <span className="teacher-brand-semester">
-                  {config.year}학년도 {config.semester}학기
-                </span>
-              )}
             </div>
           )}
           {!useTeacherSidebar && (
