@@ -54,6 +54,7 @@ export default function Weplay() {
         setLobby(next);
         if (restore && next.activeSession) {
           setSession(next.activeSession);
+          setMode(next.activeSession.mode);
           setDifficulty(next.activeSession.difficulty);
           setRankingDifficulty(next.activeSession.difficulty);
         }
@@ -122,6 +123,7 @@ export default function Weplay() {
     }
   };
   const complete = (next: WeplayResult) => {
+    setMode(next.mode);
     setDifficulty(next.difficulty);
     setRankingDifficulty(next.difficulty);
     setResult(next);
@@ -262,24 +264,20 @@ export default function Weplay() {
           )}
           {lobby && !result && (
             <section
-              className="weplay-panel weplay-launch"
+              className={`weplay-panel weplay-launch is-${mode}`}
               aria-label="게임 시작"
             >
-              <div className="weplay-launch-art" aria-hidden="true">
+              <div className="weplay-launch-art">
                 <img
-                  className="weplay-launch-allied"
-                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/allied-ship.webp`}
-                  alt=""
-                />
-                <img
-                  className="weplay-launch-enemy"
-                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/enemy-ship.webp`}
-                  alt=""
+                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/lobby-turtle-ship.webp`}
+                  alt="목재 덮개와 쇠못, 낮은 용머리와 노를 갖춘 거북선 재현 일러스트"
+                  width={1200}
+                  height={900}
                 />
               </div>
               <div className="weplay-launch-controls">
                 <div
-                  className="weplay-mode"
+                  className="weplay-mode weplay-mode-choice"
                   role="group"
                   aria-label="게임 모드"
                 >
@@ -292,7 +290,13 @@ export default function Weplay() {
                       requestKey.current = "";
                     }}
                   >
-                    연습
+                    <span className="weplay-choice-top">
+                      <strong>연습하기</strong>
+                      <span className="weplay-choice-mark" aria-hidden="true">
+                        {mode === "practice" ? "✓" : ""}
+                      </span>
+                    </span>
+                    <span className="weplay-choice-note">위스 변동 없음</span>
                   </button>
                   <button
                     type="button"
@@ -303,9 +307,18 @@ export default function Weplay() {
                       requestKey.current = "";
                     }}
                   >
-                    위스 도전
+                    <span className="weplay-choice-top">
+                      <strong>도전하기</strong>
+                      <span className="weplay-choice-mark" aria-hidden="true">
+                        {mode === "challenge" ? "✓" : ""}
+                      </span>
+                    </span>
+                    <span className="weplay-choice-note">위스 획득·차감</span>
                   </button>
                 </div>
+                <h2 className="weplay-selected-mode" aria-live="polite">
+                  {mode === "practice" ? "연습 모드" : "위스 도전 모드"}
+                </h2>
                 <div
                   className="weplay-mode weplay-difficulty"
                   role="group"
@@ -357,7 +370,6 @@ export default function Weplay() {
                         ))}
                       </select>
                     </label>
-                    <p>위스 변동 없음</p>
                   </>
                 ) : (
                   <>
@@ -408,7 +420,7 @@ export default function Weplay() {
                         <p>도전에 필요한 위스가 부족합니다.</p>
                       )}
                     <p>
-                      도중에 나가도 시간은 계속 흐르고, 처리한 단어만
+                      중간에 종료해도 참가 비용은 반환되지 않으며, 처리한 단어만
                       정산됩니다.
                     </p>
                   </>
@@ -430,7 +442,7 @@ export default function Weplay() {
                 )}
                 <button
                   type="button"
-                  className="weplay-primary"
+                  className="weplay-primary weplay-start"
                   disabled={
                     starting ||
                     loading ||
@@ -440,11 +452,13 @@ export default function Weplay() {
                   }
                   onClick={() => void start()}
                 >
-                  {starting
-                    ? "시작 준비 중…"
-                    : mode === "practice"
-                      ? "연습 시작"
-                      : `위스 도전 시작 · ${lobby.policy.challengeCost}위스`}
+                  <span>
+                    {starting
+                      ? "시작 준비 중…"
+                      : mode === "practice"
+                        ? "연습 시작"
+                        : `위스 도전 시작 · ${lobby.policy.challengeCost}위스`}
+                  </span>
                 </button>
               </div>
             </section>

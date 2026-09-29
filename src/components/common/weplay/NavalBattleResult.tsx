@@ -21,7 +21,8 @@ export default function NavalBattleResult({
   const titleId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const battle = result.battle;
-  const defeated = battle?.outcome === "defeat";
+  const endedEarly = Boolean(result.endedEarly);
+  const defeated = !endedEarly && battle?.outcome === "defeat";
   const art = `${import.meta.env?.BASE_URL || "/"}assets/weplay/naval/`;
   const signedWis = `${result.netWis > 0 ? "+" : ""}${result.netWis}`;
   useEffect(() => {
@@ -55,9 +56,15 @@ export default function NavalBattleResult({
       <div className="naval-result-banner">
         <img src={`${art}allied-ship.webp`} alt="" aria-hidden="true" />
         <div>
-          <p className="naval-result-kicker">전투 결과</p>
+          <p className="naval-result-kicker">
+            {endedEarly ? "중도 종료" : "전투 결과"}
+          </p>
           <h2 ref={heading} tabIndex={-1} id={titleId}>
-            {defeated ? "함선 침몰" : "해역 방어 완료"}
+            {endedEarly
+              ? "전투 종료"
+              : defeated
+                ? "함선 침몰"
+                : "해역 방어 완료"}
           </h2>
           <p className="naval-result-score">
             <strong>{result.score.toLocaleString()}</strong>

@@ -228,7 +228,7 @@ function createWeplayFunctions(deps) {
     return { walletRef, wallet, pointPolicy, rankTotal };
   }
 
-  async function settleSession(scope, sessionId, ownerUid = null) {
+  async function settleSession(scope, sessionId, ownerUid = null, exitEarly = false) {
     const result = await db.runTransaction(async (transaction) => {
       const sessionRef = ref(scope, 'weplay_sessions', sessionId);
       const sessionSnap = await transaction.get(sessionRef);
@@ -236,8 +236,10 @@ function createWeplayFunctions(deps) {
       const session = sessionSnap.data();
       if (ownerUid && ownerUid !== session.uid) throw new HttpsError('permission-denied', '본인의 게임만 정산할 수 있습니다.');
       if (session.status === 'finished') return { result: session.result, changed: false };
-      const battle = session.battleVersion === 1 ? simulateWeplayBattle(session, Date.now() - session.startsAtMs) : null;
-      if (Date.now() < session.endsAtMs && battle?.outcome !== 'defeat') throw new HttpsError('failed-precondition', '게임이 끝난 뒤 정산할 수 있습니다.');
+      const settledAtMs = Date.now();
+      const battle = session.battleVersion === 1 ? simulateWeplayBattle(session, settledAtMs - session.startsAtMs) : null;
+      const endedEarly = settledAtMs < session.endsAtMs && battle?.outcome !== 'defeat';
+      if (endedEarly && !exitEarly) throw new HttpsError('failed-precondition', '게임이 끝난 뒤 정산할 수 있습니다.');
       const playerRef = ref(scope, 'weplay_players', session.uid);
       const player = (await transaction.get(playerRef)).data() || {};
       const currentProfile = (await transaction.get(db.doc(`users/${session.uid}`))).data();
@@ -261,8 +263,9 @@ function createWeplayFunctions(deps) {
       if (reward > 0) balance = await writePointChange(transaction, scope, session.uid, currentProfile, reward, 'weplay_reward', sessionId, `${session.battleVersion === 1 ? '내가 충무공이라고?!' : '역사가 내려와'} 도전 정산`, session.policy.version, loaded);
       const resultData = {
         sessionId, mode: session.mode, difficulty: session.difficulty, correctCount, totalWords: battle ? session.words.filter((word) => word.kind !== 'special').length : TOTAL_WORDS, score: battle ? battle.score : correctCount * 100,
-        reward, cost, netWis: reward - cost, balance, finishedAtMs: battle?.defeatAtMs !== null && battle?.defeatAtMs !== undefined ? session.startsAtMs + battle.defeatAtMs : session.endsAtMs,
+        reward, cost, netWis: reward - cost, balance, finishedAtMs: endedEarly ? settledAtMs : battle?.defeatAtMs !== null && battle?.defeatAtMs !== undefined ? session.startsAtMs + battle.defeatAtMs : session.endsAtMs,
         missedWords: session.words.filter((word) => word.kind !== 'special' && !accepted.has(word.id)),
+        ...(endedEarly ? { endedEarly: true } : {}),
         ...(battle ? { battleVersion: 1, battle, rewardCorrectCount } : {}),
       };
       transaction.update(sessionRef, { status: 'finished', result: resultData, settledAt: FieldValue.serverTimestamp() });
@@ -462,7 +465,8 @@ function createWeplayFunctions(deps) {
 
   const finishWeplayGame = onCall({ region: REGION }, async (request) => {
     const { uid } = await student(request);
-    return settleSession(scopeFrom(request.data), identifier(request.data?.sessionId, '게임 번호'), uid);
+    if (request.data?.exitEarly !== undefined && typeof request.data.exitEarly !== 'boolean') invalid('중도 종료 여부를 확인해 주세요.');
+    return settleSession(scopeFrom(request.data), identifier(request.data?.sessionId, '게임 번호'), uid, request.data?.exitEarly === true);
   });
 
   async function settlePeriod(scope, periodId) {

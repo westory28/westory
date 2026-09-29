@@ -1,15 +1,37 @@
-.weplay-launch { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 0; overflow: hidden; }
-.weplay-launch-art { position: relative; min-height: 320px; overflow: hidden; background: #163c4e url('/assets/weplay/naval/sea-battle.webp') center / cover; }
-.weplay-launch-art img { position: absolute; height: auto; object-fit: contain; }
-.weplay-launch-allied { z-index: 1; width: 80%; left: -8%; bottom: 8%; }
-.weplay-launch-enemy { width: 58%; right: -4%; top: 14%; }
+.weplay-page .weplay-launch { --launch-ink: #171e24; --launch-parchment: #f4e5c5; --launch-gold: #d8ae66; --launch-sea: #163c4e; --launch-text: #fff8e8; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 0; overflow: hidden; }
+.weplay-launch-art { display: grid; align-content: center; min-width: 0; overflow: hidden; background: var(--launch-sea); }
+.weplay-launch-art img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; }
 .weplay-launch-controls { min-width: 0; padding: 24px; }
-.weplay-launch-controls > .weplay-primary { width: 100%; }
+.weplay-page .weplay-mode-choice { gap: 12px; }
+.weplay-page .weplay-mode-choice button { display: grid; gap: 8px; min-width: 0; text-align: left; padding: 16px; border-width: 2px; font-weight: 400; }
+.weplay-choice-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.weplay-choice-top strong { font-size: 18px; }
+.weplay-choice-mark { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; border: 1px solid currentColor; border-radius: 50%; font-weight: 800; }
+.weplay-choice-note { font-size: 14px; white-space: nowrap; }
+.weplay-page .is-practice .weplay-mode-choice button[aria-pressed="true"] { color: var(--launch-text); background: var(--launch-sea); border-color: var(--launch-sea); }
+.weplay-page .is-challenge .weplay-mode-choice button[aria-pressed="true"] { color: var(--launch-ink); background: var(--launch-parchment); border-color: var(--launch-gold); }
+.weplay-page .weplay-selected-mode { margin: 24px 0 12px; font-size: 20px; }
+.weplay-selected-mode + .weplay-difficulty { margin-top: 0; }
+.weplay-page .weplay-launch .weplay-start { position: relative; isolation: isolate; overflow: hidden; display: grid; place-items: center; width: 100%; margin-top: 16px; min-height: 52px; color: var(--launch-text); border-color: var(--launch-gold); background: var(--launch-sea); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--launch-gold) 35%, transparent); transition: transform 240ms ease, box-shadow 240ms ease; }
+.weplay-start > span { position: relative; z-index: 1; }
+.weplay-page .weplay-launch.is-challenge .weplay-start { background: var(--launch-ink); color: var(--launch-parchment); }
+.weplay-page .weplay-launch .weplay-start:hover:not(:disabled), .weplay-page .weplay-launch .weplay-start:focus-visible:not(:disabled) { background: var(--launch-sea); transform: translateY(-2px); box-shadow: 0 4px 16px color-mix(in srgb, var(--launch-gold) 45%, transparent), inset 0 0 0 1px var(--launch-gold); }
+.weplay-page .weplay-launch.is-challenge .weplay-start:hover:not(:disabled), .weplay-page .weplay-launch.is-challenge .weplay-start:focus-visible:not(:disabled) { background: var(--launch-ink); }
+.weplay-start::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(110deg, transparent 20%, color-mix(in srgb, var(--launch-gold) 30%, transparent) 48%, transparent 75%); transform: translateX(-110%); }
+.weplay-start:hover:not(:disabled)::before, .weplay-start:focus-visible:not(:disabled)::before { animation: weplay-start-shimmer 1600ms ease-in-out infinite; }
+.weplay-start:active:not(:disabled) { transform: translateY(0); }
 .weplay-battle-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+@keyframes weplay-start-shimmer { from { transform: translateX(-110%); } to { transform: translateX(110%); } }
 @media (max-width: 767px) {
-  .weplay-launch { grid-template-columns: minmax(0, 1fr); padding: 0; }
-  .weplay-launch-art { min-height: 180px; max-height: 180px; }
-  .weplay-launch-allied { width: 62%; bottom: -16%; left: 0; }
-  .weplay-launch-enemy { width: 40%; right: 2%; top: 0; }
+  .weplay-page .weplay-launch { grid-template-columns: minmax(0, 1fr); padding: 0; }
+  .weplay-launch-art { max-height: none; }
   .weplay-launch-controls { padding: 16px; }
+  .weplay-page .weplay-mode-choice { gap: 8px; }
+  .weplay-page .weplay-mode-choice button { padding: 12px 8px; }
+  .weplay-choice-top strong { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .weplay-page .weplay-launch .weplay-start { transition: none; }
+  .weplay-page .weplay-launch .weplay-start:hover:not(:disabled), .weplay-page .weplay-launch .weplay-start:focus-visible:not(:disabled) { transform: none; }
+  .weplay-start:hover:not(:disabled)::before, .weplay-start:focus-visible:not(:disabled)::before { animation: none; }
 }

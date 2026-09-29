@@ -10,6 +10,7 @@
 | enemy-ship.webp | 왼쪽을 향하는 적선 | 내장 이미지 생성 |
 | explosion.webp | 화염·연기·파편 폭발 | 내장 이미지 생성 |
 | reference-sprites.webp | 제목·지휘관·화포·포탄·물보라 | 사용자 제공 시트, WebP 변환 |
+| lobby-turtle-ship.webp | 시작 화면의 거북선 | 사료·2022년 해군 재현 자료를 참고한 새 일러스트, 내장 이미지 생성, 1200×900 WebP |
 
 게임은 이미지를 별도 레이어로 움직이며, 체력·시간·점수·입력창은 실제 HTML 요소입니다. 화면 전체를 한 장의 이미지로 대체하지 않습니다.
 
@@ -21,3 +22,16 @@
 2. **allied-ship.webp** — ONE isolated high-detail Korean turtle ship matching the upper-right reference sprite: carved dragon prow, dark spiked roof, rich warm wooden hull, broad amber sail, oars and small commander flag. Entire ship visible, three-quarter side view, prow RIGHT. Genuine transparent background and generous padding. No other objects, text, UI, ocean, backdrop shadow or frame. Clean edges without colored matte.
 3. **enemy-ship.webp** — ONE isolated high-detail enemy warship matching the lower-left reference sprite: tall dark grey sails with white circular mon emblems, ornate multi-tier wooden Japanese16th-century superstructure, red banners, weathered hull and rigging. Broad three-quarter side view, BOW LEFT. Genuine transparent exterior. No sea, reflection, ground, backdrop shadow, text, HUD or other ships. Clean edges without colored matte.
 4. **explosion.webp** — One transparent realistic cannon-impact effect sprite. Bright white-yellow core, orange flame and sparks, charcoal and grey billowing smoke, small wood splinters, rounded asymmetrical burst dissipating into transparent edges. Full effect with padding. No ship, terrain, text, UI or backdrop. Dramatic realistic VFX, designed to animate at100–250px over blue ocean.
+
+## 시작 화면 거북선 교체 (2026-09-29)
+
+기존 전투용 `allied-ship.webp`와 별개로 시작 화면에 `lobby-turtle-ship.webp`를 사용합니다. 임진왜란 당시 모습의 재현 방향을 참고한 게임 일러스트이며, 특정 실물의 정확한 도면·복제 이미지는 아닙니다. 생성 후 목재 덮개, 짧은 쇠못, 낮고 곧게 연결된 용머리, 포문과 노가 표현되는지 확인했습니다. 세부 치수·포문 수·돛대 구조까지 확정된 고증으로 표시하지 않습니다.
+
+참고 근거:
+- [국가유산청 자료: 거북선 등 조선시대 선박 관련 자료](https://www.cha.go.kr/cmm/fms/BoardFileDown.do?atchFileId=FILE_000000000018213&bbsId=BBSMSTR_1075&dwldHistYn=N&fileSn=0): 당포파왜병장의 용머리 포구·등의 쇠송곳 기록과 판자 덮개 기록. 검색에 공개된 본문을 확인했으며 원문 다운로드는 리디렉션으로 열리지 않았습니다.
+- [MBC, 해군사관학교 거북선 재현 취재·박물관장 인터뷰 (2022-12-07)](https://imnews.imbc.com/replay/2022/nw1400/article/6434131_35722.html): 임진왜란기 기록을 바탕으로 한 2022년 재현선의 낮은 일자형 용머리와 목재 덮개를 확인했습니다.
+
+생성 방식: 내장 `image_gen`, 신규 이미지 생성, 불투명 배경. 원본은 Codex generated_images에 보존하고 웹용 크기·WebP 형식만 변환했습니다. 사진을 복사하거나 SVG로 대체하지 않았습니다.
+
+프롬프트:
+> Create a premium realistic painted 4:3 landscape historical naval game lobby illustration, no text or interface. Depict one historically informed Korean geobukseon turtle ship of the Imjin War, based on documented features from Yi Sun-sin's 1592 Dangpo battle report and the Republic of Korea Naval Academy's 2022 reconstruction. Three-quarter view, broad side visible, bow facing RIGHT, the entire ship and oar tips comfortably inside the frame with margin. A broad, squat wooden panokseon-like hull with dark weathered pine planks and several cannon gunports along each side, working wooden oars close to water, enclosed rounded low wooden-plank turtle-back covering with scattered short iron spikes. Roof must clearly be WOOD PLANKS, absolutely NOT metal armor, not hexagonal steel tiles. The dragon head is small, low and forward-projecting in a nearly horizontal straight line directly connected to the bow at the gun-deck height, with a cannon mouth opening. NO tall curved dragon neck. NO dragon creature body. NO pagoda or palace towers, no huge sail covering the roof. A modest mast with sail furled/lowered and believable restrained Korean rigging, no Japanese emblems, no writing. A historically grounded reconstruction-inspired illustration rather than a claim of an exact archaeological replica. Ship fills about 80 percent of image width in lower two thirds, clearly showing wooden roof and low prow. Dynamic but restrained foamy dark teal Korean coastal sea, hazy forested southern coastal islands behind, golden side-light breaking through grey-blue sky, dramatic warm bronze wood detail, cinematic naval game realism matching Korean 16th-century warship art. Keep ship lighter and visually separated from cool sea. No people close-up, no enemies, no UI, no labels, no logos, no watermark, no invented ironclad machinery, no SVG/vector look. Original artwork, not a reproduction of any photograph.

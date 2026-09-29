@@ -82,6 +82,7 @@ export interface WeplayResult {
   battleVersion?: 1;
   battle?: WeplayBattleState;
   rewardCorrectCount?: number;
+  endedEarly?: boolean;
 }
 export interface WeplaySession {
   id: string;
@@ -175,8 +176,14 @@ export const submitWeplayAnswer = (
   config: WeplayConfig,
   data: { sessionId: string; eventId: string; wordId: string; answer: string },
 ) => call<WeplayAnswerResponse>("submitWeplayAnswer", config, data);
-export const finishWeplayGame = (config: WeplayConfig, sessionId: string) =>
-  call<WeplayResult>("finishWeplayGame", config, { sessionId });
+export interface WeplayFinishOptions {
+  exitEarly?: boolean;
+}
+export const finishWeplayGame = (
+  config: WeplayConfig,
+  sessionId: string,
+  options?: WeplayFinishOptions,
+) => call<WeplayResult>("finishWeplayGame", config, { sessionId, ...options });
 
 export const WEPLAY_GAMES = [
   { id: "history-rain", name: "내가 충무공이라고?!" },

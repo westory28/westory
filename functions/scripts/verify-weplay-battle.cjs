@@ -10,6 +10,16 @@ const clientPath = path.resolve(__dirname, '../../src/lib/weplayBattle.ts');
 const compiled = new Module(clientPath, module);
 compiled._compile(ts.transpileModule(fs.readFileSync(clientPath, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, clientPath);
 const client = compiled.exports.simulateWeplayBattle;
+const loadTs = (relative, imports, clock = {}) => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../../src/lib', relative), 'utf8');
+  const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const exports = {};
+  new Function('require', 'exports', 'performance', output)((name) => {
+    assert.ok(Object.prototype.hasOwnProperty.call(imports, name), `Unexpected dependency: ${name}`);
+    return imports[name];
+  }, exports, clock);
+  return exports;
+};
 const catalog = ['고려', '신라', '백제', '혼일강리역대국도지도'].map((text) => ({ text, unitId: 'lesson', context: '', lessonTitle: '역사' }));
 const sessionFor = (difficulty = 'medium', durationSeconds = 90) => {
   const difficultySettings = { ...core.DEFAULT_DIFFICULTY_SETTINGS[difficulty], durationSeconds };
@@ -80,16 +90,6 @@ test('special challenge succeeds at four seconds, expires at five seconds, and n
 test('server and real teacher preview preserve each special snapshot window, including stored three-second games', async () => {
   // Run the actual TS preview transport with an injected monotonic clock and
   // disconnected SDK imports. No Firebase or browser network calls are possible.
-  const loadTs = (relative, imports, clock = {}) => {
-    const source = fs.readFileSync(path.resolve(__dirname, '../../src/lib', relative), 'utf8');
-    const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-    const exports = {};
-    new Function('require', 'exports', 'performance', output)((name) => {
-      assert.ok(Object.prototype.hasOwnProperty.call(imports, name), `Unexpected dependency: ${name}`);
-      return imports[name];
-    }, exports, clock);
-    return exports;
-  };
   const definitions = loadTs('weplay.ts', { './firebase': {}, './semesterScope': {} });
   for (const storedWindow of [5000, 3000]) for (const offset of [2999, 3000, 4000, 4999, 5000]) {
     let clockMs = 0;
@@ -106,6 +106,39 @@ test('server and real teacher preview preserve each special snapshot window, inc
     assert.equal(local.battle.specialCount, offset < storedWindow ? 1 : 0);
     assert.equal(local.correctCount, 0);
   }
+});
+
+test('teacher preview early exit is explicit, locally idempotent, and keeps the original game denominator', async () => {
+  const definitions = loadTs('weplay.ts', { './firebase': {}, './semesterScope': {} });
+  let clockMs = 0;
+  const session = { ...sessionFor('mild'), id: 'preview-exit', serverNowMs: 100000 };
+  const { createWeplayPreviewTransport } = loadTs('weplayPreview.ts', { './weplay': definitions, './weplayBattle': compiled.exports }, { now: () => clockMs });
+  const preview = createWeplayPreviewTransport(session);
+  for (const word of session.words.filter((item) => item.kind === 'normal').slice(0, 30)) {
+    clockMs = word.spawnAtMs + 200;
+    assert.equal((await preview.answer({ sessionId: session.id, wordId: word.id, answer: word.text })).accepted, true);
+  }
+  await assert.rejects(preview.finish(), /게임이 끝난 뒤/);
+  await assert.rejects(preview.finish({ exitEarly: false }), /게임이 끝난 뒤/);
+  const result = await preview.finish({ exitEarly: true });
+  assert.equal(result.endedEarly, true);
+  assert.equal(result.battle.outcome, 'active');
+  assert.equal(result.totalWords, 60);
+  assert.equal(result.correctCount, 30);
+  assert.equal(result.rewardCorrectCount, 10);
+  assert.equal(result.finishedAtMs, session.startsAtMs + clockMs);
+  assert.equal(result.netWis, 0);
+  assert.equal(session.endsAtMs, 190000);
+  const nextWord = session.words[30];
+  clockMs = nextWord.spawnAtMs + 200;
+  assert.equal((await preview.answer({ sessionId: session.id, wordId: nextWord.id, answer: nextWord.text })).accepted, false);
+  clockMs = 100000;
+  assert.deepEqual(await preview.finish(), result);
+  assert.deepEqual(await preview.finish({ exitEarly: true }), result);
+  const legacy = { ...session, id: 'legacy-preview-exit', battleVersion: undefined };
+  const legacyPreview = createWeplayPreviewTransport(legacy);
+  await assert.rejects(legacyPreview.finish(), /게임이 끝난 뒤/);
+  assert.equal((await legacyPreview.finish({ exitEarly: true })).endedEarly, true);
 });
 
 test('defeat permanently closes combat; accepted events beyond death cannot resurrect the fleet', () => {

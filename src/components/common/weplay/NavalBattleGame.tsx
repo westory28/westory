@@ -11,6 +11,7 @@ import {
   submitWeplayAnswer,
   weplayErrorMessage,
   WEPLAY_DIFFICULTY_LABELS,
+  type WeplayFinishOptions,
 } from "../../../lib/weplay";
 import {
   simulateWeplayBattle,
@@ -18,6 +19,7 @@ import {
   WEPLAY_BATTLE_MAX_HP,
 } from "../../../lib/weplayBattle";
 import type { HistoryRainGameProps } from "./HistoryRainGame";
+import WeplayExitDialog from "./WeplayExitDialog";
 import "./naval-battle.css";
 
 const ART = `${import.meta.env?.BASE_URL || "/"}assets/weplay/naval/`;
@@ -86,6 +88,11 @@ export default function NavalBattleGame({
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [finishing, setFinishing] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
+  const [exitRequested, setExitRequested] = useState(false);
+  const [exitError, setExitError] = useState("");
+  const exitOpenRef = useRef(false);
+  const exitRequestedRef = useRef(false);
   const [effects, setEffects] = useState<Effect[]>([]);
   const [impacts, setImpacts] = useState<Impact[]>([]);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -95,6 +102,7 @@ export default function NavalBattleGame({
     window.visualViewport?.height || window.innerHeight,
   );
   const initialViewportHeight = useRef(window.innerHeight);
+  const refreshViewport = useRef<() => void>(() => undefined);
   const pending = useRef(new Set<string>());
   const retryData = useRef(
     new Map<
@@ -143,7 +151,9 @@ export default function NavalBattleGame({
   const alive = useRef(true);
   const finishingRef = useRef(false);
   const finishOnce = useRef(false);
-  const finishRef = useRef<() => void>(() => undefined);
+  const finishRef = useRef<(options?: WeplayFinishOptions) => void>(
+    () => undefined,
+  );
   const effectSequence = useRef(0);
   const effectTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const effectFinishAt = useRef(0);
@@ -260,6 +270,7 @@ export default function NavalBattleGame({
       );
       requestAnimationFrame(() => requestAnimationFrame(keepInputVisible));
     };
+    refreshViewport.current = viewportChanged;
     viewport?.addEventListener("resize", viewportChanged);
     viewport?.addEventListener("scroll", viewportChanged);
     return () => {
@@ -268,6 +279,7 @@ export default function NavalBattleGame({
       window.removeEventListener("beforeunload", warn);
       viewport?.removeEventListener("resize", viewportChanged);
       viewport?.removeEventListener("scroll", viewportChanged);
+      refreshViewport.current = () => undefined;
       effectTimers.current.forEach(clearTimeout);
     };
   }, []);
@@ -275,7 +287,7 @@ export default function NavalBattleGame({
     if (compactViewport) keepInputVisible();
   }, [compactViewport, keyboardInset]);
   useEffect(() => {
-    if (started && !ended) {
+    if (started && !ended && !exitOpenRef.current) {
       input.current?.focus({ preventScroll: true });
       requestAnimationFrame(() => requestAnimationFrame(keepInputVisible));
     }
@@ -406,19 +418,24 @@ export default function NavalBattleGame({
     session.words,
   ]);
 
-  const finish = async () => {
+  const finish = async (options?: WeplayFinishOptions) => {
     if (finishingRef.current) return;
+    if (exitOpenRef.current) {
+      exitRequestedRef.current = true;
+      setExitRequested(true);
+    }
     finishingRef.current = true;
     setFinishing(true);
     setError("");
+    setExitError("");
     try {
       const result = await (transport
-        ? transport.finish()
-        : finishWeplayGame(config, session.id));
+        ? transport.finish(options)
+        : finishWeplayGame(config, session.id, options));
       if (alive.current) onComplete(result);
     } catch (caught) {
       if (alive.current)
-        setError(
+        (exitRequestedRef.current ? setExitError : setError)(
           weplayErrorMessage(
             caught,
             "전투 결과를 확인하지 못했습니다. 다시 시도해 주세요.",
@@ -429,21 +446,47 @@ export default function NavalBattleGame({
       if (alive.current) setFinishing(false);
     }
   };
-  finishRef.current = () => void finish();
+  finishRef.current = (options) => void finish(options);
   useEffect(() => {
-    if (!ended || finishOnce.current) return;
+    if ((!ended && !exitRequested) || finishOnce.current) return;
     let timer: ReturnType<typeof setTimeout>;
     const settle = () => {
-      if (pending.current.size || performance.now() < effectFinishAt.current)
+      if (
+        pending.current.size ||
+        (!exitRequestedRef.current &&
+          performance.now() < effectFinishAt.current)
+      )
         timer = setTimeout(settle, 100);
       else {
         finishOnce.current = true;
-        finishRef.current();
+        finishRef.current(
+          exitRequestedRef.current ? { exitEarly: true } : undefined,
+        );
       }
     };
-    timer = setTimeout(settle, 1800);
+    timer = setTimeout(settle, exitRequested ? 0 : 1800);
     return () => clearTimeout(timer);
-  }, [ended]);
+  }, [ended, exitRequested]);
+
+  const cancelExit = () => {
+    if (exitRequestedRef.current) return;
+    exitOpenRef.current = false;
+    setExitOpen(false);
+    requestAnimationFrame(() => {
+      if (!ended) input.current?.focus({ preventScroll: true });
+      requestAnimationFrame(keepInputVisible);
+    });
+  };
+  const confirmExit = () => {
+    if (exitRequestedRef.current) {
+      if (exitError) void finish({ exitEarly: true });
+      return;
+    }
+    exitRequestedRef.current = true;
+    setExitRequested(true);
+    if (finishOnce.current && !finishingRef.current)
+      void finish({ exitEarly: true });
+  };
 
   const send = async (data: {
     sessionId: string;
@@ -496,11 +539,19 @@ export default function NavalBattleGame({
     } finally {
       pending.current.delete(data.wordId);
     }
-    input.current?.focus({ preventScroll: true });
+    if (!exitOpenRef.current && !exitRequestedRef.current)
+      input.current?.focus({ preventScroll: true });
   };
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (composing.current || !started || ended) return;
+    if (
+      composing.current ||
+      !started ||
+      ended ||
+      exitOpenRef.current ||
+      exitRequestedRef.current
+    )
+      return;
     const value = normalizeWeplayAnswer(answer);
     const word = [...(special ? [special] : []), ...prompts].find(
       (item) =>
@@ -907,7 +958,10 @@ export default function NavalBattleGame({
               ref={input}
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
-              onFocus={() => requestAnimationFrame(keepInputVisible)}
+              onFocus={() => {
+                refreshViewport.current();
+                requestAnimationFrame(keepInputVisible);
+              }}
               onBlur={() => {
                 window.setTimeout(() => {
                   if (
@@ -923,7 +977,7 @@ export default function NavalBattleGame({
               autoComplete="off"
               autoCapitalize="off"
               spellCheck={false}
-              disabled={!started || ended}
+              disabled={!started || ended || exitRequested}
               onCompositionStart={() => {
                 composing.current = true;
               }}
@@ -942,13 +996,24 @@ export default function NavalBattleGame({
             />
             <button
               type="submit"
-              disabled={!started || ended || !answer.trim()}
+              disabled={!started || ended || exitRequested || !answer.trim()}
             >
               장전
             </button>
           </div>
         </form>
         <div className="naval-footer">
+          <button
+            className="weplay-exit-button"
+            type="button"
+            disabled={finishing || exitRequested}
+            onClick={() => {
+              exitOpenRef.current = true;
+              setExitOpen(true);
+            }}
+          >
+            나가기
+          </button>
           <label>
             <input
               type="checkbox"
@@ -960,9 +1025,7 @@ export default function NavalBattleGame({
           <div className="naval-footer-info">
             <span>
               {preview
-                ? compactViewport
-                  ? "체험 · 위스·랭킹·학생 기록 미반영"
-                  : "위스·랭킹·학생 기록에 반영되지 않습니다."
+                ? "체험 · 기록·위스 미반영"
                 : session.mode === "practice"
                   ? "위스 변동 없음"
                   : `도전 비용 ${session.policy.challengeCost}위스`}
@@ -973,6 +1036,15 @@ export default function NavalBattleGame({
           </div>
         </div>
       </div>
+      <WeplayExitDialog
+        open={exitOpen}
+        confirmed={exitRequested}
+        error={exitError}
+        preview={preview}
+        mode={session.mode}
+        onCancel={cancelExit}
+        onConfirm={confirmExit}
+      />
       {error && (
         <div className="weplay-error" role="alert">
           <p>{error}</p>

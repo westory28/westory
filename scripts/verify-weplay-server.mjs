@@ -693,6 +693,63 @@ try {
   assert.equal(specialResult.score, 500);
   assert([...db.data.values()].some((value) => value.sessionId === onlySpecial.id && value.score === 500 && value.achievedAtMs));
   checks.push("Special succeeds at four seconds; reload preserves server-accepted event timestamps; special-only damage scores enter rankings without inflating normal-word rewards");
+
+  now = Date.parse("2026-09-29T01:00:00Z");
+  ({ db, api, call } = setup());
+  const exitGame = await call("startWeplayGame", { mode: "challenge", requestKey: "voluntary-exit" });
+  for (const word of exitGame.words.filter((word) => word.kind === "normal").slice(0, 30)) {
+    now = exitGame.startsAtMs + word.spawnAtMs + 200;
+    assert.equal((await call("submitWeplayAnswer", { sessionId: exitGame.id, eventId: `exit-hit-${word.id}`, wordId: word.id, answer: word.text })).accepted, true);
+  }
+  await rejectCode(call("finishWeplayGame", { sessionId: exitGame.id }), "failed-precondition");
+  await rejectCode(call("finishWeplayGame", { sessionId: exitGame.id, exitEarly: false }), "failed-precondition");
+  await rejectCode(call("finishWeplayGame", { sessionId: exitGame.id, exitEarly: "true" }), "invalid-argument");
+  await rejectCode(call("finishWeplayGame", { sessionId: exitGame.id, exitEarly: true }, "student-b"), "permission-denied");
+  const exitAtMs = now;
+  const exits = await Promise.all(Array.from({ length: 5 }, () => call("finishWeplayGame", { sessionId: exitGame.id, exitEarly: true })));
+  exits.forEach((item) => assert.deepEqual(item, exits[0]));
+  const exited = exits[0];
+  assert.equal(exited.endedEarly, true);
+  assert.equal(exited.battle.outcome, "active", "Voluntary exit must not claim victory");
+  assert.equal(exited.finishedAtMs, exitAtMs);
+  assert.equal(exited.correctCount, 30);
+  assert.equal(exited.totalWords, 60);
+  assert.equal(exited.rewardCorrectCount, 10);
+  assert.equal(exited.reward, 1);
+  assert.equal(exited.cost, 2);
+  assert.equal(db.data.get(`${prefix}/point_wallets/student-a`).balance, 29);
+  assert.equal(db.data.get(`${prefix}/weplay_players/student-a`).challengeUsed, 1);
+  assert.equal(db.data.get(`${prefix}/weplay_players/student-a`).activeSessionId, null);
+  assert.equal(db.data.get(`${prefix}/weplay_sessions/${exitGame.id}`).endsAtMs, exitGame.endsAtMs);
+  assert.equal(db.data.has(`weplay_session_queue/${exitGame.id}`), false);
+  assert.equal([...db.data.keys()].filter((key) => key.includes("/point_transactions/weplay_reward_")).length, 1);
+  assert.equal([...db.data.values()].find((entry) => entry.achievedAtMs && entry.sessionId === exitGame.id).achievedAtMs, exitAtMs);
+  now = exitGame.endsAtMs + 1000;
+  assert.deepEqual(await call("finishWeplayGame", { sessionId: exitGame.id }), exited);
+  await api.settleWeplayOnSchedule();
+  assert.equal(db.data.get(`${prefix}/point_wallets/student-a`).balance, 29);
+  checks.push("Explicit early exit only: owner checked, full 60-word reward denominator and original end time preserved, actual finish timestamp, fee/daily count kept, duplicate/scheduled settlement pays once");
+
+  for (const answerFirst of [true, false]) {
+    now = Date.parse("2026-09-29T01:00:00Z");
+    ({ db, api, call } = setup());
+    const racing = await call("startWeplayGame", { mode: "practice", requestKey: `exit-answer-race-${answerFirst}` });
+    const word = racing.words[0];
+    now = racing.startsAtMs + 500;
+    const answer = () => call("submitWeplayAnswer", { sessionId: racing.id, eventId: "racing-answer", wordId: word.id, answer: word.text });
+    const finish = () => call("finishWeplayGame", { sessionId: racing.id, exitEarly: true });
+    const outputs = await Promise.all(answerFirst ? [answer(), finish()] : [finish(), answer()]);
+    const verdict = outputs[answerFirst ? 0 : 1];
+    const closed = outputs[answerFirst ? 1 : 0];
+    assert.equal(closed.correctCount, verdict.accepted ? 1 : 0);
+    assert.equal(closed.netWis, 0);
+    assert.equal(closed.endedEarly, true);
+    assert.equal(db.data.get(`${prefix}/weplay_sessions/${racing.id}`).acceptedWordIds.length, closed.correctCount);
+    assert.deepEqual(await finish(), closed);
+    assert.equal((await answer()).accepted, verdict.accepted, "A repeated event keeps its original verdict without reopening the game");
+    assert.equal(db.data.get(`${prefix}/point_wallets/student-a`).balance, 30);
+  }
+  checks.push("Concurrent answer/early-finish orders serialize: result matches committed accepted events, practice remains free, retries never reopen or mutate a settled session");
   for (const check of checks) console.log(`PASS ${check}`);
 } finally {
   Date.now = oldNow;

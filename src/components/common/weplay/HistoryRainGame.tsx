@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import NavalBattleGame from "./NavalBattleGame";
+import WeplayExitDialog from "./WeplayExitDialog";
 import {
   finishWeplayGame,
   normalizeWeplayAnswer,
@@ -10,6 +11,7 @@ import {
   type WeplayResult,
   type WeplaySession,
   type WeplayAnswerResponse,
+  type WeplayFinishOptions,
 } from "../../../lib/weplay";
 
 export interface HistoryRainTransport {
@@ -19,7 +21,7 @@ export interface HistoryRainTransport {
     wordId: string;
     answer: string;
   }) => Promise<WeplayAnswerResponse>;
-  finish: () => Promise<WeplayResult>;
+  finish: (options?: WeplayFinishOptions) => Promise<WeplayResult>;
 }
 
 export interface HistoryRainGameProps {
@@ -59,6 +61,12 @@ function LegacyHistoryRainGame({
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [finishing, setFinishing] = useState(false);
+  const finishingRef = useRef(false);
+  const [exitOpen, setExitOpen] = useState(false);
+  const [exitRequested, setExitRequested] = useState(false);
+  const [exitError, setExitError] = useState("");
+  const exitOpenRef = useRef(false);
+  const exitRequestedRef = useRef(false);
   const finishOnce = useRef(false);
   const composing = useRef(false);
   const input = useRef<HTMLInputElement>(null);
@@ -68,7 +76,9 @@ function LegacyHistoryRainGame({
     () => matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
   const alive = useRef(true);
-  const finishRef = useRef<() => void>(() => undefined);
+  const finishRef = useRef<(options?: WeplayFinishOptions) => void>(
+    () => undefined,
+  );
   useEffect(() => {
     alive.current = true;
     const timer = window.setInterval(
@@ -110,7 +120,7 @@ function LegacyHistoryRainGame({
   const started = elapsed >= 0;
   const ended = now >= session.endsAtMs;
   useEffect(() => {
-    if (started && !ended) input.current?.focus();
+    if (started && !ended && !exitOpenRef.current) input.current?.focus();
   }, [started, ended]);
   const visible = session.words.filter(
     (word) =>
@@ -119,46 +129,81 @@ function LegacyHistoryRainGame({
       elapsed < word.spawnAtMs + word.fallDurationMs &&
       !ended,
   );
-  const finish = async () => {
-    if (finishing) return;
+  const finish = async (options?: WeplayFinishOptions) => {
+    if (finishingRef.current) return;
+    if (exitOpenRef.current) {
+      exitRequestedRef.current = true;
+      setExitRequested(true);
+    }
+    finishingRef.current = true;
     setFinishing(true);
     setError("");
+    setExitError("");
     try {
       const result = await (transport
-        ? transport.finish()
-        : finishWeplayGame(config, session.id));
+        ? transport.finish(options)
+        : finishWeplayGame(config, session.id, options));
       if (alive.current) onComplete(result);
     } catch (caught) {
       if (alive.current)
-        setError(
+        (exitRequestedRef.current ? setExitError : setError)(
           weplayErrorMessage(
             caught,
             "결과를 저장하지 못했습니다. 정산을 다시 시도해 주세요.",
           ),
         );
     } finally {
+      finishingRef.current = false;
       if (alive.current) setFinishing(false);
     }
   };
-  finishRef.current = () => void finish();
+  finishRef.current = (options) => void finish(options);
   useEffect(() => {
-    if (!ended || finishOnce.current) return;
+    if ((!ended && !exitRequested) || finishOnce.current) return;
     // Finish only after answer calls have returned, including their retries.
     let timer: ReturnType<typeof setTimeout>;
     const settleWhenReady = () => {
       if (pending.current.size > 0) timer = setTimeout(settleWhenReady, 250);
       else {
         finishOnce.current = true;
-        finishRef.current();
+        finishRef.current(
+          exitRequestedRef.current ? { exitEarly: true } : undefined,
+        );
       }
     };
-    timer = setTimeout(settleWhenReady, 1000);
+    timer = setTimeout(settleWhenReady, exitRequested ? 0 : 1000);
     return () => clearTimeout(timer);
-  }, [ended]);
+  }, [ended, exitRequested]);
+
+  const cancelExit = () => {
+    if (exitRequestedRef.current) return;
+    exitOpenRef.current = false;
+    setExitOpen(false);
+    requestAnimationFrame(() => {
+      if (!ended) input.current?.focus({ preventScroll: true });
+    });
+  };
+  const confirmExit = () => {
+    if (exitRequestedRef.current) {
+      if (exitError) void finish({ exitEarly: true });
+      return;
+    }
+    exitRequestedRef.current = true;
+    setExitRequested(true);
+    if (finishOnce.current && !finishingRef.current)
+      void finish({ exitEarly: true });
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (composing.current || !started || ended) return;
+    if (
+      composing.current ||
+      !started ||
+      ended ||
+      exitOpenRef.current ||
+      exitRequestedRef.current
+    )
+      return;
     const value = normalizeWeplayAnswer(answer);
     const word = visible.find(
       (item) =>
@@ -205,7 +250,8 @@ function LegacyHistoryRainGame({
     } finally {
       pending.current.delete(word.id);
     }
-    input.current?.focus();
+    if (!exitOpenRef.current && !exitRequestedRef.current)
+      input.current?.focus();
   };
   return (
     <section className="weplay-game" aria-label="역사가 내려와 게임">
@@ -292,7 +338,7 @@ function LegacyHistoryRainGame({
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
-            disabled={!started || ended}
+            disabled={!started || ended || exitRequested}
             onCompositionStart={() => {
               composing.current = true;
             }}
@@ -312,13 +358,24 @@ function LegacyHistoryRainGame({
           <button
             type="submit"
             className="weplay-primary"
-            disabled={!started || ended || !answer.trim()}
+            disabled={!started || ended || exitRequested || !answer.trim()}
           >
             입력
           </button>
         </div>
       </form>
       <div className="weplay-game-footer">
+        <button
+          className="weplay-exit-button"
+          type="button"
+          disabled={finishing || exitRequested}
+          onClick={() => {
+            exitOpenRef.current = true;
+            setExitOpen(true);
+          }}
+        >
+          나가기
+        </button>
         <label>
           <input
             type="checkbox"
@@ -335,6 +392,15 @@ function LegacyHistoryRainGame({
               : `도전 비용 ${session.policy.challengeCost}위스`}
         </span>
       </div>
+      <WeplayExitDialog
+        open={exitOpen}
+        confirmed={exitRequested}
+        error={exitError}
+        preview={preview}
+        mode={session.mode}
+        onCancel={cancelExit}
+        onConfirm={confirmExit}
+      />
       {feedback && <p role="status">{feedback}</p>}
       {error && (
         <p className="weplay-error" role="alert">

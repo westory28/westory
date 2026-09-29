@@ -2,6 +2,7 @@ import {
   normalizeWeplayAnswer,
   type WeplayAcceptedEvent,
   type WeplayAnswerResponse,
+  type WeplayFinishOptions,
   type WeplayResult,
   type WeplaySession,
 } from "./weplay";
@@ -56,14 +57,16 @@ export function createWeplayPreviewTransport(session: WeplaySession) {
         ...(after ? { acceptedEvents: [...events], battle: after } : {}),
       };
     },
-    async finish(): Promise<WeplayResult> {
+    async finish(options?: WeplayFinishOptions): Promise<WeplayResult> {
       if (result) return result;
       const time = now();
       const battle =
         session.battleVersion === 1
           ? simulateWeplayBattle(session, time - session.startsAtMs, events)
           : null;
-      if (battle?.outcome === "active")
+      const endedEarly =
+        time < session.endsAtMs && battle?.outcome !== "defeat";
+      if (endedEarly && options?.exitEarly !== true)
         throw new Error("게임이 끝난 뒤 정산할 수 있습니다.");
       result = {
         sessionId: session.id,
@@ -77,13 +80,15 @@ export function createWeplayPreviewTransport(session: WeplaySession) {
         cost: 0,
         netWis: 0,
         balance: 0,
-        finishedAtMs:
-          battle?.defeatAtMs != null
+        finishedAtMs: endedEarly
+          ? time
+          : battle?.defeatAtMs != null
             ? session.startsAtMs + battle.defeatAtMs
-            : time,
+            : session.endsAtMs,
         missedWords: session.words.filter(
           (word) => word.kind !== "special" && !accepted.has(word.id),
         ),
+        ...(endedEarly ? { endedEarly: true } : {}),
         ...(battle
           ? {
               battleVersion: 1,
