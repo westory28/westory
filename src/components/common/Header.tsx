@@ -393,21 +393,6 @@ const Header: React.FC<{
       children: [{ name: "학사 일정", resolvedUrl: "/teacher/schedule" }],
     });
   }
-  if (useTeacherSidebar && canManageSettings(userData, currentUser?.email)) {
-    teacherSidebarGroups.push({
-      id: "notice",
-      name: "알림장",
-      icon: "notice",
-      secondary: true,
-      directUrl: "/teacher/dashboard?notice=manage",
-      children: [
-        {
-          name: "알림장 관리",
-          resolvedUrl: "/teacher/dashboard?notice=manage",
-        },
-      ],
-    });
-  }
   const configuredShopChildren = resolvedTeacherMenus
     .flatMap((item) => item.resolvedChildren)
     .filter((child) => getShopTab(child.resolvedUrl));

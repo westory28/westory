@@ -10,10 +10,13 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   setDoc,
   where,
+  type DocumentData,
+  type DocumentSnapshot,
 } from "firebase/firestore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppToast } from "../../../components/common/AppToastProvider";
@@ -362,6 +365,9 @@ const HistoryClassroomRunner: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState("");
+  const [assignmentReloadRevision, setAssignmentReloadRevision] = useState(0);
+  const assignmentReadPathRef = useRef("");
+  const loadedRetryResetAtRef = useRef(0);
   const [resultText, setResultText] = useState("");
   const [resultSummary, setResultSummary] =
     useState<HistoryClassroomResultModalSummary | null>(null);
@@ -419,6 +425,7 @@ const HistoryClassroomRunner: React.FC = () => {
         JSON.stringify({
           ...getYearSemester(config),
           resultId: attemptResultIdRef.current,
+          retryResetAtMs: loadedRetryResetAtRef.current,
           deadlineMs: attemptDeadlineMsRef.current,
           offlineStartedAt: networkOfflineStartedAtRef.current,
           currentPage: currentPageRef.current,
@@ -442,13 +449,48 @@ const HistoryClassroomRunner: React.FC = () => {
           readLocalOnly(getAttemptProgressKey(assignmentId, userData.uid)),
         );
         const scope = getYearSemester(config);
+        // Read the reset marker when available, without making source access a
+        // prerequisite for recovering a student's already committed result.
+        assignmentReadPathRef.current = getSemesterDocPath(
+          config,
+          "history_classrooms",
+          assignmentId,
+        );
+        let snap: DocumentSnapshot<DocumentData> | null = null;
+        let assignmentReadError: unknown = null;
+        try {
+          snap = await getDoc(doc(db, assignmentReadPathRef.current));
+          if (!snap.exists()) {
+            assignmentReadPathRef.current = `history_classrooms/${assignmentId}`;
+            snap = await getDoc(doc(db, assignmentReadPathRef.current));
+          }
+        } catch (readError) {
+          assignmentReadError = readError;
+        }
+        const resetAtMs = snap?.exists()
+          ? getHistoryClassroomStudentRetryResetMs(
+              normalizeHistoryClassroomAssignment(snap.id, snap.data()),
+              userData.uid,
+            ) || 0
+          : 0;
+        loadedRetryResetAtRef.current = resetAtMs;
+        const isResetDraft =
+          !!storedAttempt &&
+          resetAtMs > 0 &&
+          (typeof storedAttempt.retryResetAtMs === "number" &&
+          Number.isFinite(storedAttempt.retryResetAtMs) &&
+          storedAttempt.retryResetAtMs >= 0
+            ? storedAttempt.retryResetAtMs < resetAtMs
+            : Number(storedAttempt.savedAt) <= resetAtMs);
         const scopedStoredAttempt =
           storedAttempt &&
+          !isResetDraft &&
           (!storedAttempt.year ||
             (storedAttempt.year === scope.year &&
               storedAttempt.semester === scope.semester))
             ? storedAttempt
             : null;
+        if (isResetDraft) clearAttemptProgress(assignmentId, userData.uid);
         const queuedSubmission = readHistoryClassroomPendingSubmission(
           scopedStoredAttempt?.pendingSubmission,
         );
@@ -511,16 +553,8 @@ const HistoryClassroomRunner: React.FC = () => {
             return;
           }
         }
-        let snap = await getDoc(
-          doc(
-            db,
-            getSemesterDocPath(config, "history_classrooms", assignmentId),
-          ),
-        );
-        if (!snap.exists()) {
-          snap = await getDoc(doc(db, `history_classrooms/${assignmentId}`));
-        }
-        if (!snap.exists()) {
+        if (assignmentReadError) throw assignmentReadError;
+        if (!snap?.exists()) {
           throw new Error("역사교실 자료를 찾을 수 없습니다.");
         }
 
@@ -593,18 +627,7 @@ const HistoryClassroomRunner: React.FC = () => {
               (getHistoryClassroomTimestampMs(right.createdAt) || 0) -
               (getHistoryClassroomTimestampMs(left.createdAt) || 0),
           );
-        const resetAtMs = getHistoryClassroomStudentRetryResetMs(
-          loaded,
-          userData.uid,
-        );
-        const savedAttempt =
-          storedAttempt &&
-          (!storedAttempt.year ||
-            (storedAttempt.year === scope.year &&
-              storedAttempt.semester === scope.semester)) &&
-          (!resetAtMs || Number(storedAttempt.savedAt) > resetAtMs)
-            ? storedAttempt
-            : null;
+        const savedAttempt = scopedStoredAttempt;
         const pendingSubmission = readHistoryClassroomPendingSubmission(
           savedAttempt?.pendingSubmission,
         );
@@ -753,7 +776,31 @@ const HistoryClassroomRunner: React.FC = () => {
     };
 
     void loadAssignment();
-  }, [assignmentId, config, userData?.uid]);
+  }, [assignmentId, config, userData?.uid, assignmentReloadRevision]);
+
+  useEffect(() => {
+    // A teacher's reset unlocks an already open error screen. Active attempts
+    // deliberately keep their answers and timer until the student re-enters.
+    if (!error || loading || !assignmentReadPathRef.current || !userData?.uid)
+      return;
+    return onSnapshot(
+      doc(db, assignmentReadPathRef.current),
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        const resetAtMs =
+          getHistoryClassroomStudentRetryResetMs(
+            normalizeHistoryClassroomAssignment(snapshot.id, snapshot.data()),
+            userData.uid,
+          ) || 0;
+        if (resetAtMs <= loadedRetryResetAtRef.current) return;
+        loadedRetryResetAtRef.current = resetAtMs;
+        setAssignmentReloadRevision((revision) => revision + 1);
+      },
+      () => {
+        /* Normal load retains the access error; listeners never bypass it. */
+      },
+    );
+  }, [error, loading, assignmentId, config, userData?.uid]);
 
   const saveResult = async (options: {
     status: "passed" | "failed" | "cancelled";

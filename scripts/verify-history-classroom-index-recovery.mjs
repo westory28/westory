@@ -36,7 +36,14 @@ try {
   tailwind = await response.text();
   await fs.writeFile(tailwindCache, tailwind);
 }
-const mock = `export const db={};export const config={year:'2026',semester:'2'};export const useAuth=()=>({config,currentUser:{uid:'student-1'},userData:{uid:'student-1',role:'student'}});export const collection=(_db,path)=>({path});export const where=(key,op,value)=>({key,op,value});export const query=(ref,...constraints)=>({...ref,constraints});export const getDocs=async(ref)=>{const values=ref.path.endsWith('/history_classrooms')?window.__data.assignments:ref.path.endsWith('/history_classroom_results')?window.__data.results:[];const docs=values.map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};export const getHttpsCallable=()=>{throw new Error('No callable allowed');};`;
+const mock = `export const db={};export const config={year:'2026',semester:'2'};export const useAuth=()=>({config,currentUser:{uid:'student-1'},userData:{uid:'student-1',role:'student'}});export const collection=(_db,path)=>({path});export const doc=(_db,...parts)=>({path:parts.join('/')});export const where=(key,op,value)=>({key,op,value});export const query=(ref,...constraints)=>({...ref,constraints});
+const rows=path=>path==='history_classrooms'?(window.__data.legacyAssignments||[]):path.endsWith('/history_classrooms')?window.__data.assignments:path.endsWith('/history_classroom_results')?window.__data.results:[];
+export const getDocs=async(ref)=>{const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
+const listeners=new Map();window.__listeners=listeners;
+const snapshot=(path,value)=>({id:path.split('/').at(-1),exists:()=>!!value,data:()=>value});
+window.__emit=(path,value)=>listeners.get(path)?.next(snapshot(path,value));window.__deny=path=>listeners.get(path)?.error({code:'permission-denied'});
+export const onSnapshot=(ref,next,error)=>{listeners.set(ref.path,{next,error});const index=ref.path.lastIndexOf('/');const value=rows(ref.path.slice(0,index)).find(item=>item.id===ref.path.slice(index+1));queueMicrotask(()=>{if(listeners.has(ref.path))next(snapshot(ref.path,value));});return()=>listeners.delete(ref.path);};
+export const getHttpsCallable=()=>{throw new Error('No callable allowed');};`;
 const component = JSON.stringify(
   path
     .join(root, "src/pages/student/history-classroom/HistoryClassroomIndex.tsx")
@@ -174,6 +181,36 @@ const scenarios = [
     },
   },
   {
+    name: "reset-version-rejects-pagehide-resaved-draft",
+    assignment: {
+      retryResetByStudentUid: { "student-1": { seconds: (now + 1000) / 1000 } },
+    },
+    draft: { ...draft, retryResetAtMs: 0, savedAt: now + 2000 },
+  },
+  {
+    name: "current-reset-version-can-recover",
+    assignment: {
+      retryResetByStudentUid: { "student-1": { seconds: (now + 1000) / 1000 } },
+    },
+    draft: { ...draft, retryResetAtMs: now + 1000, savedAt: now + 2000 },
+    recovery: true,
+  },
+  {
+    name: "current-reset-version-survives-local-clock-change",
+    assignment: {
+      retryResetByStudentUid: { "student-1": { seconds: (now + 1000) / 1000 } },
+    },
+    draft: { ...draft, retryResetAtMs: now + 1000, savedAt: now - 1000 },
+    recovery: true,
+  },
+  {
+    name: "malformed-reset-version-uses-legacy-saved-at",
+    assignment: {
+      retryResetByStudentUid: { "student-1": { seconds: (now + 1000) / 1000 } },
+    },
+    draft: { ...draft, retryResetAtMs: -1 },
+  },
+  {
     name: "invalid-answers",
     draft: {
       ...draft,
@@ -296,6 +333,189 @@ try {
       });
       await page.close();
     }
+  }
+  const liveScenarios = [
+    { name: "local-only", results: [] },
+    {
+      name: "failed",
+      results: [{ ...ownResult, status: "failed", passed: false, percent: 0 }],
+    },
+    {
+      name: "cancelled",
+      results: [
+        { ...ownResult, status: "cancelled", passed: false, percent: 0 },
+      ],
+    },
+    { name: "passed-stays-passed", results: [ownResult], staysBlocked: true },
+    {
+      name: "earlier-passed-latest-failed",
+      results: [
+        ownResult,
+        {
+          ...ownResult,
+          id: "later-failed",
+          status: "failed",
+          passed: false,
+          percent: 0,
+          createdAt: { seconds: (now + 500) / 1000 },
+        },
+      ],
+      staysBlocked: true,
+    },
+    {
+      name: "past-due-stays-closed",
+      results: [],
+      dueAt: assignment.dueAt,
+      staysBlocked: true,
+    },
+    { name: "legacy-local-only", results: [], legacy: true },
+    {
+      name: "reset-does-not-clear-newer-lock",
+      results: [],
+      savedAt: now + 2000,
+      staysBlocked: true,
+    },
+  ];
+  for (const scenario of liveScenarios) {
+    const page = await browser.newPage({
+      viewport: { width: 768, height: 1024 },
+      hasTouch: true,
+    });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.addInitScript(
+      ({ assignment, scenario, now }) => {
+        const entry = { ...assignment, dueAt: scenario.dueAt || null };
+        window.__data = {
+          assignments: scenario.legacy ? [] : [entry],
+          legacyAssignments: scenario.legacy ? [entry] : [],
+          results: scenario.results,
+        };
+        localStorage.setItem(
+          "westoryHistoryClassroomLock:assignment-1:student-1",
+          JSON.stringify({
+            savedAt: scenario.savedAt || now,
+            blockedUntil: now + 300000,
+          }),
+        );
+      },
+      { assignment, scenario, now },
+    );
+    await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page
+      .getByRole("heading", { name: assignment.title, exact: true })
+      .waitFor();
+    const path =
+      (scenario.legacy
+        ? "history_classrooms"
+        : "years/2026/semesters/2/history_classrooms") + "/assignment-1";
+    assert.deepEqual(
+      await page.evaluate(() => [...window.__listeners.keys()]),
+      [path],
+      "subscribe only at the actual assigned source path",
+    );
+    assert(await page.locator("article button").first().isDisabled());
+    await page.evaluate(
+      ({ path, now, legacy }) => {
+        const entry = (
+          legacy ? window.__data.legacyAssignments : window.__data.assignments
+        )[0];
+        window.__emit(path, {
+          ...entry,
+          retryResetByStudentUid: {
+            "student-2": { seconds: (now + 1000) / 1000 },
+            "student-1": { seconds: (now - 1000) / 1000 },
+          },
+        });
+      },
+      { path, now, legacy: scenario.legacy },
+    );
+    assert(
+      await page.locator("article button").first().isDisabled(),
+      "other student or stale reset cannot clear own cooldown",
+    );
+    await page.evaluate(
+      ({ path, now, legacy }) => {
+        const entry = (
+          legacy ? window.__data.legacyAssignments : window.__data.assignments
+        )[0];
+        window.__emit(path, {
+          ...entry,
+          retryResetByStudentUid: {
+            "student-1": { seconds: (now + 1000) / 1000 },
+          },
+        });
+      },
+      { path, now, legacy: scenario.legacy },
+    );
+    await page.waitForTimeout(50);
+    if (scenario.staysBlocked)
+      assert(
+        await page.locator("article button").first().isDisabled(),
+        scenario.name,
+      );
+    else {
+      assert(
+        await page.locator("article button").first().isEnabled(),
+        "teacher reset unlocks the existing list immediately",
+      );
+      assert.equal(
+        await page.evaluate(() =>
+          localStorage.getItem(
+            "westoryHistoryClassroomLock:assignment-1:student-1",
+          ),
+        ),
+        null,
+      );
+      await page.locator("article button").first().click();
+      await page.getByTestId("route").waitFor();
+      assert.equal(
+        await page.evaluate(() => window.__listeners.size),
+        0,
+        "navigation releases assignment listeners",
+      );
+    }
+    assert.deepEqual(errors, []);
+    reports.push({
+      scenario: "live-" + scenario.name,
+      width: 768,
+      passed: true,
+    });
+    await page.close();
+  }
+  for (const mode of ["permission", "unpublished", "deleted"]) {
+    const page = await browser.newPage({
+      viewport: { width: 768, height: 1024 },
+    });
+    await page.addInitScript(
+      ({ assignment }) => {
+        window.__data = {
+          assignments: [{ ...assignment, dueAt: null }],
+          results: [],
+        };
+      },
+      { assignment },
+    );
+    await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page
+      .getByRole("heading", { name: assignment.title, exact: true })
+      .waitFor();
+    await page.evaluate((mode) => {
+      const path = "years/2026/semesters/2/history_classrooms/assignment-1";
+      if (mode === "permission") window.__deny(path);
+      else
+        window.__emit(
+          path,
+          mode === "deleted"
+            ? null
+            : { ...window.__data.assignments[0], isPublished: false },
+        );
+    }, mode);
+    await page
+      .getByRole("heading", { name: assignment.title, exact: true })
+      .waitFor({ state: "detached" });
+    reports.push({ scenario: "live-" + mode, width: 768, passed: true });
+    await page.close();
   }
   console.log(
     `History classroom index recovery: ${reports.length} cases passed.`,

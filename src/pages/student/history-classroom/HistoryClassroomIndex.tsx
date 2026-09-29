@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -47,6 +54,12 @@ const readPendingRecoveryResultId = (
     );
     if (!raw) return null;
     const draft = JSON.parse(raw);
+    const retryResetAtMs =
+      typeof draft?.retryResetAtMs === "number" &&
+      Number.isFinite(draft.retryResetAtMs) &&
+      draft.retryResetAtMs >= 0
+        ? draft.retryResetAtMs
+        : null;
     if (
       !draft ||
       typeof draft !== "object" ||
@@ -57,7 +70,10 @@ const readPendingRecoveryResultId = (
       (draft.assignmentId && draft.assignmentId !== assignment.id) ||
       !Number.isFinite(Number(draft.savedAt)) ||
       Number(draft.savedAt) <= 0 ||
-      (resetAtMs && Number(draft.savedAt) <= resetAtMs) ||
+      (resetAtMs &&
+        (retryResetAtMs !== null
+          ? retryResetAtMs < resetAtMs
+          : Number(draft.savedAt) <= resetAtMs)) ||
       typeof draft.resultId !== "string" ||
       !draft.resultId.trim() ||
       draft.resultId.includes("/") ||
@@ -267,6 +283,7 @@ const HistoryClassroomIndex: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const unsubscribeAssignments: Array<() => void> = [];
     const loadData = async () => {
       if (!studentUid) {
         setLoading(false);
@@ -320,18 +337,66 @@ const HistoryClassroomIndex: React.FC = () => {
                 left.title.localeCompare(right.title, "ko"),
             );
 
+        let assignmentCollectionPath = getSemesterCollectionPath(
+          config,
+          "history_classrooms",
+        );
         let loadedAssignments = normalizeVisibleAssignments(
-          await loadAssignedSnapshots(
-            getSemesterCollectionPath(config, "history_classrooms"),
-          ),
+          await loadAssignedSnapshots(assignmentCollectionPath),
         );
         if (!loadedAssignments.length) {
+          assignmentCollectionPath = "history_classrooms";
           loadedAssignments = normalizeVisibleAssignments(
-            await loadAssignedSnapshots("history_classrooms"),
+            await loadAssignedSnapshots(assignmentCollectionPath),
           );
         }
         if (cancelled) return;
         setAssignments(loadedAssignments);
+        // Observe only already assigned documents at the source actually read.
+        // Teacher retry resets must unlock an open list without a page reload.
+        loadedAssignments.forEach((assignment) => {
+          unsubscribeAssignments.push(
+            onSnapshot(
+              doc(db, assignmentCollectionPath, assignment.id),
+              (snapshot) => {
+                if (cancelled) return;
+                const updated = snapshot.exists()
+                  ? normalizeHistoryClassroomAssignment(
+                      snapshot.id,
+                      snapshot.data(),
+                    )
+                  : null;
+                const visible =
+                  updated &&
+                  !isHistoryClassroomDeleted(updated) &&
+                  updated.isPublished &&
+                  isHistoryClassroomAssignedToStudent(updated, studentUid);
+                setAssignments((previous) => {
+                  const remaining = previous.filter(
+                    (item) => item.id !== assignment.id,
+                  );
+                  return (visible ? [...remaining, updated] : remaining).sort(
+                    (left, right) =>
+                      getAssignmentDateMs(right) - getAssignmentDateMs(left) ||
+                      left.title.localeCompare(right.title, "ko"),
+                  );
+                });
+              },
+              (error) => {
+                if (cancelled) return;
+                if (error.code === "permission-denied") {
+                  setAssignments((previous) =>
+                    previous.filter((item) => item.id !== assignment.id),
+                  );
+                }
+                console.warn(
+                  "Failed to refresh assigned history classroom",
+                  error,
+                );
+              },
+            ),
+          );
+        });
 
         const assignmentIds = loadedAssignments.map((item) => item.id);
         const readResultDocs = async (path: string) => {
@@ -450,6 +515,7 @@ const HistoryClassroomIndex: React.FC = () => {
     void loadData();
     return () => {
       cancelled = true;
+      unsubscribeAssignments.forEach((unsubscribe) => unsubscribe());
     };
   }, [config, studentUid]);
 

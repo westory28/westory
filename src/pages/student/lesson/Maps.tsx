@@ -34,6 +34,7 @@ const StudentMaps: React.FC = () => {
   const [googleSearchQuery, setGoogleSearchQuery] = useState("");
   const [mapRewardPending, setMapRewardPending] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
 
   const displayGroups = useMemo(
     () => groupMapResourcesForDisplay(items),
@@ -165,29 +166,68 @@ const StudentMaps: React.FC = () => {
       <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
         <PortalSubNavigation
           title="지도"
-          activeLabel={currentGroup?.title || "지도 선택"}
+          activeLabel={
+            selectedItem?.title || currentGroup?.title || "지도 선택"
+          }
           open={menuOpen}
           onOpenChange={setMenuOpen}
         >
           {displayGroups.map((group) => (
-            <button
-              key={group.key}
-              type="button"
-              onClick={() => {
-                setSelectedGroupKey(group.key);
-                setSelectedId(group.items[0]?.id || "");
-                setMenuOpen(false);
-              }}
-              className={`teacher-settings-section${currentGroup?.key === group.key ? " is-active" : ""}`}
-              aria-current={
-                currentGroup?.key === group.key ? "page" : undefined
-              }
-            >
-              <i className="fas fa-map shrink-0" aria-hidden="true" />
-              <span title={group.title} className="teacher-navigation-label">
-                {group.title}
-              </span>
-            </button>
+            <div key={group.key}>
+              <button
+                type="button"
+                onClick={() => {
+                  const expanded =
+                    (expandedGroupKey ?? currentGroup?.key) === group.key;
+                  setExpandedGroupKey(expanded ? "" : group.key);
+                  if (currentGroup?.key !== group.key) {
+                    setSelectedGroupKey(group.key);
+                    setSelectedId(group.items[0]?.id || "");
+                  }
+                }}
+                className={`teacher-settings-section${currentGroup?.key === group.key ? " is-active" : ""}`}
+                aria-expanded={
+                  (expandedGroupKey ?? currentGroup?.key) === group.key
+                }
+              >
+                <i className="fas fa-map shrink-0" aria-hidden="true" />
+                <span title={group.title} className="teacher-navigation-label">
+                  {group.title}
+                </span>
+                <i
+                  className={`fas fa-chevron-${(expandedGroupKey ?? currentGroup?.key) === group.key ? "down" : "right"} ml-auto text-xs`}
+                  aria-hidden="true"
+                />
+              </button>
+              {(expandedGroupKey ?? currentGroup?.key) === group.key && (
+                <div
+                  className="ml-4 border-l border-gray-200 pl-2"
+                  role="group"
+                  aria-label={`${group.title} 세부 지도`}
+                >
+                  {group.items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={item.title}
+                      className={`teacher-settings-section${selectedItem?.id === item.id ? " is-active" : ""}`}
+                      aria-current={
+                        selectedItem?.id === item.id ? "page" : undefined
+                      }
+                      onClick={() => {
+                        setSelectedGroupKey(group.key);
+                        setSelectedId(item.id);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <span className="teacher-navigation-label">
+                        {item.title}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </PortalSubNavigation>
 
@@ -196,14 +236,11 @@ const StudentMaps: React.FC = () => {
             <InlineLoading message="지도를 불러오는 중입니다." showWarning />
           ) : selectedItem ? (
             <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 p-4 pb-4 sm:p-6 sm:pb-4 lg:p-8 lg:pb-4">
+              <div className="border-b border-gray-100 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                      {selectedItem.category}
-                    </div>
                     <h1 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
-                      {currentGroup?.title || selectedItem.title}
+                      {selectedItem.title}
                     </h1>
                   </div>
                   {externalUrl && (
@@ -220,28 +257,7 @@ const StudentMaps: React.FC = () => {
                 </div>
               </div>
 
-              {currentTabItems.length > 0 && (
-                <div className="border-b border-gray-100 px-6">
-                  <div className="flex overflow-x-auto">
-                    {currentTabItems.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setSelectedId(item.id)}
-                        className={`shrink-0 border-b-2 px-4 py-4 text-sm font-bold transition ${
-                          selectedItem.id === item.id
-                            ? "border-blue-600 text-blue-600"
-                            : "border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        }`}
-                      >
-                        {item.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-gray-50 p-4 md:p-6">
+              <div className="bg-gray-50 p-2">
                 <MapViewer
                   item={selectedItem}
                   googleSearchQuery={

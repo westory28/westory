@@ -57,13 +57,6 @@ const TONE_CLASS_NAME: Record<
 const MIN_VIEWPORT_USER_SCALE = 1;
 const MAX_VIEWPORT_USER_SCALE = 4;
 const VIEWPORT_FIT_PADDING = 24;
-const getTimeProgressToneClass = (timeProgressPercent: number) =>
-  timeProgressPercent <= 20
-    ? "bg-red-500"
-    : timeProgressPercent <= 50
-      ? "bg-amber-500"
-      : "bg-blue-500";
-
 const getCountdownToneClass = (timeProgressPercent: number) =>
   timeProgressPercent <= 20
     ? "text-red-600"
@@ -360,6 +353,38 @@ const HistoryClassroomAssignmentView: React.FC<
   const [fitScale, setFitScale] = useState(1);
   const [userScale, setUserScale] = useState(MIN_VIEWPORT_USER_SCALE);
   const [focusedBlankId, setFocusedBlankId] = useState("");
+  const [blankFeedback, setBlankFeedback] = useState<{
+    blankId: string;
+    correct: boolean;
+    sequence: number;
+  } | null>(null);
+  const feedbackSequenceRef = useRef(0);
+  const composingBlankIdsRef = useRef(new Set<string>());
+  const deferredBlurIdsRef = useRef(new Set<string>());
+  const feedbackEnabled =
+    !readOnly &&
+    !answersLocked &&
+    !completed &&
+    !submitting &&
+    !!onAnswerChange;
+  const showBlankFeedback = (blank: HistoryClassroomBlank, value: string) => {
+    if (!feedbackEnabled || !value.trim()) return;
+    setBlankFeedback({
+      blankId: blank.id,
+      correct: isHistoryClassroomBlankCorrect(value, blank.answer),
+      sequence: ++feedbackSequenceRef.current,
+    });
+  };
+  useEffect(() => {
+    if (!blankFeedback) return;
+    const timer = window.setTimeout(() => setBlankFeedback(null), 1200);
+    return () => window.clearTimeout(timer);
+  }, [blankFeedback]);
+  useEffect(() => {
+    setBlankFeedback(null);
+    composingBlankIdsRef.current.clear();
+    deferredBlurIdsRef.current.clear();
+  }, [assignment.id, currentPage, feedbackEnabled]);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [imageRetry, setImageRetry] = useState(0);
   const [floatingViewport, setFloatingViewport] = useState({
@@ -934,23 +959,59 @@ const HistoryClassroomAssignmentView: React.FC<
           data-history-actions="true"
           className="flex min-w-0 items-center gap-2"
         >
-          <h1
-            className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900"
-            title={[
-              assignment.title,
-              lessonPath,
-              `통과 기준 ${assignment.passThresholdPercent}%`,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          >
-            {assignment.title}
-          </h1>
+          <div className="min-w-0 flex-1">
+            <h1
+              className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900"
+              title={[
+                assignment.title,
+                lessonPath,
+                `통과 기준 ${assignment.passThresholdPercent}%`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            >
+              {assignment.title}
+            </h1>
+            <div
+              data-history-answer-progress="true"
+              className="break-keep text-xs font-bold leading-4 text-gray-600"
+            >
+              전체 {assignment.blanks.length}개 중 {answeredCount}개 작성
+            </div>
+          </div>
           <div className="flex shrink-0 items-center gap-2">
             {assignment.timeLimitMinutes > 0 && countdownLabel && (
               <div
-                className={`font-bold ${getCountdownToneClass(timeProgressPercent)}`}
+                className={`flex items-center gap-1 font-bold ${getCountdownToneClass(timeProgressPercent)}`}
               >
+                <svg
+                  data-history-timer-ring="true"
+                  aria-hidden="true"
+                  viewBox="0 0 36 36"
+                  className="h-8 w-8 shrink-0 -rotate-90"
+                >
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="14"
+                    fill="none"
+                    stroke="#fee2e2"
+                    strokeWidth="4"
+                  />
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="14"
+                    fill="none"
+                    stroke="#dc2626"
+                    strokeWidth="4"
+                    pathLength="100"
+                    strokeDasharray="100"
+                    strokeDashoffset={
+                      100 - Math.max(0, Math.min(100, timeProgressPercent))
+                    }
+                  />
+                </svg>
                 <span className="mr-1 hidden text-xs sm:inline">남은 시간</span>
                 <span
                   role="timer"
@@ -964,9 +1025,6 @@ const HistoryClassroomAssignmentView: React.FC<
                 )}
               </div>
             )}
-            <span className="hidden text-xs font-bold text-gray-600 sm:inline">
-              작성 {answeredCount} / {assignment.blanks.length}
-            </span>
           </div>
           {headerAction}
           <button
@@ -984,17 +1042,6 @@ const HistoryClassroomAssignmentView: React.FC<
                   : submitLabel}
           </button>
         </div>
-        {assignment.timeLimitMinutes > 0 && countdownLabel && (
-          <div
-            className="h-0.5 overflow-hidden rounded-full bg-gray-200"
-            aria-hidden="true"
-          >
-            <div
-              className={`h-full ${getTimeProgressToneClass(timeProgressPercent)}`}
-              style={{ width: `${timeProgressPercent}%` }}
-            />
-          </div>
-        )}
         {resultText && (
           <div
             role="status"
@@ -1013,7 +1060,12 @@ const HistoryClassroomAssignmentView: React.FC<
         )}
         <div className="flex items-center justify-between gap-1">
           <div className="shrink-0 text-xs font-bold text-gray-600">
-            페이지 {Math.max(1, currentPageIndex + 1)} / {pageCount}
+            <span className="hidden sm:inline">페이지 </span>
+            <span
+              aria-label={`페이지 ${Math.max(1, currentPageIndex + 1)} / ${pageCount}`}
+            >
+              {Math.max(1, currentPageIndex + 1)} / {pageCount}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             {enableInteractiveViewport && (
@@ -1032,11 +1084,13 @@ const HistoryClassroomAssignmentView: React.FC<
                 </button>
                 <button
                   type="button"
+                  aria-label="전체 보기"
                   onClick={resetViewportScale}
                   disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
                   className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-xs font-bold text-gray-700 disabled:opacity-40"
                 >
-                  전체 보기
+                  <span className="sm:hidden">맞춤</span>
+                  <span className="hidden sm:inline">전체 보기</span>
                 </button>
                 <button
                   type="button"
@@ -1262,7 +1316,7 @@ const HistoryClassroomAssignmentView: React.FC<
                             key={blank.id}
                             data-blank-box="true"
                             data-blank-id={blank.id}
-                            className={`absolute overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
+                            className={`absolute overflow-hidden rounded-[2px] border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
                               isFocused ? "z-20" : "z-10"
                             } ${reviewToneClass}`}
                             title={
@@ -1296,6 +1350,7 @@ const HistoryClassroomAssignmentView: React.FC<
                               />
                             ) : null}
                             <WorksheetBlankInput
+                              focusOutline={false}
                               type="text"
                               ref={(node) => {
                                 blankInputRefs.current[blank.id] = node;
@@ -1306,7 +1361,42 @@ const HistoryClassroomAssignmentView: React.FC<
                               onChange={(event) =>
                                 onAnswerChange?.(blank.id, event.target.value)
                               }
-                              onFocus={() => setFocusedBlankId(blank.id)}
+                              onFocus={() => {
+                                setFocusedBlankId(blank.id);
+                                deferredBlurIdsRef.current.delete(blank.id);
+                                setBlankFeedback((current) =>
+                                  current?.blankId === blank.id
+                                    ? null
+                                    : current,
+                                );
+                              }}
+                              onBlur={(event) => {
+                                setFocusedBlankId("");
+                                if (
+                                  composingBlankIdsRef.current.has(blank.id)
+                                ) {
+                                  deferredBlurIdsRef.current.add(blank.id);
+                                  return;
+                                }
+                                showBlankFeedback(
+                                  blank,
+                                  event.currentTarget.value,
+                                );
+                              }}
+                              onCompositionStart={() =>
+                                composingBlankIdsRef.current.add(blank.id)
+                              }
+                              onCompositionEnd={(event) => {
+                                composingBlankIdsRef.current.delete(blank.id);
+                                if (
+                                  deferredBlurIdsRef.current.delete(blank.id)
+                                ) {
+                                  showBlankFeedback(
+                                    blank,
+                                    event.currentTarget.value,
+                                  );
+                                }
+                              }}
                               readOnly={isInputLocked}
                               autoComplete="off"
                               autoCorrect="off"
@@ -1325,6 +1415,34 @@ const HistoryClassroomAssignmentView: React.FC<
                                 touchAction: "manipulation",
                               }}
                             />
+                            {feedbackEnabled &&
+                              blankFeedback?.blankId === blank.id && (
+                                <span
+                                  key={blankFeedback.sequence}
+                                  data-blank-feedback="true"
+                                  data-correct={blankFeedback.correct}
+                                  role="status"
+                                  aria-label={
+                                    blankFeedback.correct ? "정답" : "오답"
+                                  }
+                                  className="history-blank-feedback pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/90"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    viewBox="0 0 32 32"
+                                    className={`h-full max-w-full ${blankFeedback.correct ? "text-blue-600" : "text-red-600"}`}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="3"
+                                  >
+                                    {blankFeedback.correct ? (
+                                      <circle cx="16" cy="16" r="12" />
+                                    ) : (
+                                      <path d="M7 7L25 25M25 7L7 25" />
+                                    )}
+                                  </svg>
+                                </span>
+                              )}
                           </div>
                         );
                       })}

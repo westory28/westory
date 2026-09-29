@@ -96,12 +96,16 @@ export const useAppToast=()=>({showToast:()=>{}});
 const reference=(...parts)=>({path:parts.flatMap(p=>typeof p==='string'?[p]:p?.path?[p.path]:[]).join('/')});
 export const collection=(_db,...parts)=>reference(...parts);
 let idCounter=0;
-export const doc=(...parts)=>{const r=reference(...parts);if(parts.length===1)r.path+='/fixture-result-'+(++idCounter);return {...r,id:r.path.split('/').at(-1)};};
+export const doc=(...parts)=>{const r=reference(...parts);if(parts.length===1)r.path+='/fixture-result-'+crypto.randomUUID();return {...r,id:r.path.split('/').at(-1)};};
 export const where=(key,operator,value)=>({key,value});
 export const query=(ref,...constraints)=>({...ref,constraints});
 export const serverTimestamp=()=>({seconds:Date.now()/1000});
 const snap=(id,value)=>({id,exists:()=>value!==undefined,data:()=>structuredClone(value)});
-export const getDoc=async(ref)=>{if(ref.path.endsWith('/history_classrooms/assignment-1')){if(fixture.denyAssignmentRead){const error=new Error('assignment access denied');error.code='permission-denied';throw error;}return snap('assignment-1',fixture.assignment);}return snap(ref.id,fixture.results[ref.id]);};
+const assignmentSnapshot=(ref)=>snap('assignment-1',fixture.legacyAssignment&&ref.path.startsWith(scope)?undefined:fixture.assignment);
+export const getDoc=async(ref)=>{if(ref.path.endsWith('/history_classrooms/assignment-1')||ref.path==='history_classrooms/assignment-1'){if(fixture.denyAssignmentRead){const error=new Error('assignment access denied');error.code='permission-denied';throw error;}return assignmentSnapshot(ref);}return snap(ref.id,fixture.results[ref.id]);};
+const listeners=new Set();
+export const onSnapshot=(ref,next,error)=>{const listener=()=>fixture.denyAssignmentRead?error?.(new Error('denied')):next(assignmentSnapshot(ref));listeners.add(listener);queueMicrotask(listener);return()=>listeners.delete(listener);};
+window.__emitAssignment=()=>{persist();for(const listener of listeners)listener();};
 export const getDocs=async(ref)=>{const docs=ref.path===scope+'/history_classroom_results'?Object.entries(fixture.results).map(([id,value])=>snap(id,value)):[];return {docs,empty:!docs.length};};
 export const setDoc=async(ref,data)=>{fixture.directWrites.push({path:ref.path,data});persist();};
 export const getHttpsCallable=async()=>async(input)=>{
@@ -576,6 +580,98 @@ try {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].status, "cancelled");
     assert.equal(await draft(t.page), null);
+    await finish(t);
+  }
+  for (const mode of ["scoped", "legacy"]) {
+    const t = await open(`teacher-reset-open-cooldown-${mode}`);
+    await fillFirst(t.page);
+    await submit(t.page);
+    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
+    await t.page.evaluate((mode) => {
+      window.__fixture.legacyAssignment = mode === "legacy";
+      window.__persistBackend();
+    }, mode);
+    await t.page.reload();
+    await t.page.getByText(/분 후 다시 응시할 수 있습니다/).waitFor();
+    await t.page.evaluate(() => {
+      window.__fixture.assignment.retryResetByStudentUid = {
+        "other-student": { seconds: Date.now() / 1000 },
+      };
+      window.__emitAssignment();
+    });
+    await advance(t.page, 100);
+    assert(await t.page.getByText(/분 후 다시 응시할 수 있습니다/).isVisible());
+    await t.page.evaluate(() => {
+      window.__fixture.assignment.retryResetByStudentUid["student-1"] = {
+        seconds: Date.now() / 1000,
+      };
+      window.__emitAssignment();
+    });
+    await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
+    assert.equal(
+      await t.page.locator('input[placeholder="첫 빈칸"]').inputValue(),
+      "",
+    );
+    assert.equal(
+      await t.page.evaluate(() => Object.keys(window.__fixture.results).length),
+      1,
+    );
+    assert.equal((await getCalls(t.page)).length, 1);
+    await finish(t);
+  }
+  for (const mode of ["pending", "committed", "active", "passed"]) {
+    const t = await open(`teacher-reset-reentry-${mode}`);
+    await fillFirst(t.page);
+    const before = await draft(t.page);
+    if (mode !== "active") {
+      if (mode === "passed") {
+        await t.page.getByRole("button", { name: "다음", exact: true }).click();
+        await t.page.locator('input[placeholder="둘째 빈칸"]').fill("백제");
+      }
+      await t.page.evaluate((mode) => {
+        if (mode === "pending")
+          window.__fixture.failures = ["functions/permission-denied"];
+        else window.__fixture.loseNextResponse = true;
+      }, mode);
+      await submit(t.page);
+      await advance(t.page, 100);
+    }
+    await advance(t.page, 100);
+    await t.page.evaluate(() => {
+      window.__fixture.assignment.retryResetByStudentUid = {
+        "student-1": { seconds: Date.now() / 1000 },
+      };
+      window.__emitAssignment();
+    });
+    await advance(t.page, 100);
+    if (mode === "active") {
+      assert.equal(
+        await t.page.locator('input[placeholder="첫 빈칸"]').inputValue(),
+        "고조선",
+        "reset must not interrupt a normal active attempt",
+      );
+      assert.equal((await draft(t.page)).resultId, before.resultId);
+    }
+    // pagehide re-saves the draft after the reset. Its marker version must stay
+    // unchanged even though savedAt becomes newer than the teacher's reset.
+    await t.page.reload();
+    if (mode === "passed") {
+      await t.page.getByText(/이미 통과한 역사교실입니다/).waitFor();
+      assert.equal(await t.page.getByRole("dialog").count(), 0);
+    } else {
+      await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
+      assert.equal(
+        await t.page.locator('input[placeholder="첫 빈칸"]').inputValue(),
+        "",
+      );
+      assert.notEqual((await draft(t.page)).resultId, before.resultId);
+      assert.equal((await draft(t.page)).pendingSubmission, null);
+    }
+    assert.equal((await getCalls(t.page)).length, mode === "active" ? 0 : 1);
+    assert.equal(
+      await t.page.evaluate(() => Object.keys(window.__fixture.results).length),
+      ["committed", "passed"].includes(mode) ? 1 : 0,
+    );
     await finish(t);
   }
   {

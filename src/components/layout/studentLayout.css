@@ -49,6 +49,15 @@
   padding-inline: 16px;
 }
 
+.student-layout .teacher-sub-workspace--lesson .teacher-settings-section {
+  padding-inline: 8px;
+  gap: 6px;
+}
+
+.student-layout .teacher-sub-workspace--lesson .teacher-navigation-label {
+  padding-inline: 8px;
+}
+
 @media (min-width: 768px) {
   .student-layout .teacher-sub-workspace {
     --student-sub-navigation-width: 256px;
@@ -56,7 +65,7 @@
   }
 
   .student-layout .teacher-sub-workspace--lesson {
-    --student-sub-navigation-width: 288px;
+    --student-sub-navigation-width: 320px;
   }
 
   .student-layout .teacher-sub-navigation.teacher-settings-navigation {
@@ -70,7 +79,7 @@
   }
 
   .student-layout .teacher-sub-workspace--lesson {
-    --student-sub-navigation-width: 256px;
+    --student-sub-navigation-width: 288px;
   }
 }
 

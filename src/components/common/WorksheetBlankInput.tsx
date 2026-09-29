@@ -3,8 +3,11 @@ import React, { forwardRef, useLayoutEffect, useRef, useState } from "react";
 /** Fits the text inside the saved blank, without changing its page geometry. */
 const WorksheetBlankInput = forwardRef<
   HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement>
->(function WorksheetBlankInput({ style, ...props }, forwardedRef) {
+  React.InputHTMLAttributes<HTMLInputElement> & { focusOutline?: boolean }
+>(function WorksheetBlankInput(
+  { style, focusOutline = true, ...props },
+  forwardedRef,
+) {
   const hostRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fontSize, setFontSize] = useState(16);
@@ -63,7 +66,11 @@ const WorksheetBlankInput = forwardRef<
   return (
     <span
       ref={hostRef}
-      className="focus-within:outline focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-blue-500"
+      className={
+        focusOutline
+          ? "focus-within:outline focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-blue-500"
+          : undefined
+      }
       style={{
         display: "block",
         position: "relative",

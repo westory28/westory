@@ -409,29 +409,6 @@ type DashboardStatusFilter =
   | "pending"
   | "passed";
 type DashboardSortOrder = "latest" | "oldest";
-type EditingResultStatusFilter = "all" | HistoryClassroomResult["status"];
-type EditingResultSortOrder = "latest" | "oldest" | "passedFirst" | "scoreHigh";
-
-const EDITING_RESULT_STATUS_FILTERS: {
-  value: EditingResultStatusFilter;
-  label: string;
-}[] = [
-  { value: "all", label: "전체" },
-  { value: "passed", label: "통과" },
-  { value: "failed", label: "미통과" },
-  { value: "cancelled", label: "취소" },
-];
-
-const EDITING_RESULT_SORT_OPTIONS: {
-  value: EditingResultSortOrder;
-  label: string;
-}[] = [
-  { value: "latest", label: "최신 제출순" },
-  { value: "oldest", label: "오래된 제출순" },
-  { value: "passedFirst", label: "통과 먼저" },
-  { value: "scoreHigh", label: "점수 높은순" },
-];
-
 const ASSIGNMENTS_PER_PAGE = 10;
 const GRANTED_EXEMPTIONS_PER_PAGE = 30;
 
@@ -1066,10 +1043,11 @@ const ManageHistoryClassroom: React.FC = () => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState(false);
   const [resettingAttemptUid, setResettingAttemptUid] = useState("");
-  const [editingResultStatusFilter, setEditingResultStatusFilter] =
-    useState<EditingResultStatusFilter>("all");
-  const [editingResultSortOrder, setEditingResultSortOrder] =
-    useState<EditingResultSortOrder>("latest");
+  const resettingAttemptRef = React.useRef(false);
+  const assignmentCollectionPathsRef = React.useRef<Record<string, string>>({});
+  const [attemptResetFeedback, setAttemptResetFeedback] = useState<
+    Record<string, string>
+  >({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>(
@@ -1201,7 +1179,7 @@ const ManageHistoryClassroom: React.FC = () => {
           );
         setStudents(loadedStudents);
 
-        const assignmentPath = getSemesterCollectionPath(
+        let assignmentPath = getSemesterCollectionPath(
           config,
           "history_classrooms",
         );
@@ -1209,6 +1187,7 @@ const ManageHistoryClassroom: React.FC = () => {
           query(collection(db, assignmentPath), orderBy("updatedAt", "desc")),
         );
         if (assignmentSnap.empty) {
+          assignmentPath = "history_classrooms";
           assignmentSnap = await getDocs(
             query(
               collection(db, "history_classrooms"),
@@ -1216,6 +1195,9 @@ const ManageHistoryClassroom: React.FC = () => {
             ),
           );
         }
+        assignmentCollectionPathsRef.current = Object.fromEntries(
+          assignmentSnap.docs.map((item) => [item.id, assignmentPath]),
+        );
         setAssignments(
           assignmentSnap.docs
             .map((docSnap) =>
@@ -1886,54 +1868,20 @@ const ManageHistoryClassroom: React.FC = () => {
     );
   }, [editingResults, editingStudentUids]);
 
-  const editingResultStatusCounts = useMemo(() => {
-    const counts: Record<EditingResultStatusFilter, number> = {
-      all: editingVisibleResults.length,
-      passed: 0,
-      failed: 0,
-      cancelled: 0,
-    };
+  const editingResultsByStudentUid = useMemo(() => {
+    const grouped = new Map<string, HistoryClassroomResult[]>();
     editingVisibleResults.forEach((result) => {
-      counts[result.status] += 1;
+      grouped.set(result.uid, [...(grouped.get(result.uid) || []), result]);
     });
-    return counts;
+    grouped.forEach((items) =>
+      items.sort(
+        (a, b) =>
+          (getTimestampMs(b.createdAt) || 0) -
+          (getTimestampMs(a.createdAt) || 0),
+      ),
+    );
+    return grouped;
   }, [editingVisibleResults]);
-
-  const editingResultRows = useMemo(() => {
-    const statusRank: Record<HistoryClassroomResult["status"], number> = {
-      passed: 0,
-      failed: 1,
-      cancelled: 2,
-    };
-    const filtered =
-      editingResultStatusFilter === "all"
-        ? editingVisibleResults
-        : editingVisibleResults.filter(
-            (result) => result.status === editingResultStatusFilter,
-          );
-
-    return [...filtered].sort((a, b) => {
-      const aSubmittedAt = getTimestampMs(a.createdAt) || 0;
-      const bSubmittedAt = getTimestampMs(b.createdAt) || 0;
-      if (editingResultSortOrder === "oldest") {
-        return aSubmittedAt - bSubmittedAt;
-      }
-      if (editingResultSortOrder === "passedFirst") {
-        return (
-          statusRank[a.status] - statusRank[b.status] ||
-          bSubmittedAt - aSubmittedAt
-        );
-      }
-      if (editingResultSortOrder === "scoreHigh") {
-        return b.percent - a.percent || bSubmittedAt - aSubmittedAt;
-      }
-      return bSubmittedAt - aSubmittedAt;
-    });
-  }, [
-    editingResultSortOrder,
-    editingResultStatusFilter,
-    editingVisibleResults,
-  ]);
 
   const assignmentAttemptMetaById = useMemo(() => {
     const resolved = new Map<
@@ -2120,7 +2068,11 @@ const ManageHistoryClassroom: React.FC = () => {
       isHistoryClassroomPastDue(editingPreviewAssignment);
 
     return editingStudents.map((student) => {
-      const latestResult = editingLatestResultsByStudentUid.get(student.uid);
+      const studentResults = editingResultsByStudentUid.get(student.uid) || [];
+      const latestResult =
+        studentResults.find(
+          (result) => result.status === "passed" || result.passed,
+        ) || editingLatestResultsByStudentUid.get(student.uid);
       if (latestResult) {
         const resetAtMs = getHistoryClassroomStudentRetryResetMs(
           editingPreviewAssignment,
@@ -2135,10 +2087,10 @@ const ManageHistoryClassroom: React.FC = () => {
           return {
             student,
             statusKey: "pending" as const,
-            statusLabel: "재도전 가능",
-            detailLabel: "응시 시간이 초기화되어 바로 다시 응시할 수 있습니다.",
+            statusLabel: "대기 해제",
+            detailLabel: `${latestResult.percent}% · ${describeHistoryResultStatus(latestResult.status)}`,
             toneClassName: "border-blue-200 bg-blue-50 text-blue-700",
-            canResetAttempt: false,
+            canResetAttempt: true,
           };
         }
 
@@ -2166,7 +2118,7 @@ const ManageHistoryClassroom: React.FC = () => {
           statusLabel: "미응시",
           detailLabel: "응시 기간이 지나 미응시로 처리됩니다.",
           toneClassName: "border-rose-200 bg-rose-50 text-rose-700",
-          canResetAttempt: false,
+          canResetAttempt: true,
         };
       }
 
@@ -2180,11 +2132,12 @@ const ManageHistoryClassroom: React.FC = () => {
             ? `응시 마감까지 ${formatHistoryClassroomRemainingWindow(remainingMs)}`
             : "아직 시작하지 않았습니다.",
         toneClassName: "border-slate-200 bg-slate-50 text-slate-700",
-        canResetAttempt: false,
+        canResetAttempt: true,
       };
     });
   }, [
     editingLatestResultsByStudentUid,
+    editingResultsByStudentUid,
     editingPreviewAssignment,
     editingStudents,
   ]);
@@ -3064,8 +3017,7 @@ const ManageHistoryClassroom: React.FC = () => {
     setSavingEdit(false);
     setDeletingAssignment(false);
     setResettingAttemptUid("");
-    setEditingResultStatusFilter("all");
-    setEditingResultSortOrder("latest");
+    setAttemptResetFeedback({});
     setPreviewOpen(false);
     setPreviewCurrentPage(1);
     setPreviewAnswers({});
@@ -3074,6 +3026,7 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const handleSaveAssignmentEdit = async () => {
+    if (resettingAttemptRef.current) return;
     const targetAssignment = assignments.find(
       (assignment) => assignment.id === editingAssignmentId,
     );
@@ -3190,10 +3143,18 @@ const ManageHistoryClassroom: React.FC = () => {
       await setDoc(
         doc(
           db,
-          getSemesterCollectionPath(config, "history_classrooms"),
+          assignmentCollectionPathsRef.current[targetAssignment.id] ||
+            getSemesterCollectionPath(config, "history_classrooms"),
           targetAssignment.id,
         ),
         payload,
+        // Settings must not overwrite the server timestamp from a live reset.
+        // Top-level merge fields still replace assignment maps when students change.
+        {
+          mergeFields: Object.keys(payload).filter(
+            (key) => key !== "retryResetByStudentUid",
+          ),
+        },
       );
       if (editingIsPublished && !targetAssignment.isPublished) {
         void createManagedNotifications(config, {
@@ -3258,28 +3219,37 @@ const ManageHistoryClassroom: React.FC = () => {
     const targetAssignment = assignments.find(
       (assignment) => assignment.id === editingAssignmentId,
     );
-    if (!targetAssignment || !student.uid || resettingAttemptUid) return;
-
-    const latestResult = editingLatestResultsByStudentUid.get(student.uid);
-    if (!latestResult || latestResult.status === "passed") {
-      alert("초기화할 재도전 제한 기록이 없습니다.");
+    if (
+      !targetAssignment ||
+      !student.uid ||
+      resettingAttemptRef.current ||
+      savingEdit ||
+      deletingAssignment
+    )
       return;
-    }
-
-    const confirmed = window.confirm(
-      `${student.name} 학생의 역사교실 응시 시간을 초기화할까요?\n기존 결과 기록은 남기고, 학생은 바로 다시 응시할 수 있습니다.`,
-    );
-    if (!confirmed) return;
-
+    if (
+      (editingResultsByStudentUid.get(student.uid) || []).some(
+        (result) => result.status === "passed" || result.passed,
+      )
+    )
+      return;
+    // An unsaved newly assigned student cannot receive a live reset yet.
+    if (
+      !getHistoryClassroomAssignedStudentUids(targetAssignment).includes(
+        student.uid,
+      )
+    )
+      return;
+    const assignmentPath =
+      assignmentCollectionPathsRef.current[targetAssignment.id] ||
+      getSemesterCollectionPath(config, "history_classrooms");
     const resetAt = new Date();
+    resettingAttemptRef.current = true;
     setResettingAttemptUid(student.uid);
+    setAttemptResetFeedback((prev) => ({ ...prev, [student.uid]: "" }));
     try {
       await setDoc(
-        doc(
-          db,
-          getSemesterCollectionPath(config, "history_classrooms"),
-          targetAssignment.id,
-        ),
+        doc(db, assignmentPath, targetAssignment.id),
         {
           retryResetByStudentUid: {
             [student.uid]: serverTimestamp(),
@@ -3303,21 +3273,30 @@ const ManageHistoryClassroom: React.FC = () => {
             : assignment,
         ),
       );
+      setAttemptResetFeedback((prev) => ({
+        ...prev,
+        [student.uid]: "재응시 대기 해제됨",
+      }));
     } catch (error) {
       console.error("Failed to reset history classroom attempt cooldown", {
-        path: `${getSemesterCollectionPath(config, "history_classrooms")}/${targetAssignment.id}`,
+        path: `${assignmentPath}/${targetAssignment.id}`,
         assignmentId: targetAssignment.id,
         uid: student.uid,
         ...getFirestoreErrorSummary(error),
         error,
       });
-      alert("응시 시간 초기화에 실패했습니다.");
+      setAttemptResetFeedback((prev) => ({
+        ...prev,
+        [student.uid]: "해제하지 못했습니다. 다시 시도해 주세요.",
+      }));
     } finally {
+      resettingAttemptRef.current = false;
       setResettingAttemptUid("");
     }
   };
 
   const handleDeleteAssignment = async () => {
+    if (resettingAttemptRef.current) return;
     const targetAssignment = assignments.find(
       (assignment) => assignment.id === editingAssignmentId,
     );
@@ -3487,10 +3466,16 @@ const ManageHistoryClassroom: React.FC = () => {
       await setDoc(
         doc(
           db,
-          getSemesterCollectionPath(config, "history_classrooms"),
+          assignmentCollectionPathsRef.current[assignmentId] ||
+            getSemesterCollectionPath(config, "history_classrooms"),
           assignmentId,
         ),
         payload,
+        {
+          mergeFields: Object.keys(payload).filter(
+            (key) => !existingAssignment || key !== "retryResetByStudentUid",
+          ),
+        },
       );
       if (nextIsPublished && !existingAssignment?.isPublished) {
         void createManagedNotifications(config, {
@@ -6155,202 +6140,145 @@ const ManageHistoryClassroom: React.FC = () => {
                 </div>
 
                 <div className="flex min-h-0 min-w-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5 lg:h-full lg:overflow-hidden lg:border-l lg:border-t-0 lg:px-5">
-                  <div className="shrink-0 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-3.5">
+                  <section
+                    aria-label="응시 현황 및 제출 내역"
+                    className="flex min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-3.5 lg:flex-1"
+                  >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-bold text-gray-700">
+                      <h3 className="text-sm font-bold text-gray-700">
                         응시 현황
-                      </div>
-                      <div className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                        {editingAttemptStatusRows.length}명
-                      </div>
+                      </h3>
+                      <span className="text-xs font-semibold text-gray-500">
+                        {editingAttemptStatusRows.length}명 · 제출{" "}
+                        {editingVisibleResults.length}건
+                      </span>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
                         완료 {editingAttemptStatusCounts.completed}
                       </span>
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700">
-                        응시 전 {editingAttemptStatusCounts.pending}
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
+                        대기 {editingAttemptStatusCounts.pending}
                       </span>
-                      <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700">
+                      <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">
                         미응시 {editingAttemptStatusCounts.overdueAbsent}
                       </span>
                     </div>
-                    <div className="mt-3 grid grid-cols-[minmax(8rem,1fr)_6.5rem_5rem_7rem] items-center gap-2 border-b border-gray-200 px-3 pb-1.5 text-[11px] font-bold text-gray-400">
-                      <div>학생</div>
-                      <div className="text-center">점수·판정</div>
-                      <div className="text-center">상태</div>
-                      <div className="text-center">조치</div>
-                    </div>
-                    <div className="mt-1 max-h-60 space-y-1.5 overflow-y-auto pr-1">
-                      {editingAttemptStatusRows.map((row) => (
-                        <div
-                          key={row.student.uid}
-                          className={`rounded-xl border px-3 py-2 ${row.toneClassName}`}
-                        >
-                          <div className="grid grid-cols-[minmax(8rem,1fr)_6.5rem_5rem_7rem] items-center gap-2">
-                            <div className="contents">
-                              <div className="contents">
-                                <div className="truncate text-sm font-bold">
-                                  {formatStudentBadgeLabel(row.student)}
-                                </div>
-                                <div className="min-w-0 truncate text-center text-[11px] font-semibold opacity-80">
-                                  {row.detailLabel}
-                                </div>
-                              </div>
-                              <div className="sr-only">{row.detailLabel}</div>
-                            </div>
-                            <span className="justify-self-center rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold">
-                              {row.statusLabel}
-                            </span>
-                            {row.canResetAttempt && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleResetStudentAttemptCooldown(
-                                    row.student,
-                                  )
-                                }
-                                disabled={
-                                  resettingAttemptUid === row.student.uid
-                                }
-                                className="justify-self-end whitespace-nowrap rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {resettingAttemptUid === row.student.uid
-                                  ? "초기화 중"
-                                  : "응시 시간 초기화"}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-3 flex min-h-[16rem] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-3.5 lg:min-h-0 lg:flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-bold text-gray-700">
-                        결과
-                      </div>
-                      <div className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                        {editingResultRows.length}/
-                        {editingVisibleResults.length}건
-                      </div>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        {EDITING_RESULT_STATUS_FILTERS.map((option) => {
-                          const selected =
-                            editingResultStatusFilter === option.value;
-                          return (
-                            <button
-                              key={option.value}
-                              type="button"
-                              onClick={() =>
-                                setEditingResultStatusFilter(option.value)
-                              }
-                              className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
-                                selected
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                              }`}
-                            >
-                              {option.label}{" "}
-                              {editingResultStatusCounts[option.value]}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <select
-                        value={editingResultSortOrder}
-                        onChange={(event) =>
-                          setEditingResultSortOrder(
-                            event.target.value as EditingResultSortOrder,
-                          )
-                        }
-                        className="ml-auto h-7 min-w-[7.5rem] rounded-full border border-gray-200 bg-white px-2 text-[11px] font-bold text-gray-600 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                        aria-label="결과 정렬"
-                      >
-                        {EDITING_RESULT_SORT_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="mt-3 max-h-[min(52vh,30rem)] min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] lg:max-h-none">
-                      <div className="sticky top-0 z-10 grid grid-cols-[minmax(5.5rem,1fr)_minmax(7rem,1fr)_minmax(4.25rem,0.65fr)_minmax(3.25rem,0.55fr)_minmax(4rem,0.65fr)_2.25rem] items-center gap-2 border-b border-gray-200 bg-white px-[13px] pb-1.5 text-[11px] font-bold text-gray-400">
-                        <div>학생</div>
-                        <div className="text-center">제출 일시</div>
-                        <div className="text-center">제출</div>
-                        <div className="text-center">점수</div>
-                        <div className="text-center">판정</div>
-                        <div className="text-center">자료</div>
-                      </div>
-                      {editingResultRows.map((result) => (
-                        <div
-                          key={result.id}
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-2"
-                        >
-                          <div className="grid grid-cols-[minmax(5.5rem,1fr)_minmax(7rem,1fr)_minmax(4.25rem,0.65fr)_minmax(3.25rem,0.55fr)_minmax(4rem,0.65fr)_2.25rem] items-center gap-2">
-                            <div className="min-w-0">
-                              <div className="space-y-0.5">
-                                <div className="truncate text-sm font-bold text-gray-900">
-                                  {result.studentName}
-                                </div>
-                                <div className="mt-0.5 truncate text-[11px] font-semibold text-gray-500">
-                                  {[
-                                    result.studentGrade,
-                                    result.studentClass,
-                                    result.studentNumber,
-                                  ]
-                                    .filter(Boolean)
-                                    .join("-")}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="truncate text-center text-[11px] font-semibold text-gray-500">
-                              {formatResultSubmittedAtLabel(result.createdAt)}
-                            </div>
-                            <div className="truncate text-center text-[11px] font-semibold text-gray-500">
-                              {result.score}/{result.total}
-                            </div>
-                            <div className="contents">
-                              <div className="text-center text-sm font-black text-gray-900">
-                                {result.percent}%
+                    <div className="mt-3 min-h-0 space-y-2 overflow-y-auto overscroll-contain lg:flex-1">
+                      {editingAttemptStatusRows.map((row) => {
+                        const studentResults =
+                          editingResultsByStudentUid.get(row.student.uid) || [];
+                        const savedStudent =
+                          !!editingAssignment &&
+                          getHistoryClassroomAssignedStudentUids(
+                            editingAssignment,
+                          ).includes(row.student.uid);
+                        return (
+                          <article
+                            key={row.student.uid}
+                            aria-label={`${row.student.name} 응시 현황`}
+                            className="min-w-0 rounded-xl border border-gray-200 bg-white p-3"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0 break-words text-sm font-bold text-gray-900">
+                                {formatStudentBadgeLabel(row.student)}
                               </div>
                               <span
-                                className={`inline-flex justify-self-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                                  result.status === "passed"
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : result.status === "failed"
-                                      ? "bg-rose-50 text-rose-700"
-                                      : "bg-amber-50 text-amber-700"
-                                }`}
+                                className={`rounded-full border px-2 py-1 text-[11px] font-bold ${row.toneClassName}`}
                               >
-                                {describeHistoryResultStatus(result.status)}
+                                {row.statusLabel}
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPreviewOpen(false);
-                                setReviewResultId(result.id);
-                              }}
-                              className="flex h-8 w-8 items-center justify-center justify-self-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                              aria-label="자료 확인"
-                              title="자료 확인"
-                            >
-                              <DashboardIcon name="map" className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {!editingResultRows.length && (
-                        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-400">
-                          조건에 맞는 결과가 없습니다.
-                        </div>
+                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0 text-xs font-semibold text-gray-600">
+                                {row.detailLabel}
+                              </div>
+                              {row.canResetAttempt && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleResetStudentAttemptCooldown(
+                                      row.student,
+                                    )
+                                  }
+                                  disabled={
+                                    !!resettingAttemptUid ||
+                                    savingEdit ||
+                                    deletingAssignment ||
+                                    !savedStudent
+                                  }
+                                  className="min-h-[44px] shrink-0 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                  title={
+                                    !savedStudent
+                                      ? "학생 배정을 먼저 저장해 주세요."
+                                      : undefined
+                                  }
+                                >
+                                  {resettingAttemptUid === row.student.uid
+                                    ? "해제 중..."
+                                    : "재응시 제한 해제"}
+                                </button>
+                              )}
+                            </div>
+                            {attemptResetFeedback[row.student.uid] && (
+                              <p
+                                role="status"
+                                className="mt-2 text-xs font-semibold text-gray-700"
+                              >
+                                {attemptResetFeedback[row.student.uid]}
+                              </p>
+                            )}
+                            {studentResults.length > 0 && (
+                              <details className="mt-2 border-t border-gray-100">
+                                <summary className="min-h-[44px] cursor-pointer py-3 text-xs font-bold text-gray-600">
+                                  제출 내역 {studentResults.length}건
+                                </summary>
+                                <ol className="space-y-2">
+                                  {studentResults.map((result) => (
+                                    <li
+                                      key={result.id}
+                                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 p-2"
+                                    >
+                                      <div className="min-w-0 text-xs text-gray-600">
+                                        <div>
+                                          {formatResultSubmittedAtLabel(
+                                            result.createdAt,
+                                          )}
+                                        </div>
+                                        <div className="mt-1 font-bold text-gray-900">
+                                          {result.score}/{result.total} ·{" "}
+                                          {result.percent}% ·{" "}
+                                          {describeHistoryResultStatus(
+                                            result.status,
+                                          )}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setPreviewOpen(false);
+                                          setReviewResultId(result.id);
+                                        }}
+                                        className="min-h-[44px] shrink-0 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"
+                                        aria-label={`${row.student.name} 제출 자료 확인`}
+                                      >
+                                        자료 보기
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ol>
+                              </details>
+                            )}
+                          </article>
+                        );
+                      })}
+                      {!editingAttemptStatusRows.length && (
+                        <p className="py-6 text-center text-sm text-gray-400">
+                          배정된 학생이 없습니다.
+                        </p>
                       )}
                     </div>
-                  </div>
+                  </section>
                 </div>
               </div>
             </div>
@@ -6388,7 +6316,9 @@ const ManageHistoryClassroom: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handleDeleteAssignment()}
-                    disabled={savingEdit || deletingAssignment}
+                    disabled={
+                      savingEdit || deletingAssignment || !!resettingAttemptUid
+                    }
                     className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {deletingAssignment ? "삭제 중..." : "과제 삭제"}
@@ -6419,7 +6349,9 @@ const ManageHistoryClassroom: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handleSaveAssignmentEdit()}
-                    disabled={savingEdit || deletingAssignment}
+                    disabled={
+                      savingEdit || deletingAssignment || !!resettingAttemptUid
+                    }
                     className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
                   >
                     {savingEdit ? "저장 중..." : "설정 저장"}

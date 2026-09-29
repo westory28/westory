@@ -1261,6 +1261,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
   );
   const floatingSaveControls = canPersist ? (
     <div
+      data-lesson-save-controls="true"
       className={
         fullscreenPreview
           ? "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-[calc(env(safe-area-inset-right,0px)+0.75rem)] z-[70] flex justify-end"
