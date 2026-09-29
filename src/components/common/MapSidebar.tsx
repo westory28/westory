@@ -74,16 +74,16 @@ const MapSidebar: React.FC<MapSidebarProps> = ({
           </div>
           {action}
         </div>
-        <nav className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:p-0">
+        <nav className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:overflow-visible">
           {items.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => onSelect(item.id)}
-              className={`flex min-w-[11rem] items-center gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:p-4 ${
+              className={`flex min-w-[11rem] items-center gap-3 rounded-lg border-0 p-3 text-left transition-colors lg:min-w-0 lg:p-4 ${
                 selectedId === item.id
-                  ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-l-4 lg:border-blue-600"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50 lg:border-l-4 lg:border-transparent"
+                  ? "bg-blue-50 text-blue-600 font-bold"
+                  : "text-gray-600 hover:bg-gray-50"
               }`}
             >
               {reorderMode ? (
