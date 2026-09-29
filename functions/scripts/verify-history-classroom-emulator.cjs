@@ -150,6 +150,25 @@ async function main() {
   };
   assert.equal((await fetch(`${base}/${results}/forged-marker`, { method: 'PATCH', headers, body: JSON.stringify({ fields }) })).status, 403);
   record('Real authenticated rules allow own result read, deny other owner read, deny committed score update and deny forged server submission marker');
+
+  const teacherAuthResponse = await fetch(`http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=emulator`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'reset-teacher@yongshin-ms.ms.kr', password: 'test-only-password', returnSecureToken: true }) });
+  const teacherAccount = await teacherAuthResponse.json(); assert(teacherAccount.idToken, JSON.stringify(teacherAccount));
+  await db.doc(`users/${teacherAccount.localId}`).set({ role: 'teacher', name: '교사검증', email: 'reset-teacher@yongshin-ms.ms.kr' });
+  const teacherHeaders = { authorization: `Bearer ${teacherAccount.idToken}`, 'content-type': 'application/json' };
+  const originalPassed = await get('rules-result');
+  for (const resourcePath of [`${prefix}/history_classrooms/reset-rules`, 'history_classrooms/reset-rules']) {
+    await db.doc(resourcePath).set({ ...assignment, targetStudentUids: [account.localId, 'no-result'], retryResetByStudentUid: { untouched: oldTime } });
+    const reset = { writes: [{ transform: { document: `projects/${project}/databases/(default)/documents/${resourcePath}`, fieldTransforms: [{ fieldPath: 'retryResetByStudentUid.`no-result`', setToServerValue: 'REQUEST_TIME' }] } }] };
+    assert.equal((await fetch(`${base}:commit`, { method: 'POST', headers, body: JSON.stringify(reset) })).status, 403, 'Student cannot write a retry reset marker');
+    const written = await fetch(`${base}:commit`, { method: 'POST', headers: teacherHeaders, body: JSON.stringify(reset) });
+    assert.equal(written.status, 200, await written.text());
+    const updated = (await db.doc(resourcePath).get()).data();
+    assert(updated.retryResetByStudentUid['no-result'].toMillis() > Date.now() - 60000);
+    assert(updated.retryResetByStudentUid.untouched.isEqual(oldTime));
+    assert.deepEqual(updated.blanks, assignment.blanks); assert.equal(updated.isPublished, true);
+  }
+  assert.deepEqual(await get('rules-result'), originalPassed);
+  record('Scoped and legacy reset markers use real server timestamps: teacher write allowed without a result, student denied, other markers/content/passed result preserved');
   console.log(`History classroom emulator verification completed: ${reports.length} groups passed.`);
 }
 

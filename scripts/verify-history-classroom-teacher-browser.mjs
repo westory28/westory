@@ -164,7 +164,14 @@ export const serverTimestamp=()=>({seconds:1790676000,nanoseconds:0});
 const snap=(key,value)=>({id:key.split('/').at(-1),exists:()=>value!==undefined,data:()=>structuredClone(value)});
 export const getDoc=async(reference)=>{fixture.reads.push(reference.path);return snap(reference.path,fixture.store[reference.path]);};
 export const getDocs=async(reference)=>{fixture.reads.push(reference.path);const docs=Object.entries(fixture.store).filter(([key])=>key.startsWith(reference.path+'/')&&!key.slice(reference.path.length+1).includes('/')).map(([key,value])=>snap(key,value));return {docs,empty:!docs.length,size:docs.length};};
-export const setDoc=async(reference,payload)=>{const data=structuredClone(payload);fixture.writes.push({path:reference.path,data});fixture.store[reference.path]=data;};
+export const setDoc=async(reference,payload,options)=>{
+ const data=structuredClone(payload);fixture.writes.push({path:reference.path,data,options});
+ if(fixture.pauseWrite){fixture.pauseWrite=false;await new Promise(resolve=>fixture.releaseWrite=resolve);}
+ if(fixture.failNextWrite){fixture.failNextWrite=false;throw new Error('Expected fixture write failure');}
+ if(options?.mergeFields){fixture.store[reference.path]={...(fixture.store[reference.path]||{}),...Object.fromEntries(options.mergeFields.map(key=>[key,data[key]]))};}
+ else if(options?.merge){const previous=fixture.store[reference.path]||{};fixture.store[reference.path]={...previous,...data,retryResetByStudentUid:{...previous.retryResetByStudentUid,...data.retryResetByStudentUid}};}
+ else fixture.store[reference.path]=data;
+};
 export const createManagedNotifications=async(_config,payload)=>{fixture.notifications.push(payload);return [];};
 export const getHttpsCallable=()=>{throw new Error('Callable use is outside this fixture');};
 `;
@@ -647,6 +654,255 @@ try {
       snapshotFields(changed.data),
       "removed lesson source does not erase the published snapshot",
     );
+    // One row per student, complete submission history, and live reset with no result.
+    await page.evaluate(
+      ({ scope, assignmentPath }) => {
+        const f = window.__fixture;
+        const assignment = f.store[assignmentPath];
+        assignment.targetStudentUids = ["student-1", "student-2", "student-3"];
+        assignment.targetStudentAccessMap = {
+          "student-1": true,
+          "student-2": true,
+          "student-3": true,
+        };
+        for (const [id, name, number] of [
+          ["student-2", "종료학생", "4"],
+          ["student-3", "통과학생", "5"],
+          ["student-4", "추가학생", "6"],
+        ]) {
+          f.store["users/" + id] = {
+            role: "student",
+            name,
+            grade: "3",
+            class: "2",
+            number,
+          };
+        }
+        for (const [id, uid, status, percent, seconds] of [
+          ["cancelled", "student-2", "cancelled", 0, 200],
+          ["failed", "student-2", "failed", 50, 100],
+          ["passed-later-failed", "student-3", "failed", 50, 300],
+          ["passed", "student-3", "passed", 100, 100],
+        ]) {
+          f.store[`${scope}/history_classroom_results/${id}`] = {
+            assignmentId: assignmentPath.split("/").at(-1),
+            uid,
+            status,
+            passed: status === "passed",
+            percent,
+            score: percent / 50,
+            total: 2,
+            studentName: uid === "student-2" ? "종료학생" : "통과학생",
+            createdAt: { seconds, nanoseconds: 0 },
+            answers: { "saved-b": "백제" },
+            answerChecks: [],
+          };
+        }
+        window.__remount();
+      },
+      { scope, assignmentPath: created.path },
+    );
+    await page
+      .getByRole("button", {
+        name: `${changed.data.title} 설정 수정`,
+        exact: true,
+      })
+      .click();
+    const panel = page.getByRole("region", { name: "응시 현황 및 제출 내역" });
+    assert.equal(await panel.getByRole("article").count(), 3);
+    const pending = panel.getByRole("article", {
+      name: "검증학생 응시 현황",
+      exact: true,
+    });
+    const cancelled = panel.getByRole("article", {
+      name: "종료학생 응시 현황",
+      exact: true,
+    });
+    const passed = panel.getByRole("article", {
+      name: "통과학생 응시 현황",
+      exact: true,
+    });
+    assert.equal(
+      await passed
+        .getByRole("button", { name: "재응시 제한 해제", exact: true })
+        .count(),
+      0,
+      "any passed result remains completed",
+    );
+    await cancelled.locator("summary").click();
+    assert.equal(
+      await cancelled.getByRole("listitem").count(),
+      2,
+      "all prior submissions remain accessible",
+    );
+    assert.equal(
+      await cancelled
+        .getByRole("button", { name: "종료학생 제출 자료 확인" })
+        .count(),
+      2,
+    );
+    await cancelled
+      .getByRole("button", { name: "종료학생 제출 자료 확인" })
+      .first()
+      .click();
+    await page
+      .getByRole("button", { name: "닫기", exact: true })
+      .last()
+      .click();
+    await page.locator('input[type="number"]').first().fill("22");
+    await page
+      .getByLabel("검증학생 배정 사유", { exact: true })
+      .selectOption("수업 태도");
+    await page.evaluate(() => (window.__fixture.pauseWrite = true));
+    const resetButton = pending.getByRole("button", {
+      name: "재응시 제한 해제",
+      exact: true,
+    });
+    await resetButton.evaluate((button) => {
+      button.click();
+      button.click();
+    });
+    const reset = await waitWrite(page, 6);
+    assert.deepEqual(Object.keys(reset.data).sort(), [
+      "retryResetByStudentUid",
+      "updatedAt",
+    ]);
+    assert.deepEqual(Object.keys(reset.data.retryResetByStudentUid), [
+      "student-1",
+    ]);
+    assert(
+      await page
+        .getByRole("button", { name: "설정 저장", exact: true })
+        .isDisabled(),
+      "settings save waits for reset",
+    );
+    await page.evaluate(() => window.__fixture.releaseWrite());
+    await pending.getByRole("status").waitFor();
+    assert.equal(
+      await pending.getByRole("status").textContent(),
+      "재응시 대기 해제됨",
+    );
+    assert.equal(
+      await page.locator('input[type="number"]').first().inputValue(),
+      "22",
+    );
+    assert.equal(
+      await page.getByLabel("검증학생 배정 사유", { exact: true }).inputValue(),
+      "수업 태도",
+    );
+    assert.equal(
+      await page.evaluate(() => window.__fixture.writes.length),
+      6,
+      "double click writes once",
+    );
+    await page.evaluate(() => (window.__fixture.failNextWrite = true));
+    await cancelled
+      .getByRole("button", { name: "재응시 제한 해제", exact: true })
+      .click();
+    await waitWrite(page, 7);
+    await cancelled
+      .getByText("해제하지 못했습니다. 다시 시도해 주세요.", { exact: true })
+      .waitFor();
+    await cancelled
+      .getByRole("button", { name: "재응시 제한 해제", exact: true })
+      .click();
+    await waitWrite(page, 8);
+    await cancelled.getByText("재응시 대기 해제됨", { exact: true }).waitFor();
+    await pending.scrollIntoViewIfNeeded();
+    const statusGeometry = await panel.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        left: r.left,
+        right: r.right,
+        viewport: innerWidth,
+        overflow: el.scrollWidth > el.clientWidth + 1,
+      };
+    });
+    assert(
+      statusGeometry.left >= 0 &&
+        statusGeometry.right <= viewport.width &&
+        !statusGeometry.overflow,
+      JSON.stringify(statusGeometry),
+    );
+    for (const button of await panel.getByRole("button").all()) {
+      if (await button.isVisible())
+        assert(
+          (await button.boundingBox()).height >= 44,
+          "tablet touch controls remain at least 44px",
+        );
+    }
+    await page.screenshot({
+      path: path.join(evidence, `teacher-attempts-${viewport.width}.png`),
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+    const savedAfterReset = await waitWrite(page, 9);
+    assert(
+      !savedAfterReset.options.mergeFields.includes("retryResetByStudentUid"),
+    );
+    const savedResetMarkers = await page.evaluate(
+      (path) => window.__fixture.store[path].retryResetByStudentUid,
+      created.path,
+    );
+    assert.deepEqual(
+      savedResetMarkers,
+      {
+        "student-1": { seconds: 1790676000, nanoseconds: 0 },
+        "student-2": { seconds: 1790676000, nanoseconds: 0 },
+      },
+      "settings save preserves both server timestamps",
+    );
+    assert.equal(savedAfterReset.data.timeLimitMinutes, 22);
+    assert.equal(
+      savedAfterReset.data.targetStudentReasons["student-1"],
+      "수업 태도",
+    );
+    // Legacy fallback must update the original document without creating a scoped stub.
+    const legacyPath = "history_classrooms/" + created.path.split("/").at(-1);
+    await page.evaluate(
+      ({ from, to }) => {
+        window.__fixture.store[to] = window.__fixture.store[from];
+        delete window.__fixture.store[from];
+        window.__remount();
+      },
+      { from: created.path, to: legacyPath },
+    );
+    await page
+      .getByRole("button", {
+        name: `${changed.data.title} 설정 수정`,
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("article", { name: "검증학생 응시 현황", exact: true })
+      .getByRole("button", { name: "재응시 제한 해제", exact: true })
+      .click();
+    const legacyReset = await waitWrite(page, 10);
+    assert.equal(legacyReset.path, legacyPath);
+    assert.equal(
+      await page.evaluate(
+        (path) => Boolean(window.__fixture.store[path]),
+        created.path,
+      ),
+      false,
+    );
+    await page
+      .getByRole("button", { name: "배정 학생 추가", exact: true })
+      .click();
+    await page.getByPlaceholder("학년 반 번호 또는 이름 검색").fill("추가학생");
+    await page.getByRole("button", { name: /추가학생.*3-2/ }).click();
+    const unsavedReset = page
+      .getByRole("article", { name: "추가학생 응시 현황", exact: true })
+      .getByRole("button", { name: "재응시 제한 해제", exact: true });
+    assert(
+      await unsavedReset.isDisabled(),
+      "unsaved assignment cannot issue a live reset",
+    );
+    assert.equal(
+      await unsavedReset.getAttribute("title"),
+      "학생 배정을 먼저 저장해 주세요.",
+    );
+    assert.equal(await page.evaluate(() => window.__fixture.writes.length), 10);
     assert.deepEqual(errors, [], "no runtime errors");
     assert(
       alerts.every((message) => message === "역사교실 과제를 저장했습니다."),
@@ -662,13 +918,14 @@ try {
       options,
       geometry,
       editGeometry,
+      statusGeometry,
       errors,
       alerts,
       ...capture,
     });
     await page.close();
     console.log(
-      `teacher ${viewport.width}px create/edit/source-switch/snapshot: passed`,
+      `teacher ${viewport.width}px create/edit/source-switch/snapshot/attempt-history/reset: passed`,
     );
   }
 } finally {

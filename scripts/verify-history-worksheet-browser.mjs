@@ -52,9 +52,9 @@ const blanks=[{id:'first',page:1,leftRatio:.15,topRatio:.2,widthRatio:.18,height
 const regions=[{label:'고조선',page:1,left:155,top:285,width:150,height:28}];
 const params=new URLSearchParams(location.search), mode=params.get('mode')||'student-solve',kind=params.get('kind')||'stage';
 if(params.has('lower'))blanks.push({id:'lower',page:1,leftRatio:.65,topRatio:.9,widthRatio:.18,heightRatio:.03,answer:'고려',prompt:'자료 하단 빈칸',source:'manual'});
-function Fixture(){const [answers,setAnswers]=useState(params.has('readonly')?{first:'삼국'}:{}),[page,setPage]=useState(1),[selected,setSelected]=useState('');
+function Fixture(){const [answers,setAnswers]=useState(params.has('readonly')?{first:'삼국'}:(params.has('locked')||params.has('completed')||params.has('submitting'))?{first:'고조선'}:{}),[page,setPage]=useState(1),[selected,setSelected]=useState('');
 const assignment={id:'fixture',title:'고대 국가의 형성',description:'',sourceType:kind==='history-lesson'?'lesson':'map',lessonUnitId:'unit-1',lessonTitle:'고조선',lessonUnitPath:['I. 고대','1. 고조선'],mapTitle:'한반도',mapResourceId:'map-1',pdfPageImages:pages,pdfRegions:regions,blanks:blanks.map(b=>({id:b.id,page:b.page,left:b.leftRatio*1000,top:b.topRatio*1400,width:b.widthRatio*1000,height:b.heightRatio*1400,answer:b.answer,prompt:b.prompt,source:b.source})),answerOptions:['고조선','삼국 시대','왕'],passThresholdPercent:80,timeLimitMinutes:params.has('timer')?10:0};
-return <main style={{padding:12,maxWidth:1440,margin:'0 auto',minWidth:0}}><h1 className="mb-4 text-lg font-bold">{kind==='stage'?mode:'역사교실 검증'}</h1><output data-testid="selected">{selected}</output>{kind==='stage'?<Stage pageImages={pages} blanks={blanks} textRegions={regions} mode={mode} teacherTool="pan" annotationEnabled={false} studentAnswers={Object.fromEntries(Object.entries(answers).map(([id,value])=>[id,{value}]))} onStudentAnswerChange={(id,value)=>setAnswers(a=>({...a,[id]:value}))} onSelectBlank={setSelected} teacherCurrentPage={page} studentCurrentPage={page} onTeacherCurrentPageChange={setPage} onStudentCurrentPageChange={setPage}/>:<HistoryView assignment={assignment} currentPage={page} onCurrentPageChange={setPage} answers={answers} onAnswerChange={(id,value)=>setAnswers(a=>({...a,[id]:value}))} interactiveViewport={true} onSubmit={()=>setSelected('submitted')} readOnly={params.get('readonly')==='1'} countdownLabel={params.has('timer')?'09:32':null} answerChecks={params.has('readonly')?[{blankId:'first',correct:false,correctAnswer:'고조선'}]:[]} helperItems={[]}/>}<output data-testid="page">{page}</output><output data-testid="answers" className="sr-only">{JSON.stringify(answers)}</output></main>}
+return <main style={{padding:12,maxWidth:1440,margin:'0 auto',minWidth:0}}><h1 className="mb-4 text-lg font-bold">{kind==='stage'?mode:'역사교실 검증'}</h1><output data-testid="selected">{selected}</output>{kind==='stage'?<Stage pageImages={pages} blanks={blanks} textRegions={regions} mode={mode} teacherTool="pan" annotationEnabled={false} studentAnswers={Object.fromEntries(Object.entries(answers).map(([id,value])=>[id,{value}]))} onStudentAnswerChange={(id,value)=>setAnswers(a=>({...a,[id]:value}))} onSelectBlank={setSelected} teacherCurrentPage={page} studentCurrentPage={page} onTeacherCurrentPageChange={setPage} onStudentCurrentPageChange={setPage}/>:<HistoryView assignment={assignment} currentPage={page} onCurrentPageChange={setPage} answers={answers} onAnswerChange={(id,value)=>setAnswers(a=>({...a,[id]:value}))} interactiveViewport={true} onSubmit={()=>setSelected('submitted')} readOnly={params.get('readonly')==='1'} answersLocked={params.has('locked')} completed={params.has('completed')} submitting={params.has('submitting')} countdownLabel={params.has('timer')?'09:32':null} timeProgressPercent={55} answerChecks={params.has('readonly')?[{blankId:'first',correct:false,correctAnswer:'고조선'}]:[]} helperItems={[]}/>}<output data-testid="page">{page}</output><output data-testid="answers" className="sr-only">{JSON.stringify(answers)}</output></main>}
 createRoot(document.getElementById('root')).render(<Fixture/>);`;
 const result = await build({
   stdin: { contents: source, loader: "tsx", resolveDir: root },
@@ -579,6 +579,345 @@ try {
     console.log(
       `lower blank / reduced viewport / readonly ${viewport.width}px: passed`,
     );
+  }
+  // Feedback is local practice feedback on blur, never a live grading hint.
+  for (const viewport of [
+    { width: 320, height: 740 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1280, height: 900 },
+  ]) {
+    const page = await browser.newPage({ viewport, hasTouch: true });
+    if (viewport.width === 768)
+      await page.emulateMedia({ reducedMotion: "reduce" });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(
+      `http://127.0.0.1:${server.address().port}/?kind=history-lesson&timer=1`,
+    );
+    const input = page.getByRole("textbox", {
+      name: "첫 번째 빈칸",
+      exact: true,
+    });
+    const feedback = page.locator("[data-blank-feedback]");
+    const toolbar = page.locator('[data-history-toolbar="true"]');
+    const assertProgress = async (count) => {
+      const progress = page.getByText(`전체 3개 중 ${count}개 작성`, {
+        exact: true,
+      });
+      assert(
+        await progress.isVisible(),
+        "answer progress remains visible at every viewport",
+      );
+      const box = await progress.boundingBox();
+      assert(
+        box && box.x >= 0 && box.x + box.width <= viewport.width,
+        "mobile progress stays within screen width",
+      );
+    };
+    await input.waitFor();
+    await waitLayout(page);
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      `${viewport.width}px feedback toolbar does not widen the document`,
+    );
+    await assertProgress(0);
+    assert.equal(
+      await page.locator("[data-history-timer-ring]").count(),
+      1,
+      "one circular timer indicator",
+    );
+    const timer = await page
+      .locator("[data-history-timer-ring]")
+      .evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const colored = [el, ...el.querySelectorAll("*")]
+          .map((node) => {
+            const style = getComputedStyle(node);
+            return [style.color, style.stroke, style.backgroundColor];
+          })
+          .flat();
+        return { width: box.width, height: box.height, colored };
+      });
+    assert(
+      Math.abs(timer.width - timer.height) < 1 && timer.width > 0,
+      "timer indicator is circular rather than a horizontal bar",
+    );
+    const progressRing = page.locator(
+      '[data-history-timer-ring] circle[pathLength="100"]',
+    );
+    assert.equal(
+      await progressRing.getAttribute("stroke-dashoffset"),
+      "45",
+      "circle represents the remaining-time fraction",
+    );
+    assert(
+      timer.colored.some((color) => {
+        const rgb = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        return rgb && +rgb[1] > +rgb[2] * 1.3 && +rgb[1] > +rgb[3] * 1.3;
+      }),
+      "timer ring uses red",
+    );
+    assert.equal(
+      await toolbar.locator(".h-0\\.5").count(),
+      0,
+      "old thin time bar is absent",
+    );
+    assert.equal(
+      await page.getByRole("timer", { name: "남은 시간" }).textContent(),
+      "09:32",
+    );
+
+    await input.tap();
+    await input.fill("고");
+    await waitLayout(page);
+    assert.equal(await feedback.count(), 0, "incomplete typing is not graded");
+    await input.fill("고조선");
+    await waitLayout(page);
+    assert.equal(
+      await feedback.count(),
+      0,
+      "a correct answer is not revealed while typing",
+    );
+    await assertProgress(1);
+    const focus = await input.evaluate((el) => ({
+      outline: getComputedStyle(el.parentElement).outlineWidth,
+      outlineStyle: getComputedStyle(el.parentElement).outlineStyle,
+      outlineColor: getComputedStyle(el.parentElement).outlineColor,
+      radius: getComputedStyle(el.closest("[data-blank-box]")).borderRadius,
+    }));
+    assert(
+      focus.outlineStyle === "none" || parseFloat(focus.outline) === 0,
+      `no overlapping blue outline inside the focused blank: ${JSON.stringify(focus)}`,
+    );
+    assert.equal(parseFloat(focus.radius), 2, "blank uses a 2px corner");
+    await input.press("Tab");
+    await waitLayout(page);
+    assert.equal(
+      await feedback.count(),
+      1,
+      "leaving a nonempty answer produces one feedback effect",
+    );
+    assert.equal(await feedback.first().getAttribute("data-correct"), "true");
+    const correctColor = await feedback
+      .first()
+      .locator("svg")
+      .evaluate((el) => getComputedStyle(el).color);
+    const correctRgb = correctColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    assert(
+      correctRgb && +correctRgb[3] > +correctRgb[1] * 1.3,
+      "correct answer effect is blue",
+    );
+    assert.equal(
+      await feedback.first().locator("circle").count(),
+      1,
+      "correct answer effect is an O",
+    );
+    assert.equal(
+      await feedback
+        .first()
+        .evaluate((el) => getComputedStyle(el).pointerEvents),
+      "none",
+      "feedback does not intercept touches",
+    );
+    assert(
+      await input.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return (
+          document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) ===
+          el
+        );
+      }),
+      "underlying input remains touch reachable during feedback",
+    );
+    if (viewport.width === 768)
+      assert.equal(
+        await feedback
+          .first()
+          .evaluate((el) => getComputedStyle(el).animationName),
+        "none",
+        "reduced motion removes the feedback animation",
+      );
+    await page.waitForTimeout(180);
+    await page.screenshot({
+      path: path.join(
+        evidence,
+        `history-feedback-correct-${viewport.width}.png`,
+      ),
+      fullPage: true,
+    });
+    await input.tap();
+    assert.equal(
+      await feedback.count(),
+      0,
+      "returning to the blank removes its old feedback",
+    );
+    await input.fill("다른 답");
+    assert.equal(
+      await feedback.count(),
+      0,
+      "revising the answer does not grade it mid-input",
+    );
+    await input.press("Tab");
+    await waitLayout(page);
+    assert.equal(await feedback.first().getAttribute("data-correct"), "false");
+    assert.equal(
+      await feedback.first().locator("circle").count(),
+      0,
+      "wrong answer effect is not an O",
+    );
+    assert(
+      (await feedback.first().locator("path").count()) > 0,
+      "wrong answer effect has the X strokes",
+    );
+    await page.waitForTimeout(180);
+    await page.screenshot({
+      path: path.join(evidence, `history-feedback-wrong-${viewport.width}.png`),
+      fullPage: true,
+    });
+    await input.tap();
+    await input.fill("   ");
+    await input.press("Tab");
+    await waitLayout(page);
+    assert.equal(
+      await feedback.count(),
+      0,
+      "empty or whitespace-only input has no wrong-answer effect",
+    );
+    await assertProgress(0);
+
+    await input.tap();
+    await input.dispatchEvent("compositionstart", { data: "" });
+    await input.fill("고");
+    await input.dispatchEvent("compositionupdate", { data: "고" });
+    assert.equal(await feedback.count(), 0, "Korean composition is not graded");
+    await input.fill("고조선");
+    await input.dispatchEvent("compositionend", { data: "고조선" });
+    await waitLayout(page);
+    assert.equal(
+      await feedback.count(),
+      0,
+      "composition completion while focused is not graded",
+    );
+    await input.press("Tab");
+    await waitLayout(page);
+    assert.equal(await feedback.first().getAttribute("data-correct"), "true");
+    assert.equal(
+      await input.inputValue(),
+      "고조선",
+      "composition preserves the typed value",
+    );
+    await input.tap();
+    await input.dispatchEvent("compositionstart", { data: "" });
+    await input.fill("고");
+    await input.evaluate((el) => el.blur());
+    await waitLayout(page);
+    assert.equal(
+      await feedback.count(),
+      0,
+      "blur during composition waits for the final Korean value",
+    );
+    await input.evaluate((el) => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      ).set.call(el, "고조선");
+      el.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          data: "고조선",
+          inputType: "insertCompositionText",
+          isComposing: true,
+        }),
+      );
+      el.dispatchEvent(
+        new CompositionEvent("compositionend", {
+          bubbles: true,
+          data: "고조선",
+        }),
+      );
+    });
+    await waitLayout(page);
+    assert.equal(
+      await feedback.first().getAttribute("data-correct"),
+      "true",
+      "deferred blur checks the committed value only once",
+    );
+    assert.equal(await input.inputValue(), "고조선");
+
+    await page.getByRole("button", { name: "다음", exact: true }).click();
+    const third = page.getByRole("textbox", {
+      name: "다음 페이지 빈칸",
+      exact: true,
+    });
+    await third.fill("삼국 시대");
+    await assertProgress(2);
+    await third.press("Tab");
+    await waitLayout(page);
+    await page.getByRole("button", { name: "이전", exact: true }).click();
+    await input.tap();
+    assert.equal(
+      await feedback.count(),
+      0,
+      "a revisited page does not leave a stale feedback on a refocused blank",
+    );
+    const before = await measure(page, "history-lesson");
+    await page.getByRole("button", { name: "자료 확대", exact: true }).click();
+    await waitLayout(page);
+    const after = await measure(page, "history-lesson");
+    assert(
+      after.image.width > before.image.width,
+      "zoom still enlarges the worksheet",
+    );
+    assertOriginalRects(
+      after,
+      "blur feedback keeps source geometry while zooming",
+    );
+    await assertProgress(2);
+    assert.deepEqual(errors, []);
+    reports.push({
+      label: `blur-feedback-timer-progress-${viewport.width}`,
+      viewport,
+      timer,
+      focus,
+      correctColor,
+      errors,
+    });
+    await page.close();
+    console.log(
+      `blur feedback / timer ring / progress ${viewport.width}px: passed`,
+    );
+  }
+  for (const mode of ["readonly", "locked", "completed", "submitting"]) {
+    const page = await browser.newPage({
+      viewport: { width: 768, height: 1024 },
+      hasTouch: true,
+    });
+    await page.goto(
+      `http://127.0.0.1:${server.address().port}/?kind=history-lesson&${mode}=1`,
+    );
+    const input = page.getByRole("textbox", {
+      name: "첫 번째 빈칸",
+      exact: true,
+    });
+    await input.waitFor();
+    assert.equal(
+      await input.getAttribute("readonly"),
+      "",
+      `${mode} keeps answer fields locked`,
+    );
+    await input.tap();
+    await input.press("Tab");
+    await waitLayout(page);
+    assert.equal(
+      await page.locator("[data-blank-feedback]").count(),
+      0,
+      `${mode} cannot trigger new practice feedback`,
+    );
+    reports.push({ label: `no-blur-feedback-${mode}`, mode });
+    await page.close();
   }
   const desktop = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
