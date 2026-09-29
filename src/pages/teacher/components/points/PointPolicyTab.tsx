@@ -381,7 +381,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                 className={`${item.iconClassName} w-5 shrink-0 text-center`}
                 aria-hidden="true"
               ></i>
-              <span>{item.label}</span>
+              <span title={item.label}>{item.label}</span>
             </button>
           ))}
         </TeacherSubNavigation>

@@ -71,12 +71,13 @@ const result = await build({
   define: { "process.env.NODE_ENV": '"production"' },
 });
 await fs.writeFile(path.join(output, "fixture.js"), result.outputFiles[0].text);
-const css = await fs.readFile(
+const teacherCss = await fs.readFile(
   path.join(root, "src/pages/teacher/teacherSettings.css"),
   "utf8",
 );
+const css = (await fs.readFile(path.join(root, "src/components/common/portalSubNavigation.css"), "utf8")) + teacherCss.replace(/@import[^;]+;/g, "");
 const baseline = `*{box-sizing:border-box}body{margin:0;font:14px Arial,sans-serif}button{font:inherit;cursor:pointer}h1{font-size:20px}output{display:block}p{overflow-wrap:anywhere}.flex{display:flex}.min-w-0{min-width:0}.flex-1{flex:1 1 0%}.shrink-0{flex-shrink:0}.items-center{align-items:center}.w-5{width:20px}.text-center{text-align:center}.text-xs{font-size:12px}.break-words{overflow-wrap:break-word}.pr-2{padding-right:8px}.teacher-nav-icon{width:20px;height:20px;flex:0 0 20px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}`;
-const html = `<!doctype html><html lang="ko"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${baseline}\n${css}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
+const html = `<!doctype html><html lang="ko"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${baseline}\n${css}</style><div id="root" class="teacher-layout"></div><script type="module" src="/fixture.js"></script></html>`;
 const server = http.createServer(async (request, response) => {
   response.setHeader(
     "Content-Type",
@@ -152,7 +153,7 @@ try {
         assert.equal(await menu.isVisible(), true);
         assert.equal(
           Math.round((await sidebar.boundingBox()).width),
-          width < 1024 ? 208 : 228,
+          width < 1024 ? 256 : 288,
           "Settings sidebar width",
         );
         await menu.locator(".teacher-settings-section").nth(1).click();

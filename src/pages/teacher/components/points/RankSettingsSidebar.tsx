@@ -53,7 +53,9 @@ const RankSettingsSidebar: React.FC<RankSettingsSidebarProps> = ({
               className={`${item.iconClassName} w-5 shrink-0 text-center`}
               aria-hidden="true"
             ></i>
-            <span className="min-w-0 flex-1">{item.label}</span>
+            <span className="min-w-0 flex-1" title={item.label}>
+              {item.label}
+            </span>
             {item.badge === "미저장" && (
               <span className="shrink-0 text-xs font-semibold text-amber-800">
                 {item.badge}

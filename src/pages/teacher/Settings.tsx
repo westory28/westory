@@ -56,7 +56,7 @@ const Settings: React.FC = () => {
             onClick={() => setMenuOpen((previous) => !previous)}
           >
             <TeacherNavigationIcon name={activeSection.icon} />
-            <span>{activeSection.label}</span>
+            <span title={activeSection.label}>{activeSection.label}</span>
             <TeacherNavigationIcon
               name="chevron"
               className={menuOpen ? "is-open" : ""}
@@ -80,7 +80,7 @@ const Settings: React.FC = () => {
                 onClick={() => selectSection(id)}
               >
                 <TeacherNavigationIcon name={icon} />
-                <span>{label}</span>
+                <span title={label}>{label}</span>
               </button>
             ))}
           </nav>

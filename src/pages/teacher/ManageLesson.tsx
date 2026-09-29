@@ -3344,7 +3344,7 @@ const ManageLesson: React.FC = () => {
   };
 
   return (
-    <div className="teacher-sub-workspace teacher-sub-workspace--page">
+    <div className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--lesson">
       <LessonTreePanel
         treeData={treeData}
         sidebarOpen={sidebarOpen}
