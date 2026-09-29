@@ -29,6 +29,10 @@ export interface HistoryClassroomAssignment {
   id: string;
   title: string;
   description: string;
+  sourceType?: "map" | "lesson";
+  lessonUnitId?: string;
+  lessonTitle?: string;
+  lessonUnitPath?: string[];
   mapResourceId: string;
   mapTitle: string;
   pdfPageImages: MapResource["pdfPageImages"];
@@ -218,6 +222,23 @@ const resolveUniqueHistoryClassroomBlankId = (
   return nextId;
 };
 
+const normalizeHistoryClassroomSource = (
+  raw: Partial<HistoryClassroomAssignment>,
+) => ({
+  sourceType:
+    raw.sourceType === "lesson" ? ("lesson" as const) : ("map" as const),
+  lessonUnitId:
+    raw.sourceType === "lesson" ? String(raw.lessonUnitId || "").trim() : "",
+  lessonTitle:
+    raw.sourceType === "lesson" ? String(raw.lessonTitle || "").trim() : "",
+  lessonUnitPath:
+    raw.sourceType === "lesson" && Array.isArray(raw.lessonUnitPath)
+      ? raw.lessonUnitPath
+          .map((title) => String(title || "").trim())
+          .filter(Boolean)
+      : [],
+});
+
 export const normalizeHistoryClassroomAssignment = (
   id: string,
   raw: Partial<HistoryClassroomAssignment>,
@@ -228,6 +249,7 @@ export const normalizeHistoryClassroomAssignment = (
     id,
     title: String(raw.title || "").trim() || "역사교실",
     description: String(raw.description || "").trim(),
+    ...normalizeHistoryClassroomSource(raw),
     mapResourceId: String(raw.mapResourceId || "").trim(),
     mapTitle: String(raw.mapTitle || "").trim(),
     pdfPageImages: Array.isArray(raw.pdfPageImages)
@@ -577,6 +599,7 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
   const payload: Record<string, unknown> = {
     title: String(raw.title || "").trim() || "역사교실",
     description: String(raw.description || "").trim(),
+    ...normalizeHistoryClassroomSource(raw),
     mapResourceId: String(raw.mapResourceId || "").trim(),
     mapTitle: String(raw.mapTitle || "").trim(),
     pdfPageImages: Array.isArray(raw.pdfPageImages)
@@ -767,15 +790,18 @@ export const summarizeHistoryClassroomAnswers = (
 export const mergeHistoryClassroomMapSnapshot = (
   assignment: HistoryClassroomAssignment,
   mapResource?: MapResource | null,
-): HistoryClassroomAssignment => ({
-  ...assignment,
-  pdfPageImages: assignment.pdfPageImages?.length
-    ? assignment.pdfPageImages
-    : mapResource?.pdfPageImages || [],
-  pdfRegions: assignment.pdfRegions?.length
-    ? assignment.pdfRegions
-    : mapResource?.pdfRegions || [],
-});
+): HistoryClassroomAssignment =>
+  assignment.sourceType === "lesson"
+    ? assignment
+    : {
+        ...assignment,
+        pdfPageImages: assignment.pdfPageImages?.length
+          ? assignment.pdfPageImages
+          : mapResource?.pdfPageImages || [],
+        pdfRegions: assignment.pdfRegions?.length
+          ? assignment.pdfRegions
+          : mapResource?.pdfRegions || [],
+      };
 
 export const getHistoryClassroomAssignedStudentUids = (
   assignment: Pick<

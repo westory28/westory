@@ -640,9 +640,6 @@ const HistoryClassroomIndex: React.FC = () => {
             <h1 className="mt-2 text-3xl font-black text-slate-950">
               역사교실
             </h1>
-            <p className="mt-2 text-sm text-slate-600">
-              지도의 빈칸을 채우고 기준 점수 이상이면 통과합니다.
-            </p>
             <div className="mt-3 inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
               면제권 {summary.availableExemptions}장 보유
             </div>
@@ -720,13 +717,22 @@ const HistoryClassroomIndex: React.FC = () => {
                             >
                               {statusMeta.label}
                             </span>
-                            {item.assignment.mapTitle && (
+                            {(item.assignment.lessonTitle ||
+                              item.assignment.mapTitle) && (
                               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                                {item.assignment.mapTitle}
+                                {item.assignment.sourceType === "lesson"
+                                  ? "수업 자료"
+                                  : item.assignment.mapTitle}
                               </span>
                             )}
                           </div>
 
+                          {item.assignment.sourceType === "lesson" && (
+                            <p className="mt-2 break-words text-sm text-slate-600">
+                              {item.assignment.lessonUnitPath?.join(" > ") ||
+                                item.assignment.lessonTitle}
+                            </p>
+                          )}
                           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-slate-600">
                             <span>
                               통과 기준 {item.assignment.passThresholdPercent}%

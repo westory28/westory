@@ -316,6 +316,13 @@ No visible UI work is complete until the design contract and verification eviden
 - Lesson materials, think cloud, maps, question registration, Wis policy and rank management reuse the settings submenu pattern through `TeacherSubNavigation`: a flat white 228px navigation (208px at 768–1023px), existing blue active-state tokens, 44px minimum menu rows and the same content padding. Below 768px, show the current selection in an expandable menu above the content; selection closes it and returns keyboard focus to the toggle. Escape also closes it. Preserve nested lesson units, visible management actions, map ordering, classroom filters and unsaved-state indicators. These submenus replace the former mobile content drawers and floating list launchers.
 # Teacher navigation labels
 
+### History classroom lesson worksheets
+
+- History classroom keeps the existing map source and adds lesson materials grouped in the teacher's curriculum order. Each assignment preserves one selected curriculum item's title, full path, pages and authored blanks.
+- Worksheet blanks in teacher editing/presentation, student materials and history classroom preserve their saved page-relative bounds at every zoom level. Do not expand their masks to meet a screen-pixel minimum. Fit answer text inside the blank by measuring its available area and complete text; use a native input of at least 16px internally and scale its visual contents to avoid tablet focus zoom. Keep zoom and page controls at least 44px; small blanks remain part of the zoomable document.
+- Reuse existing neutral surfaces, primary controls, font family and 8/12/16px spacing. Keep curriculum paths wrapped and reference words within the available width. No new palette or decorative motion.
+- Below the existing 1024px breakpoint or with a coarse pointer (including landscape tablets), keep history classroom submission/time controls in document flow so they do not cover worksheet answers or the tablet keyboard's visible area. Keep one reference-word list and the existing desktop mouse placement.
+
 Teacher menu names and lesson tree labels stay on one line. Long labels use ellipsis with the full title available on hover. Lesson add, rename and delete controls remain on the same row as their item, including narrow screens.
 
 ### Weplay history rain
