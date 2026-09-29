@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
-import MapSidebar from "../../../components/common/MapSidebar";
+import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import MapViewer from "../../../components/common/MapViewer";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
@@ -33,6 +33,7 @@ const StudentMaps: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [googleSearchQuery, setGoogleSearchQuery] = useState("");
   const [mapRewardPending, setMapRewardPending] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const displayGroups = useMemo(
     () => groupMapResourcesForDisplay(items),
@@ -71,16 +72,6 @@ const StudentMaps: React.FC = () => {
 
     void loadMaps();
   }, [config]);
-
-  const sidebarItems = useMemo<MapResource[]>(
-    () =>
-      displayGroups.map((group) => ({
-        ...group.representative,
-        id: `map-group:${group.key}`,
-        title: group.title,
-      })),
-    [displayGroups],
-  );
 
   const currentGroup =
     groupMap.get(selectedGroupKey) || displayGroups[0] || null;
@@ -171,20 +162,36 @@ const StudentMaps: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 p-4 sm:gap-6 sm:p-6 lg:flex-row lg:gap-8 lg:p-10">
-        <MapSidebar
-          heading="지도"
-          items={sidebarItems}
-          selectedId={`map-group:${currentGroup?.key || ""}`}
-          onSelect={(groupId) => {
-            const nextGroupKey = groupId.replace(/^map-group:/u, "");
-            const nextGroup = groupMap.get(nextGroupKey);
-            setSelectedGroupKey(nextGroupKey);
-            setSelectedId(nextGroup?.items[0]?.id || "");
-          }}
-        />
+      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+        <PortalSubNavigation
+          title="지도"
+          activeLabel={currentGroup?.title || "지도 선택"}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+        >
+          {displayGroups.map((group) => (
+            <button
+              key={group.key}
+              type="button"
+              onClick={() => {
+                setSelectedGroupKey(group.key);
+                setSelectedId(group.items[0]?.id || "");
+                setMenuOpen(false);
+              }}
+              className={`teacher-settings-section${currentGroup?.key === group.key ? " is-active" : ""}`}
+              aria-current={
+                currentGroup?.key === group.key ? "page" : undefined
+              }
+            >
+              <i className="fas fa-map shrink-0" aria-hidden="true" />
+              <span title={group.title} className="teacher-navigation-label">
+                {group.title}
+              </span>
+            </button>
+          ))}
+        </PortalSubNavigation>
 
-        <section className="min-w-0 flex-1">
+        <section className="teacher-sub-content">
           {loading ? (
             <InlineLoading message="지도를 불러오는 중입니다." showWarning />
           ) : selectedItem ? (

@@ -1,0 +1,703 @@
+.student-week-schedule {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 20px;
+  background: var(--ws-surface, #fff);
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-xl, 16px);
+}
+
+.student-week-schedule__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  margin-bottom: 4px;
+}
+
+.student-week-schedule__heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--ws-text-strong, #111827);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.student-week-schedule__heading h2 svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--ws-primary, #2563eb);
+}
+
+.student-dashboard-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  gap: 8px;
+  color: var(--ws-primary, #2563eb);
+  font-size: var(--ws-type-small, 0.875rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.student-week-schedule__calendar-link {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: 1px solid var(--ws-border-blue, #dbeafe);
+  border-radius: var(--radius-full, 9999px);
+  color: var(--ws-primary, #2563eb);
+}
+.student-week-schedule__calendar-link svg {
+  width: 24px;
+  height: 24px;
+}
+.student-week-schedule__calendar-link:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.student-week-schedule__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 8px 12px;
+}
+
+.student-week-schedule__range {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: var(--ws-type-body, 1rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.student-week-schedule__today {
+  min-height: 44px;
+  padding: 8px;
+  border-radius: var(--radius-md, 8px);
+  color: var(--ws-primary, #2563eb);
+  font-size: var(--ws-type-body, 1rem);
+  font-weight: 700;
+}
+
+.student-week-strip__previous,
+.student-week-strip__next {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md, 8px);
+  color: var(--ws-primary, #2563eb);
+}
+
+.student-week-schedule__today:hover,
+.student-week-strip__previous:hover,
+.student-week-strip__next:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.student-week-strip__previous svg,
+.student-week-strip__next svg,
+.student-week-schedule__filters svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.student-week-strip {
+  display: grid;
+  grid-template-columns: 44px repeat(7, minmax(0, 1fr)) 44px;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 8px 4px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+
+.student-week-strip__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 88px;
+  border-radius: var(--radius-md, 8px);
+  color: var(--ws-text, #1f2937);
+}
+
+.student-week-strip__day > span:first-child {
+  font-size: var(--ws-type-small, 0.875rem);
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.student-week-strip__day strong {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.student-week-strip__day.is-selected:not(.is-today) strong {
+  box-shadow: inset 0 0 0 1px var(--ws-primary, #2563eb);
+}
+
+.student-week-strip__day.is-saturday,
+.student-week-strip__day.is-saturday > span:first-child {
+  color: var(--ws-primary, #2563eb);
+}
+
+.student-week-strip__day.is-holiday,
+.student-week-strip__day.is-holiday > span:first-child {
+  color: var(--ws-danger-text, #b91c1c);
+}
+
+.student-week-strip__day.is-today strong {
+  color: white;
+  background: var(--ws-primary, #2563eb);
+}
+
+.student-week-strip__day.has-ribbon strong {
+  color: white;
+  background: var(--week-ribbon-color);
+}
+
+.student-week-strip__day.has-ribbon.is-today strong {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.student-week-strip__day strong {
+  overflow: hidden;
+}
+
+.student-week-strip__number,
+.student-week-event__date-label {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.student-week-strip__number {
+  position: relative;
+  top: -0.05em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.student-week-event__date-label--compact {
+  display: none;
+}
+
+.student-week-strip__day:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.student-week-strip__marker {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  transform: translateY(-2px);
+}
+
+.student-week-strip__marker.has-events {
+  background: currentColor;
+}
+
+.student-week-schedule__filters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+  max-width: 100%;
+}
+
+.student-week-schedule__filters .student-calendar-shell__filter-select {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  font-size: var(--ws-type-small, 0.875rem);
+}
+
+.student-week-schedule__actions button {
+  gap: 8px;
+  font-size: var(--ws-type-body, 1rem);
+}
+
+.student-week-schedule__actions {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.student-week-schedule__actions .student-week-schedule__icon-button {
+  display: inline-flex;
+  align-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  flex-shrink: 0;
+  justify-content: center;
+  border: 1px solid var(--ws-border-blue, #dbeafe);
+  border-radius: var(--radius-full, 9999px);
+  color: var(--ws-primary, #2563eb);
+  background: var(--ws-surface, #fff);
+}
+
+.student-week-schedule__icon-button:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.student-week-search {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.student-week-search__input-wrap {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    width 160ms ease-out,
+    opacity 160ms ease-out;
+}
+
+.student-week-search.is-open .student-week-search__input-wrap {
+  width: 160px;
+  opacity: 1;
+}
+
+.student-week-search input {
+  width: calc(100% - 8px);
+  min-width: 0;
+  height: 44px;
+  padding: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--ws-type-small, 0.875rem);
+  background: var(--ws-surface, #fff);
+}
+
+.student-week-search input:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: -2px;
+}
+
+.student-week-search__summary {
+  padding: 8px 4px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: var(--ws-type-small, 0.875rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .student-week-search__input-wrap {
+    transition: none;
+  }
+}
+
+.student-week-schedule__viewport {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.student-week-schedule__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.student-week-events {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin-top: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.student-week-events__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 160px;
+  height: 100%;
+  padding: 24px 16px;
+  font-size: var(--ws-type-small, 0.875rem);
+  color: var(--ws-text-muted, #6b7280);
+  text-align: center;
+}
+
+.student-week-events__status a {
+  color: var(--ws-primary, #2563eb);
+}
+
+.student-week-event {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 80px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--ws-border-soft, #f3f4f6);
+  text-align: left;
+}
+
+.student-week-event:last-child {
+  border-bottom: 0;
+}
+.student-week-event:hover,
+.student-week-event.is-selected {
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+
+.student-week-event__date {
+  justify-self: start;
+  padding: 4px 8px;
+  font-size: var(--ws-type-body, 1rem);
+  font-weight: 700;
+  color: var(--schedule-event-text-color);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-week-event__date-badge {
+  border: 1px solid var(--schedule-event-color);
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(
+    in srgb,
+    var(--schedule-event-color) 22%,
+    var(--ws-surface, #fff)
+  );
+}
+
+.student-week-event__body {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+}
+.student-week-event__body strong {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.student-week-event__title {
+  flex: 1;
+  min-width: 0;
+  color: var(--schedule-event-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.student-week-event__metadata {
+  display: flex;
+  align-items: center;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: calc(100% - 92px);
+  gap: 8px;
+  white-space: nowrap;
+}
+.student-week-event__category {
+  min-width: 0;
+  max-width: 120px;
+  padding-inline: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--ws-surface-subtle, #f8fafc);
+  color: var(--ws-text-muted, #6b7280);
+  font-size: var(--ws-type-label, 0.75rem);
+  line-height: 20px;
+  overflow: hidden;
+}
+.student-week-event__category-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.student-week-event__divider {
+  flex: 0 0 1px;
+  height: 12px;
+  background: var(--ws-border, #e5e7eb);
+}
+.student-week-event__period svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.student-week-event__body > span,
+.student-week-event__period {
+  font-size: var(--ws-type-small, 0.875rem);
+  color: var(--ws-text-muted, #6b7280);
+}
+.student-week-event__period {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.student-week-attendance {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-primary, #2563eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-primary, #2563eb);
+  color: var(--ws-surface, #fff);
+  font-size: var(--ws-type-small, 0.875rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.student-week-attendance:hover {
+  background: var(--ws-primary-hover, #1d4ed8);
+}
+
+.student-week-attendance:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.student-week-attendance.is-complete {
+  display: inline-flex;
+  align-items: center;
+  border-color: var(--ws-border-blue, #dbeafe);
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+}
+
+.student-week-attendance__error {
+  margin-bottom: 8px;
+  color: var(--ws-danger-text, #b91c1c);
+  font-size: var(--ws-type-small, 0.875rem);
+}
+
+.student-week-strip__day strong {
+  position: relative;
+  overflow: visible;
+}
+
+.student-week-strip__attendance {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: var(--ws-type-label, 0.75rem);
+  line-height: 1;
+}
+
+.student-schedule-title {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.student-schedule-title__text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1119px) {
+  .student-week-schedule {
+    min-height: 416px;
+  }
+
+  .student-week-events {
+    flex: none;
+    max-height: 336px;
+  }
+}
+
+@media (max-width: 639px) {
+  .student-week-schedule {
+    padding: 12px;
+  }
+
+  .student-week-schedule__heading h2 {
+    font-size: 1.125rem;
+  }
+
+  .student-week-schedule__heading h2 svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .student-week-strip {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    padding-inline: 0;
+  }
+
+  .student-week-strip__previous {
+    grid-column: 1 / 3;
+    grid-row: 1;
+  }
+
+  .student-week-strip__next {
+    grid-column: 6 / 8;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .student-week-strip__day {
+    grid-row: 2;
+  }
+
+  .student-week-strip__day strong {
+    width: 32px;
+    height: 32px;
+    font-size: 1.25rem;
+  }
+
+  .student-week-schedule__actions {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .student-week-event {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .student-week-event__date {
+    font-size: var(--ws-type-label, 0.75rem);
+    padding-inline: 4px;
+  }
+
+  .student-week-event__date-label--full {
+    display: none;
+  }
+
+  .student-week-event__date-label--compact {
+    display: inline-block;
+  }
+
+  .student-week-event__body strong {
+    font-size: var(--ws-type-small, 0.875rem);
+  }
+
+  .student-week-event__body,
+  .student-week-event__metadata {
+    gap: 4px;
+  }
+
+  .student-week-event__metadata {
+    flex-shrink: 0;
+    max-width: none;
+  }
+
+  .student-week-event__category {
+    flex-shrink: 0;
+    max-width: none;
+    padding-inline: 4px;
+    overflow: visible;
+  }
+
+  .student-week-event__category-label {
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .student-schedule-title__text {
+    width: max-content;
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+@media (max-width: 359px),
+  (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .student-week-event {
+    align-items: start;
+  }
+
+  .student-week-event__body {
+    display: contents;
+  }
+
+  .student-week-event__title {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  .student-week-event__metadata {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .student-schedule-title,
+  .student-schedule-title__text {
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

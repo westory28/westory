@@ -1,3 +1,4 @@
+import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
@@ -50,6 +51,7 @@ const ThinkCloud: React.FC = () => {
   const [draftInput, setDraftInput] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedSessionId) || null,
@@ -332,60 +334,61 @@ const ThinkCloud: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
-        <aside className="w-full lg:w-72 shrink-0">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-gray-100">
-              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
-                <i className="fas fa-lightbulb text-blue-500"></i> 생각모아
-              </h1>
-              <p className="text-xs text-gray-500 mt-1 font-bold">
-                지금까지 진행한 주제를 확인할 수 있습니다.
-              </p>
-            </div>
-            <nav className="max-h-[60vh] overflow-y-auto">
-              {sessions.length === 0 && (
-                <p className="p-4 text-sm font-bold text-gray-500">
-                  아직 등록된 주제가 없습니다.
-                </p>
-              )}
-              {sessions.map((session) => {
-                const isSelected = selectedSessionId === session.id;
-                const isLive =
-                  session.id === activeSessionId && session.status === "active";
-                return (
-                  <button
-                    key={session.id}
-                    onClick={() => {
-                      setSelectedSessionId(session.id);
-                      setSubmitError("");
-                    }}
-                    className={`w-full px-4 py-3 text-left border-l-4 transition ${isSelected ? "bg-blue-50 text-blue-700 border-blue-600" : "text-gray-700 border-transparent hover:bg-gray-50"}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-bold truncate">{session.title}</p>
-                      {isLive && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
-                          LIVE
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1 truncate">
-                      {session.description || "설명 없음"}
+      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+        <PortalSubNavigation
+          title="생각모아"
+          activeLabel={selectedSession?.title || "주제 선택"}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+        >
+          {sessions.length === 0 && (
+            <p className="p-4 text-sm font-bold text-gray-500">
+              아직 등록된 주제가 없습니다.
+            </p>
+          )}
+          {sessions.map((session) => {
+            const isSelected = selectedSessionId === session.id;
+            const isLive =
+              session.id === activeSessionId && session.status === "active";
+            return (
+              <button
+                key={session.id}
+                type="button"
+                aria-current={isSelected ? "page" : undefined}
+                onClick={() => {
+                  setSelectedSessionId(session.id);
+                  setSubmitError("");
+                  setMenuOpen(false);
+                }}
+                className={`teacher-settings-section${isSelected ? " is-active" : ""}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p
+                      title={session.title}
+                      className="teacher-navigation-label"
+                    >
+                      {session.title}
                     </p>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </aside>
+                    {isLive && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
+                        LIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 truncate">
+                    {session.description || "설명 없음"}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </PortalSubNavigation>
 
-        <div className="flex-1 space-y-4">
+        <div className="teacher-sub-content space-y-4">
           {!selectedSession && (
             <section className="bg-white border border-gray-200 rounded-2xl p-6">
-              <p className="text-gray-500 font-bold">
-                좌측에서 주제를 선택해 주세요.
-              </p>
+              <p className="text-gray-500 font-bold">주제를 선택해 주세요.</p>
             </section>
           )}
 
@@ -461,7 +464,7 @@ const ThinkCloud: React.FC = () => {
                         ? "단어를 입력해 주세요"
                         : "짧은 문장을 입력해 주세요"
                     }
-                    className="flex-1 border border-gray-300 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                    className="min-w-0 flex-1 border border-gray-300 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();

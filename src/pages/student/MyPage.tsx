@@ -1,3 +1,4 @@
+import PortalSubNavigation from "../../components/common/PortalSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -784,6 +785,7 @@ const MyPage: React.FC = () => {
   const canUseScore = config?.showScore !== false;
 
   const [menu, setMenu] = useState<MainMenu>("profile");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [categoryTab, setCategoryTab] = useState<CategoryTab | "all">("all");
   const [selectedBigUnitId, setSelectedBigUnitId] = useState<string>("all");
   const [selectedMidUnitId, setSelectedMidUnitId] = useState<string>("all");
@@ -3035,48 +3037,45 @@ const MyPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <main className="flex w-full max-w-[1480px] flex-1 flex-col gap-8 px-5 py-7 sm:px-8 lg:mx-auto lg:flex-row lg:px-10 lg:py-10">
-        <aside className="w-full lg:w-64 shrink-0">
-          <div className="sticky top-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
-            <div className="p-6 border-b border-slate-100">
-              <h2 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
-                <i className="fas fa-user-circle text-gray-400"></i>
-                마이페이지
-              </h2>
-            </div>
-            <nav className="flex flex-col">
-              {leftMenus
-                .filter((item) => isMenuAvailable(item.key))
-                .map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => selectMenu(item.key)}
-                    className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${
-                      menu === item.key
-                        ? "bg-blue-50/80 text-blue-600 border-l-4 border-blue-600"
-                        : "text-slate-600 hover:bg-slate-50 border-l-4 border-transparent"
-                    }`}
-                  >
-                    <div className="w-6 text-center">
-                      <i className={`fas ${item.icon}`}></i>
-                    </div>
-                    {item.title}
-                  </button>
-                ))}
-            </nav>
-          </div>
-        </aside>
+      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+        <PortalSubNavigation
+          title="마이페이지"
+          activeLabel={
+            leftMenus.find((item) => item.key === menu)?.title || "메뉴 선택"
+          }
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+        >
+          {leftMenus
+            .filter((item) => isMenuAvailable(item.key))
+            .map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  selectMenu(item.key);
+                  setMenuOpen(false);
+                }}
+                className={`teacher-settings-section${menu === item.key ? " is-active" : ""}`}
+                aria-current={menu === item.key ? "page" : undefined}
+              >
+                <i className={`fas ${item.icon} shrink-0`} aria-hidden="true" />
+                <span title={item.title} className="teacher-navigation-label">
+                  {item.title}
+                </span>
+              </button>
+            ))}
+        </PortalSubNavigation>
 
-        <section className="min-w-0 flex-1">
+        <section className="teacher-sub-content">
           <div className="space-y-8">
             {menu === "profile" && (
               <div className="space-y-7">
                 <h2 className="text-3xl font-black tracking-tight text-slate-900">
                   나의 기본 정보
                 </h2>
-                <div className="grid gap-5 xl:grid-cols-[minmax(360px,1.65fr)_repeat(3,minmax(170px,0.7fr))]">
-                  <div className="rounded-2xl border border-blue-200 bg-white p-6 shadow-[0_14px_32px_rgba(37,99,235,0.10)] md:p-7">
+                <div className="grid gap-5 xl:grid-cols-3">
+                  <div className="min-w-0 rounded-2xl border border-blue-200 bg-white p-6 shadow-[0_14px_32px_rgba(37,99,235,0.10)] md:p-7 xl:col-span-3">
                     <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
                       <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-blue-50 text-5xl ring-1 ring-blue-100">
                         {displayProfileIcon}
@@ -3179,7 +3178,7 @@ const MyPage: React.FC = () => {
 
                 {canUseScore && (
                   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                    <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-5">
                       <div>
                         <div className="flex items-center gap-3">
                           <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
@@ -3227,7 +3226,7 @@ const MyPage: React.FC = () => {
                   </section>
                 )}
 
-                <div className="grid gap-5 lg:grid-cols-[1fr_1fr_1.1fr]">
+                <div className="grid gap-5 2xl:grid-cols-3">
                   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
                     <div className="mb-5 flex items-center gap-3">
                       <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
@@ -3325,7 +3324,7 @@ const MyPage: React.FC = () => {
                   나의 성적표
                 </h2>
 
-                <div className="grid gap-5 lg:grid-cols-3">
+                <div className="grid gap-5 2xl:grid-cols-3">
                   {[
                     {
                       icon: "fa-arrow-trend-up",

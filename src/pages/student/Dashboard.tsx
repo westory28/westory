@@ -1,12 +1,4 @@
-import React, {
-  Suspense,
-  lazy,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import type FullCalendar from "@fullcalendar/react";
+import React, { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import {
   collection,
   doc,
@@ -48,11 +40,17 @@ import {
 } from "../../lib/wisHallOfFameRecognition";
 import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
+import {
+  calendarDateKey,
+  getKoreanDateKey,
+  getWeekStart,
+} from "../../lib/calendarWeek";
 import "./studentDashboard.css";
 
-const CalendarSection = lazy(() => import("./components/CalendarSection"));
+const StudentWeekSchedule = lazy(
+  () => import("./components/StudentWeekSchedule"),
+);
 const NoticeBoard = lazy(() => import("./components/NoticeBoard"));
-const SearchModal = lazy(() => import("./components/SearchModal"));
 
 const DashboardCalendarFallback: React.FC = () => (
   <div className="student-dashboard-placeholder" role="status">
@@ -64,9 +62,15 @@ const StudentDashboard: React.FC = () => {
   const { user, userData, config, interfaceConfig } = useAuth();
   const navigate = useNavigate();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() =>
+    getKoreanDateKey(),
+  );
+  const [weekStart, setWeekStart] = useState(() =>
+    getWeekStart(getKoreanDateKey()),
+  );
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState(false);
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceChecked, setAttendanceChecked] = useState(false);
   const [attendanceMessage, setAttendanceMessage] = useState("");
@@ -76,10 +80,9 @@ const StudentDashboard: React.FC = () => {
     useState<HallOfFameRecognition | null>(null);
   const { showToast } = useAppToast();
 
-  const calendarRef = useRef<FullCalendar>(null);
   const { year, semester } = getYearSemester(config);
   const { categories } = useScheduleCategories();
-  const todayDate = new Date().toLocaleDateString("en-CA");
+  const todayDate = getKoreanDateKey();
   const attendanceScope = `${year}_${semester}`;
   const todayAttendanceSourceId = buildAttendanceSourceId();
 
@@ -144,25 +147,38 @@ const StudentDashboard: React.FC = () => {
     const path = `years/${currentYear}/semesters/${currentSemester}/calendar`;
     const userClassStr = getStudentClassKey(userData?.grade, userData?.class);
     let active = true;
+    let snapshotVersion = 0;
+    setEventsLoading(true);
+    setEventsError(false);
     const unsubscribe = subscribeVisibleCalendarEvents(
       db,
       path,
       userClassStr,
       (loadedEvents) => {
-        if (active) setEvents(loadedEvents);
+        if (!active) return;
+        const version = ++snapshotVersion;
+        setEvents(loadedEvents);
+        setEventsLoading(false);
+        setEventsError(false);
         void getKoreanPublicHolidays(currentYear)
           .then((holidays) => {
-            if (!active) return;
+            if (!active || version !== snapshotVersion) return;
             setEvents(
               mergeEventsWithKoreanPublicHolidays(loadedEvents, holidays),
             );
           })
           .catch((error) => {
             console.error("Failed to load Korean public holidays:", error);
-            if (active) setEvents(loadedEvents);
+            if (active && version === snapshotVersion) setEvents(loadedEvents);
           });
       },
-      (error) => console.error("Dashboard calendar fetch error:", error),
+      (error) => {
+        console.error("Dashboard calendar fetch error:", error);
+        if (active) {
+          setEventsLoading(false);
+          setEventsError(true);
+        }
+      },
     );
 
     return () => {
@@ -260,15 +276,15 @@ const StudentDashboard: React.FC = () => {
   };
 
   const handleEventClick = (event: CalendarEvent) => {
-    handleDateClick(event.start);
+    handleDateClick(calendarDateKey(event.start));
     setDetailEvent(event);
   };
 
   const handleSelectSearchResults = (dateStr: string) => {
-    if (calendarRef.current) {
-      calendarRef.current.getApi().gotoDate(dateStr);
-      handleDateClick(dateStr);
-    }
+    const date = calendarDateKey(dateStr);
+    if (!date) return;
+    setWeekStart(getWeekStart(date));
+    handleDateClick(date);
   };
 
   const handleAttendanceCheck = async () => {
@@ -303,6 +319,7 @@ const StudentDashboard: React.FC = () => {
       );
 
       setAttendanceChecked(true);
+      setWeekStart(getWeekStart(todayDate));
       setSelectedDate(todayDate);
       handleDateClick(todayDate);
       notifyPointsUpdated();
@@ -360,14 +377,17 @@ const StudentDashboard: React.FC = () => {
 
         <div className="student-portal-dashboard__calendar">
           <Suspense fallback={<DashboardCalendarFallback />}>
-            <CalendarSection
+            <StudentWeekSchedule
               categories={categories}
               events={events}
               onDateClick={handleDateClick}
               onEventClick={handleEventClick}
-              onSearchClick={() => setIsSearchOpen(true)}
+              weekStart={weekStart}
+              loading={eventsLoading}
+              error={eventsError}
+              onWeekChange={setWeekStart}
+              onSearchSelect={handleSelectSearchResults}
               onAttendanceCheck={() => void handleAttendanceCheck()}
-              calendarRef={calendarRef}
               selectedDate={selectedDate}
               attendanceLoading={attendanceLoading}
               attendanceChecked={attendanceChecked}
@@ -391,23 +411,6 @@ const StudentDashboard: React.FC = () => {
           )}
         </div>
       </div>
-
-      {isSearchOpen && (
-        <Suspense
-          fallback={
-            <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 pt-20 text-sm font-semibold text-white">
-              검색 도구를 준비 중입니다.
-            </div>
-          }
-        >
-          <SearchModal
-            categories={categories}
-            isOpen={isSearchOpen}
-            onClose={() => setIsSearchOpen(false)}
-            onSelectEvent={handleSelectSearchResults}
-          />
-        </Suspense>
-      )}
 
       <WisHallOfFameRecognitionModal
         recognition={hallOfFameRecognition}

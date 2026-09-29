@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import PortalSubNavigation from "../../../../components/common/PortalSubNavigation";
+import TeacherNavigationIcon from "../../../../components/layout/TeacherNavigationIcon";
 import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useAuth } from "../../../../contexts/AuthContext";
 import {
@@ -9,7 +11,8 @@ import {
 
 interface LessonSidebarProps {
   isOpen: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  selectedUnitTitle?: string | null;
   onSelectUnit: (unitId: string, title: string) => void;
   selectedUnitId: string | null;
 }
@@ -34,7 +37,8 @@ const findTopLevelIndexByUnitId = (
 
 const LessonSidebar: React.FC<LessonSidebarProps> = ({
   isOpen,
-  onClose,
+  onOpenChange,
+  selectedUnitTitle,
   onSelectUnit,
   selectedUnitId,
 }) => {
@@ -44,53 +48,6 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
   const selectedUnitIdRef = useRef(selectedUnitId);
-  const panelRef = useRef<HTMLElement>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-
-  useEffect(() => {
-    if (!isOpen || window.matchMedia("(min-width: 1024px)").matches) return;
-    const panel = panelRef.current;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    panel
-      ?.querySelector<HTMLButtonElement>('button[aria-label="수업 목차 닫기"]')
-      ?.focus();
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeRef.current();
-      }
-      if (event.key !== "Tab" || !panel) return;
-      const items = Array.from(
-        panel.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), [tabindex="0"]',
-        ),
-      ).filter((item) => item.getClientRects().length > 0);
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    const desktop = window.matchMedia("(min-width: 1024px)");
-    const handleResize = () => {
-      if (desktop.matches) closeRef.current();
-    };
-    desktop.addEventListener("change", handleResize);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKey);
-      desktop.removeEventListener("change", handleResize);
-      document.getElementById("student-lesson-toggle")?.focus();
-    };
-  }, [isOpen]);
-
   useEffect(() => {
     selectedUnitIdRef.current = selectedUnitId;
   }, [selectedUnitId]);
@@ -151,155 +108,90 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   };
 
   return (
-    <>
-      {/* Mobile Overlay */}
-      {isOpen && (
-        <div
-          className="student-lesson-backdrop fixed inset-0 bg-black bg-opacity-50 lg:hidden"
-          onClick={onClose}
-          aria-hidden="true"
-        ></div>
+    <PortalSubNavigation
+      title="수업 목차"
+      activeLabel={selectedUnitTitle || "학습할 단원 선택"}
+      open={isOpen}
+      onOpenChange={onOpenChange}
+    >
+      {loading && (
+        <InlineLoading message="목차를 불러오는 중입니다." showWarning />
       )}
-
-      <aside
-        ref={panelRef}
-        role={isOpen ? "dialog" : undefined}
-        aria-modal={isOpen ? true : undefined}
-        aria-label="수업 목차"
-        className={`student-lesson-sidebar
-                    fixed inset-y-0 left-auto right-0 z-40
-                    w-[86%] max-w-[360px]
-                    bg-white border-l border-gray-200 shadow-xl
-                    transform transition-transform duration-300 ease-in-out
-                    flex flex-col
-                    ${isOpen ? "translate-x-0" : "translate-x-full"}
-                    lg:sticky lg:top-[88px] lg:mt-0 lg:max-h-[calc(100vh-112px)] lg:w-[360px] lg:max-w-none lg:translate-x-0 lg:self-start lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-sm xl:w-[384px]
-                `}
-        style={{ right: 0, left: "auto" }}
-      >
-        <div className="student-lesson-sidebar-heading sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 lg:rounded-t-2xl">
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800">
-              <i className="fas fa-sitemap text-blue-500"></i>
-              <span>수업 목차</span>
-            </h2>
-          </div>
+      {!loading && tree.length === 0 && (
+        <div className="px-6 py-4 text-sm text-gray-500">
+          공개된 수업 자료가 없습니다.
+        </div>
+      )}
+      {tree.map((big, bigIdx) => (
+        <div key={big.id || bigIdx}>
           <button
             type="button"
-            onClick={onClose}
-            aria-label="수업 목차 닫기"
-            className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 lg:hidden"
+            title={big.title}
+            aria-expanded={expandedGroups.has(bigIdx)}
+            onClick={() => toggleGroup(bigIdx)}
+            className="teacher-settings-section"
           >
-            <i className="fas fa-times"></i>
+            <TeacherNavigationIcon
+              name="chevron"
+              className={expandedGroups.has(bigIdx) ? "rotate-180" : ""}
+            />
+            <span className="min-w-0 break-words">{big.title}</span>
           </button>
-        </div>
-
-        <div className="custom-scroll flex-1 overflow-y-auto p-3">
-          {loading && (
-            <InlineLoading message="목차를 불러오는 중입니다." showWarning />
-          )}
-          {!loading && tree.length === 0 && (
-            <div className="p-4 text-center text-gray-400 text-sm">
-              공개된 수업 자료가 없습니다.
-            </div>
-          )}
-
-          {tree.map((big, bigIdx) => (
-            <div key={bigIdx} className="mb-2 select-none">
-              <button
-                type="button"
-                aria-expanded={expandedGroups.has(bigIdx)}
-                onClick={() => toggleGroup(bigIdx)}
-                className={`
-                                    flex w-full items-start rounded-lg p-2 text-left transition
-                                    text-sm font-bold text-gray-700 hover:bg-gray-50
-                                    ${expandedGroups.has(bigIdx) ? "bg-blue-50 text-blue-700" : ""}
-                                `}
-              >
-                <i
-                  className={`fas fa-caret-right mt-1 w-5 shrink-0 text-center text-xs text-gray-400 transition-transform ${expandedGroups.has(bigIdx) ? "rotate-90 text-blue-500" : ""}`}
-                ></i>
-                <i
-                  className={`fas ${expandedGroups.has(bigIdx) ? "fa-folder-open" : "fa-folder"} mr-2 mt-0.5 shrink-0 text-yellow-500`}
-                ></i>
-                <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">
-                  {big.title}
-                </span>
-              </button>
-
-              {expandedGroups.has(bigIdx) && (
-                <div className="ml-4 mt-1 border-l-2 border-gray-100 pl-4">
-                  {(big.children || []).map((mid, midIdx) => (
-                    <div key={midIdx} className="mb-2">
-                      <div className="flex items-start px-2 py-1 text-sm font-bold text-gray-700">
-                        <i className="fas fa-folder mr-2 mt-0.5 shrink-0 text-yellow-500"></i>
-                        <span className="min-w-0 whitespace-normal break-words leading-5">
-                          {mid.title}
+          {expandedGroups.has(bigIdx) && (
+            <div className="teacher-sub-tree-children">
+              {(big.children || []).map((mid, midIdx) => (
+                <div key={mid.id || midIdx}>
+                  <div
+                    title={mid.title}
+                    className="teacher-navigation-label px-6 py-3 text-sm font-bold text-gray-700"
+                  >
+                    {mid.title}
+                  </div>
+                  {(mid.children || []).map((small, smallIdx) => {
+                    const unitKey =
+                      small.id || `${bigIdx}-${midIdx}-${smallIdx}`;
+                    const showTitleHint = shouldShowUnitTitleHint(small.title);
+                    return (
+                      <button
+                        key={unitKey}
+                        type="button"
+                        title={small.title}
+                        aria-label={small.title}
+                        aria-current={
+                          selectedUnitId === small.id ? "page" : undefined
+                        }
+                        onClick={() => {
+                          setRevealedUnitId(unitKey);
+                          onSelectUnit(small.id, small.title);
+                          onOpenChange(false);
+                        }}
+                        onBlur={() => {
+                          if (revealedUnitId === unitKey)
+                            setRevealedUnitId(null);
+                        }}
+                        className={`teacher-settings-section group relative ${selectedUnitId === small.id ? "is-active" : ""}`}
+                      >
+                        <TeacherNavigationIcon name="lesson" />
+                        <span className="min-w-0 flex-1 break-words">
+                          {small.title}
                         </span>
-                      </div>
-                      {(mid.children || []).map((small, smallIdx) => {
-                        const unitKey =
-                          small.id || `${bigIdx}-${midIdx}-${smallIdx}`;
-                        const showTitleHint = shouldShowUnitTitleHint(
-                          small.title,
-                        );
-
-                        return (
-                          <button
-                            type="button"
-                            key={unitKey}
-                            title={small.title}
-                            aria-label={small.title}
-                            onClick={() => {
-                              setRevealedUnitId(unitKey);
-                              onSelectUnit(small.id, small.title);
-                              if (window.innerWidth < 1024) onClose();
-                            }}
-                            onBlur={() => {
-                              if (revealedUnitId === unitKey) {
-                                setRevealedUnitId(null);
-                              }
-                            }}
-                            className={`
-                                                        group relative mb-0.5 flex w-full items-start rounded-md px-2 py-2 text-left transition
-                                                        text-[0.9rem] no-underline
-                                                        ${
-                                                          selectedUnitId ===
-                                                          small.id
-                                                            ? "bg-blue-50 font-bold text-blue-600"
-                                                            : "text-gray-600 hover:bg-blue-50 hover:text-blue-600"
-                                                        }
-                                                    `}
+                        {showTitleHint && (
+                          <span
+                            className={`pointer-events-none absolute left-8 right-2 top-full z-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold leading-5 text-slate-700 shadow-lg ${revealedUnitId === unitKey ? "block" : "hidden group-hover:block group-focus-visible:block"}`}
                           >
-                            <i
-                              className={`far fa-file-alt mr-2 mt-0.5 shrink-0 text-sm ${selectedUnitId === small.id ? "text-blue-500" : "text-gray-400"}`}
-                            ></i>
-                            <span className="min-w-0 flex-1 truncate leading-5">
-                              {small.title}
-                            </span>
-                            {showTitleHint && (
-                              <span
-                                className={`pointer-events-none absolute left-8 right-2 top-[calc(100%-2px)] z-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold leading-5 text-slate-700 shadow-lg ${
-                                  revealedUnitId === unitKey
-                                    ? "block"
-                                    : "hidden group-hover:block group-focus-visible:block"
-                                }`}
-                              >
-                                {small.title}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
+                            {small.title}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      </aside>
-    </>
+      ))}
+    </PortalSubNavigation>
   );
 };
 

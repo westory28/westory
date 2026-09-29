@@ -18,6 +18,8 @@
 .student-portal-dashboard__calendar {
   grid-column: 1;
   grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
 }
 
 .student-portal-dashboard__notice {
@@ -35,7 +37,6 @@
   min-height: 0;
 }
 
-.student-portal-dashboard .student-calendar-shell,
 .student-portal-dashboard .student-notice-board,
 .student-portal-dashboard .wis-ranking-panel,
 .student-portal-dashboard .student-dashboard-placeholder {
@@ -49,170 +50,12 @@
   box-shadow: none;
 }
 
-.student-portal-dashboard .student-calendar-shell {
-  gap: 12px;
-  padding-inline: 20px;
-}
-
 .student-dashboard-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--ws-text-muted);
   font-size: var(--ws-type-small);
-}
-
-.student-portal-dashboard .student-calendar-shell__header-main,
-.student-portal-dashboard .student-calendar-shell__heading-group {
-  gap: 12px;
-}
-
-.student-portal-dashboard .student-calendar-shell__heading-group {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
-.student-portal-dashboard .student-calendar-shell__eyebrow {
-  align-self: auto;
-  margin: 0;
-  gap: 8px;
-  font-size: 1.5rem;
-  font-weight: 800;
-  line-height: 1.3;
-  color: var(--ws-text-strong);
-}
-
-.student-portal-dashboard .student-calendar-shell__eyebrow-icon,
-.student-portal-dashboard .student-calendar-shell__eyebrow-icon svg {
-  width: 24px;
-  height: 24px;
-}
-
-.student-portal-dashboard .student-calendar-shell__month-row {
-  width: auto;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.student-portal-dashboard .student-calendar-shell__month-badge {
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
-  min-width: 0;
-  gap: 4px;
-  border-radius: var(--radius-md);
-}
-
-.student-portal-dashboard .student-calendar-shell__month-title {
-  font-size: var(--ws-type-section-title);
-  font-weight: 800;
-  line-height: 1.3;
-  color: var(--ws-text-strong);
-}
-
-.student-portal-dashboard .student-calendar-shell__toolbar,
-.student-portal-dashboard .student-calendar-shell__calendar-tools {
-  width: auto;
-  gap: 8px;
-}
-
-.student-portal-dashboard .student-calendar-shell__control-cluster,
-.student-portal-dashboard .student-calendar-shell__attendance-tools {
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.student-portal-dashboard .student-calendar-shell__attendance-tools {
-  margin-left: auto;
-}
-
-.student-portal-dashboard .student-calendar-shell__nav-button,
-.student-portal-dashboard .student-calendar-shell__search-button,
-.student-portal-dashboard .student-calendar-shell__control-button,
-.student-portal-dashboard .student-calendar-shell__attendance-action,
-.student-portal-dashboard .student-calendar-shell__attendance-indicator {
-  min-height: 44px;
-  padding-inline: 12px;
-  border-radius: var(--radius-md);
-  font-size: var(--ws-type-small);
-  font-weight: 700;
-  box-shadow: none;
-  transform: none;
-}
-
-.student-portal-dashboard .student-calendar-shell__nav-button,
-.student-portal-dashboard .student-calendar-shell__search-button {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
-  padding: 0;
-}
-
-.student-portal-dashboard .student-calendar-shell__search-button span {
-  display: none;
-}
-
-.student-portal-dashboard .student-calendar-shell__view-toggle {
-  gap: 0;
-  padding: 0;
-  border: 1px solid var(--ws-border);
-  border-radius: var(--radius-md);
-  background: var(--ws-surface-subtle);
-}
-
-.student-portal-dashboard .student-calendar-shell__view-button {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  font-size: var(--ws-type-small);
-  font-weight: 700;
-  box-shadow: none;
-}
-
-.student-portal-dashboard .student-calendar-shell__view-button.is-active {
-  background: var(--ws-primary-soft);
-  color: var(--ws-primary-text);
-}
-
-.student-portal-dashboard .student-calendar-shell__body {
-  min-height: 0;
-  border-color: var(--ws-border);
-  border-radius: var(--radius-md);
-  box-shadow: none;
-}
-
-.student-portal-dashboard .student-calendar-shell__body .custom-schedule-list {
-  border: 0;
-  border-radius: 0;
-}
-
-.student-portal-dashboard .student-calendar-list-event {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--ws-border-soft);
-}
-
-.student-portal-dashboard .student-calendar-list-event__category {
-  font-size: var(--ws-type-label);
-}
-
-.student-portal-dashboard .student-calendar-list-event__title {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  font-size: var(--ws-type-body);
-}
-
-.student-calendar-list-empty {
-  padding: 24px;
-  color: var(--ws-text-muted);
-  text-align: center;
 }
 
 .student-notice-board__carousel {
@@ -365,25 +208,6 @@
     max-height: 328px;
   }
 
-  .student-portal-dashboard .student-calendar-shell__body {
-    flex: none;
-    height: 496px;
-    min-height: 420px;
-  }
-
-  .student-portal-dashboard
-    .student-calendar-shell__body[data-calendar-view="listMonth"] {
-    height: auto;
-  }
-
-  .student-portal-dashboard
-    .student-calendar-shell__body[data-calendar-view="listMonth"]
-    .custom-schedule-list {
-    position: relative;
-    height: auto;
-    overflow: visible;
-  }
-
   .student-portal-dashboard .wis-ranking-list {
     overflow: visible;
   }
@@ -398,32 +222,9 @@
     padding: 4px 12px 12px;
   }
 
-  .student-portal-dashboard .student-calendar-shell,
   .student-portal-dashboard .student-notice-board,
   .student-portal-dashboard .wis-ranking-panel {
     padding: 12px;
-  }
-
-  .student-portal-dashboard .student-calendar-shell__eyebrow {
-    font-size: 1.125rem;
-  }
-
-  .student-portal-dashboard .student-calendar-shell__month-row {
-    flex-basis: 100%;
-    margin-left: 0;
-  }
-
-  .student-portal-dashboard .student-calendar-shell__month-badge {
-    width: 100%;
-  }
-
-  .student-portal-dashboard .student-calendar-shell__body {
-    height: 420px;
-  }
-
-  .student-portal-dashboard .student-calendar-shell__view-button,
-  .student-portal-dashboard .student-calendar-shell__control-button {
-    padding-inline: 8px;
   }
 }
 

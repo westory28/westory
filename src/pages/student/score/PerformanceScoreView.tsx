@@ -17,6 +17,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
+import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import ExamOmrCard, {
   ExamOmrAnswerStrip,
@@ -510,6 +511,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     PerformanceScoreAnswerSheetRequest[]
   >([]);
   const [selectedId, setSelectedId] = useState("");
+  const [scoreMenuOpen, setScoreMenuOpen] = useState(false);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signatureConsent, setSignatureConsent] = useState(false);
   const [signatureDrawn, setSignatureDrawn] = useState(false);
@@ -2386,241 +2388,217 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-          <aside className="w-full shrink-0 lg:w-72">
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-8">
-              <div className="border-b border-gray-100 p-4 sm:p-6">
-                <h2 className="flex items-center gap-2 text-lg font-extrabold text-gray-800 sm:text-xl">
-                  <i
-                    className="fas fa-clipboard-list text-gray-400"
-                    aria-hidden="true"
-                  ></i>
-                  점수 목록
-                </h2>
-              </div>
-              <nav
-                className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:p-0"
-                aria-label={resolvedCopy.scoreListLabel}
-              >
-                {hasWrittenExamSidebarGroups
-                  ? [
-                      writtenExamObjectiveEntry ? (
-                        <button
-                          key={`written-objective-${writtenExamObjectiveEntry.scoreId}`}
-                          type="button"
-                          onClick={() => {
-                            setSelectedId(
-                              writtenExamObjectiveEntry.record.id || "",
-                            );
-                            setSelectedWrittenExamGroupKey(
-                              writtenExamObjectiveEntry.group.key,
-                            );
-                          }}
-                          aria-current={
-                            activeWrittenExamGroupIsObjective
-                              ? "true"
-                              : undefined
-                          }
-                          className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
-                            activeWrittenExamGroupIsObjective
-                              ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
-                              : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
-                          }`}
-                        >
-                          <div className="w-6 shrink-0 text-center">
-                            <i
-                              className="fas fa-clipboard-check text-sm"
-                              aria-hidden="true"
-                            ></i>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                              서답형
-                            </div>
-                            <div
-                              className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                                activeWrittenExamGroupIsObjective
-                                  ? "text-blue-500"
-                                  : "text-slate-500"
-                              }`}
-                            >
-                              <span>
-                                획득{" "}
-                                {formatPerformanceScore(
-                                  getWrittenExamGroupScore(
-                                    writtenExamObjectiveEntry.group,
-                                  ),
-                                )}{" "}
-                                /{" "}
-                                {formatPerformanceScore(
-                                  getWrittenExamGroupMaxScore(
-                                    writtenExamObjectiveEntry.group,
-                                  ),
-                                )}
-                              </span>
-                              {writtenExamObjectiveEntry.record
-                                .signatureName && (
-                                <span className="text-blue-700">확인 완료</span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      ) : null,
-                      writtenExamEssayEntries.length > 0 ? (
+        <div className="teacher-sub-workspace gap-6">
+          <PortalSubNavigation
+            title="점수 목록"
+            activeLabel={
+              activeWrittenExamGroup
+                ? `${selectedRecord.title} · ${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)}`
+                : selectedRecord.title
+            }
+            open={scoreMenuOpen}
+            onOpenChange={setScoreMenuOpen}
+          >
+            {hasWrittenExamSidebarGroups
+              ? [
+                  writtenExamObjectiveEntry ? (
+                    <button
+                      key={`written-objective-${writtenExamObjectiveEntry.scoreId}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(
+                          writtenExamObjectiveEntry.record.id || "",
+                        );
+                        setSelectedWrittenExamGroupKey(
+                          writtenExamObjectiveEntry.group.key,
+                        );
+                        setScoreMenuOpen(false);
+                      }}
+                      aria-current={
+                        activeWrittenExamGroupIsObjective ? "true" : undefined
+                      }
+                      className={`teacher-settings-section${activeWrittenExamGroupIsObjective ? " is-active" : ""}`}
+                    >
+                      <div className="w-6 shrink-0 text-center">
+                        <i
+                          className="fas fa-clipboard-check text-sm"
+                          aria-hidden="true"
+                        ></i>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                          서답형
+                        </div>
                         <div
-                          key="written-essay-menu"
-                          className={`min-w-[15rem] rounded-xl border text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 ${
-                            writtenExamEssayActive
-                              ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
-                              : "border-gray-200 text-slate-600 lg:border-transparent"
+                          className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                            activeWrittenExamGroupIsObjective
+                              ? "text-blue-500"
+                              : "text-slate-500"
                           }`}
                         >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const firstEssayEntry =
-                                writtenExamEssayEntries[0];
-                              if (!firstEssayEntry) return;
-                              setSelectedId(firstEssayEntry.record.id || "");
-                              setSelectedWrittenExamGroupKey(
-                                firstEssayEntry.group.key,
-                              );
-                            }}
-                            aria-current={
-                              writtenExamEssayActive ? "true" : undefined
-                            }
-                            className="flex w-full items-start gap-3 px-3 py-3 text-left transition hover:bg-gray-50 lg:px-4"
-                          >
-                            <div className="w-6 shrink-0 text-center">
-                              <i
-                                className="fas fa-clipboard-check text-sm"
-                                aria-hidden="true"
-                              ></i>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                                논술형
-                              </div>
-                              <div className="mt-1 text-xs font-bold text-slate-500">
-                                {writtenExamEssayEntries.length}개 문항
-                              </div>
-                            </div>
-                          </button>
-                          <div className="border-t border-slate-100 px-3 pb-3 lg:px-4">
-                            <div className="grid gap-2 pt-2">
-                              {writtenExamEssayEntries.map(
-                                ({ record, scoreId, group }) => {
-                                  const groupActive =
-                                    record.id === selectedRecord.id &&
-                                    activeWrittenExamGroup?.key === group.key;
-                                  return (
-                                    <button
-                                      key={`written-essay-${scoreId}-${group.key}`}
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedId(record.id || "");
-                                        setSelectedWrittenExamGroupKey(
-                                          group.key,
-                                        );
-                                      }}
-                                      aria-current={
-                                        groupActive ? "true" : undefined
-                                      }
-                                      className={`rounded-lg px-3 py-2 text-left text-xs font-black transition ${
-                                        groupActive
-                                          ? "bg-blue-600 text-white"
-                                          : "bg-white text-slate-600 hover:bg-slate-50"
-                                      }`}
-                                    >
-                                      <span className="block">
-                                        {getWrittenExamGroupDisplayTitle(group)}
-                                      </span>
-                                      <span
-                                        className={`mt-1 block font-bold ${
-                                          groupActive
-                                            ? "text-blue-100"
-                                            : "text-slate-400"
-                                        }`}
-                                      >
-                                        {formatPerformanceScore(
-                                          getWrittenExamGroupScore(group),
-                                        )}{" "}
-                                        /{" "}
-                                        {formatPerformanceScore(
-                                          getWrittenExamGroupMaxScore(group),
-                                        )}
-                                      </span>
-                                    </button>
-                                  );
-                                },
-                              )}
-                            </div>
+                          <span>
+                            획득{" "}
+                            {formatPerformanceScore(
+                              getWrittenExamGroupScore(
+                                writtenExamObjectiveEntry.group,
+                              ),
+                            )}{" "}
+                            /{" "}
+                            {formatPerformanceScore(
+                              getWrittenExamGroupMaxScore(
+                                writtenExamObjectiveEntry.group,
+                              ),
+                            )}
+                          </span>
+                          {writtenExamObjectiveEntry.record.signatureName && (
+                            <span className="text-blue-700">확인 완료</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ) : null,
+                  writtenExamEssayEntries.length > 0 ? (
+                    <div key="written-essay-menu" className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const firstEssayEntry = writtenExamEssayEntries[0];
+                          if (!firstEssayEntry) return;
+                          setSelectedId(firstEssayEntry.record.id || "");
+                          setSelectedWrittenExamGroupKey(
+                            firstEssayEntry.group.key,
+                          );
+                          setScoreMenuOpen(false);
+                        }}
+                        aria-current={
+                          writtenExamEssayActive ? "true" : undefined
+                        }
+                        className={`teacher-settings-section${writtenExamEssayActive ? " is-active" : ""}`}
+                      >
+                        <div className="w-6 shrink-0 text-center">
+                          <i
+                            className="fas fa-clipboard-check text-sm"
+                            aria-hidden="true"
+                          ></i>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                            논술형
+                          </div>
+                          <div className="mt-1 text-xs font-bold text-slate-500">
+                            {writtenExamEssayEntries.length}개 문항
                           </div>
                         </div>
-                      ) : null,
-                    ].filter(Boolean)
-                  : records.map((record) => {
-                      const active =
-                        record.id === selectedRecord.id ||
-                        (!selectedRecord.id && record.id === records[0]?.id);
-                      return (
-                        <button
-                          key={record.id || record.rosterId}
-                          type="button"
-                          onClick={() => setSelectedId(record.id || "")}
-                          aria-current={active ? "true" : undefined}
-                          className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
-                            active
-                              ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
-                              : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
+                      </button>
+                      <div className="border-t border-slate-100 px-3 pb-3 lg:px-4">
+                        <div className="grid gap-2 pt-2">
+                          {writtenExamEssayEntries.map(
+                            ({ record, scoreId, group }) => {
+                              const groupActive =
+                                record.id === selectedRecord.id &&
+                                activeWrittenExamGroup?.key === group.key;
+                              return (
+                                <button
+                                  key={`written-essay-${scoreId}-${group.key}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedId(record.id || "");
+                                    setSelectedWrittenExamGroupKey(group.key);
+                                    setScoreMenuOpen(false);
+                                  }}
+                                  aria-current={
+                                    groupActive ? "true" : undefined
+                                  }
+                                  className={`teacher-settings-section${groupActive ? " is-active" : ""}`}
+                                >
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block">
+                                      {getWrittenExamGroupDisplayTitle(group)}
+                                    </span>
+                                    <span
+                                      className={`mt-1 block font-bold ${
+                                        groupActive
+                                          ? "text-blue-700"
+                                          : "text-slate-400"
+                                      }`}
+                                    >
+                                      {formatPerformanceScore(
+                                        getWrittenExamGroupScore(group),
+                                      )}{" "}
+                                      /{" "}
+                                      {formatPerformanceScore(
+                                        getWrittenExamGroupMaxScore(group),
+                                      )}
+                                    </span>
+                                  </span>
+                                </button>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null,
+                ].filter(Boolean)
+              : records.map((record) => {
+                  const active =
+                    record.id === selectedRecord.id ||
+                    (!selectedRecord.id && record.id === records[0]?.id);
+                  return (
+                    <button
+                      key={record.id || record.rosterId}
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(record.id || "");
+                        setScoreMenuOpen(false);
+                      }}
+                      aria-current={active ? "true" : undefined}
+                      className={`teacher-settings-section${active ? " is-active" : ""}`}
+                    >
+                      <div className="w-6 shrink-0 text-center">
+                        <i
+                          className="fas fa-clipboard-check text-sm"
+                          aria-hidden="true"
+                        ></i>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                          {record.title}
+                        </div>
+                        <div
+                          className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                            active ? "text-blue-500" : "text-slate-500"
                           }`}
                         >
-                          <div className="w-6 shrink-0 text-center">
-                            <i
-                              className="fas fa-clipboard-check text-sm"
-                              aria-hidden="true"
-                            ></i>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                              {record.title}
-                            </div>
-                            <div
-                              className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                                active ? "text-blue-500" : "text-slate-500"
-                              }`}
-                            >
-                              <span>
-                                획득 {formatPerformanceScore(record.totalScore)}{" "}
-                                / {formatPerformanceScore(record.totalMaxScore)}
-                              </span>
-                              {record.signatureName && (
-                                <span className="text-blue-700">확인 완료</span>
-                              )}
-                              {pendingObjectionScoreIds.has(
-                                getRecordScoreId(record),
-                              ) && (
-                                <span className="text-amber-700">
-                                  이의 처리 대기
-                                </span>
-                              )}
-                              {pendingAnswerSheetRequestScoreIds.has(
-                                getRecordScoreId(record),
-                              ) && (
-                                <span className="text-blue-700">
-                                  답안지 확인 요청 중
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-              </nav>
-            </div>
-          </aside>
+                          <span>
+                            획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                            {formatPerformanceScore(record.totalMaxScore)}
+                          </span>
+                          {record.signatureName && (
+                            <span className="text-blue-700">확인 완료</span>
+                          )}
+                          {pendingObjectionScoreIds.has(
+                            getRecordScoreId(record),
+                          ) && (
+                            <span className="text-amber-700">
+                              이의 처리 대기
+                            </span>
+                          )}
+                          {pendingAnswerSheetRequestScoreIds.has(
+                            getRecordScoreId(record),
+                          ) && (
+                            <span className="text-blue-700">
+                              답안지 확인 요청 중
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+          </PortalSubNavigation>
 
-          <section className="min-w-0 flex-1 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="mt-6 min-w-0 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:mt-0">
             <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="text-sm font-black text-blue-700">

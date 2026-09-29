@@ -20,32 +20,19 @@ const Note: React.FC = () => {
 
   return (
     <div className="student-lesson-page bg-gray-50">
-      <div className="student-lesson-workspace mx-auto flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="teacher-sub-workspace teacher-sub-workspace--page">
         <LessonSidebar
           isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
+          onOpenChange={setIsSidebarOpen}
+          selectedUnitTitle={title}
           onSelectUnit={handleSelectUnit}
           selectedUnitId={unitId}
         />
 
-        <main className="relative min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="p-4 md:p-6">
+        <main className="teacher-sub-content">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6">
             <LessonContent unitId={unitId} fallbackTitle={title} />
           </div>
-
-          <button
-            id="student-lesson-toggle"
-            type="button"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            aria-label={isSidebarOpen ? "수업 목차 닫기" : "수업 목차 열기"}
-            className={`fixed right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[75] flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-white shadow-lg transition hover:bg-gray-700 lg:hidden ${
-              unitId
-                ? "bottom-[calc(env(safe-area-inset-bottom,0px)+13rem)]"
-                : "bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)]"
-            }`}
-          >
-            <i className="fas fa-list"></i>
-          </button>
         </main>
       </div>
     </div>
