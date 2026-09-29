@@ -37,6 +37,53 @@ const StudentHistoryDictionaryController: React.FC = () => {
   const { currentUser, config, configReady } = useAuth();
   const { showToast } = useAppToast();
   const location = useLocation();
+  const [saveAnchor, setSaveAnchor] = useState<{
+    bottom: number;
+    right: number;
+  } | null>(null);
+  useEffect(() => {
+    setSaveAnchor(null);
+    if (!location.pathname.startsWith("/student/lesson/note")) return;
+    let target: HTMLElement | null = null;
+    const measure = () => {
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const next = {
+        bottom: document.documentElement.clientHeight - rect.top + 12,
+        right: document.documentElement.clientWidth - rect.right,
+      };
+      setSaveAnchor((previous) =>
+        previous?.bottom === next.bottom && previous?.right === next.right
+          ? previous
+          : next,
+      );
+    };
+    const resizeObserver = new ResizeObserver(measure);
+    const findControls = () => {
+      const next =
+        Array.from(
+          document.querySelectorAll<HTMLElement>("[data-lesson-save-controls]"),
+        )
+          .filter((element) => element.getClientRects().length > 0)
+          .at(-1) ?? null;
+      if (next === target) return;
+      resizeObserver.disconnect();
+      target = next;
+      if (target) {
+        resizeObserver.observe(target);
+        measure();
+      } else setSaveAnchor(null);
+    };
+    const mutationObserver = new MutationObserver(findControls);
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    findControls();
+    window.addEventListener("resize", measure);
+    return () => {
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [location.pathname, location.search]);
   const [open, setOpen] = useState(false);
   const [word, setWord] = useState("");
   const [definition, setDefinition] = useState("");
@@ -291,6 +338,11 @@ const StudentHistoryDictionaryController: React.FC = () => {
       <button
         ref={buttonRef}
         type="button"
+        style={
+          location.pathname.startsWith("/student/lesson/note") && saveAnchor
+            ? saveAnchor
+            : undefined
+        }
         onClick={() => setOpen(true)}
         className={`fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-[0_18px_42px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname, location.search)}`}
         aria-label="역사 사전 열기"
