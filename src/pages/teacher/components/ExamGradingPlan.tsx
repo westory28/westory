@@ -328,9 +328,9 @@ const ExamGradingPlan: React.FC = () => {
   const handleEdit = (p: GradingPlan) => {
     if (saving) return;
     setEditId(p.id);
-    setSubject(p.subject);
+    setSubject(normalizeKoreanText(p.subject));
     setGrade(p.targetGrade || "3");
-    setItems(p.items.map((i) => ({ ...i })));
+    setItems(p.items.map((i) => ({ ...i, name: normalizeKoreanText(i.name) })));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 

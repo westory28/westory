@@ -202,6 +202,49 @@ input.value = "한글".normalize("NFD");
 input.selectionStart = input.selectionEnd = input.value.length;
 node.props.onBlur({ currentTarget: input });
 assert.equal(model, "한글");
+render();
+node.props.onCompositionStart({ currentTarget: input });
+change("ㅎㅏㄴㄱ", true);
+assert.equal(model, "ㅎㅏㄴㄱ");
+// Some browser/IME combinations omit compositionend. The next explicit
+// non-composing input must release the previous composition state.
+change("ㅎㅏㄴㄱㅡㄹ", false);
+assert.equal(model, "한글", "Recover when compositionend is missing");
+assert.equal(input.value, "한글");
+assert.equal(input.selectionStart, 2);
+render();
+change("ㅁㅜㄴㅈㅏㅇ", true);
+change("ㅁㅜㄴㅈㅏㅇ ㅌㅏㅁㄱㅜ", false);
+assert.equal(
+  model,
+  "문장 탐구",
+  "Recover native composition without either composition event",
+);
+render();
+node.props.onCompositionStart({ currentTarget: input });
+input.value = "ㅎㅏㄴ";
+node.props.onChange({ currentTarget: input, nativeEvent: {} });
+assert.equal(
+  model,
+  "ㅎㅏㄴ",
+  "Missing isComposing must retain an active composition",
+);
+node.props.onBlur({ currentTarget: input });
+assert.equal(
+  model,
+  "ㅎㅏㄴ",
+  "Unknown native composition status must not normalize on blur",
+);
+node.props.onCompositionEnd({ currentTarget: input });
+assert.equal(model, "한");
+render();
+input.value = "ㅎㅏㄴㄱㅡㄹ";
+node.props.onChange({ currentTarget: input, nativeEvent: {} });
+assert.equal(
+  model,
+  "한글",
+  "Missing isComposing uses the inactive composition state",
+);
 console.log(
   "Korean text input verified: detached/NFD Hangul, incremental syllables/finals/vowels, untouched Latin/word boundaries, active composition, blur, and selection preservation.",
 );

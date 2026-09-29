@@ -82,11 +82,13 @@ const KoreanTextInput: React.FC<KoreanTextInputProps> = ({
       ref={inputRef}
       value={value}
       onChange={(event) => {
-        if (
-          composingRef.current ||
-          (event.nativeEvent as InputEvent).isComposing
-        ) {
-          composingRef.current = true;
+        const nativeComposing = (event.nativeEvent as InputEvent).isComposing;
+        // An explicit false also recovers IMEs that omit compositionend.
+        // Events without this flag must retain the last composition event state.
+        if (typeof nativeComposing === "boolean") {
+          composingRef.current = nativeComposing;
+        }
+        if (composingRef.current) {
           selectionRef.current = null;
           onValueChange(event.currentTarget.value);
           return;
