@@ -125,3 +125,206 @@
 .naval-game--compact .naval-scene:has(.naval-special) .naval-prompts { visibility: hidden; }
 
 .naval-game--compact { padding-bottom: var(--naval-keyboard-inset, 0px); }
+/* Naval battlefield: upper enemy fleet, water words, lower allied fleet. */
+.naval-scene { min-height: 640px; }
+.naval-battle-status { top: 88px; }
+.naval-health { width: min(38%, 400px); border: 3px double var(--naval-gold); border-radius: 12px 4px; padding: 8px 16px 8px 44px; background: linear-gradient(110deg, var(--naval-wood), var(--naval-ink) 28%, var(--naval-ink) 75%, var(--naval-wood)); box-shadow: inset 0 0 0 2px var(--naval-wood), 0 2px 4px var(--naval-ink); }
+.naval-health::before, .naval-health::after { content: ''; position: absolute; width: 8px; height: 8px; border: 1px solid var(--naval-gold); background: var(--naval-wood); transform: rotate(45deg); top: calc(50% - 4px); }
+.naval-health::before { left: -6px; } .naval-health::after { right: -6px; }
+.naval-health--enemy { top: 116px; right: 5%; left: auto; bottom: auto; --naval-hp: var(--naval-enemy); }
+.naval-health--allied { top: auto; bottom: 156px; left: 50%; transform: translateX(-50%); --naval-hp: var(--naval-allied); }
+.naval-health .naval-health-heading { display: flex; gap: 8px; line-height: 1.2; }
+.naval-health-heading > span:last-child { margin-left: auto; }
+.naval-health .naval-health-crest { position: absolute; left: 8px; top: calc(50% - 14px); width: 28px; height: 28px; display: grid; place-items: center; border: 2px double var(--naval-gold); border-radius: 50%; color: var(--naval-gold); font-size: 16px; font-weight: 800; box-shadow: 0 0 0 2px var(--naval-wood); }
+.naval-health--enemy .naval-health-crest { border-radius: 4px 12px; }
+.naval-health .naval-health-track { display: block; position: relative; margin-top: 4px; border: 1px solid var(--naval-gold); padding: 2px; background: var(--naval-ink); }
+.naval-health-track::after { content: ''; position: absolute; inset: 2px; pointer-events: none; background: repeating-linear-gradient(90deg, transparent 0 9%, var(--naval-ink) 9% 10%); }
+.naval-health meter { height: 12px; margin: 0; border-radius: 0; }
+.naval-health meter::-webkit-meter-bar { border-radius: 0; background: var(--naval-wood); }
+.naval-health meter::-webkit-meter-optimum-value { background: linear-gradient(to bottom, var(--naval-parchment), var(--naval-hp) 28%, var(--naval-hp) 72%, var(--naval-ink)); border-radius: 0; }
+.naval-health meter::-moz-meter-bar { background: var(--naval-hp); }
+.naval-health small { font-size: 10px; margin-top: 4px; }
+.naval-fleet { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.naval-reinforcement { position: absolute; object-fit: contain; object-position: center bottom; user-select: none; }
+.naval-fleet--enemy .naval-reinforcement { height: 18%; width: 15%; opacity: .82; filter: saturate(.7); }
+.naval-fleet--enemy .naval-reinforcement--1 { left: 36%; top: 17%; width: 10%; height: 13%; opacity: .64; }
+.naval-fleet--enemy .naval-reinforcement--2 { left: 49%; top: 20%; width: 12%; height: 14%; }
+.naval-fleet--enemy .naval-reinforcement--3 { left: 64%; top: 17%; width: 10%; height: 13%; opacity: .64; }
+.naval-fleet--enemy .naval-reinforcement--4 { left: 82%; top: 21%; width: 15%; }
+.naval-fleet--enemy .naval-reinforcement--5 { left: 40%; top: 28%; width: 18%; height: 22%; opacity: .94; }
+.naval-fleet--allied .naval-reinforcement--1 { width: 24%; height: 28%; left: -4%; bottom: 24%; opacity: .88; }
+.naval-fleet--allied .naval-reinforcement--2 { width: 25%; height: 30%; left: 29%; bottom: 21%; opacity: .93; }
+.naval-ship--enemy, .naval-sinking-ship { width: 34%; height: 32%; right: 5%; bottom: 43%; }
+.naval-ship--allied { width: 40%; height: 38%; left: 6%; bottom: 20%; }
+.naval-commander { width: 22%; bottom: 42px; }
+.naval-prompts { left: 24%; right: 16%; top: 45%; bottom: auto; gap: 16px; align-items: start; }
+.naval-word { isolation: isolate; min-height: 108px; padding: 12px 4px 20px; border: 0; border-radius: 0; overflow: visible; background: transparent; box-shadow: none; gap: 4px; animation: naval-word-rise 600ms ease-out both; }
+.naval-word::after { content: ''; position: absolute; z-index: -1; inset: 0 0 8px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(22,60,78,.9), rgba(22,60,78,.65) 40%, transparent 72%); }
+.naval-word strong { font-size: 20px; line-height: 1.3; position: relative; z-index: 2; text-shadow: -1px -1px 0 var(--naval-ink), 1px -1px 0 var(--naval-ink), -1px 1px 0 var(--naval-ink), 1px 1px 0 var(--naval-ink), 0 2px 4px var(--naval-ink); }
+.naval-word .naval-word-timer { position: relative; z-index: 2; font-size: 12px; font-weight: 700; text-shadow: 0 1px 2px var(--naval-ink), 1px 1px 1px var(--naval-ink); }
+.naval-word .naval-word-splash { position: absolute; display: block; z-index: -2; width: 110%; max-width: 180px; left: 50%; bottom: -8px; transform: translateX(-50%); opacity: .72; animation: naval-word-spray 800ms ease-out both; pointer-events: none; }
+.naval-word i { bottom: 14px; left: 28%; width: 44%; height: 2px; background: var(--naval-allied); }
+.naval-queue { font-size: 10px; text-align: center; }
+.naval-word-wait { background: rgba(22,60,78,.6); font-size: 12px; border: 0; }
+.naval-command { left: 50%; right: auto; width: min(94%, 704px); transform: translateX(-50%); bottom: 68px; justify-content: center; gap: 16px; }
+.naval-input-frame { flex: 1 1 520px; max-width: 520px; }
+.naval-ammo { flex: 0 0 152px; min-width: 0; padding-left: 40px; }
+.naval-footer { position: absolute; z-index: 11; bottom: 0; left: 0; right: 0; min-height: 52px; padding: 4px 16px; background: rgba(23,30,36,.9); color: var(--naval-text); flex-wrap: nowrap; gap: 12px; border-top: 1px solid var(--naval-wood); }
+.naval-footer label { min-width: 124px; min-height: 44px; flex-shrink: 0; font-size: 12px; cursor: pointer; }
+.naval-footer input { width: 16px; height: 16px; accent-color: var(--naval-gold); }
+.naval-footer-info { min-width: 0; display: flex; flex: 1; justify-content: space-between; align-items: center; gap: 16px; font-size: 12px; }
+.naval-feedback { color: var(--naval-parchment); min-height: 0; font-size: 12px; }
+.naval-special { top: 40%; left: 26%; right: 16%; }
+.naval-scene:has(.naval-special) .naval-prompts { visibility: hidden; }
+@keyframes naval-word-rise { 0% { transform: translateY(36px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+@keyframes naval-word-spray { 0% { transform: translateX(-50%) translateY(24px) scaleY(.3); opacity: 0; } 45% { transform: translateX(-50%) translateY(-12px) scaleY(1.2); opacity: 1; } 100% { transform: translateX(-50%) translateY(0) scaleY(1); opacity: .72; } }
+.naval-game--still .naval-word { animation: none; }
+.naval-game--still .naval-word-splash { animation: none; opacity: .55; }
+@media (prefers-reduced-motion: reduce) { .naval-word, .naval-word-splash { animation: none; } }
+@container naval-game (max-width: 900px) {
+  .naval-health { width: 42%; padding-right: 12px; }
+  .naval-health--enemy { top: 120px; }
+  .naval-health--allied { top: auto; bottom: 160px; }
+  .naval-prompts { left: 17%; right: 8%; gap: 8px; }
+  .naval-word strong { font-size: 18px; }
+  .naval-footer-info { display: grid; gap: 0; text-align: right; font-size: 10px; }
+  .naval-feedback { font-size: 10px; }
+}
+@container naval-game (max-width: 600px) {
+  .naval-scene { min-height: 720px; height: 720px; max-height: 720px; aspect-ratio: auto; background-position: 54% center; }
+  .naval-health { width: 80%; padding: 8px 12px 8px 40px; left: 50%; right: auto; transform: translateX(-50%); }
+  .naval-health--enemy { top: 108px; bottom: auto; }
+  .naval-health--allied { top: auto; bottom: 184px; }
+  .naval-health strong { font-size: 12px; }
+  .naval-health .naval-health-crest { font-size: 14px; width: 24px; height: 24px; top: calc(50% - 12px); }
+  .naval-fleet--enemy .naval-reinforcement--1 { left: 2%; top: 22%; width: 18%; height: 12%; }
+  .naval-fleet--enemy .naval-reinforcement--2 { left: 22%; top: 24%; width: 19%; height: 12%; }
+  .naval-fleet--enemy .naval-reinforcement--3 { left: 44%; top: 22%; width: 17%; height: 11%; }
+  .naval-fleet--enemy .naval-reinforcement--4 { left: 73%; top: 23%; width: 22%; height: 13%; }
+  .naval-fleet--enemy .naval-reinforcement--5 { left: 1%; top: 29%; width: 31%; height: 16%; }
+  .naval-ship--enemy, .naval-sinking-ship { width: 59%; height: 24%; right: 8%; bottom: 53%; }
+  .naval-fleet--allied .naval-reinforcement--1 { width: 30%; height: 18%; left: -1%; bottom: 31%; }
+  .naval-fleet--allied .naval-reinforcement--2 { width: 30%; height: 19%; left: 72%; bottom: 30%; }
+  .naval-ship--allied { width: 60%; height: 24%; left: 21%; bottom: 28%; }
+  .naval-commander { width: 29%; bottom: 180px; left: -4%; }
+  .naval-prompts { top: 286px; bottom: auto; left: 3%; right: 3%; gap: 4px; }
+  .naval-word { min-height: 104px; padding: 8px 0 16px; }
+  .naval-word strong { font-size: 16px; }
+  .naval-word .naval-word-splash { width: 115%; bottom: -8px; }
+  .naval-word i { bottom: 10px; }
+  .naval-special { top: 278px; left: 5%; right: 5%; }
+  .naval-command { width: 94%; bottom: 76px; left: 50%; right: auto; gap: 8px; flex-wrap: wrap; }
+  .naval-ammo { flex-basis: 136px; min-width: 136px; height: 32px; margin-left: auto; padding: 4px 8px 4px 32px; }
+  .naval-input-frame { flex-basis: 100%; max-width: none; }
+  .naval-footer { min-height: 68px; padding: 4px 8px; gap: 8px; }
+  .naval-footer label { min-width: 112px; font-size: 11px; gap: 4px; }
+  .naval-footer-info { font-size: 10px; line-height: 1.35; gap: 4px; }
+  .naval-feedback { font-size: 11px; line-height: 1.35; }
+  .naval-cannonball { left: 45%; top: 59%; animation-name: naval-portrait-shot; }
+  .naval-effect--enemy .naval-cannonball { left: 59%; top: 34%; animation-name: naval-portrait-enemy-shot; }
+  .naval-impact { right: 22%; top: 24%; height: 22%; }
+  .naval-effect--enemy .naval-impact { left: 34%; top: 54%; }
+  .naval-splash--sunk { right: 18%; bottom: 51%; }
+  .naval-splash--enemy { left: 36%; top: 66%; }
+}
+@keyframes naval-portrait-shot { 0% { transform: translate(0,0) scale(1); opacity: 1; } 90% { opacity: 1; } 100% { transform: translate(14cqw,-44cqw) scale(.5); opacity: 0; } }
+@keyframes naval-portrait-enemy-shot { 0% { transform: translate(0,0) scale(.5); opacity: 1; } 90% { opacity: 1; } 100% { transform: translate(-14cqw,44cqw) scale(1); opacity: 0; } }
+.naval-game--compact .naval-scene { min-height: 448px; height: 448px; max-height: 448px; }
+.naval-game--compact .naval-topbar { padding: 4px 8px; }
+.naval-game--compact .naval-title-art { width: 38%; flex-basis: 38%; margin-top: 4px; }
+.naval-game--compact .naval-hud { width: 58%; }
+.naval-game--compact .naval-hud > div { padding: 2px 4px; }
+.naval-game--compact .naval-hud strong { font-size: 14px; }
+.naval-game--compact .naval-battle-status { top: 48px; font-size: 10px; }
+.naval-game--compact .naval-health { padding: 4px 8px 4px 32px; width: 76%; }
+.naval-game--compact .naval-health .naval-health-crest { width: 20px; height: 20px; font-size: 12px; left: 6px; top: calc(50% - 10px); }
+.naval-game--compact .naval-health--enemy { top: 74px; bottom: auto; }
+.naval-game--compact .naval-health--allied { top: auto; bottom: 156px; }
+.naval-game--compact .naval-health strong, .naval-game--compact .naval-health small { font-size: 10px; }
+.naval-game--compact .naval-health small { margin-top: 2px; }
+.naval-game--compact .naval-health meter { height: 8px; }
+.naval-game--compact .naval-health .naval-health-track { margin-top: 2px; padding: 1px; }
+.naval-game--compact .naval-health-track::after { inset: 1px; }
+.naval-game--compact .naval-ship--enemy, .naval-game--compact .naval-sinking-ship { width: 38%; height: 24%; bottom: 60%; right: 18%; }
+.naval-game--compact .naval-fleet--enemy .naval-reinforcement { top: 23%; height: 14%; }
+.naval-game--compact .naval-fleet--enemy .naval-reinforcement--5 { top: 28%; height: 15%; }
+.naval-game--compact .naval-prompts { top: 160px; left: 3%; right: 3%; gap: 4px; }
+.naval-game--compact .naval-word { min-height: 80px; padding: 0 0 12px; }
+.naval-game--compact .naval-word strong { font-size: 16px; }
+.naval-game--compact .naval-word .naval-word-splash { max-width: 92px; opacity: .55; bottom: -2px; }
+.naval-game--compact .naval-ship--allied { bottom: 34%; height: 18%; width: 45%; left: 30%; }
+.naval-game--compact .naval-fleet--allied .naval-reinforcement { bottom: 36%; height: 15%; width: 24%; }
+.naval-game--compact .naval-fleet--allied .naval-reinforcement--1 { left: 4%; }
+.naval-game--compact .naval-fleet--allied .naval-reinforcement--2 { left: 75%; }
+.naval-game--compact .naval-commander { width: 20%; bottom: 156px; }
+.naval-game--compact .naval-command { bottom: 64px; gap: 4px; }
+.naval-game--compact .naval-ammo { height: 28px; padding-block: 2px; }
+.naval-game--compact .naval-input-frame { padding: 2px; }
+.naval-game--compact .naval-footer { min-height: 60px; padding-block: 2px; }
+.naval-game--compact .naval-footer label { min-width: 108px; }
+.naval-game--compact .naval-footer-info { font-size: 10px; gap: 2px; }
+.naval-game--compact .naval-feedback { font-size: 10px; }
+.naval-game--compact .naval-special { top: 150px; padding: 8px 12px; }
+.naval-game--compact .naval-special > strong { font-size: 18px; }
+/* Anchor the fleet to the sea rather than the sky at every aspect ratio. */
+.naval-scene { background-size: auto 130%; background-position: center bottom; }
+.naval-hud-time strong { display: inline-flex; align-items: baseline; white-space: nowrap; }
+.naval-scene:has(.naval-special) .naval-prompts { visibility: visible; }
+.naval-special { top: 23%; left: 8%; right: 46%; }
+@container naval-game (max-width: 600px) {
+  .naval-special { top: 192px; left: 5%; right: 5%; gap: 4px; padding: 8px 12px; }
+  .naval-special > span { font-size: 10px; line-height: 1.2; }
+  .naval-special > strong { font-size: 18px; line-height: 1.2; }
+  .naval-special > div { font-size: 10px; }
+  .naval-special b { font-size: 14px; }
+}
+@container naval-game (max-width: 360px) {
+  .naval-hud strong { font-size: 14px; }
+  .naval-hud small { font-size: 10px; margin-left: 2px; }
+}
+.naval-game--compact .naval-scene { min-height: var(--naval-viewport-height); height: var(--naval-viewport-height); max-height: var(--naval-viewport-height); }
+.naval-game--compact .naval-hud > div { flex-direction: row; justify-content: center; flex-wrap: wrap; column-gap: 4px; padding: 2px; line-height: 1; }
+.naval-game--compact .naval-hud span { font-size: 8px; }
+.naval-game--compact .naval-hud strong { font-size: 13px; }
+.naval-game--compact .naval-hud small { font-size: 9px; margin-left: 2px; }
+.naval-game--compact .naval-battle-status { top: 32px; line-height: 1; }
+.naval-game--compact .naval-battle-status > span { padding-block: 2px; }
+.naval-game--compact .naval-health--enemy { top: 48px; width: 86%; }
+.naval-game--compact .naval-health--allied { top: auto; bottom: 120px; left: 3%; width: 63%; transform: none; }
+.naval-game--compact .naval-health .naval-health-heading { gap: 4px; font-size: 9px; line-height: 1; }
+.naval-game--compact .naval-health strong { font-size: 10px; line-height: 1; }
+.naval-game--compact .naval-health meter { height: 7px; }
+.naval-game--compact .naval-health small { font-size: 9px; line-height: 1; margin-top: 2px; }
+.naval-game--compact .naval-prompts { top: 104px; }
+.naval-game--compact .naval-word { min-height: 80px; padding: 0; gap: 2px; overflow: hidden; --naval-word-rise: 8px; }
+.naval-game--compact .naval-word strong { font-size: 16px; line-height: 1.15; }
+.naval-game--compact .naval-word .naval-word-timer { font-size: 10px; line-height: 1.2; }
+.naval-game--compact .naval-word i { bottom: 2px; }
+.naval-game--compact .naval-word .naval-word-splash { max-width: 80px; bottom: -8px; }
+.naval-game--compact .naval-queue { line-height: 1; font-size: 8px; }
+.naval-game--compact .naval-fleet--enemy .naval-reinforcement { top: 20%; height: 14%; }
+.naval-game--compact .naval-fleet--enemy .naval-reinforcement--5 { top: 23%; height: 16%; }
+.naval-game--compact .naval-ship--enemy, .naval-game--compact .naval-sinking-ship { bottom: 59%; height: 22%; }
+.naval-game--compact .naval-ship--allied { bottom: 36%; height: 17%; }
+.naval-game--compact .naval-fleet--allied .naval-reinforcement { bottom: 36%; height: 14%; }
+.naval-game--compact .naval-commander { bottom: 120px; width: 15%; }
+.naval-game--compact .naval-command { bottom: 60px; }
+.naval-game--compact .naval-ammo { position: absolute; right: 0; bottom: calc(100% + 8px); width: 28%; min-width: 0; flex: none; padding: 4px; height: 32px; }
+.naval-game--compact .naval-cannon-icon { width: 28px; left: -14px; top: 4px; }
+.naval-game--compact .naval-ammo strong { font-size: 9px; white-space: nowrap; letter-spacing: -.3px; }
+.naval-game--compact .naval-ammo strong span { margin-left: 2px; }
+.naval-game--compact .naval-ammo-slots { height: 10px; }
+.naval-game--compact .naval-input-frame { min-height: 48px; flex-basis: 100%; }
+.naval-game--compact .naval-footer { min-height: 56px; gap: 4px; }
+.naval-game--compact .naval-footer label { min-width: 104px; font-size: 10px; }
+.naval-game--compact .naval-footer-info { line-height: 1.2; font-size: 10px; }
+.naval-game--compact .naval-feedback { line-height: 1.2; font-size: 10px; }
+.naval-game--compact .naval-special { top: 104px; left: 5%; right: 5%; gap: 4px; padding: 6px 10px; }
+.naval-game--compact .naval-special > span { font-size: 10px; line-height: 1.2; }
+.naval-game--compact .naval-special > strong { font-size: 18px; line-height: 1.2; }
+.naval-game--compact .naval-special > div { font-size: 10px; line-height: 1.2; }
+.naval-game--compact .naval-special b { font-size: 12px; }
+.naval-game--compact .naval-scene:has(.naval-special) .naval-prompts { visibility: hidden; }
+@keyframes naval-word-rise { 0% { transform: translateY(var(--naval-word-rise, 36px)); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+.naval-game--compact .naval-title-art { width: 32%; flex-basis: 32%; margin-top: 0; }
+.naval-game--compact .naval-hud { width: 64%; }

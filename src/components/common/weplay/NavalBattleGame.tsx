@@ -90,6 +90,9 @@ export default function NavalBattleGame({
   );
   const [compactViewport, setCompactViewport] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(
+    window.visualViewport?.height || window.innerHeight,
+  );
   const initialViewportHeight = useRef(window.innerHeight);
   const pending = useRef(new Set<string>());
   const retryData = useRef(
@@ -108,11 +111,19 @@ export default function NavalBattleGame({
     const top = viewport?.offsetTop || 0;
     const bottom = top + (viewport?.height || window.innerHeight);
     const rect = element.getBoundingClientRect();
+    const scene = element
+      .closest(".naval-game--compact .naval-scene")
+      ?.getBoundingClientRect();
+    const bounds =
+      scene && scene.height <= (viewport?.height || window.innerHeight) - 8
+        ? scene
+        : rect;
+    const margin = bounds === scene ? 4 : 12;
     const shift =
-      rect.bottom > bottom - 12
-        ? rect.bottom - bottom + 12
-        : rect.top < top + 12
-          ? rect.top - top - 12
+      bounds.bottom > bottom - margin
+        ? bounds.bottom - bottom + margin
+        : bounds.top < top + margin
+          ? bounds.top - top - margin
           : 0;
     if (
       shift &&
@@ -163,6 +174,18 @@ export default function NavalBattleGame({
       (a, b) => a.spawnAtMs + a.fallDurationMs - b.spawnAtMs - b.fallDurationMs,
     );
   const prompts = normal.slice(0, 3);
+  const wordLanes = useRef(new Map<string, number>());
+  const promptIds = new Set(prompts.map((word) => word.id));
+  for (const id of wordLanes.current.keys())
+    if (!promptIds.has(id)) wordLanes.current.delete(id);
+  for (const word of prompts) {
+    if (wordLanes.current.has(word.id)) continue;
+    const occupied = new Set(wordLanes.current.values());
+    wordLanes.current.set(
+      word.id,
+      [1, 2, 3].find((lane) => !occupied.has(lane)) || 1,
+    );
+  }
   const special = visible.find((word) => word.kind === "special");
   const lastMiss = session.words
     .filter(
@@ -204,6 +227,7 @@ export default function NavalBattleGame({
     const viewport = window.visualViewport;
     const viewportChanged = () => {
       const height = viewport?.height || window.innerHeight;
+      setViewportHeight(height);
       setKeyboardInset(
         Math.max(
           0,
@@ -239,7 +263,7 @@ export default function NavalBattleGame({
       input.current?.focus({ preventScroll: true });
       requestAnimationFrame(() => requestAnimationFrame(keepInputVisible));
     }
-  }, [started, ended, compactViewport]);
+  }, [started, ended]);
   useEffect(() => {
     const previous = previousBattle.current;
     const next: Effect[] = [];
@@ -420,6 +444,7 @@ export default function NavalBattleGame({
           "--naval-ocean-art": `url(${ART}sea-battle.webp)`,
           "--naval-explosion-art": `url(${ART}explosion.webp)`,
           "--naval-keyboard-inset": `${keyboardInset}px`,
+          "--naval-viewport-height": `${Math.max(340, Math.min(400, viewportHeight - 8))}px`,
         } as React.CSSProperties
       }
       aria-label="내가 충무공이라고?! 해전 게임"
@@ -467,39 +492,49 @@ export default function NavalBattleGame({
           className="naval-health naval-health--allied"
           aria-label={`아군 체력 ${battle.playerHp}`}
         >
-          <div>
-            <strong>조선 수군</strong>
+          <div className="naval-health-heading">
+            <span className="naval-health-crest" aria-hidden="true">
+              帥
+            </span>
+            <strong>아군 기함</strong>
             <span>
               {battle.playerHp} / {WEPLAY_BATTLE_MAX_HP}
             </span>
           </div>
-          <meter
-            aria-label="아군 체력"
-            value={battle.playerHp}
-            min={0}
-            max={WEPLAY_BATTLE_MAX_HP}
-          >
-            아군 체력
-          </meter>
+          <div className="naval-health-track">
+            <meter
+              aria-label="아군 체력"
+              value={battle.playerHp}
+              min={0}
+              max={WEPLAY_BATTLE_MAX_HP}
+            >
+              아군 체력
+            </meter>
+          </div>
         </div>
         <div
           className="naval-health naval-health--enemy"
           aria-label={`적군 체력 ${battle.enemyHp}`}
         >
-          <div>
-            <strong>적선 {battle.sunkShips + 1}</strong>
+          <div className="naval-health-heading">
+            <span className="naval-health-crest" aria-hidden="true">
+              敵
+            </span>
+            <strong>적 기함 {battle.sunkShips + 1}</strong>
             <span>
               {battle.enemyHp} / {WEPLAY_BATTLE_MAX_HP}
             </span>
           </div>
-          <meter
-            aria-label="적군 체력"
-            value={battle.enemyHp}
-            min={0}
-            max={WEPLAY_BATTLE_MAX_HP}
-          >
-            적군 체력
-          </meter>
+          <div className="naval-health-track">
+            <meter
+              aria-label="적군 체력"
+              value={battle.enemyHp}
+              min={0}
+              max={WEPLAY_BATTLE_MAX_HP}
+            >
+              적군 체력
+            </meter>
+          </div>
           <small>
             적 포격까지{" "}
             {Math.max(
@@ -509,17 +544,39 @@ export default function NavalBattleGame({
             초
           </small>
         </div>
+        <div className="naval-fleet naval-fleet--enemy" aria-hidden="true">
+          {Array.from({ length: 5 }, (_, index) => (
+            <img
+              key={index}
+              className={`naval-reinforcement naval-reinforcement--${index + 1}`}
+              src={`${ART}enemy-ship.webp`}
+              alt=""
+              draggable={false}
+            />
+          ))}
+        </div>
+        <div className="naval-fleet naval-fleet--allied" aria-hidden="true">
+          {Array.from({ length: 2 }, (_, index) => (
+            <img
+              key={index}
+              className={`naval-reinforcement naval-reinforcement--${index + 1}`}
+              src={`${ART}allied-ship.webp`}
+              alt=""
+              draggable={false}
+            />
+          ))}
+        </div>
         <img
           className={`naval-ship naval-ship--allied${battle.playerHp <= 25 ? " is-damaged" : ""}`}
           src={`${ART}allied-ship.webp`}
-          alt="조선 수군 전함"
+          alt="아군 기함"
           draggable={false}
         />
         <img
           key={battle.sunkShips}
           className="naval-ship naval-ship--enemy"
           src={`${ART}enemy-ship.webp`}
-          alt="적군 전함"
+          alt="적 기함"
           draggable={false}
         />
         <Sprite className="naval-commander" rect={[0, 175, 430, 452]} />
@@ -618,9 +675,18 @@ export default function NavalBattleGame({
         )}
         <div className="naval-prompts" aria-label="입력할 단어">
           {prompts.map((word) => (
-            <div className="naval-word" key={word.id}>
+            <div
+              className="naval-word"
+              key={word.id}
+              data-word-id={word.id}
+              style={{ gridColumn: wordLanes.current.get(word.id), gridRow: 1 }}
+            >
+              <Sprite
+                className="naval-word-splash"
+                rect={[1025, 732, 195, 195]}
+              />
               <strong>{word.text}</strong>
-              <span>
+              <span className="naval-word-timer">
                 {Math.max(
                   1,
                   Math.ceil(
@@ -680,7 +746,7 @@ export default function NavalBattleGame({
               ))}
             </div>
             <strong>
-              포격 준비{" "}
+              {rules.ammoRequired}개마다 포격{" "}
               <span>
                 {battle.ammo}/{rules.ammoRequired}
               </span>
@@ -736,29 +802,30 @@ export default function NavalBattleGame({
             </button>
           </div>
         </form>
-      </div>
-      <div className="naval-footer">
-        <label>
-          <input
-            type="checkbox"
-            checked={reducedMotion}
-            onChange={(event) => setReducedMotion(event.target.checked)}
-          />
-          움직임 줄이기
-        </label>
-        <span>
-          {preview
-            ? "위스·랭킹·학생 기록에 반영되지 않습니다."
-            : session.mode === "practice"
-              ? "위스 변동 없음"
-              : `도전 비용 ${session.policy.challengeCost}위스`}
-        </span>
-      </div>
-      <div className="naval-feedback" role="status">
-        {feedback ||
-          (started && !ended
-            ? `정답 ${rules.ammoRequired}개마다 자동 포격`
-            : "")}
+        <div className="naval-footer">
+          <label>
+            <input
+              type="checkbox"
+              checked={reducedMotion}
+              onChange={(event) => setReducedMotion(event.target.checked)}
+            />
+            움직임 줄이기
+          </label>
+          <div className="naval-footer-info">
+            <span>
+              {preview
+                ? compactViewport
+                  ? "체험 · 위스·랭킹·학생 기록 미반영"
+                  : "위스·랭킹·학생 기록에 반영되지 않습니다."
+                : session.mode === "practice"
+                  ? "위스 변동 없음"
+                  : `도전 비용 ${session.policy.challengeCost}위스`}
+            </span>
+            <div className="naval-feedback" role="status">
+              {feedback}
+            </div>
+          </div>
+        </div>
       </div>
       {error && (
         <div className="weplay-error" role="alert">

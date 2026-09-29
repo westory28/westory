@@ -14,7 +14,9 @@ let playwright;
 try { playwright = require('playwright'); }
 catch { playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')); }
 const core = require(path.join(root, 'functions/weplayCore.js'));
-const evidence = path.join(root, '.superloopy/sessions/weplay-naval-20260929/evidence');
+const evidence = process.env.WEPLAY_QA_EVIDENCE_DIR
+  ? path.resolve(process.env.WEPLAY_QA_EVIDENCE_DIR)
+  : path.join(root, '.superloopy/sessions/weplay-naval-layout-20260929/evidence');
 await fs.mkdir(evidence, { recursive: true });
 const modulePath = relative => JSON.stringify(path.join(root, relative).replaceAll('\\', '/'));
 const lessons = [{ unitId: 'naval-qa', title: '임진왜란과 수군', isVisibleToStudents: true, words: ['이순신', '거북선', '한산도', '판옥선', '명량해전', '학익진'], wordCount: 6 }];
@@ -121,7 +123,7 @@ const server = http.createServer(async (request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await playwright.chromium.launch({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || 'msedge', headless: true });
-const checks = [], errors = [], requests = [], screenshots = [];
+const checks = [], errors = [], requests = [], screenshots = [], layoutMeasurements = [];
 async function open(view = 'battle', width = 1280, query = '') {
   const page = await browser.newPage({ viewport: { width, height: 950 } });
   page.on('pageerror', error => errors.push(error.message));
@@ -134,7 +136,39 @@ async function open(view = 'battle', width = 1280, query = '') {
 }
 async function capture(page, name) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${name}: horizontal overflow`);
-  await page.screenshot({ path: path.join(evidence, name + '.png'), fullPage: true }); screenshots.push(name + '.png');
+  await page.screenshot({ path: path.join(evidence, name + '.png'), fullPage: !name.includes('keyboard-viewport') }); screenshots.push(name + '.png');
+}
+async function measureBattleLayout(page) {
+  return page.evaluate(() => {
+    const box = selector => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const bounds = element.getBoundingClientRect();
+      return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom, width: bounds.width, height: bounds.height };
+    };
+    const scene = box('.naval-scene');
+    const inside = selector => {
+      const bounds = box(selector);
+      return !!bounds && bounds.left >= scene.left - 1 && bounds.right <= scene.right + 1 && bounds.top >= scene.top - 1 && bounds.bottom <= scene.bottom + 1;
+    };
+    const allShips = [...document.querySelectorAll('.naval-scene img')].filter(image => /(?:enemy|allied)-ship/.test(image.src));
+    const ships = side => allShips.filter(image => image.src.includes(side + '-ship')).map(image => { const b = image.getBoundingClientRect(); return { width: b.width, height: b.height, top: b.top, bottom: b.bottom, visible: getComputedStyle(image).visibility !== 'hidden' && getComputedStyle(image).display !== 'none', loaded: image.complete && image.naturalWidth > 0 }; });
+    const controls = [...document.querySelectorAll('.naval-input-frame button,.naval-input-frame input,.naval-footer label')].map(element => { const bounds = element.getBoundingClientRect(); return { tag: element.tagName, width: bounds.width, height: bounds.height }; });
+    return { scene, input: box('.naval-input-frame'), alliedHealth: box('.naval-health--allied'), enemyHealth: box('.naval-health--enemy'), alliedFleet: box('.naval-fleet--allied'), enemyFleet: box('.naval-fleet--enemy'), enemyShips: ships('enemy'), alliedShips: ships('allied'), controls, footerInside: inside('.naval-footer'), feedbackInside: inside('.naval-feedback'), promptsInside: inside('.naval-prompts'), words: [...document.querySelectorAll('.naval-word strong')].map(element => ({ font: parseFloat(getComputedStyle(element).fontSize), fits: element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight })), wordRise: [...document.querySelectorAll('.naval-word')].map(element => ({ animation: getComputedStyle(element).animationName, transform: getComputedStyle(element).transform, background: getComputedStyle(element).backgroundImage })) };
+  });
+}
+function assertBattleLayout(metrics, name) {
+  assert.ok(metrics.footerInside && metrics.feedbackInside && metrics.promptsInside, `${name}: scene-contained controls/prompts ${JSON.stringify(metrics)}`);
+  assert.ok(metrics.controls.every(control => control.width >= 44 && control.height >= 44), `${name}: 44px touch controls ${JSON.stringify(metrics.controls)}`);
+  assert.ok(metrics.enemyShips.filter(ship => ship.visible && ship.loaded && ship.width > 10).length >= 6, `${name}: at least six actual visible enemy raster ships`);
+  assert.ok(metrics.alliedShips.filter(ship => ship.visible && ship.loaded && ship.width > 10).length >= 3, `${name}: at least three actual visible allied raster ships`);
+  assert.ok(metrics.enemyHealth.bottom < metrics.alliedHealth.top, `${name}: enemy health above allied health`);
+  assert.ok(metrics.alliedHealth.bottom <= metrics.input.top + 1, `${name}: allied health above command input`);
+  assert.ok(metrics.input.top - metrics.alliedHealth.bottom <= 120, `${name}: allied health is near the command input`);
+  assert.ok(metrics.words.every(word => word.font >= 16 && word.fits), `${name}: legible and unclipped prompt text`);
+  if (metrics.scene.width > 900) assert.ok(metrics.input.width <= Math.min(520, metrics.scene.width / 2) + 1, `${name}: desktop command width <= half scene and 520px`);
+  if (metrics.scene.width <= 600) assert.ok(metrics.scene.height > metrics.scene.width * 1.2, `${name}: dedicated portrait mobile layout`);
+  if (metrics.enemyFleet) assert.ok(metrics.enemyHealth.top < metrics.enemyFleet.top + metrics.enemyFleet.height / 2, `${name}: enemy HP visually above the enemy fleet`);
 }
 async function currentBattle(page) {
   return page.evaluate(() => {
@@ -161,6 +195,34 @@ let failure = null;
 try {
   assert.equal(core.DEFAULT_GAME_SETTINGS.difficulties.mild.durationSeconds, 90, 'Naval defaults must be 90 seconds');
   checks.push('90-second default contract');
+  for (const width of [320, 390, 768, 1280]) {
+    const layout = await open('battle', width);
+    await layout.locator('.naval-game').waitFor();
+    await advanceTo(layout, 2200);
+    await layout.waitForFunction(() => [...document.querySelectorAll('.naval-game img')].every(image => image.complete && image.naturalWidth > 0));
+    assert.equal(await layout.locator('.naval-word').count(), 3);
+    assert.equal(await layout.locator('.naval-word-splash').count(), 3);
+    await layout.waitForTimeout(300);
+    const metrics = await measureBattleLayout(layout);
+    assertBattleLayout(metrics, `${width}px`);
+    layoutMeasurements.push({ width, ...metrics });
+    await capture(layout, `naval-layout-water-columns-${width}`);
+    await layout.close();
+  }
+  checks.push('320/390/768/1280px: three raster water-column words, 6+ enemy and 3+ allied ships, enemy HP above/allied HP near input, scene-contained help and feedback, 44px controls, desktop half-width command, dedicated portrait mobile layout');
+  const lane = await open('battle', 390);
+  await lane.locator('.naval-game').waitFor(); await advanceTo(lane, 2200);
+  await lane.waitForTimeout(700);
+  const beforeLane = await lane.locator('.naval-word').evaluateAll(elements => Object.fromEntries(elements.map(element => [element.dataset.wordId, element.getBoundingClientRect().x])));
+  const firstLaneId = await lane.locator('.naval-word').first().getAttribute('data-word-id');
+  await answerVisible(lane);
+  await lane.waitForFunction(id => !document.querySelector(`.naval-word[data-word-id="${id}"]`), firstLaneId);
+  const afterLane = await lane.locator('.naval-word').evaluateAll(elements => Object.fromEntries(elements.map(element => [element.dataset.wordId, element.getBoundingClientRect().x])));
+  for (const [id, x] of Object.entries(beforeLane)) if (id !== firstLaneId && id in afterLane) assert.ok(Math.abs(afterLane[id] - x) < 1, `${id} must keep its water lane after another word is answered`);
+  assert.equal(Object.keys(beforeLane).filter(id => id !== firstLaneId && id in afterLane).length, 2);
+  await capture(lane, 'naval-stable-water-lanes-390');
+  checks.push('Answering one water word preserves the remaining two word IDs in their original horizontal lanes');
+  await lane.close();
   for (const [difficulty, ammo] of [['mild', 2], ['medium', 3], ['spicy', 4]]) {
     const width = { mild: 390, medium: 768, spicy: 1280 }[difficulty];
     const page = await open('battle', width, `difficulty=${difficulty}`);
@@ -209,29 +271,53 @@ try {
       return [...document.querySelectorAll('.naval-health,.naval-command,.naval-word,.naval-hud')].map(element => { const box = element.getBoundingClientRect(); return { className: element.className, fits: box.left >= scene.left - 1 && box.right <= scene.right + 1 && box.top >= scene.top - 1 && box.bottom <= scene.bottom + 1 }; });
     });
     assert.ok(geometry.every(item => item.fits), JSON.stringify(geometry));
+    const metrics = await measureBattleLayout(narrow);
+    assertBattleLayout(metrics, `teacher ${container}px`);
+    layoutMeasurements.push({ container, ...metrics });
     await capture(narrow, `naval-teacher-container-${container}`);
     await narrow.close();
   }
   const keyboard = await open('battle', 390);
-  await keyboard.locator('.naval-game').waitFor(); await advanceTo(keyboard, 200);
+  await keyboard.locator('.naval-game').waitFor(); await advanceTo(keyboard, 2200);
   await keyboard.getByRole('textbox', { name: '단어 입력' }).focus();
   await keyboard.setViewportSize({ width: 390, height: 360 });
   await keyboard.clock.runFor(250);
   await keyboard.locator('.naval-game--compact').waitFor();
   const keyboardGeometry = await keyboard.evaluate(() => {
     const input = document.querySelector('#naval-answer-input').getBoundingClientRect();
-    const prompt = document.querySelector('.naval-word').getBoundingClientRect();
+    const prompts = [...document.querySelectorAll('.naval-word')].map(element => element.getBoundingClientRect());
     const bottom = visualViewport.offsetTop + visualViewport.height;
-    return { input: { top: input.top, bottom: input.bottom }, prompt: { top: prompt.top, bottom: prompt.bottom }, viewportBottom: bottom };
+    const health = [...document.querySelectorAll('.naval-health')].map(element => { const rect = element.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom }; });
+    const retained = ['.naval-hud', '.naval-footer'].map(selector => { const rect = document.querySelector(selector).getBoundingClientRect(); return { selector, top: rect.top, bottom: rect.bottom }; });
+    return { input: { top: input.top, bottom: input.bottom }, prompts: prompts.map(prompt => ({ top: prompt.top, bottom: prompt.bottom })), health, retained, viewportBottom: bottom };
   });
   assert.ok(keyboardGeometry.input.top >= 0 && keyboardGeometry.input.bottom <= keyboardGeometry.viewportBottom + 1, JSON.stringify(keyboardGeometry));
-  assert.ok(keyboardGeometry.prompt.bottom > 0 && keyboardGeometry.prompt.bottom <= keyboardGeometry.viewportBottom, JSON.stringify(keyboardGeometry));
+  assert.equal(keyboardGeometry.prompts.length, 3);
+  assert.ok(keyboardGeometry.prompts.every(prompt => prompt.top >= 0 && prompt.bottom <= keyboardGeometry.viewportBottom), JSON.stringify(keyboardGeometry));
+  assert.ok(keyboardGeometry.health.every(health => health.top >= 0 && health.bottom <= keyboardGeometry.viewportBottom), JSON.stringify(keyboardGeometry));
+  assert.ok(keyboardGeometry.retained.every(element => element.top >= 0 && element.bottom <= keyboardGeometry.viewportBottom), JSON.stringify(keyboardGeometry));
+  await keyboard.waitForTimeout(650);
   await capture(keyboard, 'naval-keyboard-viewport-390x360');
   await answerVisible(keyboard);
+  await advanceTo(keyboard, 30100);
+  const compactSpecial = await keyboard.evaluate(() => {
+    const rect = selector => { const bounds = document.querySelector(selector).getBoundingClientRect(); return { top: bounds.top, bottom: bounds.bottom }; };
+    return { special: rect('.naval-special'), input: rect('.naval-input-frame'), allied: rect('.naval-health--allied'), enemy: rect('.naval-health--enemy'), viewport: visualViewport.offsetTop + visualViewport.height };
+  });
+  assert.ok(compactSpecial.special.top >= 0 && compactSpecial.special.bottom <= compactSpecial.viewport, JSON.stringify(compactSpecial));
+  for (const element of [compactSpecial.input, compactSpecial.allied, compactSpecial.enemy]) assert.ok(compactSpecial.special.bottom <= element.top || compactSpecial.special.top >= element.bottom, `Keyboard special overlaps HP/input: ${JSON.stringify(compactSpecial)}`);
+  await capture(keyboard, 'naval-special-keyboard-viewport-390x360');
+  assert.equal((await answerVisible(keyboard, true)).accepted, true);
+  await keyboard.getByRole('checkbox', { name: '움직임 줄이기' }).check();
+  await keyboard.setViewportSize({ width: 390, height: 950 });
+  await keyboard.clock.runFor(250);
+  assert.equal(await keyboard.getByRole('checkbox', { name: '움직임 줄이기' }).evaluate(element => document.activeElement === element), true, 'Closing the keyboard while changing motion settings must not refocus the answer input');
   checks.push('600/680px teacher content at 1280px viewport keeps HUD, words and input inside scene; simulated keyboard viewport shrink preserves visible prompt and usable input');
   await keyboard.close();
-  const longWords = await open('battle', 390, 'long=1');
+  for (const width of [320, 390]) {
+  const longWords = await open('battle', width, 'long=1');
   await longWords.locator('.naval-game').waitFor(); await advanceTo(longWords, 2200);
+  await longWords.waitForTimeout(700);
   assert.equal(await longWords.locator('.naval-word').count(), 3);
   const longGeometry = await longWords.evaluate(() => ({
     font: parseFloat(getComputedStyle(document.querySelector('.naval-word strong')).fontSize),
@@ -240,9 +326,10 @@ try {
     wordsFit: [...document.querySelectorAll('.naval-word strong')].every(element => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight),
   }));
   assert.ok(longGeometry.font >= 16 && longGeometry.wordsFit && longGeometry.promptsBottom < longGeometry.inputTop, JSON.stringify(longGeometry));
-  await capture(longWords, 'naval-three-long-words-390');
-  checks.push('Three simultaneous 12-character mobile prompts remain at least 16px, uncut and above the input');
+  await capture(longWords, `naval-three-long-words-${width}`);
+  checks.push(`${width}px: three simultaneous 12-character mobile prompts remain at least 16px, uncut and above the input`);
   await longWords.close();
+  }
 
   const special = await open('battle', 1280);
   await special.locator('.naval-game').waitFor();
@@ -290,6 +377,10 @@ try {
   await ime.waitForFunction(() => window.navalQa.answers.length === 1);
   await ime.getByRole('checkbox', { name: '움직임 줄이기' }).check();
   assert.equal(await ime.locator('.naval-game--still').count(), 1);
+  await advanceTo(ime, 1700);
+  assert.ok(await ime.locator('.naval-word').count() > 0);
+  assert.equal(await ime.locator('.naval-word,.naval-word-splash').evaluateAll(elements => elements.every(element => getComputedStyle(element).animationName === 'none')), true);
+  await capture(ime, 'naval-water-words-reduced-motion-768');
   checks.push('Korean composition does not prematurely submit; completed composition submits once; reduced motion switch applies');
   await ime.close();
 
@@ -375,7 +466,11 @@ try {
   assert.deepEqual(errors, []); assert.deepEqual(requests, []);
 } catch (error) { failure = error.stack; process.exitCode = 1; }
 finally {
-  await fs.writeFile(path.join(evidence, 'naval-browser-results.json'), JSON.stringify({ status: failure ? 'failed' : 'passed', failure, checks, errors, requests, screenshots }, null, 2));
+  if (failure) {
+    const page = browser.contexts().flatMap(context => context.pages()).at(-1);
+    if (page) { await page.screenshot({ path: path.join(evidence, 'failure-current-viewport.png'), fullPage: false }); screenshots.push('failure-current-viewport.png'); }
+  }
+  await fs.writeFile(path.join(evidence, 'naval-browser-results.json'), JSON.stringify({ status: failure ? 'failed' : 'passed', failure, checks, errors, requests, screenshots, layoutMeasurements }, null, 2));
   await browser.close(); await new Promise(resolve => server.close(resolve));
 }
 if (failure) throw new Error(failure);
