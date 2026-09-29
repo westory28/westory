@@ -364,7 +364,7 @@ async function measure(page, view, width) {
   return result;
 }
 try {
-  for (const width of [390, 768, 1280]) {
+  for (const width of [390, 768, 1280, 1440]) {
     const page = await pageFor("management", width);
     await page
       .getByRole("heading", { name: "게임 운영", exact: true })
@@ -379,6 +379,39 @@ try {
         .isDisabled(),
       true,
     );
+    const table = page.getByRole("table", {
+      name: "난이도별 시간과 단어 길이 설정",
+    });
+    assert.equal(await table.locator("tbody tr").count(), 3);
+    assert.equal(await table.getByRole("spinbutton").count(), 18);
+    for (const label of ["착한맛", "중간맛", "매운맛"])
+      assert.equal(
+        await table.getByRole("rowheader", { name: label }).isVisible(),
+        true,
+      );
+    assert.equal(
+      await table.getByRole("columnheader", { name: "낙하 시간 (초)" }).count(),
+      1,
+    );
+    const scroll = page.getByRole("region", { name: "난이도별 설정 표" });
+    if (width === 390)
+      assert.equal(
+        await scroll.evaluate((el) => el.scrollWidth > el.clientWidth),
+        true,
+      );
+    const first = page.getByRole("spinbutton", {
+      name: "착한맛 전체 제한시간",
+      exact: true,
+    });
+    await first.focus();
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await page
+        .getByRole("spinbutton", { name: "착한맛 초반 낙하 시간", exact: true })
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
+    await first.blur();
     await capture(page, `settings-collapsed-${width}`);
     await page.locator("details.teacher-weplay-pool > summary").click();
     await page.getByLabel("단어·자료 검색", { exact: true }).fill("고려");
@@ -388,7 +421,7 @@ try {
     await page.close();
   }
   checks.push(
-    "390/768/1280: word pool collapsed by default, single searchable accordion, no horizontal overflow",
+    "390/768/1280/1440: three difficulty rows with shared headers, 18 accessible inputs, keyboard order, local table scrolling, single word accordion and no page overflow",
   );
   const page = await pageFor("management", 390);
   await page.getByRole("heading", { name: "게임 운영", exact: true }).waitFor();
@@ -479,20 +512,12 @@ try {
   await input("최소 단어 길이").fill("4");
   await input("최대 단어 길이").fill("4");
   assert.equal(await preview.isEnabled(), true);
-  await page
-    .getByRole("group", { name: "설정할 난이도", exact: true })
-    .getByRole("button", { name: "중간맛", exact: true })
-    .click();
   assert.equal(
     await page
       .getByRole("spinbutton", { name: "중간맛 전체 제한시간", exact: true })
       .inputValue(),
     "60",
   );
-  await page
-    .getByRole("group", { name: "설정할 난이도", exact: true })
-    .getByRole("button", { name: "착한맛", exact: true })
-    .click();
   assert.equal(await input("전체 제한시간").inputValue(), "30");
   await capture(page, "settings-edited-390");
   await page.evaluate(

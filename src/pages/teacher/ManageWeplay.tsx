@@ -372,35 +372,33 @@ export default function ManageWeplay() {
                         )}
                       </div>
                     </div>
-                    <label className="teacher-weplay-toggle">
-                      <input
-                        type="checkbox"
-                        checked={draft.enabled}
-                        disabled={!canWrite || saving}
-                        onChange={(event) =>
-                          update({ enabled: event.target.checked })
-                        }
-                      />
-                      학생 게임 사용 허용
-                    </label>
-                    <p className="teacher-weplay-note">
-                      끄면 새 연습·도전을 시작할 수 없습니다. 진행 중인 판은
-                      끝까지 진행됩니다.
-                    </p>
+                    <div className="teacher-weplay-operation-row">
+                      <label className="teacher-weplay-toggle">
+                        <input
+                          type="checkbox"
+                          checked={draft.enabled}
+                          disabled={!canWrite || saving}
+                          onChange={(event) =>
+                            update({ enabled: event.target.checked })
+                          }
+                        />
+                        학생 게임 사용 허용
+                      </label>
+                      <div className="teacher-weplay-counts">
+                        <span>
+                          학생 출제 가능 <strong>{availableCount}개</strong>
+                        </span>
+                        <span>
+                          교사 체험 <strong>{countWords(false)}개</strong>
+                        </span>
+                      </div>
+                    </div>
                     {removedSourceCount > 0 && (
                       <p className="teacher-weplay-notice">
                         삭제된 자료 {removedSourceCount}개를 선택 목록에서
                         제외했습니다. 게임 설정을 저장하면 적용됩니다.
                       </p>
                     )}
-                    <div className="teacher-weplay-counts">
-                      <span>
-                        학생 출제 가능 <strong>{availableCount}개</strong>
-                      </span>
-                      <span>
-                        교사 체험 <strong>{countWords(false)}개</strong>
-                      </span>
-                    </div>
                     <WeplayWordPool
                       lessons={data.lessons}
                       settings={draft}
@@ -414,45 +412,51 @@ export default function ManageWeplay() {
                       update={update}
                       onValidityChange={setDifficultyError}
                     />
-                    {difficultyError && (
-                      <p className="teacher-weplay-error" role="alert">
-                        설정을 저장하거나 체험하려면 입력값을 확인해 주세요.{" "}
-                        {difficultyError}
-                      </p>
-                    )}
                   </section>
                 </form>
                 <section
-                  className="teacher-weplay-section"
+                  className="teacher-weplay-section teacher-weplay-preview-controls"
                   aria-labelledby="weplay-preview-title"
                 >
-                  <div className="teacher-weplay-section-title">
+                  <div className="teacher-weplay-preview-toolbar">
                     <h2 id="weplay-preview-title">교사 체험</h2>
+                    <div
+                      className="teacher-weplay-difficulty"
+                      role="group"
+                      aria-label="체험 난이도"
+                    >
+                      {(
+                        Object.keys(
+                          WEPLAY_DIFFICULTY_LABELS,
+                        ) as WeplayDifficulty[]
+                      ).map((level) => (
+                        <button
+                          key={level}
+                          className="teacher-weplay-button"
+                          aria-pressed={difficulty === level}
+                          disabled={starting}
+                          onClick={() => setDifficulty(level)}
+                        >
+                          {WEPLAY_DIFFICULTY_LABELS[level]}
+                        </button>
+                      ))}
+                    </div>
                     <span className="teacher-weplay-note">
                       {draft.difficulties[difficulty].durationSeconds}초 · 20개
                       단어
                     </span>
-                  </div>
-                  <div
-                    className="teacher-weplay-difficulty"
-                    role="group"
-                    aria-label="체험 난이도"
-                  >
-                    {(
-                      Object.keys(
-                        WEPLAY_DIFFICULTY_LABELS,
-                      ) as WeplayDifficulty[]
-                    ).map((level) => (
-                      <button
-                        key={level}
-                        className="teacher-weplay-button"
-                        aria-pressed={difficulty === level}
-                        disabled={starting}
-                        onClick={() => setDifficulty(level)}
-                      >
-                        {WEPLAY_DIFFICULTY_LABELS[level]}
-                      </button>
-                    ))}
+                    <button
+                      className="teacher-weplay-button is-primary"
+                      disabled={
+                        starting ||
+                        saving ||
+                        previewCount < 3 ||
+                        !!difficultyError
+                      }
+                      onClick={() => void startPreview()}
+                    >
+                      {starting ? "준비 중…" : "체험 시작"}
+                    </button>
                   </div>
                   <p className="teacher-weplay-note">
                     위스·랭킹·학생 기록에 반영되지 않습니다.
@@ -464,18 +468,6 @@ export default function ManageWeplay() {
                       필요합니다.
                     </p>
                   )}
-                  <button
-                    className="teacher-weplay-button is-primary"
-                    disabled={
-                      starting ||
-                      saving ||
-                      previewCount < 3 ||
-                      !!difficultyError
-                    }
-                    onClick={() => void startPreview()}
-                  >
-                    {starting ? "준비 중…" : "체험 시작"}
-                  </button>
                 </section>
               </>
             )}
