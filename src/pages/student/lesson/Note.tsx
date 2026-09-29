@@ -20,7 +20,7 @@ const Note: React.FC = () => {
 
   return (
     <div className="student-lesson-page bg-gray-50">
-      <div className="teacher-sub-workspace teacher-sub-workspace--page">
+      <div className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--lesson">
         <LessonSidebar
           isOpen={isSidebarOpen}
           onOpenChange={setIsSidebarOpen}
