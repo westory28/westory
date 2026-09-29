@@ -645,6 +645,24 @@ try {
           `${expected.state} action permission is unchanged`,
         );
         const actionBox = await action.boundingBox();
+        const cardBox = await item.boundingBox();
+        assert(
+          Math.abs(
+            cardBox.x + cardBox.width - actionBox.x - actionBox.width - 21,
+          ) < 2,
+          "start action stays at the right edge",
+        );
+        if (width >= 640) {
+          assert(
+            Math.abs(
+              actionBox.y +
+                actionBox.height / 2 -
+                cardBox.y -
+                cardBox.height / 2,
+            ) < 2,
+            "desktop/tablet action is alongside the content, not in a footer",
+          );
+        }
         assert(
           actionBox.height >= 44,
           `${expected.state} action is touch reachable`,
@@ -657,6 +675,20 @@ try {
         );
       }
       const primary = item.locator('[data-history-primary-info="true"]');
+      if (["available", "cooldown"].includes(expected.state)) {
+        const previousHeight =
+          width === 390
+            ? expected.state === "available"
+              ? 408
+              : 376
+            : expected.state === "available"
+              ? 299
+              : 279;
+        assert(
+          (await item.boundingBox()).height <= previousHeight,
+          "card does not grow vertically from the previous layout",
+        );
+      }
       assert.deepEqual(await primary.locator("dd").allTextContents(), [
         "46문제",
         "10분",
