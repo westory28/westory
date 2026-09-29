@@ -21,6 +21,7 @@ interface TeacherSidebarProps {
   showSettings: boolean;
   collapsed: boolean;
   mobileOpen: boolean;
+  mobileAccount?: React.ReactNode;
   onToggleCollapsed: () => void;
   onCloseMobile: () => void;
   isChildActive: (
@@ -45,6 +46,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   showSettings,
   collapsed,
   mobileOpen,
+  mobileAccount,
   onToggleCollapsed,
   onCloseMobile,
   isChildActive,
@@ -178,6 +180,9 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
             <TeacherNavigationIcon name="close" />
           </button>
         </div>
+        {mobileAccount && (
+          <div className="teacher-mobile-account">{mobileAccount}</div>
+        )}
         <nav className="teacher-sidebar-nav" aria-label="교사 주 메뉴">
           {showDashboard && (
             <Link

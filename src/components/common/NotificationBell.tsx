@@ -21,6 +21,7 @@ import { InlineLoading } from "./LoadingState";
 interface NotificationBellProps {
   className?: string;
   buttonClassName?: string;
+  panelClassName?: string;
   onUnreadCountChange?: (count: number) => void;
 }
 
@@ -167,6 +168,7 @@ const shownRealtimeToastKeys = new Set<string>();
 const NotificationBell: React.FC<NotificationBellProps> = ({
   className = "",
   buttonClassName = "",
+  panelClassName = "",
   onUnreadCountChange,
 }) => {
   const navigate = useNavigate();
@@ -504,7 +506,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       </button>
 
       {open && (
-        <div className="fixed inset-x-3 top-[4.25rem] z-[130] overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl sm:left-auto sm:right-4 sm:w-[360px] lg:absolute lg:right-0 lg:top-11">
+        <div
+          className={`fixed inset-x-3 top-[4.25rem] z-[130] overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl sm:left-auto sm:right-4 sm:w-[360px] lg:absolute lg:right-0 lg:top-11 ${panelClassName}`}
+        >
           <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
             <div>
               <div className="text-sm font-extrabold text-stone-900">

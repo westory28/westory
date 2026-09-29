@@ -49,6 +49,8 @@ interface Props {
 
 const readableDate = (date: string) =>
   `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
+const compactDate = (date: string) =>
+  `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
 
 // Keep the configured hue readable on both white and the date badge's 22% tint.
 const readableEventColor = (color: string) => {
@@ -452,6 +454,7 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 <button
                   key={event.id}
                   type="button"
+                  aria-label={`${dateLabel}, ${event.title}, ${event.eventType !== "holiday" ? `${event.targetType === "class" && event.targetClass ? `${classLabel(event.targetClass)}, ` : ""}${meta.label}, ` : ""}${periodLabel}`}
                   className={`teacher-week-event${selectedDate && eventIncludesDate(event, selectedDate) ? " is-selected" : ""}`}
                   onClick={() => {
                     if (searchTerm) {
@@ -471,10 +474,22 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 >
                   <span
                     title={dateLabel}
+                    aria-label={dateLabel}
                     className={`teacher-week-event__date${event.eventType !== "holiday" ? " teacher-week-event__date-badge" : ""}`}
                   >
-                    <span className="teacher-week-event__date-label">
+                    <span
+                      className="teacher-week-event__date-label teacher-week-event__date-label--full"
+                      aria-hidden="true"
+                    >
                       {dateLabel}
+                    </span>
+                    <span
+                      className="teacher-week-event__date-label teacher-week-event__date-label--compact"
+                      aria-hidden="true"
+                    >
+                      {end > start
+                        ? `${compactDate(start)}–${compactDate(end)}`
+                        : compactDate(start)}
                     </span>
                   </span>
                   <span className="teacher-week-event__body">

@@ -146,6 +146,9 @@ const Header: React.FC<{
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileTeacherHeader, setMobileTeacherHeader] = useState(
+    () => window.matchMedia("(max-width: 1023px)").matches,
+  );
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
   const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(
@@ -538,8 +541,10 @@ const Header: React.FC<{
     if (!useTeacherSidebar) return;
     const desktop = window.matchMedia("(min-width: 1024px)");
     const closeDesktopDrawer = () => {
+      setMobileTeacherHeader(!desktop.matches);
       if (desktop.matches) closeMobileMenu();
     };
+    closeDesktopDrawer();
     desktop.addEventListener("change", closeDesktopDrawer);
     return () => desktop.removeEventListener("change", closeDesktopDrawer);
   }, [useTeacherSidebar, closeMobileMenu]);
@@ -699,6 +704,108 @@ const Header: React.FC<{
     };
   }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal]);
 
+  const accountControls = (
+    <>
+      {isTeacherPortal &&
+        !useTeacherSidebar &&
+        canManageSettings(userData, currentUser?.email || "") && (
+          <Link
+            to="/teacher/settings"
+            className="text-gray-400 hover:text-blue-600 transition"
+            title="설정"
+          >
+            <i className="fas fa-cog fa-lg"></i>
+          </Link>
+        )}
+
+      <Link
+        to={profileTarget}
+        className="user-greeting header-user-link inline-flex items-center gap-1.5 hover:text-blue-600 transition cursor-pointer"
+        title={isTeacherPortal ? "관리자 페이지" : "마이페이지"}
+      >
+        {!isTeacherPortal && (
+          <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">
+            {studentProfileIcon}
+          </span>
+        )}
+        <span className="header-user-name">{profileLabel}</span>
+        {!isTeacherPortal && studentRank && (
+          <PointRankBadge rank={studentRank} size="sm" className="shrink-0" />
+        )}
+      </Link>
+
+      <React.Suspense fallback={null}>
+        <NotificationBell
+          className={
+            useTeacherSidebar
+              ? "teacher-account-notification"
+              : "hidden lg:block"
+          }
+          panelClassName={
+            useTeacherSidebar && mobileTeacherHeader
+              ? "teacher-mobile-notification-panel"
+              : undefined
+          }
+          onUnreadCountChange={setMobileUnreadCount}
+        />
+      </React.Suspense>
+
+      <div
+        className={`${useTeacherSidebar ? "teacher-account-session" : "hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1"} bg-stone-100 rounded-full border border-stone-200`}
+      >
+        <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
+        <span
+          className={`${useTeacherSidebar ? "teacher-account-countdown" : ""} font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
+        >
+          {formatCountdown(remainingSeconds)}
+        </span>
+        <button
+          onClick={() => extendSession({ force: true })}
+          data-session-ignore="true"
+          className="text-stone-400 hover:text-blue-600 transition p-1"
+          title="시간 연장"
+          aria-label="시간 연장"
+        >
+          <i className="fas fa-redo-alt text-xs"></i>
+        </button>
+      </div>
+
+      <button
+        onClick={handleLogout}
+        data-session-ignore="true"
+        className="btn-logout"
+        aria-label={isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
+      >
+        <i
+          className="fas fa-right-from-bracket btn-logout-icon"
+          aria-hidden="true"
+        ></i>
+        <span className="btn-logout-label">
+          {isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
+        </span>
+      </button>
+
+      {!useTeacherSidebar && (
+        <button
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          data-session-ignore="true"
+          className="mobile-menu-btn"
+          aria-label="모바일 메뉴 열기"
+        >
+          <i className="fas fa-bars"></i>
+          {mobileUnreadCount > 0 && (
+            <span
+              className="mobile-menu-btn-badge"
+              aria-label={`읽지 않은 알림 ${mobileUnreadLabel}개`}
+            >
+              {mobileUnreadLabel}
+            </span>
+          )}
+        </button>
+      )}
+    </>
+  );
+
   if (!isReady) return null;
 
   return (
@@ -718,6 +825,7 @@ const Header: React.FC<{
           showSettings={canManageSettings(userData, currentUser?.email)}
           collapsed={sidebarCollapsed}
           mobileOpen={mobileMenuOpen}
+          mobileAccount={mobileTeacherHeader ? accountControls : undefined}
           onToggleCollapsed={onToggleSidebar}
           onCloseMobile={closeMobileMenu}
           isChildActive={isChildActive}
@@ -824,101 +932,7 @@ const Header: React.FC<{
           )}
 
           <div className="header-right">
-            {isTeacherPortal &&
-              !useTeacherSidebar &&
-              canManageSettings(userData, currentUser?.email || "") && (
-                <Link
-                  to="/teacher/settings"
-                  className="text-gray-400 hover:text-blue-600 transition"
-                  title="설정"
-                >
-                  <i className="fas fa-cog fa-lg"></i>
-                </Link>
-              )}
-
-            <Link
-              to={profileTarget}
-              className="user-greeting header-user-link inline-flex items-center gap-1.5 hover:text-blue-600 transition cursor-pointer"
-              title={isTeacherPortal ? "관리자 페이지" : "마이페이지"}
-            >
-              {!isTeacherPortal && (
-                <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">
-                  {studentProfileIcon}
-                </span>
-              )}
-              <span className="header-user-name">{profileLabel}</span>
-              {!isTeacherPortal && studentRank && (
-                <PointRankBadge
-                  rank={studentRank}
-                  size="sm"
-                  className="shrink-0"
-                />
-              )}
-            </Link>
-
-            <React.Suspense fallback={null}>
-              <NotificationBell
-                className={
-                  useTeacherSidebar
-                    ? "teacher-account-notification"
-                    : "hidden lg:block"
-                }
-                onUnreadCountChange={setMobileUnreadCount}
-              />
-            </React.Suspense>
-
-            <div
-              className={`${useTeacherSidebar ? "teacher-account-session" : "hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1"} bg-stone-100 rounded-full border border-stone-200`}
-            >
-              <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
-              <span
-                className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
-              >
-                {formatCountdown(remainingSeconds)}
-              </span>
-              <button
-                onClick={() => extendSession({ force: true })}
-                data-session-ignore="true"
-                className="text-stone-400 hover:text-blue-600 transition p-1"
-                title="시간 연장"
-              >
-                <i className="fas fa-redo-alt text-xs"></i>
-              </button>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              data-session-ignore="true"
-              className="btn-logout"
-              aria-label={isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
-            >
-              <i
-                className="fas fa-right-from-bracket btn-logout-icon"
-                aria-hidden="true"
-              ></i>
-              <span className="btn-logout-label">
-                {isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
-              </span>
-            </button>
-
-            {!useTeacherSidebar && (
-              <button
-                onClick={() => setMobileMenuOpen((prev) => !prev)}
-                data-session-ignore="true"
-                className="mobile-menu-btn"
-                aria-label="모바일 메뉴 열기"
-              >
-                <i className="fas fa-bars"></i>
-                {mobileUnreadCount > 0 && (
-                  <span
-                    className="mobile-menu-btn-badge"
-                    aria-label={`읽지 않은 알림 ${mobileUnreadLabel}개`}
-                  >
-                    {mobileUnreadLabel}
-                  </span>
-                )}
-              </button>
-            )}
+            {(!useTeacherSidebar || !mobileTeacherHeader) && accountControls}
           </div>
           {useTeacherSidebar && (
             <button
