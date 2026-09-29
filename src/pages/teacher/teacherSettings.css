@@ -1,22 +1,20 @@
 @import "../../components/common/portalSubNavigation.css";
 
+.teacher-layout .teacher-settings-sections {
+  padding-inline: 16px;
+}
+
 @media (min-width: 768px) {
   .teacher-layout .teacher-settings-workspace,
   .teacher-layout .teacher-sub-workspace {
     --teacher-sub-navigation-width: 256px;
     grid-template-columns: var(--teacher-sub-navigation-width) minmax(0, 1fr);
-    padding: 24px;
-    column-gap: 24px;
   }
   .teacher-layout .teacher-sub-workspace--lesson {
     --teacher-sub-navigation-width: 288px;
   }
   .teacher-layout .teacher-sub-navigation.teacher-settings-navigation {
     width: var(--teacher-sub-navigation-width);
-    margin-top: 0;
-  }
-  .teacher-layout .teacher-sub-content {
-    padding: 0;
   }
 }
 @media (min-width: 768px) and (max-width: 1023px) {

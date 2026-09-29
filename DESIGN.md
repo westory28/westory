@@ -327,4 +327,4 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 
 - Student weekly schedule keeps date, title, category and period on one row at every viewport, including reduced-motion mode. Reduced motion uses static single-line ellipsis instead of title animation or wrapping.
 
-- Teacher submenu workspaces use 24px outer padding to separate the menu from the global sidebar, with a 24px menu/content gap. Use 256px desktop / 240px tablet menus and 288px desktop / 256px tablet lesson contents. Mobile retains its existing disclosure and spacing. Student dimensions remain unchanged.
+- Teacher submenu lists have 16px horizontal padding inside the navigation panel; lesson rows retain their 8px padding so top-level icons start 24px from the panel edge. Keep the original adjoining global/submenu panels and original content padding. Use 256px desktop / 240px tablet menus and 288px desktop / 256px tablet lesson contents. Preserve mobile disclosure and student dimensions.
