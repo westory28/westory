@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import WorksheetBlankInput from "./WorksheetBlankInput";
 import {
   getHistoryClassroomBlankRenderRect,
   isHistoryClassroomBlankCorrect,
@@ -39,8 +40,6 @@ interface HistoryClassroomAssignmentViewProps {
 }
 
 const DEFAULT_HELPER_ITEMS = [
-  "오른쪽 참고 보기에서 단어를 확인하고, 지도 위 빈칸에 직접 입력합니다.",
-  "각 빈칸은 서로 독립적으로 입력하고 제출 전까지 자유롭게 수정할 수 있습니다.",
   "다른 창 전환, 화면 이동, 멀티태스킹 시 응시는 자동 취소됩니다.",
 ];
 
@@ -56,14 +55,6 @@ const TONE_CLASS_NAME: Record<
 const MIN_VIEWPORT_USER_SCALE = 1;
 const MAX_VIEWPORT_USER_SCALE = 4;
 const VIEWPORT_FIT_PADDING = 24;
-const BLANK_TEXT_HORIZONTAL_PADDING = 24;
-const BLANK_TEXT_VERTICAL_PADDING = 4;
-const BLANK_TEXT_MIN_FONT_SIZE = 3;
-const BLANK_TEXT_MAX_FONT_SIZE = 22;
-const BLANK_TEXT_LINE_HEIGHT_RATIO = 1.18;
-const BLANK_TEXT_FONT_FAMILY = '"Noto Sans KR", sans-serif';
-let blankTextMeasureContext: CanvasRenderingContext2D | null = null;
-
 const getTimeProgressToneClass = (timeProgressPercent: number) =>
   timeProgressPercent <= 20
     ? "bg-red-500"
@@ -86,76 +77,6 @@ const clampViewportUserScale = (value: number) =>
 
 const getCenteredViewportOffset = (viewportSize: number, contentSize: number) =>
   Math.max(0, (viewportSize - contentSize) / 2);
-
-const getBlankTextPaddingX = (pixelWidth: number) =>
-  Math.max(2, Math.min(12, Math.floor(pixelWidth * 0.12)));
-
-const getBlankTextPaddingY = (pixelHeight: number) =>
-  Math.max(0, Math.min(3, Math.floor(pixelHeight * 0.08)));
-
-const getBlankFontSize = (
-  pixelWidth: number,
-  pixelHeight: number,
-  content: string,
-) => {
-  const safeContent = String(content || "").trim() || "가";
-  const availableWidth = Math.max(
-    1,
-    pixelWidth -
-      Math.min(
-        BLANK_TEXT_HORIZONTAL_PADDING,
-        getBlankTextPaddingX(pixelWidth) * 2,
-      ),
-  );
-  const availableHeight = Math.max(
-    1,
-    pixelHeight -
-      Math.min(
-        BLANK_TEXT_VERTICAL_PADDING,
-        getBlankTextPaddingY(pixelHeight) * 2,
-      ),
-  );
-  const heightLimitedFontSize = Math.max(
-    BLANK_TEXT_MIN_FONT_SIZE,
-    Math.min(
-      BLANK_TEXT_MAX_FONT_SIZE,
-      Math.floor(availableHeight / BLANK_TEXT_LINE_HEIGHT_RATIO),
-    ),
-  );
-
-  if (typeof document === "undefined") {
-    const widthBasedEstimate =
-      availableWidth / Math.max(1.1, safeContent.length * 0.9);
-    return Math.max(
-      BLANK_TEXT_MIN_FONT_SIZE,
-      Math.min(heightLimitedFontSize, Math.floor(widthBasedEstimate)),
-    );
-  }
-
-  if (!blankTextMeasureContext) {
-    blankTextMeasureContext = document.createElement("canvas").getContext("2d");
-  }
-
-  const measureTextWidth = (fontSize: number) => {
-    if (!blankTextMeasureContext) {
-      return safeContent.length * fontSize * 0.9;
-    }
-    blankTextMeasureContext.font = `700 ${fontSize}px ${BLANK_TEXT_FONT_FAMILY}`;
-    return blankTextMeasureContext.measureText(safeContent).width;
-  };
-
-  for (
-    let fontSize = heightLimitedFontSize;
-    fontSize >= BLANK_TEXT_MIN_FONT_SIZE;
-    fontSize -= 1
-  ) {
-    if (measureTextWidth(fontSize) <= availableWidth) {
-      return fontSize;
-    }
-  }
-
-  return BLANK_TEXT_MIN_FONT_SIZE;
-};
 
 const getTouchDistance = (touches: React.TouchList) =>
   Math.hypot(
@@ -192,11 +113,8 @@ interface BlankRenderMetrics {
   answerValue: string;
   trimmedAnswerValue: string;
   placeholder: string;
-  fontSize: number;
   chipWidth: number;
   chipHeight: number;
-  textPaddingX: number;
-  textPaddingY: number;
   isFilled: boolean;
   isInputLocked: boolean;
   reviewCorrect: boolean | null;
@@ -384,7 +302,13 @@ const HistoryClassroomAssignmentView: React.FC<
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
   const showFloatingActions = !isModalPreview;
-  const pageCount = assignment.pdfPageImages?.length || 1;
+  const pages = assignment.pdfPageImages || [];
+  const pageCount = pages.length;
+  const currentPageIndex = pages.findIndex((page) => page.page === currentPage);
+  const lessonPath =
+    assignment.sourceType === "lesson"
+      ? assignment.lessonUnitPath?.join(" > ") || assignment.lessonTitle
+      : "";
   const pageImage =
     assignment.pdfPageImages?.find((page) => page.page === currentPage) || null;
   const currentBlanks = assignment.blanks.filter(
@@ -460,15 +384,21 @@ const HistoryClassroomAssignmentView: React.FC<
     }
 
     const metrics = currentBlanks.map((blank) => {
-      const renderRect = getHistoryClassroomBlankRenderRect(
-        blank,
-        pageImage,
-        currentTextRegions,
-      );
+      const renderRect =
+        assignment.sourceType === "lesson"
+          ? {
+              leftRatio: blank.left / displayWidth,
+              topRatio: blank.top / displayHeight,
+              widthRatio: blank.width / displayWidth,
+              heightRatio: blank.height / displayHeight,
+            }
+          : getHistoryClassroomBlankRenderRect(
+              blank,
+              pageImage,
+              currentTextRegions,
+            );
       const pixelWidth = renderRect.widthRatio * displayWidth;
       const pixelHeight = renderRect.heightRatio * displayHeight;
-      const textPixelWidth = pixelWidth;
-      const textPixelHeight = pixelHeight;
       const answerValue = String(answers[blank.id] || "");
       const trimmedAnswerValue = answerValue.trim();
       const placeholder = blank.prompt || "정답 입력";
@@ -482,14 +412,6 @@ const HistoryClassroomAssignmentView: React.FC<
         answerCheck && !answerCheck.correct
           ? String(answerCheck.correctAnswer || blank.answer || "")
           : "";
-      const displayValue = reviewText || trimmedAnswerValue || placeholder;
-      const fontSize = getBlankFontSize(
-        textPixelWidth,
-        textPixelHeight,
-        displayValue,
-      );
-      const textPaddingX = getBlankTextPaddingX(textPixelWidth);
-      const textPaddingY = getBlankTextPaddingY(textPixelHeight);
       const isFilled = Boolean(trimmedAnswerValue);
       const isInputLocked =
         readOnly || completed || submitting || !onAnswerChange;
@@ -500,11 +422,8 @@ const HistoryClassroomAssignmentView: React.FC<
         answerValue,
         trimmedAnswerValue,
         placeholder,
-        fontSize,
         chipWidth: pixelWidth,
         chipHeight: pixelHeight,
-        textPaddingX,
-        textPaddingY,
         isFilled,
         isInputLocked,
         reviewCorrect,
@@ -512,7 +431,7 @@ const HistoryClassroomAssignmentView: React.FC<
       };
     });
 
-    if (!resolveBlankOverlap) {
+    if (!resolveBlankOverlap || assignment.sourceType === "lesson") {
       return metrics.map((entry) => {
         return {
           ...entry,
@@ -529,6 +448,7 @@ const HistoryClassroomAssignmentView: React.FC<
     });
   }, [
     answers,
+    assignment.sourceType,
     answerCheckByBlankId,
     answerChecks.length,
     completed,
@@ -546,6 +466,10 @@ const HistoryClassroomAssignmentView: React.FC<
     () => sortPlacementsForFocus(blankPlacements),
     [blankPlacements],
   );
+  const useInlineActions =
+    floatingViewport.width < 1024 ||
+    (typeof window !== "undefined" &&
+      window.matchMedia("(pointer: coarse)").matches);
   const floatingPanelWidth = Math.min(
     320,
     Math.max(248, floatingViewport.width - 24),
@@ -635,7 +559,7 @@ const HistoryClassroomAssignmentView: React.FC<
       const nextFitScale = Math.min(
         1,
         Math.max(
-          0.22,
+          0.01,
           Math.min(
             availableWidth / Math.max(pageImage.width, 1),
             availableHeight / Math.max(pageImage.height, 1),
@@ -975,9 +899,11 @@ const HistoryClassroomAssignmentView: React.FC<
             <h1 className="mt-1 break-words text-3xl font-black text-gray-900">
               {assignment.title}
             </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              {assignment.description || "설명이 없습니다."}
-            </p>
+            {assignment.description && (
+              <p className="mt-2 text-sm text-gray-600">
+                {assignment.description}
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
                 통과 기준 {assignment.passThresholdPercent}% 이상
@@ -996,7 +922,7 @@ const HistoryClassroomAssignmentView: React.FC<
           {headerAction && <div className="min-w-[11rem]">{headerAction}</div>}
         </div>
 
-        {isModalPreview &&
+        {(isModalPreview || useInlineActions) &&
           assignment.timeLimitMinutes > 0 &&
           countdownLabel && (
             <div className="mt-4 max-w-md">
@@ -1026,11 +952,16 @@ const HistoryClassroomAssignmentView: React.FC<
         <section
           className={`rounded-3xl border border-gray-200 bg-white shadow-sm ${
             isModalPreview ? "flex min-h-[42rem] flex-col p-4 lg:p-5" : "p-4"
-          }`}
+          } min-w-0`}
         >
+          {lessonPath && (
+            <p className="mb-3 break-words text-sm font-bold text-gray-600">
+              {lessonPath}
+            </p>
+          )}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm font-bold text-gray-600">
-              페이지 {currentPage} / {pageCount}
+              페이지 {Math.max(1, currentPageIndex + 1)} / {pageCount}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {enableInteractiveViewport && (
@@ -1040,9 +971,10 @@ const HistoryClassroomAssignmentView: React.FC<
                   </div>
                   <button
                     type="button"
+                    aria-label="자료 축소"
                     onClick={() => nudgeViewportZoom(-0.18)}
                     disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                    className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
                   >
                     -
                   </button>
@@ -1050,15 +982,16 @@ const HistoryClassroomAssignmentView: React.FC<
                     type="button"
                     onClick={resetViewportScale}
                     disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                    className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
                   >
                     전체 보기
                   </button>
                   <button
                     type="button"
+                    aria-label="자료 확대"
                     onClick={() => nudgeViewportZoom(0.18)}
                     disabled={userScale >= MAX_VIEWPORT_USER_SCALE}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                    className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
                   >
                     +
                   </button>
@@ -1066,21 +999,23 @@ const HistoryClassroomAssignmentView: React.FC<
               )}
               <button
                 type="button"
-                disabled={currentPage <= 1}
+                disabled={currentPageIndex <= 0}
                 onClick={() =>
-                  onCurrentPageChange(Math.max(1, currentPage - 1))
+                  onCurrentPageChange(pages[currentPageIndex - 1].page)
                 }
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
               >
                 이전
               </button>
               <button
                 type="button"
-                disabled={currentPage >= pageCount}
-                onClick={() =>
-                  onCurrentPageChange(Math.min(pageCount, currentPage + 1))
+                disabled={
+                  currentPageIndex < 0 || currentPageIndex >= pageCount - 1
                 }
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                onClick={() =>
+                  onCurrentPageChange(pages[currentPageIndex + 1].page)
+                }
+                className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
               >
                 다음
               </button>
@@ -1100,12 +1035,6 @@ const HistoryClassroomAssignmentView: React.FC<
                   : undefined
               }
             >
-              {!isModalPreview && (
-                <div className="mb-3 text-xs font-medium text-gray-500">
-                  첫 화면에서는 전체 지도와 빈칸 분포를 먼저 확인하고, 확대가
-                  필요하면 휠 또는 핀치로 조절하세요.
-                </div>
-              )}
               <div
                 ref={enableInteractiveViewport ? viewportRef : undefined}
                 className="h-full min-h-0 overflow-auto"
@@ -1212,11 +1141,8 @@ const HistoryClassroomAssignmentView: React.FC<
                           blank,
                           answerValue,
                           trimmedAnswerValue,
-                          fontSize,
                           chipWidth,
                           chipHeight,
-                          textPaddingX,
-                          textPaddingY,
                           isFilled,
                           isInputLocked,
                           reviewCorrect,
@@ -1239,14 +1165,16 @@ const HistoryClassroomAssignmentView: React.FC<
                         return (
                           <div
                             key={blank.id}
+                            data-blank-box="true"
+                            data-blank-id={blank.id}
                             className={`absolute overflow-hidden rounded-xl border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
                               isFocused ? "z-20" : "z-10"
                             } ${reviewToneClass}`}
                             title={
                               hasReview
                                 ? reviewCorrect
-                                  ? "Correct"
-                                  : `Wrong. Correct answer: ${reviewText || blank.answer}`
+                                  ? "정답"
+                                  : `오답 · 정답: ${reviewText || blank.answer}`
                                 : undefined
                             }
                             style={{
@@ -1272,54 +1200,36 @@ const HistoryClassroomAssignmentView: React.FC<
                                 }`}
                               />
                             ) : null}
-                            {isInputLocked ? (
-                              <span
-                                className="relative z-[1] flex h-full w-full items-center justify-center overflow-hidden whitespace-nowrap text-center"
-                                style={{
-                                  fontSize: `${fontSize}px`,
-                                  letterSpacing: 0,
-                                  lineHeight: BLANK_TEXT_LINE_HEIGHT_RATIO,
-                                  padding: `${textPaddingY}px ${textPaddingX}px`,
-                                }}
-                              >
-                                {lockedDisplayText}
-                              </span>
-                            ) : (
-                              <input
-                                type="text"
-                                ref={(node) => {
-                                  blankInputRefs.current[blank.id] = node;
-                                }}
-                                value={answerValue}
-                                onChange={(event) =>
-                                  onAnswerChange?.(blank.id, event.target.value)
-                                }
-                                onFocus={() => setFocusedBlankId(blank.id)}
-                                readOnly={isInputLocked}
-                                autoComplete="off"
-                                autoCorrect="off"
-                                autoCapitalize="off"
-                                spellCheck={false}
-                                inputMode="text"
-                                lang="ko"
-                                aria-label={
-                                  blank.prompt || `${blank.id} 답안 입력`
-                                }
-                                placeholder={placeholder}
-                                className={`relative z-[1] h-full w-full border-0 bg-transparent text-center font-bold outline-none ${
-                                  isFilled
-                                    ? "text-orange-800 placeholder:text-orange-300"
-                                    : "text-slate-700 placeholder:text-slate-400"
-                                }`}
-                                style={{
-                                  fontSize: `${fontSize}px`,
-                                  letterSpacing: 0,
-                                  lineHeight: "normal",
-                                  padding: `${textPaddingY}px ${textPaddingX}px`,
-                                  touchAction: "none",
-                                }}
-                              />
-                            )}
+                            <WorksheetBlankInput
+                              type="text"
+                              ref={(node) => {
+                                blankInputRefs.current[blank.id] = node;
+                              }}
+                              value={
+                                isInputLocked ? lockedDisplayText : answerValue
+                              }
+                              onChange={(event) =>
+                                onAnswerChange?.(blank.id, event.target.value)
+                              }
+                              onFocus={() => setFocusedBlankId(blank.id)}
+                              readOnly={isInputLocked}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck={false}
+                              inputMode="text"
+                              lang="ko"
+                              aria-label={
+                                blank.prompt ||
+                                `${assignment.blanks.findIndex((item) => item.id === blank.id) + 1}번 답안 입력`
+                              }
+                              placeholder={placeholder}
+                              className={`relative z-[1] border-0 bg-transparent text-center font-bold outline-none ${hasReview ? (reviewCorrect ? "text-emerald-900" : "text-rose-900") : isFilled ? "text-orange-800 placeholder:text-orange-300" : "text-slate-700 placeholder:text-slate-400"}`}
+                              style={{
+                                letterSpacing: 0,
+                                touchAction: "manipulation",
+                              }}
+                            />
                           </div>
                         );
                       })}
@@ -1340,9 +1250,6 @@ const HistoryClassroomAssignmentView: React.FC<
         >
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="text-sm font-bold text-gray-700">참고 보기</div>
-            <div className="mt-2 text-xs font-bold text-gray-500">
-              보기는 참고만 하고, 정답은 지도 위 빈칸에 직접 입력하세요.
-            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {assignment.answerOptions.map((option) => {
                 const normalizedOption =
@@ -1360,7 +1267,7 @@ const HistoryClassroomAssignmentView: React.FC<
                         : "border border-gray-200 bg-gray-100 text-gray-700"
                     }`}
                   >
-                    <span className="whitespace-nowrap">{option}</span>
+                    <span className="break-all">{option}</span>
                   </span>
                 );
               })}
@@ -1372,120 +1279,109 @@ const HistoryClassroomAssignmentView: React.FC<
             )}
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="text-sm font-bold text-gray-700">안내</div>
-            <ul className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
-              {helperItems.map((item, index) => (
-                <li key={`${item}-${index}`}>
-                  {index + 1}. {item}
-                </li>
-              ))}
-            </ul>
-            {isModalPreview && (
-              <button
-                type="button"
-                onClick={onSubmit}
-                disabled={readOnly || submitting || completed || !onSubmit}
-                className="mt-5 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-              >
-                {readOnly
-                  ? "읽기 전용 미리보기"
-                  : submitting
-                    ? "제출 중..."
-                    : completed
-                      ? "제출 완료"
-                      : "제출하기"}
-              </button>
-            )}
-            {resultText && (
-              <div className="mt-3 text-sm font-bold text-blue-700">
-                {resultText}
-              </div>
-            )}
-            {pointNotice && (
-              <div
-                className={`mt-3 text-sm font-bold ${
-                  isPointAwardedNotice ? "text-emerald-700" : "text-amber-700"
-                }`}
-              >
-                {pointNotice}
-              </div>
-            )}
-          </div>
+          {(helperItems.length > 0 ||
+            isModalPreview ||
+            resultText ||
+            pointNotice) && (
+            <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+              {helperItems.length > 0 && (
+                <div className="text-sm font-bold text-gray-700">안내</div>
+              )}
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
+                {helperItems.map((item, index) => (
+                  <li key={`${item}-${index}`}>
+                    {index + 1}. {item}
+                  </li>
+                ))}
+              </ul>
+              {isModalPreview && (
+                <button
+                  type="button"
+                  onClick={onSubmit}
+                  disabled={readOnly || submitting || completed || !onSubmit}
+                  className="mt-5 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {readOnly
+                    ? "읽기 전용 미리보기"
+                    : submitting
+                      ? "제출 중..."
+                      : completed
+                        ? "제출 완료"
+                        : "제출하기"}
+                </button>
+              )}
+              {resultText && (
+                <div className="mt-3 text-sm font-bold text-blue-700">
+                  {resultText}
+                </div>
+              )}
+              {pointNotice && (
+                <div
+                  className={`mt-3 text-sm font-bold ${
+                    isPointAwardedNotice ? "text-emerald-700" : "text-amber-700"
+                  }`}
+                >
+                  {pointNotice}
+                </div>
+              )}
+            </div>
+          )}
         </aside>
       </div>
 
       {showFloatingActions && (
         <div
-          className="pointer-events-none fixed z-[140] flex max-w-[calc(100vw-1.5rem)] justify-end"
-          style={{
-            top: `calc(env(safe-area-inset-top, 0px) + ${
-              floatingViewport.offsetTop + floatingViewport.height - 12
-            }px)`,
-            left: `calc(env(safe-area-inset-left, 0px) + ${Math.max(
-              12,
-              floatingViewport.offsetLeft +
-                floatingViewport.width -
-                floatingPanelWidth -
-                12,
-            )}px)`,
-            width: `${floatingPanelWidth}px`,
-            transform: `translateY(-100%) scale(${1 / floatingViewport.scale})`,
-            transformOrigin: "bottom right",
-          }}
+          data-history-actions="true"
+          className={
+            useInlineActions
+              ? "mt-4 w-full"
+              : "pointer-events-none fixed z-[140] flex max-w-[calc(100vw-1.5rem)] justify-end"
+          }
+          style={
+            useInlineActions
+              ? undefined
+              : {
+                  top: `calc(env(safe-area-inset-top, 0px) + ${
+                    floatingViewport.offsetTop + floatingViewport.height - 12
+                  }px)`,
+                  left: `calc(env(safe-area-inset-left, 0px) + ${Math.max(
+                    12,
+                    floatingViewport.offsetLeft +
+                      floatingViewport.width -
+                      floatingPanelWidth -
+                      12,
+                  )}px)`,
+                  width: `${floatingPanelWidth}px`,
+                  transform: `translateY(-100%) scale(${1 / floatingViewport.scale})`,
+                  transformOrigin: "bottom right",
+                }
+          }
         >
           <div className="pointer-events-auto w-full rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
-            {assignment.timeLimitMinutes > 0 && countdownLabel && (
-              <div className="rounded-xl bg-gray-50 px-3 py-2.5">
-                <div className="flex items-center justify-between gap-3 text-[11px] font-bold tracking-[0.18em] text-gray-400">
-                  <span>남은 시간</span>
-                  <span
-                    className={`font-mono text-xl leading-none ${getCountdownToneClass(
-                      timeProgressPercent,
-                    )}`}
-                  >
-                    {countdownLabel}
-                  </span>
+            {!useInlineActions &&
+              assignment.timeLimitMinutes > 0 &&
+              countdownLabel && (
+                <div className="rounded-xl bg-gray-50 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3 text-[11px] font-bold tracking-[0.18em] text-gray-400">
+                    <span>남은 시간</span>
+                    <span
+                      className={`font-mono text-xl leading-none ${getCountdownToneClass(
+                        timeProgressPercent,
+                      )}`}
+                    >
+                      {countdownLabel}
+                    </span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-1000 ${getTimeProgressToneClass(
+                        timeProgressPercent,
+                      )}`}
+                      style={{ width: `${timeProgressPercent}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">
-                  <div
-                    className={`h-full rounded-full transition-[width] duration-1000 ${getTimeProgressToneClass(
-                      timeProgressPercent,
-                    )}`}
-                    style={{ width: `${timeProgressPercent}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            {assignment.answerOptions.length > 0 && (
-              <div className="mt-2 rounded-xl bg-gray-50 px-3 py-2 lg:hidden">
-                <div className="mb-1 text-[11px] font-bold text-gray-500">
-                  참고 보기
-                </div>
-                <div className="-mx-1 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto px-1 pb-1">
-                  {assignment.answerOptions.map((option) => {
-                    const normalizedOption =
-                      normalizeHistoryClassroomAnswer(option);
-                    const isAnswered =
-                      Boolean(normalizedOption) &&
-                      normalizedAnsweredOptions.has(normalizedOption);
-
-                    return (
-                      <span
-                        key={option}
-                        className={`shrink-0 rounded-full border px-2.5 py-1.5 text-xs font-bold ${
-                          isAnswered
-                            ? "border-orange-300 bg-orange-50 text-orange-800"
-                            : "border-gray-200 bg-white text-gray-700"
-                        }`}
-                      >
-                        {option}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+              )}
             {resultText && (
               <div className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
                 {resultText}
@@ -1506,7 +1402,7 @@ const HistoryClassroomAssignmentView: React.FC<
               type="button"
               onClick={onSubmit}
               disabled={readOnly || submitting || completed || !onSubmit}
-              className="mt-2 min-h-10 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 min-h-11 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {readOnly
                 ? "읽기 전용 미리보기"

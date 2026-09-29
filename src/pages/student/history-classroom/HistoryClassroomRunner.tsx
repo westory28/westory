@@ -407,6 +407,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
         let loaded = normalizeHistoryClassroomAssignment(snap.id, snap.data());
         if (
+          loaded.sourceType !== "lesson" &&
           loaded.mapResourceId &&
           (!(loaded.pdfPageImages?.length || 0) ||
             !(loaded.pdfRegions?.length || 0))
@@ -544,7 +545,12 @@ const HistoryClassroomRunner: React.FC = () => {
                 ]),
               )
             : {};
-        const savedPage = Number(savedAttempt?.currentPage) || 0;
+        const savedPageNumber = Number(savedAttempt?.currentPage) || 0;
+        const savedPage = loaded.pdfPageImages?.some(
+          (page) => page.page === savedPageNumber,
+        )
+          ? savedPageNumber
+          : 0;
         const nextDeadlineMs =
           loaded.timeLimitMinutes > 0
             ? hasSavedDeadline

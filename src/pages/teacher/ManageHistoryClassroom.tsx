@@ -44,6 +44,12 @@ import {
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
 import { normalizeMapResource, type MapResource } from "../../lib/mapResources";
+import {
+  getHistoryClassroomSourceFields,
+  getHistoryClassroomSourceId,
+  readHistoryClassroomLessonSources,
+  type HistoryClassroomLessonSource,
+} from "../../lib/historyClassroomLessonSources";
 import { createManagedNotifications } from "../../lib/notifications";
 import {
   getSemesterCollectionPath,
@@ -676,28 +682,115 @@ const worksheetBlankToHistoryBlank = (
 const cloneMapResourceBlanks = (
   mapResource: MapResource | null,
 ): HistoryClassroomBlank[] =>
-  (mapResource?.pdfBlanks || [])
-    .map<HistoryClassroomBlank>((blank) => ({
-      id:
-        String(blank.id || "").trim() ||
-        `blank-${blank.page}-${blank.left}-${blank.top}`,
-      page: Math.max(1, Number(blank.page) || 1),
-      left: Number(blank.left) || 0,
-      top: Number(blank.top) || 0,
-      width: Math.max(1, Number(blank.width) || 1),
-      height: Math.max(1, Number(blank.height) || 1),
-      answer: String(blank.answer || "").trim(),
-      prompt: String(blank.prompt || "").trim(),
-      source: blank.source === "ocr" ? "ocr" : "manual",
-    }))
-    .filter((blank) => blank.answer)
-    .sort((a, b) => a.page - b.page || a.top - b.top || a.left - b.left);
+  mapResource && "lessonUnitId" in mapResource
+    ? (mapResource.pdfBlanks || []).map((blank) => ({ ...blank }))
+    : (mapResource?.pdfBlanks || [])
+        .map<HistoryClassroomBlank>((blank) => ({
+          id:
+            String(blank.id || "").trim() ||
+            `blank-${blank.page}-${blank.left}-${blank.top}`,
+          page: Math.max(1, Number(blank.page) || 1),
+          left: Number(blank.left) || 0,
+          top: Number(blank.top) || 0,
+          width: Math.max(1, Number(blank.width) || 1),
+          height: Math.max(1, Number(blank.height) || 1),
+          answer: String(blank.answer || "").trim(),
+          prompt: String(blank.prompt || "").trim(),
+          source: blank.source === "ocr" ? "ocr" : "manual",
+        }))
+        .filter((blank) => blank.answer)
+        .sort((a, b) => a.page - b.page || a.top - b.top || a.left - b.left);
+
+const HistoryClassroomSourceSelect: React.FC<{
+  id: string;
+  value: string;
+  currentLabel?: string;
+  sources: MapResource[];
+  loading: boolean;
+  error: string;
+  onChange: (value: string) => void;
+}> = ({ id, value, currentLabel, sources, loading, error, onChange }) => {
+  const isLesson = value.startsWith("lesson:");
+  const available = sources.filter(
+    (source) => "lessonUnitId" in source === isLesson,
+  );
+  return (
+    <div className="min-w-0 space-y-3">
+      <label className="block" htmlFor={`${id}-type`}>
+        <span className="mb-1 block text-xs font-bold text-gray-500">
+          자료 유형
+        </span>
+        <select
+          id={`${id}-type`}
+          value={isLesson ? "lesson" : "map"}
+          onChange={(event) => {
+            const lesson = event.target.value === "lesson";
+            onChange(
+              sources.find((source) => "lessonUnitId" in source === lesson)
+                ?.id || (lesson ? "lesson:" : ""),
+            );
+          }}
+          className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+        >
+          <option value="lesson">수업 자료</option>
+          <option value="map">지도</option>
+        </select>
+      </label>
+      <label className="block" htmlFor={id}>
+        <span className="mb-1 block text-xs font-bold text-gray-500">
+          {isLesson ? "수업 자료 목차" : "PDF 지도"}
+        </span>
+        <select
+          id={id}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+        >
+          {!available.some((source) => source.id === value) && (
+            <option value={value}>
+              {currentLabel ||
+                (loading && isLesson ? "수업 자료 불러오는 중…" : "자료 선택")}
+            </option>
+          )}
+          {available.map((source) => (
+            <option key={source.id} value={source.id}>
+              {"lessonUnitPath" in source
+                ? (source as HistoryClassroomLessonSource).lessonUnitPath.join(
+                    " › ",
+                  )
+                : source.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      {isLesson && error && (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
+      {isLesson && !loading && !error && !available.length && (
+        <p className="text-sm text-gray-500">
+          빈칸이 저장된 수업 자료가 없습니다.
+        </p>
+      )}
+    </div>
+  );
+};
 
 const ManageHistoryClassroom: React.FC = () => {
   const { config, userData } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [maps, setMaps] = useState<MapResource[]>([]);
+  const [lessonSources, setLessonSources] = useState<
+    HistoryClassroomLessonSource[]
+  >([]);
+  const [lessonSourceError, setLessonSourceError] = useState("");
+  const [loadingLessonSources, setLoadingLessonSources] = useState(false);
+  const worksheetSources = useMemo(
+    () => [...lessonSources, ...maps],
+    [lessonSources, maps],
+  );
   const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
     [],
   );
@@ -1020,12 +1113,49 @@ const ManageHistoryClassroom: React.FC = () => {
   }, [searchParams]);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoadingLessonSources(true);
+    setLessonSourceError("");
+    setLessonSources([]);
+    void readHistoryClassroomLessonSources(config)
+      .then((sources) => {
+        if (!cancelled) setLessonSources(sources);
+      })
+      .catch((error) => {
+        console.error(
+          "Failed to load history classroom lesson sources:",
+          error,
+        );
+        if (!cancelled)
+          setLessonSourceError(
+            "수업 자료를 불러오지 못했습니다. 새로고침 후 다시 선택해 주세요.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingLessonSources(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [config, dashboardRefreshKey]);
+
+  const selectedWorksheetSource = useMemo(
+    () =>
+      worksheetSources.find((source) => source.id === selectedMapId) || null,
+    [worksheetSources, selectedMapId],
+  );
+
+  useEffect(() => {
     if (preserveBlankResetRef.current) {
       preserveBlankResetRef.current = false;
       return;
     }
-    const nextMap = maps.find((item) => item.id === selectedMapId) || null;
-    setBlanks(cloneMapResourceBlanks(nextMap));
+    setBlanks(
+      worksheetSourceAssignment &&
+        getHistoryClassroomSourceId(worksheetSourceAssignment) === selectedMapId
+        ? worksheetSourceAssignment.blanks
+        : cloneMapResourceBlanks(selectedWorksheetSource),
+    );
     setSelectedBlankId("");
     setDraftBlank(null);
     setDraftBlankAnswer("");
@@ -1034,12 +1164,12 @@ const ManageHistoryClassroom: React.FC = () => {
     setBlankEditorError("");
     blankEditorComposingRef.current = false;
     setShowAllBlankTags(false);
-  }, [maps, selectedMapId]);
+  }, [selectedWorksheetSource, selectedMapId, worksheetSourceAssignment]);
 
   const worksheetSourceMap = useMemo<MapResource | null>(() => {
     if (
       !worksheetSourceAssignment ||
-      worksheetSourceAssignment.mapResourceId !== selectedMapId
+      getHistoryClassroomSourceId(worksheetSourceAssignment) !== selectedMapId
     ) {
       return null;
     }
@@ -1048,27 +1178,38 @@ const ManageHistoryClassroom: React.FC = () => {
       !(worksheetSourceAssignment.pdfPageImages?.length || 0) &&
       !(worksheetSourceAssignment.pdfRegions?.length || 0)
     ) {
-      return maps.find((item) => item.id === selectedMapId) || null;
+      return worksheetSources.find((item) => item.id === selectedMapId) || null;
     }
 
     return {
-      id: worksheetSourceAssignment.mapResourceId,
-      title: worksheetSourceAssignment.mapTitle || "불러온 지도",
+      id: getHistoryClassroomSourceId(worksheetSourceAssignment),
+      title:
+        worksheetSourceAssignment.sourceType === "lesson"
+          ? worksheetSourceAssignment.title
+          : worksheetSourceAssignment.mapTitle || "불러온 지도",
+      ...(worksheetSourceAssignment.sourceType === "lesson"
+        ? {
+            lessonUnitId: worksheetSourceAssignment.lessonUnitId,
+            lessonTitle: worksheetSourceAssignment.lessonTitle,
+            lessonUnitPath: worksheetSourceAssignment.lessonUnitPath,
+          }
+        : {}),
       category: "",
       description: "",
       type: "pdf",
       pdfPageImages: worksheetSourceAssignment.pdfPageImages || [],
       pdfRegions: worksheetSourceAssignment.pdfRegions || [],
+      pdfBlanks: worksheetSourceAssignment.blanks,
       sortOrder: -1,
     };
-  }, [maps, selectedMapId, worksheetSourceAssignment]);
+  }, [worksheetSources, selectedMapId, worksheetSourceAssignment]);
 
   const selectedMap = useMemo(
     () =>
       worksheetSourceMap ||
-      maps.find((item) => item.id === selectedMapId) ||
+      worksheetSources.find((item) => item.id === selectedMapId) ||
       null,
-    [maps, selectedMapId, worksheetSourceMap],
+    [worksheetSources, selectedMapId, worksheetSourceMap],
   );
 
   const selectedStoredMap = useMemo(
@@ -1524,8 +1665,9 @@ const ManageHistoryClassroom: React.FC = () => {
   );
 
   const editingSelectedMap = useMemo(
-    () => maps.find((map) => map.id === editingMapResourceId) || null,
-    [editingMapResourceId, maps],
+    () =>
+      worksheetSources.find((map) => map.id === editingMapResourceId) || null,
+    [editingMapResourceId, worksheetSources],
   );
 
   const editingStudents = useMemo(
@@ -1693,7 +1835,7 @@ const ManageHistoryClassroom: React.FC = () => {
       resolveDueWindowDaysValue(editingDueWindowDays);
     const mapChanged =
       !!editingSelectedMap &&
-      editingSelectedMap.id !== editingAssignment.mapResourceId;
+      editingSelectedMap.id !== getHistoryClassroomSourceId(editingAssignment);
     const previewBlanks = mapChanged
       ? cloneMapResourceBlanks(editingSelectedMap)
       : editingAssignment.blanks;
@@ -1711,18 +1853,17 @@ const ManageHistoryClassroom: React.FC = () => {
       editingAssignment.id,
       {
         ...editingAssignment,
-        title:
-          editingSelectedMap?.title ||
-          editingAssignment.mapTitle ||
-          editingAssignment.title,
+        title: mapChanged ? editingSelectedMap!.title : editingAssignment.title,
         description: "",
-        mapResourceId:
-          editingSelectedMap?.id || editingAssignment.mapResourceId,
-        mapTitle: editingSelectedMap?.title || editingAssignment.mapTitle,
-        pdfPageImages:
-          editingSelectedMap?.pdfPageImages || editingAssignment.pdfPageImages,
-        pdfRegions:
-          editingSelectedMap?.pdfRegions || editingAssignment.pdfRegions,
+        ...(mapChanged
+          ? getHistoryClassroomSourceFields(editingSelectedMap!)
+          : {}),
+        pdfPageImages: mapChanged
+          ? editingSelectedMap!.pdfPageImages
+          : editingAssignment.pdfPageImages,
+        pdfRegions: mapChanged
+          ? editingSelectedMap!.pdfRegions
+          : editingAssignment.pdfRegions,
         blanks: previewBlanks,
         answerOptions: buildAnswerOptions(previewBlanks),
         targetStudentReasons: pickStudentReasons(
@@ -2211,9 +2352,9 @@ const ManageHistoryClassroom: React.FC = () => {
     blankEditorComposingRef.current = false;
     setShowAllBlankTags(false);
     setFloatingPanelOpen(false);
-    if (maps[0]) {
-      setSelectedMapId(maps[0].id);
-      setBlanks(cloneMapResourceBlanks(maps[0]));
+    if (worksheetSources[0]) {
+      setSelectedMapId(worksheetSources[0].id);
+      setBlanks(cloneMapResourceBlanks(worksheetSources[0]));
     } else {
       setBlanks([]);
     }
@@ -2655,7 +2796,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const openAssignmentEditor = (assignment: HistoryClassroomAssignment) => {
     setEditingAssignmentId(assignment.id);
-    setEditingMapResourceId(assignment.mapResourceId);
+    setEditingMapResourceId(getHistoryClassroomSourceId(assignment));
     setEditingTitle(assignment.title);
     setEditingDescription(assignment.description);
     setEditingTimeLimitMinutes(assignment.timeLimitMinutes);
@@ -2681,7 +2822,7 @@ const ManageHistoryClassroom: React.FC = () => {
     mode: "edit" | "clone" = "edit",
   ) => {
     preserveBlankResetRef.current = true;
-    setSelectedMapId(assignment.mapResourceId);
+    setSelectedMapId(getHistoryClassroomSourceId(assignment));
     setWorksheetSourceAssignment(assignment);
     setWorksheetEditingAssignmentId(mode === "edit" ? assignment.id : "");
     setWorksheetEditingIsPublished(
@@ -2766,11 +2907,17 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("배정 학생을 확인해주세요.");
       return;
     }
-    const replacementMap = maps.find((map) => map.id === editingMapResourceId);
+    const replacementMap = worksheetSources.find(
+      (map) => map.id === editingMapResourceId,
+    );
     const mapChanged =
-      !!replacementMap && replacementMap.id !== targetAssignment.mapResourceId;
-    if (editingMapResourceId && !replacementMap) {
-      alert("교체할 배포 지도를 찾을 수 없습니다.");
+      !!replacementMap &&
+      replacementMap.id !== getHistoryClassroomSourceId(targetAssignment);
+    if (
+      editingMapResourceId !== getHistoryClassroomSourceId(targetAssignment) &&
+      !replacementMap
+    ) {
+      alert("교체할 자료를 찾을 수 없습니다. 자료를 다시 선택해 주세요.");
       return;
     }
     const nextBlanks = mapChanged
@@ -2781,7 +2928,7 @@ const ManageHistoryClassroom: React.FC = () => {
       (!nextBlanks.length ||
         nextBlanks.some((blank) => !String(blank.answer || "").trim()))
     ) {
-      alert("교체할 배포 지도에 저장된 빈칸과 정답을 먼저 확인해 주세요.");
+      alert("교체할 자료에 저장된 빈칸과 정답을 먼저 확인해 주세요.");
       return;
     }
 
@@ -2798,19 +2945,20 @@ const ManageHistoryClassroom: React.FC = () => {
           targetAssignment.createdAt ||
           targetAssignment.updatedAt,
       });
-      const nextMapTitle =
-        replacementMap?.title ||
-        targetAssignment.mapTitle ||
-        editingTitle.trim();
+      const nextMapTitle = mapChanged
+        ? replacementMap!.title
+        : targetAssignment.title;
       const payload = sanitizeHistoryClassroomAssignmentForWrite({
         ...targetAssignment,
         title: nextMapTitle,
         description: "",
-        mapResourceId: replacementMap?.id || targetAssignment.mapResourceId,
-        mapTitle: nextMapTitle,
-        pdfPageImages:
-          replacementMap?.pdfPageImages || targetAssignment.pdfPageImages,
-        pdfRegions: replacementMap?.pdfRegions || targetAssignment.pdfRegions,
+        ...(mapChanged ? getHistoryClassroomSourceFields(replacementMap!) : {}),
+        pdfPageImages: mapChanged
+          ? replacementMap!.pdfPageImages
+          : targetAssignment.pdfPageImages,
+        pdfRegions: mapChanged
+          ? replacementMap!.pdfRegions
+          : targetAssignment.pdfRegions,
         blanks: nextBlanks,
         answerOptions: buildAnswerOptions(nextBlanks),
         timeLimitMinutes: Math.max(0, editingTimeLimitMinutes),
@@ -3034,7 +3182,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const handleSave = async () => {
     if (!selectedMap || !selectedStudentUids.length) {
-      alert("지도와 대상 학생을 먼저 선택해 주세요.");
+      alert("자료와 대상 학생을 먼저 선택해 주세요.");
       return;
     }
     if (!selectedStudents.length) {
@@ -3049,7 +3197,7 @@ const ManageHistoryClassroom: React.FC = () => {
       !saveBlanks.length ||
       saveBlanks.some((blank) => !blank.answer.trim())
     ) {
-      alert("배포 지도 관리에서 출제 빈칸과 정답을 먼저 저장해 주세요.");
+      alert("선택한 자료에 빈칸과 정답을 먼저 저장해 주세요.");
       return;
     }
 
@@ -3065,15 +3213,16 @@ const ManageHistoryClassroom: React.FC = () => {
         existingAssignment?.id || `history-classroom-${Date.now()}`;
       const sourceSnapshot =
         worksheetSourceAssignment &&
-        worksheetSourceAssignment.mapResourceId === selectedMap.id
+        getHistoryClassroomSourceId(worksheetSourceAssignment) ===
+          selectedMap.id
           ? worksheetSourceAssignment
           : existingAssignment &&
-              existingAssignment.mapResourceId === selectedMap.id
+              getHistoryClassroomSourceId(existingAssignment) === selectedMap.id
             ? existingAssignment
             : null;
       const resolvedDueWindowDays = resolveDueWindowDaysValue(dueWindowDays);
       const resolvedMapTitle =
-        sourceSnapshot?.mapTitle || selectedMap.title || "역사교실";
+        sourceSnapshot?.title || selectedMap.title || "역사교실";
       const nextIsPublished = existingAssignment
         ? worksheetEditingIsPublished
         : true;
@@ -3089,8 +3238,7 @@ const ManageHistoryClassroom: React.FC = () => {
       const payload = sanitizeHistoryClassroomAssignmentForWrite({
         title: resolvedMapTitle,
         description: "",
-        mapResourceId: selectedMap.id,
-        mapTitle: resolvedMapTitle,
+        ...getHistoryClassroomSourceFields(selectedMap),
         pdfPageImages: sourceSnapshot?.pdfPageImages?.length
           ? sourceSnapshot.pdfPageImages
           : selectedMap.pdfPageImages || [],
@@ -4724,7 +4872,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 </div>
                 <h2 className="mt-1 text-xl font-black text-gray-900">
                   {worksheetEditingAssignmentId
-                    ? "역사교실 지도/빈칸 수정"
+                    ? "역사교실 자료 수정"
                     : "새 역사교실 등록"}
                 </h2>
               </div>
@@ -4739,35 +4887,28 @@ const ManageHistoryClassroom: React.FC = () => {
             <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 p-4">
               <div className="mx-auto max-w-6xl space-y-4">
                 <section className="grid gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
-                  <div className="md:col-span-2 xl:col-span-2">
-                    <label className="mb-1 block text-xs font-bold text-gray-500">
-                      PDF 지도 선택
-                    </label>
-                    <select
+                  <div className="min-w-0 md:col-span-2 xl:col-span-2">
+                    <HistoryClassroomSourceSelect
+                      id="history-create-source"
                       value={selectedMapId}
-                      onChange={(e) => {
-                        const nextMapId = e.target.value;
+                      sources={worksheetSources}
+                      loading={loadingLessonSources}
+                      error={lessonSourceError}
+                      currentLabel={worksheetSourceAssignment?.title}
+                      onChange={(nextMapId) => {
                         setSelectedMapId(nextMapId);
                         if (
-                          worksheetSourceAssignment?.mapResourceId !== nextMapId
+                          !worksheetSourceAssignment ||
+                          getHistoryClassroomSourceId(
+                            worksheetSourceAssignment,
+                          ) !== nextMapId
                         ) {
                           setWorksheetSourceAssignment(null);
                           setWorksheetImportSourceId("");
                           setWorksheetImportSourceTitle("");
                         }
-                        setTargetStudentUid("");
-                        setTargetStudentSearch("");
-                        setSelectedStudentUids([]);
-                        setStudentReasons({});
                       }}
-                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
-                    >
-                      {maps.map((map) => (
-                        <option key={map.id} value={map.id}>
-                          {map.title}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="grid gap-3 md:col-span-2 md:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
@@ -5056,11 +5197,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-bold text-gray-700">
-                          선택한 배포 지도
-                        </div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          빈칸과 정답은 지도 관리에서 저장한 값을 그대로
-                          사용합니다.
+                          선택한 자료
                         </div>
                       </div>
                       <div className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-blue-700">
@@ -5084,15 +5221,17 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-gray-700">
-                        {selectedMap?.title || "지도 미선택"}
+                        {selectedMap?.title || "자료 미선택"}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => openMapBlankManager(selectedMapId)}
-                        className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
-                      >
-                        지도 관리에서 수정
-                      </button>
+                      {!selectedMapId.startsWith("lesson:") && (
+                        <button
+                          type="button"
+                          onClick={() => openMapBlankManager(selectedMapId)}
+                          className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
+                        >
+                          지도 관리에서 수정
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -5337,7 +5476,7 @@ const ManageHistoryClassroom: React.FC = () => {
                               <div className="flex items-center justify-between gap-3">
                                 <div>
                                   <div className="text-xs font-bold text-orange-500">
-                                    {assignment.mapTitle}
+                                    {assignment.title}
                                   </div>
                                   <div className="text-lg font-black text-gray-900">
                                     {assignment.title}
@@ -5496,7 +5635,7 @@ const ManageHistoryClassroom: React.FC = () => {
             <div className="shrink-0 flex items-center justify-between border-b border-gray-200 px-6 py-4">
               <div>
                 <div className="text-xs font-bold text-orange-500">
-                  {editingAssignment.mapTitle}
+                  {editingAssignment.title}
                 </div>
                 <div className="text-xl font-black text-gray-900">
                   역사교실 설정 수정
@@ -5512,8 +5651,8 @@ const ManageHistoryClassroom: React.FC = () => {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:overflow-hidden">
-              <div className="grid min-h-full gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,0.82fr)_minmax(24rem,1.18fr)] xl:grid-cols-[minmax(0,0.78fr)_minmax(29rem,1.22fr)]">
-                <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-5 [-webkit-overflow-scrolling:touch]">
+              <div className="grid min-h-full grid-cols-1 gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,0.82fr)_minmax(24rem,1.18fr)] xl:grid-cols-[minmax(0,0.78fr)_minmax(29rem,1.22fr)]">
+                <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain px-6 py-5 [-webkit-overflow-scrolling:touch]">
                   <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-4">
                       <div>
@@ -5591,57 +5730,48 @@ const ManageHistoryClassroom: React.FC = () => {
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <div className="text-sm font-bold text-gray-700">
-                            현재 배포 지도
-                          </div>
-                          <div className="mt-1 text-xs text-gray-500">
-                            선택한 배포 지도의 빈칸과 정답으로 과제를
-                            교체합니다.
+                            배포 자료
                           </div>
                         </div>
                         <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-600">
-                          현재 {editingAssignment.mapTitle}
+                          현재 {editingAssignment.title}
                         </span>
                       </div>
-                      <label className="mt-3 block">
-                        <span className="mb-1 block text-xs font-bold text-gray-500">
-                          배포 지도 교체
-                        </span>
-                        <select
+                      <div className="mt-3">
+                        <HistoryClassroomSourceSelect
+                          id="history-edit-source"
                           value={editingMapResourceId}
-                          onChange={(event) =>
-                            setEditingMapResourceId(event.target.value)
-                          }
-                          className="h-10 w-full rounded-xl border border-orange-200 bg-white px-3 text-sm font-bold text-gray-800 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
-                        >
-                          {maps.map((map) => (
-                            <option key={map.id} value={map.id}>
-                              {map.title}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          sources={worksheetSources}
+                          loading={loadingLessonSources}
+                          error={lessonSourceError}
+                          currentLabel={editingAssignment.title}
+                          onChange={setEditingMapResourceId}
+                        />
+                      </div>
                       {editingSelectedMap &&
                         editingSelectedMap.id !==
-                          editingAssignment.mapResourceId && (
+                          getHistoryClassroomSourceId(editingAssignment) && (
                           <div className="mt-2 rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700">
-                            저장하면 {editingSelectedMap.title} 지도로
+                            저장하면 {editingSelectedMap.title} 자료로
                             교체됩니다.
                           </div>
                         )}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openMapBlankManager(
-                              editingMapResourceId ||
-                                editingAssignment.mapResourceId,
-                            )
-                          }
-                          className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
-                        >
-                          선택한 지도 관리
-                        </button>
-                      </div>
+                      {!editingMapResourceId.startsWith("lesson:") && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openMapBlankManager(
+                                editingMapResourceId ||
+                                  editingAssignment.mapResourceId,
+                              )
+                            }
+                            className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
+                          >
+                            선택한 지도 관리
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="rounded-2xl bg-gray-50 p-4">
@@ -5783,8 +5913,8 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex min-h-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5 lg:h-full lg:overflow-hidden lg:border-l lg:border-t-0 lg:px-5">
-                  <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-3.5">
+                <div className="flex min-h-0 min-w-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5 lg:h-full lg:overflow-hidden lg:border-l lg:border-t-0 lg:px-5">
+                  <div className="shrink-0 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
                         응시 현황
@@ -5912,7 +6042,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         <div className="text-center">제출</div>
                         <div className="text-center">점수</div>
                         <div className="text-center">판정</div>
-                        <div className="text-center">지도</div>
+                        <div className="text-center">자료</div>
                       </div>
                       {editingResultRows.map((result) => (
                         <div
@@ -5965,8 +6095,8 @@ const ManageHistoryClassroom: React.FC = () => {
                                 setReviewResultId(result.id);
                               }}
                               className="flex h-8 w-8 items-center justify-center justify-self-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                              aria-label="지도 확인"
-                              title="지도 확인"
+                              aria-label="자료 확인"
+                              title="자료 확인"
                             >
                               <DashboardIcon name="map" className="h-4 w-4" />
                             </button>

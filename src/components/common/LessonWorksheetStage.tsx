@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import WorksheetBlankInput from "./WorksheetBlankInput";
 import {
   clampRatio,
   getLessonWorksheetStageCapabilities,
   getTightTextRegionBounds,
-  normalizeBlankText,
   splitTextRegionIntoTokens,
   type LessonWorksheetBlank,
   type LessonWorksheetExamHighlight,
@@ -222,11 +222,6 @@ const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 const EMPTY_BLANK_LABEL = "빈칸";
 const MIN_STUDENT_ZOOM = 0.7;
 const MAX_STUDENT_ZOOM = 2.4;
-const STUDENT_BLANK_MIN_DISPLAY_WIDTH = 34;
-const STUDENT_BLANK_MIN_DISPLAY_HEIGHT = 18;
-const STUDENT_BLANK_MAX_FONT_SIZE = 28;
-const STUDENT_BLANK_MIN_FONT_SIZE = 6;
-const STUDENT_BLANK_FONT_FAMILY = '"Noto Sans KR", sans-serif';
 const TOOL_COLORS: ToolColorOption[] = [
   {
     key: "blue",
@@ -280,22 +275,6 @@ const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = {
 const toPercent = (value: number) => `${value * 100}%`;
 const clampZoom = (value: number) =>
   Math.min(MAX_STUDENT_ZOOM, Math.max(MIN_STUDENT_ZOOM, value));
-const getZoomedPageWidth = (baseWidth: number, zoom: number) =>
-  Math.max(1, baseWidth * zoom);
-let studentBlankTextMeasureContext: CanvasRenderingContext2D | null = null;
-
-const measureStudentBlankText = (content: string, fontSize: number) => {
-  if (typeof document === "undefined") return content.length * fontSize * 0.82;
-  if (!studentBlankTextMeasureContext) {
-    studentBlankTextMeasureContext = document
-      .createElement("canvas")
-      .getContext("2d");
-  }
-  if (!studentBlankTextMeasureContext) return content.length * fontSize * 0.82;
-  studentBlankTextMeasureContext.font = `700 ${fontSize}px ${STUDENT_BLANK_FONT_FAMILY}`;
-  return studentBlankTextMeasureContext.measureText(content).width;
-};
-
 const getDefaultFootnoteAnchorRect = (
   point: RatioPoint,
   pageImage: LessonWorksheetPageImage,
@@ -418,191 +397,6 @@ const getPointMatchedRegions = (
   });
 
   return nearest ? [nearest] : [];
-};
-
-const resolveBlankRenderRect = (
-  blank: LessonWorksheetBlank,
-  pageImage: LessonWorksheetPageImage,
-  pageRegions: LessonWorksheetTextRegion[],
-) => {
-  const blankCenterX = blank.leftRatio + blank.widthRatio / 2;
-  const blankCenterY = blank.topRatio + blank.heightRatio / 2;
-  const blankPixelWidth = blank.widthRatio * pageImage.width;
-  const blankPixelHeight = blank.heightRatio * pageImage.height;
-  const normalizedAnswer = normalizeBlankText(blank.answer);
-  const expandedRegions = expandRegionsForSelection(pageRegions, pageImage);
-  const candidates = normalizedAnswer
-    ? expandedRegions.filter(
-        (region) => normalizeBlankText(region.label) === normalizedAnswer,
-      )
-    : [];
-
-  if (candidates.length) {
-    const nearest = candidates
-      .map((region) => {
-        const bounds = getTightTextRegionBounds(region, pageImage);
-        if (!bounds) return null;
-        const candidateCenterX = bounds.leftRatio + bounds.widthRatio / 2;
-        const candidateCenterY = bounds.topRatio + bounds.heightRatio / 2;
-        const dx = candidateCenterX - blankCenterX;
-        const dy = candidateCenterY - blankCenterY;
-        const pixelDistance = Math.hypot(
-          dx * pageImage.width,
-          dy * pageImage.height,
-        );
-        const maxSnapDistance = Math.max(
-          80,
-          blankPixelWidth * 3,
-          blankPixelHeight * 3,
-          bounds.width * 3,
-          bounds.height * 3,
-        );
-        return {
-          bounds,
-          distance: Math.hypot(dx, dy),
-          pixelDistance,
-          maxSnapDistance,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .sort((a, b) => a.distance - b.distance)[0];
-
-    if (nearest && nearest.pixelDistance <= nearest.maxSnapDistance) {
-      return nearest.bounds;
-    }
-  }
-
-  return {
-    leftRatio: blank.leftRatio,
-    topRatio: blank.topRatio,
-    widthRatio: blank.widthRatio,
-    heightRatio: blank.heightRatio,
-  };
-};
-
-const expandRect = (
-  rect: {
-    leftRatio: number;
-    topRatio: number;
-    widthRatio: number;
-    heightRatio: number;
-  },
-  pageImage: LessonWorksheetPageImage,
-  options?: {
-    padX?: number;
-    padY?: number;
-    minWidth?: number;
-    minHeight?: number;
-  },
-) => {
-  const padX = options?.padX ?? 8;
-  const padY = options?.padY ?? 5;
-  const minWidth = options?.minWidth ?? 44;
-  const minHeight = options?.minHeight ?? 20;
-  const naturalLeft = rect.leftRatio * pageImage.width - padX;
-  const naturalTop = rect.topRatio * pageImage.height - padY;
-  const naturalRight =
-    (rect.leftRatio + rect.widthRatio) * pageImage.width + padX;
-  const naturalBottom =
-    (rect.topRatio + rect.heightRatio) * pageImage.height + padY;
-  const width = Math.min(
-    pageImage.width,
-    Math.max(minWidth, naturalRight - naturalLeft),
-  );
-  const height = Math.min(
-    pageImage.height,
-    Math.max(minHeight, naturalBottom - naturalTop),
-  );
-  const centerX = (rect.leftRatio + rect.widthRatio / 2) * pageImage.width;
-  const centerY = (rect.topRatio + rect.heightRatio / 2) * pageImage.height;
-  const left = Math.max(
-    0,
-    Math.min(pageImage.width - width, centerX - width / 2),
-  );
-  const top = Math.max(
-    0,
-    Math.min(pageImage.height - height, centerY - height / 2),
-  );
-
-  return {
-    leftRatio: left / pageImage.width,
-    topRatio: top / pageImage.height,
-    widthRatio: width / pageImage.width,
-    heightRatio: height / pageImage.height,
-  };
-};
-
-const getStudentBlankRect = (
-  blank: LessonWorksheetBlank,
-  pageImage: LessonWorksheetPageImage,
-  pageRegions: LessonWorksheetTextRegion[],
-  displayScale = 1,
-) => {
-  const safeDisplayScale = Math.max(0.001, displayScale);
-  const baseRect =
-    blank.source === "manual"
-      ? {
-          leftRatio: blank.leftRatio,
-          topRatio: blank.topRatio,
-          widthRatio: blank.widthRatio,
-          heightRatio: blank.heightRatio,
-        }
-      : resolveBlankRenderRect(blank, pageImage, pageRegions);
-  const pixelWidth = Math.max(1, baseRect.widthRatio * pageImage.width);
-  const pixelHeight = Math.max(1, baseRect.heightRatio * pageImage.height);
-
-  if (blank.source === "manual") {
-    return expandRect(baseRect, pageImage, {
-      padX: (pixelWidth < 34 ? 2 : 3) / safeDisplayScale,
-      padY: (pixelHeight < 18 ? 1.5 : 2.5) / safeDisplayScale,
-      minWidth:
-        Math.max(
-          STUDENT_BLANK_MIN_DISPLAY_WIDTH,
-          Math.min(pixelWidth * safeDisplayScale + 10, 88),
-        ) / safeDisplayScale,
-      minHeight:
-        Math.max(
-          STUDENT_BLANK_MIN_DISPLAY_HEIGHT,
-          Math.min(pixelHeight * safeDisplayScale + 8, 36),
-        ) / safeDisplayScale,
-    });
-  }
-
-  return expandRect(baseRect, pageImage, {
-    padX: (pixelWidth < 40 ? 2.5 : 4) / safeDisplayScale,
-    padY: (pixelHeight < 20 ? 2 : 2.5) / safeDisplayScale,
-    minWidth:
-      Math.max(
-        STUDENT_BLANK_MIN_DISPLAY_WIDTH,
-        Math.min(pixelWidth * safeDisplayScale + 14, 94),
-      ) / safeDisplayScale,
-    minHeight:
-      Math.max(
-        STUDENT_BLANK_MIN_DISPLAY_HEIGHT,
-        Math.min(pixelHeight * safeDisplayScale + 8, 38),
-      ) / safeDisplayScale,
-  });
-};
-
-const getStudentBlankFontSize = (
-  pixelWidth: number,
-  pixelHeight: number,
-  content: string,
-) => {
-  const safeContent = String(content || EMPTY_BLANK_LABEL);
-  const availableWidth = Math.max(1, pixelWidth - 4);
-  const heightBased = Math.max(1, pixelHeight - 2) * 0.82;
-  const initialSize = Math.min(STUDENT_BLANK_MAX_FONT_SIZE, heightBased);
-  for (
-    let fontSize = initialSize;
-    fontSize >= STUDENT_BLANK_MIN_FONT_SIZE;
-    fontSize -= 0.5
-  ) {
-    if (measureStudentBlankText(safeContent, fontSize) <= availableWidth) {
-      return fontSize;
-    }
-  }
-  return STUDENT_BLANK_MIN_FONT_SIZE;
 };
 
 const buildStrokePath = (
@@ -768,9 +562,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const allowNativeStudentTouchScroll =
     isStudentSolveMode && !isAnnotationEnabled && studentZoom <= 1.02;
   const studentZoomRef = useRef(1);
-  const [pageViewportWidths, setPageViewportWidths] = useState<
-    Record<number, number>
-  >({});
   const [toolbarVisible, setToolbarVisible] = useState(
     annotationUiMode === "always",
   );
@@ -1057,37 +848,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     isTeacherViewMode,
     pageImages,
   ]);
-
-  useEffect(() => {
-    if (!isViewportInteractive || typeof ResizeObserver === "undefined") {
-      return undefined;
-    }
-    const observers: ResizeObserver[] = [];
-    const updateViewportWidth = (page: number, width: number) => {
-      setPageViewportWidths((prev) => {
-        if (Math.abs((prev[page] || 0) - width) < 0.5) return prev;
-        return { ...prev, [page]: width };
-      });
-    };
-
-    visiblePageImages.forEach((pageImage) => {
-      const host = scrollHostRefs.current[pageImage.page];
-      if (!host) return;
-      updateViewportWidth(pageImage.page, host.clientWidth);
-      const observer = new ResizeObserver((entries) => {
-        updateViewportWidth(
-          pageImage.page,
-          entries[0]?.contentRect.width || host.clientWidth,
-        );
-      });
-      observer.observe(host);
-      observers.push(observer);
-    });
-
-    return () => {
-      observers.forEach((observer) => observer.disconnect());
-    };
-  }, [isViewportInteractive, visiblePageImages]);
 
   const activeTeacherPageIndex =
     isTeacherViewMode && activeTeacherPage != null
@@ -2646,19 +2406,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             draftStroke?.page === pageImage.page ? draftStroke : null;
           const currentDraftBox =
             draftBox?.page === pageImage.page ? draftBox : null;
-          const baseViewportWidth =
-            pageViewportWidths[pageImage.page] ||
-            scrollHostRefs.current[pageImage.page]?.clientWidth ||
-            pageImage.width;
-          const visualPageWidth = isViewportInteractive
-            ? getZoomedPageWidth(baseViewportWidth, studentZoom)
-            : Math.max(1, baseViewportWidth);
-          const visualPageHeight =
-            pageImage.width > 0
-              ? (visualPageWidth * pageImage.height) / pageImage.width
-              : Math.max(1, pageImage.height);
-          const pageDisplayScale =
-            pageImage.width > 0 ? visualPageWidth / pageImage.width : 1;
 
           return (
             <section
@@ -3541,38 +3288,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     pageBlanks.map((blank) => {
                       const studentAnswer = studentAnswers[blank.id];
                       const status = studentAnswer?.status || "";
-                      const renderRect = getStudentBlankRect(
-                        blank,
-                        pageImage,
-                        pageRegions,
-                        pageDisplayScale,
-                      );
-                      const pixelWidth =
-                        renderRect.widthRatio * visualPageWidth;
-                      const pixelHeight =
-                        renderRect.heightRatio * visualPageHeight;
+                      // OCR and manual blanks use the exact saved geometry.
+                      const renderRect = blank;
                       const placeholder = blank.prompt || EMPTY_BLANK_LABEL;
-                      const activeValue = (studentAnswer?.value || "").trim();
-                      const sizingText =
-                        activeValue ||
-                        placeholder ||
-                        blank.answer ||
-                        EMPTY_BLANK_LABEL;
-                      const fontSize = getStudentBlankFontSize(
-                        pixelWidth,
-                        pixelHeight,
-                        sizingText,
-                      );
-                      const horizontalPadding =
-                        pixelWidth < 42
-                          ? 0.2
-                          : pixelWidth < 52
-                            ? 0.5
-                            : pixelWidth < 80
-                              ? 1
-                              : 1.5;
-                      const verticalPadding =
-                        pixelHeight < 18 ? 0 : pixelHeight < 24 ? 0.2 : 0.5;
                       const allowBlankPointerInteraction =
                         !isAnnotationEnabled || activeStudentTool === "text";
 
@@ -3598,8 +3316,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               : "none",
                           }}
                         >
-                          <input
+                          <WorksheetBlankInput
                             lang="ko"
+                            aria-label={`${pageImage.page}페이지 빈칸 ${pageBlanks.indexOf(blank) + 1}`}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
                             inputMode="text"
                             type="text"
                             value={studentAnswer?.value || ""}
@@ -3620,20 +3342,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                                 blank.answer,
                               )
                             }
-                            style={{
-                              fontSize: `${fontSize}px`,
-                              lineHeight: 1,
-                              letterSpacing: 0,
-                              paddingLeft: `${horizontalPadding}px`,
-                              paddingRight: `${horizontalPadding}px`,
-                              paddingTop: `${verticalPadding}px`,
-                              paddingBottom: `${verticalPadding}px`,
-                              boxSizing: "border-box",
-                              minWidth: 0,
-                              overflow: "hidden",
-                              textOverflow: "clip",
-                              whiteSpace: "nowrap",
-                            }}
                           />
                           {(status === "correct" || status === "wrong") && (
                             <div

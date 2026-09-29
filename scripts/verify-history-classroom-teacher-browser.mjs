@@ -1,0 +1,495 @@
+/** Exercises the actual teacher component with an in-memory Firestore boundary.
+ * No live Firebase reads, writes, notifications, or callable requests are made.
+ */
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import os from "node:os";
+import fs from "node:fs/promises";
+import http from "node:http";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const require = createRequire(path.join(root, "package.json"));
+const { build } = require("esbuild");
+let playwright;
+try {
+  playwright = require("playwright");
+} catch {
+  playwright = require(
+    process.env.PLAYWRIGHT_MODULE_PATH ||
+      path.join(
+        os.homedir(),
+        ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
+      ),
+  );
+}
+const evidence = path.join(
+  root,
+  ".superloopy/sessions/history-lesson-worksheets/evidence",
+);
+await fs.mkdir(evidence, { recursive: true });
+const cache = path.join(os.tmpdir(), "westory-tailwind-fixture.js");
+let tailwind;
+try {
+  tailwind = await fs.readFile(cache, "utf8");
+} catch {
+  const response = await fetch("https://cdn.tailwindcss.com/3.4.17");
+  assert(response.ok);
+  tailwind = await response.text();
+  await fs.writeFile(cache, tailwind);
+}
+const scope = "years/2026/semesters/2";
+const longTitle =
+  "고대 국가의 성립과 발전 및 한반도와 동아시아의 교류를 살펴보는 긴 수업 자료 목차";
+const pageImages = [1, 3].map((page) => ({
+  page,
+  imageUrl: `/worksheet.svg?page=${page}`,
+  width: 1000,
+  height: 1400,
+}));
+const originalBlanks = [
+  {
+    id: "saved-ocr",
+    page: 1,
+    leftRatio: 0.125,
+    topRatio: 0.235,
+    widthRatio: 0.1875,
+    heightRatio: 0.0275,
+    answer: "고조선",
+    prompt: "나라 이름",
+    source: "ocr",
+  },
+  {
+    id: "saved-manual",
+    page: 3,
+    leftRatio: 0.325,
+    topRatio: 0.435,
+    widthRatio: 0.1375,
+    heightRatio: 0.0375,
+    answer: "삼국 시대",
+    prompt: "시대 이름",
+    source: "manual",
+  },
+];
+const lesson = (unitId, title, answer) => ({
+  unitId,
+  title,
+  worksheetPageImages: pageImages,
+  worksheetBlanks: answer
+    ? [{ ...originalBlanks[0], id: `saved-${unitId}`, answer }]
+    : originalBlanks,
+  worksheetTextRegions: [],
+});
+const map = {
+  title: "한반도 지도",
+  type: "pdf",
+  sortOrder: 0,
+  pdfPageImages: pageImages,
+  pdfRegions: [],
+  pdfBlanks: [
+    {
+      id: "map-blank",
+      page: 1,
+      left: 120,
+      top: 240,
+      width: 160,
+      height: 40,
+      answer: "평양",
+      prompt: "도시",
+      source: "manual",
+    },
+  ],
+};
+const store = {
+  [`${scope}/curriculum/tree`]: {
+    tree: [
+      {
+        id: "chapter",
+        title: "II. 고대 사회",
+        children: [
+          { id: "b", title: "2. 삼국", children: [] },
+          { id: "a", title: longTitle, children: [] },
+        ],
+      },
+    ],
+  },
+  [`${scope}/lessons/b`]: lesson("b", "삼국 수업", "백제"),
+  [`${scope}/lessons/a`]: lesson("a", longTitle),
+  [`${scope}/map_resources/map-1`]: map,
+  "users/student-1": {
+    role: "student",
+    name: "검증학생",
+    grade: "1",
+    class: "2",
+    number: "3",
+  },
+};
+const mock = `
+const fixture=window.__fixture={store:${JSON.stringify(store)},writes:[],notifications:[],reads:[],alerts:[]};
+export const config={year:'2026',semester:'2'};
+export const db={};
+export const useAuth=()=>({config,userData:{uid:'teacher-fixture',role:'teacher',name:'검증교사'}});
+const ref=(...parts)=>({path:parts.filter(p=>typeof p==='string').join('/')});
+export const collection=(_db,...parts)=>ref(...parts);
+export const doc=(_db,...parts)=>ref(...parts);
+export const query=(reference)=>reference;
+export const orderBy=()=>null;
+export const limit=()=>null;
+export const serverTimestamp=()=>({seconds:1790676000,nanoseconds:0});
+const snap=(key,value)=>({id:key.split('/').at(-1),exists:()=>value!==undefined,data:()=>structuredClone(value)});
+export const getDoc=async(reference)=>{fixture.reads.push(reference.path);return snap(reference.path,fixture.store[reference.path]);};
+export const getDocs=async(reference)=>{fixture.reads.push(reference.path);const docs=Object.entries(fixture.store).filter(([key])=>key.startsWith(reference.path+'/')&&!key.slice(reference.path.length+1).includes('/')).map(([key,value])=>snap(key,value));return {docs,empty:!docs.length,size:docs.length};};
+export const setDoc=async(reference,payload)=>{const data=structuredClone(payload);fixture.writes.push({path:reference.path,data});fixture.store[reference.path]=data;};
+export const createManagedNotifications=async(_config,payload)=>{fixture.notifications.push(payload);return [];};
+export const getHttpsCallable=()=>{throw new Error('Callable use is outside this fixture');};
+`;
+const component = JSON.stringify(
+  path
+    .join(root, "src/pages/teacher/ManageHistoryClassroom.tsx")
+    .replaceAll("\\", "/"),
+);
+const bundle = await build({
+  stdin: {
+    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import Manage from ${component};const root=createRoot(document.getElementById('root'));let revision=0;window.__remount=()=>root.render(<MemoryRouter key={++revision}><Manage/></MemoryRouter>);window.__remount();`,
+    loader: "tsx",
+    resolveDir: root,
+  },
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "browser",
+  define: { "process.env.NODE_ENV": '"production"', "import.meta.env": "{}" },
+  plugins: [
+    {
+      name: "in-memory-boundaries",
+      setup(build) {
+        build.onResolve(
+          {
+            filter:
+              /^firebase\/firestore$|(?:lib\/|^\.\/)(?:firebase|notifications)$|contexts\/AuthContext$/,
+          },
+          () => ({ path: "fixture-boundaries", namespace: "fixture" }),
+        );
+        build.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
+          contents: mock,
+          loader: "js",
+        }));
+      },
+    },
+  ],
+});
+const css = (
+  await Promise.all(
+    ["assets/css/style.css", "src/assets/index.css"].map((file) =>
+      fs.readFile(path.join(root, file), "utf8"),
+    ),
+  )
+)
+  .join("\n")
+  .replaceAll(/@import[^;]+;/g, "")
+  .replaceAll(/@tailwind[^;]+;/g, "");
+const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}body{margin:0}#root{min-width:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
+const svg =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1400"><rect width="1000" height="1400" fill="white"/><text x="100" y="100" font-size="36">교사 자료 검증</text></svg>';
+const server = http.createServer((req, res) => {
+  const route = req.url.split("?")[0];
+  res.setHeader(
+    "Content-Type",
+    route.endsWith(".js")
+      ? "text/javascript"
+      : route.endsWith(".svg")
+        ? "image/svg+xml"
+        : "text/html;charset=utf-8",
+  );
+  res.end(
+    route === "/fixture.js"
+      ? bundle.outputFiles[0].text
+      : route === "/tailwind.js"
+        ? tailwind
+        : route === "/worksheet.svg"
+          ? svg
+          : html,
+  );
+});
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+const browser = await playwright.chromium.launch({
+  channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
+  headless: true,
+});
+const reports = [];
+const expectedBlanks = originalBlanks.map((b) => ({
+  id: b.id,
+  page: b.page,
+  left: b.leftRatio * 1000,
+  top: b.topRatio * 1400,
+  width: b.widthRatio * 1000,
+  height: b.heightRatio * 1400,
+  answer: b.answer,
+  prompt: b.prompt,
+  source: b.source,
+}));
+const snapshotFields = (assignment) =>
+  Object.fromEntries(
+    [
+      "sourceType",
+      "lessonUnitId",
+      "lessonTitle",
+      "lessonUnitPath",
+      "mapResourceId",
+      "mapTitle",
+      "pdfPageImages",
+      "pdfRegions",
+      "blanks",
+      "answerOptions",
+    ].map((key) => [key, assignment[key]]),
+  );
+const waitWrite = async (page, count) => {
+  await page.waitForFunction(
+    (count) => window.__fixture.writes.length === count,
+    count,
+  );
+  return page.evaluate(() => window.__fixture.writes.at(-1));
+};
+const measure = async (page, id) =>
+  page.locator(id).evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      left: r.left,
+      right: r.right,
+      width: r.width,
+      height: r.height,
+      viewport: innerWidth,
+      overflow: document.documentElement.scrollWidth > innerWidth + 1,
+      label: el.selectedOptions[0]?.textContent,
+    };
+  });
+try {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1280, height: 900 },
+  ]) {
+    const page = await browser.newPage({ viewport, hasTouch: true });
+    const errors = [],
+      alerts = [];
+    page.on("pageerror", (error) => {
+      errors.push(error.message);
+      console.error(error.message);
+    });
+    page.on("console", (message) => {
+      if (message.type() === "error") console.error(message.text());
+    });
+    page.on("dialog", async (dialog) => {
+      alerts.push(dialog.message());
+      await dialog.accept();
+    });
+    await page.route("**/*", (route) =>
+      route
+        .request()
+        .url()
+        .startsWith(`http://127.0.0.1:${server.address().port}`)
+        ? route.continue()
+        : route.abort(),
+    );
+    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await page
+      .getByRole("button", { name: "+ 새 역사교실", exact: true })
+      .click();
+    await page.locator("#history-create-source-type").selectOption("lesson");
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll("#history-create-source option").length === 2,
+    );
+    const options = await page
+      .locator("#history-create-source option")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => ({ value: node.value, label: node.textContent })),
+      );
+    assert.deepEqual(
+      options.map((item) => item.value),
+      ["lesson:b", "lesson:a"],
+      "curriculum order must win over alphabetical sorting",
+    );
+    assert.equal(options[1].label, `II. 고대 사회 › ${longTitle}`);
+    await page.locator("#history-create-source").selectOption("lesson:a");
+    const geometry = await measure(page, "#history-create-source");
+    assert(
+      !geometry.overflow &&
+        geometry.right <= viewport.width &&
+        geometry.left >= 0,
+      `source selector stays in the viewport: ${JSON.stringify(geometry)}`,
+    );
+    assert(
+      geometry.height >= 44,
+      "source selector has a tablet-sized touch target",
+    );
+    await page.screenshot({
+      path: path.join(evidence, `teacher-create-${viewport.width}.png`),
+      fullPage: true,
+    });
+    await page.locator("#history-create-source-type").selectOption("map");
+    assert.equal(
+      await page.locator("#history-create-source").inputValue(),
+      "map-1",
+    );
+    await page.locator("#history-create-source-type").selectOption("lesson");
+    await page.locator("#history-create-source").selectOption("lesson:a");
+    await page.getByPlaceholder("이름으로 전체 학생 검색").fill("검증학생");
+    await page.getByRole("button", { name: /검증학생.*1-2/ }).click();
+    await page
+      .getByRole("button", { name: "역사교실 저장", exact: true })
+      .click();
+    const created = await waitWrite(page, 1);
+    assert(created.path.startsWith(`${scope}/history_classrooms/`));
+    assert.equal(created.data.sourceType, "lesson");
+    assert.equal(created.data.lessonUnitId, "a");
+    assert.deepEqual(created.data.lessonUnitPath, ["II. 고대 사회", longTitle]);
+    assert.deepEqual(
+      created.data.blanks,
+      expectedBlanks,
+      "saved blanks keep ids, answer, prompt, source, page and exact geometry",
+    );
+    assert.deepEqual(created.data.pdfPageImages, pageImages);
+    assert.equal(created.data.mapResourceId, "");
+    assert.deepEqual(created.data.targetStudentUids, ["student-1"]);
+
+    // Reload the actual teacher component after the source lesson changes.
+    // Existing assignments must keep their published snapshot on a settings save.
+    await page.evaluate(
+      ({ scope }) => {
+        window.__fixture.store[`${scope}/lessons/a`].worksheetBlanks[0].answer =
+          "원본에서 수정된 정답";
+        window.__fixture.store[
+          `${scope}/lessons/a`
+        ].worksheetPageImages[0].imageUrl = "/worksheet.svg?revision=2";
+        window.__remount();
+      },
+      { scope },
+    );
+    await page
+      .getByRole("button", { name: `${longTitle} 설정 수정`, exact: true })
+      .click();
+    assert.equal(
+      await page.locator("#history-edit-source-type").inputValue(),
+      "lesson",
+    );
+    assert.equal(
+      await page.locator("#history-edit-source").inputValue(),
+      "lesson:a",
+    );
+    await page.locator("#history-edit-source").scrollIntoViewIfNeeded();
+    const editGeometry = await measure(page, "#history-edit-source");
+    await page.screenshot({
+      path: path.join(evidence, `teacher-edit-${viewport.width}.png`),
+      fullPage: true,
+    });
+    assert(
+      !editGeometry.overflow &&
+        editGeometry.right <= viewport.width &&
+        editGeometry.left >= 0,
+      `edit selector fits: ${JSON.stringify(editGeometry)}`,
+    );
+    await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+    const preserved = await waitWrite(page, 2);
+    assert.deepEqual(
+      snapshotFields(preserved.data),
+      snapshotFields(created.data),
+      "unchanged source preserves the original assignment snapshot",
+    );
+
+    await page
+      .getByRole("button", { name: `${longTitle} 설정 수정`, exact: true })
+      .click();
+    await page.locator("#history-edit-source-type").selectOption("map");
+    await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+    const mapped = await waitWrite(page, 3);
+    assert.equal(mapped.data.sourceType, "map");
+    assert.equal(mapped.data.mapResourceId, "map-1");
+    assert.equal(mapped.data.lessonUnitId, "");
+    assert.deepEqual(mapped.data.lessonUnitPath, []);
+    assert.deepEqual(mapped.data.blanks, map.pdfBlanks);
+
+    await page
+      .getByRole("button", { name: "한반도 지도 설정 수정", exact: true })
+      .click();
+    await page.locator("#history-edit-source-type").selectOption("lesson");
+    assert.equal(
+      await page.locator("#history-edit-source").inputValue(),
+      "lesson:b",
+    );
+    await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+    const changed = await waitWrite(page, 4);
+    assert.equal(changed.data.sourceType, "lesson");
+    assert.equal(changed.data.lessonUnitId, "b");
+    assert.equal(changed.data.mapResourceId, "");
+    assert.equal(changed.data.blanks[0].answer, "백제");
+    assert.deepEqual(changed.data.lessonUnitPath, ["II. 고대 사회", "2. 삼국"]);
+
+    await page.evaluate(
+      ({ scope }) => {
+        delete window.__fixture.store[`${scope}/lessons/b`];
+        window.__remount();
+      },
+      { scope },
+    );
+    await page
+      .getByRole("button", {
+        name: `${changed.data.title} 설정 수정`,
+        exact: true,
+      })
+      .click();
+    assert.equal(
+      await page.locator("#history-edit-source").inputValue(),
+      "lesson:b",
+      "missing source keeps the saved selection",
+    );
+    await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+    const missingSource = await waitWrite(page, 5);
+    assert.deepEqual(
+      snapshotFields(missingSource.data),
+      snapshotFields(changed.data),
+      "removed lesson source does not erase the published snapshot",
+    );
+    assert.deepEqual(errors, [], "no runtime errors");
+    assert(
+      alerts.every((message) => message === "역사교실 과제를 저장했습니다."),
+      `unexpected alert: ${alerts.join(", ")}`,
+    );
+    const capture = await page.evaluate(() => ({
+      writes: window.__fixture.writes,
+      reads: window.__fixture.reads,
+      notifications: window.__fixture.notifications,
+    }));
+    reports.push({
+      viewport,
+      options,
+      geometry,
+      editGeometry,
+      errors,
+      alerts,
+      ...capture,
+    });
+    await page.close();
+    console.log(
+      `teacher ${viewport.width}px create/edit/source-switch/snapshot: passed`,
+    );
+  }
+} finally {
+  await fs.writeFile(
+    path.join(evidence, "teacher-browser-report.json"),
+    JSON.stringify(
+      {
+        recordedAt: new Date().toISOString(),
+        coverage:
+          "actual ManageHistoryClassroom and source builder; in-memory backend; Edge touch emulation, no production data",
+        reports,
+      },
+      null,
+      2,
+    ),
+  );
+  await browser.close();
+  await new Promise((resolve) => server.close(resolve));
+}
+console.log(`Evidence: ${evidence}`);
