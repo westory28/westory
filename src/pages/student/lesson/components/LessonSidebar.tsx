@@ -44,6 +44,52 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
   const selectedUnitIdRef = useRef(selectedUnitId);
+  const panelRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen || window.matchMedia("(min-width: 1024px)").matches) return;
+    const panel = panelRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panel
+      ?.querySelector<HTMLButtonElement>('button[aria-label="수업 목차 닫기"]')
+      ?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+      }
+      if (event.key !== "Tab" || !panel) return;
+      const items = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex="0"]',
+        ),
+      ).filter((item) => item.getClientRects().length > 0);
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const handleResize = () => {
+      if (desktop.matches) closeRef.current();
+    };
+    desktop.addEventListener("change", handleResize);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKey);
+      desktop.removeEventListener("change", handleResize);
+      document.getElementById("student-lesson-toggle")?.focus();
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     selectedUnitIdRef.current = selectedUnitId;
@@ -109,33 +155,34 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
       {/* Mobile Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          className="student-lesson-backdrop fixed inset-0 bg-black bg-opacity-50 lg:hidden"
           onClick={onClose}
+          aria-hidden="true"
         ></div>
       )}
 
       <aside
-        className={`
+        ref={panelRef}
+        role={isOpen ? "dialog" : undefined}
+        aria-modal={isOpen ? true : undefined}
+        aria-label="수업 목차"
+        className={`student-lesson-sidebar
                     fixed inset-y-0 left-auto right-0 z-40
                     w-[86%] max-w-[360px]
                     bg-white border-l border-gray-200 shadow-xl
                     transform transition-transform duration-300 ease-in-out
                     flex flex-col
-                    mt-16
                     ${isOpen ? "translate-x-0" : "translate-x-full"}
                     lg:sticky lg:top-[88px] lg:mt-0 lg:max-h-[calc(100vh-112px)] lg:w-[360px] lg:max-w-none lg:translate-x-0 lg:self-start lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-sm xl:w-[384px]
                 `}
         style={{ right: 0, left: "auto" }}
       >
-        <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 lg:rounded-t-2xl">
+        <div className="student-lesson-sidebar-heading sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 lg:rounded-t-2xl">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800">
               <i className="fas fa-sitemap text-blue-500"></i>
               <span>수업 목차</span>
             </h2>
-            <p className="mt-0.5 text-xs font-medium text-gray-500">
-              단원별 수업 자료를 확인합니다.
-            </p>
           </div>
           <button
             type="button"

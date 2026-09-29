@@ -1,4 +1,4 @@
-.teacher-layout {
+:is(.teacher-layout, .student-layout) {
   --teacher-sidebar-width: 232px;
   --teacher-sidebar-collapsed-width: 88px;
   --teacher-header-height: 48px;
@@ -7,10 +7,10 @@
   padding-left: var(--teacher-sidebar-width);
 }
 
-.teacher-layout.is-sidebar-collapsed {
+:is(.teacher-layout, .student-layout).is-sidebar-collapsed {
   padding-left: var(--teacher-sidebar-collapsed-width);
 }
-.teacher-layout > main {
+:is(.teacher-layout, .student-layout) > main {
   min-width: 0;
 }
 
@@ -298,7 +298,7 @@
   transform: rotate(180deg);
 }
 
-.teacher-layout .teacher-account-header {
+:is(.teacher-layout, .student-layout) .teacher-account-header {
   position: relative;
   z-index: 40;
   min-height: var(--teacher-header-height);
@@ -306,7 +306,7 @@
   border: 0;
   background: transparent;
 }
-.teacher-layout .teacher-account-header .header-container {
+:is(.teacher-layout, .student-layout) .teacher-account-header .header-container {
   justify-content: flex-end;
   gap: 16px;
   height: var(--teacher-header-height);
@@ -333,16 +333,16 @@
 .teacher-account-header .header-user-link {
   min-height: 40px;
 }
-.teacher-layout .teacher-account-notification {
+:is(.teacher-layout, .student-layout) .teacher-account-notification {
   display: block;
 }
-.teacher-layout .teacher-account-session {
+:is(.teacher-layout, .student-layout) .teacher-account-session {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 8px;
 }
-.teacher-layout .teacher-account-session button {
+:is(.teacher-layout, .student-layout) .teacher-account-session button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -361,23 +361,23 @@
 .teacher-mobile-account {
   display: none;
 }
-.teacher-layout .btn-logout {
+:is(.teacher-layout, .student-layout) .btn-logout {
   width: auto;
   min-height: 40px;
   padding-inline: 12px;
   font-size: 0.875rem;
 }
-.teacher-layout .btn-logout-icon {
+:is(.teacher-layout, .student-layout) .btn-logout-icon {
   display: none;
 }
-.teacher-layout .btn-logout-label {
+:is(.teacher-layout, .student-layout) .btn-logout-label {
   display: inline;
 }
 @media (min-width: 1024px) {
-  .teacher-layout {
+  :is(.teacher-layout, .student-layout) {
     --teacher-account-top-space: 24px;
   }
-  .teacher-layout .teacher-account-header {
+  :is(.teacher-layout, .student-layout) .teacher-account-header {
     height: var(--teacher-account-height);
     min-height: var(--teacher-account-height);
     padding-top: var(--teacher-account-top-space);
@@ -411,8 +411,8 @@
 }
 
 @media (max-width: 1023px) {
-  .teacher-layout,
-  .teacher-layout.is-sidebar-collapsed {
+  :is(.teacher-layout, .student-layout),
+  :is(.teacher-layout, .student-layout).is-sidebar-collapsed {
     --teacher-header-height: 64px;
     padding-left: 0;
   }
@@ -473,12 +473,12 @@
     justify-content: initial;
     padding-inline: 12px;
   }
-  .teacher-layout .teacher-account-header .header-container {
+  :is(.teacher-layout, .student-layout) .teacher-account-header .header-container {
     justify-content: space-between;
     gap: 16px;
     padding-inline: 8px;
   }
-  .teacher-layout .teacher-account-header {
+  :is(.teacher-layout, .student-layout) .teacher-account-header {
     margin-left: 0;
     height: auto;
     padding-top: calc(var(--space-6) + env(safe-area-inset-top, 0px));
@@ -525,7 +525,7 @@
   .teacher-account-header .header-user-name {
     max-width: 128px;
   }
-  .teacher-layout .teacher-account-session button {
+  :is(.teacher-layout, .student-layout) .teacher-account-session button {
     min-width: 40px;
     min-height: 40px;
   }
@@ -533,7 +533,7 @@
     padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   }
-  .teacher-layout .teacher-mobile-drawer {
+  :is(.teacher-layout, .student-layout) .teacher-mobile-drawer {
     top: 0;
     bottom: auto;
     height: 100dvh;
@@ -543,20 +543,20 @@
     background: var(--ws-surface, #ffffff);
     overscroll-behavior: contain;
   }
-  .teacher-layout .teacher-mobile-drawer-heading {
+  :is(.teacher-layout, .student-layout) .teacher-mobile-drawer-heading {
     flex-shrink: 0;
   }
-  .teacher-layout .teacher-mobile-drawer.translate-x-full {
+  :is(.teacher-layout, .student-layout) .teacher-mobile-drawer.translate-x-full {
     visibility: hidden;
   }
-  body:has(.teacher-layout .teacher-mobile-drawer-backdrop) {
+  body:has(:is(.teacher-layout, .student-layout) .teacher-mobile-drawer-backdrop) {
     overflow: hidden;
   }
-  .teacher-layout:has(.teacher-mobile-drawer-backdrop)
+  :is(.teacher-layout, .student-layout):has(.teacher-mobile-drawer-backdrop)
     > button[data-patch-memo-root] {
     visibility: hidden;
   }
-  .teacher-layout .teacher-patch-memo-panel {
+  :is(.teacher-layout, .student-layout) .teacher-patch-memo-panel {
     height: min(76dvh, 720px);
     max-height: calc(
       100dvh - 7.25rem - env(safe-area-inset-top, 0px) -
@@ -567,18 +567,18 @@
 }
 
 @media (max-width: 639px) {
-  .teacher-layout .teacher-patch-memo-panel {
+  :is(.teacher-layout, .student-layout) .teacher-patch-memo-panel {
     height: min(84dvh, 720px);
     max-height: calc(100dvh - var(--space-4) - env(safe-area-inset-top, 0px));
   }
 }
 
 @media (max-width: 767px) {
-  .teacher-layout .teacher-account-header,
-  .teacher-layout .teacher-account-header .header-container {
+  :is(.teacher-layout, .student-layout) .teacher-account-header,
+  :is(.teacher-layout, .student-layout) .teacher-account-header .header-container {
     height: auto;
   }
-  .teacher-layout .teacher-account-header .header-container {
+  :is(.teacher-layout, .student-layout) .teacher-account-header .header-container {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0 8px;
@@ -611,14 +611,14 @@
   .teacher-account-header .header-user-name {
     max-width: 80px;
   }
-  .teacher-layout .teacher-account-session {
+  :is(.teacher-layout, .student-layout) .teacher-account-session {
     gap: 4px;
     padding-inline: 8px;
   }
-  .teacher-layout .teacher-account-session > i {
+  :is(.teacher-layout, .student-layout) .teacher-account-session > i {
     display: none;
   }
-  .teacher-layout .btn-logout {
+  :is(.teacher-layout, .student-layout) .btn-logout {
     padding-inline: 4px;
     font-size: 0.75rem;
   }
@@ -630,13 +630,13 @@
 }
 
 @media (max-width: 1119px) {
-  .teacher-layout .teacher-account-header .header-container {
+  :is(.teacher-layout, .student-layout) .teacher-account-header .header-container {
     padding-inline: 16px;
   }
 }
 
 @media (max-width: 639px) {
-  .teacher-layout .teacher-account-header .header-container {
+  :is(.teacher-layout, .student-layout) .teacher-account-header .header-container {
     padding-inline: 12px;
   }
 }

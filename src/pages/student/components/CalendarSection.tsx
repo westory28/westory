@@ -429,12 +429,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
       <div className="student-calendar-shell__header">
         <div className="student-calendar-shell__header-main">
           <div className="student-calendar-shell__heading-group">
-            <span className="student-calendar-shell__eyebrow">
+            <h2 className="student-calendar-shell__eyebrow">
               <span className="student-calendar-shell__eyebrow-icon">
                 <CalendarBadgeIcon />
               </span>
               {LABELS.heading}
-            </span>
+            </h2>
 
             <div className="student-calendar-shell__month-row">
               <div className="student-calendar-shell__month-badge">
@@ -449,9 +449,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 </button>
 
                 <div className="student-calendar-shell__month-label">
-                  <h2 className="student-calendar-shell__month-title">
+                  <h3 className="student-calendar-shell__month-title">
                     {currentTitle || LABELS.heading}
-                  </h2>
+                  </h3>
                 </div>
 
                 <button
@@ -517,9 +517,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             </div>
 
             <div className="student-calendar-shell__attendance-tools">
-              <span className="student-calendar-shell__attendance-label">
-                {LABELS.attendance}
-              </span>
               {attendanceChecked ? (
                 <span
                   className="student-calendar-shell__attendance-indicator"
@@ -550,7 +547,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
         </div>
 
         {attendanceHasError && (
-          <p className="student-calendar-shell__error-message">
+          <p className="student-calendar-shell__error-message" role="alert">
             {attendanceMessage}
           </p>
         )}
@@ -749,6 +746,11 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
 
         {currentViewType === "listMonth" && (
           <div className="custom-schedule-list absolute inset-0 overflow-y-auto rounded-xl border border-gray-200 bg-white">
+            {listRows.length === 0 && (
+              <div className="student-calendar-list-empty">
+                등록된 일정이 없습니다.
+              </div>
+            )}
             {listRows.map((group) => (
               <div key={group.date}>
                 <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-lg font-extrabold text-gray-900 first:border-t-0">
@@ -772,9 +774,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                       key={event.id}
                       type="button"
                       onClick={() => onEventClick(event)}
-                      className="grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
+                      className="student-calendar-list-event grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
                     >
-                      <div className="flex min-w-0 items-center gap-2 font-bold text-gray-700">
+                      <div className="student-calendar-list-event__category flex min-w-0 items-center gap-2 font-bold text-gray-700">
                         <span
                           className="h-3.5 w-3.5 shrink-0 rounded-full"
                           style={{ backgroundColor: categoryColor }}
@@ -782,7 +784,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         <span className="truncate">{categoryLabel}</span>
                       </div>
                       <div
-                        className={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold ${
+                        className={`student-calendar-list-event__title block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold ${
                           isHoliday ? "text-red-500" : "text-gray-900"
                         }`}
                         title={eventTitle}
@@ -790,7 +792,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                         {eventTitle}
                       </div>
                       <div
-                        className="truncate text-sm font-semibold text-gray-600"
+                        className="student-calendar-list-event__target truncate text-sm font-semibold text-gray-600"
                         title={targetLabel}
                       >
                         {targetLabel}
