@@ -46,6 +46,7 @@ import {
 import { normalizeMapResource, type MapResource } from "../../lib/mapResources";
 import {
   getHistoryClassroomSourceFields,
+  getHistoryClassroomLessonSelectLevels,
   getHistoryClassroomSourceId,
   readHistoryClassroomLessonSources,
   type HistoryClassroomLessonSource,
@@ -57,6 +58,20 @@ import {
 } from "../../lib/semesterScope";
 
 const HISTORY_CLASSROOM_RESULT_LIMIT = 500;
+const NEW_ASSIGNMENT_DEFAULTS = {
+  timeLimitMinutes: 10,
+  cooldownMinutes: 5,
+  passThresholdPercent: 90,
+  targetGrade: "3",
+  targetClass: "2",
+};
+const ASSIGNMENT_REASONS = [
+  "1인 1역 및 청소 안함",
+  "지각",
+  "수업 태도",
+  "교사 지시 불이행",
+];
+const OTHER_ASSIGNMENT_REASON = "__other__";
 
 interface StudentOption {
   uid: string;
@@ -705,15 +720,33 @@ const HistoryClassroomSourceSelect: React.FC<{
   id: string;
   value: string;
   currentLabel?: string;
+  stacked?: boolean;
   sources: MapResource[];
   loading: boolean;
   error: string;
   onChange: (value: string) => void;
-}> = ({ id, value, currentLabel, sources, loading, error, onChange }) => {
+}> = ({
+  id,
+  value,
+  currentLabel,
+  stacked = false,
+  sources,
+  loading,
+  error,
+  onChange,
+}) => {
   const isLesson = value.startsWith("lesson:");
   const available = sources.filter(
     (source) => "lessonUnitId" in source === isLesson,
   );
+  const lessonLevels = isLesson
+    ? getHistoryClassroomLessonSelectLevels(
+        available as HistoryClassroomLessonSource[],
+        value,
+      )
+    : [];
+  const selectClassName =
+    "min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm";
   return (
     <div className="min-w-0 space-y-3">
       <label className="block" htmlFor={`${id}-type`}>
@@ -736,33 +769,82 @@ const HistoryClassroomSourceSelect: React.FC<{
           <option value="map">지도</option>
         </select>
       </label>
-      <label className="block" htmlFor={id}>
-        <span className="mb-1 block text-xs font-bold text-gray-500">
-          {isLesson ? "수업 자료 목차" : "PDF 지도"}
-        </span>
-        <select
-          id={id}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+      {isLesson && lessonLevels.length ? (
+        <div
+          className={`grid min-w-0 gap-3 ${stacked ? "" : "md:grid-cols-3"}`}
         >
-          {!available.some((source) => source.id === value) && (
-            <option value={value}>
-              {currentLabel ||
-                (loading && isLesson ? "수업 자료 불러오는 중…" : "자료 선택")}
-            </option>
-          )}
-          {available.map((source) => (
-            <option key={source.id} value={source.id}>
-              {"lessonUnitPath" in source
-                ? (source as HistoryClassroomLessonSource).lessonUnitPath.join(
-                    " › ",
-                  )
-                : source.title}
-            </option>
-          ))}
-        </select>
-      </label>
+          {lessonLevels.map((level, index) => {
+            const levelId =
+              index === lessonLevels.length - 1 ? id : `${id}-level-${index}`;
+            return (
+              <label key={index} className="block min-w-0" htmlFor={levelId}>
+                <span className="mb-1 block text-xs font-bold text-gray-500">
+                  {["대목차", "중목차", "소목차"][index] ||
+                    `하위 목차 ${index - 2}`}
+                </span>
+                <select
+                  id={levelId}
+                  title={
+                    level.options.find((option) => option.value === level.value)
+                      ?.title || currentLabel
+                  }
+                  data-lesson-level={index}
+                  value={level.value}
+                  onChange={(event) => {
+                    const option = level.options.find(
+                      (item) => item.value === event.target.value,
+                    );
+                    if (option) onChange(option.sourceId);
+                  }}
+                  className={selectClassName}
+                >
+                  {!level.value && (
+                    <option value="">
+                      {(currentLabel ? "기존 배포 자료 유지" : "") ||
+                        (loading ? "수업 자료 불러오는 중…" : "목차 선택")}
+                    </option>
+                  )}
+                  {level.options.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <label className="block" htmlFor={id}>
+          <span className="mb-1 block text-xs font-bold text-gray-500">
+            {isLesson ? "수업 자료 목차" : "PDF 지도"}
+          </span>
+          <select
+            id={id}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+          >
+            {!available.some((source) => source.id === value) && (
+              <option value={value}>
+                {currentLabel ||
+                  (loading && isLesson
+                    ? "수업 자료 불러오는 중…"
+                    : "자료 선택")}
+              </option>
+            )}
+            {available.map((source) => (
+              <option key={source.id} value={source.id}>
+                {"lessonUnitPath" in source
+                  ? (
+                      source as HistoryClassroomLessonSource
+                    ).lessonUnitPath.join(" › ")
+                  : source.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {isLesson && error && (
         <p role="alert" className="text-sm text-red-600">
           {error}
@@ -772,6 +854,78 @@ const HistoryClassroomSourceSelect: React.FC<{
         <p className="text-sm text-gray-500">
           빈칸이 저장된 수업 자료가 없습니다.
         </p>
+      )}
+    </div>
+  );
+};
+
+const AssignmentReasonField: React.FC<{
+  id: string;
+  studentName: string;
+  value: string;
+  explicitOther: boolean;
+  showError: boolean;
+  onChange: (value: string, other: boolean) => void;
+}> = ({ id, studentName, value, explicitOther, showError, onChange }) => {
+  const other =
+    explicitOther || (!!value && !ASSIGNMENT_REASONS.includes(value));
+  const invalid = showError && other && !value.trim();
+  return (
+    <div className="space-y-2">
+      <label className="block" htmlFor={id}>
+        <span className="mb-1 block text-xs font-bold text-gray-500">
+          배정 사유
+        </span>
+        <select
+          id={id}
+          aria-label={`${studentName} 배정 사유`}
+          value={other ? OTHER_ASSIGNMENT_REASON : value}
+          onChange={(event) => {
+            const nextOther = event.target.value === OTHER_ASSIGNMENT_REASON;
+            onChange(
+              nextOther ? (other ? value : "") : event.target.value,
+              nextOther,
+            );
+          }}
+          className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
+        >
+          <option value="">사유 선택</option>
+          {ASSIGNMENT_REASONS.map((reason) => (
+            <option key={reason} value={reason}>
+              {reason}
+            </option>
+          ))}
+          <option value={OTHER_ASSIGNMENT_REASON}>기타</option>
+        </select>
+      </label>
+      {other && (
+        <label className="block" htmlFor={`${id}-other`}>
+          <span className="mb-1 block text-xs font-bold text-gray-500">
+            기타 사유 (필수)
+          </span>
+          <textarea
+            id={`${id}-other`}
+            lang="ko"
+            inputMode="text"
+            rows={2}
+            required
+            value={value}
+            aria-label={`${studentName} 기타 사유`}
+            aria-invalid={invalid}
+            aria-describedby={invalid ? `${id}-error` : undefined}
+            onChange={(event) => onChange(event.target.value, true)}
+            className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+          {invalid && (
+            <span
+              id={`${id}-error`}
+              role="alert"
+              className="mt-1 block text-sm text-red-600"
+            >
+              기타 사유를 입력해 주세요.
+            </span>
+          )}
+        </label>
       )}
     </div>
   );
@@ -840,12 +994,22 @@ const ManageHistoryClassroom: React.FC = () => {
   const [selectedMapId, setSelectedMapId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [timeLimitMinutes, setTimeLimitMinutes] = useState(0);
-  const [cooldownMinutes, setCooldownMinutes] = useState(0);
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState(
+    NEW_ASSIGNMENT_DEFAULTS.timeLimitMinutes,
+  );
+  const [cooldownMinutes, setCooldownMinutes] = useState(
+    NEW_ASSIGNMENT_DEFAULTS.cooldownMinutes,
+  );
   const [dueWindowDays, setDueWindowDays] = useState<number | "">("");
-  const [passThresholdPercent, setPassThresholdPercent] = useState(80);
-  const [targetGrade, setTargetGrade] = useState("");
-  const [targetClass, setTargetClass] = useState("");
+  const [passThresholdPercent, setPassThresholdPercent] = useState(
+    NEW_ASSIGNMENT_DEFAULTS.passThresholdPercent,
+  );
+  const [targetGrade, setTargetGrade] = useState(
+    NEW_ASSIGNMENT_DEFAULTS.targetGrade,
+  );
+  const [targetClass, setTargetClass] = useState(
+    NEW_ASSIGNMENT_DEFAULTS.targetClass,
+  );
   const [targetNumber, setTargetNumber] = useState("");
   const [targetStudentUid, setTargetStudentUid] = useState("");
   const [targetStudentSearch, setTargetStudentSearch] = useState("");
@@ -854,6 +1018,12 @@ const ManageHistoryClassroom: React.FC = () => {
     {},
   );
   const [blanks, setBlanks] = useState<HistoryClassroomBlank[]>([]);
+  const [otherReasonUids, setOtherReasonUids] = useState<string[]>([]);
+  const [showReasonErrors, setShowReasonErrors] = useState(false);
+  const [editingOtherReasonUids, setEditingOtherReasonUids] = useState<
+    string[]
+  >([]);
+  const [showEditingReasonErrors, setShowEditingReasonErrors] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedBlankId, setSelectedBlankId] = useState("");
   const [draftBlank, setDraftBlank] = useState<any>(null);
@@ -2332,17 +2502,19 @@ const ManageHistoryClassroom: React.FC = () => {
     setWorksheetSourceAssignment(null);
     setTitle("");
     setDescription("");
-    setTimeLimitMinutes(0);
-    setCooldownMinutes(0);
+    setTimeLimitMinutes(NEW_ASSIGNMENT_DEFAULTS.timeLimitMinutes);
+    setCooldownMinutes(NEW_ASSIGNMENT_DEFAULTS.cooldownMinutes);
     setDueWindowDays("");
-    setPassThresholdPercent(80);
-    setTargetGrade("");
-    setTargetClass("");
+    setPassThresholdPercent(NEW_ASSIGNMENT_DEFAULTS.passThresholdPercent);
+    setTargetGrade(NEW_ASSIGNMENT_DEFAULTS.targetGrade);
+    setTargetClass(NEW_ASSIGNMENT_DEFAULTS.targetClass);
     setTargetNumber("");
     setTargetStudentUid("");
     setTargetStudentSearch("");
     setSelectedStudentUids([]);
     setStudentReasons({});
+    setOtherReasonUids([]);
+    setShowReasonErrors(false);
     setSelectedBlankId("");
     setDraftBlank(null);
     setDraftBlankAnswer("");
@@ -2813,6 +2985,8 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingStudentSearchOpen(false);
     setEditingStudentSearch("");
     setEditingStudentReasons(assignment.targetStudentReasons || {});
+    setEditingOtherReasonUids([]);
+    setShowEditingReasonErrors(false);
     setEditingIsPublished(assignment.isPublished);
     setPreviewOpen(false);
   };
@@ -2847,6 +3021,8 @@ const ManageHistoryClassroom: React.FC = () => {
           : [],
     );
     setStudentReasons(assignment.targetStudentReasons || {});
+    setOtherReasonUids([]);
+    setShowReasonErrors(false);
     setBlanks(assignment.blanks);
     setSelectedBlankId("");
     setDraftBlank(null);
@@ -2882,6 +3058,8 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingStudentSearchOpen(false);
     setEditingStudentSearch("");
     setEditingStudentReasons({});
+    setEditingOtherReasonUids([]);
+    setShowEditingReasonErrors(false);
     setEditingIsPublished(true);
     setSavingEdit(false);
     setDeletingAssignment(false);
@@ -2905,6 +3083,22 @@ const ManageHistoryClassroom: React.FC = () => {
     );
     if (!updatedStudents.length) {
       alert("배정 학생을 확인해주세요.");
+      return;
+    }
+    const missingReasonUid = editingStudentUids.find(
+      (uid) =>
+        editingOtherReasonUids.includes(uid) &&
+        !String(editingStudentReasons[uid] || "").trim(),
+    );
+    if (missingReasonUid) {
+      setShowEditingReasonErrors(true);
+      window.requestAnimationFrame(() => {
+        const input = document.getElementById(
+          `history-edit-reason-${missingReasonUid}-other`,
+        );
+        input?.focus({ preventScroll: true });
+        input?.closest("label")?.scrollIntoView({ block: "center" });
+      });
       return;
     }
     const replacementMap = worksheetSources.find(
@@ -3189,6 +3383,22 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("학생 정보를 찾을 수 없습니다.");
       return;
     }
+    const missingReasonUid = selectedStudentUids.find(
+      (uid) =>
+        otherReasonUids.includes(uid) &&
+        !String(studentReasons[uid] || "").trim(),
+    );
+    if (missingReasonUid) {
+      setShowReasonErrors(true);
+      window.requestAnimationFrame(() => {
+        const input = document.getElementById(
+          `history-create-reason-${missingReasonUid}-other`,
+        );
+        input?.focus({ preventScroll: true });
+        input?.closest("label")?.scrollIntoView({ block: "center" });
+      });
+      return;
+    }
     const saveBlanks =
       worksheetEditingAssignmentId && worksheetSourceAssignment
         ? blanks
@@ -3322,17 +3532,19 @@ const ManageHistoryClassroom: React.FC = () => {
       setAssignmentPage(1);
       setTitle("");
       setDescription("");
-      setTimeLimitMinutes(0);
-      setCooldownMinutes(0);
+      setTimeLimitMinutes(NEW_ASSIGNMENT_DEFAULTS.timeLimitMinutes);
+      setCooldownMinutes(NEW_ASSIGNMENT_DEFAULTS.cooldownMinutes);
       setDueWindowDays("");
-      setPassThresholdPercent(80);
-      setTargetGrade("");
-      setTargetClass("");
+      setPassThresholdPercent(NEW_ASSIGNMENT_DEFAULTS.passThresholdPercent);
+      setTargetGrade(NEW_ASSIGNMENT_DEFAULTS.targetGrade);
+      setTargetClass(NEW_ASSIGNMENT_DEFAULTS.targetClass);
       setTargetNumber("");
       setTargetStudentUid("");
       setTargetStudentSearch("");
       setSelectedStudentUids([]);
       setStudentReasons({});
+      setOtherReasonUids([]);
+      setShowReasonErrors(false);
       setBlanks([]);
       setSelectedBlankId("");
       setDraftBlank(null);
@@ -4982,6 +5194,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   <div className="space-y-3 md:col-span-2 xl:col-span-2">
                     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(5.75rem,1.2fr)] gap-2 lg:grid-cols-4 lg:gap-3">
                       <select
+                        aria-label="대상 학년"
                         value={targetGrade}
                         onChange={(e) => {
                           setTargetGrade(e.target.value);
@@ -4993,6 +5206,9 @@ const ManageHistoryClassroom: React.FC = () => {
                         className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
                       >
                         <option value="">학년 선택</option>
+                        {targetGrade && !gradeOptions.includes(targetGrade) && (
+                          <option value={targetGrade}>{targetGrade}</option>
+                        )}
                         {gradeOptions.map((grade) => (
                           <option key={grade} value={grade}>
                             {grade}
@@ -5000,6 +5216,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         ))}
                       </select>
                       <select
+                        aria-label="대상 학급"
                         value={targetClass}
                         onChange={(e) => {
                           setTargetClass(e.target.value);
@@ -5010,6 +5227,9 @@ const ManageHistoryClassroom: React.FC = () => {
                         className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
                       >
                         <option value="">학급 선택</option>
+                        {targetClass && !classOptions.includes(targetClass) && (
+                          <option value={targetClass}>{targetClass}</option>
+                        )}
                         {classOptions.map((className) => (
                           <option key={className} value={className}>
                             {className}
@@ -5168,19 +5388,25 @@ const ManageHistoryClassroom: React.FC = () => {
                               삭제
                             </button>
                           </div>
-                          <textarea
-                            lang="ko"
-                            inputMode="text"
+                          <AssignmentReasonField
+                            id={`history-create-reason-${student.uid}`}
+                            studentName={student.name}
                             value={studentReasons[student.uid] || ""}
-                            onChange={(event) =>
+                            explicitOther={otherReasonUids.includes(
+                              student.uid,
+                            )}
+                            showError={showReasonErrors}
+                            onChange={(reason, other) => {
                               setStudentReasons((prev) => ({
                                 ...prev,
-                                [student.uid]: event.target.value,
-                              }))
-                            }
-                            rows={2}
-                            placeholder="왜 배정했는지 입력"
-                            className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                [student.uid]: reason,
+                              }));
+                              setOtherReasonUids((prev) =>
+                                other
+                                  ? [...new Set([...prev, student.uid])]
+                                  : prev.filter((uid) => uid !== student.uid),
+                              );
+                            }}
                           />
                         </div>
                       ))}
@@ -5310,17 +5536,25 @@ const ManageHistoryClassroom: React.FC = () => {
                           setWorksheetSourceAssignment(null);
                           setTitle("");
                           setDescription("");
-                          setTimeLimitMinutes(0);
-                          setCooldownMinutes(0);
+                          setTimeLimitMinutes(
+                            NEW_ASSIGNMENT_DEFAULTS.timeLimitMinutes,
+                          );
+                          setCooldownMinutes(
+                            NEW_ASSIGNMENT_DEFAULTS.cooldownMinutes,
+                          );
                           setDueWindowDays("");
-                          setPassThresholdPercent(80);
-                          setTargetGrade("");
-                          setTargetClass("");
+                          setPassThresholdPercent(
+                            NEW_ASSIGNMENT_DEFAULTS.passThresholdPercent,
+                          );
+                          setTargetGrade(NEW_ASSIGNMENT_DEFAULTS.targetGrade);
+                          setTargetClass(NEW_ASSIGNMENT_DEFAULTS.targetClass);
                           setTargetNumber("");
                           setTargetStudentUid("");
                           setTargetStudentSearch("");
                           setSelectedStudentUids([]);
                           setStudentReasons({});
+                          setOtherReasonUids([]);
+                          setShowReasonErrors(false);
                           setBlanks([]);
                           setSelectedBlankId("");
                           setDraftBlank(null);
@@ -5740,6 +5974,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       <div className="mt-3">
                         <HistoryClassroomSourceSelect
                           id="history-edit-source"
+                          stacked
                           value={editingMapResourceId}
                           sources={worksheetSources}
                           loading={loadingLessonSources}
@@ -5887,19 +6122,25 @@ const ManageHistoryClassroom: React.FC = () => {
                                 삭제
                               </button>
                             </div>
-                            <textarea
-                              lang="ko"
-                              inputMode="text"
+                            <AssignmentReasonField
+                              id={`history-edit-reason-${student.uid}`}
+                              studentName={student.name}
                               value={editingStudentReasons[student.uid] || ""}
-                              onChange={(event) =>
+                              explicitOther={editingOtherReasonUids.includes(
+                                student.uid,
+                              )}
+                              showError={showEditingReasonErrors}
+                              onChange={(reason, other) => {
                                 setEditingStudentReasons((prev) => ({
                                   ...prev,
-                                  [student.uid]: event.target.value,
-                                }))
-                              }
-                              rows={2}
-                              placeholder="왜 배정했는지 입력"
-                              className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                  [student.uid]: reason,
+                                }));
+                                setEditingOtherReasonUids((prev) =>
+                                  other
+                                    ? [...new Set([...prev, student.uid])]
+                                    : prev.filter((uid) => uid !== student.uid),
+                                );
+                              }}
                             />
                           </div>
                         ))}

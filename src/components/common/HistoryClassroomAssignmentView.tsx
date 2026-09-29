@@ -25,6 +25,8 @@ interface HistoryClassroomAssignmentViewProps {
   submitting?: boolean;
   completed?: boolean;
   readOnly?: boolean;
+  answersLocked?: boolean;
+  submitLabel?: string;
   resultText?: string;
   pointNotice?: string;
   countdownLabel?: string | null;
@@ -287,6 +289,8 @@ const HistoryClassroomAssignmentView: React.FC<
   submitting = false,
   completed = false,
   readOnly = false,
+  answersLocked = false,
+  submitLabel = "제출하기",
   resultText = "",
   pointNotice = "",
   countdownLabel = null,
@@ -301,7 +305,6 @@ const HistoryClassroomAssignmentView: React.FC<
   answerChecks = [],
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
-  const showFloatingActions = !isModalPreview;
   const pages = assignment.pdfPageImages || [];
   const pageCount = pages.length;
   const currentPageIndex = pages.findIndex((page) => page.page === currentPage);
@@ -338,6 +341,8 @@ const HistoryClassroomAssignmentView: React.FC<
   );
   const isPointAwardedNotice = pointNotice.includes("+");
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(144);
   const fitScaleRef = useRef(1);
   const userScaleRef = useRef(1);
   const totalScaleRef = useRef(1);
@@ -355,6 +360,8 @@ const HistoryClassroomAssignmentView: React.FC<
   const [fitScale, setFitScale] = useState(1);
   const [userScale, setUserScale] = useState(MIN_VIEWPORT_USER_SCALE);
   const [focusedBlankId, setFocusedBlankId] = useState("");
+  const [imageLoadError, setImageLoadError] = useState(false);
+  const [imageRetry, setImageRetry] = useState(0);
   const [floatingViewport, setFloatingViewport] = useState({
     offsetLeft: 0,
     offsetTop: 0,
@@ -364,13 +371,53 @@ const HistoryClassroomAssignmentView: React.FC<
   });
 
   const enableInteractiveViewport = interactiveViewport && Boolean(pageImage);
-  const viewportHeight = useMemo(() => {
-    if (isModalPreview) return null;
-    if (!pageImage) return "clamp(18rem, 56vh, 34rem)";
-    return pageImage.height > pageImage.width
-      ? "clamp(20rem, 62vh, 38rem)"
-      : "clamp(18rem, 54vh, 32rem)";
-  }, [isModalPreview, pageImage]);
+  useEffect(() => {
+    // Warm subsequent pages while connected so paging can survive brief Wi-Fi loss.
+    const images = (assignment.pdfPageImages || []).map((page) => {
+      const image = new Image();
+      image.src = page.imageUrl;
+      return image;
+    });
+    return () =>
+      images.forEach((image) => {
+        image.onload = null;
+        image.onerror = null;
+      });
+  }, [assignment.id, assignment.pdfPageImages]);
+
+  useEffect(() => {
+    setImageLoadError(false);
+  }, [currentPage, pageImage?.imageUrl]);
+
+  useEffect(() => {
+    const retry = () => {
+      if (imageLoadError) {
+        setImageLoadError(false);
+        setImageRetry((value) => value + 1);
+      }
+    };
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [imageLoadError]);
+  const viewportHeight = isModalPreview
+    ? null
+    : Math.min(
+        1000,
+        Math.max(160, floatingViewport.height - toolbarHeight - 32),
+      );
+  const answeredCount = assignment.blanks.filter((blank) =>
+    String(answers[blank.id] || "").trim(),
+  ).length;
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+    const measure = () =>
+      setToolbarHeight(toolbar.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, []);
   const totalScale = enableInteractiveViewport ? fitScale * userScale : 1;
   const scaledPageWidth = pageImage ? pageImage.width * totalScale : 0;
   const scaledPageHeight = pageImage ? pageImage.height * totalScale : 0;
@@ -414,7 +461,7 @@ const HistoryClassroomAssignmentView: React.FC<
           : "";
       const isFilled = Boolean(trimmedAnswerValue);
       const isInputLocked =
-        readOnly || completed || submitting || !onAnswerChange;
+        readOnly || answersLocked || completed || submitting || !onAnswerChange;
 
       return {
         blank,
@@ -459,6 +506,7 @@ const HistoryClassroomAssignmentView: React.FC<
     onAnswerChange,
     pageImage,
     readOnly,
+    answersLocked,
     resolveBlankOverlap,
     submitting,
   ]);
@@ -466,15 +514,6 @@ const HistoryClassroomAssignmentView: React.FC<
     () => sortPlacementsForFocus(blankPlacements),
     [blankPlacements],
   );
-  const useInlineActions =
-    floatingViewport.width < 1024 ||
-    (typeof window !== "undefined" &&
-      window.matchMedia("(pointer: coarse)").matches);
-  const floatingPanelWidth = Math.min(
-    320,
-    Math.max(248, floatingViewport.width - 24),
-  );
-
   useEffect(() => {
     fitScaleRef.current = fitScale;
   }, [fitScale]);
@@ -497,8 +536,6 @@ const HistoryClassroomAssignmentView: React.FC<
   );
 
   useEffect(() => {
-    if (!showFloatingActions) return undefined;
-
     const updateFloatingViewport = () => {
       const viewport = window.visualViewport;
       setFloatingViewport({
@@ -526,7 +563,7 @@ const HistoryClassroomAssignmentView: React.FC<
       );
       window.removeEventListener("resize", updateFloatingViewport);
     };
-  }, [showFloatingActions]);
+  }, []);
 
   useEffect(() => {
     setUserScale(MIN_VIEWPORT_USER_SCALE);
@@ -885,149 +922,204 @@ const HistoryClassroomAssignmentView: React.FC<
       className={
         isModalPreview
           ? "mx-auto w-full max-w-[108rem] px-5 py-5 lg:px-6"
-          : "mx-auto max-w-6xl px-4 pt-32 pb-12 sm:pt-28 sm:pb-14 lg:px-5"
+          : "mx-auto w-full px-2 py-2 sm:px-3"
       }
     >
       <div
-        className={`rounded-3xl border border-gray-200 bg-white shadow-sm ${
-          isModalPreview ? "mb-4 p-5" : "mb-5 p-6"
-        }`}
+        ref={toolbarRef}
+        data-history-toolbar="true"
+        className="sticky top-0 z-30 mb-2 rounded-xl border border-gray-200 bg-white px-2 py-1 shadow-sm sm:px-3"
       >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-orange-500">역사교실</div>
-            <h1 className="mt-1 break-words text-3xl font-black text-gray-900">
-              {assignment.title}
-            </h1>
-            {assignment.description && (
-              <p className="mt-2 text-sm text-gray-600">
-                {assignment.description}
-              </p>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
-                통과 기준 {assignment.passThresholdPercent}% 이상
-              </span>
-              {dueStatusLabel && (
+        <div
+          data-history-actions="true"
+          className="flex min-w-0 items-center gap-2"
+        >
+          <h1
+            className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900"
+            title={[
+              assignment.title,
+              lessonPath,
+              `통과 기준 ${assignment.passThresholdPercent}%`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          >
+            {assignment.title}
+          </h1>
+          <div className="flex shrink-0 items-center gap-2">
+            {assignment.timeLimitMinutes > 0 && countdownLabel && (
+              <div
+                className={`font-bold ${getCountdownToneClass(timeProgressPercent)}`}
+              >
+                <span className="mr-1 hidden text-xs sm:inline">남은 시간</span>
                 <span
-                  className={`rounded-full border px-3 py-1 text-[11px] font-bold ${
-                    TONE_CLASS_NAME[dueStatusTone]
-                  }`}
+                  role="timer"
+                  aria-label="남은 시간"
+                  className="font-mono text-lg tabular-nums"
                 >
-                  {dueStatusLabel}
+                  {countdownLabel}
                 </span>
-              )}
-            </div>
+                {timeProgressPercent <= 10 && !completed && (
+                  <span className="ml-1 hidden text-xs sm:inline">곧 종료</span>
+                )}
+              </div>
+            )}
+            <span className="hidden text-xs font-bold text-gray-600 sm:inline">
+              작성 {answeredCount} / {assignment.blanks.length}
+            </span>
           </div>
-          {headerAction && <div className="min-w-[11rem]">{headerAction}</div>}
+          {headerAction}
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={readOnly || submitting || completed || !onSubmit}
+            className="min-h-11 shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+          >
+            {readOnly
+              ? "읽기 전용 미리보기"
+              : submitting
+                ? "제출 중..."
+                : completed
+                  ? "제출 완료"
+                  : submitLabel}
+          </button>
         </div>
-
-        {(isModalPreview || useInlineActions) &&
-          assignment.timeLimitMinutes > 0 &&
-          countdownLabel && (
-            <div className="mt-4 max-w-md">
-              <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-gray-500">
-                <span>제한 시간</span>
-                <span>{countdownLabel}</span>
-              </div>
-              <div className="h-3 overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className={`h-full rounded-full transition-[width] duration-1000 ${getTimeProgressToneClass(
-                    timeProgressPercent,
-                  )}`}
-                  style={{ width: `${timeProgressPercent}%` }}
-                />
-              </div>
-            </div>
-          )}
+        {assignment.timeLimitMinutes > 0 && countdownLabel && (
+          <div
+            className="h-0.5 overflow-hidden rounded-full bg-gray-200"
+            aria-hidden="true"
+          >
+            <div
+              className={`h-full ${getTimeProgressToneClass(timeProgressPercent)}`}
+              style={{ width: `${timeProgressPercent}%` }}
+            />
+          </div>
+        )}
+        {resultText && (
+          <div
+            role="status"
+            className="rounded-xl bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700"
+          >
+            {resultText}
+          </div>
+        )}
+        {pointNotice && (
+          <div
+            role="status"
+            className={`text-sm font-bold ${isPointAwardedNotice ? "text-emerald-700" : "text-amber-700"}`}
+          >
+            {pointNotice}
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-1">
+          <div className="shrink-0 text-xs font-bold text-gray-600">
+            페이지 {Math.max(1, currentPageIndex + 1)} / {pageCount}
+          </div>
+          <div className="flex items-center gap-1">
+            {enableInteractiveViewport && (
+              <>
+                <div className="hidden rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-500 sm:block">
+                  {displayZoomPercent}%
+                </div>
+                <button
+                  type="button"
+                  aria-label="자료 축소"
+                  onClick={() => nudgeViewportZoom(-0.18)}
+                  disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
+                  className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  onClick={resetViewportScale}
+                  disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
+                  className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-xs font-bold text-gray-700 disabled:opacity-40"
+                >
+                  전체 보기
+                </button>
+                <button
+                  type="button"
+                  aria-label="자료 확대"
+                  onClick={() => nudgeViewportZoom(0.18)}
+                  disabled={userScale >= MAX_VIEWPORT_USER_SCALE}
+                  className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                >
+                  +
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              disabled={currentPageIndex <= 0}
+              onClick={() =>
+                onCurrentPageChange(pages[currentPageIndex - 1].page)
+              }
+              className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+            >
+              이전
+            </button>
+            <button
+              type="button"
+              disabled={
+                currentPageIndex < 0 || currentPageIndex >= pageCount - 1
+              }
+              onClick={() =>
+                onCurrentPageChange(pages[currentPageIndex + 1].page)
+              }
+              className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+            >
+              다음
+            </button>
+          </div>
+        </div>
       </div>
-
       <div
         className={
           isModalPreview
-            ? "grid gap-4 lg:grid-cols-[minmax(0,1.46fr)_18rem] xl:grid-cols-[minmax(0,1.7fr)_19.5rem]"
-            : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]"
+            ? "grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]"
+            : "space-y-2"
         }
       >
-        <section
-          className={`rounded-3xl border border-gray-200 bg-white shadow-sm ${
-            isModalPreview ? "flex min-h-[42rem] flex-col p-4 lg:p-5" : "p-4"
-          } min-w-0`}
-        >
-          {lessonPath && (
-            <p className="mb-3 break-words text-sm font-bold text-gray-600">
-              {lessonPath}
+        <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-1">
+          {assignment.description && (
+            <p className="p-2 text-sm text-gray-600">
+              {assignment.description}
             </p>
           )}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm font-bold text-gray-600">
-              페이지 {Math.max(1, currentPageIndex + 1)} / {pageCount}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {enableInteractiveViewport && (
-                <>
-                  <div className="hidden rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-500 sm:block">
-                    {displayZoomPercent}%
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="자료 축소"
-                    onClick={() => nudgeViewportZoom(-0.18)}
-                    disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
-                    className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
-                  >
-                    -
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetViewportScale}
-                    disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
-                    className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
-                  >
-                    전체 보기
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="자료 확대"
-                    onClick={() => nudgeViewportZoom(0.18)}
-                    disabled={userScale >= MAX_VIEWPORT_USER_SCALE}
-                    className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
-                  >
-                    +
-                  </button>
-                </>
-              )}
+          {dueStatusLabel && (
+            <p
+              className={`px-2 py-1 text-xs font-bold ${TONE_CLASS_NAME[dueStatusTone]}`}
+            >
+              {dueStatusLabel}
+            </p>
+          )}
+          {imageLoadError && (
+            <div
+              role="alert"
+              className="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800"
+            >
+              <span>
+                자료를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.
+              </span>
               <button
                 type="button"
-                disabled={currentPageIndex <= 0}
-                onClick={() =>
-                  onCurrentPageChange(pages[currentPageIndex - 1].page)
-                }
-                className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
+                className="min-h-11 rounded-xl border border-amber-200 bg-white px-3 font-bold"
+                onClick={() => {
+                  setImageLoadError(false);
+                  setImageRetry((value) => value + 1);
+                }}
               >
-                이전
-              </button>
-              <button
-                type="button"
-                disabled={
-                  currentPageIndex < 0 || currentPageIndex >= pageCount - 1
-                }
-                onClick={() =>
-                  onCurrentPageChange(pages[currentPageIndex + 1].page)
-                }
-                className="min-h-11 min-w-11 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 disabled:opacity-40"
-              >
-                다음
+                자료 다시 불러오기
               </button>
             </div>
-          </div>
-
+          )}
           {pageImage && (
             <div
-              className={`rounded-3xl border border-gray-200 bg-gray-100 ${
+              className={`rounded-lg border border-gray-200 bg-gray-100 ${
                 isModalPreview
                   ? "flex-1 min-h-[38rem] overflow-auto p-4 lg:min-h-[46rem]"
-                  : "overflow-hidden p-3 sm:p-4"
+                  : "overflow-hidden p-1"
               }`}
               style={
                 !isModalPreview && viewportHeight
@@ -1129,12 +1221,15 @@ const HistoryClassroomAssignmentView: React.FC<
                       }}
                     >
                       <img
+                        key={`${pageImage.page}-${imageRetry}`}
                         src={pageImage.imageUrl}
                         alt={`${assignment.title} ${currentPage}`}
                         className="block h-full w-full"
                         loading="lazy"
                         decoding="async"
                         style={{ maxWidth: "none" }}
+                        onLoad={() => setImageLoadError(false)}
+                        onError={() => setImageLoadError(true)}
                       />
                       {orderedBlankPlacements.map((placement) => {
                         const {
@@ -1245,9 +1340,13 @@ const HistoryClassroomAssignmentView: React.FC<
           className={
             isModalPreview
               ? "self-start space-y-3 lg:sticky lg:top-5"
-              : "space-y-4 lg:sticky lg:top-28 lg:self-start"
+              : "space-y-2"
           }
         >
+          <div className="flex flex-wrap gap-x-3 gap-y-1 px-2 text-xs font-bold text-gray-600">
+            {lessonPath && <span>{lessonPath}</span>}
+            <span>통과 기준 {assignment.passThresholdPercent}% 이상</span>
+          </div>
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="text-sm font-bold text-gray-700">참고 보기</div>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -1279,142 +1378,18 @@ const HistoryClassroomAssignmentView: React.FC<
             )}
           </div>
 
-          {(helperItems.length > 0 ||
-            isModalPreview ||
-            resultText ||
-            pointNotice) && (
+          {helperItems.length > 0 && (
             <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-              {helperItems.length > 0 && (
-                <div className="text-sm font-bold text-gray-700">안내</div>
-              )}
+              <div className="text-sm font-bold text-gray-700">안내</div>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
                 {helperItems.map((item, index) => (
-                  <li key={`${item}-${index}`}>
-                    {index + 1}. {item}
-                  </li>
+                  <li key={`${item}-${index}`}>{item}</li>
                 ))}
               </ul>
-              {isModalPreview && (
-                <button
-                  type="button"
-                  onClick={onSubmit}
-                  disabled={readOnly || submitting || completed || !onSubmit}
-                  className="mt-5 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {readOnly
-                    ? "읽기 전용 미리보기"
-                    : submitting
-                      ? "제출 중..."
-                      : completed
-                        ? "제출 완료"
-                        : "제출하기"}
-                </button>
-              )}
-              {resultText && (
-                <div className="mt-3 text-sm font-bold text-blue-700">
-                  {resultText}
-                </div>
-              )}
-              {pointNotice && (
-                <div
-                  className={`mt-3 text-sm font-bold ${
-                    isPointAwardedNotice ? "text-emerald-700" : "text-amber-700"
-                  }`}
-                >
-                  {pointNotice}
-                </div>
-              )}
             </div>
           )}
         </aside>
       </div>
-
-      {showFloatingActions && (
-        <div
-          data-history-actions="true"
-          className={
-            useInlineActions
-              ? "mt-4 w-full"
-              : "pointer-events-none fixed z-[140] flex max-w-[calc(100vw-1.5rem)] justify-end"
-          }
-          style={
-            useInlineActions
-              ? undefined
-              : {
-                  top: `calc(env(safe-area-inset-top, 0px) + ${
-                    floatingViewport.offsetTop + floatingViewport.height - 12
-                  }px)`,
-                  left: `calc(env(safe-area-inset-left, 0px) + ${Math.max(
-                    12,
-                    floatingViewport.offsetLeft +
-                      floatingViewport.width -
-                      floatingPanelWidth -
-                      12,
-                  )}px)`,
-                  width: `${floatingPanelWidth}px`,
-                  transform: `translateY(-100%) scale(${1 / floatingViewport.scale})`,
-                  transformOrigin: "bottom right",
-                }
-          }
-        >
-          <div className="pointer-events-auto w-full rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-[0_20px_45px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
-            {!useInlineActions &&
-              assignment.timeLimitMinutes > 0 &&
-              countdownLabel && (
-                <div className="rounded-xl bg-gray-50 px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-3 text-[11px] font-bold tracking-[0.18em] text-gray-400">
-                    <span>남은 시간</span>
-                    <span
-                      className={`font-mono text-xl leading-none ${getCountdownToneClass(
-                        timeProgressPercent,
-                      )}`}
-                    >
-                      {countdownLabel}
-                    </span>
-                  </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">
-                    <div
-                      className={`h-full rounded-full transition-[width] duration-1000 ${getTimeProgressToneClass(
-                        timeProgressPercent,
-                      )}`}
-                      style={{ width: `${timeProgressPercent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            {resultText && (
-              <div className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
-                {resultText}
-              </div>
-            )}
-            {pointNotice && (
-              <div
-                className={`mt-2 rounded-xl px-3 py-2 text-xs font-bold ${
-                  isPointAwardedNotice
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-amber-50 text-amber-700"
-                }`}
-              >
-                {pointNotice}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={onSubmit}
-              disabled={readOnly || submitting || completed || !onSubmit}
-              className="mt-2 min-h-11 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {readOnly
-                ? "읽기 전용 미리보기"
-                : submitting
-                  ? "제출 중..."
-                  : completed
-                    ? "제출 완료"
-                    : "제출하기"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

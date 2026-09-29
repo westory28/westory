@@ -25,9 +25,51 @@ import {
   type HistoryClassroomResult,
 } from "../../../lib/historyClassroom";
 import { readLocalOnly, removeStorage } from "../../../lib/safeStorage";
-import { getSemesterCollectionPath } from "../../../lib/semesterScope";
+import {
+  getSemesterCollectionPath,
+  getYearSemester,
+} from "../../../lib/semesterScope";
+import { readHistoryClassroomPendingSubmission } from "../../../lib/historyClassroomAttemptRecovery";
 
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
+const HISTORY_CLASSROOM_ATTEMPT_PREFIX = "westoryHistoryClassroomAttempt";
+
+const readPendingRecoveryResultId = (
+  assignment: HistoryClassroomAssignment,
+  uid: string,
+  scope: { year: string; semester: string },
+  resetAtMs: number | null,
+) => {
+  if (!uid) return null;
+  try {
+    const raw = readLocalOnly(
+      `${HISTORY_CLASSROOM_ATTEMPT_PREFIX}:${assignment.id}:${uid}`,
+    );
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    if (
+      !draft ||
+      typeof draft !== "object" ||
+      Array.isArray(draft) ||
+      draft.year !== scope.year ||
+      draft.semester !== scope.semester ||
+      (draft.uid && draft.uid !== uid) ||
+      (draft.assignmentId && draft.assignmentId !== assignment.id) ||
+      !Number.isFinite(Number(draft.savedAt)) ||
+      Number(draft.savedAt) <= 0 ||
+      (resetAtMs && Number(draft.savedAt) <= resetAtMs) ||
+      typeof draft.resultId !== "string" ||
+      !draft.resultId.trim() ||
+      draft.resultId.includes("/") ||
+      Array.isArray(draft.pendingSubmission?.answers) ||
+      !readHistoryClassroomPendingSubmission(draft.pendingSubmission)
+    )
+      return null;
+    return draft.resultId;
+  } catch {
+    return null;
+  }
+};
 type StudentHistoryClassroomStatus =
   | "available"
   | "retry"
@@ -511,6 +553,26 @@ const HistoryClassroomIndex: React.FC = () => {
         const resetAtMs = studentUid
           ? getHistoryClassroomStudentRetryResetMs(assignment, studentUid)
           : null;
+        const pendingResultId = readPendingRecoveryResultId(
+          assignment,
+          studentUid,
+          getYearSemester(config),
+          resetAtMs,
+        );
+        const matchingResult = pendingResultId
+          ? Object.values(resultsByAssignment)
+              .flat()
+              .find((attempt) => attempt.id === pendingResultId)
+          : null;
+        const recoveredResult =
+          matchingResult?.uid === studentUid &&
+          matchingResult.assignmentId === assignment.id
+            ? matchingResult
+            : null;
+        const canRecoverPending =
+          !!pendingResultId &&
+          (!matchingResult || !!recoveredResult) &&
+          (!!recoveredResult || !passedAttempt);
         const serverRemainMinutes = formatCooldown(
           latest?.createdAt,
           assignment.cooldownMinutes,
@@ -554,6 +616,8 @@ const HistoryClassroomIndex: React.FC = () => {
 
         return {
           assignment,
+          canRecoverPending,
+          hasRecoveredResult: !!recoveredResult,
           assignmentReason,
           assignedCount,
           attemptCount: attempts.length,
@@ -585,6 +649,7 @@ const HistoryClassroomIndex: React.FC = () => {
       }),
     [
       assignments,
+      config,
       exemptionRequests,
       exemptions,
       nowMs,
@@ -609,6 +674,7 @@ const HistoryClassroomIndex: React.FC = () => {
     const passed = classroomItems.filter((item) => item.status === "passed");
     const active = classroomItems.filter(
       (item) =>
+        (item.canRecoverPending && !item.hasRecoveredResult) ||
         item.status === "available" ||
         item.status === "retry" ||
         item.status === "cooldown",
@@ -693,8 +759,11 @@ const HistoryClassroomIndex: React.FC = () => {
                 {group.items.map((item) => {
                   const statusMeta = getStatusMeta(item.status);
                   const canStart =
-                    item.status === "available" || item.status === "retry";
+                    item.canRecoverPending ||
+                    item.status === "available" ||
+                    item.status === "retry";
                   const canRequestExemption =
+                    !item.canRecoverPending &&
                     !item.passedAttempt &&
                     item.exemptionState === "available" &&
                     Boolean(item.availableExemption);
@@ -789,7 +858,9 @@ const HistoryClassroomIndex: React.FC = () => {
                             </div>
                           ) : (
                             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-center text-sm font-bold text-blue-700">
-                              아직 시작 전
+                              {item.canRecoverPending
+                                ? "제출 대기"
+                                : "아직 시작 전"}
                             </div>
                           )}
 
@@ -802,15 +873,19 @@ const HistoryClassroomIndex: React.FC = () => {
                                 `/student/history-classroom/run?id=${item.assignment.id}`,
                               );
                             }}
-                            className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed ${statusMeta.buttonClassName}`}
+                            className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed ${item.canRecoverPending ? getStatusMeta("available").buttonClassName : statusMeta.buttonClassName}`}
                           >
-                            {item.status === "retry"
-                              ? "다시 도전하기"
-                              : item.status === "available"
-                                ? "응시하기"
-                                : item.status === "cooldown"
-                                  ? "다시 도전하기"
-                                  : statusMeta.label}
+                            {item.canRecoverPending
+                              ? item.hasRecoveredResult
+                                ? "제출 결과 확인"
+                                : "제출 재시도"
+                              : item.status === "retry"
+                                ? "다시 도전하기"
+                                : item.status === "available"
+                                  ? "응시하기"
+                                  : item.status === "cooldown"
+                                    ? "다시 도전하기"
+                                    : statusMeta.label}
                           </button>
 
                           {canRequestExemption && item.availableExemption && (

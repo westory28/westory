@@ -11,7 +11,66 @@ export interface HistoryClassroomLessonSource extends MapResource {
   lessonUnitId: string;
   lessonTitle: string;
   lessonUnitPath: string[];
+  lessonUnitPathIds: string[];
 }
+
+export const getHistoryClassroomLessonSelectLevels = (
+  sources: HistoryClassroomLessonSource[],
+  selectedSourceId: string,
+) => {
+  const selected = sources.find((source) => source.id === selectedSourceId);
+  const selectedPath = selected?.lessonUnitPathIds || [];
+  const levels: {
+    value: string;
+    options: { value: string; title: string; sourceId: string }[];
+  }[] = [];
+  const maxDepth = Math.max(
+    0,
+    ...sources.map((source) => source.lessonUnitPathIds.length),
+  );
+  for (let depth = 0; depth < maxDepth; depth += 1) {
+    const candidates = sources.filter((source) =>
+      selectedPath
+        .slice(0, depth)
+        .every((id, index) => source.lessonUnitPathIds[index] === id),
+    );
+    const options = new Map<
+      string,
+      { value: string; title: string; sourceId: string }
+    >();
+    candidates.forEach((source) => {
+      const nodeId = source.lessonUnitPathIds[depth];
+      if (nodeId && !options.has(nodeId)) {
+        options.set(nodeId, {
+          value: nodeId,
+          title: source.lessonUnitPath[depth],
+          sourceId: source.id,
+        });
+      }
+    });
+    if (!options.size) break;
+    // A curriculum node may have both its own worksheet and child worksheets.
+    const ownSource = candidates.find(
+      (source) => source.lessonUnitPathIds.length === depth,
+    );
+    if (ownSource)
+      options.set(`source:${ownSource.id}`, {
+        value: `source:${ownSource.id}`,
+        title: "이 목차 자료",
+        sourceId: ownSource.id,
+      });
+    levels.push({
+      value:
+        selectedPath[depth] ||
+        (ownSource?.id === selectedSourceId
+          ? `source:${selectedSourceId}`
+          : ""),
+      options: [...options.values()],
+    });
+    if (!selectedPath[depth]) break;
+  }
+  return levels;
+};
 
 export const getHistoryClassroomSourceId = (
   assignment: HistoryClassroomAssignment,
@@ -54,9 +113,14 @@ export const buildHistoryClassroomLessonSources = (
     if (lesson.unitId) lessonsByUnit.set(lesson.unitId, lesson);
   });
   const sources: HistoryClassroomLessonSource[] = [];
-  const visit = (nodes: LessonTreeSelectionNode[], parents: string[]) => {
+  const visit = (
+    nodes: LessonTreeSelectionNode[],
+    parents: string[],
+    parentIds: string[],
+  ) => {
     nodes.forEach((node) => {
       const path = [...parents, node.title];
+      const pathIds = [...parentIds, node.id];
       const raw = lessonsByUnit.get(node.id);
       if (raw) {
         const lesson = normalizeLessonData(raw, {
@@ -97,6 +161,7 @@ export const buildHistoryClassroomLessonSources = (
             lessonUnitId: node.id,
             lessonTitle: lesson.title,
             lessonUnitPath: path,
+            lessonUnitPathIds: pathIds,
             category: "",
             description: "",
             type: "pdf",
@@ -107,10 +172,10 @@ export const buildHistoryClassroomLessonSources = (
           });
         }
       }
-      visit(node.children || [], path);
+      visit(node.children || [], path, pathIds);
     });
   };
-  visit(tree, []);
+  visit(tree, [], []);
   return sources;
 };
 

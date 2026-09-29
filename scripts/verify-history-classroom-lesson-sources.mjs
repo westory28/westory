@@ -63,12 +63,14 @@ const load = (filename) => {
 
 const {
   buildHistoryClassroomLessonSources,
+  getHistoryClassroomLessonSelectLevels,
   readHistoryClassroomLessonSources,
   getHistoryClassroomSourceFields,
   getHistoryClassroomSourceId,
 } = load("src/lib/historyClassroomLessonSources.ts");
 const {
   normalizeHistoryClassroomAssignment,
+  normalizeHistoryClassroomResult,
   sanitizeHistoryClassroomAssignmentForWrite,
   mergeHistoryClassroomMapSnapshot,
   summarizeHistoryClassroomAnswers,
@@ -179,6 +181,76 @@ assert.deepEqual(
   [1, 3],
 );
 assert.equal(sources[0].pdfBlanks[1].width, 240);
+const nestedSources = buildHistoryClassroomLessonSources(
+  [
+    {
+      id: "r1",
+      title: "같은 대목차",
+      children: [
+        {
+          id: "m2",
+          title: "같은 중목차",
+          children: [
+            { id: "z", title: "같은 소목차" },
+            { id: "x", title: "다음 소목차" },
+          ],
+        },
+        {
+          id: "m1",
+          title: "다른 중목차",
+          children: [{ id: "y", title: "같은 소목차" }],
+        },
+      ],
+    },
+    {
+      id: "r2",
+      title: "같은 대목차",
+      children: [
+        {
+          id: "m3",
+          title: "같은 중목차",
+          children: [{ id: "v", title: "같은 소목차" }],
+        },
+      ],
+    },
+  ],
+  [lesson("z"), lesson("x"), lesson("y"), lesson("v"), lesson("r1")],
+  [],
+);
+let levels = getHistoryClassroomLessonSelectLevels(nestedSources, "lesson:x");
+assert.deepEqual(plain(levels.map((level) => level.value)), ["r1", "m2", "x"]);
+assert.deepEqual(
+  plain(levels[0].options.map((option) => option.value)),
+  ["r1", "r2"],
+  "Duplicate titles must remain distinct by node ID",
+);
+assert.deepEqual(plain(levels[1].options.map((option) => option.value)), [
+  "m2",
+  "m1",
+  "source:lesson:r1",
+]);
+assert.deepEqual(
+  plain(levels[2].options.map((option) => option.value)),
+  ["z", "x"],
+  "Only selected ancestors' descendants appear, in teacher order",
+);
+levels = getHistoryClassroomLessonSelectLevels(nestedSources, "lesson:v");
+assert.deepEqual(plain(levels.map((level) => level.value)), ["r2", "m3", "v"]);
+assert.equal(levels[2].options.length, 1);
+levels = getHistoryClassroomLessonSelectLevels(nestedSources, "lesson:r1");
+assert.equal(
+  levels[1].value,
+  "source:lesson:r1",
+  "Parent-node worksheets remain selectable beside their child chapters",
+);
+levels = getHistoryClassroomLessonSelectLevels(nestedSources, "lesson:deleted");
+assert.equal(levels.length, 1);
+assert.equal(
+  levels[0].value,
+  "",
+  "Missing snapshots keep a placeholder and allow choosing a new root without guessing by title",
+);
+
 const missingPage = lesson("earlier");
 missingPage.worksheetPageImages = missingPage.worksheetPageImages.filter(
   (page) => page.page !== 3,
@@ -240,6 +312,27 @@ const oldMap = normalizeHistoryClassroomAssignment("old-map", {
   mapResourceId: "map-1",
   mapTitle: "한반도",
 });
+for (const [input, expected] of [
+  [0, 0],
+  [90, 90],
+  [null, 80],
+  [undefined, 80],
+  ["", 80],
+]) {
+  const raw = { passThresholdPercent: input };
+  assert.equal(
+    normalizeHistoryClassroomAssignment("threshold", raw).passThresholdPercent,
+    expected,
+  );
+  assert.equal(
+    normalizeHistoryClassroomResult("threshold", raw).passThresholdPercent,
+    expected,
+  );
+  assert.equal(
+    sanitizeHistoryClassroomAssignmentForWrite(raw).passThresholdPercent,
+    expected,
+  );
+}
 assert.equal(oldMap.sourceType, "map");
 assert.equal(getHistoryClassroomSourceId(oldMap), "map-1");
 assert.equal(
