@@ -332,3 +332,5 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 - Student submenus now match these teacher dimensions: 256px desktop / 240px tablet, with lesson contents at 288px / 256px. Apply the same 16px horizontal padding inside submenu lists, preserving adjoining panels, student actions and full-width mobile disclosure.
 
 - Teacher lesson tree titles show an immediate, wrapped full-title tooltip on hover or keyboard focus, dismissed on mouse leave, blur or Escape. Use existing surface, border, small text, 8px padding/radius tokens; do not change row width. Leaf lessons expose only delete; rename remains on parent units and leaf titles are edited in the existing editor.
+
+- Teacher lesson contents width is now 320px desktop / 288px tablet. Only actually ellipsized labels show the full-title tooltip; measure their rendered width and update on resize. On desktop fine-pointer devices, hide row actions and release their width until that row is hovered or contains keyboard focus. On mobile/tablet or touch devices, always show the permitted actions on each row. Leaf rows retain delete only; keep other menus and student dimensions unchanged.

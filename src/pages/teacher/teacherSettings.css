@@ -25,6 +25,23 @@
   padding-inline: 16px;
 }
 
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .teacher-layout .teacher-sub-workspace--lesson .teacher-sub-tree-actions {
+    display: none;
+  }
+
+  .teacher-layout
+    .teacher-sub-workspace--lesson
+    .teacher-sub-tree-row:hover
+    > .teacher-sub-tree-actions,
+  .teacher-layout
+    .teacher-sub-workspace--lesson
+    .teacher-sub-tree-row:focus-within
+    > .teacher-sub-tree-actions {
+    display: flex;
+  }
+}
+
 @media (min-width: 768px) {
   .teacher-layout .teacher-settings-workspace,
   .teacher-layout .teacher-sub-workspace {
@@ -32,7 +49,7 @@
     grid-template-columns: var(--teacher-sub-navigation-width) minmax(0, 1fr);
   }
   .teacher-layout .teacher-sub-workspace--lesson {
-    --teacher-sub-navigation-width: 288px;
+    --teacher-sub-navigation-width: 320px;
   }
   .teacher-layout .teacher-sub-navigation.teacher-settings-navigation {
     width: var(--teacher-sub-navigation-width);
@@ -44,6 +61,6 @@
     --teacher-sub-navigation-width: 240px;
   }
   .teacher-layout .teacher-sub-workspace--lesson {
-    --teacher-sub-navigation-width: 256px;
+    --teacher-sub-navigation-width: 288px;
   }
 }

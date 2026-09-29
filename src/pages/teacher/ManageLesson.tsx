@@ -3272,6 +3272,18 @@ const ManageLesson: React.FC = () => {
 
   const TreeCard = ({ node, level }: { node: TreeNode; level: number }) => {
     const [showTitle, setShowTitle] = useState(false);
+    const [titleOverflow, setTitleOverflow] = useState(false);
+    const titleRef = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+      const label = titleRef.current;
+      if (!label) return;
+      const measure = () =>
+        setTitleOverflow(label.scrollWidth > label.clientWidth + 1);
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(label);
+      return () => observer.disconnect();
+    }, [node.title]);
     const isExpanded = expandedIds.has(node.id);
     const isSelected = selectedNodeId === node.id;
     const isLeaf = level >= 2;
@@ -3297,8 +3309,10 @@ const ManageLesson: React.FC = () => {
               className={`fas ${isLeaf ? "fa-file-alt" : isExpanded ? "fa-folder-open" : "fa-folder"}`}
               aria-hidden="true"
             />
-            <span className="teacher-navigation-label">{node.title}</span>
-            {showTitle && (
+            <span ref={titleRef} className="teacher-navigation-label">
+              {node.title}
+            </span>
+            {showTitle && titleOverflow && (
               <span className="teacher-lesson-title-tooltip" aria-hidden="true">
                 {node.title}
               </span>
@@ -3310,7 +3324,7 @@ const ManageLesson: React.FC = () => {
               />
             )}
           </button>
-          {canManageUnit && (isSelected || isExpanded) && (
+          {canManageUnit && (
             <div className="teacher-sub-tree-actions">
               {!isLeaf && (
                 <button
