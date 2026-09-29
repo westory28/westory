@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState } from "react";
 import QuizUnitTree from "./components/QuizUnitTree";
+import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import QuizEditor from "./components/QuizEditor";
 import QuizLogTab from "./components/QuizLogTab";
 import QuizBankTab from "./components/QuizBankTab";
@@ -87,10 +88,28 @@ const ManageQuiz: React.FC = () => {
 
   return (
     <div
-      className={`flex flex-col bg-gray-50 ${isManageTab ? "h-[calc(100dvh-64px)] min-h-[760px] overflow-hidden" : "min-h-[calc(100dvh-64px)]"}`}
+      className={
+        isManageTab && canWrite
+          ? "teacher-sub-workspace teacher-sub-workspace--page"
+          : "min-h-[calc(100dvh-64px)] bg-gray-50"
+      }
     >
+      {canWrite && isManageTab && (
+        <TeacherSubNavigation
+          title="문제 등록"
+          activeLabel={selectedNode?.title || "단원 및 평가 선택"}
+          open={mobileTreeOpen}
+          onOpenChange={setMobileTreeOpen}
+        >
+          <QuizUnitTree onSelect={handleNodeSelect} />
+        </TeacherSubNavigation>
+      )}
       <main
-        className={`w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-3 ${isManageTab ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "pb-8"}`}
+        className={
+          isManageTab && canWrite
+            ? "teacher-sub-content"
+            : "w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 pb-8"
+        }
       >
         {!canWrite && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
@@ -99,36 +118,8 @@ const ManageQuiz: React.FC = () => {
         )}
 
         {canWrite && activeTab === "manage" && (
-          <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden relative min-h-0">
-            {mobileTreeOpen && (
-              <button
-                type="button"
-                className="teacher-mobile-drawer-backdrop fixed inset-0 bg-black/45 z-40 lg:hidden"
-                onClick={() => setMobileTreeOpen(false)}
-                aria-label="패널 닫기"
-              />
-            )}
-
-            <div
-              className={`teacher-mobile-drawer fixed lg:static right-0 w-[82%] max-w-[320px] lg:w-1/3 bg-white lg:rounded-xl shadow-2xl lg:shadow-sm border border-gray-200 flex flex-col overflow-hidden lg:h-full lg:min-h-0 z-50 lg:z-auto transition-transform duration-300 motion-reduce:transition-none ${mobileTreeOpen ? "translate-x-0" : "translate-x-full"} lg:translate-x-0`}
-            >
-              <div className="teacher-mobile-drawer-heading p-4 border-b bg-gray-50 font-bold text-gray-700 flex items-center justify-between">
-                <span>단원 및 평가 선택</span>
-                <button
-                  type="button"
-                  onClick={() => setMobileTreeOpen(false)}
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center lg:hidden text-gray-400 hover:text-gray-700"
-                  aria-label="패널 닫기"
-                >
-                  <i className="fas fa-times text-lg"></i>
-                </button>
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <QuizUnitTree onSelect={handleNodeSelect} />
-              </div>
-            </div>
-
-            <div className="w-full lg:w-2/3 flex flex-col h-full min-h-0 overflow-hidden">
+          <div className="flex min-w-0 flex-col">
+            <div className="flex min-w-0 flex-col">
               {selectedNode ? (
                 <QuizEditor
                   node={selectedNode}
@@ -145,24 +136,11 @@ const ManageQuiz: React.FC = () => {
                 <div className="h-full min-h-[520px] py-16 flex flex-col items-center justify-center text-gray-400">
                   <i className="fas fa-mouse-pointer text-4xl mb-4"></i>
                   <p className="text-lg text-center">
-                    목록에서 <strong>모의고사</strong> 또는
-                    <br />
-                    <strong>중단원</strong>을 선택해 문제를 관리하세요.
+                    모의고사 또는 중단원을 선택해 주세요.
                   </p>
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={() => setMobileTreeOpen(true)}
-              className="teacher-floating-action-above-patch fixed z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 lg:hidden"
-              aria-label="문제 등록 패널 열기"
-              aria-expanded={mobileTreeOpen}
-              title="문제 등록"
-            >
-              <i className="fas fa-list text-lg"></i>
-            </button>
           </div>
         )}
 

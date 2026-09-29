@@ -1,3 +1,4 @@
+import NumericInput from "../../../../components/common/NumericInput";
 import React, { useState } from "react";
 
 interface ScoreItem {
@@ -159,7 +160,8 @@ const ScoreCard: React.FC<ScoreCardProps> = ({
                     {item.maxScore}점 만점 / {item.ratio}% 반영
                   </div>
                 </div>
-                <input
+                <NumericInput
+                  allowEmpty
                   type="number"
                   disabled={disabled}
                   min={0}

@@ -77,6 +77,8 @@ const KoreanTextInput: React.FC<KoreanTextInputProps> = ({
 
   return (
     <input
+      lang="ko"
+      inputMode="text"
       {...props}
       type="text"
       ref={inputRef}

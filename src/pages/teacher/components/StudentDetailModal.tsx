@@ -1,3 +1,4 @@
+import NumericInput from "../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import PointRankBadge from "../../../components/common/PointRankBadge";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -929,7 +930,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     <span className="mb-1 block text-xs font-bold text-gray-500">
                       번호
                     </span>
-                    <input
+                    <NumericInput
                       type="number"
                       name="number"
                       value={formData.number}
@@ -944,6 +945,8 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     이름
                   </span>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     type="text"
                     name="name"
                     value={formData.name}

@@ -283,7 +283,7 @@ const QuizRunner: React.FC = () => {
         .split(ORDER_DELIMITER)
         .map((item) => {
           const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
-          return [left.trim(), right.trim()];
+          return [left.trim(), right.trim()] as const;
         })
         .filter(([left, right]) => left && right),
     );
@@ -2177,6 +2177,8 @@ const QuizRunner: React.FC = () => {
 
               {(question.type === "short" || question.type === "word") && (
                 <input
+                  lang="ko"
+                  inputMode="text"
                   type="text"
                   value={currentAnswer}
                   onChange={(event) => handleAnswer(event.target.value)}

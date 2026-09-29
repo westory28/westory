@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/verify-semester-archive.mjs",
+    "prebuild": "npm run typecheck && node scripts/verify-semester-archive.mjs",
+    "typecheck": "tsc --noEmit",
     "build": "vite build",
     "verify:semester-archive": "node scripts/verify-semester-archive.mjs",
     "preview": "vite preview",

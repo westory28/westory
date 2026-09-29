@@ -1,3 +1,4 @@
+import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -676,7 +677,7 @@ const cloneMapResourceBlanks = (
   mapResource: MapResource | null,
 ): HistoryClassroomBlank[] =>
   (mapResource?.pdfBlanks || [])
-    .map((blank) => ({
+    .map<HistoryClassroomBlank>((blank) => ({
       id:
         String(blank.id || "").trim() ||
         `blank-${blank.page}-${blank.left}-${blank.top}`,
@@ -3324,6 +3325,8 @@ const ManageHistoryClassroom: React.FC = () => {
           </div>
           <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 md:col-span-2 lg:col-span-1 xl:h-12 xl:px-4">
             <input
+              lang="ko"
+              inputMode="text"
               value={dashboardSearch}
               onChange={(event) => setDashboardSearch(event.target.value)}
               placeholder="과제명, 학생 이름, 학번 검색"
@@ -3472,6 +3475,8 @@ const ManageHistoryClassroom: React.FC = () => {
                       학생 검색
                     </span>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={exemptionStudentSearch}
                       onChange={(event) =>
@@ -3581,6 +3586,8 @@ const ManageHistoryClassroom: React.FC = () => {
                   부여 사유
                 </span>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   value={exemptionReason}
                   onChange={(event) => setExemptionReason(event.target.value)}
                   rows={3}
@@ -3882,16 +3889,30 @@ const ManageHistoryClassroom: React.FC = () => {
 
                     {expanded && (
                       <div className="mt-4 grid gap-3 xl:grid-cols-4">
-                        {[
-                          ["통과", row.statusGroups.passed, "text-emerald-700"],
-                          ["미통과", row.statusGroups.failed, "text-rose-700"],
-                          ["미제출", row.statusGroups.pending, "text-gray-700"],
+                        {(
                           [
-                            "자동 종료",
-                            row.statusGroups.cancelled,
-                            "text-amber-700",
-                          ],
-                        ].map(([label, students, toneClassName]) => (
+                            [
+                              "통과",
+                              row.statusGroups.passed,
+                              "text-emerald-700",
+                            ],
+                            [
+                              "미통과",
+                              row.statusGroups.failed,
+                              "text-rose-700",
+                            ],
+                            [
+                              "미제출",
+                              row.statusGroups.pending,
+                              "text-gray-700",
+                            ],
+                            [
+                              "자동 종료",
+                              row.statusGroups.cancelled,
+                              "text-amber-700",
+                            ],
+                          ] as const
+                        ).map(([label, students, toneClassName]) => (
                           <div
                             key={label}
                             className="rounded-2xl border border-gray-200 bg-white p-3"
@@ -3902,29 +3923,26 @@ const ManageHistoryClassroom: React.FC = () => {
                               {label}
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
-                              {(students as typeof row.studentSummaries).map(
-                                (student) => (
-                                  <span
-                                    key={`${row.assignment.id}-${label}-${student.uid}`}
-                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
-                                  >
-                                    {student.name}
-                                    <span className="ml-2 font-semibold text-gray-500">
-                                      {student.classLabel}{" "}
-                                      {student.number && `${student.number}번`}{" "}
-                                      {student.attemptLabel !== "시도 없음" &&
-                                        student.attemptLabel}
-                                    </span>
-                                    {student.reason && (
-                                      <span className="ml-2 font-semibold text-blue-600">
-                                        {student.reason}
-                                      </span>
-                                    )}
+                              {students.map((student) => (
+                                <span
+                                  key={`${row.assignment.id}-${label}-${student.uid}`}
+                                  className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
+                                >
+                                  {student.name}
+                                  <span className="ml-2 font-semibold text-gray-500">
+                                    {student.classLabel}{" "}
+                                    {student.number && `${student.number}번`}{" "}
+                                    {student.attemptLabel !== "시도 없음" &&
+                                      student.attemptLabel}
                                   </span>
-                                ),
-                              )}
-                              {!(students as typeof row.studentSummaries)
-                                .length && (
+                                  {student.reason && (
+                                    <span className="ml-2 font-semibold text-blue-600">
+                                      {student.reason}
+                                    </span>
+                                  )}
+                                </span>
+                              ))}
+                              {!students.length && (
                                 <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-400">
                                   없음
                                 </span>
@@ -4134,6 +4152,8 @@ const ManageHistoryClassroom: React.FC = () => {
                             학생 검색
                           </span>
                           <input
+                            lang="ko"
+                            inputMode="text"
                             type="text"
                             value={exemptionStudentSearch}
                             onChange={(event) =>
@@ -4307,6 +4327,8 @@ const ManageHistoryClassroom: React.FC = () => {
                         부여 사유
                       </span>
                       <textarea
+                        lang="ko"
+                        inputMode="text"
                         value={exemptionReason}
                         onChange={(event) =>
                           setExemptionReason(event.target.value)
@@ -4498,6 +4520,8 @@ const ManageHistoryClassroom: React.FC = () => {
                           ))}
                         </select>
                         <input
+                          lang="ko"
+                          inputMode="text"
                           type="text"
                           value={grantedExemptionNameSearch}
                           onChange={(event) =>
@@ -4751,7 +4775,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         제한 시간(분)
                       </label>
-                      <input
+                      <NumericInput
                         type="number"
                         min={0}
                         value={timeLimitMinutes}
@@ -4765,7 +4789,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         재도전 제한 시간(분)
                       </label>
-                      <input
+                      <NumericInput
                         type="number"
                         min={0}
                         value={cooldownMinutes}
@@ -4779,7 +4803,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         응시 제한 기간(일)
                       </label>
-                      <input
+                      <NumericInput
                         type="number"
                         min={1}
                         value={dueWindowDays}
@@ -4796,7 +4820,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         통과 기준 (%)
                       </label>
-                      <input
+                      <NumericInput
                         type="number"
                         min={0}
                         max={100}
@@ -4875,6 +4899,8 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
                     <div className="space-y-2">
                       <input
+                        lang="ko"
+                        inputMode="text"
                         value={targetStudentSearch}
                         onChange={(e) => setTargetStudentSearch(e.target.value)}
                         placeholder="이름으로 전체 학생 검색"
@@ -5002,6 +5028,8 @@ const ManageHistoryClassroom: React.FC = () => {
                             </button>
                           </div>
                           <textarea
+                            lang="ko"
+                            inputMode="text"
                             value={studentReasons[student.uid] || ""}
                             onChange={(event) =>
                               setStudentReasons((prev) => ({
@@ -5107,6 +5135,8 @@ const ManageHistoryClassroom: React.FC = () => {
                               </button>
                             </div>
                             <input
+                              lang="ko"
+                              inputMode="text"
                               value={blank.answer}
                               onChange={(e) =>
                                 handleBlankChange(blank.id, e.target.value)
@@ -5490,7 +5520,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           제한 시간(분)
                         </label>
-                        <input
+                        <NumericInput
                           type="number"
                           min={0}
                           value={editingTimeLimitMinutes}
@@ -5506,7 +5536,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           재도전 제한(분)
                         </label>
-                        <input
+                        <NumericInput
                           type="number"
                           min={0}
                           value={editingCooldownMinutes}
@@ -5522,7 +5552,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           응시 제한 기간(일)
                         </label>
-                        <input
+                        <NumericInput
                           type="number"
                           min={1}
                           value={editingDueWindowDays}
@@ -5539,7 +5569,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           통과 기준(%)
                         </label>
-                        <input
+                        <NumericInput
                           type="number"
                           min={0}
                           max={100}
@@ -5649,6 +5679,8 @@ const ManageHistoryClassroom: React.FC = () => {
                       {editingStudentSearchOpen && (
                         <div className="mb-3 space-y-2">
                           <input
+                            lang="ko"
+                            inputMode="text"
                             value={editingStudentSearch}
                             onChange={(event) =>
                               setEditingStudentSearch(event.target.value)
@@ -5726,6 +5758,8 @@ const ManageHistoryClassroom: React.FC = () => {
                               </button>
                             </div>
                             <textarea
+                              lang="ko"
+                              inputMode="text"
                               value={editingStudentReasons[student.uid] || ""}
                               onChange={(event) =>
                                 setEditingStudentReasons((prev) => ({
@@ -6199,6 +6233,8 @@ const ManageHistoryClassroom: React.FC = () => {
                 p.{draftBlank.page} 영역을 선택했습니다.
               </div>
               <input
+                lang="ko"
+                inputMode="text"
                 type="text"
                 value={draftBlankAnswer}
                 onChange={(e) => setDraftBlankAnswer(e.target.value)}
@@ -6232,6 +6268,8 @@ const ManageHistoryClassroom: React.FC = () => {
                 p.{selectedBlank.page}
               </div>
               <input
+                lang="ko"
+                inputMode="text"
                 type="text"
                 value={selectedBlank.answer}
                 onChange={(e) =>
@@ -6297,6 +6335,8 @@ const ManageHistoryClassroom: React.FC = () => {
                     답 입력
                   </span>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     type="text"
                     value={blankEditorAnswer}
                     onChange={(event) => {

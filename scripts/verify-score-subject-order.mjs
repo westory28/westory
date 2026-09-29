@@ -89,6 +89,10 @@ assert.ok(
 
 const ScoreCard = loadTs("src/pages/student/score/components/ScoreCard.tsx", {
   react: React,
+  "../../../../components/common/NumericInput": loadTs(
+    "src/components/common/NumericInput.tsx",
+    { react: React },
+  ),
 }).default;
 for (const subject of ["음악", "미술", "체육", "국어", "영어", "기가"]) {
   const threeLevel = ["음악", "미술", "체육"].includes(subject);

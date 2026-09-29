@@ -594,6 +594,8 @@ const SettingsPrivacy: React.FC = () => {
                             항목 제목
                           </label>
                           <input
+                            lang="ko"
+                            inputMode="text"
                             type="text"
                             value={item.title}
                             onChange={(e) =>

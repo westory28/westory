@@ -2874,6 +2874,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   {resolvedCopy.objectionReasonLabel}
                 </label>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   id="performance-score-objection-reason"
                   value={objectionReason}
                   onChange={(event) => {
@@ -3019,6 +3021,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   확인 요청 사유
                 </label>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   id="performance-score-answer-sheet-reason"
                   value={answerSheetRequestReason}
                   onChange={(event) => {

@@ -3599,6 +3599,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           }}
                         >
                           <input
+                            lang="ko"
+                            inputMode="text"
                             type="text"
                             value={studentAnswer?.value || ""}
                             data-blank-id={blank.id}

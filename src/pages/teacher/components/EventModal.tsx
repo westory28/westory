@@ -501,6 +501,8 @@ const EventModal: React.FC<EventModalProps> = ({
           <label className="teacher-event-title">
             <span>일정 제목</span>
             <input
+              lang="ko"
+              inputMode="text"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="예: 1차 수행평가"
@@ -623,6 +625,8 @@ const EventModal: React.FC<EventModalProps> = ({
                   메모 <small>(선택)</small>
                 </span>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   value={description}
                   onChange={(event) =>
                     setDescription(
@@ -669,6 +673,8 @@ const EventModal: React.FC<EventModalProps> = ({
                       <label>
                         <span>분류 이름</span>
                         <input
+                          lang="ko"
+                          inputMode="text"
                           value={selectedCategory.label}
                           onChange={(event) =>
                             handleCategoryDraftChange(eventType, {
@@ -713,6 +719,8 @@ const EventModal: React.FC<EventModalProps> = ({
                     <label>
                       <span>새 분류</span>
                       <input
+                        lang="ko"
+                        inputMode="text"
                         value={newCategoryLabel}
                         onChange={(event) =>
                           setNewCategoryLabel(event.target.value)

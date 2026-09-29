@@ -1,3 +1,4 @@
+import NumericInput from "../../../components/common/NumericInput";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { updateStudentData } from "../../../lib/studentData";
@@ -107,7 +108,7 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
               <label className="mb-1 block text-xs font-bold text-gray-500">
                 번호
               </label>
-              <input
+              <NumericInput
                 type="number"
                 name="number"
                 value={formData.number}
@@ -121,6 +122,8 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
               이름
             </label>
             <input
+              lang="ko"
+              inputMode="text"
               type="text"
               name="name"
               value={formData.name}

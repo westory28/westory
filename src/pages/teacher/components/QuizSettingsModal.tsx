@@ -1,3 +1,4 @@
+import NumericInput from "../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
@@ -831,7 +832,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         <span className="text-xs font-bold text-gray-500">
                           한 번에 출제할 문항 수
                         </span>
-                        <input
+                        <NumericInput
                           type="number"
                           min={1}
                           value={settings.questionCount}
@@ -852,7 +853,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         <span className="text-xs font-bold text-gray-500">
                           제한 시간 (분)
                         </span>
-                        <input
+                        <NumericInput
                           type="number"
                           min={1}
                           value={settings.timeLimitMinutes}
@@ -945,7 +946,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             <span className="text-xs font-bold text-gray-500">
                               힌트 사용 가능 횟수
                             </span>
-                            <input
+                            <NumericInput
                               type="number"
                               min={1}
                               value={settings.hintLimit}
@@ -999,7 +1000,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             <span className="text-xs font-bold text-gray-500">
                               재응시 대기 시간 (분)
                             </span>
-                            <input
+                            <NumericInput
                               type="number"
                               min={0}
                               value={settings.cooldown}
@@ -1027,7 +1028,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             <span className="text-xs font-bold text-gray-500">
                               재응시 대기 시간 (분)
                             </span>
-                            <input
+                            <NumericInput
                               type="number"
                               min={0}
                               value={settings.cooldown}

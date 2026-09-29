@@ -1,4 +1,5 @@
 import React from "react";
+import TeacherSubNavigation from "./TeacherSubNavigation";
 import StorageImage from "../../../components/common/StorageImage";
 import {
   getLessonPdfExtractionHelpText,
@@ -43,7 +44,9 @@ type SaveStateTone = "saved" | "saving" | "dirty";
 type LessonTreePanelProps = {
   treeData: LessonTreeNode[];
   sidebarOpen: boolean;
-  onCloseSidebar: () => void;
+  onSidebarOpenChange: (open: boolean) => void;
+  activeLabel: string;
+  canEdit: boolean;
   onOpenRootModal: () => void;
   onSaveTree: () => void;
   renderTreeNode: (node: LessonTreeNode, level: number) => React.ReactNode;
@@ -255,109 +258,42 @@ function pdfStatusBadgeClass(
 export function LessonTreePanel({
   treeData,
   sidebarOpen,
-  onCloseSidebar,
+  onSidebarOpenChange,
+  activeLabel,
+  canEdit,
   onOpenRootModal,
   onSaveTree,
   renderTreeNode,
 }: LessonTreePanelProps) {
-  const renderActionButtons = (compact = false) => (
-    <div className={`flex shrink-0 gap-2 ${compact ? "text-xs" : ""}`}>
-      <button
-        type="button"
-        onClick={onOpenRootModal}
-        className={`rounded-lg bg-blue-600 font-semibold text-white ${
-          compact ? "px-3 py-2 text-xs" : "px-3 py-2 text-sm"
-        }`}
-      >
-        새 묶음
-      </button>
-      <button
-        type="button"
-        onClick={onSaveTree}
-        className={`rounded-lg border border-gray-200 bg-white font-semibold text-gray-700 ${
-          compact ? "px-3 py-2 text-xs" : "px-3 py-2 text-sm"
-        }`}
-      >
-        트리 저장
-      </button>
-    </div>
-  );
-
-  const renderTreeList = (className = "p-3") => (
-    <div
-      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${className}`}
+  return (
+    <TeacherSubNavigation
+      title="수업 자료"
+      activeLabel={activeLabel || "수업 자료 선택"}
+      open={sidebarOpen}
+      onOpenChange={onSidebarOpenChange}
+      actions={
+        canEdit ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onOpenRootModal}
+              className="min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              새 묶음
+            </button>
+            <button
+              type="button"
+              onClick={onSaveTree}
+              className="min-h-10 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700"
+            >
+              트리 저장
+            </button>
+          </div>
+        ) : undefined
+      }
     >
       {treeData.map((node) => renderTreeNode(node, 0))}
-    </div>
-  );
-  const mobileDrawerInertProps = sidebarOpen
-    ? {}
-    : ({ inert: "" } as React.HTMLAttributes<HTMLElement>);
-
-  return (
-    <>
-      <div className="hidden w-full max-w-sm lg:block">
-        <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-4">
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold text-gray-800">
-                수업 자료 트리
-              </h2>
-              <p className="text-xs text-gray-500">
-                단원과 자료 구조를 관리합니다.
-              </p>
-            </div>
-            {renderActionButtons()}
-          </div>
-          {renderTreeList()}
-        </div>
-      </div>
-
-      {sidebarOpen && (
-        <button
-          type="button"
-          className="teacher-mobile-drawer-backdrop fixed inset-0 z-40 bg-black/45 lg:hidden"
-          onClick={onCloseSidebar}
-          aria-label="수업 자료 목차 닫기"
-        />
-      )}
-      <aside
-        id="lesson-tree-drawer"
-        role="dialog"
-        aria-modal={sidebarOpen ? "true" : undefined}
-        aria-hidden={!sidebarOpen}
-        aria-labelledby="lesson-tree-drawer-title"
-        {...mobileDrawerInertProps}
-        className={`teacher-mobile-drawer fixed right-0 z-50 flex w-[84%] max-w-[360px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 motion-reduce:transition-none lg:hidden ${
-          sidebarOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
-        }`}
-      >
-        <div className="teacher-mobile-drawer-heading flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4">
-          <h2
-            id="lesson-tree-drawer-title"
-            className="text-base font-bold text-gray-800"
-          >
-            수업 자료 목차
-          </h2>
-          <button
-            type="button"
-            onClick={onCloseSidebar}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
-            aria-label="수업 자료 목차 닫기"
-          >
-            <i className="fas fa-times text-sm" aria-hidden="true"></i>
-          </button>
-        </div>
-        <div className="teacher-mobile-drawer-heading flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-gray-800">자료 구조 관리</p>
-            <p className="text-xs text-gray-500">말단 자료를 선택하세요.</p>
-          </div>
-          {renderActionButtons(true)}
-        </div>
-        {renderTreeList("p-3")}
-      </aside>
-    </>
+    </TeacherSubNavigation>
   );
 }
 
@@ -380,6 +316,8 @@ export function LessonEditorHeader({
             자료 제목
           </span>
           <input
+            lang="ko"
+            inputMode="text"
             value={lessonTitle}
             onChange={(event) => onLessonTitleChange(event.target.value)}
             placeholder="수업 자료 제목을 입력하세요"
@@ -598,6 +536,8 @@ export function FootnoteEditorDialog({
                       팝업 제목
                     </span>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       value={footnote.title ?? ""}
                       onChange={(event) =>
                         onFootnoteDraftChange?.({ title: event.target.value })
@@ -617,6 +557,8 @@ export function FootnoteEditorDialog({
                       각주 버튼 이름
                     </span>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       value={footnote.label ?? ""}
                       onChange={(event) =>
                         onFootnoteDraftChange?.({ label: event.target.value })
@@ -638,6 +580,8 @@ export function FootnoteEditorDialog({
                     팝업 내용
                   </span>
                   <textarea
+                    lang="ko"
+                    inputMode="text"
                     value={footnote.bodyHtml ?? ""}
                     onChange={(event) =>
                       onFootnoteDraftChange?.({ bodyHtml: event.target.value })
@@ -893,6 +837,8 @@ export function LessonBodyEditor({
         </p>
       </div>
       <textarea
+        lang="ko"
+        inputMode="text"
         ref={textareaRef}
         value={lessonContent}
         onChange={(event) => onLessonContentChange(event.target.value)}
@@ -1728,6 +1674,8 @@ export function LessonPdfSection({
                   정답
                 </span>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   ref={blankEditorAnswerInputRef}
                   value={draftBlankAnswer}
                   onChange={(event) =>
@@ -1752,6 +1700,8 @@ export function LessonPdfSection({
                   학생 안내 문구
                 </span>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   value={draftBlankPrompt}
                   onChange={(event) =>
                     onDraftBlankPromptChange(event.target.value)

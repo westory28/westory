@@ -15,7 +15,7 @@ import {
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
 import {
-  compareSchedulePeriod,
+  compareFullCalendarSchedulePeriod,
   getSchedulePeriodRangeLabel,
   getSchedulePeriodOrder,
 } from "../../lib/schedulePeriods";
@@ -280,12 +280,7 @@ const Calendar = () => {
                 right: "dayGridMonth,listMonth",
               }}
               events={events}
-              eventOrder={(left, right) =>
-                compareSchedulePeriod(
-                  left.extendedProps as CalendarEvent,
-                  right.extendedProps as CalendarEvent,
-                )
-              }
+              eventOrder={compareFullCalendarSchedulePeriod}
               dateClick={handleDateClick}
               eventClick={handleEventClick}
               eventDidMount={(arg) => {

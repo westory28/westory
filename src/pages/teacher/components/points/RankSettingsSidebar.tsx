@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import TeacherSubNavigation from "../TeacherSubNavigation";
 
 export type RankSettingsPanelId =
   | "theme_preview"
@@ -24,84 +25,45 @@ const RankSettingsSidebar: React.FC<RankSettingsSidebarProps> = ({
   activePanel,
   items,
   onSelect,
-}) => (
-  <aside className="w-full shrink-0 lg:w-72">
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-8">
-      <div className="flex items-center gap-3 border-b border-gray-100 p-4 sm:p-6">
-        <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-700">
-          <i className="fas fa-medal text-sm" aria-hidden="true"></i>
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-lg font-extrabold text-gray-800">설정</h2>
-          <p className="mt-0.5 text-xs font-medium text-gray-500">
-            테마 · 등급 설정 · 이모지
-          </p>
-        </div>
-      </div>
+}) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const activeItem = items.find((item) => item.id === activePanel);
 
-      <nav className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:p-0">
-        {items.map((item) => {
-          const selected = activePanel === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelect(item.id)}
-              className={[
-                "group flex min-w-[12rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4",
-                selected
-                  ? "border-blue-200 bg-blue-50 text-blue-700 lg:border-blue-600"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 lg:border-transparent",
-              ].join(" ")}
-            >
-              <div
-                className={[
-                  "mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-sm transition-colors",
-                  selected
-                    ? "border-blue-100 bg-white text-blue-700"
-                    : "border-gray-200 bg-gray-50 text-gray-500 group-hover:bg-white",
-                ].join(" ")}
-              >
-                <i className={item.iconClassName} aria-hidden="true"></i>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-bold">{item.label}</span>
-                  {item.badge && (
-                    <span
-                      className={[
-                        "rounded-full px-2 py-0.5 text-[10px] font-bold leading-none",
-                        selected
-                          ? "border border-blue-100 bg-white text-blue-700"
-                          : "bg-gray-100 text-gray-600",
-                      ].join(" ")}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
-                {item.description && (
-                  <p className="mt-1 text-xs leading-5 text-gray-500">
-                    {item.description}
-                  </p>
-                )}
-                {item.meta && (
-                  <div
-                    className={[
-                      "mt-1.5 text-[11px] font-bold",
-                      selected ? "text-blue-600" : "text-gray-400",
-                    ].join(" ")}
-                  >
-                    {item.meta}
-                  </div>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </nav>
-    </div>
-  </aside>
-);
+  return (
+    <TeacherSubNavigation
+      title="등급 관리"
+      activeLabel={activeItem?.label || "등급 관리"}
+      open={menuOpen}
+      onOpenChange={setMenuOpen}
+    >
+      {items.map((item) => {
+        const selected = activePanel === item.id;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              onSelect(item.id);
+              setMenuOpen(false);
+            }}
+            className={`teacher-settings-section${selected ? " is-active" : ""}`}
+            aria-current={selected ? "page" : undefined}
+          >
+            <i
+              className={`${item.iconClassName} w-5 shrink-0 text-center`}
+              aria-hidden="true"
+            ></i>
+            <span className="min-w-0 flex-1">{item.label}</span>
+            {item.badge === "미저장" && (
+              <span className="shrink-0 text-xs font-semibold text-amber-800">
+                {item.badge}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </TeacherSubNavigation>
+  );
+};
 
 export default RankSettingsSidebar;

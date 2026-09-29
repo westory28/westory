@@ -1,3 +1,4 @@
+import NumericInput from "../../../../components/common/NumericInput";
 import React from "react";
 import "../teacher-list-controls.css";
 import PointRankBadge from "../../../../components/common/PointRankBadge";
@@ -196,6 +197,8 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
               ))}
             </select>
             <input
+              lang="ko"
+              inputMode="text"
               aria-label="학생 이름 검색"
               value={nameSearch}
               onChange={(event) => onNameSearchChange(event.target.value)}
@@ -469,7 +472,8 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                               <div className="mb-1 text-xs font-bold text-blue-700">
                                 수정 위스
                               </div>
-                              <input
+                              <NumericInput
+                                allowEmpty
                                 type="number"
                                 value={adjustmentDraftValue}
                                 onChange={(event) =>

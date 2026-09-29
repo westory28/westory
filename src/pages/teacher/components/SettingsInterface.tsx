@@ -505,6 +505,8 @@ const SettingsInterface: React.FC = () => {
                     서브 타이틀
                   </label>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     type="text"
                     name="mainSubtitle"
                     value={config.mainSubtitle}
@@ -533,6 +535,8 @@ const SettingsInterface: React.FC = () => {
                     저작권 문구
                   </label>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     type="text"
                     name="footerText"
                     value={config.footerText}
@@ -602,6 +606,8 @@ const SettingsInterface: React.FC = () => {
                     제목
                   </label>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     type="text"
                     name="ddayTitle"
                     value={config.ddayTitle}
@@ -814,6 +820,8 @@ const SettingsInterface: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-2">
                 <input
+                  lang="ko"
+                  inputMode="text"
                   type="text"
                   value={parentDraft[activePortal].name}
                   onChange={(e) =>
@@ -897,6 +905,8 @@ const SettingsInterface: React.FC = () => {
                       </button>
                     </div>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={item.name}
                       onChange={(e) =>
@@ -916,6 +926,8 @@ const SettingsInterface: React.FC = () => {
                   <div className="p-4 space-y-3 bg-white">
                     <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-2">
                       <input
+                        lang="ko"
+                        inputMode="text"
                         type="text"
                         value={
                           childDrafts[
@@ -1032,6 +1044,8 @@ const SettingsInterface: React.FC = () => {
                             </button>
                           </div>
                           <input
+                            lang="ko"
+                            inputMode="text"
                             type="text"
                             value={child.name}
                             onChange={(e) =>

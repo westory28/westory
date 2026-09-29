@@ -31,12 +31,127 @@
   padding: 24px;
 }
 
-.teacher-settings-heading h1 {
+.teacher-settings-heading h1,
+.teacher-settings-heading h2 {
   margin: 0;
   color: var(--ws-text-strong, #111827);
   font-size: var(--ws-type-section-title, 1.25rem);
   font-weight: 800;
   line-height: 1.3;
+}
+
+/* Teacher tools share the settings menu's spacing, selection and disclosure. */
+.teacher-sub-workspace {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  background: var(--ws-bg, #f9fafb);
+}
+
+.teacher-sub-navigation.teacher-settings-navigation {
+  width: 228px;
+  flex-shrink: 0;
+  margin-top: 0;
+  grid-row: auto;
+}
+
+.teacher-sub-navigation .teacher-settings-navigation-inner {
+  top: var(--teacher-account-height, 48px);
+  max-height: calc(100dvh - var(--teacher-account-height, 48px));
+}
+
+.teacher-sub-navigation-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.teacher-sub-navigation .teacher-settings-section {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.teacher-sub-content {
+  min-width: 0;
+  padding: 32px;
+}
+
+.teacher-sub-workspace--page {
+  min-height: calc(100dvh - var(--teacher-account-height, 48px));
+}
+
+@media (min-width: 1024px) {
+  .teacher-sub-workspace--page > .teacher-sub-navigation {
+    margin-top: calc(-1 * var(--teacher-account-height, 48px));
+  }
+
+  .teacher-sub-workspace--page .teacher-settings-navigation-inner {
+    top: 0;
+    max-height: 100dvh;
+  }
+}
+
+.teacher-sub-tree-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+}
+
+.teacher-sub-tree-row > .teacher-settings-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.teacher-sub-tree-children {
+  padding-left: 16px;
+}
+
+.teacher-sub-tree-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+@media (max-width: 1279px) {
+  .teacher-sub-content {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .teacher-sub-workspace {
+    grid-template-columns: 208px minmax(0, 1fr);
+  }
+
+  .teacher-sub-navigation.teacher-settings-navigation {
+    width: 208px;
+  }
+}
+
+@media (max-width: 767px) {
+  .teacher-sub-workspace {
+    display: block;
+  }
+
+  .teacher-sub-navigation.teacher-settings-navigation {
+    width: 100%;
+  }
+
+  .teacher-sub-navigation .teacher-settings-navigation-inner {
+    position: static;
+    max-height: none;
+  }
+
+  .teacher-sub-content {
+    padding: 24px 16px;
+  }
 }
 
 .teacher-settings-heading p {

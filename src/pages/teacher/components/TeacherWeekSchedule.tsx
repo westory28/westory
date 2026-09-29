@@ -281,6 +281,8 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 aria-hidden={!searchOpen}
               >
                 <input
+                  lang="ko"
+                  inputMode="text"
                   id="teacher-week-search-input"
                   ref={searchInputRef}
                   type="search"

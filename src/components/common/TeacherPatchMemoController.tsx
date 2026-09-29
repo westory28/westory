@@ -702,6 +702,8 @@ const TeacherPatchMemoController: React.FC = () => {
                   메모
                 </span>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   ref={bodyRef}
                   disabled={saving}
                   value={body}

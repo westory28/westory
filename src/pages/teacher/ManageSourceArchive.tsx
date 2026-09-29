@@ -577,6 +577,8 @@ const ManageSourceArchive: React.FC = () => {
               검색
             </span>
             <input
+              lang="ko"
+              inputMode="text"
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
               placeholder="제목, 설명, 태그, 출처 검색"
@@ -1070,6 +1072,8 @@ const ManageSourceArchive: React.FC = () => {
                   제목
                 </span>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   value={draft.title}
                   onChange={(event) =>
                     setDraft((current) => ({
@@ -1111,6 +1115,8 @@ const ManageSourceArchive: React.FC = () => {
                     출처
                   </span>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     value={draft.source}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1130,6 +1136,8 @@ const ManageSourceArchive: React.FC = () => {
                     시대
                   </span>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     value={draft.era}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1146,6 +1154,8 @@ const ManageSourceArchive: React.FC = () => {
                     주제
                   </span>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     value={draft.subject}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1162,6 +1172,8 @@ const ManageSourceArchive: React.FC = () => {
                     단원
                   </span>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     value={draft.unit}
                     onChange={(event) =>
                       setDraft((current) => ({
@@ -1180,6 +1192,8 @@ const ManageSourceArchive: React.FC = () => {
                   태그
                 </span>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   value={tagInput}
                   onChange={(event) => setTagInput(event.target.value)}
                   placeholder="태그를 쉼표로 구분해 입력"
@@ -1191,6 +1205,8 @@ const ManageSourceArchive: React.FC = () => {
                   설명
                 </span>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   value={draft.description}
                   onChange={(event) =>
                     setDraft((current) => ({

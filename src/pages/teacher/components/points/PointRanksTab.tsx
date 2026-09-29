@@ -719,14 +719,14 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+      <div className="teacher-sub-workspace">
         <RankSettingsSidebar
           activePanel={activePanel}
           items={sidebarItems}
           onSelect={setActivePanel}
         />
 
-        <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="teacher-sub-content">
           <div className="border-b border-gray-100 px-4 py-3 sm:px-6">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">

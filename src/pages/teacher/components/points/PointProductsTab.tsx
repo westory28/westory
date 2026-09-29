@@ -1,3 +1,4 @@
+import NumericInput from "../../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import WisProductCard, {
   WIS_PRODUCT_CARD_GRID_CLASSNAME,
@@ -210,6 +211,8 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
 
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <input
+                lang="ko"
+                inputMode="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="상품명 검색"
@@ -420,6 +423,8 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                 상품명
               </span>
               <input
+                lang="ko"
+                inputMode="text"
                 value={productForm.name}
                 onChange={(event) =>
                   onProductFormChange((prev) => ({
@@ -436,6 +441,8 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                 상품 설명
               </span>
               <textarea
+                lang="ko"
+                inputMode="text"
                 value={productForm.description}
                 onChange={(event) =>
                   onProductFormChange((prev) => ({
@@ -453,7 +460,8 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                 <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
                   가격(위스)
                 </span>
-                <input
+                <NumericInput
+                  allowEmpty
                   type="number"
                   min="0"
                   value={productForm.price}
@@ -475,7 +483,8 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                 <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
                   재고(개)
                 </span>
-                <input
+                <NumericInput
+                  allowEmpty
                   type="number"
                   min="0"
                   value={productForm.stock}

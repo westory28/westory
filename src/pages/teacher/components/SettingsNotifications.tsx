@@ -833,6 +833,8 @@ const SettingsNotifications: React.FC = () => {
                   알림 제목
                 </label>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   type="text"
                   value={toFriendlyNotificationText(
                     event,
@@ -870,6 +872,8 @@ const SettingsNotifications: React.FC = () => {
                 알림 내용
               </label>
               <textarea
+                lang="ko"
+                inputMode="text"
                 value={toFriendlyNotificationText(event, policy.bodyTemplate)}
                 disabled={disabled}
                 rows={2}

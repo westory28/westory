@@ -1,3 +1,4 @@
+import NumericInput from "../../../components/common/NumericInput";
 import { isSemesterArchive } from "../../../lib/semesterArchive";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -644,9 +645,9 @@ const getObjectiveOmrItems = (
       correctAnswer: item.correctAnswer || "",
       studentAnswer: item.studentAnswer || "",
       correct: item.answerCorrect,
-      score: item.score,
+      score: "score" in item ? item.score : undefined,
       maxScore: item.maxScore,
-      scoreEntered: item.scoreEntered,
+      scoreEntered: "scoreEntered" in item ? item.scoreEntered : undefined,
       invalid: item.answerStatus === "invalid",
     }))
     .sort(
@@ -1267,7 +1268,7 @@ const getFiniteNumber = (value: unknown) => {
 
 const getScoreItemBasePayload = (
   item: Partial<PerformanceScoreItem> & { name?: string },
-) => {
+): Omit<PerformanceScoreItem, "score" | "scoreEntered"> => {
   const shortName = toText(item.shortName);
   const itemKey = toText(item.itemKey);
   const groupKey = toText(item.groupKey);
@@ -1297,7 +1298,12 @@ const getScoreItemBasePayload = (
     ...(typeof item.answerCorrect === "boolean"
       ? { answerCorrect: item.answerCorrect }
       : {}),
-    ...(answerStatus ? { answerStatus } : {}),
+    ...(answerStatus === "correct" ||
+    answerStatus === "incorrect" ||
+    answerStatus === "blank" ||
+    answerStatus === "invalid"
+      ? { answerStatus }
+      : {}),
     ...(answerChoices.length ? { answerChoices } : {}),
     maxScore: getFiniteNumber(item.maxScore) ?? 0,
     ...(item.ratio !== undefined ? { ratio: item.ratio } : {}),
@@ -2900,7 +2906,11 @@ const getRecordItemsForRoster = (
       answerChoices: existing?.answerChoices || item.answerChoices,
       maxScore: existingMaxScore === null ? item.maxScore : existing?.maxScore,
       ratio,
-      feedback: existing?.feedback || item.feedback,
+      feedback:
+        existing?.feedback ||
+        ("feedback" in item && typeof item.feedback === "string"
+          ? item.feedback
+          : undefined),
     });
     return {
       ...baseItem,
@@ -5683,7 +5693,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const scoreStatsSecondRoster = scoreListSummaryRosters.secondRoster;
   const writtenExamStatsGroups = useMemo(() => {
     if (!isWrittenExamMode) return [];
-    const byKey = new Map<string, PerformanceScoreItem>();
+    const byKey = new Map<string, PerformanceScoreRoster["items"][number]>();
     rosters.forEach((roster) => {
       (roster.items || []).forEach((item, index) => {
         const meta = getWrittenExamItemMeta(item, index);
@@ -6109,10 +6119,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   );
   const scoreListDisplayItems = useMemo(() => {
     if (selectedScoreRoster) return selectedScoreRoster.items || [];
-    const byName = new Map<
-      string,
-      NonNullable<PerformanceScoreRecord["items"]>[number]
-    >();
+    const byName = new Map<string, PerformanceScoreRoster["items"][number]>();
     rosters.forEach((roster) => {
       (roster.items || []).forEach((item, index) => {
         const key = item.name || item.shortName || `item-${index}`;
@@ -8778,9 +8785,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
       syncedRosterRowsById.forEach((rows, rosterId) => {
         if (rosterId === selectedScoreRoster.id) return;
-        const roster = rostersWithEditedRows.find(
-          (item) => item.id === rosterId,
-        );
+        const roster = latestOtherRosters.find((item) => item.id === rosterId);
         if (!roster) return;
         const storageRows = getRosterRowsForStorage(rows);
         const meta = buildRosterRowsMeta(roster, storageRows);
@@ -10323,6 +10328,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               </div>
 
               <textarea
+                lang="ko"
+                inputMode="text"
                 value={scoreWarningDraft}
                 onChange={(event) => setScoreWarningDraft(event.target.value)}
                 disabled={scoreWarningLoading || scoreWarningSaving}
@@ -10473,6 +10480,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         {managerCopy.uploadSelectLabel}
                       </span>
                       <input
+                        lang="ko"
+                        inputMode="text"
                         type="text"
                         value={writtenExamItemName}
                         onChange={(event) =>
@@ -10488,6 +10497,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       과목
                     </span>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={subject}
                       onChange={(event) => setSubject(event.target.value)}
@@ -10500,7 +10511,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       <span className="text-xs font-black text-slate-600">
                         기본 만점
                       </span>
-                      <input
+                      <NumericInput
+                        allowEmpty
                         type="number"
                         min="0"
                         step="0.1"
@@ -12800,6 +12812,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       평가명
                     </span>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
@@ -12834,6 +12848,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   </span>
                   {isWrittenExamMode ? (
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={subject}
                       onChange={(event) => setSubject(event.target.value)}
@@ -12841,6 +12857,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     />
                   ) : (
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
@@ -13015,6 +13033,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         )}
                         <td className="px-3 py-2">
                           <textarea
+                            lang="ko"
+                            inputMode="text"
                             value={row.feedback}
                             onChange={(event) =>
                               updateFeedback(row.rowKey, event.target.value)
@@ -13263,6 +13283,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     학생 이름 검색
                   </span>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     type="search"
                     value={scoreListSearch}
                     onChange={(event) => setScoreListSearch(event.target.value)}
@@ -13760,6 +13782,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                 {scoreEditing && manualRecord ? (
                                   <div className="flex min-w-36 items-center">
                                     <input
+                                      lang="ko"
+                                      inputMode="text"
                                       type="text"
                                       value={record.studentName || ""}
                                       onChange={(event) =>

@@ -86,6 +86,8 @@ const MapViewer: React.FC<MapViewerProps> = ({
         </label>
         <div className="flex items-center gap-2">
           <input
+            lang="ko"
+            inputMode="text"
             id={id}
             type="text"
             value={googleSearchQuery ?? ""}

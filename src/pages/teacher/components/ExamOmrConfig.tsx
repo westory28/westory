@@ -1,3 +1,4 @@
+import NumericInput from "../../../components/common/NumericInput";
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -193,7 +194,7 @@ const ExamOmrConfig: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <input
+                <NumericInput
                   type="number"
                   className="w-16 p-1 text-center border rounded text-sm font-bold text-blue-600"
                   value={item.score}
@@ -259,7 +260,7 @@ const ExamOmrConfig: React.FC = () => {
                         <span className="text-xs font-bold text-gray-500">
                           ({sIdx + 1})
                         </span>
-                        <input
+                        <NumericInput
                           type="number"
                           className="w-14 p-1 text-center border rounded text-xs font-bold"
                           value={sub.score}
@@ -275,6 +276,8 @@ const ExamOmrConfig: React.FC = () => {
                         <span className="text-xs text-gray-400">점</span>
                       </div>
                       <textarea
+                        lang="ko"
+                        inputMode="text"
                         className="w-full p-2 border rounded text-sm h-16 resize-none"
                         placeholder="모범 답안 입력"
                         value={sub.answer}

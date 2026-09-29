@@ -12,7 +12,7 @@ export const MOCK_EXAM_ROUNDS: MockExamRound[] = [
   "round_3",
 ];
 
-export const isMockExamRound = (value: unknown): value is MockExamRound =>
+export const isMockExamRound = (value: unknown): boolean =>
   MOCK_EXAM_ROUND_PATTERN.test(
     String(value || "")
       .trim()

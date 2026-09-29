@@ -2757,6 +2757,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             <div className="relative min-w-0 md:col-span-2 xl:col-span-1">
               <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
               <input
+                lang="ko"
+                inputMode="text"
                 type="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -3547,6 +3549,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 </div>
 
                 <input
+                  lang="ko"
+                  inputMode="text"
                   type="text"
                   value={editQuestionText}
                   onChange={(e) => setEditQuestionText(e.target.value)}
@@ -3611,6 +3615,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       </div>
                     </div>
                     <textarea
+                      lang="ko"
+                      inputMode="text"
                       ref={editPassageTextareaRef}
                       value={editPassage}
                       onChange={(e) => setEditPassage(e.target.value)}
@@ -3682,6 +3688,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           </span>
                           <div className="min-w-0 flex-1">
                             <input
+                              lang="ko"
+                              inputMode="text"
                               type="text"
                               value={option}
                               onChange={(e) =>
@@ -3772,6 +3780,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
                 {editType === "word" && (
                   <input
+                    lang="ko"
+                    inputMode="text"
                     type="text"
                     value={editWordAnswer}
                     onChange={(e) => setEditWordAnswer(e.target.value)}
@@ -3805,6 +3815,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           {index + 1}
                         </span>
                         <input
+                          lang="ko"
+                          inputMode="text"
                           type="text"
                           value={item}
                           onChange={(e) =>
@@ -3876,6 +3888,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           {index + 1}
                         </span>
                         <input
+                          lang="ko"
+                          inputMode="text"
                           type="text"
                           value={pair.left}
                           onChange={(e) =>
@@ -3892,6 +3906,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         />
                         <div className="min-w-0 space-y-2">
                           <input
+                            lang="ko"
+                            inputMode="text"
                             type="text"
                             value={pair.right}
                             onChange={(e) =>
@@ -3955,6 +3971,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 )}
 
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   value={editExplanationText}
                   onChange={(e) => setEditExplanationText(e.target.value)}
                   placeholder="해설 (선택)"
@@ -3972,6 +3990,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   </label>
                   {editHintEnabled && (
                     <textarea
+                      lang="ko"
+                      inputMode="text"
                       placeholder="학생에게 보여줄 힌트를 입력하세요"
                       value={editHintText}
                       onChange={(e) => setEditHintText(e.target.value)}
@@ -4165,6 +4185,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       )}
                       {editType === "word" && (
                         <input
+                          lang="ko"
+                          inputMode="text"
                           type="text"
                           value={previewWordAnswer}
                           onChange={(e) => setPreviewWordAnswer(e.target.value)}

@@ -70,6 +70,7 @@ function mount() {
     },
   };
   const dependencies = {
+    "../../../components/common/NumericInput": { __esModule: true, default: "input" },
     "./examGradingPlan.css": {},
     "./KoreanTextInput": { __esModule: true, default: "input" },
     "./GradingScoreHelp": { __esModule: true, default: "help" },

@@ -2259,6 +2259,8 @@ const QuizLogTab: React.FC = () => {
           </h3>
           <div className="relative w-full sm:w-72">
             <input
+              lang="ko"
+              inputMode="text"
               value={studentSearch}
               onChange={(event) => setStudentSearch(event.target.value)}
               placeholder="학생 검색"

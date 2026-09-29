@@ -242,6 +242,8 @@ const SettingsSchool: React.FC = () => {
                     </td>
                     <td className="p-2">
                       <input
+                        lang="ko"
+                        inputMode="text"
                         type="text"
                         value={g.label}
                         onChange={(e) =>
@@ -324,6 +326,8 @@ const SettingsSchool: React.FC = () => {
                   </td>
                   <td className="p-2">
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={c.label}
                       onChange={(e) =>

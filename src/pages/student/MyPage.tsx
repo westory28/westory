@@ -1,3 +1,4 @@
+import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -1732,7 +1733,7 @@ const MyPage: React.FC = () => {
       showToast({
         tone: "error",
         title: "목표 저장에 실패했습니다.",
-        description: "잠시 후 다시 시도해 주세요.",
+        message: "잠시 후 다시 시도해 주세요.",
       });
     } finally {
       setSavingGoal(false);
@@ -3624,7 +3625,7 @@ const MyPage: React.FC = () => {
                           <label className="text-sm font-bold text-slate-700">
                             과목 목표
                           </label>
-                          <input
+                          <NumericInput
                             type="number"
                             min={0}
                             max={100}
@@ -3745,6 +3746,8 @@ const MyPage: React.FC = () => {
                     </div>
                     <div className="mt-6 flex gap-2">
                       <input
+                        lang="ko"
+                        inputMode="text"
                         value={goalScore}
                         onChange={(event) => setGoalScore(event.target.value)}
                         placeholder="이번 학기 평균 85점 이상"
@@ -3764,7 +3767,8 @@ const MyPage: React.FC = () => {
               </div>
             )}
 
-            {menu === "score" && false && (
+            {/* Keep this legacy view hidden while type-checking its null guards. */}
+            {menu === "score" && Boolean(false) && (
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold text-gray-800">
                   나의 성적표
@@ -3913,7 +3917,7 @@ const MyPage: React.FC = () => {
                           <label className="text-sm font-bold text-gray-700">
                             과목 목표 점수
                           </label>
-                          <input
+                          <NumericInput
                             type="number"
                             min={0}
                             max={100}
@@ -4086,6 +4090,8 @@ const MyPage: React.FC = () => {
                   </label>
                   <div className="flex gap-2">
                     <input
+                      lang="ko"
+                      inputMode="text"
                       value={goalScore}
                       onChange={(event) => setGoalScore(event.target.value)}
                       placeholder="예: 이번 학기 평균 85점 이상"

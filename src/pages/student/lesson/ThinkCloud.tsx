@@ -450,6 +450,8 @@ const ThinkCloud: React.FC = () => {
               <section className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
+                    lang="ko"
+                    inputMode="text"
                     value={draftInput}
                     onChange={(e) => setDraftInput(e.target.value)}
                     maxLength={Math.max(1, options.maxLength)}

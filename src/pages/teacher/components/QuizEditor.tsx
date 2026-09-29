@@ -1542,6 +1542,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   )}
 
                   <input
+                    lang="ko"
+                    inputMode="text"
                     type="text"
                     placeholder="문제 내용을 입력하세요"
                     value={formText}
@@ -1605,6 +1607,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         </div>
                       </div>
                       <textarea
+                        lang="ko"
+                        inputMode="text"
                         ref={passageTextareaRef}
                         value={formPassage}
                         onChange={(e) => setFormPassage(e.target.value)}
@@ -1676,6 +1680,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             </span>
                             <div className="min-w-0 flex-1">
                               <input
+                                lang="ko"
+                                inputMode="text"
                                 type="text"
                                 value={option}
                                 onChange={(e) =>
@@ -1768,6 +1774,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
                   {formType === "word" && (
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={wordAnswer}
                       onChange={(e) => setWordAnswer(e.target.value)}
@@ -1800,6 +1808,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             {index + 1}
                           </span>
                           <input
+                            lang="ko"
+                            inputMode="text"
                             type="text"
                             value={item}
                             onChange={(e) =>
@@ -1872,6 +1882,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             {index + 1}
                           </span>
                           <input
+                            lang="ko"
+                            inputMode="text"
                             type="text"
                             value={pair.left}
                             onChange={(e) =>
@@ -1889,6 +1901,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           />
                           <div className="min-w-0 space-y-2">
                             <input
+                              lang="ko"
+                              inputMode="text"
                               type="text"
                               value={pair.right}
                               onChange={(e) =>
@@ -1953,6 +1967,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   )}
 
                   <textarea
+                    lang="ko"
+                    inputMode="text"
                     placeholder="해설 (선택)"
                     value={formExp}
                     onChange={(e) => setFormExp(e.target.value)}
@@ -1971,6 +1987,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     </label>
                     {hintEnabled && (
                       <textarea
+                        lang="ko"
+                        inputMode="text"
                         placeholder="학생에게 보여줄 힌트를 입력하세요"
                         value={hintText}
                         onChange={(e) => setHintText(e.target.value)}
@@ -2162,6 +2180,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         )}
                         {formType === "word" && (
                           <input
+                            lang="ko"
+                            inputMode="text"
                             type="text"
                             value={previewWordAnswer}
                             onChange={(e) =>

@@ -729,10 +729,9 @@ const ManageHistoryDictionary: React.FC = () => {
       ],
       {
         columns: [{ width: 18 }, { width: 54 }, { width: 26 }, { width: 32 }],
-        fileName: "westory_history_dictionary_template.xlsx",
         sheet: "역사 사전 업로드",
       },
-    );
+    ).toFile("westory_history_dictionary_template.xlsx");
   };
 
   const parseUploadTags = (value: unknown) =>
@@ -842,7 +841,7 @@ const ManageHistoryDictionary: React.FC = () => {
         if (row.definition && row.definition.length < 5) {
           errors.push("풀이 5자 미만");
         }
-        if (normalizedCounts.get(row.normalizedWord) > 1) {
+        if ((normalizedCounts.get(row.normalizedWord) ?? 0) > 1) {
           errors.push("파일 내 중복 단어");
         }
         if (row.normalizedWord && existingWords.has(row.normalizedWord)) {
@@ -1242,6 +1241,8 @@ const ManageHistoryDictionary: React.FC = () => {
                       aria-hidden="true"
                     ></i>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="search"
                       value={termSearch}
                       onChange={(event) => setTermSearch(event.target.value)}
@@ -1393,6 +1394,8 @@ const ManageHistoryDictionary: React.FC = () => {
                       aria-hidden="true"
                     ></i>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="search"
                       value={studentWordSearch}
                       onChange={(event) =>
@@ -1508,6 +1511,8 @@ const ManageHistoryDictionary: React.FC = () => {
                   aria-hidden="true"
                 ></i>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   type="search"
                   value={requestSearch}
                   onChange={(event) => setRequestSearch(event.target.value)}
@@ -2054,6 +2059,8 @@ const ManageHistoryDictionary: React.FC = () => {
                       단어
                     </span>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={word}
                       onChange={(event) => setWord(event.target.value)}
@@ -2067,6 +2074,8 @@ const ManageHistoryDictionary: React.FC = () => {
                       학생용 역사 풀이
                     </span>
                     <textarea
+                      lang="ko"
+                      inputMode="text"
                       value={definition}
                       onChange={(event) => setDefinition(event.target.value)}
                       maxLength={1200}
@@ -2120,6 +2129,8 @@ const ManageHistoryDictionary: React.FC = () => {
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_8.25rem]">
                       <input
+                        lang="ko"
+                        inputMode="text"
                         type="text"
                         value={tagInput}
                         onChange={(event) => setTagInput(event.target.value)}
@@ -2146,6 +2157,8 @@ const ManageHistoryDictionary: React.FC = () => {
                       </button>
                     </div>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={relatedUnitId}
                       onChange={(event) => setRelatedUnitId(event.target.value)}

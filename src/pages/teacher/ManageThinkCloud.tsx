@@ -1,3 +1,5 @@
+import TeacherSubNavigation from "./components/TeacherSubNavigation";
+import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
@@ -597,6 +599,8 @@ const ManageThinkCloud: React.FC = () => {
             주제
           </label>
           <input
+            lang="ko"
+            inputMode="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="예: 조선 후기 사회 변화를 한 단어로 표현해 보세요"
@@ -609,6 +613,8 @@ const ManageThinkCloud: React.FC = () => {
             설명
           </label>
           <textarea
+            lang="ko"
+            inputMode="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
@@ -726,7 +732,7 @@ const ManageThinkCloud: React.FC = () => {
 
           <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 md:col-span-2">
             <span className="font-bold text-gray-700">최대 입력 길이</span>
-            <input
+            <NumericInput
               type="number"
               min={5}
               max={100}
@@ -911,157 +917,108 @@ const ManageThinkCloud: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
-        {mobileSessionListOpen && (
-          <button
-            type="button"
-            className="teacher-mobile-drawer-backdrop fixed inset-0 z-40 bg-black/45 lg:hidden"
-            onClick={() => setMobileSessionListOpen(false)}
-            aria-label="생각모아 목록 닫기"
-          />
-        )}
-
-        <aside
-          className={`teacher-mobile-drawer fixed right-0 z-50 w-[82%] max-w-[320px] shrink-0 transition-transform duration-300 motion-reduce:transition-none lg:static lg:z-auto lg:h-auto lg:w-72 lg:max-w-none lg:translate-x-0 ${
-            mobileSessionListOpen ? "translate-x-0" : "translate-x-full"
-          }`}
-          aria-label="생각모아 목록"
-        >
-          <div className="flex h-full flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl lg:rounded-xl lg:shadow-sm">
-            <div className="teacher-mobile-drawer-heading flex items-center justify-between border-b border-gray-100 p-5">
-              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
-                <i
-                  className="fas fa-cloud text-blue-500"
-                  aria-hidden="true"
-                ></i>
-                <span>생각모아 목록</span>
-              </h1>
+      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+        <TeacherSubNavigation
+          title="생각모아"
+          activeLabel={
+            isCreateMode ? "새 주제" : selectedSession?.title || "주제 선택"
+          }
+          open={mobileSessionListOpen}
+          onOpenChange={setMobileSessionListOpen}
+          actions={
+            canEdit ? (
               <button
                 type="button"
-                onClick={() => setMobileSessionListOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 lg:hidden"
-                aria-label="생각모아 목록 닫기"
+                onClick={openCreateMode}
+                className="min-h-11 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700"
               >
-                <i className="fas fa-times text-lg" aria-hidden="true"></i>
+                + 새 주제
               </button>
+            ) : undefined
+          }
+        >
+          <div className="border-b border-gray-100 p-4">
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                aria-label="학년 필터"
+                value={filterGrade}
+                onChange={(e) => setFilterGrade(e.target.value)}
+                className="min-h-11 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-sm font-bold text-gray-700 focus-visible:outline-blue-500"
+              >
+                <option value="all">전체 학년</option>
+                {gradeOptions.map((grade) => (
+                  <option key={grade.value} value={grade.value}>
+                    {grade.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="반 필터"
+                value={filterClass}
+                onChange={(e) => setFilterClass(e.target.value)}
+                className="min-h-11 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-sm font-bold text-gray-700 focus-visible:outline-blue-500"
+              >
+                <option value="all">전체 반</option>
+                {classOptions.map((cls) => (
+                  <option key={cls.value} value={cls.value}>
+                    {cls.label}
+                  </option>
+                ))}
+              </select>
             </div>
+          </div>
 
-            {canEdit && (
-              <div className="teacher-mobile-drawer-heading border-b border-gray-100 p-4 lg:hidden">
+          <div className="flex flex-col gap-1">
+            {filteredSessions.length === 0 && (
+              <p className="p-4 text-sm font-bold text-gray-500">
+                저장된 주제가 없습니다.
+              </p>
+            )}
+            {filteredSessions.map((session) => {
+              const isSelected =
+                !isCreateMode && selectedSessionId === session.id;
+              const isActive =
+                session.id === activeSessionId && session.status === "active";
+              return (
                 <button
                   type="button"
-                  onClick={openCreateMode}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+                  key={session.id}
+                  onClick={() => selectSession(session.id)}
+                  className={`teacher-settings-section flex-col !items-stretch !gap-1${isSelected ? " is-active" : ""}`}
+                  aria-current={isSelected ? "page" : undefined}
                 >
-                  <i className="fas fa-plus text-sm" aria-hidden="true"></i>
-                  <span>새 생각모아 만들기</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 break-words">{session.title}</p>
+                    {isActive && (
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
+                        LIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 break-words">
+                    {formatGradeLabel(
+                      session.targetGrade,
+                      session.targetGradeLabel,
+                    )}{" "}
+                    {formatClassLabel(
+                      session.targetClass,
+                      session.targetClassLabel,
+                    )}{" "}
+                    · {session.description || "설명 없음"}
+                  </p>
                 </button>
-              </div>
-            )}
-
-            <div className="teacher-mobile-drawer-heading border-b border-gray-100 p-4">
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  aria-label="학년 필터"
-                  value={filterGrade}
-                  onChange={(e) => setFilterGrade(e.target.value)}
-                  className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
-                >
-                  <option value="all">전체 학년</option>
-                  {gradeOptions.map((grade) => (
-                    <option key={grade.value} value={grade.value}>
-                      {grade.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label="반 필터"
-                  value={filterClass}
-                  onChange={(e) => setFilterClass(e.target.value)}
-                  className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
-                >
-                  <option value="all">전체 반</option>
-                  {classOptions.map((cls) => (
-                    <option key={cls.value} value={cls.value}>
-                      {cls.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:max-h-[60vh]">
-              {filteredSessions.length === 0 && (
-                <p className="p-4 text-sm font-bold text-gray-500">
-                  저장된 주제가 없습니다.
-                </p>
-              )}
-              {filteredSessions.map((session) => {
-                const isSelected =
-                  !isCreateMode && selectedSessionId === session.id;
-                const isActive =
-                  session.id === activeSessionId && session.status === "active";
-                return (
-                  <button
-                    type="button"
-                    key={session.id}
-                    onClick={() => selectSession(session.id)}
-                    className={`w-full px-4 py-3 text-left border-l-4 transition ${isSelected ? "bg-blue-50 text-blue-700 border-blue-600" : "text-gray-700 border-transparent hover:bg-gray-50"}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-bold truncate">{session.title}</p>
-                      {isActive && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
-                          LIVE
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1 truncate">
-                      {formatGradeLabel(
-                        session.targetGrade,
-                        session.targetGradeLabel,
-                      )}{" "}
-                      {formatClassLabel(
-                        session.targetClass,
-                        session.targetClassLabel,
-                      )}{" "}
-                      · {session.description || "설명 없음"}
-                    </p>
-                  </button>
-                );
-              })}
-            </nav>
+              );
+            })}
           </div>
-        </aside>
+        </TeacherSubNavigation>
 
-        <div className="flex-1">
-          <div className="think-cloud-desktop-create-action mb-4 justify-end">
-            <button
-              onClick={openCreateMode}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm"
-            >
-              + 새 주제
-            </button>
-          </div>
+        <div className="teacher-sub-content">
           {isCreateMode ? renderCreatePanel() : renderDetailPanel()}
           {message && (
             <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>
           )}
         </div>
       </main>
-
-      <button
-        type="button"
-        onClick={() => setMobileSessionListOpen(true)}
-        className={`fixed z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 lg:hidden ${
-          canEdit ? "teacher-floating-action-above-patch" : "bottom-6 right-6"
-        }`}
-        aria-label="생각모아 목록 열기"
-        aria-expanded={mobileSessionListOpen}
-        title="생각모아 목록"
-      >
-        <i className="fas fa-list text-lg" aria-hidden="true"></i>
-      </button>
 
       {cloudModalOpen && (
         <div

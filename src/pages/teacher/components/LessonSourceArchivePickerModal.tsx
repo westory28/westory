@@ -92,6 +92,8 @@ const LessonSourceArchivePickerModal: React.FC<
                 검색
               </span>
               <input
+                lang="ko"
+                inputMode="text"
                 ref={searchInputRef}
                 value={searchValue}
                 onChange={(event) => onSearchChange(event.target.value)}

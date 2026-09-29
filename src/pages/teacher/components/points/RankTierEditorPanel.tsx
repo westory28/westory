@@ -1,3 +1,4 @@
+import NumericInput from "../../../../components/common/NumericInput";
 import React, { useMemo } from "react";
 import PointRankBadge from "../../../../components/common/PointRankBadge";
 import {
@@ -345,7 +346,7 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                               <div className="mb-2 text-sm font-bold text-gray-700">
                                 {POINT_RANK_FIELD_LABELS.tierThreshold}
                               </div>
-                              <input
+                              <NumericInput
                                 type="number"
                                 min="0"
                                 value={tier.minPoints}
@@ -425,6 +426,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                                 {POINT_RANK_FIELD_LABELS.tierLabel}
                               </div>
                               <input
+                                lang="ko"
+                                inputMode="text"
                                 value={
                                   draftThemes?.[activeThemeId]?.tiers?.[
                                     tier.code
@@ -450,6 +453,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                                 {POINT_RANK_FIELD_LABELS.tierShortLabel}
                               </div>
                               <input
+                                lang="ko"
+                                inputMode="text"
                                 value={
                                   draftThemes?.[activeThemeId]?.tiers?.[
                                     tier.code
@@ -481,6 +486,8 @@ const RankTierEditorPanel: React.FC<RankTierEditorPanelProps> = ({
                               {POINT_RANK_FIELD_LABELS.tierDescription}
                             </div>
                             <textarea
+                              lang="ko"
+                              inputMode="text"
                               rows={3}
                               value={
                                 draftThemes?.[activeThemeId]?.tiers?.[tier.code]

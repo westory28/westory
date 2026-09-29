@@ -449,6 +449,8 @@ const OrderDetailPanel: React.FC<{
             처리 메모
           </label>
           <textarea
+            lang="ko"
+            inputMode="text"
             value={orderMemo}
             onChange={(event) => onOrderMemoChange(event.target.value)}
             rows={2}

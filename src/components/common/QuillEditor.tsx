@@ -289,6 +289,8 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
   if (loadFailed) {
     return (
       <textarea
+        lang="ko"
+        inputMode="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full resize-y border border-gray-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"

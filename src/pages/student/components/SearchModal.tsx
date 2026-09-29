@@ -141,6 +141,8 @@ const SearchModal: React.FC<SearchModalProps> = ({
         <div className="border-b border-gray-100 px-5 py-4 sm:px-6">
           <div className="relative">
             <input
+              lang="ko"
+              inputMode="text"
               type="text"
               value={q}
               onChange={(event) => setQ(event.target.value)}

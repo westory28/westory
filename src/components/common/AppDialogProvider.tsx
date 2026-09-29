@@ -310,6 +310,8 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                   </label>
                   {dialog.multiline ? (
                     <textarea
+                      lang="ko"
+                      inputMode="text"
                       id={promptInputId}
                       ref={(element) => {
                         promptInputRef.current = element;
@@ -326,6 +328,7 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                     />
                   ) : (
                     <input
+                      lang="ko"
                       id={promptInputId}
                       ref={(element) => {
                         promptInputRef.current = element;
@@ -342,7 +345,7 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                         }
                       }}
                       maxLength={dialog.maxLength}
-                      inputMode={dialog.inputMode}
+                      inputMode={dialog.inputMode ?? "text"}
                       placeholder={dialog.placeholder}
                       className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     />

@@ -1,3 +1,4 @@
+import NumericInput from "../../../components/common/NumericInput";
 import React, { useEffect, useState } from "react";
 import "./examGradingPlan.css";
 import KoreanTextInput from "./KoreanTextInput";
@@ -503,7 +504,8 @@ const ExamGradingPlan: React.FC = () => {
                                   <span>{item.ratio}% 반영</span>
                                 </div>
                               </div>
-                              <input
+                              <NumericInput
+                                allowEmpty
                                 type="number"
                                 min={0}
                                 max={maxScore}
@@ -839,13 +841,13 @@ const ExamGradingPlan: React.FC = () => {
                   <label className="grading-editor__field">
                     <span>만점</span>
                     <span className="grading-editor__number">
-                      <input
+                      <NumericInput
                         type="number"
                         inputMode="decimal"
                         min="0"
                         step="any"
                         placeholder="만점"
-                        value={item.maxScore || ""}
+                        value={item.maxScore}
                         onChange={(e) =>
                           handleItemChange(
                             idx,
@@ -860,14 +862,14 @@ const ExamGradingPlan: React.FC = () => {
                   <label className="grading-editor__field">
                     <span>반영 비율</span>
                     <span className="grading-editor__number">
-                      <input
+                      <NumericInput
                         type="number"
                         inputMode="decimal"
                         min="0"
                         max="100"
                         step="any"
                         placeholder="%"
-                        value={item.ratio || ""}
+                        value={item.ratio}
                         onChange={(e) =>
                           handleItemChange(idx, "ratio", Number(e.target.value))
                         }

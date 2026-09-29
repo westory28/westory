@@ -1,3 +1,4 @@
+import NumericInput from "../../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import WisHallOfFamePositionEditor, {
@@ -1105,7 +1106,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     <span className="text-xs font-bold text-slate-600">
                       전교 공개 인원
                     </span>
-                    <input
+                    <NumericInput
                       type="number"
                       min={4}
                       max={20}
@@ -1136,7 +1137,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     <span className="text-xs font-bold text-slate-600">
                       학급 공개 인원
                     </span>
-                    <input
+                    <NumericInput
                       type="number"
                       min={4}
                       max={20}

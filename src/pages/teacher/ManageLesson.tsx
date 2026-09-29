@@ -3274,78 +3274,66 @@ const ManageLesson: React.FC = () => {
     const isExpanded = expandedIds.has(node.id);
     const isSelected = selectedNodeId === node.id;
     const isLeaf = level >= 2;
-    const canManageUnit = level <= 2;
+    const canManageUnit = canEdit && level <= 2;
     return (
-      <div
-        style={{ marginLeft: level > 0 ? 16 : 0 }}
-        className="mb-1 select-none"
-      >
-        <div
-          className={`group flex cursor-pointer items-start rounded p-2 transition-colors ${isSelected ? "bg-blue-50 font-bold text-blue-600" : "hover:bg-gray-50"}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            handleNodeClick(node, level);
-          }}
-        >
-          <div className="mr-1 w-6 text-center text-gray-400">
+      <div>
+        <div className="teacher-sub-tree-row">
+          <button
+            type="button"
+            className={`teacher-settings-section${isSelected ? " is-active" : ""}`}
+            aria-current={isSelected ? "page" : undefined}
+            aria-expanded={!isLeaf ? isExpanded : undefined}
+            onClick={() => handleNodeClick(node, level)}
+            title={node.title}
+          >
+            <i
+              className={`fas ${isLeaf ? "fa-file-alt" : isExpanded ? "fa-folder-open" : "fa-folder"}`}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 break-words">{node.title}</span>
             {!isLeaf && (
               <i
-                className={`fas fa-caret-${isExpanded ? "down" : "right"} transition-transform`}
-              ></i>
+                className={`fas fa-caret-${isExpanded ? "down" : "right"}`}
+                aria-hidden="true"
+              />
             )}
-          </div>
-          <div className="mr-2 text-yellow-500">
-            <i
-              className={`fas ${isLeaf ? "fa-file-alt text-gray-400" : isExpanded ? "fa-folder-open" : "fa-folder"}`}
-            ></i>
-          </div>
-          <div className="min-w-0 flex-1">
-            <span
-              className="block truncate text-sm leading-5 group-hover:whitespace-normal group-hover:break-words"
-              title={node.title}
-            >
-              {node.title}
-            </span>
-          </div>
-          {canManageUnit && (
-            <div className="pointer-events-none ml-2 flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+          </button>
+          {canManageUnit && (isSelected || isExpanded) && (
+            <div className="teacher-sub-tree-actions">
               {!isLeaf && (
                 <button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openModal("child", node);
-                  }}
-                  className="rounded p-1 text-green-600 hover:bg-green-100"
+                  type="button"
+                  onClick={() => openModal("child", node)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded text-green-600 hover:bg-green-100"
+                  aria-label={`${node.title} 하위 항목 추가`}
                   title="하위 항목 추가"
                 >
-                  <i className="fas fa-plus text-xs"></i>
+                  <i className="fas fa-plus text-xs" aria-hidden="true" />
                 </button>
               )}
               <button
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openModal("rename", node);
-                }}
-                className="rounded p-1 text-blue-600 hover:bg-blue-100"
+                type="button"
+                onClick={() => openModal("rename", node)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded text-blue-600 hover:bg-blue-100"
+                aria-label={`${node.title} 이름 수정`}
                 title="이름 수정"
               >
-                <i className="fas fa-pen text-xs"></i>
+                <i className="fas fa-pen text-xs" aria-hidden="true" />
               </button>
               <button
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleDeleteNode(node);
-                }}
-                className="rounded p-1 text-red-600 hover:bg-red-100"
+                type="button"
+                onClick={() => handleDeleteNode(node)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded text-red-600 hover:bg-red-100"
+                aria-label={`${node.title} 삭제`}
                 title="삭제"
               >
-                <i className="fas fa-trash text-xs"></i>
+                <i className="fas fa-trash text-xs" aria-hidden="true" />
               </button>
             </div>
           )}
         </div>
         {!isLeaf && isExpanded && node.children?.length > 0 && (
-          <div className="mt-1">
+          <div className="teacher-sub-tree-children">
             {node.children.map((child) => (
               <TreeCard key={child.id} node={child} level={level + 1} />
             ))}
@@ -3356,8 +3344,20 @@ const ManageLesson: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <main className="relative flex flex-1 flex-col px-4 py-6 lg:px-6 xl:px-8">
+    <div className="teacher-sub-workspace teacher-sub-workspace--page">
+      <LessonTreePanel
+        treeData={treeData}
+        sidebarOpen={sidebarOpen}
+        onSidebarOpenChange={setSidebarOpen}
+        activeLabel={selectedNodeTitle}
+        canEdit={canEdit}
+        onOpenRootModal={() => openModal("root")}
+        onSaveTree={() => void saveTree(treeData, false)}
+        renderTreeNode={(node, level) => (
+          <TreeCard key={node.id} node={node} level={level} />
+        )}
+      />
+      <main className="teacher-sub-content">
         <div className="mb-4 flex items-center">
           <h1 className="text-xl font-bold text-gray-800 lg:text-2xl">
             <i className="fas fa-sitemap mr-2 text-blue-500"></i>수업 자료 관리
@@ -3368,17 +3368,7 @@ const ManageLesson: React.FC = () => {
             이 화면은 조회 전용입니다. 편집과 저장은 관리자만 가능합니다.
           </div>
         )}
-        <div className="flex flex-1 flex-col gap-6 pb-4 lg:flex-row">
-          <LessonTreePanel
-            treeData={treeData}
-            sidebarOpen={sidebarOpen}
-            onCloseSidebar={() => setSidebarOpen(false)}
-            onOpenRootModal={() => openModal("root")}
-            onSaveTree={() => void saveTree(treeData, false)}
-            renderTreeNode={(node, level) => (
-              <TreeCard key={node.id} node={node} level={level} />
-            )}
-          />
+        <div className="flex min-w-0 flex-col pb-4">
           <div className="relative flex min-h-[600px] min-w-0 flex-1 flex-col rounded-xl border border-gray-200 bg-white shadow-sm">
             {!selectedNodeId ? (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-white p-6 text-center text-gray-400">
@@ -3387,10 +3377,6 @@ const ManageLesson: React.FC = () => {
                 </div>
                 <p className="text-lg font-bold text-gray-600">
                   수업 자료를 선택해 주세요.
-                </p>
-                <p className="mt-2 text-sm">
-                  왼쪽 트리에서 말단 수업 항목을 선택하면 편집을 시작할 수
-                  있습니다.
                 </p>
               </div>
             ) : (
@@ -3542,17 +3528,6 @@ const ManageLesson: React.FC = () => {
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(true)}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5.75rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)] lg:hidden"
-          aria-label="수업 자료 목차 열기"
-          aria-controls="lesson-tree-drawer"
-          aria-expanded={sidebarOpen}
-          title="목차"
-        >
-          <i className="fas fa-list text-lg" aria-hidden="true"></i>
-        </button>
       </main>
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -3565,6 +3540,8 @@ const ManageLesson: React.FC = () => {
                   : "이름 수정"}
             </h3>
             <input
+              lang="ko"
+              inputMode="text"
               type="text"
               autoFocus
               className="mb-6 w-full rounded-lg border-2 border-gray-200 p-3 text-lg font-bold outline-none focus:border-blue-500"

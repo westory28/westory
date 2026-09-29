@@ -184,6 +184,8 @@ const SettingsAccess: React.FC = () => {
 
         <div className="mt-4">
           <input
+            lang="ko"
+            inputMode="text"
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

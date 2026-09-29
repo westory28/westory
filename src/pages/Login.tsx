@@ -2129,6 +2129,8 @@ const Login: React.FC = () => {
                   이름
                 </label>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   type="text"
                   value={profileForm.name}
                   maxLength={4}

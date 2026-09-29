@@ -18,7 +18,9 @@ export type SchedulePeriodValue =
   | (typeof SCHEDULE_PERIOD_OPTIONS)[number]["value"]
   | typeof SCHEDULE_ALL_DAY_PERIOD_VALUE;
 
-export const DEFAULT_SCHEDULE_PERIOD: SchedulePeriodValue = "period1";
+const DEFAULT_SCHEDULE_PERIOD_OPTION = SCHEDULE_PERIOD_OPTIONS[2];
+export const DEFAULT_SCHEDULE_PERIOD: SchedulePeriodValue =
+  DEFAULT_SCHEDULE_PERIOD_OPTION.value;
 
 const PERIOD_OPTION_BY_VALUE = new Map(
   [
@@ -35,8 +37,8 @@ const LEGACY_PERIOD_VALUE_BY_LABEL = new Map<string, SchedulePeriodValue>([
   [SCHEDULE_ALL_DAY_PERIOD_VALUE, SCHEDULE_ALL_DAY_PERIOD_VALUE],
   ["\uD558\uB8E8\uC885\uC77C", SCHEDULE_ALL_DAY_PERIOD_VALUE],
   ...SCHEDULE_PERIOD_OPTIONS.flatMap((option) => [
-    [option.label, option.value],
-    [option.value, option.value],
+    [option.label, option.value] as const,
+    [option.value, option.value] as const,
   ]),
 ]);
 
@@ -49,7 +51,10 @@ export const normalizeSchedulePeriod = (
 };
 
 export const getSchedulePeriodLabel = (value: unknown) => {
-  return PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)).label;
+  return (
+    PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)) ??
+    DEFAULT_SCHEDULE_PERIOD_OPTION
+  ).label;
 };
 
 export const getSchedulePeriodRangeLabel = (
@@ -72,7 +77,10 @@ export const getSchedulePeriodRangeLabel = (
 };
 
 export const getSchedulePeriodOrder = (value: unknown) => {
-  return PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)).order;
+  return (
+    PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)) ??
+    DEFAULT_SCHEDULE_PERIOD_OPTION
+  ).order;
 };
 
 export const compareSchedulePeriod = (
@@ -88,6 +96,28 @@ export const compareSchedulePeriod = (
     "ko",
   );
 };
+
+const getCalendarEventPeriodFields = (value: unknown) => {
+  const props =
+    value && typeof value === "object" && "extendedProps" in value
+      ? value.extendedProps
+      : null;
+  if (!props || typeof props !== "object") return {};
+  return {
+    startPeriod: "startPeriod" in props ? props.startPeriod : undefined,
+    period: "period" in props ? props.period : undefined,
+    title: "title" in props ? String(props.title || "") : "",
+  };
+};
+
+export const compareFullCalendarSchedulePeriod = (
+  left: unknown,
+  right: unknown,
+) =>
+  compareSchedulePeriod(
+    getCalendarEventPeriodFields(left),
+    getCalendarEventPeriodFields(right),
+  );
 
 export const compareCalendarSchedule = <
   T extends {

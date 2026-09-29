@@ -1,3 +1,4 @@
+import NumericInput from "./NumericInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import WisHallOfFameLeaderboardList from "./WisHallOfFameLeaderboardList";
 import WisHallOfFamePodium from "./WisHallOfFamePodium";
@@ -506,7 +507,7 @@ const WisHallOfFamePositionEditor: React.FC<
             가로 위치
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <input
+            <NumericInput
               type="number"
               min={0}
               max={100}
@@ -530,7 +531,7 @@ const WisHallOfFamePositionEditor: React.FC<
             세로 위치
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <input
+            <NumericInput
               type="number"
               min={0}
               max={100}
@@ -554,7 +555,7 @@ const WisHallOfFamePositionEditor: React.FC<
             넓이
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <input
+            <NumericInput
               type="number"
               min={getWidthBounds(selectedKey, deviceMode).min}
               max={getWidthBounds(selectedKey, deviceMode).max}

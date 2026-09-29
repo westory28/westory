@@ -1,4 +1,6 @@
+import NumericInput from "../../../../components/common/NumericInput";
 import React from "react";
+import TeacherSubNavigation from "../TeacherSubNavigation";
 import {
   POINT_POLICY_FIELD_HELPERS,
   POINT_POLICY_FIELD_LABELS,
@@ -19,7 +21,7 @@ interface PointPolicyTabProps {
 interface PolicySectionItem {
   id: string;
   label: string;
-  description: string;
+  iconClassName: string;
 }
 
 interface PolicyToggleProps {
@@ -44,17 +46,17 @@ const policySections: PolicySectionItem[] = [
   {
     id: "policy-auto-reward",
     label: "기본 자동 지급",
-    description: "기본 행동 보상",
+    iconClassName: "fas fa-coins",
   },
   {
     id: "policy-bonus",
     label: "조건부 보너스",
-    description: "추가 조건 달성 보상",
+    iconClassName: "fas fa-gift",
   },
   {
     id: "policy-control",
     label: "운영 제어",
-    description: "운영 관련 설정",
+    iconClassName: "fas fa-sliders-h",
   },
 ];
 
@@ -150,7 +152,7 @@ const AmountField = ({
   <label className="block rounded-lg border border-slate-200 bg-white p-4">
     <span className="block text-sm font-extrabold text-slate-900">{title}</span>
     <span className="mt-3 flex min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-      <input
+      <NumericInput
         type="number"
         min={min}
         value={value}
@@ -262,6 +264,11 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
     policySections[0].id,
   );
 
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const activeSection = policySections.find(
+    (item) => item.id === activeSectionId,
+  )!;
+
   return (
     <form
       onSubmit={(event) => {
@@ -352,46 +359,34 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside
-          className="lg:sticky lg:top-4 lg:self-start"
-          aria-label="운영 정책 하위 메뉴"
+      <div className="teacher-sub-workspace">
+        <TeacherSubNavigation
+          title="위스 운영 정책"
+          activeLabel={activeSection.label}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
         >
-          <nav className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            {policySections.map((item) => {
-              const isActive = activeSectionId === item.id;
+          {policySections.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setActiveSectionId(item.id);
+                setMenuOpen(false);
+              }}
+              aria-current={activeSectionId === item.id ? "page" : undefined}
+              className={`teacher-settings-section${activeSectionId === item.id ? " is-active" : ""}`}
+            >
+              <i
+                className={`${item.iconClassName} w-5 shrink-0 text-center`}
+                aria-hidden="true"
+              ></i>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </TeacherSubNavigation>
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveSectionId(item.id)}
-                  aria-current={isActive ? "page" : undefined}
-                  className={[
-                    "block w-full border-b border-slate-200 px-4 py-4 text-left transition last:border-b-0 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400",
-                    isActive
-                      ? "border-l-4 border-l-blue-600 bg-blue-50 text-blue-700"
-                      : "border-l-4 border-l-transparent text-slate-700 hover:bg-slate-50 focus:bg-slate-50",
-                  ].join(" ")}
-                >
-                  <span className="block text-sm font-extrabold">
-                    {item.label}
-                  </span>
-                  <span
-                    className={[
-                      "mt-1 block text-xs leading-5",
-                      isActive ? "text-blue-600" : "text-slate-500",
-                    ].join(" ")}
-                  >
-                    {item.description}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-
-        <div className="space-y-5">
+        <div className="teacher-sub-content space-y-5">
           {activeSectionId === "policy-auto-reward" && (
             <SectionPanel
               id="policy-auto-reward"

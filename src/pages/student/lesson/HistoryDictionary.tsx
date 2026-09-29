@@ -502,6 +502,8 @@ const HistoryDictionary: React.FC = () => {
                   aria-hidden="true"
                 ></i>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   type="search"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
@@ -633,6 +635,8 @@ const HistoryDictionary: React.FC = () => {
                   단어
                 </span>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   type="text"
                   value={word}
                   onChange={(event) => {
@@ -650,6 +654,8 @@ const HistoryDictionary: React.FC = () => {
                   내가 이해한 뜻
                 </span>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   value={definition}
                   onChange={(event) => setDefinition(event.target.value)}
                   maxLength={1200}
@@ -835,6 +841,8 @@ const HistoryDictionary: React.FC = () => {
             </div>
 
             <textarea
+              lang="ko"
+              inputMode="text"
               value={memo}
               onChange={(event) => setMemo(event.target.value)}
               maxLength={240}

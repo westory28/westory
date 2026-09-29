@@ -339,6 +339,8 @@ const StudentHistoryDictionaryController: React.FC = () => {
                     단어
                   </span>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     ref={inputRef}
                     type="text"
                     value={word}
@@ -353,6 +355,8 @@ const StudentHistoryDictionaryController: React.FC = () => {
                     내가 이해한 뜻풀이
                   </span>
                   <textarea
+                    lang="ko"
+                    inputMode="text"
                     value={definition}
                     onChange={(event) => setDefinition(event.target.value)}
                     maxLength={1200}
@@ -537,6 +541,8 @@ const StudentHistoryDictionaryController: React.FC = () => {
             </div>
 
             <textarea
+              lang="ko"
+              inputMode="text"
               value={memo}
               onChange={(event) => setMemo(event.target.value)}
               maxLength={240}

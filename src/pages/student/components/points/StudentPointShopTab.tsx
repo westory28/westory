@@ -108,6 +108,8 @@ const StudentPointShopTab: React.FC<StudentPointShopTabProps> = ({
                   {`${formatWisAmount(selectedProduct.price)} 구매 요청을 보냅니다.`}
                 </div>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   value={purchaseMemo}
                   onChange={(event) => onPurchaseMemoChange(event.target.value)}
                   rows={3}

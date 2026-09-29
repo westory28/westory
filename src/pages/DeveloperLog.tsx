@@ -927,6 +927,8 @@ const DeveloperLog: React.FC = () => {
                   제목
                 </label>
                 <input
+                  lang="ko"
+                  inputMode="text"
                   id="developer-log-title"
                   value={form.title}
                   onChange={(event) =>
@@ -970,6 +972,8 @@ const DeveloperLog: React.FC = () => {
                   요약
                 </label>
                 <textarea
+                  lang="ko"
+                  inputMode="text"
                   id="developer-log-summary"
                   value={form.summary}
                   onChange={(event) =>
@@ -1288,6 +1292,8 @@ const DeveloperLog: React.FC = () => {
                     aria-hidden="true"
                   ></i>
                   <input
+                    lang="ko"
+                    inputMode="text"
                     value={searchText}
                     onChange={(event) => setSearchText(event.target.value)}
                     placeholder="제목, 내용을 검색하세요"

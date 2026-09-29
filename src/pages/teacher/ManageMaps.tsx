@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import NumericInput from "../../components/common/NumericInput";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   deleteDoc,
@@ -16,7 +17,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { InlineLoading } from "../../components/common/LoadingState";
-import MapSidebar from "../../components/common/MapSidebar";
+import TeacherMapNavigation from "./components/TeacherMapNavigation";
 import MapViewer from "../../components/common/MapViewer";
 import { useAuth } from "../../contexts/AuthContext";
 import { db, getFirebaseStorage } from "../../lib/firebase";
@@ -1488,8 +1489,8 @@ const ManageMaps: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 p-6 lg:flex-row lg:p-10">
-        <MapSidebar
+      <main className="teacher-sub-workspace teacher-sub-workspace--page flex-1">
+        <TeacherMapNavigation
           heading="지도"
           items={sidebarItems}
           selectedId={`map-group:${currentDisplayGroup?.key || ""}`}
@@ -1512,7 +1513,7 @@ const ManageMaps: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsReorderMode((prev) => !prev)}
-              className={`inline-flex min-w-[44px] items-center justify-center rounded-lg border px-2 py-1 text-xs font-extrabold leading-none transition ${
+              className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border px-2 py-1 text-xs font-extrabold leading-none transition ${
                 isReorderMode
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-transparent text-gray-400 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-700"
@@ -1536,7 +1537,7 @@ const ManageMaps: React.FC = () => {
                     displayGroups[0]?.key ===
                     item.id.replace(/^map-group:/u, "")
                   }
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-30"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-30"
                   aria-label={`${item.title} 위로 이동`}
                   title="위로 이동"
                 >
@@ -1549,7 +1550,7 @@ const ManageMaps: React.FC = () => {
                     displayGroups[displayGroups.length - 1]?.key ===
                     item.id.replace(/^map-group:/u, "")
                   }
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-30"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-white disabled:opacity-30"
                   aria-label={`${item.title} 아래로 이동`}
                   title="아래로 이동"
                 >
@@ -1563,7 +1564,7 @@ const ManageMaps: React.FC = () => {
                   e.stopPropagation();
                   handleOpenTabRename(item.id.replace(/^map-group:/u, ""));
                 }}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-gray-200 hover:bg-white hover:text-gray-700"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-gray-200 hover:bg-white hover:text-gray-700"
                 aria-label={`${item.title} 탭 이름 설정`}
                 title="탭 이름 설정"
               >
@@ -1574,7 +1575,7 @@ const ManageMaps: React.FC = () => {
           reorderMode={isReorderMode}
         />
 
-        <section className="min-w-0 flex-1 space-y-5 sm:space-y-6">
+        <section className="teacher-sub-content space-y-5 sm:space-y-6">
           {loading ? (
             <InlineLoading
               message="지도 자료를 불러오는 중입니다."
@@ -1716,6 +1717,8 @@ const ManageMaps: React.FC = () => {
                       지도 탭
                     </label>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={draft.tabGroup || ""}
                       onChange={(e) =>
@@ -1733,6 +1736,8 @@ const ManageMaps: React.FC = () => {
                       지도 제목
                     </label>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={draft.title}
                       onChange={(e) =>
@@ -1750,6 +1755,8 @@ const ManageMaps: React.FC = () => {
                       분류
                     </label>
                     <input
+                      lang="ko"
+                      inputMode="text"
                       type="text"
                       value={draft.category}
                       onChange={(e) =>
@@ -1781,7 +1788,7 @@ const ManageMaps: React.FC = () => {
                     <label className="mb-1 block text-xs font-bold text-gray-500">
                       지도 순서
                     </label>
-                    <input
+                    <NumericInput
                       type="number"
                       value={draft.sortOrder}
                       onChange={(e) =>
@@ -1800,6 +1807,8 @@ const ManageMaps: React.FC = () => {
                     설명
                   </label>
                   <textarea
+                    lang="ko"
+                    inputMode="text"
                     value={draft.description}
                     onChange={(e) =>
                       handleDraftChange("description", e.target.value)
@@ -1913,6 +1922,8 @@ const ManageMaps: React.FC = () => {
                         구글 지도 검색어
                       </label>
                       <input
+                        lang="ko"
+                        inputMode="text"
                         type="text"
                         value={draft.googleQuery || ""}
                         onChange={(e) =>
@@ -1976,6 +1987,8 @@ const ManageMaps: React.FC = () => {
                                   p.{region.page}
                                 </div>
                                 <input
+                                  lang="ko"
+                                  inputMode="text"
                                   type="text"
                                   value={region.label}
                                   onChange={(e) =>
@@ -2281,6 +2294,8 @@ const ManageMaps: React.FC = () => {
 
                     <div className="mt-3 flex flex-col gap-2 md:flex-row">
                       <input
+                        lang="ko"
+                        inputMode="text"
                         type="text"
                         value={sectionTagInputs[section.id] || ""}
                         onChange={(e) =>
@@ -2429,6 +2444,8 @@ const ManageMaps: React.FC = () => {
                 지도 탭
               </label>
               <input
+                lang="ko"
+                inputMode="text"
                 type="text"
                 value={tabRenameValue}
                 onChange={(e) => setTabRenameValue(e.target.value)}

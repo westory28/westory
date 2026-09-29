@@ -1,3 +1,4 @@
+import NumericInput from "../../../../components/common/NumericInput";
 import React, { useMemo, useState } from "react";
 import "../teacher-list-controls.css";
 import PointRankBadge from "../../../../components/common/PointRankBadge";
@@ -145,6 +146,8 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               ))}
             </select>
             <input
+              lang="ko"
+              inputMode="text"
               aria-label="학생 이름 검색"
               value={nameSearch}
               onChange={(event) => onNameSearchChange(event.target.value)}
@@ -364,7 +367,8 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                     <div className="mb-2 text-sm font-bold text-gray-700">
                       수량
                     </div>
-                    <input
+                    <NumericInput
+                      allowEmpty
                       type="number"
                       min="1"
                       value={amount}
@@ -385,6 +389,8 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                       사유
                     </div>
                     <textarea
+                      lang="ko"
+                      inputMode="text"
                       value={reason}
                       onChange={(event) => onReasonChange(event.target.value)}
                       rows={4}
