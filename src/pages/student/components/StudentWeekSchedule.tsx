@@ -203,24 +203,6 @@ const StudentWeekSchedule: React.FC<Props> = ({
           <NavigationIcon name="calendar" />
           이번 주 학사 일정
         </h2>
-        {attendanceChecked ? (
-          <span
-            className="student-week-attendance is-complete"
-            title={attendanceDescription || "오늘 출석 완료"}
-          >
-            출석 완료
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="student-week-attendance"
-            disabled={attendanceLoading}
-            onClick={onAttendanceCheck}
-            title={attendanceDescription || "출석 체크"}
-          >
-            {attendanceLoading ? "처리 중…" : "출석 체크"}
-          </button>
-        )}
       </div>
       <div className="student-week-schedule__toolbar">
         <span
@@ -291,6 +273,24 @@ const StudentWeekSchedule: React.FC<Props> = ({
             >
               <NavigationIcon name="calendar" />
             </Link>
+            {attendanceChecked ? (
+              <span
+                className="student-week-attendance is-complete"
+                title={attendanceDescription || "오늘 출석 완료"}
+              >
+                출석 완료
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="student-week-attendance"
+                disabled={attendanceLoading}
+                onClick={onAttendanceCheck}
+                title={attendanceDescription || "출석 체크"}
+              >
+                {attendanceLoading ? "처리 중…" : "출석 체크"}
+              </button>
+            )}
           </div>
         </div>
       </div>
