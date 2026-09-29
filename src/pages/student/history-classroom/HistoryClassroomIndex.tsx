@@ -230,27 +230,27 @@ const getStatusMeta = (status: StudentHistoryClassroomStatus) => {
   }
   if (status === "retry") {
     return {
-      label: "다시 도전",
-      badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
+      label: "다시 도전 가능",
+      badgeClassName: "border-blue-200 bg-blue-50 text-blue-700",
       buttonClassName: "bg-blue-600 text-white hover:bg-blue-700",
     };
   }
   if (status === "cooldown") {
     return {
-      label: "잠시 쉬는 중",
-      badgeClassName: "border-slate-200 bg-slate-50 text-slate-600",
-      buttonClassName: "bg-slate-100 text-slate-500",
+      label: "재도전 대기",
+      badgeClassName: "border-amber-300 bg-amber-50 text-amber-800",
+      buttonClassName: "bg-amber-100 text-amber-800",
     };
   }
   if (status === "closed") {
     return {
-      label: "기간 종료",
+      label: "응시 기간 종료",
       badgeClassName: "border-slate-200 bg-slate-50 text-slate-500",
       buttonClassName: "bg-slate-100 text-slate-500",
     };
   }
   return {
-    label: "도전 가능",
+    label: "지금 도전 가능",
     badgeClassName: "border-blue-200 bg-blue-50 text-blue-700",
     buttonClassName: "bg-blue-600 text-white hover:bg-blue-700",
   };
@@ -823,7 +823,9 @@ const HistoryClassroomIndex: React.FC = () => {
 
               <div className="space-y-3">
                 {group.items.map((item) => {
-                  const statusMeta = getStatusMeta(item.status);
+                  const statusMeta = getStatusMeta(
+                    item.canRecoverPending ? "available" : item.status,
+                  );
                   const canStart =
                     item.canRecoverPending ||
                     item.status === "available" ||
@@ -842,16 +844,11 @@ const HistoryClassroomIndex: React.FC = () => {
                       className="rounded-[24px] border border-slate-200 bg-white px-5 py-5 shadow-sm transition hover:border-blue-200 hover:shadow-md"
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <h2 className="text-xl font-black text-slate-950">
                               {item.assignment.title}
                             </h2>
-                            <span
-                              className={`rounded-full border px-3 py-1 text-xs font-bold ${statusMeta.badgeClassName}`}
-                            >
-                              {statusMeta.label}
-                            </span>
                             {(item.assignment.lessonTitle ||
                               item.assignment.mapTitle) && (
                               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
@@ -891,68 +888,112 @@ const HistoryClassroomIndex: React.FC = () => {
                             </p>
                           )}
 
-                          <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-600">
-                            <span className="rounded-full bg-slate-50 px-3 py-1">
-                              빈칸 {item.assignment.blanks.length}개
-                            </span>
-                            {item.assignedCount > 0 && (
-                              <span className="rounded-full bg-slate-50 px-3 py-1">
-                                함께 배정 {item.assignedCount}명
-                              </span>
-                            )}
-                            <span className="rounded-full bg-slate-50 px-3 py-1">
-                              시도 {item.attemptCount}회
-                            </span>
+                          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
+                            <span>{item.assignment.blanks.length}문제</span>
+                            <span>시도 {item.attemptCount}회</span>
                             {item.bestPercent != null && (
-                              <span className="rounded-full bg-slate-50 px-3 py-1">
-                                최고 {item.bestPercent}%
-                              </span>
+                              <span>최고 {item.bestPercent}%</span>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex shrink-0 flex-col gap-3 lg:w-48">
-                          {item.passedAttempt ? (
-                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700">
-                              {item.passedAttemptNumber}번째 시도 ·{" "}
-                              {item.passedAttempt.percent}% 통과
+                        <div
+                          data-history-status-panel="true"
+                          className={`flex shrink-0 flex-col gap-3 rounded-2xl border-2 p-4 lg:w-64 ${statusMeta.badgeClassName}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 24 24"
+                              className="h-7 w-7 shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              {item.canRecoverPending ? (
+                                <>
+                                  <path d="M4 7v5h5M20 17v-5h-5" />
+                                  <path d="M6 17a7 7 0 0 0 12-1M18 7A7 7 0 0 0 6 8" />
+                                </>
+                              ) : item.status === "cooldown" ? (
+                                <>
+                                  <circle cx="12" cy="12" r="9" />
+                                  <path d="M12 7v5l3 2" />
+                                </>
+                              ) : item.status === "passed" ? (
+                                <>
+                                  <circle cx="12" cy="12" r="9" />
+                                  <path d="m8 12 3 3 5-6" />
+                                </>
+                              ) : item.status === "closed" ? (
+                                <>
+                                  <circle cx="12" cy="12" r="9" />
+                                  <path d="m9 9 6 6m0-6-6 6" />
+                                </>
+                              ) : (
+                                <path d="m8 4 12 8-12 8Z" />
+                              )}
+                            </svg>
+                            <div className="text-xl font-black leading-tight">
+                              {item.canRecoverPending
+                                ? item.hasRecoveredResult
+                                  ? "제출 완료"
+                                  : "제출 대기"
+                                : statusMeta.label}
                             </div>
-                          ) : item.latest ? (
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-bold text-slate-700">
-                              최근 {item.latest.percent}% ·{" "}
-                              {getResultLabel(item.latest.status)}
+                          </div>
+                          {!item.canRecoverPending &&
+                            item.status === "cooldown" && (
+                              <div
+                                role="timer"
+                                aria-label="재도전까지 남은 시간"
+                                className="text-2xl font-black tabular-nums"
+                              >
+                                약 {item.remainMinutes}분 후 가능
+                              </div>
+                            )}
+                          {item.passedAttempt ? (
+                            <div className="text-sm font-semibold">
+                              {item.passedAttempt.score}/
+                              {item.passedAttempt.total}문제 ·{" "}
+                              {item.passedAttemptNumber}번째 시도
                             </div>
                           ) : (
-                            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-center text-sm font-bold text-blue-700">
-                              {item.canRecoverPending
-                                ? "제출 대기"
-                                : "아직 시작 전"}
-                            </div>
+                            item.latest && (
+                              <div className="text-sm font-semibold">
+                                최근 {item.latest.score}/{item.latest.total}문제
+                                · {getResultLabel(item.latest.status)}
+                              </div>
+                            )
                           )}
 
-                          <button
-                            type="button"
-                            disabled={!canStart}
-                            onClick={() => {
-                              if (!canStart) return;
-                              navigate(
-                                `/student/history-classroom/run?id=${item.assignment.id}`,
-                              );
-                            }}
-                            className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed ${item.canRecoverPending ? getStatusMeta("available").buttonClassName : statusMeta.buttonClassName}`}
-                          >
-                            {item.canRecoverPending
-                              ? item.hasRecoveredResult
-                                ? "제출 결과 확인"
-                                : "제출 재시도"
-                              : item.status === "retry"
-                                ? "다시 도전하기"
-                                : item.status === "available"
-                                  ? "응시하기"
-                                  : item.status === "cooldown"
-                                    ? "다시 도전하기"
-                                    : statusMeta.label}
-                          </button>
+                          {(canStart || item.status === "cooldown") && (
+                            <button
+                              type="button"
+                              disabled={!canStart}
+                              onClick={() => {
+                                if (!canStart) return;
+                                navigate(
+                                  `/student/history-classroom/run?id=${item.assignment.id}`,
+                                );
+                              }}
+                              className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed ${item.canRecoverPending ? getStatusMeta("available").buttonClassName : statusMeta.buttonClassName}`}
+                            >
+                              {item.canRecoverPending
+                                ? item.hasRecoveredResult
+                                  ? "제출 결과 확인"
+                                  : "제출 재시도"
+                                : item.status === "retry"
+                                  ? "다시 도전하기"
+                                  : item.status === "available"
+                                    ? "응시하기"
+                                    : item.status === "cooldown"
+                                      ? "대기 중"
+                                      : statusMeta.label}
+                            </button>
+                          )}
 
                           {canRequestExemption && item.availableExemption && (
                             <button

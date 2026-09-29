@@ -154,6 +154,18 @@ const ownResult = {
   createdAt: { seconds: now / 1000 },
 };
 const reports = [];
+const assertBlocked = async (page, message) => {
+  assert.equal(
+    await page.locator("article").count(),
+    1,
+    "blocked assignment remains visible",
+  );
+  assert.equal(
+    await page.locator("article button:enabled").count(),
+    0,
+    message,
+  );
+};
 const scenarios = [
   { name: "closed-pending", recovery: true },
   { name: "cooldown-pending", assignment: { dueAt: null }, recovery: true },
@@ -319,10 +331,7 @@ try {
           0,
           `${scenario.name} must not unlock recovery`,
         );
-        assert(
-          await page.locator("article button").first().isDisabled(),
-          `${scenario.name} stays closed`,
-        );
+        await assertBlocked(page, `${scenario.name} stays closed`);
       }
       assert.deepEqual(errors, []);
       reports.push({
@@ -414,7 +423,7 @@ try {
       [path],
       "subscribe only at the actual assigned source path",
     );
-    assert(await page.locator("article button").first().isDisabled());
+    await assertBlocked(page, "attempt starts blocked");
     await page.evaluate(
       ({ path, now, legacy }) => {
         const entry = (
@@ -430,8 +439,8 @@ try {
       },
       { path, now, legacy: scenario.legacy },
     );
-    assert(
-      await page.locator("article button").first().isDisabled(),
+    await assertBlocked(
+      page,
       "other student or stale reset cannot clear own cooldown",
     );
     await page.evaluate(
@@ -449,11 +458,7 @@ try {
       { path, now, legacy: scenario.legacy },
     );
     await page.waitForTimeout(50);
-    if (scenario.staysBlocked)
-      assert(
-        await page.locator("article button").first().isDisabled(),
-        scenario.name,
-      );
+    if (scenario.staysBlocked) await assertBlocked(page, scenario.name);
     else {
       assert(
         await page.locator("article button").first().isEnabled(),
@@ -515,6 +520,198 @@ try {
       .getByRole("heading", { name: assignment.title, exact: true })
       .waitFor({ state: "detached" });
     reports.push({ scenario: "live-" + mode, width: 768, passed: true });
+    await page.close();
+  }
+  for (const width of [390, 768, 1280]) {
+    const page = await browser.newPage({
+      viewport: { width, height: 1024 },
+      hasTouch: true,
+    });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.addInitScript(
+      ({ assignment, draft, now }) => {
+        const assignments = [
+          "available",
+          "retry",
+          "cooldown",
+          "passed",
+          "closed",
+          "pending",
+        ].map((state) => ({
+          ...assignment,
+          id: state,
+          title: `${state} · 고대 국가의 형성과 발전을 살펴보는 역사교실`,
+          dueAt: ["closed", "pending"].includes(state)
+            ? assignment.dueAt
+            : null,
+          passThresholdPercent: 80,
+        }));
+        window.__data = {
+          assignments,
+          results: ["retry", "cooldown", "passed"].map((state) => ({
+            id: `${state}-result`,
+            assignmentId: state,
+            uid: "student-1",
+            status: state === "passed" ? "passed" : "failed",
+            passed: state === "passed",
+            score: state === "passed" ? 5 : 2,
+            total: 5,
+            percent: state === "passed" ? 100 : 40,
+            createdAt: {
+              seconds: (now - (state === "retry" ? 600000 : 0)) / 1000,
+            },
+          })),
+        };
+        localStorage.setItem(
+          "westoryHistoryClassroomAttempt:pending:student-1",
+          JSON.stringify({
+            ...draft,
+            assignmentId: "pending",
+            resultId: "pending-result",
+          }),
+        );
+      },
+      { assignment, draft, now },
+    );
+    const url = `http://127.0.0.1:${server.address().port}`;
+    await page.route("**/*", (route) =>
+      route.request().url().startsWith(url) ? route.continue() : route.abort(),
+    );
+    await page.goto(url);
+    const card = (state) =>
+      page.locator("article").filter({
+        has: page.getByRole("heading", { name: new RegExp(`^${state} ·`) }),
+      });
+    const expectations = [
+      {
+        state: "available",
+        label: "지금 도전 가능",
+        action: "응시하기",
+        enabled: true,
+      },
+      {
+        state: "retry",
+        label: "다시 도전 가능",
+        action: "다시 도전하기",
+        enabled: true,
+      },
+      {
+        state: "cooldown",
+        label: "재도전 대기",
+        action: "대기 중",
+        enabled: false,
+      },
+      { state: "passed", label: "통과 완료", enabled: false },
+      { state: "closed", label: "응시 기간 종료", enabled: false },
+      { state: "pending", action: "제출 재시도", enabled: true },
+    ];
+    for (const expected of expectations) {
+      const item = card(expected.state);
+      await item.waitFor();
+      const panel = item.locator('[data-history-status-panel="true"]');
+      assert(
+        await panel.isVisible(),
+        `${expected.state} has a prominent state panel`,
+      );
+      if (expected.label)
+        assert(
+          await panel.getByText(expected.label, { exact: true }).isVisible(),
+          `${expected.state} exposes its current state`,
+        );
+      if (expected.action) {
+        const action = item.getByRole("button", {
+          name: expected.action,
+          exact: true,
+        });
+        assert.equal(
+          await action.isEnabled(),
+          expected.enabled,
+          `${expected.state} action permission is unchanged`,
+        );
+        const actionBox = await action.boundingBox();
+        assert(
+          actionBox.height >= 44,
+          `${expected.state} action is touch reachable`,
+        );
+      } else {
+        assert.equal(
+          await item.locator("button").count(),
+          0,
+          `${expected.state} has no redundant or startable action`,
+        );
+      }
+      const panelBox = await panel.boundingBox();
+      assert(
+        panelBox.x >= 0 && panelBox.x + panelBox.width <= width + 1,
+        `${expected.state} panel stays inside viewport`,
+      );
+      if (expected.state === "cooldown") {
+        const remaining = panel.getByText(/약 [1-5]분 후 가능/);
+        assert(
+          await remaining.isVisible(),
+          "cooldown prominently explains when another attempt becomes available",
+        );
+        const size = await remaining.evaluate((el) =>
+          parseFloat(getComputedStyle(el).fontSize),
+        );
+        assert(size >= 20, "remaining wait uses a large visible number");
+      }
+      if (["retry", "cooldown", "passed"].includes(expected.state)) {
+        assert(
+          await item
+            .getByText(
+              expected.state === "passed"
+                ? /5\/5문제\s*· 1번째 시도/
+                : /최근 2\/5문제\s*· 미통과/,
+            )
+            .isVisible(),
+          "latest score is a secondary count rather than a competing percentage",
+        );
+      }
+      if (expected.state === "pending") {
+        assert.equal(
+          await panel.getByText("응시 기간 종료", { exact: true }).count(),
+          0,
+          "pending submission takes precedence over a closed assignment",
+        );
+      }
+      await item.screenshot({
+        path: path.join(
+          evidence,
+          `student-index-state-${expected.state}-${width}.png`,
+        ),
+      });
+    }
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      "student status list has no horizontal overflow",
+    );
+    await page.screenshot({
+      path: path.join(evidence, `student-index-states-${width}.png`),
+      fullPage: true,
+    });
+    for (const state of ["available", "retry", "pending"]) {
+      if (state !== "available") await page.goto(url);
+      const expected = expectations.find((entry) => entry.state === state);
+      await card(state)
+        .getByRole("button", { name: expected.action, exact: true })
+        .click();
+      assert.equal(
+        await page.getByTestId("route").textContent(),
+        `/student/history-classroom/run?id=${state}`,
+        `${state} preserves the original runner route`,
+      );
+    }
+    assert.deepEqual(errors, []);
+    reports.push({
+      scenario: "visible-status-panels",
+      width,
+      states: expectations.map(({ state }) => state),
+      passed: true,
+    });
     await page.close();
   }
   console.log(
