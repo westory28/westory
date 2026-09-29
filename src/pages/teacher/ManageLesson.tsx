@@ -3271,6 +3271,7 @@ const ManageLesson: React.FC = () => {
   };
 
   const TreeCard = ({ node, level }: { node: TreeNode; level: number }) => {
+    const [showTitle, setShowTitle] = useState(false);
     const isExpanded = expandedIds.has(node.id);
     const isSelected = selectedNodeId === node.id;
     const isLeaf = level >= 2;
@@ -3280,17 +3281,28 @@ const ManageLesson: React.FC = () => {
         <div className="teacher-sub-tree-row">
           <button
             type="button"
-            className={`teacher-settings-section${isSelected ? " is-active" : ""}`}
+            className={`teacher-settings-section teacher-lesson-title-button${isSelected ? " is-active" : ""}`}
             aria-current={isSelected ? "page" : undefined}
             aria-expanded={!isLeaf ? isExpanded : undefined}
             onClick={() => handleNodeClick(node, level)}
-            title={node.title}
+            onMouseEnter={() => setShowTitle(true)}
+            onMouseLeave={() => setShowTitle(false)}
+            onFocus={() => setShowTitle(true)}
+            onBlur={() => setShowTitle(false)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setShowTitle(false);
+            }}
           >
             <i
               className={`fas ${isLeaf ? "fa-file-alt" : isExpanded ? "fa-folder-open" : "fa-folder"}`}
               aria-hidden="true"
             />
             <span className="teacher-navigation-label">{node.title}</span>
+            {showTitle && (
+              <span className="teacher-lesson-title-tooltip" aria-hidden="true">
+                {node.title}
+              </span>
+            )}
             {!isLeaf && (
               <i
                 className={`fas fa-caret-${isExpanded ? "down" : "right"}`}
@@ -3311,15 +3323,17 @@ const ManageLesson: React.FC = () => {
                   <i className="fas fa-plus text-xs" aria-hidden="true" />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => openModal("rename", node)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded text-blue-600 hover:bg-blue-100"
-                aria-label={`${node.title} 이름 수정`}
-                title="이름 수정"
-              >
-                <i className="fas fa-pen text-xs" aria-hidden="true" />
-              </button>
+              {!isLeaf && (
+                <button
+                  type="button"
+                  onClick={() => openModal("rename", node)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded text-blue-600 hover:bg-blue-100"
+                  aria-label={`${node.title} 이름 수정`}
+                  title="이름 수정"
+                >
+                  <i className="fas fa-pen text-xs" aria-hidden="true" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleDeleteNode(node)}

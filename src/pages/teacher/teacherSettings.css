@@ -1,5 +1,26 @@
 @import "../../components/common/portalSubNavigation.css";
 
+.teacher-layout .teacher-lesson-title-button {
+  position: relative;
+}
+
+.teacher-layout .teacher-lesson-title-button > .teacher-lesson-title-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  z-index: 50;
+  padding: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text-strong, #111827);
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
 .teacher-layout .teacher-settings-sections {
   padding-inline: 16px;
 }
