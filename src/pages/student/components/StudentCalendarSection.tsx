@@ -369,16 +369,16 @@ export default function StudentCalendarSection({
                       <span
                         className="student-full-calendar__category-dot"
                         style={{
-                          backgroundColor: getScheduleEventColor(
-                            event,
-                            categories,
-                          ),
+                          backgroundColor:
+                            event.eventType === "holiday"
+                              ? "var(--ws-danger, #ef4444)"
+                              : getScheduleEventColor(event, categories),
                         }}
                       />
-                      {
-                        getScheduleCategoryMeta(event.eventType, categories)
-                          .label
-                      }
+                      {event.eventType === "holiday"
+                        ? "공휴일"
+                        : getScheduleCategoryMeta(event.eventType, categories)
+                            .label}
                     </span>
                     <span
                       className="student-full-calendar__list-title"
