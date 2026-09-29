@@ -421,14 +421,47 @@
 }
 .grading-plan-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--ws-border);
 }
 .grading-plan-actions > button {
+  flex-shrink: 0;
   min-height: 40px;
+  min-width: 40px;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+.grading-plan-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+.grading-plan-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+.grading-plan-identity > span {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.grading-plan-scroll {
+  max-height: min(70vh, 48rem);
+  max-height: min(70dvh, 48rem);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+@media (max-width: 639px) {
+  .grading-plan-actions > button {
+    justify-content: center;
+  }
+  .grading-plan-actions > button > span {
+    display: none;
+  }
 }
 @media (min-width: 1024px) {
   .grading-preview-columns {

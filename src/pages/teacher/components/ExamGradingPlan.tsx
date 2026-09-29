@@ -917,12 +917,17 @@ const ExamGradingPlan: React.FC = () => {
             >
               <option value="latest">등록순 (최신)</option>
               <option value="name">과목명 (가나다)</option>
-              <option value="importance">중요도순 (국어·수학·사회…)</option>
+              <option value="importance">나이스순</option>
             </select>
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div
+          className="grading-plan-scroll space-y-4"
+          role="region"
+          aria-label="등록된 평가 기준"
+          tabIndex={0}
+        >
           {loading ? (
             <div className="text-center p-10 text-gray-400">
               데이터를 불러오는 중...
@@ -939,13 +944,50 @@ const ExamGradingPlan: React.FC = () => {
               >
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
                 <div className="min-w-0 flex-1 pl-4">
-                  <div className="mb-3 flex min-w-0 flex-wrap items-center gap-3">
-                    <span className="text-xs font-bold text-white bg-blue-500 px-2.5 py-1 rounded shadow-sm">
-                      {p.targetGrade || "3"}학년
-                    </span>
-                    <h4 className="min-w-0 break-keep text-xl font-bold text-gray-800">
-                      {p.subject}
-                    </h4>
+                  <div className="grading-plan-heading mb-3">
+                    <div className="grading-plan-identity">
+                      <span className="text-xs font-bold text-white bg-blue-500 px-2.5 py-1 rounded shadow-sm">
+                        {p.targetGrade || "3"}학년
+                      </span>
+                      <h4
+                        title={p.subject}
+                        className="min-w-0 truncate text-xl font-bold text-gray-800"
+                      >
+                        {p.subject}
+                      </h4>
+                    </div>
+                    <div className="grading-plan-actions">
+                      <button
+                        aria-label={`${p.subject} 미리보기`}
+                        title="미리보기"
+                        onClick={() => openPreview(p)}
+                        className="text-emerald-600 hover:bg-emerald-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-emerald-100 shadow-sm"
+                      >
+                        <i
+                          className="fas fa-chart-simple"
+                          aria-hidden="true"
+                        ></i>
+                        <span>미리보기</span>
+                      </button>
+                      <button
+                        aria-label={`${p.subject} 수정`}
+                        title="수정"
+                        onClick={() => handleEdit(p)}
+                        className="text-blue-500 hover:bg-blue-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-blue-100 shadow-sm"
+                      >
+                        <i className="fas fa-pen" aria-hidden="true"></i>
+                        <span>수정</span>
+                      </button>
+                      <button
+                        aria-label={`${p.subject} 삭제`}
+                        title="삭제"
+                        onClick={() => handleDelete(p.id)}
+                        className="text-red-500 hover:bg-red-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-red-100 shadow-sm"
+                      >
+                        <i className="fas fa-trash" aria-hidden="true"></i>
+                        <span>삭제</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <div className="grading-plan-category">
@@ -1009,26 +1051,6 @@ const ExamGradingPlan: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                </div>
-                <div className="grading-plan-actions">
-                  <button
-                    onClick={() => openPreview(p)}
-                    className="text-emerald-600 hover:bg-emerald-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-emerald-100 shadow-sm"
-                  >
-                    <i className="fas fa-chart-simple mr-1"></i>미리보기
-                  </button>
-                  <button
-                    onClick={() => handleEdit(p)}
-                    className="text-blue-500 hover:bg-blue-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-blue-100 shadow-sm"
-                  >
-                    <i className="fas fa-pen mr-1"></i>수정
-                  </button>
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    className="text-red-500 hover:bg-red-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-red-100 shadow-sm"
-                  >
-                    <i className="fas fa-trash mr-1"></i>삭제
-                  </button>
                 </div>
               </div>
             ))
