@@ -9,7 +9,13 @@ import {
   Tooltip,
   type TooltipItem,
 } from "chart.js";
-import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  getDocFromServer,
+  serverTimestamp,
+  writeBatch,
+} from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import ExamOmrCard, {
@@ -30,6 +36,7 @@ import {
   PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
   PERFORMANCE_SCORE_KIND,
   PERFORMANCE_SCORE_USER_COLLECTION,
+  applyPerformanceScoreConfirmation,
   WRITTEN_EXAM_SCORE_KIND,
   WRITTEN_EXAM_SECTION_OBJECTIVE,
   formatPerformanceScore,
@@ -44,6 +51,7 @@ import {
   normalizePerformanceScoreSettings,
   savePerformanceScoreWarningConsent,
   type PerformanceScoreAnswerSheetRequest,
+  type PerformanceScoreConfirmation,
   type PerformanceScoreItem,
   type PerformanceScoreKind,
   type PerformanceScoreObjection,
@@ -277,14 +285,17 @@ const getRecordScoreId = (record: PerformanceScoreRecord) =>
   record.id || record.rosterId || "";
 
 const isRecordConfirmed = (record: PerformanceScoreRecord) =>
-  Boolean(record.signatureImage || record.confirmation?.signatureImage);
+  hasStoredSignature(record) || hasStoredSignature(record.confirmation);
 
-const hasStoredSignatureImage = (data: unknown) =>
+const hasStoredSignature = (data: unknown) =>
   typeof data === "object" &&
   data !== null &&
   "signatureImage" in data &&
   typeof (data as { signatureImage?: unknown }).signatureImage === "string" &&
-  Boolean((data as { signatureImage: string }).signatureImage);
+  Boolean((data as { signatureImage: string }).signatureImage.trim()) &&
+  "signatureName" in data &&
+  typeof (data as { signatureName?: unknown }).signatureName === "string" &&
+  Boolean((data as { signatureName: string }).signatureName.trim());
 
 const getSignatureSaveErrorMessage = (error: unknown) => {
   const code =
@@ -1932,13 +1943,12 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
             currentUser.uid,
           );
-          const snap = await getDoc(ref);
+          const snap = await getDocFromServer(ref);
           return {
             record,
             scoreId,
             ref,
-            alreadyConfirmed:
-              snap.exists() && hasStoredSignatureImage(snap.data()),
+            alreadyConfirmed: snap.exists() && hasStoredSignature(snap.data()),
           };
         }),
       );
@@ -1961,40 +1971,38 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         await batch.commit();
       }
 
-      const writtenScoreIds = new Set(
-        targetsToWrite.map((target) => target.scoreId),
+      // Only show completion after every signature can be read back from the
+      // server, including a prior submission recovered after a connection loss.
+      const verifiedConfirmations = new Map(
+        await Promise.all(
+          saveTargets.map(async ({ ref, scoreId }) => {
+            const snapshot = await getDocFromServer(ref);
+            const data = snapshot.data();
+            if (
+              !snapshot.exists() ||
+              !hasStoredSignature(data) ||
+              data?.uid !== currentUser.uid ||
+              data?.rosterId !== scoreId ||
+              !data?.confirmedAt
+            ) {
+              throw new Error(
+                "The saved score signature could not be verified.",
+              );
+            }
+            return [
+              scoreId,
+              { ...data, id: snapshot.id } as PerformanceScoreConfirmation,
+            ] as const;
+          }),
+        ),
       );
-      const alreadyConfirmedScoreIds = new Set(
-        saveTargets
-          .filter((target) => target.alreadyConfirmed)
-          .map((target) => target.scoreId),
-      );
-      const localConfirmedAt = new Date();
       setRecords((current) =>
         current.map((record) => {
-          const scoreId = getRecordScoreId(record);
-          if (
-            alreadyConfirmedScoreIds.has(scoreId) ||
-            isRecordConfirmed(record)
-          ) {
-            return record;
-          }
-          return writtenScoreIds.has(scoreId)
-            ? {
-                ...record,
-                signatureName,
-                signatureImage,
-                signedAt: localConfirmedAt,
-                confirmation: {
-                  id: currentUser.uid,
-                  uid: currentUser.uid,
-                  rosterId: record.rosterId,
-                  signatureName,
-                  signatureImage,
-                  confirmedAt: localConfirmedAt,
-                  updatedAt: localConfirmedAt,
-                },
-              }
+          const confirmation = verifiedConfirmations.get(
+            getRecordScoreId(record),
+          );
+          return confirmation
+            ? applyPerformanceScoreConfirmation(record, confirmation)
             : record;
         }),
       );

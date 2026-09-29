@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   orderBy,
   query,
@@ -439,22 +440,28 @@ export const savePerformanceScoreWarningConsent = async (
     acknowledgedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  await setDoc(
-    doc(
-      db,
-      "users",
-      uid,
-      PERFORMANCE_SCORE_CONSENTS_COLLECTION,
-      PERFORMANCE_SCORE_CONSENT_DOC_ID,
-    ),
-    payload,
+  const consentRef = doc(
+    db,
+    "users",
+    uid,
+    PERFORMANCE_SCORE_CONSENTS_COLLECTION,
+    PERFORMANCE_SCORE_CONSENT_DOC_ID,
   );
-  return {
-    id: PERFORMANCE_SCORE_CONSENT_DOC_ID,
-    ...payload,
-    acknowledgedAt: new Date(),
-    updatedAt: new Date(),
-  } satisfies PerformanceScoreWarningConsent;
+  await setDoc(consentRef, payload);
+  const savedSnapshot = await getDocFromServer(consentRef);
+  const saved = savedSnapshot.exists()
+    ? ({
+        id: savedSnapshot.id,
+        ...savedSnapshot.data(),
+      } as PerformanceScoreWarningConsent)
+    : null;
+  if (
+    !isPerformanceScoreWarningConsentCurrent(saved, uid, config, settings) ||
+    !saved?.acknowledgedAt
+  ) {
+    throw new Error("The saved score warning consent could not be verified.");
+  }
+  return saved;
 };
 
 export const isPerformanceScoreWarningConsentCurrent = (

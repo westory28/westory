@@ -365,6 +365,60 @@ const main = async () => {
     ),
   );
 
+  const confirmationRef = doc(
+    existingStudent.db,
+    "users",
+    existingStudent.user.uid,
+    "performance_scores",
+    performanceScoreId,
+    "confirmations",
+    existingStudent.user.uid,
+  );
+  // A completed signature remains immutable, even for its owner.
+  await assertFails(setDoc(confirmationRef, signaturePayload));
+  await assertFails(
+    setDoc(doc(otherStudent.db, confirmationRef.path), {
+      ...signaturePayload,
+      signatureName: "다른학생",
+    }),
+  );
+
+  // Old partial records must remain repairable when a field was never stored.
+  for (const missingField of ["signatureImage", "signatureName"]) {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const incomplete = { ...signaturePayload };
+      delete incomplete[missingField];
+      await setDoc(doc(context.firestore(), confirmationRef.path), incomplete);
+    });
+    await assertSucceeds(setDoc(confirmationRef, signaturePayload));
+    const storedSignature = (await getDoc(confirmationRef)).data();
+    if (
+      storedSignature?.signatureImage !== signaturePayload.signatureImage ||
+      storedSignature?.signatureName !== signaturePayload.signatureName ||
+      !storedSignature?.confirmedAt
+    ) {
+      throw new Error(`Signature repair did not persist ${missingField}.`);
+    }
+    await assertFails(setDoc(confirmationRef, signaturePayload));
+  }
+
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), confirmationRef.path), {
+      uid: existingStudent.user.uid,
+      rosterId: performanceScoreId,
+    });
+  });
+  await assertFails(
+    setDoc(confirmationRef, { ...signaturePayload, signatureImage: "" }),
+  );
+  await assertFails(
+    setDoc(confirmationRef, {
+      ...signaturePayload,
+      signatureImage: `data:image/png;base64,${"A".repeat(120000)}`,
+    }),
+  );
+  await assertSucceeds(setDoc(confirmationRef, signaturePayload));
+
   console.log(
     JSON.stringify(
       {
@@ -377,6 +431,9 @@ const main = async () => {
           "cross-user update remains blocked",
           "performance score signature requires scoped warning consent",
           "performance score consent does not authorize another semester",
+          "complete signatures cannot be overwritten or changed by another student",
+          "legacy signatures with a missing image or name can be repaired and read back",
+          "empty and oversized signature images remain blocked",
         ],
       },
       null,

@@ -15,6 +15,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
+  getYearSemester,
 } from "../../../lib/semesterScope";
 import {
   buildScoreRows,
@@ -91,234 +92,13 @@ const formatPreviewScore = (value: number) => `${formatPreviewNumber(value)}점`
 const formatPreviewPercent = (value: number) =>
   `${formatPreviewNumber(value)}%`;
 
-const initialIndexByKey: Record<string, number> = {
-  r: 0,
-  R: 1,
-  s: 2,
-  e: 3,
-  E: 4,
-  f: 5,
-  a: 6,
-  q: 7,
-  Q: 8,
-  t: 9,
-  T: 10,
-  d: 11,
-  w: 12,
-  W: 13,
-  c: 14,
-  z: 15,
-  x: 16,
-  v: 17,
-  g: 18,
-};
-const medialIndexByKey: Record<string, number> = {
-  k: 0,
-  o: 1,
-  i: 2,
-  O: 3,
-  j: 4,
-  p: 5,
-  u: 6,
-  P: 7,
-  h: 8,
-  y: 12,
-  n: 13,
-  b: 17,
-  m: 18,
-  l: 20,
-};
-const medialComboIndexByKeys: Record<string, number> = {
-  hk: 9,
-  ho: 10,
-  hl: 11,
-  nj: 14,
-  np: 15,
-  nl: 16,
-  ml: 19,
-};
-const finalIndexByKey: Record<string, number> = {
-  r: 1,
-  R: 2,
-  s: 4,
-  e: 7,
-  f: 8,
-  a: 16,
-  q: 17,
-  t: 19,
-  T: 20,
-  d: 21,
-  w: 22,
-  c: 23,
-  z: 24,
-  x: 25,
-  v: 26,
-  g: 27,
-};
-const finalComboIndexByKeys: Record<string, number> = {
-  rt: 3,
-  sw: 5,
-  sg: 6,
-  fr: 9,
-  fa: 10,
-  fq: 11,
-  ft: 12,
-  fx: 13,
-  fv: 14,
-  fg: 15,
-  qt: 18,
-};
-const jamoByKey: Record<string, string> = {
-  r: "ㄱ",
-  R: "ㄲ",
-  s: "ㄴ",
-  e: "ㄷ",
-  E: "ㄸ",
-  f: "ㄹ",
-  a: "ㅁ",
-  q: "ㅂ",
-  Q: "ㅃ",
-  t: "ㅅ",
-  T: "ㅆ",
-  d: "ㅇ",
-  w: "ㅈ",
-  W: "ㅉ",
-  c: "ㅊ",
-  z: "ㅋ",
-  x: "ㅌ",
-  v: "ㅍ",
-  g: "ㅎ",
-  k: "ㅏ",
-  o: "ㅐ",
-  i: "ㅑ",
-  O: "ㅒ",
-  j: "ㅓ",
-  p: "ㅔ",
-  u: "ㅕ",
-  P: "ㅖ",
-  h: "ㅗ",
-  y: "ㅛ",
-  n: "ㅜ",
-  b: "ㅠ",
-  m: "ㅡ",
-  l: "ㅣ",
-};
-const jamoByVowelComboKeys: Record<string, string> = {
-  hk: "ㅘ",
-  ho: "ㅙ",
-  hl: "ㅚ",
-  nj: "ㅝ",
-  np: "ㅞ",
-  nl: "ㅟ",
-  ml: "ㅢ",
-};
-
-const isConsonantKey = (key: string) => key in initialIndexByKey;
-const isVowelKey = (key: string) => key in medialIndexByKey;
-const composeHangul = (initial: number, medial: number, final: number) =>
-  String.fromCharCode(0xac00 + (initial * 21 + medial) * 28 + final);
-
-const convertKeyboardKoreanSegment = (segment: string) => {
-  let output = "";
-  let i = 0;
-
-  while (i < segment.length) {
-    const ch = segment[i];
-
-    if (
-      isConsonantKey(ch) &&
-      i + 1 < segment.length &&
-      isVowelKey(segment[i + 1])
-    ) {
-      const initial = initialIndexByKey[ch];
-      i += 1;
-
-      const firstVowel = segment[i];
-      let medial = medialIndexByKey[firstVowel];
-      i += 1;
-
-      if (i < segment.length && isVowelKey(segment[i])) {
-        const comboMedial =
-          medialComboIndexByKeys[`${firstVowel}${segment[i]}`];
-        if (comboMedial !== undefined) {
-          medial = comboMedial;
-          i += 1;
-        }
-      }
-
-      let final = 0;
-      if (i < segment.length && isConsonantKey(segment[i])) {
-        if (!(i + 1 < segment.length && isVowelKey(segment[i + 1]))) {
-          const comboKey =
-            i + 1 < segment.length ? `${segment[i]}${segment[i + 1]}` : "";
-          const comboFinal = finalComboIndexByKeys[comboKey];
-
-          if (
-            comboFinal !== undefined &&
-            !(i + 2 < segment.length && isVowelKey(segment[i + 2]))
-          ) {
-            final = comboFinal;
-            i += 2;
-          } else {
-            final = finalIndexByKey[segment[i]] ?? 0;
-            i += 1;
-          }
-        }
-      }
-
-      output += composeHangul(initial, medial, final);
-      continue;
-    }
-
-    if (isVowelKey(ch)) {
-      const next = i + 1 < segment.length ? segment[i + 1] : "";
-      const combo = jamoByVowelComboKeys[`${ch}${next}`];
-      if (combo) {
-        output += combo;
-        i += 2;
-      } else {
-        output += jamoByKey[ch] ?? ch;
-        i += 1;
-      }
-      continue;
-    }
-
-    output += jamoByKey[ch] ?? ch;
-    i += 1;
-  }
-
-  return output;
-};
-
-const normalizeKoreanKeyboardInput = (value: string) => {
-  let output = "";
-  let buffer = "";
-
-  for (const char of value) {
-    if (/[A-Za-z]/.test(char)) {
-      buffer += char;
-      continue;
-    }
-    if (buffer) {
-      output += convertKeyboardKoreanSegment(buffer);
-      buffer = "";
-    }
-    output += char;
-  }
-
-  if (buffer) {
-    output += convertKeyboardKoreanSegment(buffer);
-  }
-
-  return output;
-};
-
 const ExamGradingPlan: React.FC = () => {
   const { userConfig } = useAuth();
   const { confirm } = useAppDialog();
   const { showToast } = useAppToast();
   const [plans, setPlans] = useState<GradingPlan[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPlan, setPreviewPlan] = useState<Omit<
     GradingPlan,
@@ -380,27 +160,21 @@ const ExamGradingPlan: React.FC = () => {
     setItems(items.filter((_, i) => i !== idx));
   };
 
-  const handleItemChange = (
+  const handleItemChange = <K extends keyof GradingItem>(
     idx: number,
-    field: keyof GradingItem,
-    value: any,
+    field: K,
+    value: GradingItem[K],
   ) => {
-    const newItems = [...items];
-    // @ts-ignore
-    newItems[idx][field] = value;
-    setItems(newItems);
-  };
-
-  const handleSubjectChange = (value: string) => {
-    setSubject(normalizeKoreanKeyboardInput(value));
-  };
-
-  const handleItemNameChange = (idx: number, value: string) => {
-    handleItemChange(idx, "name", normalizeKoreanKeyboardInput(value));
+    setItems((current) =>
+      current.map((item, index) =>
+        index === idx ? { ...item, [field]: value } : item,
+      ),
+    );
   };
 
   const handleSave = async () => {
-    if (!subject) {
+    if (saving) return;
+    if (!subject.trim()) {
       showToast({
         tone: "warning",
         title: "과목명을 입력해 주세요.",
@@ -409,20 +183,31 @@ const ExamGradingPlan: React.FC = () => {
       return;
     }
 
-    const validItems = items.filter(
-      (i) => i.name && i.maxScore > 0 && i.ratio > 0,
-    );
-    if (validItems.length === 0) {
+    const validItems = items.map((item) => ({
+      ...item,
+      name: item.name.trim(),
+    }));
+    if (
+      validItems.length === 0 ||
+      validItems.some(
+        (item) =>
+          !item.name ||
+          !Number.isFinite(item.maxScore) ||
+          item.maxScore <= 0 ||
+          !Number.isFinite(item.ratio) ||
+          item.ratio <= 0,
+      )
+    ) {
       showToast({
         tone: "warning",
         title: "평가 항목을 확인해 주세요.",
-        message: "이름, 만점, 반영 비율이 입력된 항목이 하나 이상 필요합니다.",
+        message: "모든 평가 항목의 이름, 만점, 반영 비율을 입력해 주세요.",
       });
       return;
     }
 
     const totalRatio = validItems.reduce((sum, i) => sum + i.ratio, 0);
-    if (totalRatio !== 100) {
+    if (Math.abs(totalRatio - 100) > 0.000001) {
       showToast({
         tone: "warning",
         title: "비율 합계를 확인해 주세요.",
@@ -431,15 +216,17 @@ const ExamGradingPlan: React.FC = () => {
       return;
     }
 
+    const scope = getYearSemester(userConfig);
     const data = {
-      subject,
+      subject: subject.trim(),
       targetGrade: grade,
       items: validItems,
-      academicYear: userConfig?.year || "2025",
-      semester: userConfig?.semester || "1",
+      academicYear: scope.year,
+      semester: scope.semester,
       updatedAt: serverTimestamp(),
     };
 
+    setSaving(true);
     try {
       if (editId) {
         await updateDoc(
@@ -469,14 +256,19 @@ const ExamGradingPlan: React.FC = () => {
         });
       }
       resetForm();
-      loadPlans();
+      await loadPlans();
     } catch (e) {
       console.error(e);
       showToast({
         tone: "error",
         title: "저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message:
+          (e as { code?: string }).code === "permission-denied"
+            ? "평가 기준을 저장할 교사 권한을 확인해 주세요. 입력 내용은 유지됩니다."
+            : "입력 내용은 유지됩니다. 연결 상태를 확인한 뒤 다시 저장해 주세요.",
       });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -489,8 +281,8 @@ const ExamGradingPlan: React.FC = () => {
       maxScore: Number(item.maxScore || 0),
       ratio: Number(item.ratio || 0),
     })),
-    academicYear: userConfig?.year || "2025",
-    semester: userConfig?.semester || "1",
+    academicYear: getYearSemester(userConfig).year,
+    semester: getYearSemester(userConfig).semester,
   });
 
   const openPreview = (plan?: GradingPlan) => {
@@ -529,6 +321,7 @@ const ExamGradingPlan: React.FC = () => {
   };
 
   const handleEdit = (p: GradingPlan) => {
+    if (saving) return;
     setEditId(p.id);
     setSubject(p.subject);
     setGrade(p.targetGrade || "3");
@@ -930,13 +723,14 @@ const ExamGradingPlan: React.FC = () => {
             </h3>
             <button
               onClick={resetForm}
+              disabled={saving}
               className="text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 transition"
             >
               <i className="fas fa-undo mr-1"></i>초기화
             </button>
           </div>
 
-          <div className="space-y-4">
+          <fieldset disabled={saving} className="min-w-0 space-y-4">
             <div>
               <label className="block text-xs font-bold text-blue-800 mb-1">
                 대상 학년
@@ -958,7 +752,7 @@ const ExamGradingPlan: React.FC = () => {
               <input
                 type="text"
                 value={subject}
-                onChange={(e) => handleSubjectChange(e.target.value)}
+                onChange={(e) => setSubject(e.target.value)}
                 placeholder="예: 국어, 역사, 사회"
                 {...koreanInputProps}
                 className="w-full border border-blue-200 rounded p-2 text-sm focus:ring-2 focus:ring-blue-400"
@@ -983,7 +777,11 @@ const ExamGradingPlan: React.FC = () => {
                     <select
                       value={item.type}
                       onChange={(e) =>
-                        handleItemChange(idx, "type", e.target.value)
+                        handleItemChange(
+                          idx,
+                          "type",
+                          e.target.value as GradingItem["type"],
+                        )
                       }
                       className="border border-gray-300 rounded px-1 py-1.5 text-xs w-[60px] bg-white"
                     >
@@ -995,7 +793,7 @@ const ExamGradingPlan: React.FC = () => {
                       placeholder="예: 서술형, 발표, 포트폴리오"
                       value={item.name}
                       onChange={(e) =>
-                        handleItemNameChange(idx, e.target.value)
+                        handleItemChange(idx, "name", e.target.value)
                       }
                       {...koreanInputProps}
                       className="border border-gray-300 rounded px-2 py-1.5 text-xs flex-1 min-w-0"
@@ -1049,12 +847,18 @@ const ExamGradingPlan: React.FC = () => {
               </button>
               <button
                 onClick={handleSave}
-                className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition transform active:scale-95 ${editId ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
+                disabled={saving}
+                aria-busy={saving}
+                className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${editId ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
               >
-                {editId ? "수정사항 저장" : "기준 저장하기"}
+                {saving
+                  ? "저장 중…"
+                  : editId
+                    ? "수정사항 저장"
+                    : "기준 저장하기"}
               </button>
             </div>
-          </div>
+          </fieldset>
         </div>
       </div>
 

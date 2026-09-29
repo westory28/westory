@@ -424,10 +424,10 @@ service cloud.firestore {
     }
 
     function hasCompletePerformanceScoreSignature(data) {
-      return data.signatureImage is string
-        && data.signatureImage.size() > 0
-        && data.signatureName is string
-        && data.signatureName.size() > 0;
+      return data.get('signatureImage', '') is string
+        && data.get('signatureImage', '').size() > 0
+        && data.get('signatureName', '') is string
+        && data.get('signatureName', '').size() > 0;
     }
 
     function canRepairPerformanceScoreConfirmation(userId, scoreId, confirmationId) {
@@ -976,7 +976,7 @@ service cloud.firestore {
 
     match /grading_plans/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isTeacherRole();
     }
 
     match /exam_config/{docId} {
@@ -1133,7 +1133,7 @@ service cloud.firestore {
 
       match /grading_plans/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow write: if isAdmin() || isTeacherRole();
       }
 
       match /exam_config/{docId} {
