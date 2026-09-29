@@ -20,6 +20,7 @@ import {
 import { CalendarEvent } from "../../../types";
 import ScheduleMorePopover from "../../../components/common/ScheduleMorePopover";
 import type { ScheduleMorePopoverAnchor } from "../../../components/common/ScheduleMorePopover";
+import TeacherScheduleTitle from "./TeacherScheduleTitle";
 
 interface TeacherCalendarSectionProps {
   events: CalendarEvent[];
@@ -529,20 +530,25 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                 </button>
               </div>
 
-              <select
-                value={filterClass}
-                onChange={(e) => onFilterChange(e.target.value)}
-                className="student-calendar-shell__filter-select"
-                aria-label="일정 대상 필터"
-              >
-                <option value="all">전체</option>
-                <option value="common">공통</option>
-                {classTargets.map((target) => (
-                  <option key={target.value} value={target.value}>
-                    {target.label}
-                  </option>
-                ))}
-              </select>
+              <div className="teacher-schedule-filter">
+                <select
+                  value={filterClass}
+                  onChange={(e) => onFilterChange(e.target.value)}
+                  className="student-calendar-shell__filter-select"
+                  aria-label="일정 대상 필터"
+                >
+                  <option value="all">전체</option>
+                  <option value="common">공통</option>
+                  {classTargets.map((target) => (
+                    <option key={target.value} value={target.value}>
+                      {target.label}
+                    </option>
+                  ))}
+                </select>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
             </div>
 
             <div className="student-calendar-shell__calendar-tools">
@@ -688,7 +694,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                   <div
                     className={`fc-list-title-cell ${isHoliday ? "holiday-segment-title" : ""}`}
                   >
-                    {safeTitle}
+                    <TeacherScheduleTitle title={safeTitle} />
                   </div>
                   <div className="fc-list-target-cell">{targetLabel}</div>
                 </div>
@@ -718,7 +724,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
             return (
               <div className={eventLabelClassName} title={safeTitle}>
                 <span className="student-calendar-event-label__text">
-                  {safeTitle}
+                  <TeacherScheduleTitle title={safeTitle} />
                 </span>
               </div>
             );
@@ -776,14 +782,16 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                       key={event.id}
                       type="button"
                       onClick={() => onEventClick(event)}
-                      className="grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
+                      className="teacher-calendar-list-event grid w-full cursor-pointer grid-cols-[170px_minmax(0,1fr)_116px] items-center gap-5 px-4 py-3 text-left transition hover:bg-slate-50"
                     >
                       <div className="flex min-w-0 items-center gap-2 font-bold text-gray-700">
                         <span
                           className="h-3.5 w-3.5 shrink-0 rounded-full"
                           style={{ backgroundColor: categoryColor }}
                         ></span>
-                        <span className="truncate">{categoryLabel}</span>
+                        <span className="teacher-calendar-list-event__category truncate">
+                          {categoryLabel}
+                        </span>
                       </div>
                       <div
                         className={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold ${
@@ -791,7 +799,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
                         }`}
                         title={eventTitle}
                       >
-                        {eventTitle}
+                        <TeacherScheduleTitle title={eventTitle} />
                       </div>
                       <div
                         className="truncate text-sm font-semibold text-gray-600"

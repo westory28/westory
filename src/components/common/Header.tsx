@@ -538,7 +538,6 @@ const Header: React.FC<{
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    if (!useTeacherSidebar) return;
     const desktop = window.matchMedia("(min-width: 1024px)");
     const closeDesktopDrawer = () => {
       setMobileTeacherHeader(!desktop.matches);
@@ -704,7 +703,7 @@ const Header: React.FC<{
     };
   }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal]);
 
-  const accountControls = (
+  const accountControls = (mobile = false) => (
     <>
       {isTeacherPortal &&
         !useTeacherSidebar &&
@@ -734,75 +733,77 @@ const Header: React.FC<{
         )}
       </Link>
 
-      <React.Suspense fallback={null}>
-        <NotificationBell
-          className={
-            useTeacherSidebar
-              ? "teacher-account-notification"
-              : "hidden lg:block"
-          }
-          panelClassName={
-            useTeacherSidebar && mobileTeacherHeader
-              ? "teacher-mobile-notification-panel"
-              : undefined
-          }
-          onUnreadCountChange={setMobileUnreadCount}
-        />
-      </React.Suspense>
-
       <div
-        className={`${useTeacherSidebar ? "teacher-account-session" : "hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1"} bg-stone-100 rounded-full border border-stone-200`}
+        className={
+          mobile ? "mobile-account-actions" : "desktop-account-actions"
+        }
       >
-        <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
-        <span
-          className={`${useTeacherSidebar ? "teacher-account-countdown" : ""} font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
-        >
-          {formatCountdown(remainingSeconds)}
-        </span>
+        <React.Suspense fallback={null}>
+          <NotificationBell
+            className={
+              useTeacherSidebar || mobile
+                ? "teacher-account-notification"
+                : "hidden lg:block"
+            }
+            panelClassName={
+              useTeacherSidebar && mobileTeacherHeader
+                ? "teacher-mobile-notification-panel"
+                : undefined
+            }
+            onUnreadCountChange={setMobileUnreadCount}
+          />
+        </React.Suspense>
+
+        {mobile ? (
+          <button
+            type="button"
+            onClick={() => extendSession({ force: true })}
+            data-session-ignore="true"
+            className={`mobile-account-session ${remainingSeconds < 300 ? "is-warning" : ""}`}
+            title="시간 연장"
+            aria-label={`남은 시간 ${formatCountdown(remainingSeconds)}, 시간 연장`}
+          >
+            <i className="fas fa-stopwatch" aria-hidden="true" />
+            <span>{formatCountdown(remainingSeconds)}</span>
+            <i className="fas fa-redo-alt" aria-hidden="true" />
+          </button>
+        ) : (
+          <div
+            className={`${useTeacherSidebar ? "teacher-account-session" : "hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1"} bg-stone-100 rounded-full border border-stone-200`}
+          >
+            <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
+            <span
+              className={`${useTeacherSidebar ? "teacher-account-countdown" : ""} font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
+            >
+              {formatCountdown(remainingSeconds)}
+            </span>
+            <button
+              onClick={() => extendSession({ force: true })}
+              data-session-ignore="true"
+              className="text-stone-400 hover:text-blue-600 transition p-1"
+              title="시간 연장"
+              aria-label="시간 연장"
+            >
+              <i className="fas fa-redo-alt text-xs"></i>
+            </button>
+          </div>
+        )}
+
         <button
-          onClick={() => extendSession({ force: true })}
+          onClick={handleLogout}
           data-session-ignore="true"
-          className="text-stone-400 hover:text-blue-600 transition p-1"
-          title="시간 연장"
-          aria-label="시간 연장"
+          className="btn-logout"
+          aria-label={isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
         >
-          <i className="fas fa-redo-alt text-xs"></i>
+          <i
+            className="fas fa-right-from-bracket btn-logout-icon"
+            aria-hidden="true"
+          ></i>
+          <span className="btn-logout-label">
+            {isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
+          </span>
         </button>
       </div>
-
-      <button
-        onClick={handleLogout}
-        data-session-ignore="true"
-        className="btn-logout"
-        aria-label={isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
-      >
-        <i
-          className="fas fa-right-from-bracket btn-logout-icon"
-          aria-hidden="true"
-        ></i>
-        <span className="btn-logout-label">
-          {isSemesterArchive ? "조회 창 닫기" : "로그아웃"}
-        </span>
-      </button>
-
-      {!useTeacherSidebar && (
-        <button
-          onClick={() => setMobileMenuOpen((prev) => !prev)}
-          data-session-ignore="true"
-          className="mobile-menu-btn"
-          aria-label="모바일 메뉴 열기"
-        >
-          <i className="fas fa-bars"></i>
-          {mobileUnreadCount > 0 && (
-            <span
-              className="mobile-menu-btn-badge"
-              aria-label={`읽지 않은 알림 ${mobileUnreadLabel}개`}
-            >
-              {mobileUnreadLabel}
-            </span>
-          )}
-        </button>
-      )}
     </>
   );
 
@@ -825,7 +826,9 @@ const Header: React.FC<{
           showSettings={canManageSettings(userData, currentUser?.email)}
           collapsed={sidebarCollapsed}
           mobileOpen={mobileMenuOpen}
-          mobileAccount={mobileTeacherHeader ? accountControls : undefined}
+          mobileAccount={
+            mobileTeacherHeader ? accountControls(true) : undefined
+          }
           onToggleCollapsed={onToggleSidebar}
           onCloseMobile={closeMobileMenu}
           isChildActive={isChildActive}
@@ -927,7 +930,37 @@ const Header: React.FC<{
           )}
 
           <div className="header-right">
-            {(!useTeacherSidebar || !mobileTeacherHeader) && accountControls}
+            {!mobileTeacherHeader && accountControls()}
+            {!useTeacherSidebar && mobileTeacherHeader && (
+              <>
+                {!mobileMenuOpen && (
+                  <React.Suspense fallback={null}>
+                    <NotificationBell
+                      className="hidden"
+                      onUnreadCountChange={setMobileUnreadCount}
+                    />
+                  </React.Suspense>
+                )}
+                <button
+                  onClick={() => setMobileMenuOpen((prev) => !prev)}
+                  data-session-ignore="true"
+                  className="mobile-menu-btn"
+                  aria-label="모바일 메뉴 열기"
+                  aria-expanded={mobileMenuOpen}
+                  aria-controls="mobile-menu"
+                >
+                  <i className="fas fa-bars" aria-hidden="true" />
+                  {mobileUnreadCount > 0 && (
+                    <span
+                      className="mobile-menu-btn-badge"
+                      aria-label={`읽지 않은 알림 ${mobileUnreadLabel}개`}
+                    >
+                      {mobileUnreadLabel}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
           </div>
           {useTeacherSidebar && (
             <button
@@ -956,40 +989,8 @@ const Header: React.FC<{
           <div id="mobile-menu" className={mobileMenuOpen ? "open" : ""}>
             {mobileMenuOpen && (
               <>
-                <div className="mobile-menu-status">
-                  <div className="mobile-menu-status-card">
-                    <div className="mobile-menu-status-copy">
-                      <span className="mobile-menu-status-label">알림</span>
-                      <strong>
-                        {mobileUnreadCount > 0
-                          ? `${mobileUnreadLabel}개`
-                          : "새 알림 없음"}
-                      </strong>
-                    </div>
-                    <React.Suspense fallback={null}>
-                      <NotificationBell className="mobile-menu-notification" />
-                    </React.Suspense>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => extendSession({ force: true })}
-                    title="시간 연장"
-                    data-session-ignore="true"
-                    className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds < 300 ? "is-warning" : ""}`}
-                  >
-                    <div className="mobile-menu-status-copy">
-                      <span className="mobile-menu-status-label">
-                        남은 시간
-                      </span>
-                      <strong>{formatCountdown(remainingSeconds)}</strong>
-                    </div>
-                    <span
-                      className="mobile-menu-status-icon"
-                      aria-hidden="true"
-                    >
-                      <i className="fas fa-redo-alt"></i>
-                    </span>
-                  </button>
+                <div className="mobile-account-block">
+                  {accountControls(true)}
                 </div>
                 {menuItems.map((item, idx) => {
                   const visibleChildren = getVisibleChildren(item);

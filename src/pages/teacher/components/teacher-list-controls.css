@@ -1,0 +1,101 @@
+.student-list-controls,
+.points-student-filter-header {
+  padding: 20px;
+}
+
+.student-list-toolbar {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+}
+
+.student-list-toolbar select {
+  min-width: 0;
+  height: 40px;
+}
+
+.student-list-toolbar__action {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+}
+
+.student-list-search {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+}
+
+.student-list-search input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+}
+
+.student-list-pagination {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px;
+}
+
+.student-list-pagination button {
+  min-width: 32px;
+  height: 40px;
+  padding: 0 4px;
+}
+
+.student-list-pagination__gap {
+  flex: 0 0 12px;
+  text-align: center;
+}
+
+@media (max-width: 767px) {
+  .student-list-controls {
+    padding: 12px;
+  }
+
+  .student-list-toolbar {
+    gap: 4px;
+  }
+
+  .student-list-toolbar select {
+    flex: 1 1 0;
+    padding-left: 4px;
+    padding-right: 4px;
+    text-align: center;
+    text-align-last: center;
+  }
+
+  .points-student-filter-header {
+    padding: 12px;
+  }
+
+  .points-student-filter-header .points-student-filters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .points-student-filters select {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    padding: 8px 4px;
+    font-size: 12px;
+    text-align: center;
+    text-align-last: center;
+  }
+
+  .points-student-filters input {
+    grid-column: 1 / -1;
+    min-width: 0;
+    height: 40px;
+  }
+}

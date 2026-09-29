@@ -1,0 +1,88 @@
+.teacher-schedule-title {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.teacher-schedule-title__text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.teacher-schedule-filter {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.teacher-week-schedule
+  .teacher-schedule-filter
+  .student-calendar-shell__filter-select,
+.teacher-calendar-shell
+  .teacher-schedule-filter
+  .student-calendar-shell__filter-select {
+  appearance: none;
+  flex: 0 1 auto;
+  max-width: 100%;
+  padding-inline: 32px;
+  line-height: normal;
+  text-align: center;
+  text-align-last: center;
+}
+
+.teacher-week-schedule .teacher-schedule-filter > svg,
+.teacher-calendar-shell .teacher-schedule-filter > svg {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--ws-text-muted, #6b7280);
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 767px) {
+  .teacher-calendar-shell .teacher-calendar-list-event {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    font-size: var(--ws-type-small, 0.875rem);
+  }
+
+  .teacher-calendar-list-event__category {
+    flex-shrink: 0;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .teacher-schedule-title__text {
+    width: max-content;
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .teacher-schedule-title,
+  .teacher-schedule-title__text {
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-calendar-shell .student-calendar-event-label,
+  .teacher-calendar-shell .student-calendar-event-label.is-range,
+  .teacher-calendar-shell .student-calendar-event-label.is-single {
+    height: auto;
+    min-height: 24px;
+  }
+}

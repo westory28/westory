@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import "../teacher-list-controls.css";
 import PointRankBadge from "../../../../components/common/PointRankBadge";
 import { getPointFeedbackToneClass } from "../../../../constants/pointLabels";
 import {
@@ -97,21 +98,18 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.95fr]">
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 bg-gray-50 p-5">
+        <div className="points-student-filter-header border-b border-gray-100 bg-gray-50">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-800">
                 지급 및 환수 대상 선택
               </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                이름을 입력하면 전 학년, 전 학급에서 찾고 드롭다운으로 범위를
-                다시 좁힐 수 있습니다.
-              </p>
             </div>
             <div className="text-sm font-bold text-gray-500 whitespace-nowrap">{`검색 결과 ${students.length}명`}</div>
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="points-student-filters mt-4 grid gap-3 md:grid-cols-4">
             <select
+              aria-label="학년 필터"
               value={gradeFilter}
               onChange={(event) => onGradeFilterChange(event.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
@@ -123,6 +121,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               ))}
             </select>
             <select
+              aria-label="반 필터"
               value={classFilter}
               onChange={(event) => onClassFilterChange(event.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
@@ -134,6 +133,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               ))}
             </select>
             <select
+              aria-label="번호 필터"
               value={numberFilter}
               onChange={(event) => onNumberFilterChange(event.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
@@ -145,6 +145,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               ))}
             </select>
             <input
+              aria-label="학생 이름 검색"
               value={nameSearch}
               onChange={(event) => onNameSearchChange(event.target.value)}
               placeholder="이름 또는 일부 검색"

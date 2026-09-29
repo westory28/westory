@@ -783,9 +783,38 @@
     gap: 4px;
   }
   .teacher-week-event__metadata {
-    max-width: calc(100% - 44px);
+    flex-shrink: 0;
+    max-width: none;
   }
   .teacher-week-event__category {
+    flex-shrink: 0;
+    max-width: none;
     padding-inline: 4px;
+    overflow: visible;
+  }
+  .teacher-week-event__category-label {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+/* Preserve a readable title slot when motion is disabled or the row is narrow. */
+@media (max-width: 359px), (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .teacher-week-event {
+    align-items: start;
+  }
+  .teacher-week-event__body {
+    display: contents;
+  }
+  .teacher-week-event__title {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+  }
+  .teacher-week-event__metadata {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 }

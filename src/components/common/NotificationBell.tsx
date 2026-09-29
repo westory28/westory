@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -189,6 +195,8 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const [privacyPolicyLoading, setPrivacyPolicyLoading] = useState(false);
   const [privacyPolicyHtml, setPrivacyPolicyHtml] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [panelPosition, setPanelPosition] = useState<React.CSSProperties>({});
   const realtimeToastStateRef = useRef({
     initialized: false,
     scopeKey: "",
@@ -235,6 +243,44 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const unreadCount = personalUnreadCount + broadcastUnreadCount;
   const displayUnreadCount = unreadCount > 99 ? "99+" : String(unreadCount);
   const hasNotifications = notifications.length > 0;
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const positionPanel = () => {
+      const trigger = triggerRef.current?.getBoundingClientRect();
+      if (!trigger) return;
+      const viewport = window.visualViewport;
+      const viewportLeft = viewport?.offsetLeft || 0;
+      const viewportTop = viewport?.offsetTop || 0;
+      const viewportWidth = viewport?.width || window.innerWidth;
+      const viewportHeight = viewport?.height || window.innerHeight;
+      const width = Math.min(360, viewportWidth - 24);
+      const top = trigger.bottom + 8;
+      setPanelPosition({
+        top,
+        left: Math.max(
+          viewportLeft + 12,
+          Math.min(
+            trigger.right - width,
+            viewportLeft + viewportWidth - width - 12,
+          ),
+        ),
+        width,
+        maxHeight: Math.max(0, viewportTop + viewportHeight - top - 12),
+      });
+    };
+    positionPanel();
+    window.addEventListener("resize", positionPanel);
+    window.addEventListener("scroll", positionPanel, true);
+    window.visualViewport?.addEventListener("resize", positionPanel);
+    window.visualViewport?.addEventListener("scroll", positionPanel);
+    return () => {
+      window.removeEventListener("resize", positionPanel);
+      window.removeEventListener("scroll", positionPanel, true);
+      window.visualViewport?.removeEventListener("resize", positionPanel);
+      window.visualViewport?.removeEventListener("scroll", positionPanel);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!currentUser?.uid || !config) {
@@ -488,8 +534,19 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   if (!currentUser) return null;
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div
+      ref={rootRef}
+      className={`relative ${className}`}
+      onKeyDown={(event) => {
+        if (open && event.key === "Escape") {
+          event.stopPropagation();
+          setOpen(false);
+          triggerRef.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         data-session-action="true"
@@ -507,7 +564,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
 
       {open && (
         <div
-          className={`fixed inset-x-3 top-[4.25rem] z-[130] overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl sm:left-auto sm:right-4 sm:w-[360px] lg:absolute lg:right-0 lg:top-11 ${panelClassName}`}
+          className={`notification-anchored-panel fixed z-[130] overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl ${panelClassName}`}
+          style={panelPosition}
+          role="region"
+          aria-label="알림 목록"
         >
           <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
             <div>

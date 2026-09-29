@@ -1,4 +1,5 @@
 import React from "react";
+import "../teacher-list-controls.css";
 import PointRankBadge from "../../../../components/common/PointRankBadge";
 import {
   POINT_TRANSACTION_TYPE_LABELS,
@@ -151,21 +152,18 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.28fr)_minmax(360px,0.92fr)]">
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 bg-gray-50 p-5">
+        <div className="points-student-filter-header border-b border-gray-100 bg-gray-50">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-800">
                 학생별 위스 현황
               </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                기본은 누적 적립 순으로 보며, 학년·반·번호·이름 검색을 조합해
-                최근 거래 내역까지 확인할 수 있습니다.
-              </p>
             </div>
             <div className="text-sm font-bold text-gray-500">{`검색 결과 ${totalWalletCount}명`}</div>
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="points-student-filters mt-4 grid gap-3 md:grid-cols-4">
             <select
+              aria-label="학년 필터"
               value={gradeFilter}
               onChange={(event) => onGradeFilterChange(event.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
@@ -176,6 +174,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
               ))}
             </select>
             <select
+              aria-label="반 필터"
               value={classFilter}
               onChange={(event) => onClassFilterChange(event.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
@@ -186,6 +185,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
               ))}
             </select>
             <select
+              aria-label="번호 필터"
               value={numberFilter}
               onChange={(event) => onNumberFilterChange(event.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
@@ -196,6 +196,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
               ))}
             </select>
             <input
+              aria-label="학생 이름 검색"
               value={nameSearch}
               onChange={(event) => onNameSearchChange(event.target.value)}
               placeholder="이름 또는 일부 검색"

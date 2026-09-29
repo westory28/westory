@@ -495,12 +495,15 @@
     align-items: center;
     flex-shrink: 0;
     gap: 8px;
-    padding: 0 12px 12px;
+    padding: 0 0 12px;
     border-bottom: 1px solid var(--ws-border, #e5e7eb);
   }
   .teacher-mobile-account .header-user-link {
     width: 100%;
     min-height: 40px;
+    font-size: 16px;
+    font-weight: 800;
+    padding-inline: 12px;
   }
   .teacher-mobile-account .teacher-account-notification > button {
     width: 40px;
@@ -509,8 +512,6 @@
   .teacher-mobile-account .teacher-mobile-notification-panel {
     display: flex;
     flex-direction: column;
-    top: calc(16px + env(safe-area-inset-top, 0px));
-    max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
   .teacher-mobile-notification-panel > div:first-child,
   .teacher-mobile-notification-panel > div:last-child {

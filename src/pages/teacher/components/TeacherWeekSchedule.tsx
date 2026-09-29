@@ -19,6 +19,7 @@ import {
   getSchedulePeriodRangeLabel,
 } from "../../../lib/schedulePeriods";
 import TeacherNavigationIcon from "../../../components/layout/TeacherNavigationIcon";
+import TeacherScheduleTitle from "./TeacherScheduleTitle";
 import {
   calendarDateKey,
   calendarEventEndDate,
@@ -252,20 +253,25 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           이번 주
         </button>
         <div className="teacher-week-schedule__filters">
-          <select
-            className="student-calendar-shell__filter-select"
-            aria-label="일정 대상 필터"
-            value={filterClass}
-            onChange={(event) => onFilterChange(event.target.value)}
-          >
-            <option value="all">전체 일정</option>
-            <option value="common">공통 일정</option>
-            {availableClassTargets.map((target) => (
-              <option key={target} value={target}>
-                {classLabel(target)}
-              </option>
-            ))}
-          </select>
+          <div className="teacher-schedule-filter">
+            <select
+              className="student-calendar-shell__filter-select"
+              aria-label="일정 대상 필터"
+              value={filterClass}
+              onChange={(event) => onFilterChange(event.target.value)}
+            >
+              <option value="all">전체 일정</option>
+              <option value="common">공통 일정</option>
+              {availableClassTargets.map((target) => (
+                <option key={target} value={target}>
+                  {classLabel(target)}
+                </option>
+              ))}
+            </select>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
           <div className="teacher-week-schedule__actions">
             <div
               className={`teacher-week-search${searchOpen ? " is-open" : ""}`}
@@ -497,7 +503,7 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                       className="teacher-week-event__title"
                       title={event.title}
                     >
-                      {event.title}
+                      <TeacherScheduleTitle title={event.title} />
                     </strong>
                     <span className="teacher-week-event__metadata">
                       {event.eventType !== "holiday" && (

@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
+import { buildStudentPagination } from "./components/studentPagination";
+import "./components/teacher-list-controls.css";
 import { useAuth } from "../../contexts/AuthContext";
 import { canEditStudentList } from "../../lib/permissions";
 import {
@@ -163,6 +165,9 @@ const StudentList: React.FC = () => {
   const [gradeFilter, setGradeFilter] = useState("all");
   const [classFilter, setClassFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
   const [gradeOptions, setGradeOptions] = useState<SchoolGradeOption[]>([
     { value: "1", label: "1학년" },
     { value: "2", label: "2학년" },
@@ -211,6 +216,10 @@ const StudentList: React.FC = () => {
   useEffect(() => {
     applyFilters();
   }, [normalizedStudents, gradeFilter, classFilter, searchQuery]);
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
 
   const fetchStudents = async (options: { silent?: boolean } = {}) => {
     if (!options.silent) setLoading(true);
@@ -619,14 +628,15 @@ const StudentList: React.FC = () => {
             </h2>
           </div>
 
-          <div className="flex flex-col items-center justify-between gap-3 border-b border-gray-100 p-5 md:flex-row">
+          <div className="student-list-controls flex flex-col items-center gap-3 border-b border-gray-100">
             {readOnly && (
               <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700">
                 읽기 전용 권한입니다. 학생 명단 조회만 가능합니다.
               </div>
             )}
-            <div className="flex w-full items-center gap-2 overflow-x-auto md:w-auto">
+            <div className="student-list-toolbar">
               <select
+                aria-label="학년 필터"
                 value={gradeFilter}
                 onChange={(e) => setGradeFilter(e.target.value)}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
@@ -639,6 +649,7 @@ const StudentList: React.FC = () => {
                 ))}
               </select>
               <select
+                aria-label="반 필터"
                 value={classFilter}
                 onChange={(e) => setClassFilter(e.target.value)}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
@@ -651,31 +662,61 @@ const StudentList: React.FC = () => {
                 ))}
               </select>
               <button
+                type="button"
                 onClick={() => void handleRefreshList()}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
+                className="student-list-toolbar__action rounded-lg border border-gray-300 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
                 title="명단 새로고침 및 필터 초기화"
+                aria-label="명단 새로고침 및 필터 초기화"
               >
                 <i
                   className={`fas fa-sync-alt ${loading ? "animate-spin" : ""}`}
+                  aria-hidden="true"
                 ></i>
               </button>
-            </div>
-
-            <div className="flex w-full gap-2 md:w-auto">
-              <input
-                type="text"
-                placeholder="이름 또는 이메일 검색"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none md:w-64"
-              />
               <button
-                onClick={applyFilters}
-                className="whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                ref={searchButtonRef}
+                type="button"
+                onClick={() => {
+                  setSearchOpen(!searchOpen);
+                  if (searchOpen) setSearchQuery("");
+                }}
+                aria-expanded={searchOpen}
+                aria-controls="student-list-search"
+                aria-label={searchOpen ? "학생 검색 닫기" : "학생 검색 열기"}
+                title={searchOpen ? "검색 닫기" : "검색"}
+                className="student-list-toolbar__action rounded-lg bg-blue-600 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
               >
-                <i className="fas fa-search mr-1"></i>검색
+                <i className="fas fa-search" aria-hidden="true"></i>
               </button>
             </div>
+            {searchOpen && (
+              <form
+                id="student-list-search"
+                role="search"
+                className="student-list-search"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  applyFilters();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape" || event.nativeEvent.isComposing)
+                    return;
+                  setSearchOpen(false);
+                  setSearchQuery("");
+                  searchButtonRef.current?.focus();
+                }}
+              >
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  aria-label="이름 또는 이메일 검색"
+                  placeholder="이름 또는 이메일 검색"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </form>
+            )}
           </div>
 
           <div className="flex-1 overflow-x-auto">
@@ -829,29 +870,45 @@ const StudentList: React.FC = () => {
           </div>
 
           {!loading && studentPageGroups.length > 1 && (
-            <div className="flex flex-wrap items-center justify-center gap-2 border-t border-gray-100 bg-white px-5 py-3">
+            <nav
+              aria-label="학생 명단 페이지"
+              className="student-list-pagination border-t border-gray-100 bg-white"
+            >
               {currentPageGroup && (
-                <span className="mr-1 text-xs font-bold text-gray-500">
+                <span className="hidden whitespace-nowrap text-xs font-bold text-gray-500 md:inline">
                   현재 {currentPageGroup.label}
                 </span>
               )}
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {studentPageGroups.map((group, index) => {
-                  const page = index + 1;
+              {buildStudentPagination(currentPage, totalPages).map(
+                (page, index) => {
+                  if (page === "ellipsis") {
+                    return (
+                      <span
+                        key={`gap-${index}`}
+                        className="student-list-pagination__gap text-xs text-gray-500"
+                        aria-hidden="true"
+                      >
+                        …
+                      </span>
+                    );
+                  }
+                  const group = studentPageGroups[page - 1];
                   return (
                     <button
                       key={group.key}
+                      type="button"
                       onClick={() => setCurrentPage(page)}
                       title={`${page}페이지: ${group.label}`}
                       aria-label={`${page}페이지, ${group.label}`}
-                      className={`min-w-8 h-8 rounded-md px-2 text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
+                      aria-current={currentPage === page ? "page" : undefined}
+                      className={`rounded-md text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
                     >
                       {page}
                     </button>
                   );
-                })}
-              </div>
-            </div>
+                },
+              )}
+            </nav>
           )}
         </div>
 
