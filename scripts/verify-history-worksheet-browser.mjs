@@ -298,6 +298,15 @@ try {
         await waitLayout(page);
         const label = `${kind}-${mode}-${viewport.width}x${viewport.height}`;
         const before = await measure(page, kind);
+        const toolbarBefore =
+          kind === "stage"
+            ? null
+            : await page.locator('[data-history-toolbar="true"]').boundingBox();
+        if (toolbarBefore)
+          assert(
+            toolbarBefore.height <= 104,
+            `${label}: compact toolbar uses at most two 44px touch rows`,
+          );
         assert(!before.overflow, `${label}: no document overflow`);
         if (kind !== "stage") {
           assert.equal(
@@ -349,6 +358,16 @@ try {
             .click();
         await waitLayout(page);
         const zoomed = await measure(page, kind);
+        if (toolbarBefore) {
+          const toolbarZoomed = await page
+            .locator('[data-history-toolbar="true"]')
+            .boundingBox();
+          assert(
+            Math.abs(toolbarZoomed.width - toolbarBefore.width) < 1 &&
+              Math.abs(toolbarZoomed.height - toolbarBefore.height) < 1,
+            `${label}: document zoom does not resize the toolbar`,
+          );
+        }
         assert(
           zoomed.image.width > before.image.width * 1.05,
           `${label}: zoom increases the page`,
@@ -374,6 +393,16 @@ try {
         if (viewport.width === 768) {
           await pinch(page, kind);
           const pinched = await measure(page, kind);
+          if (toolbarBefore) {
+            const toolbarPinched = await page
+              .locator('[data-history-toolbar="true"]')
+              .boundingBox();
+            assert(
+              Math.abs(toolbarPinched.width - toolbarBefore.width) < 1 &&
+                Math.abs(toolbarPinched.height - toolbarBefore.height) < 1,
+              `${label}: pinch only scales the worksheet/map, not its toolbar`,
+            );
+          }
           assert(
             pinched.image.width > reset.image.width * 1.05,
             `${label}: two-finger touch pinch zooms the document`,
@@ -564,8 +593,14 @@ try {
     await desktop
       .locator('[data-history-actions="true"]')
       .evaluate((el) => getComputedStyle(el).position),
-    "fixed",
-    "mouse desktop retains fixed submission actions",
+    "static",
+    "desktop submission stays in the worksheet toolbar without overlay",
+  );
+  assert.equal(
+    await desktop
+      .locator('[data-history-toolbar="true"]')
+      .evaluate((el) => getComputedStyle(el).position),
+    "sticky",
   );
   await desktop
     .getByRole("button", { name: "자료 확대", exact: true })
@@ -579,8 +614,50 @@ try {
     path: path.join(evidence, "history-desktop-mouse-1440.png"),
     fullPage: true,
   });
-  reports.push({ label: "desktop-mouse-keyboard-1440", fixedActions: true });
+  reports.push({ label: "desktop-mouse-keyboard-1440", fixedActions: false });
   await desktop.close();
+  const recovery = await browser.newPage({
+    viewport: { width: 768, height: 1024 },
+    hasTouch: true,
+  });
+  await recovery.route("**/worksheet.svg", (route) =>
+    route.abort("internetdisconnected"),
+  );
+  await recovery.goto(
+    `http://127.0.0.1:${server.address().port}/?kind=history-lesson&timer=1`,
+  );
+  await recovery.getByRole("button", { name: "자료 다시 불러오기" }).waitFor();
+  await recovery.unroute("**/worksheet.svg");
+  await recovery.getByRole("button", { name: "자료 다시 불러오기" }).click();
+  await recovery.waitForFunction(
+    () => document.querySelector("section img")?.naturalWidth > 0,
+  );
+  await recovery
+    .getByRole("button", { name: "자료 다시 불러오기" })
+    .waitFor({ state: "hidden" });
+  const toolbar = recovery.locator('[data-history-toolbar="true"]');
+  await toolbar.evaluate((element) =>
+    element.scrollIntoView({ block: "start" }),
+  );
+  await recovery.evaluate(() => window.scrollBy(0, 120));
+  const timerBox = await recovery
+    .getByRole("timer", { name: "남은 시간" })
+    .boundingBox();
+  assert(
+    timerBox && timerBox.y >= 0 && timerBox.y < 180,
+    "countdown stays visible at the worksheet toolbar while solving",
+  );
+  const retryMetrics = await measure(recovery, "history-lesson");
+  assertOriginalRects(retryMetrics, "image retry retains geometry");
+  await recovery.screenshot({
+    path: path.join(evidence, "history-image-recovery-768.png"),
+    fullPage: true,
+  });
+  reports.push({
+    label: "image-failure-retry-and-visible-timer-768",
+    timerBox,
+  });
+  await recovery.close();
 } finally {
   await fs.writeFile(
     path.join(evidence, "worksheet-browser-report.json"),

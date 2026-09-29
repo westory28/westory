@@ -34,8 +34,8 @@ assert(
   "History classroom must keep retry locks for actual attempt start/exit paths.",
 );
 assert(
-  /const handleBeforeUnload[\s\S]*writeCooldownLock/.test(historyRunner),
-  "History classroom beforeunload path must lock/reset instead of silently preserving the attempt.",
+  /const handleBeforeUnload[\s\S]*persistAttemptProgress/.test(historyRunner),
+  "History classroom browser reload must preserve the attempt; explicit confirmed exits still cancel above.",
 );
 assert(
   /setInterval\(emitSessionActivity, 60 \* 1000\)/.test(historyRunner),

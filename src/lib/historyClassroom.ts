@@ -222,6 +222,13 @@ const resolveUniqueHistoryClassroomBlankId = (
   return nextId;
 };
 
+const normalizeHistoryClassroomPassThreshold = (value: unknown) => {
+  const threshold = value == null || value === "" ? Number.NaN : Number(value);
+  return Number.isFinite(threshold)
+    ? Math.min(100, Math.max(0, threshold))
+    : 80;
+};
+
 const normalizeHistoryClassroomSource = (
   raw: Partial<HistoryClassroomAssignment>,
 ) => ({
@@ -304,9 +311,8 @@ export const normalizeHistoryClassroomAssignment = (
       : [],
     timeLimitMinutes: Math.max(0, Number(raw.timeLimitMinutes) || 0),
     cooldownMinutes: Number(raw.cooldownMinutes) || 0,
-    passThresholdPercent: Math.min(
-      100,
-      Math.max(0, Number(raw.passThresholdPercent) || 80),
+    passThresholdPercent: normalizeHistoryClassroomPassThreshold(
+      raw.passThresholdPercent,
     ),
     dueWindowDays:
       Number.isFinite(Number(raw.dueWindowDays)) &&
@@ -383,9 +389,8 @@ export const normalizeHistoryClassroomResult = (
   score: Number(raw.score) || 0,
   total: Number(raw.total) || 0,
   percent: Math.min(100, Math.max(0, Number(raw.percent) || 0)),
-  passThresholdPercent: Math.min(
-    100,
-    Math.max(0, Number(raw.passThresholdPercent) || 80),
+  passThresholdPercent: normalizeHistoryClassroomPassThreshold(
+    raw.passThresholdPercent,
   ),
   passed: raw.passed === true,
   status:
@@ -662,9 +667,8 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
       : [],
     timeLimitMinutes: Math.max(0, Number(raw.timeLimitMinutes) || 0),
     cooldownMinutes: Math.max(0, Number(raw.cooldownMinutes) || 0),
-    passThresholdPercent: Math.min(
-      100,
-      Math.max(0, Number(raw.passThresholdPercent) || 80),
+    passThresholdPercent: normalizeHistoryClassroomPassThreshold(
+      raw.passThresholdPercent,
     ),
     dueWindowDays:
       Number.isFinite(Number(raw.dueWindowDays)) &&

@@ -5849,7 +5849,7 @@ exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, asyn
 });
 
 exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid, profile } = await assertHistoryClassroomStudent(request);
   const { year, semester } = assertYearSemester(request.data);
   const assignmentId = String(request.data?.assignmentId || '').trim();
   const requestedResultId = String(request.data?.resultId || '').trim();
@@ -5859,75 +5859,85 @@ exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request
   if (!assignmentId) {
     throw new HttpsError('invalid-argument', 'Assignment id is required.');
   }
+  if ([year, semester, assignmentId, requestedResultId].some((value) => (
+    value.includes('/') || value === '.' || value === '..' || Buffer.byteLength(value, 'utf8') > 1500
+  ))) {
+    throw new HttpsError('invalid-argument', 'Invalid history classroom document id.');
+  }
   if (requestedStatus && !['passed', 'failed', 'cancelled'].includes(requestedStatus)) {
     throw new HttpsError('invalid-argument', 'Invalid result status.');
   }
-
-  const assignment = await loadHistoryClassroomAssignmentForSubmit(year, semester, assignmentId);
-  const assignmentData = assignment.data;
-  if (assignmentData.deletedAt) {
-    throw new HttpsError('failed-precondition', 'History classroom assignment was deleted.');
-  }
-  if (assignmentData.isPublished !== true) {
-    throw new HttpsError('failed-precondition', 'History classroom assignment is not published.');
-  }
-  if (!collectHistoryClassroomAssignedUidsForFunction(assignmentData).includes(uid)) {
-    throw new HttpsError('permission-denied', 'History classroom assignment is not assigned to the caller.');
-  }
-
-  const answers = normalizeHistoryClassroomAnswersForWrite(request.data?.answers);
-  const scoreSummary = buildHistoryClassroomServerScore(assignmentData, answers);
-  const { profile } = await getUserProfile(uid);
-  const passThresholdPercent = Math.min(100, Math.max(0, Number(assignmentData.passThresholdPercent) || 80));
-  const passed = requestedStatus === 'cancelled'
-    ? false
-    : scoreSummary.percent >= passThresholdPercent;
-  const status = requestedStatus === 'cancelled'
-    ? 'cancelled'
-    : passed
-      ? 'passed'
-      : 'failed';
 
   const resultCollectionPath = `${getSemesterRoot(year, semester)}/history_classroom_results`;
   const resultRef = requestedResultId
     ? db.doc(`${resultCollectionPath}/${requestedResultId}`)
     : db.collection(resultCollectionPath).doc();
-  const resultSnap = await resultRef.get();
-  if (resultSnap.exists && String(resultSnap.data()?.uid || '').trim() !== uid) {
-    throw new HttpsError('permission-denied', 'History classroom result id belongs to another user.');
-  }
+  const resultPayload = await db.runTransaction(async (transaction) => {
+    const resultSnap = await transaction.get(resultRef);
+    const saved = resultSnap.exists ? resultSnap.data() : null;
+    if (saved && String(saved.uid || '').trim() !== uid) {
+      throw new HttpsError('permission-denied', 'History classroom result id belongs to another user.');
+    }
+    if (saved && String(saved.assignmentId || '').trim() !== assignmentId) {
+      throw new HttpsError('failed-precondition', 'History classroom result id belongs to another assignment.');
+    }
+    if (saved?.completionSource === 'exemption') {
+      throw new HttpsError('failed-precondition', 'History classroom exemption results cannot be replaced by an attempt.');
+    }
+    // This field is excluded from the client-create rule's allowed keys. Once
+    // server-scored, a lost-response retry returns the original committed result
+    // even if the assignment was subsequently edited, hidden, or deleted.
+    if (saved?.serverSubmissionVersion === 1) return saved;
 
-  const resultPayload = {
-    assignmentId: assignment.id,
-    assignmentTitle: String(assignmentData.title || '').trim(),
-    uid,
-    studentName: String(profile.name || '').trim(),
-    studentGrade: String(profile.grade || '').trim(),
-    studentClass: String(profile.class || '').trim(),
-    studentNumber: String(profile.number || '').trim(),
-    answers,
-    score: scoreSummary.score,
-    total: scoreSummary.total,
-    percent: scoreSummary.percent,
-    passThresholdPercent,
-    passed,
-    status,
-    answerChecks: scoreSummary.checks,
-    cancellationReason,
-    createdAt: FieldValue.serverTimestamp(),
-  };
+    let assignmentSnap = await transaction.get(db.doc(`${getSemesterRoot(year, semester)}/history_classrooms/${assignmentId}`));
+    if (!assignmentSnap.exists) {
+      assignmentSnap = await transaction.get(db.doc(`history_classrooms/${assignmentId}`));
+    }
+    if (!assignmentSnap.exists) {
+      throw new HttpsError('not-found', 'History classroom assignment does not exist.');
+    }
+    const assignmentData = assignmentSnap.data() || {};
+    assertHistoryClassroomAssignmentForStudent(assignmentData, uid);
 
-  await resultRef.set(resultPayload, { merge: false });
+    // Older clients could save directly to Firestore. Re-score their ORIGINAL
+    // answers once rather than trusting client totals or replacing their attempt.
+    const answers = normalizeHistoryClassroomAnswersForWrite(saved ? saved.answers : request.data?.answers);
+    const scoreSummary = buildHistoryClassroomServerScore(assignmentData, answers);
+    const threshold = assignmentData.passThresholdPercent == null || assignmentData.passThresholdPercent === ''
+      ? Number.NaN
+      : Number(assignmentData.passThresholdPercent);
+    const passThresholdPercent = Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : 80;
+    const cancelled = (saved ? saved.status : requestedStatus) === 'cancelled';
+    const passed = !cancelled && scoreSummary.percent >= passThresholdPercent;
+    const payload = {
+      assignmentId,
+      assignmentTitle: String(assignmentData.title || '').trim(),
+      ...getHistoryClassroomProfileSnapshot(uid, profile),
+      answers,
+      score: scoreSummary.score,
+      total: scoreSummary.total,
+      percent: scoreSummary.percent,
+      passThresholdPercent,
+      passed,
+      status: cancelled ? 'cancelled' : passed ? 'passed' : 'failed',
+      answerChecks: scoreSummary.checks,
+      cancellationReason: saved ? String(saved.cancellationReason || '').slice(0, 120) : cancellationReason,
+      createdAt: saved?.createdAt || FieldValue.serverTimestamp(),
+      serverSubmissionVersion: 1,
+    };
+    transaction.set(resultRef, payload);
+    return payload;
+  });
 
   let notificationCreatedCount = 0;
   let notificationRecipientCount = 0;
-  if (passed) {
+  if (resultPayload.passed) {
     try {
       const notificationResults = await createHistoryClassroomPassedNotifications(year, semester, {
         resultId: resultRef.id,
         assignmentTitle: resultPayload.assignmentTitle,
         studentName: resultPayload.studentName,
-        percent: scoreSummary.percent,
+        percent: resultPayload.percent,
         actorUid: uid,
       });
       notificationCreatedCount = notificationResults.filter((result) => result.created).length;
@@ -5940,12 +5950,13 @@ exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request
   return {
     resultId: resultRef.id,
     resultCollectionPath,
-    score: scoreSummary.score,
-    total: scoreSummary.total,
-    percent: scoreSummary.percent,
-    passed,
-    status,
-    answerChecks: scoreSummary.checks,
+    score: resultPayload.score,
+    total: resultPayload.total,
+    percent: resultPayload.percent,
+    passThresholdPercent: resultPayload.passThresholdPercent,
+    passed: resultPayload.passed,
+    status: resultPayload.status,
+    answerChecks: resultPayload.answerChecks,
     notificationCreatedCount,
     notificationRecipientCount,
   };

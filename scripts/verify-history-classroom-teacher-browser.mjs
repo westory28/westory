@@ -26,7 +26,7 @@ try {
 }
 const evidence = path.join(
   root,
-  ".superloopy/sessions/history-lesson-worksheets/evidence",
+  ".superloopy/sessions/history-classroom-followup/evidence",
 );
 await fs.mkdir(evidence, { recursive: true });
 const cache = path.join(os.tmpdir(), "westory-tailwind-fixture.js");
@@ -108,19 +108,43 @@ const store = {
         id: "chapter",
         title: "II. 고대 사회",
         children: [
-          { id: "b", title: "2. 삼국", children: [] },
-          { id: "a", title: longTitle, children: [] },
+          {
+            id: "middle",
+            title: "국가의 형성",
+            children: [
+              { id: "b", title: "2. 삼국", children: [] },
+              { id: "a", title: longTitle, children: [] },
+            ],
+          },
+          {
+            id: "middle-other",
+            title: "국가의 형성",
+            children: [{ id: "d", title: "2. 삼국", children: [] }],
+          },
+        ],
+      },
+      {
+        id: "chapter-copy",
+        title: "II. 고대 사회",
+        children: [
+          {
+            id: "middle-copy",
+            title: "국가의 형성",
+            children: [{ id: "c", title: "2. 삼국", children: [] }],
+          },
         ],
       },
     ],
   },
+  [`${scope}/lessons/c`]: lesson("c", "중복 제목 수업", "신라"),
+  [`${scope}/lessons/d`]: lesson("d", "다른 중목차 수업", "고구려"),
   [`${scope}/lessons/b`]: lesson("b", "삼국 수업", "백제"),
   [`${scope}/lessons/a`]: lesson("a", longTitle),
   [`${scope}/map_resources/map-1`]: map,
   "users/student-1": {
     role: "student",
     name: "검증학생",
-    grade: "1",
+    grade: "3",
     class: "2",
     number: "3",
   },
@@ -264,6 +288,22 @@ const measure = async (page, id) =>
       label: el.selectedOptions[0]?.textContent,
     };
   });
+const assertNewDefaults = async (page) => {
+  assert.deepEqual(
+    await page
+      .locator('input[type="number"]')
+      .evaluateAll((inputs) => inputs.map((input) => input.value)),
+    ["10", "5", "", "90"],
+  );
+  assert.equal(
+    await page.getByLabel("대상 학년", { exact: true }).inputValue(),
+    "3",
+  );
+  assert.equal(
+    await page.getByLabel("대상 학급", { exact: true }).inputValue(),
+    "2",
+  );
+};
 try {
   for (const viewport of [
     { width: 390, height: 844 },
@@ -296,6 +336,7 @@ try {
     await page
       .getByRole("button", { name: "+ 새 역사교실", exact: true })
       .click();
+    await assertNewDefaults(page);
     await page.locator("#history-create-source-type").selectOption("lesson");
     await page.waitForFunction(
       () =>
@@ -308,11 +349,39 @@ try {
       );
     assert.deepEqual(
       options.map((item) => item.value),
-      ["lesson:b", "lesson:a"],
+      ["b", "a"],
       "curriculum order must win over alphabetical sorting",
     );
-    assert.equal(options[1].label, `II. 고대 사회 › ${longTitle}`);
-    await page.locator("#history-create-source").selectOption("lesson:a");
+    assert.equal(options[1].label, longTitle);
+    assert.deepEqual(
+      await page
+        .locator("#history-create-source-level-0 option")
+        .evaluateAll((nodes) => nodes.map((node) => node.value)),
+      ["chapter", "chapter-copy"],
+    );
+    await page
+      .locator("#history-create-source-level-0")
+      .selectOption("chapter-copy");
+    assert.deepEqual(
+      await page
+        .locator("#history-create-source option")
+        .evaluateAll((nodes) => nodes.map((node) => node.value)),
+      ["c"],
+    );
+    await page
+      .locator("#history-create-source-level-0")
+      .selectOption("chapter");
+    await page
+      .locator("#history-create-source-level-1")
+      .selectOption("middle-other");
+    assert.deepEqual(
+      await page
+        .locator("#history-create-source option")
+        .evaluateAll((nodes) => nodes.map((node) => node.value)),
+      ["d"],
+    );
+    await page.locator("#history-create-source-level-1").selectOption("middle");
+    await page.locator("#history-create-source").selectOption("a");
     const geometry = await measure(page, "#history-create-source");
     assert(
       !geometry.overflow &&
@@ -334,9 +403,48 @@ try {
       "map-1",
     );
     await page.locator("#history-create-source-type").selectOption("lesson");
-    await page.locator("#history-create-source").selectOption("lesson:a");
+    await page.locator("#history-create-source").selectOption("a");
     await page.getByPlaceholder("이름으로 전체 학생 검색").fill("검증학생");
-    await page.getByRole("button", { name: /검증학생.*1-2/ }).click();
+    await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
+    const reasonSelect = page.getByLabel("검증학생 배정 사유", { exact: true });
+    assert.deepEqual(await reasonSelect.locator("option").allTextContents(), [
+      "사유 선택",
+      "1인 1역 및 청소 안함",
+      "지각",
+      "수업 태도",
+      "교사 지시 불이행",
+      "기타",
+    ]);
+    await reasonSelect.selectOption("__other__");
+    await page
+      .getByRole("button", { name: "역사교실 저장", exact: true })
+      .click();
+    assert.equal(
+      await page.evaluate(() => window.__fixture.writes.length),
+      0,
+      "Explicit other requires a reason",
+    );
+    assert(
+      await page
+        .getByText("기타 사유를 입력해 주세요.", { exact: true })
+        .isVisible(),
+    );
+    await page.screenshot({
+      path: path.join(
+        evidence,
+        `teacher-create-other-required-${viewport.width}.png`,
+      ),
+      fullPage: true,
+    });
+    await page
+      .getByLabel("검증학생 기타 사유", { exact: true })
+      .fill("교사가 작성한 세부 사유");
+    await reasonSelect.selectOption("지각");
+    assert.equal(
+      await page.getByLabel("검증학생 기타 사유", { exact: true }).count(),
+      0,
+      "Standard reasons do not show a free text field",
+    );
     await page
       .getByRole("button", { name: "역사교실 저장", exact: true })
       .click();
@@ -344,7 +452,11 @@ try {
     assert(created.path.startsWith(`${scope}/history_classrooms/`));
     assert.equal(created.data.sourceType, "lesson");
     assert.equal(created.data.lessonUnitId, "a");
-    assert.deepEqual(created.data.lessonUnitPath, ["II. 고대 사회", longTitle]);
+    assert.deepEqual(created.data.lessonUnitPath, [
+      "II. 고대 사회",
+      "국가의 형성",
+      longTitle,
+    ]);
     assert.deepEqual(
       created.data.blanks,
       expectedBlanks,
@@ -353,6 +465,28 @@ try {
     assert.deepEqual(created.data.pdfPageImages, pageImages);
     assert.equal(created.data.mapResourceId, "");
     assert.deepEqual(created.data.targetStudentUids, ["student-1"]);
+    assert.equal(created.data.targetStudentReasons["student-1"], "지각");
+    assert.deepEqual(
+      [
+        created.data.timeLimitMinutes,
+        created.data.cooldownMinutes,
+        created.data.passThresholdPercent,
+        created.data.targetGrade,
+        created.data.targetClass,
+      ],
+      [10, 5, 90, "3", "2"],
+    );
+    await page
+      .getByRole("button", { name: "+ 새 역사교실", exact: true })
+      .click();
+    await assertNewDefaults(page);
+    await page.locator('input[type="number"]').first().fill("17");
+    await page.getByRole("button", { name: "닫기", exact: true }).click();
+    await page
+      .getByRole("button", { name: "+ 새 역사교실", exact: true })
+      .click();
+    await assertNewDefaults(page);
+    await page.getByRole("button", { name: "닫기", exact: true }).click();
 
     // Reload the actual teacher component after the source lesson changes.
     // Existing assignments must keep their published snapshot on a settings save.
@@ -363,6 +497,12 @@ try {
         window.__fixture.store[
           `${scope}/lessons/a`
         ].worksheetPageImages[0].imageUrl = "/worksheet.svg?revision=2";
+        const assignment = Object.entries(window.__fixture.store).find(
+          ([key]) => key.startsWith(`${scope}/history_classrooms/`),
+        )[1];
+        assignment.timeLimitMinutes = 17;
+        assignment.cooldownMinutes = 8;
+        assignment.passThresholdPercent = 75;
         window.__remount();
       },
       { scope },
@@ -374,10 +514,7 @@ try {
       await page.locator("#history-edit-source-type").inputValue(),
       "lesson",
     );
-    assert.equal(
-      await page.locator("#history-edit-source").inputValue(),
-      "lesson:a",
-    );
+    assert.equal(await page.locator("#history-edit-source").inputValue(), "a");
     await page.locator("#history-edit-source").scrollIntoViewIfNeeded();
     const editGeometry = await measure(page, "#history-edit-source");
     await page.screenshot({
@@ -390,8 +527,50 @@ try {
         editGeometry.left >= 0,
       `edit selector fits: ${JSON.stringify(editGeometry)}`,
     );
+    assert.deepEqual(
+      await page
+        .locator('input[type="number"]')
+        .evaluateAll((inputs) => inputs.map((input) => input.value)),
+      ["17", "8", "", "75"],
+      "Editing keeps existing policy instead of new assignment defaults",
+    );
+    assert.equal(
+      await page.getByLabel("검증학생 배정 사유", { exact: true }).inputValue(),
+      "지각",
+    );
+    await page
+      .getByLabel("검증학생 배정 사유", { exact: true })
+      .selectOption("__other__");
+    await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+    assert.equal(
+      await page.evaluate(() => window.__fixture.writes.length),
+      1,
+      "Edit other reason is required",
+    );
+    await page.screenshot({
+      path: path.join(
+        evidence,
+        `teacher-edit-other-required-${viewport.width}.png`,
+      ),
+      fullPage: true,
+    });
+    await page
+      .getByLabel("검증학생 기타 사유", { exact: true })
+      .fill("기존 자유 입력 사유를 유지합니다");
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const preserved = await waitWrite(page, 2);
+    assert.deepEqual(
+      [
+        preserved.data.timeLimitMinutes,
+        preserved.data.cooldownMinutes,
+        preserved.data.passThresholdPercent,
+      ],
+      [17, 8, 75],
+    );
+    assert.equal(
+      preserved.data.targetStudentReasons["student-1"],
+      "기존 자유 입력 사유를 유지합니다",
+    );
     assert.deepEqual(
       snapshotFields(preserved.data),
       snapshotFields(created.data),
@@ -401,9 +580,25 @@ try {
     await page
       .getByRole("button", { name: `${longTitle} 설정 수정`, exact: true })
       .click();
+    assert.equal(
+      await page.getByLabel("검증학생 배정 사유", { exact: true }).inputValue(),
+      "__other__",
+    );
+    assert.equal(
+      await page.getByLabel("검증학생 기타 사유", { exact: true }).inputValue(),
+      "기존 자유 입력 사유를 유지합니다",
+    );
+    await page
+      .getByLabel("검증학생 배정 사유", { exact: true })
+      .selectOption("");
     await page.locator("#history-edit-source-type").selectOption("map");
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const mapped = await waitWrite(page, 3);
+    assert.equal(
+      mapped.data.targetStudentReasons["student-1"] || "",
+      "",
+      "Unselected reasons remain allowed for compatibility",
+    );
     assert.equal(mapped.data.sourceType, "map");
     assert.equal(mapped.data.mapResourceId, "map-1");
     assert.equal(mapped.data.lessonUnitId, "");
@@ -414,17 +609,18 @@ try {
       .getByRole("button", { name: "한반도 지도 설정 수정", exact: true })
       .click();
     await page.locator("#history-edit-source-type").selectOption("lesson");
-    assert.equal(
-      await page.locator("#history-edit-source").inputValue(),
-      "lesson:b",
-    );
+    assert.equal(await page.locator("#history-edit-source").inputValue(), "b");
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const changed = await waitWrite(page, 4);
     assert.equal(changed.data.sourceType, "lesson");
     assert.equal(changed.data.lessonUnitId, "b");
     assert.equal(changed.data.mapResourceId, "");
     assert.equal(changed.data.blanks[0].answer, "백제");
-    assert.deepEqual(changed.data.lessonUnitPath, ["II. 고대 사회", "2. 삼국"]);
+    assert.deepEqual(changed.data.lessonUnitPath, [
+      "II. 고대 사회",
+      "국가의 형성",
+      "2. 삼국",
+    ]);
 
     await page.evaluate(
       ({ scope }) => {
@@ -441,8 +637,8 @@ try {
       .click();
     assert.equal(
       await page.locator("#history-edit-source").inputValue(),
-      "lesson:b",
-      "missing source keeps the saved selection",
+      "",
+      "missing source shows a placeholder without replacing the saved snapshot",
     );
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const missingSource = await waitWrite(page, 5);
