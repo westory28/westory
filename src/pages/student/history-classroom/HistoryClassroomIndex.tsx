@@ -224,34 +224,34 @@ const getStatusMeta = (status: StudentHistoryClassroomStatus) => {
   if (status === "passed") {
     return {
       label: "통과 완료",
-      badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      textClassName: "text-emerald-700",
       buttonClassName: "bg-emerald-50 text-emerald-700",
     };
   }
   if (status === "retry") {
     return {
       label: "다시 도전 가능",
-      badgeClassName: "border-blue-200 bg-blue-50 text-blue-700",
+      textClassName: "text-blue-700",
       buttonClassName: "bg-blue-600 text-white hover:bg-blue-700",
     };
   }
   if (status === "cooldown") {
     return {
       label: "재도전 대기",
-      badgeClassName: "border-amber-300 bg-amber-50 text-amber-800",
+      textClassName: "text-amber-800",
       buttonClassName: "bg-amber-100 text-amber-800",
     };
   }
   if (status === "closed") {
     return {
       label: "응시 기간 종료",
-      badgeClassName: "border-slate-200 bg-slate-50 text-slate-500",
+      textClassName: "text-slate-500",
       buttonClassName: "bg-slate-100 text-slate-500",
     };
   }
   return {
     label: "지금 도전 가능",
-    badgeClassName: "border-blue-200 bg-blue-50 text-blue-700",
+    textClassName: "text-blue-700",
     buttonClassName: "bg-blue-600 text-white hover:bg-blue-700",
   };
 };
@@ -837,75 +837,103 @@ const HistoryClassroomIndex: React.FC = () => {
                     Boolean(item.availableExemption);
                   const isRequestingExemption =
                     requestingAssignmentId === item.assignment.id;
+                  const lessonPath = [
+                    ...(item.assignment.lessonUnitPath || []),
+                  ];
+                  if (
+                    lessonPath.at(-1)?.trim() === item.assignment.title.trim()
+                  )
+                    lessonPath.pop();
+                  const lessonBreadcrumb =
+                    lessonPath.join(" > ") ||
+                    (!item.assignment.lessonUnitPath?.length &&
+                    item.assignment.lessonTitle !== item.assignment.title
+                      ? item.assignment.lessonTitle
+                      : "");
 
                   return (
                     <article
                       key={item.assignment.id}
                       className="rounded-[24px] border border-slate-200 bg-white px-5 py-5 shadow-sm transition hover:border-blue-200 hover:shadow-md"
                     >
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-xl font-black text-slate-950">
-                              {item.assignment.title}
-                            </h2>
-                            {(item.assignment.lessonTitle ||
-                              item.assignment.mapTitle) && (
-                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                                {item.assignment.sourceType === "lesson"
-                                  ? "수업 자료"
-                                  : item.assignment.mapTitle}
-                              </span>
-                            )}
-                          </div>
-
-                          {item.assignment.sourceType === "lesson" && (
-                            <p className="mt-2 break-words text-sm text-slate-600">
-                              {item.assignment.lessonUnitPath?.join(" > ") ||
-                                item.assignment.lessonTitle}
-                            </p>
-                          )}
-                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-slate-600">
-                            <span>
-                              통과 기준 {item.assignment.passThresholdPercent}%
-                            </span>
-                            <span>
-                              제한 시간 {item.assignment.timeLimitMinutes || 0}
-                              분
-                            </span>
-                            <span>
-                              재도전 제한 {item.assignment.cooldownMinutes || 0}
-                              분
-                            </span>
-                            <span>{item.dueLabel}</span>
-                          </div>
-
-                          {(item.assignmentReason ||
-                            item.assignment.description) && (
-                            <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500">
-                              {item.assignmentReason ||
-                                item.assignment.description}
-                            </p>
-                          )}
-
-                          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
-                            <span>{item.assignment.blanks.length}문제</span>
-                            <span>시도 {item.attemptCount}회</span>
-                            {item.bestPercent != null && (
-                              <span>최고 {item.bestPercent}%</span>
-                            )}
-                          </div>
+                      <h2 className="text-xl font-black text-slate-950 [overflow-wrap:anywhere]">
+                        {item.assignment.title}
+                      </h2>
+                      {item.assignment.sourceType === "lesson" &&
+                        lessonBreadcrumb && (
+                          <p className="mt-1 text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]">
+                            {lessonBreadcrumb}
+                          </p>
+                        )}
+                      <dl
+                        data-history-primary-info="true"
+                        className="my-4 grid grid-cols-3 divide-x divide-slate-200"
+                      >
+                        <div className="min-w-0 pr-3">
+                          <dt className="text-xs text-slate-500">문제</dt>
+                          <dd className="mt-1 text-lg font-bold text-slate-900">
+                            {item.assignment.blanks.length}문제
+                          </dd>
                         </div>
-
+                        <div className="min-w-0 px-3">
+                          <dt className="text-xs text-slate-500">제한 시간</dt>
+                          <dd className="mt-1 text-lg font-bold text-slate-900">
+                            {item.assignment.timeLimitMinutes > 0
+                              ? `${item.assignment.timeLimitMinutes}분`
+                              : "없음"}
+                          </dd>
+                        </div>
+                        <div className="min-w-0 pl-3">
+                          <dt className="text-xs text-slate-500">통과 기준</dt>
+                          <dd className="mt-1 text-lg font-bold text-slate-900">
+                            {item.assignment.passThresholdPercent}%
+                          </dd>
+                        </div>
+                      </dl>
+                      {(item.assignmentReason ||
+                        item.assignment.description) && (
+                        <p className="text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
+                          {item.assignmentReason || item.assignment.description}
+                        </p>
+                      )}
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-slate-500">
+                        <span>
+                          재도전 제한 {item.assignment.cooldownMinutes || 0}분
+                        </span>
+                        <span>{item.dueLabel}</span>
+                        <span>
+                          시도 {item.attemptCount}회
+                          {item.bestPercent != null
+                            ? ` · 최고 ${item.bestPercent}%`
+                            : ""}
+                        </span>
+                        {item.passedAttempt ? (
+                          <span>
+                            {item.passedAttempt.score}/
+                            {item.passedAttempt.total}문제 ·{" "}
+                            {item.passedAttemptNumber}번째 시도
+                          </span>
+                        ) : (
+                          item.latest && (
+                            <span>
+                              최근 {item.latest.score}/{item.latest.total}문제 ·{" "}
+                              {getResultLabel(item.latest.status)}
+                            </span>
+                          )
+                        )}
+                      </div>
+                      <div
+                        data-history-status-panel="true"
+                        className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-3"
+                      >
                         <div
-                          data-history-status-panel="true"
-                          className={`flex shrink-0 flex-col gap-3 rounded-2xl border-2 p-4 lg:w-64 ${statusMeta.badgeClassName}`}
+                          className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 ${statusMeta.textClassName}`}
                         >
                           <div className="flex items-center gap-2">
                             <svg
                               aria-hidden="true"
                               viewBox="0 0 24 24"
-                              className="h-7 w-7 shrink-0"
+                              className="h-5 w-5 shrink-0"
                               fill="none"
                               stroke="currentColor"
                               strokeWidth="2"
@@ -936,7 +964,7 @@ const HistoryClassroomIndex: React.FC = () => {
                                 <path d="m8 4 12 8-12 8Z" />
                               )}
                             </svg>
-                            <div className="text-xl font-black leading-tight">
+                            <div className="text-base font-bold leading-6">
                               {item.canRecoverPending
                                 ? item.hasRecoveredResult
                                   ? "제출 완료"
@@ -949,27 +977,14 @@ const HistoryClassroomIndex: React.FC = () => {
                               <div
                                 role="timer"
                                 aria-label="재도전까지 남은 시간"
-                                className="text-2xl font-black tabular-nums"
+                                className="text-base font-semibold tabular-nums"
                               >
                                 약 {item.remainMinutes}분 후 가능
                               </div>
                             )}
-                          {item.passedAttempt ? (
-                            <div className="text-sm font-semibold">
-                              {item.passedAttempt.score}/
-                              {item.passedAttempt.total}문제 ·{" "}
-                              {item.passedAttemptNumber}번째 시도
-                            </div>
-                          ) : (
-                            item.latest && (
-                              <div className="text-sm font-semibold">
-                                최근 {item.latest.score}/{item.latest.total}문제
-                                · {getResultLabel(item.latest.status)}
-                              </div>
-                            )
-                          )}
-
-                          {(canStart || item.status === "cooldown") && (
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 empty:hidden max-sm:w-full">
+                          {canStart && (
                             <button
                               type="button"
                               disabled={!canStart}
@@ -979,7 +994,7 @@ const HistoryClassroomIndex: React.FC = () => {
                                   `/student/history-classroom/run?id=${item.assignment.id}`,
                                 );
                               }}
-                              className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed ${item.canRecoverPending ? getStatusMeta("available").buttonClassName : statusMeta.buttonClassName}`}
+                              className={`min-h-11 rounded-xl px-4 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed max-sm:flex-1 ${item.canRecoverPending ? getStatusMeta("available").buttonClassName : statusMeta.buttonClassName}`}
                             >
                               {item.canRecoverPending
                                 ? item.hasRecoveredResult
@@ -989,9 +1004,7 @@ const HistoryClassroomIndex: React.FC = () => {
                                   ? "다시 도전하기"
                                   : item.status === "available"
                                     ? "응시하기"
-                                    : item.status === "cooldown"
-                                      ? "대기 중"
-                                      : statusMeta.label}
+                                    : statusMeta.label}
                             </button>
                           )}
 
@@ -1006,7 +1019,7 @@ const HistoryClassroomIndex: React.FC = () => {
                                   item.availableExemption.id,
                                 );
                               }}
-                              className="min-h-11 whitespace-nowrap rounded-2xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-black leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+                              className="min-h-11 whitespace-nowrap rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 max-sm:flex-1"
                             >
                               {isRequestingExemption
                                 ? "요청 보내는 중"
@@ -1016,14 +1029,14 @@ const HistoryClassroomIndex: React.FC = () => {
 
                           {!item.passedAttempt &&
                             item.exemptionState === "requested" && (
-                              <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-center text-sm font-bold text-indigo-700">
+                              <div className="text-sm font-semibold text-indigo-700">
                                 면제권 사용 요청 중
                               </div>
                             )}
 
                           {!item.passedAttempt &&
                             item.exemptionState === "used" && (
-                              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700">
+                              <div className="text-sm font-semibold text-emerald-700">
                                 면제권 사용됨
                               </div>
                             )}

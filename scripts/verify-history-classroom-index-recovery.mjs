@@ -37,13 +37,13 @@ try {
   await fs.writeFile(tailwindCache, tailwind);
 }
 const mock = `export const db={};export const config={year:'2026',semester:'2'};export const useAuth=()=>({config,currentUser:{uid:'student-1'},userData:{uid:'student-1',role:'student'}});export const collection=(_db,path)=>({path});export const doc=(_db,...parts)=>({path:parts.join('/')});export const where=(key,op,value)=>({key,op,value});export const query=(ref,...constraints)=>({...ref,constraints});
-const rows=path=>path==='history_classrooms'?(window.__data.legacyAssignments||[]):path.endsWith('/history_classrooms')?window.__data.assignments:path.endsWith('/history_classroom_results')?window.__data.results:[];
+const rows=path=>path==='history_classrooms'?(window.__data.legacyAssignments||[]):path.endsWith('/history_classrooms')?window.__data.assignments:path.endsWith('/history_classroom_results')?window.__data.results:path.endsWith('/history_classroom_exemptions')?(window.__data.exemptions||[]):path.endsWith('/history_classroom_exemption_requests')?(window.__data.requests||[]):[];
 export const getDocs=async(ref)=>{const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
 const listeners=new Map();window.__listeners=listeners;
 const snapshot=(path,value)=>({id:path.split('/').at(-1),exists:()=>!!value,data:()=>value});
 window.__emit=(path,value)=>listeners.get(path)?.next(snapshot(path,value));window.__deny=path=>listeners.get(path)?.error({code:'permission-denied'});
 export const onSnapshot=(ref,next,error)=>{listeners.set(ref.path,{next,error});const index=ref.path.lastIndexOf('/');const value=rows(ref.path.slice(0,index)).find(item=>item.id===ref.path.slice(index+1));queueMicrotask(()=>{if(listeners.has(ref.path))next(snapshot(ref.path,value));});return()=>listeners.delete(ref.path);};
-export const getHttpsCallable=()=>{throw new Error('No callable allowed');};`;
+export const getHttpsCallable=async(name)=>async(input)=>{if(name!=='createHistoryClassroomExemptionRequest')throw new Error('Unexpected callable');window.__exemptionCalls=(window.__exemptionCalls||[]).concat([{name,input}]);return {data:{}};};`;
 const component = JSON.stringify(
   path
     .join(root, "src/pages/student/history-classroom/HistoryClassroomIndex.tsx")
@@ -545,7 +545,23 @@ try {
           dueAt: ["closed", "pending"].includes(state)
             ? assignment.dueAt
             : null,
-          passThresholdPercent: 80,
+          sourceType: "lesson",
+          lessonTitle: `${state} · 고대 국가의 형성과 발전을 살펴보는 역사교실`,
+          lessonUnitPath: [
+            "I. 문명의 발생과 고대 세계의 형성 및 발전",
+            "동아시아 고대 국가들의 성장과 주변 나라와의 교류",
+            `${state} · 고대 국가의 형성과 발전을 살펴보는 역사교실`,
+          ],
+          targetStudentReasons: {
+            "student-1":
+              "1인 1역 및 청소 안함 — 담당 구역 정리와 수업 준비를 마친 뒤 역사교실에서 학습 내용을 확인합니다.",
+          },
+          blanks: Array.from({ length: 46 }, (_, index) => ({
+            ...assignment.blanks[0],
+            id: "blank-" + index,
+          })),
+          timeLimitMinutes: 10,
+          passThresholdPercent: 90,
         }));
         window.__data = {
           assignments,
@@ -555,9 +571,9 @@ try {
             uid: "student-1",
             status: state === "passed" ? "passed" : "failed",
             passed: state === "passed",
-            score: state === "passed" ? 5 : 2,
-            total: 5,
-            percent: state === "passed" ? 100 : 40,
+            score: state === "passed" ? 46 : 3,
+            total: 46,
+            percent: state === "passed" ? 100 : 7,
             createdAt: {
               seconds: (now - (state === "retry" ? 600000 : 0)) / 1000,
             },
@@ -599,7 +615,6 @@ try {
       {
         state: "cooldown",
         label: "재도전 대기",
-        action: "대기 중",
         enabled: false,
       },
       { state: "passed", label: "통과 완료", enabled: false },
@@ -612,7 +627,7 @@ try {
       const panel = item.locator('[data-history-status-panel="true"]');
       assert(
         await panel.isVisible(),
-        `${expected.state} has a prominent state panel`,
+        `${expected.state} has a unified footer state row`,
       );
       if (expected.label)
         assert(
@@ -641,7 +656,70 @@ try {
           `${expected.state} has no redundant or startable action`,
         );
       }
+      const primary = item.locator('[data-history-primary-info="true"]');
+      assert.deepEqual(await primary.locator("dd").allTextContents(), [
+        "46문제",
+        "10분",
+        "90%",
+      ]);
+      const primaryBoxes = await primary.locator("dd").evaluateAll((elements) =>
+        elements.map((el) => ({
+          top: el.getBoundingClientRect().top,
+          size: parseFloat(getComputedStyle(el).fontSize),
+        })),
+      );
+      assert(
+        primaryBoxes.every(
+          (item) => item.top === primaryBoxes[0].top && item.size === 18,
+        ),
+        "all three primary metrics remain on one row",
+      );
+      const heading = item.getByRole("heading", { level: 2 });
+      assert.equal(
+        await heading.evaluate((el) =>
+          parseFloat(getComputedStyle(el).fontSize),
+        ),
+        20,
+      );
+      const breadcrumb = item.locator("h2 + p");
+      assert.equal(
+        await breadcrumb.textContent(),
+        "I. 문명의 발생과 고대 세계의 형성 및 발전 > 동아시아 고대 국가들의 성장과 주변 나라와의 교류",
+        "duplicate leaf is omitted from the visible breadcrumb",
+      );
+      const footerStyle = await panel.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return {
+          background: style.backgroundColor,
+          left: style.borderLeftWidth,
+          right: style.borderRightWidth,
+          bottom: style.borderBottomWidth,
+        };
+      });
+      assert.deepEqual(
+        footerStyle,
+        {
+          background: "rgba(0, 0, 0, 0)",
+          left: "0px",
+          right: "0px",
+          bottom: "0px",
+        },
+        "status uses a divider row without a separate colored box",
+      );
+      if (expected.label)
+        assert.equal(
+          await panel
+            .getByText(expected.label, { exact: true })
+            .evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+          16,
+        );
+      const primaryBox = await primary.boundingBox();
       const panelBox = await panel.boundingBox();
+      assert(
+        panelBox.y >= primaryBox.y + primaryBox.height &&
+          Math.abs(panelBox.width - primaryBox.width) < 2,
+        "status footer spans the same card width below the primary information",
+      );
       assert(
         panelBox.x >= 0 && panelBox.x + panelBox.width <= width + 1,
         `${expected.state} panel stays inside viewport`,
@@ -655,15 +733,19 @@ try {
         const size = await remaining.evaluate((el) =>
           parseFloat(getComputedStyle(el).fontSize),
         );
-        assert(size >= 20, "remaining wait uses a large visible number");
+        assert.equal(
+          size,
+          16,
+          "remaining wait stays balanced with the status text",
+        );
       }
       if (["retry", "cooldown", "passed"].includes(expected.state)) {
         assert(
           await item
             .getByText(
               expected.state === "passed"
-                ? /5\/5문제\s*· 1번째 시도/
-                : /최근 2\/5문제\s*· 미통과/,
+                ? /46\/46문제\s*· 1번째 시도/
+                : /최근 3\/46문제\s*· 미통과/,
             )
             .isVisible(),
           "latest score is a secondary count rather than a competing percentage",
@@ -707,12 +789,106 @@ try {
     }
     assert.deepEqual(errors, []);
     reports.push({
-      scenario: "visible-status-panels",
+      scenario: "balanced-assignment-cards",
       width,
       states: expectations.map(({ state }) => state),
       passed: true,
     });
     await page.close();
+  }
+  for (const width of [390, 768, 1280]) {
+    for (const mode of ["available", "requested", "used", "recovery"]) {
+      const page = await browser.newPage({
+        viewport: { width, height: 1024 },
+        hasTouch: true,
+      });
+      await page.addInitScript(
+        ({ assignment, draft, mode }) => {
+          window.__data = {
+            assignments: [{ ...assignment, dueAt: null }],
+            results: [],
+            exemptions: [
+              {
+                id: "exemption-1",
+                uid: "student-1",
+                assignmentId: assignment.id,
+                status: mode === "recovery" ? "available" : mode,
+              },
+            ],
+          };
+          if (mode === "recovery")
+            localStorage.setItem(
+              "westoryHistoryClassroomAttempt:assignment-1:student-1",
+              JSON.stringify(draft),
+            );
+        },
+        { assignment, draft, mode },
+      );
+      const url = `http://127.0.0.1:${server.address().port}`;
+      await page.route("**/*", (route) =>
+        route.request().url().startsWith(url)
+          ? route.continue()
+          : route.abort(),
+      );
+      await page.goto(url);
+      const item = page.locator("article");
+      await item.waitFor();
+      const request = item.getByRole("button", {
+        name: "면제권 사용 요청",
+        exact: true,
+      });
+      if (mode === "available") {
+        assert(await request.isEnabled());
+        await request.click();
+        await item.getByText("면제권 사용 요청 중", { exact: true }).waitFor();
+        assert.deepEqual(await page.evaluate(() => window.__exemptionCalls), [
+          {
+            name: "createHistoryClassroomExemptionRequest",
+            input: {
+              year: "2026",
+              semester: "2",
+              assignmentId: "assignment-1",
+              exemptionId: "exemption-1",
+              memo: "",
+            },
+          },
+        ]);
+        assert.equal(await request.count(), 0);
+      } else if (mode === "recovery") {
+        assert.equal(await request.count(), 0);
+        assert(
+          await item
+            .getByRole("button", { name: "제출 재시도", exact: true })
+            .isEnabled(),
+          "recovery takes precedence over exemption request",
+        );
+      } else {
+        assert(
+          await item
+            .getByText(
+              mode === "requested" ? "면제권 사용 요청 중" : "면제권 사용됨",
+              { exact: true },
+            )
+            .isVisible(),
+        );
+        assert.equal(await request.count(), 0);
+      }
+      assert.equal(
+        await item
+          .locator("[data-history-primary-info] dd")
+          .nth(1)
+          .textContent(),
+        "없음",
+        "zero minutes means no time limit",
+      );
+      assert(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      );
+      reports.push({ scenario: "exemption-" + mode, width, passed: true });
+      await page.close();
+    }
   }
   console.log(
     `History classroom index recovery: ${reports.length} cases passed.`,

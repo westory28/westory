@@ -257,7 +257,167 @@ async function pinch(page, kind) {
   await session.detach();
   await waitLayout(page);
 }
-try {
+verification: try {
+  for (const width of [390, 768, 1280]) {
+    const page = await browser.newPage({
+      viewport: { width, height: 1024 },
+      hasTouch: true,
+    });
+    const reduced = width === 768;
+    if (reduced) await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(
+      `http://127.0.0.1:${server.address().port}/?kind=history-lesson`,
+    );
+    const input = page.getByRole("textbox", {
+      name: "첫 번째 빈칸",
+      exact: true,
+    });
+    const strokes = [];
+    for (const correct of [true, false]) {
+      await input.fill(correct ? "고조선" : "다른 답");
+      const samples = await input.evaluate(async (el) => {
+        const mount = new Promise((resolve) => {
+          const observer = new MutationObserver(() => {
+            const effect = document.querySelector("[data-blank-feedback]");
+            if (effect) {
+              observer.disconnect();
+              resolve(effect);
+            }
+          });
+          observer.observe(document.body, { childList: true, subtree: true });
+        });
+        el.blur();
+        const effect = await mount;
+        // SVG defs include both symbols; sample only masks used by this mark.
+        const paths = [
+          ...effect.querySelectorAll(
+            "[data-feedback-brush][mask], [data-feedback-brush] [mask]",
+          ),
+        ].map((shape) => {
+          const id = shape.getAttribute("mask").match(/url\(#(.+)\)/)[1];
+          return document
+            .getElementById(id)
+            .querySelector(".history-blank-feedback__stroke");
+        });
+        const snapshots = [];
+        const start = performance.now();
+        for (const target of [0, 140, 320, 700]) {
+          await new Promise((resolve) =>
+            setTimeout(
+              resolve,
+              Math.max(0, target - (performance.now() - start)),
+            ),
+          );
+          snapshots.push({
+            ms: performance.now() - start,
+            offsets: paths.map((path) =>
+              parseFloat(getComputedStyle(path).strokeDashoffset),
+            ),
+          });
+        }
+        return {
+          snapshots,
+          paths: paths.map((path) => ({
+            pathLength: path.getAttribute("pathLength"),
+            animation: getComputedStyle(path).animationName,
+          })),
+          surfaces: [effect, ...effect.querySelectorAll("*")].map((node) => {
+            const style = getComputedStyle(node);
+            return {
+              background: style.backgroundColor,
+              border: style.borderTopWidth,
+              shadow: style.boxShadow,
+            };
+          }),
+        };
+      });
+      assert.equal(
+        samples.paths.length,
+        correct ? 1 : 2,
+        "O is one drawn stroke and X is two strokes",
+      );
+      assert(
+        samples.paths.every((path) => path.pathLength === "100"),
+        "brush masks use normalized stroke progress",
+      );
+      for (const surface of samples.surfaces) {
+        assert(
+          ["rgba(0, 0, 0, 0)", "transparent"].includes(surface.background),
+          `brush has no backing surface: ${JSON.stringify(surface)}`,
+        );
+        assert.equal(parseFloat(surface.border), 0, "brush has no border");
+        assert.equal(surface.shadow, "none", "brush has no shadow");
+      }
+      if (reduced) {
+        assert(
+          samples.paths.every((path) => path.animation === "none"),
+          "reduced motion disables drawing animation",
+        );
+        assert(
+          samples.snapshots.every((sample) =>
+            sample.offsets.every((offset) => Math.abs(offset) < 0.01),
+          ),
+          "reduced motion immediately shows complete brush strokes",
+        );
+      } else {
+        const [initial, early, middle, final] = samples.snapshots;
+        assert(
+          initial.offsets.every((offset) => offset > 90),
+          `brush starts undrawn: ${JSON.stringify(samples.snapshots)}`,
+        );
+        assert(
+          early.offsets[0] > 0 && early.offsets[0] < initial.offsets[0],
+          "first stroke visibly draws over time",
+        );
+        if (!correct) {
+          assert(
+            early.offsets[1] >= 99,
+            "X second stroke waits before drawing",
+          );
+          assert(
+            middle.offsets[1] > 0 && middle.offsets[1] < 99,
+            "X second stroke then visibly draws",
+          );
+        } else
+          assert(
+            middle.offsets[0] > 0 && middle.offsets[0] < early.offsets[0],
+            "O drawing continues through the middle frame",
+          );
+        assert(
+          final.offsets.every((offset) => Math.abs(offset) < 0.01),
+          "brush finishes with all strokes visible",
+        );
+      }
+      assert(
+        (await page
+          .locator(`[data-feedback-brush="${correct ? "correct" : "wrong"}"]`)
+          .count()) > 0,
+        "brush shape semantic marker exists",
+      );
+      await page.screenshot({
+        path: path.join(
+          evidence,
+          `history-brush-${correct ? "correct" : "wrong"}-${width}.png`,
+        ),
+        fullPage: true,
+      });
+      assert(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+        "brush never widens the page",
+      );
+      strokes.push({ correct, ...samples });
+      await page.locator("[data-blank-feedback]").waitFor({ state: "hidden" });
+    }
+    reports.push({
+      label: `transparent-brush-drawing-${width}`,
+      reduced,
+      strokes,
+    });
+    await page.close();
+  }
+  if (process.env.BRUSH_ONLY) break verification;
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
@@ -1037,10 +1197,12 @@ try {
       correctRgb && +correctRgb[3] > +correctRgb[1] * 1.3,
       "correct answer effect is blue",
     );
-    assert.equal(
-      await feedback.first().locator("circle").count(),
-      1,
-      "correct answer effect is an O",
+    assert(
+      (await feedback
+        .first()
+        .locator('[data-feedback-brush="correct"]')
+        .count()) > 0,
+      "correct answer effect uses the O brush shape",
     );
     assert.equal(
       await feedback
@@ -1098,13 +1260,16 @@ try {
     assert.equal(await feedback.first().getAttribute("data-correct"), "false");
     const wrongStartedAt = Date.now();
     assert.equal(
-      await feedback.first().locator("circle").count(),
+      await feedback.first().locator('[data-feedback-brush="correct"]').count(),
       0,
       "wrong answer effect is not an O",
     );
     assert(
-      (await feedback.first().locator("path").count()) > 0,
-      "wrong answer effect has the X strokes",
+      (await feedback
+        .first()
+        .locator('[data-feedback-brush="wrong"]')
+        .count()) > 0,
+      "wrong answer effect uses the X brush shape",
     );
     await page.waitForTimeout(180);
     await page.screenshot({
@@ -1357,7 +1522,12 @@ try {
   await recovery.close();
 } finally {
   await fs.writeFile(
-    path.join(evidence, "worksheet-browser-report.json"),
+    path.join(
+      evidence,
+      process.env.BRUSH_ONLY
+        ? "worksheet-brush-report.json"
+        : "worksheet-browser-report.json",
+    ),
     JSON.stringify(
       {
         recordedAt: new Date().toISOString(),
