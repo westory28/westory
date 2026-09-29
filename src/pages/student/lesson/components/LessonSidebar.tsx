@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import PortalSubNavigation from "../../../../components/common/PortalSubNavigation";
-import TeacherNavigationIcon from "../../../../components/layout/TeacherNavigationIcon";
 import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useAuth } from "../../../../contexts/AuthContext";
 import {
@@ -22,19 +21,6 @@ type TreeItem = StudentCurriculumTreeItem;
 const shouldShowUnitTitleHint = (title?: string) =>
   String(title || "").trim().length > 18;
 
-const findTopLevelIndexByUnitId = (
-  tree: TreeItem[],
-  unitId?: string | null,
-) => {
-  const targetUnitId = String(unitId || "").trim();
-  if (!targetUnitId) return -1;
-
-  const containsUnit = (item: TreeItem): boolean =>
-    item.id === targetUnitId || (item.children || []).some(containsUnit);
-
-  return tree.findIndex(containsUnit);
-};
-
 const LessonSidebar: React.FC<LessonSidebarProps> = ({
   isOpen,
   onOpenChange,
@@ -45,19 +31,11 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const { config } = useAuth();
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
   const selectedUnitIdRef = useRef(selectedUnitId);
   useEffect(() => {
     selectedUnitIdRef.current = selectedUnitId;
   }, [selectedUnitId]);
-
-  useEffect(() => {
-    if (!selectedUnitId) return;
-    const topLevelIndex = findTopLevelIndexByUnitId(tree, selectedUnitId);
-    if (topLevelIndex < 0) return;
-    setExpandedGroups((prev) => new Set(prev).add(topLevelIndex));
-  }, [selectedUnitId, tree]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,13 +53,6 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
         );
         if (cancelled || selectedUnitIdRef.current || !latestSelection) return;
 
-        const topLevelIndex = findTopLevelIndexByUnitId(
-          nextTree,
-          latestSelection.node.id,
-        );
-        if (topLevelIndex >= 0) {
-          setExpandedGroups(new Set([topLevelIndex]));
-        }
         onSelectUnit(latestSelection.node.id, latestSelection.node.title);
       } catch (error) {
         console.error("Error fetching curriculum:", error);
@@ -95,17 +66,6 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
       cancelled = true;
     };
   }, [config, onSelectUnit]);
-
-  const toggleGroup = (index: number) => {
-    const newSet = new Set(expandedGroups);
-    if (newSet.has(index)) {
-      newSet.delete(index);
-    } else {
-      newSet.add(index);
-    }
-    setRevealedUnitId(null);
-    setExpandedGroups(newSet);
-  };
 
   return (
     <PortalSubNavigation
@@ -123,30 +83,13 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
         </div>
       )}
       {tree.map((big, bigIdx) => (
-        <div key={big.id || bigIdx}>
-          <button
-            type="button"
-            title={big.title}
-            aria-expanded={expandedGroups.has(bigIdx)}
-            onClick={() => toggleGroup(bigIdx)}
-            className="teacher-settings-section"
-          >
-            <TeacherNavigationIcon
-              name="chevron"
-              className={expandedGroups.has(bigIdx) ? "rotate-180" : ""}
-            />
-            <span className="min-w-0 break-words">{big.title}</span>
-          </button>
-          {expandedGroups.has(bigIdx) && (
-            <div className="teacher-sub-tree-children">
-              {(big.children || []).map((mid, midIdx) => (
-                <div key={mid.id || midIdx}>
-                  <div
-                    title={mid.title}
-                    className="teacher-navigation-label px-6 py-3 text-sm font-bold text-gray-700"
-                  >
-                    {mid.title}
-                  </div>
+        <section key={big.id || bigIdx} className="student-curriculum-group">
+          <h3 className="student-curriculum-major">{big.title}</h3>
+          <div className="student-curriculum-middle-list">
+            {(big.children || []).map((mid, midIdx) => (
+              <div key={mid.id || midIdx}>
+                <h4 className="student-curriculum-middle">{mid.title}</h4>
+                <div className="student-curriculum-unit-list">
                   {(mid.children || []).map((small, smallIdx) => {
                     const unitKey =
                       small.id || `${bigIdx}-${midIdx}-${smallIdx}`;
@@ -171,7 +114,6 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
                         }}
                         className={`teacher-settings-section group relative ${selectedUnitId === small.id ? "is-active" : ""}`}
                       >
-                        <TeacherNavigationIcon name="lesson" />
                         <span className="min-w-0 flex-1 break-words">
                           {small.title}
                         </span>
@@ -186,10 +128,10 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
                     );
                   })}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ))}
     </PortalSubNavigation>
   );

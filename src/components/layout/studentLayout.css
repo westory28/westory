@@ -45,6 +45,38 @@
   min-height: calc(100dvh - var(--teacher-account-height));
 }
 
+.student-curriculum-group + .student-curriculum-group {
+  margin-top: 24px;
+}
+
+.student-curriculum-major {
+  margin: 0;
+  padding: 12px 0;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--ws-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.student-curriculum-middle-list {
+  padding-left: 12px;
+}
+
+.student-curriculum-middle {
+  margin: 0;
+  padding: 12px 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ws-text);
+  overflow-wrap: anywhere;
+}
+
+.student-curriculum-unit-list {
+  padding-left: 8px;
+}
+
 .student-layout .teacher-settings-sections {
   padding-inline: 16px;
 }
