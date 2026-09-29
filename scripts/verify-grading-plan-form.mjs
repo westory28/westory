@@ -209,6 +209,21 @@ assert.equal(form.render().subject.props.value, "");
 assert.equal(form.render().form.props.disabled, false);
 
 const incomplete = mount();
+const repeated = mount();
+for (let index = 0; index < 5; index += 1) {
+  const beforeCompositionCommit = repeated.render();
+  repeated.change(
+    beforeCompositionCommit.names[index],
+    `한글 영역 ${index + 1}`,
+  );
+  // A queued add event must keep the text committed after its render.
+  beforeCompositionCommit.add.props.onClick();
+  assert.equal(
+    repeated.render().names[index].props.value,
+    `한글 영역 ${index + 1}`,
+  );
+  assert.equal(repeated.render().names.length, index + 2);
+}
 incomplete.change(incomplete.render().subject, "국어");
 incomplete.change(incomplete.render().names[0], "시험");
 incomplete.change(incomplete.render().maxScores[0], "100");

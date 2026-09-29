@@ -245,6 +245,128 @@ assert.equal(
   "한글",
   "Missing isComposing uses the inactive composition state",
 );
+
+// Render one shared component module with separate hook state for each row,
+// just as React mounts each newly added evaluation-name input independently.
+const fields = [];
+const multiDocument = { activeElement: null };
+let renderingField;
+const MultiKoreanTextInput = loadTs(
+  "src/pages/teacher/components/KoreanTextInput.tsx",
+  {
+    react: {
+      ...React,
+      useRef(initial) {
+        const index = renderingField.cursor++;
+        renderingField.refs[index] ??= { current: initial };
+        return renderingField.refs[index];
+      },
+      useLayoutEffect(effect) {
+        renderingField.effects.push(effect);
+      },
+    },
+    "../../../lib/koreanText": helper,
+  },
+  { document: multiDocument },
+).default;
+const renderField = (field) => {
+  renderingField = field;
+  field.cursor = 0;
+  field.node = MultiKoreanTextInput({
+    value: field.value,
+    onValueChange: (next) => {
+      field.value = next;
+    },
+  });
+  field.refs[0].current = field.input;
+  field.input.value = field.value;
+  field.effects.splice(0).forEach((effect) => effect());
+};
+const addField = () => {
+  const field = {
+    value: "",
+    refs: [],
+    effects: [],
+    cursor: 0,
+    node: null,
+    input: {
+      value: "",
+      selectionStart: 0,
+      selectionEnd: 0,
+      selectionDirection: "none",
+      setSelectionRange: input.setSelectionRange,
+    },
+  };
+  fields.push(field);
+  fields.forEach(renderField);
+  return field;
+};
+const changeField = (field, value, nativeEvent = { isComposing: false }) => {
+  multiDocument.activeElement = field.input;
+  field.input.value = value;
+  field.input.selectionStart = field.input.selectionEnd = value.length;
+  field.node.props.onChange({ currentTarget: field.input, nativeEvent });
+  fields.forEach(renderField);
+};
+const firstField = addField();
+changeField(firstField, "ㅁㅜㄴㅈㅏㅇ");
+assert.equal(firstField.value, "문장");
+firstField.node.props.onCompositionStart({ currentTarget: firstField.input });
+changeField(firstField, "문장 ㅌㅏㅁㄱㅜ", { isComposing: true });
+const secondField = addField();
+assert.equal(
+  firstField.value,
+  "문장 ㅌㅏㅁㄱㅜ",
+  "Adding a row must preserve the previous row's latest active Korean input",
+);
+assert.equal(secondField.value, "");
+changeField(secondField, "ㅂㅏㄹㅍㅛ", {});
+assert.equal(
+  secondField.value,
+  "발표",
+  "A new row must not inherit another row's active composition state",
+);
+changeField(firstField, "문장 ㅌㅏㅁㄱㅜ ㅍㅕㅇㄱㅏ", {});
+assert.equal(
+  firstField.value,
+  "문장 ㅌㅏㅁㄱㅜ ㅍㅕㅇㄱㅏ",
+  "Another row's commit must not end the first row's active composition",
+);
+multiDocument.activeElement = firstField.input;
+firstField.node.props.onCompositionEnd({ currentTarget: firstField.input });
+fields.forEach(renderField);
+assert.equal(firstField.value, "문장 탐구 평가");
+assert.equal(firstField.input.selectionStart, firstField.value.length);
+assert.equal(secondField.value, "발표");
+
+secondField.node.props.onCompositionStart({ currentTarget: secondField.input });
+changeField(secondField, "발표 ㅍㅕㅇㄱㅏ", { isComposing: true });
+const thirdField = addField();
+for (const char of "ㅅㅓㅅㅜㄹㅎㅕㅇ") {
+  changeField(thirdField, thirdField.value + char);
+}
+assert.equal(thirdField.value, "서술형");
+assert.equal(firstField.value, "문장 탐구 평가");
+assert.equal(secondField.value, "발표 ㅍㅕㅇㄱㅏ");
+changeField(secondField, secondField.value, { isComposing: false });
+assert.equal(
+  secondField.value,
+  "발표 평가",
+  "A newly added row recovers a missing compositionend independently",
+);
+changeField(firstField, firstField.value + " ㄱㅣㅈㅜㄴ");
+assert.deepEqual(
+  fields.map((field) => field.value),
+  ["문장 탐구 평가 기준", "발표 평가", "서술형"],
+  "All added rows keep their latest Korean text when an earlier row is edited",
+);
+const fourthField = addField();
+changeField(fourthField, "English 123!");
+assert.deepEqual(
+  fields.map((field) => field.value),
+  ["문장 탐구 평가 기준", "발표 평가", "서술형", "English 123!"],
+  "Repeated additions retain earlier values and preserve English input",
+);
 console.log(
-  "Korean text input verified: detached/NFD Hangul, incremental syllables/finals/vowels, untouched Latin/word boundaries, active composition, blur, and selection preservation.",
+  "Korean text input verified: detached/NFD Hangul, incremental syllables/finals/vowels, untouched Latin/word boundaries, active composition, blur, selection, and independent Korean input across repeated row additions.",
 );

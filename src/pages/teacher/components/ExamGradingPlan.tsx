@@ -158,7 +158,10 @@ const ExamGradingPlan: React.FC = () => {
   };
 
   const handleAddItem = () => {
-    setItems([...items, { type: "정기", name: "", maxScore: 0, ratio: 0 }]);
+    setItems((current) => [
+      ...current,
+      { type: "정기", name: "", maxScore: 0, ratio: 0 },
+    ]);
   };
 
   const handleRemoveItem = (idx: number) => {
