@@ -386,3 +386,7 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 ### Student attendance stamp
 
 - Reuse one transparent red raster stamp reading 출석 for confirmed attendance only. Reserve a 36×24px stamp slot above each weekday in the student weekly strip; retain date buttons and their existing event markers. Full calendar month cells show the same 36×24px stamp beside the day number, fitting within narrow cells without horizontal overflow. Use existing danger-text ink and spacing tokens; no stamp animation or teacher UI changes. Attendance data remains scoped to the signed-in student and semester, with visible read/save errors and retry.
+
+### Student full calendar alignment
+- Student full calendar reuses the teacher calendar shell, 1536px page width, 16px/24px gutters, and `max(600px, 100dvh - 176px)` canvas. Keep student actions read-only.
+- Reuse the teacher left-aligned numeric date header and 24px event labels. The attendance stamp stays beside the date in one non-wrapping row; mobile stamps scale from 16px to 24px wide to fit seven equal columns.
