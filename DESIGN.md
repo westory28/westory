@@ -324,3 +324,5 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 - Student lesson contents, think cloud, maps, My Page and score lists use the same settings submenu through `PortalSubNavigation`, including the 228px desktop/208px tablet rail, flat surfaces, 44px rows and mobile disclosure below 768px. Preserve student-only items, selection, public-content filtering and learning actions. The original teacher component remains a compatibility export of the shared component and uses the unchanged shared stylesheet.
 
 - Teacher submenu width: 288px desktop / 256px tablet (768–1023px); lesson curriculum: 360px / 320px. Below 768px retain full-width disclosure. Truncated teacher menu labels expose full names with native title tooltips. Student submenu dimensions stay unchanged.
+
+- Student weekly schedule keeps date, title, category and period on one row at every viewport, including reduced-motion mode. Reduced motion uses static single-line ellipsis instead of title animation or wrapping.

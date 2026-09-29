@@ -669,35 +669,26 @@
   }
 }
 
-@media (max-width: 359px),
-  (max-width: 767px) and (prefers-reduced-motion: reduce) {
-  .student-week-event {
-    align-items: start;
-  }
-
-  .student-week-event__body {
-    display: contents;
-  }
-
-  .student-week-event__title {
-    grid-column: 2;
-    grid-row: 1;
-    width: 100%;
-  }
-
+@media (max-width: 359px) {
   .student-week-event__metadata {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-content: flex-end;
-    flex-wrap: wrap;
+    flex-shrink: 1;
+    max-width: 55%;
+  }
+  .student-week-event__category {
+    flex-shrink: 1;
+    overflow: hidden;
+  }
+  .student-week-event__category-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
 @media (max-width: 767px) and (prefers-reduced-motion: reduce) {
-  .student-schedule-title,
   .student-schedule-title__text {
     width: 100%;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
