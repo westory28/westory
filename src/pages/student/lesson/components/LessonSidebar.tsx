@@ -31,6 +31,17 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const { config } = useAuth();
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    new Set(),
+  );
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
   const selectedUnitIdRef = useRef(selectedUnitId);
   useEffect(() => {
@@ -84,12 +95,58 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
       )}
       {tree.map((big, bigIdx) => (
         <section key={big.id || bigIdx} className="student-curriculum-group">
-          <h3 className="student-curriculum-major">{big.title}</h3>
-          <div className="student-curriculum-middle-list">
+          <h3 className="student-curriculum-major">
+            <button
+              type="button"
+              className="student-curriculum-toggle"
+              aria-expanded={!collapsedGroups.has(`big-${bigIdx}`)}
+              onClick={() => toggleGroup(`big-${bigIdx}`)}
+            >
+              {big.title}
+            </button>
+          </h3>
+          <div
+            className="student-curriculum-middle-list"
+            hidden={collapsedGroups.has(`big-${bigIdx}`)}
+          >
             {(big.children || []).map((mid, midIdx) => (
               <div key={mid.id || midIdx}>
-                <h4 className="student-curriculum-middle">{mid.title}</h4>
-                <div className="student-curriculum-unit-list">
+                <h4 className="student-curriculum-middle">
+                  <button
+                    type="button"
+                    className="student-curriculum-toggle"
+                    aria-expanded={
+                      !collapsedGroups.has(`mid-${bigIdx}-${midIdx}`)
+                    }
+                    onClick={() => toggleGroup(`mid-${bigIdx}-${midIdx}`)}
+                  >
+                    <span>{mid.title}</span>
+                    <svg
+                      aria-hidden="true"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      className={
+                        collapsedGroups.has(`mid-${bigIdx}-${midIdx}`)
+                          ? "-rotate-90 shrink-0"
+                          : "shrink-0"
+                      }
+                    >
+                      <path
+                        d="m4 6 4 4 4-4"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </h4>
+                <div
+                  className="student-curriculum-unit-list"
+                  hidden={collapsedGroups.has(`mid-${bigIdx}-${midIdx}`)}
+                >
                   {(mid.children || []).map((small, smallIdx) => {
                     const unitKey =
                       small.id || `${bigIdx}-${midIdx}-${smallIdx}`;

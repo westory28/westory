@@ -77,6 +77,29 @@
   padding-left: 8px;
 }
 
+.student-curriculum-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  border-radius: 8px;
+}
+
+.student-curriculum-toggle:focus-visible {
+  outline: 2px solid var(--ws-ring);
+  outline-offset: 2px;
+}
+
+.student-curriculum-major:has(.student-curriculum-toggle),
+.student-curriculum-middle:has(.student-curriculum-toggle) {
+  padding-block: 0;
+}
+
 .student-layout .teacher-settings-sections {
   padding-inline: 16px;
 }
