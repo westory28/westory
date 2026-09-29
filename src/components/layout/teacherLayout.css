@@ -468,6 +468,8 @@
   }
   .teacher-layout .teacher-account-header {
     margin-left: 0;
+    height: auto;
+    padding-top: calc(var(--space-6) + env(safe-area-inset-top, 0px));
   }
   .teacher-header-start {
     display: flex;
@@ -477,6 +479,52 @@
   }
   .teacher-account-header .header-user-name {
     max-width: 128px;
+  }
+  .teacher-account-header .teacher-account-session button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .teacher-sidebar.is-mobile-open {
+    padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  }
+  .teacher-layout .teacher-mobile-drawer {
+    top: 0;
+    bottom: auto;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    background: var(--ws-surface, #ffffff);
+    overscroll-behavior: contain;
+  }
+  .teacher-layout .teacher-mobile-drawer-heading {
+    flex-shrink: 0;
+  }
+  .teacher-layout .teacher-mobile-drawer.translate-x-full {
+    visibility: hidden;
+  }
+  body:has(.teacher-layout .teacher-mobile-drawer-backdrop) {
+    overflow: hidden;
+  }
+  .teacher-layout:has(.teacher-mobile-drawer-backdrop)
+    > button[data-patch-memo-root] {
+    visibility: hidden;
+  }
+  .teacher-layout .teacher-patch-memo-panel {
+    height: min(76dvh, 720px);
+    max-height: calc(
+      100dvh - 7.25rem - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    );
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@media (max-width: 639px) {
+  .teacher-layout .teacher-patch-memo-panel {
+    height: min(84dvh, 720px);
+    max-height: calc(100dvh - var(--space-4) - env(safe-area-inset-top, 0px));
   }
 }
 

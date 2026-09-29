@@ -103,27 +103,29 @@ const ManageQuiz: React.FC = () => {
             {mobileTreeOpen && (
               <button
                 type="button"
-                className="fixed inset-0 bg-black/45 z-40 lg:hidden"
+                className="teacher-mobile-drawer-backdrop fixed inset-0 bg-black/45 z-40 lg:hidden"
                 onClick={() => setMobileTreeOpen(false)}
                 aria-label="패널 닫기"
               />
             )}
 
             <div
-              className={`fixed lg:static top-16 lg:top-auto right-0 bottom-0 lg:bottom-auto w-[82%] max-w-[320px] lg:w-1/3 bg-white lg:rounded-xl shadow-2xl lg:shadow-sm border border-gray-200 flex flex-col overflow-hidden h-[calc(100vh-64px)] lg:h-full lg:min-h-0 z-50 lg:z-auto transition-transform duration-300 ${mobileTreeOpen ? "translate-x-0" : "translate-x-full"} lg:translate-x-0`}
+              className={`teacher-mobile-drawer fixed lg:static right-0 w-[82%] max-w-[320px] lg:w-1/3 bg-white lg:rounded-xl shadow-2xl lg:shadow-sm border border-gray-200 flex flex-col overflow-hidden lg:h-full lg:min-h-0 z-50 lg:z-auto transition-transform duration-300 motion-reduce:transition-none ${mobileTreeOpen ? "translate-x-0" : "translate-x-full"} lg:translate-x-0`}
             >
-              <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 flex items-center justify-between">
+              <div className="teacher-mobile-drawer-heading p-4 border-b bg-gray-50 font-bold text-gray-700 flex items-center justify-between">
                 <span>단원 및 평가 선택</span>
                 <button
                   type="button"
                   onClick={() => setMobileTreeOpen(false)}
-                  className="lg:hidden text-gray-400 hover:text-gray-700"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center lg:hidden text-gray-400 hover:text-gray-700"
                   aria-label="패널 닫기"
                 >
                   <i className="fas fa-times text-lg"></i>
                 </button>
               </div>
-              <QuizUnitTree onSelect={handleNodeSelect} />
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <QuizUnitTree onSelect={handleNodeSelect} />
+              </div>
             </div>
 
             <div className="w-full lg:w-2/3 flex flex-col h-full min-h-0 overflow-hidden">

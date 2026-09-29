@@ -284,7 +284,9 @@ export function LessonTreePanel({
   );
 
   const renderTreeList = (className = "p-3") => (
-    <div className={`flex-1 overflow-y-auto ${className}`}>
+    <div
+      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${className}`}
+    >
       {treeData.map((node) => renderTreeNode(node, 0))}
     </div>
   );
@@ -314,7 +316,7 @@ export function LessonTreePanel({
       {sidebarOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-black/45 lg:hidden"
+          className="teacher-mobile-drawer-backdrop fixed inset-0 z-40 bg-black/45 lg:hidden"
           onClick={onCloseSidebar}
           aria-label="수업 자료 목차 닫기"
         />
@@ -326,11 +328,11 @@ export function LessonTreePanel({
         aria-hidden={!sidebarOpen}
         aria-labelledby="lesson-tree-drawer-title"
         {...mobileDrawerInertProps}
-        className={`fixed bottom-0 right-0 top-16 z-50 flex h-[calc(100vh-64px)] w-[84%] max-w-[360px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 lg:hidden ${
+        className={`teacher-mobile-drawer fixed right-0 z-50 flex w-[84%] max-w-[360px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 motion-reduce:transition-none lg:hidden ${
           sidebarOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4">
+        <div className="teacher-mobile-drawer-heading flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4">
           <h2
             id="lesson-tree-drawer-title"
             className="text-base font-bold text-gray-800"
@@ -340,13 +342,13 @@ export function LessonTreePanel({
           <button
             type="button"
             onClick={onCloseSidebar}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
             aria-label="수업 자료 목차 닫기"
           >
             <i className="fas fa-times text-sm" aria-hidden="true"></i>
           </button>
         </div>
-        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+        <div className="teacher-mobile-drawer-heading flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
           <div className="min-w-0">
             <p className="text-sm font-bold text-gray-800">자료 구조 관리</p>
             <p className="text-xs text-gray-500">말단 자료를 선택하세요.</p>

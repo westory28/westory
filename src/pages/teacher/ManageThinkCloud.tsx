@@ -915,20 +915,20 @@ const ManageThinkCloud: React.FC = () => {
         {mobileSessionListOpen && (
           <button
             type="button"
-            className="fixed inset-0 z-40 bg-black/45 lg:hidden"
+            className="teacher-mobile-drawer-backdrop fixed inset-0 z-40 bg-black/45 lg:hidden"
             onClick={() => setMobileSessionListOpen(false)}
             aria-label="생각모아 목록 닫기"
           />
         )}
 
         <aside
-          className={`fixed bottom-0 right-0 top-16 z-50 w-[82%] max-w-[320px] shrink-0 transition-transform duration-300 motion-reduce:transition-none lg:static lg:z-auto lg:h-auto lg:w-72 lg:max-w-none lg:translate-x-0 ${
+          className={`teacher-mobile-drawer fixed right-0 z-50 w-[82%] max-w-[320px] shrink-0 transition-transform duration-300 motion-reduce:transition-none lg:static lg:z-auto lg:h-auto lg:w-72 lg:max-w-none lg:translate-x-0 ${
             mobileSessionListOpen ? "translate-x-0" : "translate-x-full"
           }`}
           aria-label="생각모아 목록"
         >
           <div className="flex h-full flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl lg:rounded-xl lg:shadow-sm">
-            <div className="flex items-center justify-between border-b border-gray-100 p-5">
+            <div className="teacher-mobile-drawer-heading flex items-center justify-between border-b border-gray-100 p-5">
               <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
                 <i
                   className="fas fa-cloud text-blue-500"
@@ -947,7 +947,7 @@ const ManageThinkCloud: React.FC = () => {
             </div>
 
             {canEdit && (
-              <div className="border-b border-gray-100 p-4 lg:hidden">
+              <div className="teacher-mobile-drawer-heading border-b border-gray-100 p-4 lg:hidden">
                 <button
                   type="button"
                   onClick={openCreateMode}
@@ -959,7 +959,7 @@ const ManageThinkCloud: React.FC = () => {
               </div>
             )}
 
-            <div className="border-b border-gray-100 p-4">
+            <div className="teacher-mobile-drawer-heading border-b border-gray-100 p-4">
               <div className="grid grid-cols-2 gap-2">
                 <select
                   aria-label="학년 필터"
@@ -990,7 +990,7 @@ const ManageThinkCloud: React.FC = () => {
               </div>
             </div>
 
-            <nav className="flex-1 overflow-y-auto lg:max-h-[60vh]">
+            <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:max-h-[60vh]">
               {filteredSessions.length === 0 && (
                 <p className="p-4 text-sm font-bold text-gray-500">
                   저장된 주제가 없습니다.

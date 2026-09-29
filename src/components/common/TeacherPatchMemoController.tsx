@@ -667,9 +667,9 @@ const TeacherPatchMemoController: React.FC = () => {
           role="dialog"
           aria-modal="false"
           aria-labelledby="teacher-patch-memo-title"
-          className="fixed bottom-0 right-0 z-[110] flex h-[min(84vh,720px)] w-full flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:bottom-[6.25rem] sm:right-6 sm:h-[min(76vh,720px)] sm:w-[390px] sm:rounded-2xl"
+          className="teacher-patch-memo-panel fixed bottom-0 right-0 z-[110] flex h-[min(84vh,720px)] w-full flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:bottom-[6.25rem] sm:right-6 sm:h-[min(76vh,720px)] sm:w-[390px] sm:rounded-2xl"
         >
-          <header className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <header className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <h2
                 id="teacher-patch-memo-title"
@@ -688,14 +688,14 @@ const TeacherPatchMemoController: React.FC = () => {
                 setSelectingTarget(false);
                 buttonRef.current?.focus();
               }}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
               aria-label="패치 메모 닫기"
             >
               <i className="fas fa-times text-sm" aria-hidden="true"></i>
             </button>
           </header>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
             <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
               <label className="block">
                 <span className="text-xs font-extrabold text-slate-700">

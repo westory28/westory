@@ -741,8 +741,8 @@
     margin-left: auto;
   }
   .teacher-week-event {
-    grid-template-columns: 88px minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
   }
   .teacher-week-event__date {
     font-size: var(--ws-type-small, 0.875rem);
@@ -752,17 +752,13 @@
     font-size: var(--ws-type-body, 1rem);
   }
   .teacher-week-event__body {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 4px;
+    gap: 8px;
   }
   .teacher-week-event__metadata {
-    justify-content: space-between;
-    min-width: 0;
-    max-width: none;
+    max-width: calc(100% - 88px);
   }
   .teacher-week-event__category {
-    min-width: 0;
+    padding-inline: 4px;
   }
   .teacher-weekly-dashboard__notice {
     height: 344px;
