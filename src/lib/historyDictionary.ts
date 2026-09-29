@@ -313,6 +313,7 @@ export const loadPublishedHistoryDictionaryTerm = async (
     query(
       collection(db, path),
       where("normalizedWord", "==", normalizedWord),
+      where("status", "==", "published"),
       limit(1),
     ),
   );
