@@ -70,6 +70,28 @@ const wordsByDifficulty = Object.fromEntries(
     core.buildWords(catalog, "browser-qa", difficulty),
   ]),
 );
+const configuredGames = Object.fromEntries(
+  [30, 90, 180].map((durationSeconds) => {
+    const config = {
+      durationSeconds,
+      fallSeconds:
+        durationSeconds === 30
+          ? [5, 4, 3]
+          : durationSeconds === 90
+            ? [18, 12, 6]
+            : [30, 20, 10],
+      minWordLength: 1,
+      maxWordLength: 12,
+    };
+    return [
+      durationSeconds,
+      {
+        config,
+        words: core.buildWords(catalog, "configured-qa", "mild", config),
+      },
+    ];
+  }),
+);
 const fixture = `
 const config = {year:"2026",semester:"2"};
 const policy = ${JSON.stringify(policy)};
@@ -77,10 +99,12 @@ const wordsByDifficulty = ${JSON.stringify(wordsByDifficulty)};
 const difficulty = new URLSearchParams(location.search).get("difficulty") || "medium";
 const words = wordsByDifficulty[difficulty];
 const mode = new URLSearchParams(location.search).get("view") || "student";
+const configuredGame = ${JSON.stringify(configuredGames)}[new URLSearchParams(location.search).get("duration")];
 const qa = window.weplayQa = { calls: [], session: null, balance: 30, fail: {}, failAfter: {}, hold: {}, records: [], policy, words, config };
 const period = {id:"qa-period",startsAtMs:Date.now()-86400000,endsAtMs:Date.now()+86400000,rankingPeriod:"weekly",rankingRewards:policy.rankingRewards,status:"open"};
 const clone = value => structuredClone(value);
 const session = (gameMode,level=difficulty) => ({id:"qa-session",mode:gameMode,difficulty:level,status:"active",startsAtMs:Date.now()+3000,endsAtMs:Date.now()+3000+${core.GAME_DURATION_MS},words:clone(wordsByDifficulty[level]),acceptedWordIds:[],correctCount:0,policy:clone(qa.policy),result:null,serverNowMs:Date.now()});
+qa.configuredGame = configuredGame;
 const result = () => {
   const s = qa.session;
   const correctCount = s.acceptedWordIds.length;
@@ -106,6 +130,13 @@ qa.call = async (name,data) => {
   }
   else if (name === "finishWeplayGame") {qa.session.result??=result();qa.session.status="finished";qa.records=[qa.session.result];response=clone(qa.session.result)}
   else throw new Error("Unexpected callable: "+name);
+  if(name === "getWeplayLobby" && mode === "configured") {
+    response.difficulties=Object.fromEntries(["mild","medium","spicy"].map(level=>[level,{durationSeconds:30,fallSeconds:[5,4,3],minWordLength:1,maxWordLength:4}]));
+    response.challengeDifficulties=${JSON.stringify(core.DEFAULT_DIFFICULTY_SETTINGS)};
+    response.wordCountsByDifficulty={mild:3,medium:2,spicy:0};
+    response.challengeWordCountsByDifficulty={mild:4,medium:4,spicy:4};
+    response.lessons[0].wordCountsByDifficulty={mild:1,medium:1,spicy:0};
+  }
   if(qa.failAfter[name]){qa.failAfter[name]--;throw new Error("응답을 받지 못했습니다. 다시 시도해 주세요.");}
   return {data:response};
 };
@@ -128,6 +159,7 @@ import {getStudentRouteAccess,isStudentVisibilityControlledPath} from ${modulePa
 import ${modulePath("src/assets/index.css")};
 import {qa,mode,config,session} from "fixture:service";
 if(mode.startsWith("game")){qa.session=session("practice");qa.session.startsAtMs=Date.now();qa.session.endsAtMs=Date.now()+${core.GAME_DURATION_MS};}
+if(qa.configuredGame && mode.startsWith("game")){qa.session.words=structuredClone(qa.configuredGame.words);qa.session.endsAtMs=qa.session.startsAtMs+qa.configuredGame.config.durationSeconds*1000;qa.session.difficultySettings=qa.configuredGame.config;}
 if(mode==="game-long")qa.session.words=qa.session.words.map(word=>({...word,text:"대한민국임시정부수립과정"}));
 if(mode==="empty")qa.empty=true;
 if(mode==="poor")qa.balance=0;
@@ -517,7 +549,7 @@ try {
         true,
       );
       await page
-        .getByText("공개된 수업 자료에 게임용 빈칸 단어가 아직 없습니다.", {
+        .getByText("선택한 난이도와 범위에 출제할 단어가 없습니다.", {
           exact: true,
         })
         .waitFor();
@@ -846,6 +878,109 @@ try {
       );
       await long.close();
     }
+  for (const duration of [30, 90, 180]) {
+    const custom = await pageFor(
+      `game-long&difficulty=mild&duration=${duration}`,
+      320,
+    );
+    for (let tick = 0; tick < duration; tick++) {
+      await custom.clock.runFor(tick === 0 ? 50 : 1000);
+      const stage = Math.floor(tick / (duration / 3));
+      assert.equal(
+        await custom
+          .locator('.weplay-stages li[aria-current="step"] strong')
+          .textContent(),
+        ["초반", "중반", "후반"][stage],
+      );
+      const overlap = await custom
+        .locator(".weplay-field")
+        .evaluate((field) => {
+          const words = [...field.querySelectorAll(".weplay-word > span")].map(
+            (el) => el.getBoundingClientRect(),
+          );
+          return words.some((word, index) =>
+            words
+              .slice(index + 1)
+              .some(
+                (other) =>
+                  word.left < other.right &&
+                  word.right > other.left &&
+                  word.top < other.bottom &&
+                  word.bottom > other.top,
+              ),
+          );
+        });
+      assert.equal(
+        overlap,
+        false,
+        `${duration}s configured game at ${tick}s: word overlap`,
+      );
+    }
+    await custom.clock.runFor(2100);
+    assert.equal(
+      await custom.evaluate(() => window.weplayQa.completed.totalWords),
+      20,
+    );
+    await custom.close();
+    checks.push(
+      `Configured ${duration}s game: actual third-stage transitions, full duration completion, 20-word result, no 12-character word overlap at 320px`,
+    );
+  }
+  const configuredLobby = await pageFor("configured", 390);
+  await configuredLobby
+    .getByText("30초 · 20개 단어", { exact: true })
+    .waitFor();
+  assert.equal(
+    await configuredLobby
+      .getByRole("button", { name: "연습 시작", exact: true })
+      .isEnabled(),
+    true,
+  );
+  await configuredLobby
+    .getByRole("group", { name: "난이도", exact: true })
+    .getByRole("button", { name: "중간맛", exact: true })
+    .click();
+  assert.equal(
+    await configuredLobby
+      .getByRole("button", { name: "연습 시작", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await configuredLobby
+    .getByRole("group", { name: "게임 모드", exact: true })
+    .getByRole("button", { name: "위스 도전", exact: true })
+    .click();
+  await configuredLobby
+    .getByText("60초 · 20개 단어", { exact: true })
+    .waitFor();
+  assert.equal(
+    await configuredLobby
+      .getByRole("button", { name: "위스 도전 시작 · 2위스", exact: true })
+      .isEnabled(),
+    true,
+  );
+  await configuredLobby
+    .getByRole("group", { name: "게임 모드", exact: true })
+    .getByRole("button", { name: "연습", exact: true })
+    .click();
+  await configuredLobby
+    .getByRole("group", { name: "난이도", exact: true })
+    .getByRole("button", { name: "착한맛", exact: true })
+    .click();
+  await configuredLobby
+    .locator(".weplay-select select")
+    .first()
+    .selectOption("unit-1");
+  assert.equal(
+    await configuredLobby
+      .getByRole("button", { name: "연습 시작", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await configuredLobby.close();
+  checks.push(
+    "Student lobby uses latest practice and frozen challenge durations/counts; per-lesson filtered word count guards start",
+  );
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpectedRequests, []);
   status = "passed";

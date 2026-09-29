@@ -4,11 +4,14 @@ const TOTAL_WORDS = 20;
 const GAME_DURATION_MS = 60000;
 const START_DELAY_MS = 3000;
 const ANSWER_GRACE_MS = 750;
-const PERIOD_SETTLEMENT_DELAY_MS = 180000;
+const PERIOD_SETTLEMENT_DELAY_MS = 240000;
 const DIFFICULTIES = ['mild', 'medium', 'spicy'];
 const FALL_DURATIONS = { mild: [12000, 10000, 8000], medium: [10000, 8000, 6000], spicy: [8000, 6000, 4000] };
 const GAME_ID = 'history-rain';
-const DEFAULT_GAME_SETTINGS = { enabled: true, sourceMode: 'all', unitIds: [], version: 0 };
+const DEFAULT_DIFFICULTY_SETTINGS = Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, {
+  durationSeconds: 60, fallSeconds: FALL_DURATIONS[difficulty].map((ms) => ms / 1000), minWordLength: 1, maxWordLength: 12,
+}]));
+const DEFAULT_GAME_SETTINGS = { enabled: true, sourceMode: 'all', unitIds: [], excludedWords: [], customWords: [], difficulties: DEFAULT_DIFFICULTY_SETTINGS, version: 0 };
 const DEFAULT_POLICY = {
   enabled: true,
   challengeCost: 2,
@@ -81,7 +84,39 @@ function validateGameSettings(input) {
   if (!input || typeof input.enabled !== 'boolean') throw new Error('학생 사용 허용 여부를 확인해 주세요.');
   if (!['all', 'selected'].includes(input.sourceMode)) throw new Error('출제 자료 범위를 확인해 주세요.');
   const unitIds = validateUnitIds(input.unitIds);
-  return { enabled: input.enabled, sourceMode: input.sourceMode, unitIds: input.sourceMode === 'all' ? [] : unitIds };
+  return {
+    enabled: input.enabled, sourceMode: input.sourceMode, unitIds: input.sourceMode === 'all' ? [] : unitIds,
+    excludedWords: validateWordList(input.excludedWords ?? [], true), customWords: validateWordList(input.customWords ?? []),
+    difficulties: validateDifficulties(input.difficulties ?? DEFAULT_DIFFICULTY_SETTINGS),
+  };
+}
+
+function validateWordList(input, normalize = false) {
+  if (!Array.isArray(input) || input.length > 1000) throw new Error('단어는 1,000개 이내로 등록해 주세요.');
+  const unique = new Map();
+  for (const raw of input) {
+    if (typeof raw !== 'string') throw new Error('단어를 확인해 주세요.');
+    const text = raw.normalize('NFKC').replace(/\s+/g, ' ').trim();
+    const key = normalizeAnswer(text);
+    if (!key || Array.from(text).length > 12 || !/[\p{L}\p{N}]/u.test(text) || /[<>\u0000-\u001f]/.test(text) || text.startsWith('fn:')) throw new Error('단어는 글자나 숫자를 포함해 1~12자로 입력해 주세요.');
+    if (!unique.has(key)) unique.set(key, normalize ? key : text);
+  }
+  return [...unique.values()];
+}
+
+function validateDifficultySettings(input) {
+  const durationSeconds = integer(input?.durationSeconds, 30, 180, '전체 제한 시간');
+  if (!Array.isArray(input?.fallSeconds) || input.fallSeconds.length !== 3) throw new Error('초반·중반·후반 낙하 시간을 설정해 주세요.');
+  const fallSeconds = input.fallSeconds.map((seconds) => integer(seconds, 1, Math.min(30, Math.floor((durationSeconds / 3 - 1) * 0.64)), '낙하 시간'));
+  if (fallSeconds[0] <= fallSeconds[1] || fallSeconds[1] <= fallSeconds[2]) throw new Error('낙하 시간은 초반·중반·후반 순으로 짧아져야 합니다.');
+  const minWordLength = integer(input?.minWordLength, 1, 12, '최소 단어 길이');
+  const maxWordLength = integer(input?.maxWordLength, 1, 12, '최대 단어 길이');
+  if (minWordLength > maxWordLength) throw new Error('최소 단어 길이는 최대 길이보다 클 수 없습니다.');
+  return { durationSeconds, fallSeconds, minWordLength, maxWordLength };
+}
+
+function validateDifficulties(input) {
+  return Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, validateDifficultySettings(input?.[difficulty])]));
 }
 
 function readGameSettings(data) {
@@ -94,6 +129,17 @@ const filterGameLessons = (lessons, settings) => settings.sourceMode === 'select
   : lessons;
 
 const uniqueWordCount = (words) => new Set(words.map((word) => normalizeAnswer(word.text))).size;
+
+function gameCatalog(lessons, settings) {
+  const excluded = new Set(settings.excludedWords || []);
+  const custom = (settings.customWords || []).map((text) => ({ text, unitId: '__weplay_custom__', lessonTitle: '직접 추가한 단어', context: '' }));
+  return [...extractLessonWords(filterGameLessons(lessons, settings)), ...custom].filter((word) => !excluded.has(normalizeAnswer(word.text)));
+}
+
+const filterDifficultyWords = (catalog, config) => catalog.filter((word) => {
+  const length = Array.from(normalizeAnswer(word.text)).length;
+  return length >= config.minWordLength && length <= config.maxWordLength;
+});
 
 const decodeText = (value) => String(value || '')
   .replace(/<[^>]*>/g, ' ')
@@ -154,17 +200,19 @@ function extractLessonWords(lessons) {
 
 // A class receives the same deterministic word/length order during a ranking period.
 // The current visible lesson catalog is re-read on every new game so hidden material never leaks.
-function buildWords(catalog, seed, difficulty = 'medium') {
+function buildWords(catalog, seed, difficulty = 'medium', difficultySettings = DEFAULT_DIFFICULTY_SETTINGS[difficulty]) {
   if (!DIFFICULTIES.includes(difficulty)) throw new Error('게임 난이도를 선택해 주세요.');
-  const unique = [...new Map(catalog.map((word) => [normalizeAnswer(word.text), word])).values()];
+  const config = validateDifficultySettings(difficultySettings);
+  const unique = [...new Map(filterDifficultyWords(catalog, config).map((word) => [normalizeAnswer(word.text), word])).values()];
   if (unique.length < 3) throw new Error('출제 범위에 서로 다른 빈칸 정답이 3개 이상 필요합니다.');
   const sorted = unique.sort((a, b) => hash(`${seed}:${normalizeAnswer(a.text)}`).localeCompare(hash(`${seed}:${normalizeAnswer(b.text)}`)));
   return Array.from({ length: TOTAL_WORDS }, (_, index) => {
     const stage = index < 7 ? 1 : index < 14 ? 2 : 3;
     const localIndex = index < 7 ? index : index < 14 ? index - 7 : index - 14;
-    const fallDurationMs = FALL_DURATIONS[difficulty][stage - 1];
+    const fallDurationMs = config.fallSeconds[stage - 1] * 1000;
+    const phaseDurationMs = config.durationSeconds * 1000 / 3;
     const count = stage < 3 ? 7 : 6;
-    const spawnAtMs = (stage - 1) * 20000 + Math.floor(localIndex * (20000 - fallDurationMs - 1000) / (count - 1));
+    const spawnAtMs = Math.floor((stage - 1) * phaseDurationMs + localIndex * (phaseDurationMs - fallDurationMs - 1000) / (count - 1));
     return { ...sorted[index % sorted.length], id: `word-${index + 1}`, stage, spawnAtMs, fallDurationMs };
   });
 }
@@ -204,4 +252,4 @@ const compareEntries = (a, b) => Number(b.score || 0) - Number(a.score || 0)
   || Number(a.achievedAtMs || 0) - Number(b.achievedAtMs || 0)
   || String(a.uid).localeCompare(String(b.uid));
 
-module.exports = { TOTAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, DEFAULT_GAME_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };
+module.exports = { TOTAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, validateDifficulties, validateDifficultySettings, gameCatalog, filterDifficultyWords, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };

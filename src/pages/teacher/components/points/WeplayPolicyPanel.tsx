@@ -337,7 +337,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
       }}
     >
       <header className="weplay-policy__header">
-        <h3 id="weplay-policy-title">역사가 내려와 (60초)</h3>
+        <h3 id="weplay-policy-title">역사가 내려와</h3>
         {ready && (
           <span
             className={

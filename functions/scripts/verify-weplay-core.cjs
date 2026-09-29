@@ -1,10 +1,10 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const {
-  DEFAULT_POLICY, TOTAL_WORDS, GAME_DURATION_MS, DIFFICULTIES, FALL_DURATIONS, normalizeAnswer,
+  DEFAULT_POLICY, TOTAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, normalizeAnswer,
   validatePolicy, effectiveLessons, extractLessonWords, buildWords,
   assessAnswer, gameReward, periodBounds, compareEntries,
-  DEFAULT_GAME_SETTINGS, validateGameSettings, readGameSettings, filterGameLessons, uniqueWordCount,
+  DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, validateGameSettings, readGameSettings, filterGameLessons, uniqueWordCount, gameCatalog, validateDifficultySettings,
 } = require('../weplayCore');
 
 const policy = () => structuredClone(DEFAULT_POLICY);
@@ -102,13 +102,39 @@ test('ranking tie breaks by earlier achievement then stable uid', () => {
 
 test('game settings validate student access and canonical selected unit IDs', () => {
   assert.deepEqual(readGameSettings(null), DEFAULT_GAME_SETTINGS);
-  assert.deepEqual(validateGameSettings({ enabled: true, sourceMode: 'selected', unitIds: ['b', ' a ', 'b'] }), { enabled: true, sourceMode: 'selected', unitIds: ['a', 'b'] });
+  const { version, ...defaults } = DEFAULT_GAME_SETTINGS;
+  assert.deepEqual(validateGameSettings({ enabled: true, sourceMode: 'selected', unitIds: ['b', ' a ', 'b'] }), { ...defaults, sourceMode: 'selected', unitIds: ['a', 'b'] });
   assert.deepEqual(validateGameSettings({ enabled: false, sourceMode: 'selected', unitIds: [] }).unitIds, []);
   assert.deepEqual(validateGameSettings({ enabled: false, sourceMode: 'all', unitIds: ['deleted-unit'] }).unitIds, []);
   for (const invalid of [null, { enabled: 'true', sourceMode: 'all', unitIds: [] }, { enabled: true, sourceMode: 'unknown', unitIds: [] }, { enabled: true, sourceMode: 'selected', unitIds: [''] }, { enabled: true, sourceMode: 'selected', unitIds: ['a/b'] }, { enabled: true, sourceMode: 'all', unitIds: Array(201).fill('a') }]) {
     assert.throws(() => validateGameSettings(invalid));
   }
   assert.throws(() => readGameSettings({ enabled: true, sourceMode: 'all', unitIds: [], version: -1 }));
+});
+
+test('editable words normalize, deduplicate, respect exclusions and selected lesson visibility', () => {
+  const settings = validateGameSettings({ ...DEFAULT_GAME_SETTINGS, customWords: ['삼국 시대', '삼국시대', 'ABC', '고려'], excludedWords: [' ＡＢＣ ', '삼국 시대'] });
+  assert.deepEqual(settings.customWords, ['삼국 시대', 'ABC', '고려']);
+  assert.deepEqual(settings.excludedWords, ['abc', '삼국시대']);
+  const lessons = effectiveLessons([{ unitId: 'public', contentHtml: '[고조선] [삼국 시대]' }, { unitId: 'hidden', contentHtml: '[비밀]', isVisibleToStudents: false }], []);
+  assert.deepEqual(gameCatalog(lessons, settings).map((word) => word.text), ['고조선', '고려']);
+  for (const customWords of [[''], ['<b>안녕</b>'], ['가'.repeat(13)], Array(1001).fill('고려'), [123]]) assert.throws(() => validateGameSettings({ ...DEFAULT_GAME_SETTINGS, customWords }));
+  assert.deepEqual(readGameSettings({ enabled: true, sourceMode: 'all', unitIds: [], version: 3 }).difficulties, DEFAULT_DIFFICULTY_SETTINGS);
+});
+
+test('configured 30/95/180 second games preserve stage bounds, word length filtering, and strict acceleration', () => {
+  assert.ok(PERIOD_SETTLEMENT_DELAY_MS > 180000 + START_DELAY_MS + 5000, 'Ranking freeze must follow even a maximum duration session started at the period boundary.');
+  const words = ['가', '가나', '가나다', '가나다라', '가나다라마'].map((text) => ({ text }));
+  for (const [durationSeconds, fallSeconds] of [[30, [5, 4, 3]], [95, [19, 12, 6]], [180, [30, 20, 10]]]) {
+    const config = { durationSeconds, fallSeconds, minWordLength: 2, maxWordLength: 4 };
+    const deck = buildWords(words, 'seed', 'mild', config);
+    assert.equal(deck.length, 20);
+    assert.ok(deck.every((word) => word.text.length >= 2 && word.text.length <= 4));
+    for (const word of deck) assert.ok(word.spawnAtMs + word.fallDurationMs <= word.stage * durationSeconds * 1000 / 3 - 999);
+    assert.deepEqual([deck[0].fallDurationMs, deck[7].fallDurationMs, deck[14].fallDurationMs], fallSeconds.map((seconds) => seconds * 1000));
+  }
+  for (const patch of [{ durationSeconds: 29 }, { durationSeconds: 181 }, { durationSeconds: 60.5 }, { fallSeconds: [10, 10, 8] }, { fallSeconds: [8, 10, 6] }, { fallSeconds: [13, 10, 8] }, { minWordLength: 4, maxWordLength: 3 }]) assert.throws(() => validateDifficultySettings({ ...DEFAULT_DIFFICULTY_SETTINGS.mild, ...patch }));
+  assert.throws(() => buildWords(words, 'seed', 'mild', { ...DEFAULT_DIFFICULTY_SETTINGS.mild, minWordLength: 4 }));
 });
 
 test('teacher preview retains hidden scoped lessons while student filtering never revives legacy answers', () => {

@@ -1,8 +1,9 @@
 const {
-  TOTAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES,
+  TOTAL_WORDS, START_DELAY_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES,
   hash, validatePolicy, readPolicy, effectiveLessons, extractLessonWords,
   buildWords, assessAnswer, gameReward, periodBounds, compareEntries,
-  GAME_ID, validateUnitIds, validateGameSettings, readGameSettings, filterGameLessons, uniqueWordCount,
+  GAME_ID, validateUnitIds, validateGameSettings, readGameSettings, uniqueWordCount,
+  DEFAULT_DIFFICULTY_SETTINGS, gameCatalog, filterDifficultyWords,
 } = require('./weplayCore');
 const { randomUUID } = require('node:crypto');
 
@@ -70,6 +71,7 @@ function createWeplayFunctions(deps) {
     startsAtMs: data.startsAtMs, endsAtMs: data.endsAtMs, words: data.words,
     acceptedWordIds: data.acceptedWordIds || [], correctCount: (data.acceptedWordIds || []).length,
     policy: data.policy, result: data.result || null, serverNowMs: Date.now(),
+    difficultySettings: data.difficultySettings || DEFAULT_DIFFICULTY_SETTINGS[data.difficulty],
   });
 
   async function readLessons(scope, includeHidden = false) {
@@ -84,19 +86,18 @@ function createWeplayFunctions(deps) {
       ref(scope, 'weplay_games', GAME_ID).get(), readLessons(scope),
     ]);
     const settings = settingsFromSnap(settingsSnap);
-    return { settings, catalog: extractLessonWords(filterGameLessons(lessons, settings)) };
+    return { settings, catalog: gameCatalog(lessons, settings) };
   }
 
   const managementPayload = (settings, lessons) => {
-    const selected = filterGameLessons(lessons, settings);
     return {
       settings,
       lessons: lessons.map((lesson) => {
         const words = extractLessonWords([lesson]);
         return { unitId: String(lesson.unitId || '').trim(), title: String(lesson.title || '').trim().slice(0, 120), isVisibleToStudents: lesson.isVisibleToStudents !== false, wordCount: words.length, words: words.map((word) => word.text) };
       }),
-      availableWordCount: uniqueWordCount(extractLessonWords(selected.filter((lesson) => lesson.isVisibleToStudents !== false))),
-      previewWordCount: uniqueWordCount(extractLessonWords(selected)),
+      availableWordCount: uniqueWordCount(gameCatalog(lessons.filter((lesson) => lesson.isVisibleToStudents !== false), settings)),
+      previewWordCount: uniqueWordCount(gameCatalog(lessons, settings)),
     };
   };
 
@@ -150,7 +151,11 @@ function createWeplayFunctions(deps) {
       ref(scope, 'weplay_games', GAME_ID).get(), ref(scope, 'weplay_policies', 'current').get(), readLessons(scope, true),
     ]);
     let previewSettings = settingsFromSnap(settingsSnap);
-    if (request.data?.unitIds !== undefined) {
+    if (request.data?.settings !== undefined) {
+      try { previewSettings = validateGameSettings(request.data.settings); }
+      catch (error) { invalid(error.message); }
+      assertKnownUnits(previewSettings.unitIds, lessons);
+    } else if (request.data?.unitIds !== undefined) {
       let unitIds;
       try { unitIds = validateUnitIds(request.data.unitIds); }
       catch (error) { invalid(error.message); }
@@ -159,11 +164,12 @@ function createWeplayFunctions(deps) {
     }
     const id = `preview_${randomUUID()}`;
     let words;
-    try { words = buildWords(extractLessonWords(filterGameLessons(lessons, previewSettings)), id, difficulty); }
+    const difficultySettings = previewSettings.difficulties[difficulty];
+    try { words = buildWords(gameCatalog(lessons, previewSettings), id, difficulty, difficultySettings); }
     catch (error) { throw new HttpsError('failed-precondition', error.message); }
     const startsAtMs = Date.now() + START_DELAY_MS;
     // Preview sessions never enter Firestore, the settlement queues, or the ledger.
-    return publicSession({ id, mode: 'practice', difficulty, status: 'active', startsAtMs, endsAtMs: startsAtMs + GAME_DURATION_MS, words, acceptedWordIds: [], policy: policyFromSnap(policySnap), result: null });
+    return publicSession({ id, mode: 'practice', difficulty, difficultySettings, status: 'active', startsAtMs, endsAtMs: startsAtMs + difficultySettings.durationSeconds * 1000, words, acceptedWordIds: [], policy: policyFromSnap(policySnap), result: null });
   });
 
   async function ensurePeriod(scope) {
@@ -179,7 +185,8 @@ function createWeplayFunctions(deps) {
       const periodRef = ref(scope, 'weplay_periods', id);
       const existing = await transaction.get(periodRef);
       if (existing.exists) return existing.data();
-      const period = { id, ...bounds, rankingPeriod: policy.rankingPeriod, rankingRewards: policy.rankingRewards, policyVersion: policy.version, status: 'open', createdAt: FieldValue.serverTimestamp() };
+      const settings = settingsFromSnap(await transaction.get(ref(scope, 'weplay_games', GAME_ID)));
+      const period = { id, ...bounds, rankingPeriod: policy.rankingPeriod, rankingRewards: policy.rankingRewards, policyVersion: policy.version, difficulties: settings.difficulties, status: 'open', createdAt: FieldValue.serverTimestamp() };
       transaction.create(periodRef, period);
       transaction.set(metaRef, { periodId: id }, { merge: true });
       transaction.set(db.doc(`weplay_period_queue/${hash(`${scope.year}:${scope.semester}:${id}`)}`), {
@@ -315,18 +322,20 @@ function createWeplayFunctions(deps) {
       ref(scope, 'weplay_players', uid).collection('records').orderBy('finishedAtMs', 'desc').limit(10).get(),
     ]);
     const { settings, catalog } = catalogResult;
+    const challengeDifficulties = period.difficulties || DEFAULT_DIFFICULTY_SETTINGS;
+    const counts = (words, difficulties) => Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, uniqueWordCount(filterDifficultyWords(words, difficulties[difficulty]))]));
     const policy = policyFromSnap(policySnap);
     const player = playerSnap.data() || {};
     const dailyUsed = player.dateKey === dayKey() ? Number(player.challengeUsed || 0) : 0;
     const lessons = [...new Set(catalog.map((word) => word.unitId))].map((unitId) => {
       const words = catalog.filter((word) => word.unitId === unitId);
-      return { unitId, title: words[0].lessonTitle, wordCount: words.length };
+      return { unitId, title: words[0].lessonTitle, wordCount: words.length, wordCountsByDifficulty: counts(words, settings.difficulties) };
     });
     const key = classKey(profile);
     const rankingSnap = key ? await ref(scope, 'weplay_periods', period.id).collection('entries').where('classKey', '==', key).get() : null;
     const entries = (rankingSnap?.docs || []).map((doc) => doc.data());
     const rankingByDifficulty = Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, entries.filter((entry) => entry.difficulty === difficulty).sort(compareEntries).slice(0, 50).map((entry, index) => ({ rank: index + 1, studentLabel: entry.studentLabel, score: entry.score, correctCount: entry.correctCount, isMe: entry.uid === uid }))]));
-    return { policy, gameEnabled: settings.enabled, balance: Number(walletSnap.data()?.balance || 0), dailyUsed, dailyRemaining: Math.max(0, policy.dailyChallengeLimit - dailyUsed), lessons, wordCount: uniqueWordCount(catalog), activeSession: active ? publicSession(active) : null, records: recordsSnap.docs.map((doc) => doc.data()), period: publicPeriod(period), rankingByDifficulty, serverNowMs: Date.now() };
+    return { policy, gameEnabled: settings.enabled, difficulties: settings.difficulties, challengeDifficulties, wordCountsByDifficulty: counts(catalog, settings.difficulties), challengeWordCountsByDifficulty: counts(catalog, challengeDifficulties), balance: Number(walletSnap.data()?.balance || 0), dailyUsed, dailyRemaining: Math.max(0, policy.dailyChallengeLimit - dailyUsed), lessons, wordCount: uniqueWordCount(catalog), activeSession: active ? publicSession(active) : null, records: recordsSnap.docs.map((doc) => doc.data()), period: publicPeriod(period), rankingByDifficulty, serverNowMs: Date.now() };
   });
 
   const startWeplayGame = onCall({ region: REGION }, async (request) => {
@@ -345,13 +354,14 @@ function createWeplayFunctions(deps) {
     const { settings: catalogSettings, catalog: allWords } = await readCatalog(scope);
     if (!catalogSettings.enabled) throw new HttpsError('failed-precondition', '현재 학생 게임 이용을 허용하지 않습니다.');
     const period = mode === 'challenge' ? await ensurePeriod(scope) : null;
+    const difficultySettings = (mode === 'challenge' ? period.difficulties || DEFAULT_DIFFICULTY_SETTINGS : catalogSettings.difficulties)[difficulty];
     const unitIds = request.data?.unitIds;
     if (unitIds !== undefined && (!Array.isArray(unitIds) || unitIds.length > 200 || unitIds.some((id) => typeof id !== 'string' || id.length > 128))) invalid('출제 범위를 확인해 주세요.');
     const catalog = mode === 'practice' && unitIds?.length ? allWords.filter((word) => unitIds.includes(word.unitId)) : allWords;
     const key = classKey(profile);
     if (mode === 'challenge' && !key) throw new HttpsError('failed-precondition', '학년과 반을 등록한 뒤 도전해 주세요.');
     let words;
-    try { words = buildWords(catalog, mode === 'challenge' ? `${scope.year}:${scope.semester}:${period.id}:${key}:${difficulty}` : sessionId, difficulty); }
+    try { words = buildWords(catalog, mode === 'challenge' ? `${scope.year}:${scope.semester}:${period.id}:${key}:${difficulty}` : sessionId, difficulty, difficultySettings); }
     catch (error) { throw new HttpsError('failed-precondition', error.message); }
     const output = await db.runTransaction(async (transaction) => {
       const sessionRef = ref(scope, 'weplay_sessions', sessionId);
@@ -390,7 +400,7 @@ function createWeplayFunctions(deps) {
       }
       const profileSnapshot = buildWalletBase(uid, profile);
       const session = {
-        id: sessionId, uid, mode, difficulty, status: 'active', startsAtMs: now + START_DELAY_MS, endsAtMs: now + START_DELAY_MS + GAME_DURATION_MS,
+        id: sessionId, uid, mode, difficulty, difficultySettings, status: 'active', startsAtMs: now + START_DELAY_MS, endsAtMs: now + START_DELAY_MS + difficultySettings.durationSeconds * 1000,
         words, acceptedWordIds: [], answerEvents: {}, answerEventCount: 0, policy, gameSettingsVersion: gameSettings.version,
         profile: profileSnapshot, classKey: key, studentLabel: studentLabel(profile),
         periodId: period?.id || null, result: null, createdAt: FieldValue.serverTimestamp(),

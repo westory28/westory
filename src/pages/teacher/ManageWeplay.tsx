@@ -11,6 +11,7 @@ import {
   saveWeplayGameSettings,
   previewWeplayGame,
   normalizeWeplayAnswer,
+  normalizeWeplayGameSettings,
   weplayErrorMessage,
   WEPLAY_GAMES,
   WEPLAY_DIFFICULTY_LABELS,
@@ -28,6 +29,8 @@ import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import TeacherNavigationIcon from "../../components/layout/TeacherNavigationIcon";
 import "../../components/common/weplay/weplay.css";
 import "./ManageWeplay.css";
+import WeplayWordPool, { getWeplayWordPool } from "./components/WeplayWordPool";
+import WeplayDifficultyEditor from "./components/WeplayDifficultyEditor";
 
 export default function ManageWeplay() {
   const { config, currentUser, userData } = useAuth();
@@ -46,6 +49,8 @@ export default function ManageWeplay() {
   const [feedback, setFeedback] = useState("");
   const [reloadRequired, setReloadRequired] = useState(false);
   const [removedSourceCount, setRemovedSourceCount] = useState(0);
+  const [difficultyError, setDifficultyError] = useState("");
+  const [settingsRevision, setSettingsRevision] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<WeplayDifficulty>("mild");
   const [preview, setPreview] = useState<{
@@ -60,7 +65,8 @@ export default function ManageWeplay() {
   const dirty =
     !!draft &&
     !!data &&
-    JSON.stringify(draft) !== JSON.stringify(data.settings);
+    (!!difficultyError ||
+      JSON.stringify(draft) !== JSON.stringify(data.settings));
   const load = useCallback(async () => {
     const token = ++generation.current;
     setLoading(true);
@@ -69,7 +75,10 @@ export default function ManageWeplay() {
     try {
       const response = await getWeplayManagement(config, game.id);
       if (token !== generation.current) return;
+      response.settings = normalizeWeplayGameSettings(response.settings);
       setData(response);
+      setDifficultyError("");
+      setSettingsRevision((value) => value + 1);
       const knownUnits = new Set(response.lessons.map((item) => item.unitId));
       const unitIds = response.settings.unitIds.filter((id) =>
         knownUnits.has(id),
@@ -115,13 +124,21 @@ export default function ManageWeplay() {
       (item) =>
         draft?.sourceMode === "all" || draft?.unitIds.includes(item.unitId),
     ) || [];
-  const countWords = (publicOnly: boolean) =>
-    new Set(
-      selectedLessons
-        .filter((item) => !publicOnly || item.isVisibleToStudents)
-        .flatMap((item) => item.words.map(normalizeWeplayAnswer)),
-    ).size;
-  const previewCount = countWords(false);
+  const pool = draft ? getWeplayWordPool(data?.lessons || [], draft) : [];
+  const includedWords = pool.filter(
+    (word) => !draft?.excludedWords.includes(word.key),
+  );
+  const countWords = (publicOnly: boolean, level?: WeplayDifficulty) =>
+    includedWords.filter((word) => {
+      const rule = level && draft?.difficulties[level];
+      const length = Array.from(normalizeWeplayAnswer(word.text)).length;
+      return (
+        (!publicOnly || word.public) &&
+        (!rule ||
+          (length >= rule.minWordLength && length <= rule.maxWordLength))
+      );
+    }).length;
+  const previewCount = countWords(false, difficulty);
   const availableCount = countWords(true);
   const update = (next: Partial<WeplayGameSettings>) => {
     setDraft((previous) => (previous ? { ...previous, ...next } : previous));
@@ -129,7 +146,7 @@ export default function ManageWeplay() {
   };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!draft || !canWrite || saving || !dirty) return;
+    if (!draft || !canWrite || saving || !dirty || difficultyError) return;
     const requestedScope = scope;
     setSaving(true);
     setError("");
@@ -137,8 +154,11 @@ export default function ManageWeplay() {
     try {
       const response = await saveWeplayGameSettings(config, game.id, draft);
       if (scopeRef.current !== requestedScope) return;
+      response.settings = normalizeWeplayGameSettings(response.settings);
       setData(response);
       setDraft(response.settings);
+      setDifficultyError("");
+      setSettingsRevision((value) => value + 1);
       setRemovedSourceCount(0);
       setReloadRequired(false);
       setFeedback("게임 설정을 저장했습니다.");
@@ -159,7 +179,7 @@ export default function ManageWeplay() {
     }
   };
   const startPreview = async () => {
-    if (starting || previewCount < 3) return;
+    if (starting || previewCount < 3 || !draft || difficultyError) return;
     const requestedScope = scope;
     setStarting(true);
     setError("");
@@ -169,6 +189,7 @@ export default function ManageWeplay() {
         game.id,
         difficulty,
         selectedLessons.map((item) => item.unitId),
+        draft,
       );
       if (scopeRef.current !== requestedScope) return;
       setResult(null);
@@ -326,7 +347,7 @@ export default function ManageWeplay() {
                     읽기 전용입니다. 게임 체험은 이용할 수 있습니다.
                   </p>
                 )}
-                <form onSubmit={(event) => void save(event)}>
+                <form noValidate onSubmit={(event) => void save(event)}>
                   <section
                     className="teacher-weplay-section"
                     aria-labelledby="weplay-settings-title"
@@ -344,7 +365,7 @@ export default function ManageWeplay() {
                           <button
                             className="teacher-weplay-button is-primary"
                             type="submit"
-                            disabled={!dirty || saving}
+                            disabled={!dirty || saving || !!difficultyError}
                           >
                             {saving ? "저장 중…" : "게임 설정 저장"}
                           </button>
@@ -366,36 +387,6 @@ export default function ManageWeplay() {
                       끄면 새 연습·도전을 시작할 수 없습니다. 진행 중인 판은
                       끝까지 진행됩니다.
                     </p>
-                    <fieldset
-                      className="teacher-weplay-sources"
-                      disabled={!canWrite || saving}
-                    >
-                      <legend>출제 자료</legend>
-                      <label>
-                        <input
-                          type="radio"
-                          name="weplay-source-mode"
-                          checked={draft.sourceMode === "all"}
-                          onChange={() =>
-                            update({ sourceMode: "all", unitIds: [] })
-                          }
-                        />
-                        전체 수업 자료
-                      </label>
-                      <label>
-                        <input
-                          type="radio"
-                          name="weplay-source-mode"
-                          checked={draft.sourceMode === "selected"}
-                          onChange={() => update({ sourceMode: "selected" })}
-                        />
-                        선택한 수업 자료
-                      </label>
-                    </fieldset>
-                    <p className="teacher-weplay-note">
-                      학생에게는 공개된 자료만 출제됩니다. 비공개 자료는 교사
-                      체험에서만 사용할 수 있습니다.
-                    </p>
                     {removedSourceCount > 0 && (
                       <p className="teacher-weplay-notice">
                         삭제된 자료 {removedSourceCount}개를 선택 목록에서
@@ -407,67 +398,27 @@ export default function ManageWeplay() {
                         학생 출제 가능 <strong>{availableCount}개</strong>
                       </span>
                       <span>
-                        교사 체험 <strong>{previewCount}개</strong>
+                        교사 체험 <strong>{countWords(false)}개</strong>
                       </span>
                     </div>
-                    {availableCount < 3 && (
-                      <p className="teacher-weplay-notice">
-                        학생이 게임을 시작하려면 공개된 자료에 서로 다른 빈칸
-                        정답이 3개 이상 필요합니다.
+                    <WeplayWordPool
+                      lessons={data.lessons}
+                      settings={draft}
+                      disabled={!canWrite || saving}
+                      update={update}
+                    />
+                    <WeplayDifficultyEditor
+                      key={`${scope}/${settingsRevision}`}
+                      settings={draft}
+                      disabled={!canWrite || saving}
+                      update={update}
+                      onValidityChange={setDifficultyError}
+                    />
+                    {difficultyError && (
+                      <p className="teacher-weplay-error" role="alert">
+                        설정을 저장하거나 체험하려면 입력값을 확인해 주세요.{" "}
+                        {difficultyError}
                       </p>
-                    )}
-                    {!data.lessons.length ? (
-                      <p>
-                        등록된 수업 자료가 없습니다.{" "}
-                        <Link to="/teacher/lesson">수업 자료 관리</Link>
-                      </p>
-                    ) : (
-                      <ul className="teacher-weplay-lessons">
-                        {data.lessons.map((item) => (
-                          <li key={item.unitId}>
-                            <div className="teacher-weplay-lesson-row">
-                              <label>
-                                <input
-                                  type="checkbox"
-                                  aria-label={`${item.title || "제목 없는 수업 자료"} 출제 포함`}
-                                  checked={
-                                    draft.sourceMode === "all" ||
-                                    draft.unitIds.includes(item.unitId)
-                                  }
-                                  disabled={
-                                    draft.sourceMode === "all" ||
-                                    !canWrite ||
-                                    saving
-                                  }
-                                  onChange={(event) =>
-                                    update({
-                                      unitIds: event.target.checked
-                                        ? [...draft.unitIds, item.unitId]
-                                        : draft.unitIds.filter(
-                                            (id) => id !== item.unitId,
-                                          ),
-                                    })
-                                  }
-                                />
-                                <span>
-                                  {item.title || "제목 없는 수업 자료"}
-                                </span>
-                              </label>
-                              <span className="teacher-weplay-note">
-                                {item.isVisibleToStudents ? "공개" : "비공개"}
-                              </span>
-                            </div>
-                            <details>
-                              <summary>빈칸 단어 {item.wordCount}개</summary>
-                              <p>
-                                {item.words.length
-                                  ? item.words.join(" · ")
-                                  : "게임에 사용할 빈칸 정답이 없습니다."}
-                              </p>
-                            </details>
-                          </li>
-                        ))}
-                      </ul>
                     )}
                   </section>
                 </form>
@@ -478,7 +429,8 @@ export default function ManageWeplay() {
                   <div className="teacher-weplay-section-title">
                     <h2 id="weplay-preview-title">교사 체험</h2>
                     <span className="teacher-weplay-note">
-                      60초 · 20개 단어
+                      {draft.difficulties[difficulty].durationSeconds}초 · 20개
+                      단어
                     </span>
                   </div>
                   <div
@@ -504,16 +456,22 @@ export default function ManageWeplay() {
                   </div>
                   <p className="teacher-weplay-note">
                     위스·랭킹·학생 기록에 반영되지 않습니다.
-                    {dirty && " 선택한 자료로 먼저 체험할 수 있습니다."}
+                    {dirty && " 저장 전 설정으로 체험합니다."}
                   </p>
                   {previewCount < 3 && (
                     <p className="teacher-weplay-notice">
-                      체험할 자료에 서로 다른 빈칸 정답이 3개 이상 필요합니다.
+                      선택한 난이도의 단어 길이에 맞는 단어가 3개 이상
+                      필요합니다.
                     </p>
                   )}
                   <button
                     className="teacher-weplay-button is-primary"
-                    disabled={starting || saving || previewCount < 3}
+                    disabled={
+                      starting ||
+                      saving ||
+                      previewCount < 3 ||
+                      !!difficultyError
+                    }
                     onClick={() => void startPreview()}
                   >
                     {starting ? "준비 중…" : "체험 시작"}

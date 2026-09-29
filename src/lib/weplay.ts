@@ -71,14 +71,24 @@ export interface WeplaySession {
   policy: WeplayPolicy;
   result: WeplayResult | null;
   serverNowMs: number;
+  difficultySettings?: WeplayDifficultySettings;
 }
 export interface WeplayLobby {
   gameEnabled?: boolean;
+  difficulties?: Record<WeplayDifficulty, WeplayDifficultySettings>;
+  challengeDifficulties?: Record<WeplayDifficulty, WeplayDifficultySettings>;
+  wordCountsByDifficulty?: Record<WeplayDifficulty, number>;
+  challengeWordCountsByDifficulty?: Record<WeplayDifficulty, number>;
   policy: WeplayPolicy;
   balance: number;
   dailyUsed: number;
   dailyRemaining: number;
-  lessons: { unitId: string; title: string; wordCount: number }[];
+  lessons: {
+    unitId: string;
+    title: string;
+    wordCount: number;
+    wordCountsByDifficulty?: Record<WeplayDifficulty, number>;
+  }[];
   wordCount: number;
   activeSession: WeplaySession | null;
   records: WeplayResult[];
@@ -142,12 +152,66 @@ export const WEPLAY_GAMES = [
   { id: "history-rain", name: "역사가 내려와" },
 ] as const;
 export type WeplayGameId = (typeof WEPLAY_GAMES)[number]["id"];
+export interface WeplayDifficultySettings {
+  durationSeconds: number;
+  fallSeconds: [number, number, number];
+  minWordLength: number;
+  maxWordLength: number;
+}
+export const DEFAULT_WEPLAY_DIFFICULTIES: Record<
+  WeplayDifficulty,
+  WeplayDifficultySettings
+> = {
+  mild: {
+    durationSeconds: 60,
+    fallSeconds: [12, 10, 8],
+    minWordLength: 1,
+    maxWordLength: 12,
+  },
+  medium: {
+    durationSeconds: 60,
+    fallSeconds: [10, 8, 6],
+    minWordLength: 1,
+    maxWordLength: 12,
+  },
+  spicy: {
+    durationSeconds: 60,
+    fallSeconds: [8, 6, 4],
+    minWordLength: 1,
+    maxWordLength: 12,
+  },
+};
 export interface WeplayGameSettings {
   enabled: boolean;
   sourceMode: "all" | "selected";
   unitIds: string[];
+  excludedWords: string[];
+  customWords: string[];
+  difficulties: Record<WeplayDifficulty, WeplayDifficultySettings>;
   version?: number;
 }
+export const normalizeWeplayGameSettings = (
+  settings: WeplayGameSettings,
+): WeplayGameSettings => ({
+  ...settings,
+  excludedWords: settings.excludedWords || [],
+  customWords: settings.customWords || [],
+  difficulties: Object.fromEntries(
+    (Object.keys(DEFAULT_WEPLAY_DIFFICULTIES) as WeplayDifficulty[]).map(
+      (difficulty) => [
+        difficulty,
+        {
+          ...DEFAULT_WEPLAY_DIFFICULTIES[difficulty],
+          ...settings.difficulties?.[difficulty],
+          fallSeconds: [
+            ...(settings.difficulties?.[difficulty]?.fallSeconds ||
+              DEFAULT_WEPLAY_DIFFICULTIES[difficulty].fallSeconds),
+          ],
+        },
+      ],
+    ),
+  ) as WeplayGameSettings["difficulties"],
+});
 export interface WeplayManagement {
   settings: WeplayGameSettings;
   lessons: {
@@ -178,11 +242,13 @@ export const previewWeplayGame = (
   gameId: WeplayGameId,
   difficulty: WeplayDifficulty,
   unitIds: string[],
+  settings?: WeplayGameSettings,
 ) =>
   call<WeplaySession>("previewWeplayGame", config, {
     gameId,
     difficulty,
     unitIds,
+    ...(settings ? { settings } : {}),
   });
 
 export const normalizeWeplayAnswer = (text: string) =>

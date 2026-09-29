@@ -6,7 +6,7 @@ if (project !== 'demo-westory-weplay' || !/^127\.0\.0\.1:\d+$/.test(process.env.
 }
 const api = require('../index');
 const { getFirestore } = require('firebase-admin/firestore');
-const { DEFAULT_POLICY, hash } = require('../weplayCore');
+const { DEFAULT_POLICY, DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, hash } = require('../weplayCore');
 const db = getFirestore();
 const scope = { year: '2026', semester: '2' };
 const prefix = 'years/2026/semesters/2';
@@ -48,7 +48,7 @@ async function main() {
   const beforeRead = await snapshotDatabase();
   assert.ok(beforeRead.some((doc) => doc.path === `${prefix}/weplay_policies/current`), 'Database snapshots must include nested semester documents.');
   const initial = await call('getWeplayManagement');
-  assert.deepEqual(initial.settings, { enabled: true, sourceMode: 'all', unitIds: [], version: 0 });
+  assert.deepEqual(initial.settings, DEFAULT_GAME_SETTINGS);
   assert.equal(initial.availableWordCount, 3);
   assert.equal(initial.previewWordCount, 6);
   assert.equal(initial.lessons.find((lesson) => lesson.unitId === 'private').isVisibleToStudents, false);
@@ -174,6 +174,44 @@ async function main() {
   assert.equal(recovered.availableWordCount, 3);
   assert.equal((await get(`${prefix}/lessons/private`)).isVisibleToStudents, false);
   console.log('PASS missing selected lessons remain empty; explicit all/disabled save clears stale IDs and recovers without publishing or substituting hidden material');
+
+  const draft = { ...recovered.settings, enabled: true, customWords: ['직접추가가', '직접추가나', '직접추가다'], excludedWords: ['고조선', '삼국 시대', '훈민정음'], difficulties: structuredClone(DEFAULT_DIFFICULTY_SETTINGS) };
+  draft.difficulties.medium = { durationSeconds: 30, fallSeconds: [5, 4, 3], minWordLength: 5, maxWordLength: 5 };
+  const beforeDraft = await snapshotDatabase();
+  const draftPreview = await call('previewWeplayGame', { settings: draft });
+  assert.equal(draftPreview.endsAtMs - draftPreview.startsAtMs, 30000);
+  assert.ok(draftPreview.words.every((word) => word.unitId === '__weplay_custom__'));
+  assert.deepEqual(await snapshotDatabase(), beforeDraft, 'Full draft preview has zero writes.');
+  for (const patch of [{ durationSeconds: 0 }, { fallSeconds: [5, 5, 3] }, { fallSeconds: [6, 4, 3] }]) {
+    await rejectCode(call('previewWeplayGame', { settings: { ...draft, difficulties: { ...draft.difficulties, medium: { ...draft.difficulties.medium, ...patch } } } }), 'invalid-argument');
+  }
+  const configured = await call('saveWeplayGameSettings', { settings: draft });
+  assert.equal(configured.availableWordCount, 3);
+  lobby = await call('getWeplayLobby', {}, 'student');
+  assert.equal(lobby.difficulties.medium.durationSeconds, 30);
+  assert.equal(lobby.challengeDifficulties.medium.durationSeconds, 60);
+  assert.equal(lobby.wordCountsByDifficulty.medium, 3);
+  assert.equal(lobby.lessons[0].wordCountsByDifficulty.medium, 3);
+  assert.equal(lobby.settings, undefined, 'Student lobby must not leak excluded/private source settings.');
+  const configuredPractice = await call('startWeplayGame', { mode: 'practice', requestKey: 'configured-practice' }, 'student');
+  assert.equal(configuredPractice.endsAtMs - configuredPractice.startsAtMs, 30000);
+  assert.deepEqual(configuredPractice.difficultySettings, draft.difficulties.medium);
+  const editedAgain = await call('saveWeplayGameSettings', { settings: { ...configured.settings, difficulties: DEFAULT_DIFFICULTY_SETTINGS } });
+  assert.equal((await get(`${prefix}/weplay_sessions/${configuredPractice.id}`)).difficultySettings.durationSeconds, 30);
+  await db.doc(`${prefix}/weplay_sessions/${configuredPractice.id}`).update({ endsAtMs: Date.now() - 1 });
+  await call('finishWeplayGame', { sessionId: configuredPractice.id }, 'student');
+  const configuredAgain = await call('saveWeplayGameSettings', { settings: { ...editedAgain.settings, difficulties: draft.difficulties } });
+  const challenge = await call('startWeplayGame', { mode: 'challenge', requestKey: 'fixed-period-challenge' }, 'student');
+  assert.equal(challenge.endsAtMs - challenge.startsAtMs, 60000, 'Existing period uses fixed difficulty snapshot.');
+  assert.deepEqual(challenge.difficultySettings, DEFAULT_DIFFICULTY_SETTINGS.medium);
+  await db.doc(`${prefix}/weplay_sessions/${challenge.id}`).update({ endsAtMs: Date.now() - 1 });
+  await call('finishWeplayGame', { sessionId: challenge.id }, 'student');
+  await db.doc(`${prefix}/weplay_periods/${lobby.period.id}`).update({ endsAtMs: Date.now() - 1 });
+  const nextPeriod = await call('getWeplayLobby', {}, 'student');
+  assert.equal(nextPeriod.challengeDifficulties.medium.durationSeconds, 30, 'Next period snapshots newly saved difficulty settings.');
+  await call('saveWeplayGameSettings', { settings: { ...configuredAgain.settings, enabled: false } });
+  assert.equal((await get(`${prefix}/lessons/private`)).isVisibleToStudents, false);
+  console.log('PASS editable words, full draft zero-write preview, configured timing and lengths, active session snapshot, period difficulty fairness and next-period changes');
 
   const signup = await fetch(`http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'management-rules@yongshin-ms.ms.kr', password: 'emulator-only-password', returnSecureToken: true }) });
   const account = await signup.json();

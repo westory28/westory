@@ -5,6 +5,7 @@ import {
   startWeplayGame,
   weplayErrorMessage,
   WEPLAY_DIFFICULTY_LABELS,
+  DEFAULT_WEPLAY_DIFFICULTIES,
   type WeplayDifficulty,
   type WeplayLobby,
   type WeplayResult,
@@ -141,10 +142,22 @@ export default function Weplay() {
     : 0;
   const ranking = lobby?.rankingByDifficulty[rankingDifficulty] || [];
   const rankRewards = lobby?.period?.rankingRewards[rankingDifficulty];
+  const difficultySettings =
+    (mode === "challenge"
+      ? lobby?.challengeDifficulties
+      : lobby?.difficulties)?.[difficulty] ||
+    DEFAULT_WEPLAY_DIFFICULTIES[difficulty];
+  const selectedLesson = lobby?.lessons.find((item) => item.unitId === lesson);
   const availableCount =
     mode === "practice" && lesson
-      ? lobby?.lessons.find((item) => item.unitId === lesson)?.wordCount || 0
-      : lobby?.wordCount || 0;
+      ? (selectedLesson?.wordCountsByDifficulty?.[difficulty] ??
+        selectedLesson?.wordCount ??
+        0)
+      : ((mode === "challenge"
+          ? lobby?.challengeWordCountsByDifficulty?.[difficulty]
+          : lobby?.wordCountsByDifficulty?.[difficulty]) ??
+        lobby?.wordCount ??
+        0);
   return (
     <main className="weplay-page">
       <header className="weplay-heading">
@@ -267,7 +280,9 @@ export default function Weplay() {
                   </button>
                 ))}
               </div>
-              <p className="weplay-rule">60초 · 20개 단어</p>
+              <p className="weplay-rule">
+                {difficultySettings.durationSeconds}초 · 20개 단어
+              </p>
               {mode === "practice" ? (
                 <>
                   <label className="weplay-select">
@@ -280,10 +295,13 @@ export default function Weplay() {
                         requestKey.current = "";
                       }}
                     >
-                      <option value="">공개된 수업 전체</option>
+                      <option value="">전체 단어</option>
                       {lobby.lessons.map((item) => (
                         <option key={item.unitId} value={item.unitId}>
-                          {item.title} ({item.wordCount}개)
+                          {item.title} (
+                          {item.wordCountsByDifficulty?.[difficulty] ??
+                            item.wordCount}
+                          개)
                         </option>
                       ))}
                     </select>
@@ -338,12 +356,12 @@ export default function Weplay() {
               )}
               {availableCount === 0 && lobby.gameEnabled !== false && (
                 <p role="status">
-                  공개된 수업 자료에 게임용 빈칸 단어가 아직 없습니다.
+                  선택한 난이도와 범위에 출제할 단어가 없습니다.
                 </p>
               )}
               {availableCount > 0 && availableCount < 3 && (
                 <p role="status">
-                  서로 다른 빈칸 단어가 3개 이상인 수업 범위를 선택해 주세요.
+                  서로 다른 단어가 3개 이상인 난이도와 범위를 선택해 주세요.
                 </p>
               )}
               <button

@@ -11,10 +11,13 @@ Policy reads require `point_read` or `point_manage`; `saveWeplayPolicy` requires
 `point_manage`. All new `weplay_*` documents are server-only under the existing
 Firestore default-deny rules.
 
-A game lasts 60 seconds plus a 3-second preparation countdown. Its 20 words are
-distributed 7/7/6 across three 20-second phases. Students choose `mild`, `medium`,
-or `spicy`; fall durations are respectively 12/10/8, 10/8/6, or 8/6/4 seconds.
-Only currently visible lesson HTML blanks and valid PDF page blanks are used,
+A game defaults to 60 seconds plus a 3-second preparation countdown. Its 20 words are
+distributed 7/7/6 across three equal phases. Students choose `mild`, `medium`,
+or `spicy`; default fall durations are respectively 12/10/8, 10/8/6, or 8/6/4 seconds.
+Teachers configure each difficulty's duration (30–180 seconds), strictly decreasing
+fall times, and normalized word length (1–12). Fall times are bounded by
+`min(30, floor((durationSeconds / 3 - 1) * 0.64))` to avoid crowding the three lanes.
+Currently visible lesson HTML blanks and valid PDF page blanks are used,
 with semester lessons shadowing legacy lessons, including hidden overrides.
 Answers longer than 12 characters are excluded. Challenge difficulty does not
 change the shared daily limit, participation cost, or result payout table.
@@ -27,7 +30,8 @@ on the student's next lobby visit. Policies are snapshotted per game and per ran
 period. Weekly periods start Monday at midnight in Korea; monthly periods start on
 the first. Rankings and first/second/third rewards are separate for each class and
 difficulty. Ties use the earlier achieved record, then a stable internal ID.
-Period settlement waits three minutes after the period ends, settles all outstanding
+Period settlement waits four minutes after the period ends (including a maximum-length
+game begun just before the boundary), settles all outstanding
 games first, and uses unique ledger/award documents to prevent duplicate rewards.
 
 Verification from the repository root:
@@ -47,9 +51,13 @@ rank rewards, deleted-user recovery, and authenticated direct-access denial.
 `getWeplayManagement`, `saveWeplayGameSettings`, and `previewWeplayGame` accept
 `gameId: "history-rain"` and the usual year/semester scope. Game settings live at
 `weplay_games/history-rain`: `enabled`, `sourceMode` (`all` or `selected`),
-`unitIds`, and server-controlled `version`. A missing document preserves the
-original enabled/all behavior. Students receive only the intersection of the
-selected source range and currently visible lessons. Disabling the game blocks
+`unitIds`, `excludedWords`, `customWords`, `difficulties`, and server-controlled `version`.
+Each difficulty contains `durationSeconds`, `fallSeconds: [early, middle, late]`,
+`minWordLength`, and `maxWordLength`. Legacy documents default missing fields.
+The normalized exclusion list filters all lesson and custom sources. Manual words
+are explicit game content visible to students and use source ID `__weplay_custom__`;
+both lists are capped at 1,000 items. Students receive lesson words only from the
+intersection of selected sources and currently visible lessons. Disabling the game blocks
 new practice and challenge starts; already started games can still finish.
 Starts recheck the settings/version in their transaction and reject a stale
 catalog instead of charging for a changed source range. Settings saves reject a
@@ -61,9 +69,16 @@ authorization. Only a teacher or the admin can save settings; a student's
 teacher-portal flag or delegated point permission does not grant write access.
 Management includes the latest public and private lessons, including empty
 ones, and reports the eligible student/teacher preview word counts separately.
-Teacher previews may explicitly override the source unit IDs. They use the same
-60-second word builder and difficulty curves, but return an in-memory practice
+Teacher previews accept a complete validated unsaved `settings` draft (or the legacy
+source `unitIds` override). They use the same configurable word builder, but return an in-memory practice
 session only: no session document, queue, record, wallet, or ranking is written.
+Practice/preview difficulty settings apply immediately; challenges snapshot all three
+difficulty configurations for each ranking period. Existing legacy periods retain
+the original difficulty curves. Saved changes affect the next ranking period;
+source visibility and word inclusion/exclusion still apply to every new game.
+Started sessions retain their difficulty and words. Lobby responses expose only
+latest/active challenge difficulty configurations and per-difficulty eligible counts,
+never private lessons or excluded-word settings.
 
 ```powershell
 firebase emulators:exec --config firebase.weplay-test.json --project demo-westory-weplay --only firestore,auth "node functions/scripts/verify-weplay-management-emulator.cjs"

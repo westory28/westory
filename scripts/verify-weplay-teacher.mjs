@@ -298,6 +298,8 @@ async function pageFor(view, width = 1280) {
   await page.clock.install({ time: new Date("2026-09-29T02:00:00Z") });
   await page.clock.pauseAt(new Date("2026-09-29T02:00:10Z"));
   await page.goto(`${origin}/?view=${view}`);
+  if (["management", "removed-source", "empty", "readonly"].includes(view))
+    await page.locator("details.teacher-weplay-pool > summary").click();
   return page;
 }
 async function capture(page, name) {
@@ -449,6 +451,14 @@ try {
       await manage
         .getByRole("radio", { name: "선택한 수업 자료", exact: true })
         .check();
+      for (const title of [
+        "조선의 문화",
+        "삼국의 발전과 통일",
+        "다음 수업 준비 자료",
+      ])
+        await manage
+          .getByRole("checkbox", { name: title + " 출제 포함", exact: true })
+          .uncheck();
       assert.equal(
         await manage
           .getByRole("button", { name: "체험 시작", exact: true })
@@ -532,6 +542,7 @@ try {
         semester: "2",
         gameId: "history-rain",
         settings: {
+          ...structuredClone(core.DEFAULT_GAME_SETTINGS),
           enabled: false,
           sourceMode: "selected",
           unitIds: ["private-1"],
@@ -547,6 +558,12 @@ try {
       await removed
         .getByRole("heading", { name: "게임 운영", exact: true })
         .waitFor();
+      if (
+        (await removed
+          .locator("details.teacher-weplay-pool")
+          .getAttribute("open")) === null
+      )
+        await removed.locator("details.teacher-weplay-pool > summary").click();
       assert.equal(
         await removed
           .getByRole("button", { name: "게임 설정 저장", exact: true })
@@ -568,6 +585,12 @@ try {
       );
       assert.deepEqual(removedSave.unitIds, ["public-1"]);
       assert.equal(removedSave.enabled, false);
+      if (
+        (await removed
+          .locator("details.teacher-weplay-pool")
+          .getAttribute("open")) === null
+      )
+        await removed.locator("details.teacher-weplay-pool > summary").click();
       await removed
         .getByRole("radio", { name: "전체 수업 자료", exact: true })
         .check();
@@ -602,6 +625,7 @@ try {
       await removed
         .getByRole("heading", { name: "게임 운영", exact: true })
         .waitFor();
+      await removed.locator("details.teacher-weplay-pool > summary").click();
       assert.equal(
         await removed
           .getByRole("checkbox", {
@@ -654,7 +678,10 @@ try {
         const page = await pageFor(view, 390);
         if (view === "empty") {
           await page
-            .getByText("등록된 수업 자료가 없습니다.", { exact: false })
+            .getByText(
+              "연결한 자료의 빈칸 단어가 없습니다. 단어를 직접 추가할 수 있습니다.",
+              { exact: true },
+            )
             .waitFor();
           assert.equal(
             await page
@@ -753,6 +780,14 @@ try {
         await page
           .getByRole("radio", { name: "선택한 수업 자료", exact: true })
           .check();
+        for (const title of [
+          "조선의 문화",
+          "삼국의 발전과 통일",
+          "다음 수업 준비 자료",
+        ])
+          await page
+            .getByRole("checkbox", { name: title + " 출제 포함", exact: true })
+            .uncheck();
         await page
           .getByRole("checkbox", {
             name: "다음 수업 준비 자료 출제 포함",
@@ -869,6 +904,13 @@ try {
         await page
           .getByRole("heading", { name: "게임 운영", exact: true })
           .waitFor();
+        await page.locator("details.teacher-weplay-pool > summary").click();
+        if (
+          (await page
+            .locator("details.teacher-weplay-pool")
+            .getAttribute("open")) === null
+        )
+          await page.locator("details.teacher-weplay-pool > summary").click();
         assert.equal(
           await page
             .getByRole("checkbox", {

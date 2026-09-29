@@ -90,7 +90,14 @@ export default function HistoryRainGame({
     0,
     Math.ceil((session.endsAtMs - Math.max(now, session.startsAtMs)) / 1000),
   );
-  const stage = Math.min(3, Math.max(1, Math.floor(elapsed / 20000) + 1));
+  const stageDuration = Math.max(
+    1,
+    (session.endsAtMs - session.startsAtMs) / 3,
+  );
+  const stage = Math.min(
+    3,
+    Math.max(1, Math.floor(elapsed / stageDuration) + 1),
+  );
   const started = elapsed >= 0;
   const ended = now >= session.endsAtMs;
   useEffect(() => {
