@@ -1,0 +1,191 @@
+.student-calendar-page__canvas {
+  height: calc(100dvh - 176px);
+  min-height: 600px;
+}
+
+/* FullCalendar background is a grid item too: assign the same rows as teacher. */
+.student-full-calendar .fc .fc-daygrid-day-bg {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  min-width: 0;
+  z-index: 0;
+}
+
+.student-full-calendar .fc .fc-daygrid-day-top {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  position: relative;
+  z-index: 8;
+}
+
+.student-full-calendar .fc .fc-daygrid-day-events {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+}
+
+.student-full-calendar .fc .fc-daygrid-day-bottom {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.student-full-calendar .student-calendar-day-date {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  height: var(--space-6);
+  white-space: nowrap;
+}
+
+.student-full-calendar .student-attendance-stamp {
+  flex: 0 0 auto;
+}
+
+.student-full-calendar
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .student-calendar-day-head {
+  align-items: center;
+  min-height: var(--space-10);
+}
+
+/* Match the teacher calendar's event labels without changing teacher styles. */
+.student-full-calendar .student-calendar-event-label {
+  height: var(--space-6);
+  padding: 0 var(--space-1);
+  color: var(--ws-text-strong);
+}
+
+.student-full-calendar .student-calendar-event-label__text {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.student-full-calendar__list-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.student-full-calendar__list-event {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+}
+
+.student-full-calendar__list-event:hover {
+  background: var(--ws-surface-subtle);
+}
+
+.student-full-calendar__category {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ws-text-muted);
+  font-weight: 700;
+}
+
+.student-full-calendar__category-dot {
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.student-full-calendar__list-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.student-calendar-page button:focus-visible {
+  outline: 2px solid var(--ws-ring);
+  outline-offset: 2px;
+}
+
+.student-full-calendar .student-calendar-shell__nav-button,
+.student-full-calendar .student-calendar-shell__control-button,
+.student-full-calendar .student-calendar-shell__view-button,
+.student-full-calendar .student-calendar-shell__search-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.student-full-calendar .student-calendar-shell__month-badge {
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+}
+
+.student-calendar-attendance-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  color: var(--ws-danger-text, #b91c1c);
+  font-size: 0.875rem;
+}
+
+.student-calendar-attendance-error button {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  color: var(--ws-primary);
+  font-weight: 700;
+}
+
+@media (max-width: 639px) {
+  .student-full-calendar .student-calendar-shell__calendar-tools,
+  .student-full-calendar .student-calendar-shell__control-cluster {
+    flex-wrap: nowrap;
+    gap: var(--space-1);
+  }
+
+  .student-full-calendar .student-calendar-shell__control-button,
+  .student-full-calendar .student-calendar-shell__search-button,
+  .student-full-calendar .student-calendar-shell__view-button {
+    padding-inline: var(--space-2);
+  }
+
+  .student-full-calendar
+    .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+    .fc
+    .student-calendar-day-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    min-height: var(--space-12);
+    padding-inline: 2px;
+  }
+
+  .student-full-calendar .student-calendar-day-date {
+    gap: 2px;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .student-full-calendar .student-calendar-day-date .student-attendance-stamp {
+    width: clamp(16px, 5vw, 24px);
+    height: auto;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .student-full-calendar__list-event {
+    grid-template-columns: var(--space-20) minmax(0, 1fr);
+    gap: var(--space-2);
+    font-size: 0.875rem;
+  }
+}

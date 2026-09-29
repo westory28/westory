@@ -1,12 +1,5 @@
-import {
-  getScheduleEventColor,
-  getScheduleEventTextColor,
-} from "../../lib/scheduleCategories";
-import React, { useEffect, useMemo, useState } from "react";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import listPlugin from "@fullcalendar/list";
+import { getScheduleEventColor } from "../../lib/scheduleCategories";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -14,87 +7,26 @@ import {
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
-import {
-  compareFullCalendarSchedulePeriod,
-  getSchedulePeriodRangeLabel,
-  getSchedulePeriodOrder,
-} from "../../lib/schedulePeriods";
+import { getSchedulePeriodRangeLabel } from "../../lib/schedulePeriods";
 import { loadVisibleCalendarEvents } from "../../lib/visibleSchedule";
-import AttendanceStamp from "./components/AttendanceStamp";
+import StudentCalendarSection from "./components/StudentCalendarSection";
+import type { CalendarEvent } from "../../types";
 import { useAttendanceDates } from "./hooks/useAttendanceDates";
-
-interface CalendarEvent {
-  labelColor?: string;
-  id: string;
-  title: string;
-  start: string; // ISO string YYYY-MM-DD
-  end?: string;
-  startPeriod?: string;
-  endPeriod?: string;
-  period?: string;
-  eventType:
-    | "exam"
-    | "performance"
-    | "event"
-    | "diagnosis"
-    | "formative"
-    | "holiday";
-  targetType: "common" | "class";
-  targetClass?: string;
-  description?: string;
-  backgroundColor?: string;
-  borderColor?: string;
-  textColor?: string;
-  classNames?: string[];
-}
-
-const toDateKey = (value?: string) =>
-  String(value || "")
-    .split("T")[0]
-    .trim();
-
-const getInclusiveSpanDays = (start?: string, end?: string) => {
-  const startDateKey = toDateKey(start);
-  if (!startDateKey) return 1;
-  const endDateKey = toDateKey(end);
-  const resolvedEndDateKey =
-    endDateKey && endDateKey > startDateKey ? endDateKey : startDateKey;
-  const startDate = new Date(`${startDateKey}T00:00:00`);
-  const endDate = new Date(`${resolvedEndDateKey}T00:00:00`);
-  const diffDays = Math.round(
-    (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000),
-  );
-  return diffDays + 1;
-};
 
 const Calendar = () => {
   const { user } = useAuth();
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [userClass, setUserClass] = useState<string | null>(null);
   const [currentConfig, setCurrentConfig] = useState<{
     year: string;
     semester: string;
   } | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const attendance = useAttendanceDates(user?.uid, currentConfig);
-  const attendanceDateSet = useMemo(
-    () => new Set(attendance.dates),
-    [attendance.dates],
-  );
-
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
     null,
   );
-
-  const colorMap: { [key: string]: string } = {
-    exam: "#ef4444", // Red
-    performance: "#f97316", // Orange
-    event: "#10b981", // Green
-    diagnosis: "#3b82f6", // Blue
-    formative: "#3b82f6", // Blue
-  };
 
   const typeLabelMap: { [key: string]: string } = {
     exam: "정기 시험",
@@ -103,38 +35,6 @@ const Calendar = () => {
     diagnosis: "진단평가",
     formative: "형성평가",
   };
-
-  const toLocalYmd = (date: Date) => {
-    const offset = date.getTimezoneOffset() * 60000;
-    return new Date(date.getTime() - offset).toISOString().split("T")[0];
-  };
-
-  const toExclusiveEnd = (start?: string, end?: string) => {
-    const startDateKey = toDateKey(start);
-    const endDateKey = toDateKey(end);
-    if (!startDateKey || !endDateKey || endDateKey <= startDateKey)
-      return undefined;
-    const endDate = new Date(`${endDateKey}T00:00:00`);
-    endDate.setDate(endDate.getDate() + 1);
-    return toLocalYmd(endDate);
-  };
-
-  const holidayDateSet = useMemo(() => {
-    const set = new Set<string>();
-    events.forEach((eventItem: any) => {
-      const date = String(eventItem.start || "").split("T")[0];
-      const title = String(eventItem.title || "");
-      const isHolidayEvent =
-        eventItem.classNames?.includes("holiday-text-event") ||
-        eventItem.extendedProps?.eventType === "holiday" ||
-        /공휴일|대체공휴일/.test(title);
-
-      if (date && isHolidayEvent) {
-        set.add(date);
-      }
-    });
-    return set;
-  }, [events]);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -185,41 +85,7 @@ const Calendar = () => {
         const loadedEvents = mergeEventsWithKoreanPublicHolidays(
           visibleEvents,
           holidays,
-        ).map((event) => {
-          const isHoliday = event.eventType === "holiday";
-          const inclusiveSpanDays = getInclusiveSpanDays(
-            event.start,
-            event.end,
-          );
-          const isMultiDayRange = inclusiveSpanDays > 1;
-
-          return {
-            id: event.id,
-            title: event.title,
-            start: toDateKey(event.start) || event.start,
-            end: toExclusiveEnd(event.start, event.end),
-            allDay: true,
-            backgroundColor: isHoliday
-              ? "#ef4444"
-              : getScheduleEventColor(event),
-            borderColor: isHoliday ? "#ef4444" : getScheduleEventColor(event),
-            textColor: isHoliday ? "#ffffff" : getScheduleEventTextColor(event),
-            classNames: [
-              ...(isHoliday ? ["holiday-text-event"] : []),
-              ...(isMultiDayRange
-                ? ["student-calendar-page-range-event"]
-                : ["student-calendar-page-single-event"]),
-            ],
-            extendedProps: {
-              ...event,
-              inclusiveSpanDays,
-              isMultiDayRange,
-              periodOrder: getSchedulePeriodOrder(
-                event.startPeriod ?? event.period,
-              ),
-            },
-          };
-        });
+        );
         setEvents(loadedEvents);
       } catch (e) {
         console.error("Error fetching events:", e);
@@ -229,144 +95,40 @@ const Calendar = () => {
     fetchEvents();
   }, [currentConfig, userClass]);
 
-  const handleEventClick = (info: any) => {
-    const props = info.event.extendedProps as CalendarEvent & {
-      inclusiveSpanDays?: number;
-      isMultiDayRange?: boolean;
-    };
-    if (props.eventType === "holiday") return; // Skip holidays
-    setSelectedEvent(props);
+  const handleEventClick = (event: CalendarEvent) => {
+    if (event.eventType === "holiday") return;
+    setSelectedEvent(event);
     setModalOpen(true);
   };
 
-  const handleDateClick = (arg: any) => {
-    setSelectedDate(arg.dateStr);
-  };
-
   return (
-    <div className="student-calendar-page bg-gray-50 flex flex-col min-h-screen">
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 h-full flex flex-col">
-        <div className="mb-4 shrink-0">
-          <h1 className="text-2xl font-bold text-gray-800">
-            <i className="fas fa-calendar-check text-green-500 mr-2"></i>학사
-            일정
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            우리 반의 주요 일정과 평가 계획을 확인하세요.
-          </p>
+    <div className="student-calendar-page mx-auto w-full max-w-[1536px] px-4 py-4 md:px-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-extrabold text-gray-900">학사 일정</h1>
+        {currentConfig && (
+          <span className="text-sm text-gray-500">
+            {currentConfig.year}학년도 {currentConfig.semester}학기
+          </span>
+        )}
+      </div>
+      {attendance.error && (
+        <div className="student-calendar-attendance-error" role="status">
+          <span>출석 기록을 불러오지 못했습니다.</span>
+          <button type="button" onClick={attendance.retry}>
+            다시 시도
+          </button>
         </div>
-
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 md:p-6 flex flex-col relative min-h-[600px]">
-          <div className="flex items-center gap-4 mb-4 text-xs font-bold text-gray-500 justify-end">
-            <div className="flex items-center">
-              <span className="w-3 h-3 rounded-full bg-red-500 mr-1"></span>정기
-              시험
-            </div>
-            <div className="flex items-center">
-              <span className="w-3 h-3 rounded-full bg-orange-500 mr-1"></span>
-              수행평가
-            </div>
-            <div className="flex items-center">
-              <span className="w-3 h-3 rounded-full bg-blue-500 mr-1"></span>
-              진단/형성
-            </div>
-            <div className="flex items-center">
-              <span className="w-3 h-3 rounded-full bg-green-500 mr-1"></span>
-              행사
-            </div>
-          </div>
-
-          {attendance.error && (
-            <div className="student-calendar-attendance-error" role="status">
-              <span>출석 기록을 불러오지 못했습니다.</span>
-              <button type="button" onClick={attendance.retry}>
-                다시 시도
-              </button>
-            </div>
-          )}
-          <div
-            className="flex-1 calendar-wrapper"
-            aria-busy={attendance.loading}
-          >
-            <FullCalendar
-              plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
-              initialView="dayGridMonth"
-              locale="ko"
-              headerToolbar={{
-                left: "prev,next today",
-                center: "title",
-                right: "dayGridMonth,listMonth",
-              }}
-              events={events}
-              eventOrder={compareFullCalendarSchedulePeriod}
-              dateClick={handleDateClick}
-              eventClick={handleEventClick}
-              eventDidMount={(arg) => {
-                const event = arg.event.extendedProps as CalendarEvent & {
-                  inclusiveSpanDays?: number;
-                  isMultiDayRange?: boolean;
-                };
-                const isRangeEvent =
-                  typeof event.inclusiveSpanDays === "number"
-                    ? event.inclusiveSpanDays > 1
-                    : Boolean(event.isMultiDayRange);
-                const harness = arg.el.closest(
-                  ".fc-daygrid-event-harness, .fc-daygrid-event-harness-abs",
-                );
-                if (!harness) return;
-                harness.classList.toggle(
-                  "student-calendar-page-event-harness--range",
-                  isRangeEvent,
-                );
-                harness.classList.toggle(
-                  "student-calendar-page-event-harness--single",
-                  !isRangeEvent,
-                );
-              }}
-              eventContent={(arg) => {
-                if (arg.view.type !== "dayGridMonth") return undefined;
-                return (
-                  <div className="fc-segment-title" title={arg.event.title}>
-                    {arg.event.title}
-                  </div>
-                );
-              }}
-              height="auto" // Allow it to grow
-              fixedWeekCount={false}
-              dayCellContent={(arg) => {
-                const date = toLocalYmd(arg.date);
-                return (
-                  <span className="student-calendar-date-label">
-                    <span>{arg.dayNumberText}</span>
-                    {attendanceDateSet.has(date) && (
-                      <AttendanceStamp date={date} />
-                    )}
-                  </span>
-                );
-              }}
-              dayHeaderContent={(arg) => {
-                const date = toLocalYmd(arg.date);
-                return (
-                  <span className="student-calendar-date-label">
-                    <span>{arg.text}</span>
-                    {arg.view.type === "listMonth" &&
-                      attendanceDateSet.has(date) && (
-                        <AttendanceStamp date={date} />
-                      )}
-                  </span>
-                );
-              }}
-              dayCellClassNames={(arg) => {
-                const dateStr = toLocalYmd(arg.date);
-                const classes: string[] = [];
-                if (holidayDateSet.has(dateStr)) classes.push("fc-day-holiday");
-                if (selectedDate === dateStr) classes.push("fc-day-selected");
-                return classes;
-              }}
-            />
-          </div>
-        </div>
-      </main>
+      )}
+      <div
+        className="student-calendar-page__canvas"
+        aria-busy={attendance.loading}
+      >
+        <StudentCalendarSection
+          events={events}
+          attendanceDates={attendance.dates}
+          onEventClick={handleEventClick}
+        />
+      </div>
 
       {/* Detail Modal */}
       {modalOpen && selectedEvent && (
@@ -432,106 +194,6 @@ const Calendar = () => {
           </div>
         </div>
       )}
-
-      <style>{`
-                .student-calendar-page .student-calendar-date-label {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: flex-end;
-                    flex-wrap: wrap;
-                    gap: 4px;
-                    max-width: 100%;
-                }
-                .student-calendar-page .fc-daygrid-day-number { min-width: 0; max-width: 100%; }
-                .student-calendar-attendance-error { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; color: var(--ws-danger-text, #b91c1c); font-size: 0.875rem; }
-                .student-calendar-attendance-error button { min-height: 44px; padding: 0 12px; color: var(--ws-primary, #2563eb); font-weight: 700; }
-                .student-calendar-attendance-error button:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
-                .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
-                .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
-                .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; font-weight: 600; border: none; }
-                .fc-daygrid-day-events {
-                    box-sizing: border-box;
-                    min-width: 0;
-                    width: 100%;
-                    max-width: 100%;
-                    overflow: visible;
-                }
-                .fc-daygrid-event-harness.student-calendar-page-event-harness--single,
-                .fc-daygrid-event-harness-abs.student-calendar-page-event-harness--single {
-                    box-sizing: border-box !important;
-                    inline-size: 100% !important;
-                    max-inline-size: 100% !important;
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    min-width: 0 !important;
-                    overflow: hidden !important;
-                }
-                .fc-daygrid-event-harness-abs.student-calendar-page-event-harness--single {
-                    left: 0 !important;
-                    right: 0 !important;
-                    inset-inline: 0 !important;
-                }
-                .fc-daygrid-event-harness.student-calendar-page-event-harness--range,
-                .fc-daygrid-event-harness-abs.student-calendar-page-event-harness--range {
-                    width: auto !important;
-                    min-width: 0 !important;
-                    max-width: none !important;
-                    overflow: visible !important;
-                }
-                .fc-daygrid-event.student-calendar-page-single-event,
-                .fc-daygrid-event.student-calendar-page-single-event .fc-event-main,
-                .fc-daygrid-event.student-calendar-page-single-event .fc-event-main-frame,
-                .fc-daygrid-event.student-calendar-page-single-event .fc-event-title-container {
-                    box-sizing: border-box;
-                    inline-size: 100%;
-                    max-inline-size: 100%;
-                    min-width: 0;
-                    width: 100%;
-                    max-width: 100%;
-                    overflow: hidden;
-                }
-                .fc-daygrid-event.student-calendar-page-range-event,
-                .fc-daygrid-event.student-calendar-page-range-event .fc-event-main,
-                .fc-daygrid-event.student-calendar-page-range-event .fc-event-main-frame,
-                .fc-daygrid-event.student-calendar-page-range-event .fc-event-title-container {
-                    min-width: 0;
-                    width: 100%;
-                    max-width: 100%;
-                    overflow: visible;
-                }
-                .fc-daygrid-event.student-calendar-page-range-event {
-                    width: 100% !important;
-                    min-width: 0 !important;
-                    max-width: 100% !important;
-                    overflow: visible !important;
-                    margin-left: 0 !important;
-                    margin-right: 0 !important;
-                    border-radius: 0 !important;
-                    position: relative;
-                    z-index: 2;
-                }
-                .fc-daygrid-event.student-calendar-page-range-event.fc-event-start {
-                    border-top-left-radius: 4px !important;
-                    border-bottom-left-radius: 4px !important;
-                }
-                .fc-daygrid-event.student-calendar-page-range-event.fc-event-end {
-                    border-top-right-radius: 4px !important;
-                    border-bottom-right-radius: 4px !important;
-                }
-                .fc-daygrid-event.student-calendar-page-range-event.fc-event-start.fc-event-end {
-                    border-radius: 4px !important;
-                }
-                .fc-day-sun a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
-                .fc-day-sat:not(.fc-day-holiday) a { color: #3b82f6 !important; text-decoration: none; font-weight: 700 !important; }
-                .fc-day-holiday a { color: #ef4444 !important; text-decoration: none; font-weight: 700 !important; }
-                .fc-day-holiday .fc-daygrid-day-number { color: #ef4444 !important; font-weight: 700 !important; }
-                .fc-day-selected { background-color: #eff6ff !important; outline: 2px solid #3b82f6 !important; outline-offset: -2px !important; }
-                .fc-daygrid-event.holiday-text-event { background-color: #ef4444 !important; border-color: #ef4444 !important; }
-                .fc-daygrid-event.holiday-text-event .fc-segment-title { color: #ffffff !important; font-size: 0.75rem; font-weight: 800; }
-                .fc-list-event.holiday-text-event { background-color: transparent !important; border: none !important; }
-                .fc-list-event.holiday-text-event .fc-list-event-title a { color: #ef4444 !important; font-weight: 800 !important; }
-                .fc-segment-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; padding: 0 2px; }
-            `}</style>
     </div>
   );
 };
