@@ -246,6 +246,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
 
   useLayoutEffect(() => {
     if (!open) return;
+    let frame = 0;
     const positionPanel = () => {
       const trigger = triggerRef.current?.getBoundingClientRect();
       if (!trigger) return;
@@ -256,7 +257,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       const viewportHeight = viewport?.height || window.innerHeight;
       const width = Math.min(360, viewportWidth - 24);
       const top = trigger.bottom + 8;
-      setPanelPosition({
+      const nextPosition = {
         top,
         left: Math.max(
           viewportLeft + 12,
@@ -267,18 +268,25 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
         ),
         width,
         maxHeight: Math.max(0, viewportTop + viewportHeight - top - 12),
-      });
+      };
+      setPanelPosition((previous) =>
+        previous.top === nextPosition.top &&
+        previous.left === nextPosition.left &&
+        previous.width === nextPosition.width &&
+        previous.maxHeight === nextPosition.maxHeight
+          ? previous
+          : nextPosition,
+      );
     };
-    positionPanel();
-    window.addEventListener("resize", positionPanel);
-    window.addEventListener("scroll", positionPanel, true);
-    window.visualViewport?.addEventListener("resize", positionPanel);
-    window.visualViewport?.addEventListener("scroll", positionPanel);
+    // Menu transitions and late font loading can move the bell without a
+    // window resize or scroll. Track its position only while the panel is open.
+    const followTrigger = () => {
+      positionPanel();
+      frame = window.requestAnimationFrame(followTrigger);
+    };
+    followTrigger();
     return () => {
-      window.removeEventListener("resize", positionPanel);
-      window.removeEventListener("scroll", positionPanel, true);
-      window.visualViewport?.removeEventListener("resize", positionPanel);
-      window.visualViewport?.removeEventListener("scroll", positionPanel);
+      window.cancelAnimationFrame(frame);
     };
   }, [open]);
 
