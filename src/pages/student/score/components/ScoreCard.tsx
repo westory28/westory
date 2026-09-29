@@ -8,6 +8,7 @@ interface ScoreItem {
 }
 
 interface ScoreCardProps {
+  disabled?: boolean;
   plan: {
     id: string;
     subject: string;
@@ -21,6 +22,7 @@ interface ScoreCardProps {
 
 const ScoreCard: React.FC<ScoreCardProps> = ({
   plan,
+  disabled = false,
   userScores,
   onScoreChange,
   totalScore,
@@ -144,9 +146,9 @@ const ScoreCard: React.FC<ScoreCardProps> = ({
             return (
               <div
                 key={idx}
-                className="flex justify-between items-center py-3 border-b border-dashed border-gray-200 last:border-0"
+                className="flex gap-3 justify-between items-center py-3 border-b border-dashed border-gray-200 last:border-0"
               >
-                <div>
+                <div className="min-w-0 break-words">
                   <div className="text-sm text-gray-800">
                     <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 mr-2">
                       {item.type}
@@ -159,7 +161,11 @@ const ScoreCard: React.FC<ScoreCardProps> = ({
                 </div>
                 <input
                   type="number"
-                  className="w-20 p-2 border border-gray-300 rounded text-center text-sm focus:outline-none focus:border-blue-500"
+                  disabled={disabled}
+                  min={0}
+                  max={item.maxScore}
+                  aria-label={`${plan.subject} ${item.name} 점수`}
+                  className="w-20 shrink-0 p-2 border border-gray-300 rounded text-center text-sm focus:outline-none focus:border-blue-500"
                   value={val}
                   placeholder="0"
                   onChange={(e) => onScoreChange(plan.id, idx, e.target.value)}

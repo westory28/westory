@@ -4,9 +4,10 @@ import {
   collection,
   query,
   orderBy,
-  getDocs,
+  onSnapshot,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -19,10 +20,7 @@ import {
   getYearSemester,
 } from "../../../lib/semesterScope";
 import { lazyWithRetry } from "../../../lib/lazyWithRetry";
-import {
-  getAchievementColor,
-  getSubjectPriorityIndex,
-} from "../../../lib/studentScores";
+import { buildScoreRows } from "../../../lib/studentScores";
 
 const GradeChart = lazyWithRetry(
   () => import("./components/GradeChart"),
@@ -67,11 +65,13 @@ const ScoreDashboard: React.FC = () => {
   const [plans, setPlans] = useState<GradingPlan[]>([]);
   const [userScores, setUserScores] = useState<{ [key: string]: string }>({});
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showWarning, setShowWarning] = useState(false);
   const [agree, setAgree] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [warningSaving, setWarningSaving] = useState(false);
+  const [warningNeedsRetry, setWarningNeedsRetry] = useState(false);
   const [warningAcknowledgedLocal, setWarningAcknowledgedLocal] =
     useState(false);
   const hasHydratedUserDoc = userData?.uid === currentUser?.uid;
@@ -140,14 +140,78 @@ const ScoreDashboard: React.FC = () => {
 
   useEffect(() => {
     setWarningAcknowledgedLocal(false);
+    setWarningNeedsRetry(false);
   }, [currentUser?.uid]);
 
   useEffect(() => {
-    if (currentUser?.uid) {
-      fetchData(semester);
+    if (!currentUser?.uid) {
+      setLoading(false);
       return;
     }
-    setLoading(false);
+    let active = true;
+    setLoading(true);
+    setLoadError(null);
+    setPlans([]);
+    setUserScores({});
+    const unsubscribe = onSnapshot(
+      query(
+        collection(
+          db,
+          getSemesterCollectionPath(
+            { year: activeYear, semester },
+            "grading_plans",
+          ),
+        ),
+        orderBy("createdAt", "desc"),
+      ),
+      (snapshot) => {
+        if (active)
+          setPlans(
+            snapshot.docs.map(
+              (item) => ({ id: item.id, ...item.data() }) as GradingPlan,
+            ),
+          );
+      },
+      (error) => {
+        console.error("Failed to subscribe to grading plans:", error);
+        if (active)
+          setLoadError(
+            "평가 기준을 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.",
+          );
+      },
+    );
+    getDoc(
+      doc(
+        db,
+        "users",
+        currentUser.uid,
+        "academic_records",
+        activeYear + "_" + semester,
+      ),
+    )
+      .then((snapshot) => {
+        if (active)
+          setUserScores({
+            ...(snapshot.exists() ? snapshot.data().scores || {} : {}),
+            ...loadDraftScores(semester),
+          });
+      })
+      .catch((error) => {
+        console.error("Error loading score data:", error);
+        if (active) {
+          setUserScores(loadDraftScores(semester));
+          setLoadError(
+            "저장된 점수를 불러오지 못했습니다. 연결 상태를 확인한 뒤 새로고침해 주세요.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [currentUser?.uid, activeYear, semester]);
 
   useEffect(() => {
@@ -157,6 +221,7 @@ const ScoreDashboard: React.FC = () => {
       return;
     }
 
+    if (warningSaving || warningNeedsRetry) return;
     const warningAcknowledged =
       warningAcknowledgedLocal || userData?.scoreWarningAcknowledged === true;
     setShowWarning(!warningAcknowledged);
@@ -166,6 +231,8 @@ const ScoreDashboard: React.FC = () => {
     hasHydratedUserDoc,
     userData?.scoreWarningAcknowledged,
     warningAcknowledgedLocal,
+    warningSaving,
+    warningNeedsRetry,
   ]);
 
   useEffect(() => {
@@ -182,11 +249,12 @@ const ScoreDashboard: React.FC = () => {
 
   useEffect(() => {
     const handleBeforeUnload = () => {
+      if (loading) return;
       persistDraftScores(semester, userScores);
     };
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
+      if (!loading && document.visibilityState === "hidden") {
         persistDraftScores(semester, userScores);
       }
     };
@@ -197,55 +265,14 @@ const ScoreDashboard: React.FC = () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [activeYear, currentUser?.uid, semester, userData?.uid, userScores]);
-
-  const fetchData = async (targetSemester: string = semester) => {
-    setLoading(true);
-    try {
-      // 1. Fetch Plans
-      const snap = await getDocs(
-        query(
-          collection(
-            db,
-            getSemesterCollectionPath(
-              { year: activeYear, semester: targetSemester },
-              "grading_plans",
-            ),
-          ),
-          orderBy("createdAt", "desc"),
-        ),
-      );
-      const loadedPlans: GradingPlan[] = [];
-      snap.forEach((d) =>
-        loadedPlans.push({ id: d.id, ...d.data() } as GradingPlan),
-      );
-      setPlans(loadedPlans);
-
-      // 2. Fetch User Scores
-      const scoreDocId = `${activeYear}_${targetSemester}`;
-      // IMPORTANT: Based on previous logic, scores are stored under users/{uid}/academic_records/{scoreDocId}
-      if (currentUser?.uid) {
-        const scoreRef = doc(
-          db,
-          "users",
-          currentUser.uid,
-          "academic_records",
-          scoreDocId,
-        );
-        const scoreSnap = await getDoc(scoreRef);
-        const remoteScores = scoreSnap.exists()
-          ? scoreSnap.data().scores || {}
-          : {};
-        const draftScores = loadDraftScores(targetSemester);
-        const mergedScores = { ...remoteScores, ...draftScores };
-        setUserScores(mergedScores);
-      }
-    } catch (error) {
-      console.error("Error loading score data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [
+    activeYear,
+    currentUser?.uid,
+    semester,
+    userData?.uid,
+    userScores,
+    loading,
+  ]);
 
   const handleScoreChange = (planId: string, idx: number, val: string) => {
     const numVal = parseFloat(val);
@@ -279,6 +306,10 @@ const ScoreDashboard: React.FC = () => {
     const sanitized: { [key: string]: string } = {};
     Object.entries(scoresToSave || {}).forEach(([key, rawValue]) => {
       if (!key || key.length > 120 || !/^.+_\d+$/.test(key)) return;
+      if (rawValue === "") {
+        sanitized[key] = "";
+        return;
+      }
       const numeric = Number(rawValue);
       if (!Number.isFinite(numeric) || numeric < 0 || numeric > 1000) return;
       sanitized[key] = String(numeric);
@@ -291,7 +322,7 @@ const ScoreDashboard: React.FC = () => {
     targetSemester: string = semester,
     options?: { announce?: boolean },
   ) => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.uid || loadError) return;
     const scoreDocId = `${activeYear}_${targetSemester}`;
     const sanitizedScores = sanitizeScores(scoresToSave);
     try {
@@ -305,7 +336,13 @@ const ScoreDashboard: React.FC = () => {
       );
       setLastSavedAt(Date.now());
       setSaveError(null);
-      clearDraftScores(targetSemester);
+      // An older save must not erase newer unsaved input.
+      const currentDraft = loadDraftScores(targetSemester);
+      if (
+        JSON.stringify(sanitizeScores(currentDraft)) ===
+        JSON.stringify(sanitizedScores)
+      )
+        clearDraftScores(targetSemester);
       if (options?.announce) {
         showToast({
           tone: "success",
@@ -327,18 +364,27 @@ const ScoreDashboard: React.FC = () => {
   };
 
   const handleManualSave = async () => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     setSaving(true);
     await saveScores(userScores, semester, { announce: true });
     setSaving(false);
   };
 
   const handleConfirmWarning = async () => {
-    if (!agree || !userData) return;
+    if (
+      !agree ||
+      !userData ||
+      warningSaving ||
+      !currentUser?.uid ||
+      currentUser.uid !== userData.uid
+    )
+      return;
+    setWarningNeedsRetry(true);
     setWarningSaving(true);
     let userDocExists: boolean | null = null;
     try {
       const userRef = doc(db, "users", userData.uid);
-      const userSnap = await getDoc(userRef);
+      const userSnap = await getDocFromServer(userRef);
       userDocExists = userSnap.exists();
       const warningPayload: Record<string, unknown> = {
         scoreWarningAcknowledged: true,
@@ -397,7 +443,16 @@ const ScoreDashboard: React.FC = () => {
       }
 
       await setDoc(userRef, warningPayload, { merge: true });
+      const savedWarning = await getDocFromServer(userRef);
+      if (
+        savedWarning.data()?.scoreWarningAcknowledged !== true ||
+        !savedWarning.data()?.scoreWarningAcknowledgedAt
+      )
+        throw new Error(
+          "Score warning consent was not confirmed by the server.",
+        );
       setWarningAcknowledgedLocal(true);
+      setWarningNeedsRetry(false);
       setAgree(true);
       setSaveError(null);
       setShowWarning(false);
@@ -424,59 +479,17 @@ const ScoreDashboard: React.FC = () => {
     }
   };
 
-  // Processing for Display
-  const getFilteredAndSortedPlans = () => {
-    let filtered = plans.filter((p) => {
-      const pGrade = p.targetGrade || "2";
-      const pYear = p.academicYear;
-      const pSem = p.semester;
-      // Filter logic matches existing dashboard
-      const yearMatch = !pYear || pYear === activeYear;
-      const semesterMatch = !pSem || pSem === semester;
-      return String(pGrade) === grade && yearMatch && semesterMatch;
-    });
-
-    // Calculate Totals
-    const processed = filtered.map((p) => {
-      let total = 0;
-      let hasData = false;
-      p.items.forEach((item, idx) => {
-        const key = `${p.id}_${idx}`;
-        const saved = userScores[key];
-        if (saved !== undefined && saved !== "" && saved !== null) {
-          hasData = true;
-          const val = parseFloat(saved);
-          if (!isNaN(val)) total += (val / item.maxScore) * item.ratio;
-        }
-      });
-      return { ...p, currentScore: parseFloat(total.toFixed(1)), hasData };
-    });
-
-    if (sortMode === "name") {
-      processed.sort((a, b) => a.subject.localeCompare(b.subject));
-    } else if (sortMode === "importance") {
-      processed.sort(
-        (a, b) =>
-          getSubjectPriorityIndex(a.subject) -
-            getSubjectPriorityIndex(b.subject) ||
-          a.subject.localeCompare(b.subject),
-      );
-    } else {
-      // Latest
-      processed.sort(
-        (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0),
-      );
-    }
-
-    return processed;
-  };
-
-  const displayPlans = getFilteredAndSortedPlans();
-  const chartLabels = displayPlans.map((p) => p.subject);
-  const chartData = displayPlans.map((p) => p.currentScore);
-  const chartColors = displayPlans.map((p) =>
-    getAchievementColor(p.currentScore, p.subject),
-  );
+  const chartRows = buildScoreRows(plans, userScores, {
+    year: activeYear,
+    semester,
+    grade: String(grade),
+    sortMode: sortMode as "importance" | "name" | "latest",
+  });
+  const displayPlans = chartRows.map((row) => ({
+    ...plans.find((plan) => plan.id === row.id)!,
+    currentScore: row.total,
+    hasData: row.hasData,
+  }));
 
   if (loading)
     return <PageLoading message="성적 데이터를 불러오는 중입니다." />;
@@ -501,20 +514,18 @@ const ScoreDashboard: React.FC = () => {
               입력한 점수는 사용자의 계정에 안전하게 저장되며 성적 계산기에서
               계속 이어집니다.
             </div>
-            <div
-              className="flex items-center justify-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition mb-4"
-              onClick={() => setAgree(!agree)}
-            >
+            <label className="flex items-center justify-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition mb-4">
               <input
                 type="checkbox"
+                disabled={warningSaving}
                 checked={agree}
                 onChange={(e) => setAgree(e.target.checked)}
                 className="w-4 h-4 text-blue-600"
               />
-              <label className="text-sm font-bold text-gray-700 cursor-pointer">
+              <span className="text-sm font-bold text-gray-700">
                 위 내용을 확인하였으며 동의합니다.
-              </label>
-            </div>
+              </span>
+            </label>
             <button
               onClick={handleConfirmWarning}
               disabled={!agree || warningSaving}
@@ -565,21 +576,32 @@ const ScoreDashboard: React.FC = () => {
         </div>
         <button
           onClick={handleManualSave}
-          disabled={saving || showWarning}
-          className={`px-4 py-2 rounded text-sm font-bold transition ${saving || showWarning ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+          disabled={saving || showWarning || !!loadError}
+          className={`px-4 py-2 rounded text-sm font-bold transition ${saving || showWarning || loadError ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
         >
           저장
         </button>
       </div>
 
+      {loadError && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {loadError}
+        </div>
+      )}
       {saveError && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {saveError}
         </div>
       )}
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
+      <React.Suspense fallback={<p>그래프를 준비하는 중입니다.</p>}>
+        <GradeChart rows={chartRows} />
+      </React.Suspense>
+      {/* Score inputs */}
+      <div>
         {/* Left: Cards */}
         <div>
           {displayPlans.length === 0 ? (
@@ -589,6 +611,7 @@ const ScoreDashboard: React.FC = () => {
           ) : (
             displayPlans.map((plan) => (
               <ScoreCard
+                disabled={showWarning || !!loadError}
                 key={plan.id}
                 plan={plan}
                 userScores={userScores}
@@ -598,50 +621,6 @@ const ScoreDashboard: React.FC = () => {
               />
             ))
           )}
-        </div>
-
-        {/* Right: Chart */}
-        <div>
-          <div className="bg-white p-5 rounded-xl border border-gray-100 sticky top-20 shadow-sm">
-            <div className="text-base font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4">
-              성취도 그래프
-            </div>
-            <div className="h-[300px]">
-              <React.Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center text-sm font-semibold text-gray-400">
-                    그래프를 준비하는 중입니다.
-                  </div>
-                }
-              >
-                <GradeChart
-                  labels={chartLabels}
-                  data={chartData}
-                  colors={chartColors}
-                />
-              </React.Suspense>
-            </div>
-            <div className="mt-6 flex h-8 overflow-hidden rounded-lg text-xs font-bold text-white shadow-inner">
-              <div className="flex flex-1 items-center justify-center bg-red-500">
-                A
-              </div>
-              <div className="flex flex-1 items-center justify-center bg-orange-500">
-                B
-              </div>
-              <div className="flex flex-1 items-center justify-center bg-yellow-500">
-                C
-              </div>
-              <div className="flex flex-1 items-center justify-center bg-green-500">
-                D
-              </div>
-              <div className="flex flex-1 items-center justify-center bg-blue-500">
-                E
-              </div>
-            </div>
-            <div className="mt-2 text-right text-[10px] text-gray-400">
-              * 음악·미술·체육은 A/B/C 3단계 평가입니다.
-            </div>
-          </div>
         </div>
       </div>
 
