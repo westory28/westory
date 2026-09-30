@@ -1027,7 +1027,7 @@ export const getPointRankDisplay = ({
     earnedPointsFromTransactions,
   });
   let activeTier = resolvedPolicy.tiers[0];
-  let nextTier: PointRankPolicyTier | null = null;
+  let nextTier: PointRankPolicyTier | null = resolvedPolicy.tiers[1] || null;
 
   resolvedPolicy.tiers.forEach((tier, index) => {
     if (metricValue >= tier.minPoints) {
@@ -1035,11 +1035,6 @@ export const getPointRankDisplay = ({
       nextTier = resolvedPolicy.tiers[index + 1] || null;
     }
   });
-
-  if (!nextTier) {
-    nextTier =
-      resolvedPolicy.tiers.find((tier) => tier.minPoints > metricValue) || null;
-  }
 
   const themeName = getResolvedThemeName(
     resolvedPolicy,

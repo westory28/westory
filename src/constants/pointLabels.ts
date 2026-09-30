@@ -23,7 +23,7 @@ export const POINT_RANK_THEME_LABELS: Record<PointRankThemeId, string> = {
 
 export const POINT_RANK_THEME_DETAIL_LABELS: Record<PointRankThemeId, string> =
   {
-    korean_golpum: "한국사 골품제",
+    korean_golpum: "한국사 신분제",
     world_nobility: "세계사 귀족제",
   };
 
