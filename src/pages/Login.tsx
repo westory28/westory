@@ -47,6 +47,8 @@ import {
   normalizeStaffPermissions,
 } from "../lib/permissions";
 
+import PublicEntry from "../components/public-entry/PublicEntry";
+
 const TEACHER_EMAIL = "westoria28@gmail.com";
 const ALLOWED_SCHOOL_EMAIL_DOMAIN = "yongshin-ms.ms.kr";
 const ROLE_SESSION_KEY = "westoryPortalRole";
@@ -1846,152 +1848,204 @@ const Login: React.FC = () => {
   if (loading)
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
-  return (
-    <div className="relative flex min-h-screen min-h-[100dvh] flex-col bg-gray-50">
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-10 md:py-12">
-        <div className="text-5xl mb-4 animate-bounce">
-          {interfaceConfig?.mainEmoji || "\u{1F4DA}"}
-        </div>
-        <h1 className="text-6xl font-black tracking-tight mb-3">
-          <span className="text-blue-600">We</span>
-          <span className="text-amber-500">story</span>
-        </h1>
-        <p className="text-gray-500 text-xl font-medium mb-8">
-          {interfaceConfig?.mainSubtitle || "우리가 써 내려가는 이야기"}
-        </p>
-
-        {ddayCount !== null && (
-          <div
-            className="mb-6 w-full max-w-sm rounded-lg border border-blue-100 bg-white px-5 py-4 shadow-sm"
-            aria-label={`${ddayTitle} ${formatDdayCount(ddayCount)}`}
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0 text-left">
-                <p className="text-xs font-bold text-blue-600">D-Day</p>
-                <p className="mt-1 truncate text-base font-extrabold text-gray-900">
-                  {ddayTitle}
-                </p>
-                <p className="mt-1 text-xs font-medium text-gray-500">
-                  목표일 {formatDdayDate(ddayDate)}
-                </p>
-              </div>
-              <span className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-lg font-black text-white shadow-sm">
-                {formatDdayCount(ddayCount)}
-              </span>
+  // The classic presentation is retained for a quick, local rollback.
+  const classicEntry =
+    new URLSearchParams(window.location.search).get("entry") === "classic";
+  const loginControls = (
+    <>
+      {ddayCount !== null && (
+        <div
+          className="mb-6 w-full max-w-sm rounded-lg border border-blue-100 bg-white px-5 py-4 shadow-sm"
+          aria-label={`${ddayTitle} ${formatDdayCount(ddayCount)}`}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0 text-left">
+              <p className="text-xs font-bold text-blue-600">D-Day</p>
+              <p className="mt-1 truncate text-base font-extrabold text-gray-900">
+                {ddayTitle}
+              </p>
+              <p className="mt-1 text-xs font-medium text-gray-500">
+                목표일 {formatDdayDate(ddayDate)}
+              </p>
             </div>
+            <span className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-lg font-black text-white shadow-sm">
+              {formatDdayCount(ddayCount)}
+            </span>
           </div>
-        )}
+        </div>
+      )}
 
-        {restrictedInAppBrowser && (
-          <div className="w-full max-w-sm mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left shadow-sm">
-            <p className="text-sm font-extrabold text-amber-900">
-              네이버앱·카카오톡 인앱 브라우저에서는 로그인할 수 없습니다.
-            </p>
-            <p className="mt-2 text-sm leading-6 text-amber-800">
-              하단 메뉴에서 외부 브라우저로 열기를 선택한 뒤 Chrome 또는
-              Safari에서 다시 접속해주세요.
-            </p>
-          </div>
-        )}
+      {restrictedInAppBrowser && (
+        <div className="w-full max-w-sm mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left shadow-sm">
+          <p className="text-sm font-extrabold text-amber-900">
+            네이버앱·카카오톡 인앱 브라우저에서는 로그인할 수 없습니다.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-amber-800">
+            하단 메뉴에서 외부 브라우저로 열기를 선택한 뒤 Chrome 또는
+            Safari에서 다시 접속해주세요.
+          </p>
+        </div>
+      )}
 
-        {!!loginNotice && (
-          <div className="w-full max-w-sm mb-5 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-left shadow-sm">
-            <p className="text-sm font-semibold leading-6 text-blue-900">
-              {loginNotice}
-            </p>
-          </div>
-        )}
+      {!!loginNotice && (
+        <div className="w-full max-w-sm mb-5 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-left shadow-sm">
+          <p className="text-sm font-semibold leading-6 text-blue-900">
+            {loginNotice}
+          </p>
+        </div>
+      )}
 
-        {currentUser ? (
-          <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-            <p className="text-sm text-gray-500 break-all text-center px-2">
-              {currentUser.email || "로그인 계정"}
-            </p>
+      {currentUser ? (
+        <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+          <p className="text-sm text-gray-500 break-all text-center px-2">
+            {currentUser.email || "로그인 계정"}
+          </p>
+          <button
+            onClick={goToDashboard}
+            disabled={authBusy}
+            className="w-full bg-blue-600 text-white border border-blue-600 px-6 py-3 rounded-full text-base font-bold shadow hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {authBusy ? "처리 중..." : "계속하기"}
+          </button>
+          <button
+            onClick={() => handleLogin("student")}
+            disabled={authBusy || restrictedInAppBrowser}
+            className="w-full bg-white border border-gray-300 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            학생 로그인 (계정 선택)
+          </button>
+          <button
+            onClick={() =>
+              void handleSwitchAccount(isTeacherUser ? "teacher" : "student")
+            }
+            disabled={authBusy}
+            className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            다른 계정으로 로그인
+          </button>
+        </div>
+      ) : (
+        <div className="w-full max-w-sm flex flex-col gap-3">
+          <button
+            onClick={() => handleLogin("student")}
+            disabled={authBusy || restrictedInAppBrowser}
+            className="w-full bg-white border border-gray-200 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <img
+              src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg"
+              width={24}
+              height={24}
+              alt="Google"
+            />
+            학생 로그인
+          </button>
+          <p className="text-center text-xs leading-5 text-gray-500 whitespace-nowrap">
+            학교 Google 계정(@{ALLOWED_SCHOOL_EMAIL_DOMAIN})으로만 로그인할 수
+            있습니다.
+          </p>
+          {!!loginNotice && (
             <button
-              onClick={goToDashboard}
-              disabled={authBusy}
-              className="w-full bg-blue-600 text-white border border-blue-600 px-6 py-3 rounded-full text-base font-bold shadow hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {authBusy ? "처리 중..." : "계속하기"}
-            </button>
-            <button
-              onClick={() => handleLogin("student")}
-              disabled={authBusy || restrictedInAppBrowser}
-              className="w-full bg-white border border-gray-300 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              학생 로그인 (계정 선택)
-            </button>
-            <button
-              onClick={() =>
-                void handleSwitchAccount(isTeacherUser ? "teacher" : "student")
-              }
+              onClick={() => void handleSwitchAccount("student")}
               disabled={authBusy}
               className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              다른 계정으로 로그인
+              다른 계정으로 다시 시도
             </button>
-          </div>
-        ) : (
-          <div className="w-full max-w-sm flex flex-col gap-3">
-            <button
-              onClick={() => handleLogin("student")}
-              disabled={authBusy || restrictedInAppBrowser}
-              className="w-full bg-white border border-gray-200 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <img
-                src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg"
-                width={24}
-                height={24}
-                alt="Google"
-              />
-              학생 로그인
-            </button>
-            <p className="text-center text-xs leading-5 text-gray-500 whitespace-nowrap">
-              학교 Google 계정(@{ALLOWED_SCHOOL_EMAIL_DOMAIN})으로만 로그인할 수
-              있습니다.
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div
+      className={
+        classicEntry
+          ? "relative flex min-h-screen min-h-[100dvh] flex-col bg-gray-50"
+          : ""
+      }
+    >
+      {classicEntry ? (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-10 md:py-12">
+            <div className="text-5xl mb-4 animate-bounce">
+              {interfaceConfig?.mainEmoji || "\u{1F4DA}"}
+            </div>
+            <h1 className="text-6xl font-black tracking-tight mb-3">
+              <span className="text-blue-600">We</span>
+              <span className="text-amber-500">story</span>
+            </h1>
+            <p className="text-gray-500 text-xl font-medium mb-8">
+              {interfaceConfig?.mainSubtitle || "우리가 써 내려가는 이야기"}
             </p>
-            {!!loginNotice && (
-              <button
-                onClick={() => void handleSwitchAccount("student")}
-                disabled={authBusy}
-                className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                다른 계정으로 다시 시도
-              </button>
-            )}
+
+            {loginControls}
           </div>
-        )}
-      </div>
 
-      <div className="flex shrink-0 items-center justify-center gap-2 px-4 pb-6 text-xs whitespace-nowrap md:pb-8">
-        <button
-          onClick={() => showPolicy("terms")}
-          className="text-gray-400 hover:text-gray-600"
-        >
-          이용 약관
-        </button>
-        <span className="text-gray-300">|</span>
-        <button
-          onClick={() => showPolicy("privacy")}
-          className="text-gray-400 hover:text-gray-600"
-        >
-          개인정보 처리 방침
-        </button>
-      </div>
+          <div className="flex shrink-0 items-center justify-center gap-2 px-4 pb-6 text-xs whitespace-nowrap md:pb-8">
+            <button
+              onClick={() => showPolicy("terms")}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              이용 약관
+            </button>
+            <span className="text-gray-300">|</span>
+            <button
+              onClick={() => showPolicy("privacy")}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              개인정보 처리 방침
+            </button>
+          </div>
 
-      <div className="fixed bottom-12 right-4 z-30 md:bottom-8 md:right-8">
-        <button
-          onClick={() => handleLogin("teacher")}
-          disabled={authBusy || restrictedInAppBrowser}
-          className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition whitespace-nowrap"
-        >
-          <i className="fas fa-chalkboard-teacher mr-1"></i>
-          관리자 로그인
-        </button>
-      </div>
+          <div className="fixed bottom-12 right-4 z-30 md:bottom-8 md:right-8">
+            <button
+              onClick={() => handleLogin("teacher")}
+              disabled={authBusy || restrictedInAppBrowser}
+              className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition whitespace-nowrap"
+            >
+              <i className="fas fa-chalkboard-teacher mr-1"></i>
+              관리자 로그인
+            </button>
+          </div>
+        </>
+      ) : (
+        <PublicEntry
+          controls={loginControls}
+          onStudentLogin={() => {
+            if (currentUser) void goToDashboard();
+            else void handleLogin("student");
+          }}
+          onTeacherLogin={() => void handleLogin("teacher")}
+          onPolicy={(policy) => void showPolicy(policy)}
+          disabled={authBusy || (!currentUser && restrictedInAppBrowser)}
+          teacherDisabled={authBusy || restrictedInAppBrowser}
+          busy={authBusy}
+          signedIn={!!currentUser}
+          activeDialog={
+            consentModalOpen
+              ? "consent"
+              : profileModalOpen
+                ? "profile"
+                : policyOpen
+                  ? "policy"
+                  : null
+          }
+          onDialogDismiss={() => {
+            if (consentModalOpen) handleConsentCancel();
+            else if (profileModalOpen) handleProfileCancel();
+            else setPolicyOpen(false);
+          }}
+          schoolDomain={ALLOWED_SCHOOL_EMAIL_DOMAIN}
+        />
+      )}
 
       {policyOpen && (
         <div
+          aria-labelledby="login-policy-title"
+          data-login-dialog="policy"
+          role="dialog"
+          aria-modal="true"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
           onClick={() => setPolicyOpen(false)}
         >
@@ -2000,10 +2054,16 @@ const Login: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900">{policyTitle}</h2>
+              <h2
+                id="login-policy-title"
+                className="text-lg font-bold text-gray-900"
+              >
+                {policyTitle}
+              </h2>
               <button
                 onClick={() => setPolicyOpen(false)}
-                className="text-gray-400 hover:text-gray-700 text-xl transition"
+                aria-label="닫기"
+                className="entry-dialog-close text-gray-400 hover:text-gray-700 text-xl transition"
               >
                 <i className="fas fa-times"></i>
               </button>
@@ -2026,7 +2086,13 @@ const Login: React.FC = () => {
       )}
 
       {profileModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div
+          data-login-dialog="profile"
+          aria-label="학생 정보 입력"
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        >
           <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 md:p-8 mx-4"
             onClick={(e) => e.stopPropagation()}
@@ -2042,10 +2108,14 @@ const Login: React.FC = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">
+                <label
+                  htmlFor="login-profile-email"
+                  className="block text-xs font-bold text-gray-500 mb-1"
+                >
                   이메일
                 </label>
                 <input
+                  id="login-profile-email"
                   type="text"
                   value={profileForm.email}
                   readOnly
@@ -2055,10 +2125,14 @@ const Login: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">
+                  <label
+                    htmlFor="login-profile-grade"
+                    className="block text-xs font-bold text-gray-500 mb-1"
+                  >
                     학년
                   </label>
                   <select
+                    id="login-profile-grade"
                     value={profileForm.grade}
                     onChange={(e) =>
                       setProfileForm((prev) => ({
@@ -2076,10 +2150,14 @@ const Login: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">
+                  <label
+                    htmlFor="login-profile-class"
+                    className="block text-xs font-bold text-gray-500 mb-1"
+                  >
                     반
                   </label>
                   <select
+                    id="login-profile-class"
                     value={profileForm.className}
                     onChange={(e) =>
                       setProfileForm((prev) => ({
@@ -2098,10 +2176,14 @@ const Login: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">
+                  <label
+                    htmlFor="login-profile-number"
+                    className="block text-xs font-bold text-gray-500 mb-1"
+                  >
                     번호
                   </label>
                   <select
+                    id="login-profile-number"
                     value={profileForm.number}
                     onChange={(e) =>
                       setProfileForm((prev) => ({
@@ -2125,10 +2207,14 @@ const Login: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">
+                <label
+                  htmlFor="login-profile-name"
+                  className="block text-xs font-bold text-gray-500 mb-1"
+                >
                   이름
                 </label>
                 <input
+                  id="login-profile-name"
                   lang="ko"
                   inputMode="text"
                   type="text"
@@ -2172,6 +2258,10 @@ const Login: React.FC = () => {
       )}
       {consentModalOpen && (
         <div
+          data-login-dialog="consent"
+          aria-label="개인정보 수집·이용 동의"
+          role="dialog"
+          aria-modal="true"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
           onClick={handleConsentCancel}
         >
