@@ -142,6 +142,7 @@ Layout tokens:
 
 ### Portal navigation and workspace footers
 
+- Teacher map navigation expands each category's maps directly beneath it, matching student maps with the existing 16px indent, 8px inner spacing and selected-row treatment. Category selection keeps the mobile menu open; choosing a map closes it. Keep category rename/reorder controls, map edit/tag controls and persistence unchanged. Replace the duplicate horizontal map tabs and category badge with the selected map title.
 - Move the student's configured My Page destination from the primary menu list to the sidebar bottom, in the same slot as teacher Settings. Preserve its configured label, destination and visibility; a My Page group with custom child links stays in the primary menu so those destinations remain accessible. Use the existing blue soft background, blue border/text, 8px radius and bold label, including in the mobile drawer. In compact desktop navigation use the short label `내 정보` with the full configured title accessible.
 - Page-level subnavigation workspaces use the Settings layout: navigation spans both rows, content occupies the upper right cell, and the existing footer occupies the lower right cell. Extend the white navigation surface through the footer to the page end. Below 768px keep navigation, content and footer in normal single-column flow. Preserve independent desktop menu scrolling, mobile disclosure behavior, and existing menu dimensions. Nested score/rank lists keep their existing page footer. Hidden workspaces must not suppress the visible page footer.
 
