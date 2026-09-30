@@ -11,7 +11,10 @@ interface ApplicationSession {
   protocolVersion: number;
   revision: string;
 }
-const flights = new Map<User, Promise<void>>();
+const flights = new Map<
+  User,
+  { promise: Promise<void>; isCurrent?: () => boolean }
+>();
 const sessionError = () =>
   Object.assign(
     new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요."),
@@ -20,29 +23,41 @@ const sessionError = () =>
 
 // Protected Firestore reads require the same server session as existing
 // calendar/dictionary commands. The server alone decides expiry and renewal.
-export const prepareApplicationSession = async (user: User): Promise<void> => {
+export const prepareApplicationSession = async (
+  user: User,
+  options: { fresh?: boolean; isCurrent?: () => boolean } = {},
+): Promise<void> => {
   if (isSemesterArchive) return;
-  if (auth.currentUser !== user) throw sessionError();
+  const current = () =>
+    auth.currentUser === user && options.isCurrent?.() !== false;
+  if (!current()) throw sessionError();
   const existing = flights.get(user);
-  if (existing) return existing;
+  if (existing) {
+    if (!options.fresh && existing.isCurrent?.() !== false)
+      return existing.promise;
+    // A timed-out callable cannot be aborted by the SDK. Drain it before a
+    // manual retry, then ask the server again; its result is never reused.
+    await existing.promise.catch(() => undefined);
+    if (!current()) throw sessionError();
+    return prepareApplicationSession(user, options);
+  }
 
   const flight = (async () => {
     const token = await user.getIdTokenResult();
     const authTime = Number(token.claims.auth_time);
-    if (auth.currentUser !== user || !Number.isFinite(authTime))
-      throw sessionError();
+    if (!current() || !Number.isFinite(authTime)) throw sessionError();
     const open = await getHttpsCallable<
       { authorityGeneration: string; protocolVersion: number },
       ApplicationSession
     >("openApplicationSession");
-    if (auth.currentUser !== user) throw sessionError();
+    if (!current()) throw sessionError();
     const { data } = await open({
       authorityGeneration: GENERATION,
       protocolVersion: PROTOCOL,
     });
     const currentToken = await user.getIdTokenResult();
     if (
-      auth.currentUser !== user ||
+      !current() ||
       Number(currentToken.claims.auth_time) !== authTime ||
       data.status !== "active" ||
       data.authTime !== authTime ||
@@ -53,10 +68,11 @@ export const prepareApplicationSession = async (user: User): Promise<void> => {
     )
       throw sessionError();
   })();
-  flights.set(user, flight);
+  const entry = { promise: flight, isCurrent: options.isCurrent };
+  flights.set(user, entry);
   try {
     await flight;
   } finally {
-    if (flights.get(user) === flight) flights.delete(user);
+    if (flights.get(user) === entry) flights.delete(user);
   }
 };
