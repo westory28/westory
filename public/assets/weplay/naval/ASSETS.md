@@ -11,8 +11,19 @@
 | explosion.webp | 화염·연기·파편 폭발 | 내장 이미지 생성 |
 | reference-sprites.webp | 제목·지휘관·화포·포탄·물보라 | 사용자 제공 시트, WebP 변환 |
 | lobby-turtle-ship.webp | 시작 화면의 거북선 | 사료·2022년 해군 재현 자료를 참고한 새 일러스트, 내장 이미지 생성, 1200×900 WebP |
+| yi-sunsin-cutin.webp | 필살기 성공 때의 이순신 눈빛 컷인 | 내장 이미지 생성, 1440×480 WebP, 약207KB |
+| impact-lines.webp | 필살기 성공 때의 만화 집중선 | 내장 이미지 생성, 투명1200×800 WebP, 약441KB |
 
 게임은 이미지를 별도 레이어로 움직이며, 체력·시간·점수·입력창은 실제 HTML 요소입니다. 화면 전체를 한 장의 이미지로 대체하지 않습니다.
+
+## 필살기 강조 이미지 (2026-09-30)
+
+사용자가 제시한 만화 집중선·눈빛 컷인 형식을 참고해 새 래스터 이미지를 생성했습니다. 특정 만화 인물이나 패널을 복제하지 않았으며, 이순신 장군의 실제 얼굴을 재현했다고 주장하지 않는 게임 일러스트입니다. 이미지 생성 뒤 크기 조정·WebP 변환만 수행했습니다. 눈빛 컷인은1.4초만 나타나고, 집중선의 가운데는 투명합니다. 두 파일은 정적 자산으로 재사용하며 애니메이션 중 서버 호출은 없습니다.
+
+생성 프롬프트:
+
+- **yi-sunsin-cutin.webp** — Original premium historical Korean naval game special-attack cut-in, ultra-wide4:1. Extreme close-up of Admiral Yi Sun-sin's focused eyes, brow, cheeks and nose; stern Korean man about fifty, human dark eyes, realistic age lines. Historically grounded Joseon iron helmet edge, no samurai helmet, fantasy horns or supernatural pupils. High-contrast black-and-white manhwa brush ink and hatching, restrained gold glint, dark outer edges, both eyes large and centered. No words, logos, interface, watermark, existing manga character or panel. Detailed original raster illustration, not vector.
+- **impact-lines.webp** — Landscape3:2 transparent raster comic impact overlay. Irregular hand-inked tapered radial speed lines point inward from all edges to a fully transparent oval center occupying60% width and65% height. White and warm off-white streaks with charcoal outlines and stippled corners; spaces between strokes also transparent. No opaque backing, characters, text, symbols or interface. Original dynamic manga/manhwa brush effect, not uniform geometric vector wedges.
 
 ## 생성 프롬프트
 

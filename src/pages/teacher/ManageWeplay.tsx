@@ -29,6 +29,8 @@ import HistoryRainGame, {
 } from "../../components/common/weplay/HistoryRainGame";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import NavalBattleResult from "../../components/common/weplay/NavalBattleResult";
+import WeplayGuide from "../../components/common/weplay/WeplayGuide";
+import useWeplayGuide from "../../components/common/weplay/useWeplayGuide";
 import TeacherNavigationIcon from "../../components/layout/TeacherNavigationIcon";
 import "../../components/common/weplay/weplay.css";
 import "./ManageWeplay.css";
@@ -63,6 +65,18 @@ export default function ManageWeplay() {
   const [result, setResult] = useState<WeplayResult | null>(null);
   const generation = useRef(0);
   const scope = `${currentUser?.uid}/${config?.year}/${config?.semester}/${game.id}`;
+  const [loadedScope, setLoadedScope] = useState("");
+  const guide = useWeplayGuide(
+    currentUser?.uid,
+    userData,
+    loadedScope === scope &&
+      canRead &&
+      !!data &&
+      !loading &&
+      !starting &&
+      !preview &&
+      !result,
+  );
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const dirty =
@@ -80,6 +94,7 @@ export default function ManageWeplay() {
       if (token !== generation.current) return;
       response.settings = normalizeWeplayGameSettings(response.settings);
       setData(response);
+      setLoadedScope(scope);
       setDifficultyError("");
       setSettingsRevision((value) => value + 1);
       const knownUnits = new Set(response.lessons.map((item) => item.unitId));
@@ -245,6 +260,14 @@ export default function ManageWeplay() {
       <main className="teacher-sub-content teacher-weplay-content">
         <div className="teacher-weplay-title">
           <h1>{game.name}</h1>
+          <button
+            type="button"
+            className="weplay-guide-launch"
+            onClick={guide.openGuide}
+            disabled={!currentUser || starting}
+          >
+            <span aria-hidden="true">i</span>게임 안내
+          </button>
           {canReadPoints(userData, currentUser?.email) && (
             <Link
               className="teacher-weplay-button"
@@ -350,6 +373,7 @@ export default function ManageWeplay() {
                     </div>
                   ) : (
                     <HistoryRainGame
+                      onShowGuide={guide.openGuide}
                       key={preview.session.id}
                       session={preview.session}
                       config={config}
@@ -496,6 +520,14 @@ export default function ManageWeplay() {
             )}
           </>
         )}
+        <WeplayGuide
+          open={guide.open}
+          saving={guide.saving}
+          error={guide.error}
+          gameRunning={!!preview}
+          onFinish={() => void guide.finishGuide()}
+          onCloseForNow={guide.closeForNow}
+        />
       </main>
     </PortalWorkspace>
   );

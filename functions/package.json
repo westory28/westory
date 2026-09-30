@@ -5,7 +5,7 @@
   "scripts": {
     "check": "node --check index.js && node --check weplay.js && node --check weplayCore.js && node --check weplayBattle.js && node --check attendanceSession.js && node --check studentAttendance.js",
     "test:attendance": "node --test scripts/verify-attendance-session.cjs scripts/verify-student-attendance.cjs",
-    "test:weplay": "node --test scripts/verify-weplay-core.cjs scripts/verify-weplay-battle.cjs",
+    "test:weplay": "node --test scripts/verify-weplay-core.cjs scripts/verify-weplay-battle.cjs scripts/verify-weplay-guide.cjs",
     "smoke:source-archive-pdf": "node scripts/smoke-source-archive-pdf.mjs",
     "cleanup:student-teacher-portal": "node scripts/cleanup-student-teacher-portal.cjs",
     "fix:legacy-student-profile-emojis": "node scripts/fix-legacy-student-profile-emojis.cjs",

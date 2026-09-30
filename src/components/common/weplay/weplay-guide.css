@@ -1,0 +1,210 @@
+.weplay-guide {
+  --guide-ink: #171e24;
+  --guide-gold: #d8ae66;
+  --guide-text: #fff8e8;
+  --guide-parchment: #f4e5c5;
+  box-sizing: border-box;
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(960px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid var(--guide-gold);
+  border-radius: 12px;
+  background: var(--guide-ink);
+  color: var(--guide-text);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.weplay-guide::backdrop {
+  background: rgba(23, 30, 36, 0.85);
+}
+.weplay-guide-header {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  font-size: 14px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--guide-gold) 30%, transparent);
+}
+.weplay-guide-header > span {
+  white-space: nowrap;
+  color: var(--guide-parchment);
+}
+.weplay-guide .weplay-guide-live {
+  margin: 0;
+  padding: 8px 24px;
+  color: var(--guide-gold);
+  font-size: 14px;
+}
+.weplay-guide-demo.weplay-page {
+  position: relative;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  overflow: hidden;
+}
+.weplay-guide-demo .weplay-game {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.weplay-guide-demo .naval-game {
+  padding: 0;
+}
+.weplay-guide-demo .naval-scene {
+  border-radius: 0;
+}
+.weplay-guide-demo .naval-game--guide {
+  pointer-events: none;
+}
+.weplay-guide-demo .naval-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  background: rgba(23, 30, 36, 0.3);
+  pointer-events: none;
+}
+.weplay-guide-demo [data-weplay-guide] {
+  transition: none;
+}
+.weplay-guide-demo[data-guide-step="timeline"] [data-weplay-guide="timeline"],
+.weplay-guide-demo[data-guide-step="words"] [data-weplay-guide="words"],
+.weplay-guide-demo[data-guide-step="input"] [data-weplay-guide="input"],
+.weplay-guide-demo[data-guide-step="charge"] [data-weplay-guide="charge"],
+.weplay-guide-demo[data-guide-step="health"] [data-weplay-guide="health"],
+.weplay-guide-demo[data-guide-step="health"]
+  [data-weplay-guide="health-allied"] {
+  z-index: 15;
+  outline: 3px solid var(--guide-gold);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.weplay-guide-demo[data-guide-step="input"] .naval-command,
+.weplay-guide-demo[data-guide-step="charge"] .naval-command {
+  z-index: 15;
+}
+.weplay-guide-special {
+  position: absolute;
+  inset: 24px 0;
+  z-index: 16;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  background: var(--guide-ink);
+  pointer-events: none;
+}
+.weplay-guide-special img {
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+  object-fit: cover;
+}
+.weplay-guide-special strong {
+  font-size: 24px;
+  color: var(--guide-gold);
+}
+.weplay-guide-special span {
+  font-size: 16px;
+  color: var(--guide-text);
+}
+.weplay-guide-card {
+  padding: 24px;
+}
+.weplay-guide .weplay-guide-card h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--guide-text);
+}
+.weplay-guide .weplay-guide-card p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--guide-parchment);
+}
+.weplay-guide .weplay-guide-card .weplay-guide-error {
+  margin-top: 12px;
+  color: var(--guide-gold);
+}
+.weplay-guide-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+.weplay-guide .weplay-guide-actions button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--guide-gold);
+  border-radius: 8px;
+  color: var(--guide-text);
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.weplay-guide .weplay-guide-actions .weplay-guide-skip {
+  margin-right: auto;
+  border-color: transparent;
+  font-weight: 400;
+}
+.weplay-guide .weplay-guide-actions .weplay-guide-next {
+  background: var(--guide-gold);
+  color: var(--guide-ink);
+}
+.weplay-guide .weplay-guide-actions button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.weplay-guide :focus-visible {
+  outline: 3px solid var(--guide-gold);
+  outline-offset: 3px;
+}
+.weplay-guide-launch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+}
+.weplay-guide-launch > span {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 600px) {
+  .weplay-guide {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+  .weplay-guide-header {
+    padding: 12px 16px;
+  }
+  .weplay-guide-card {
+    padding: 16px;
+  }
+  .weplay-guide .weplay-guide-card h2 {
+    font-size: 18px;
+  }
+  .weplay-guide .weplay-guide-live {
+    padding: 8px 16px;
+  }
+  .weplay-guide .weplay-guide-actions button {
+    padding-inline: 12px;
+  }
+}

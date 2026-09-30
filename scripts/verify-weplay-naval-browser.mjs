@@ -27,8 +27,9 @@ const params=new URLSearchParams(location.search);
 export const view=params.get('view')||'battle';
 export const config={year:'2026',semester:'2'};
 const readonly=view==='readonly';
-export const userData={uid:'naval-qa',role:readonly?'student':'teacher',teacherPortalEnabled:true,staffPermissions:readonly?['lesson_read']:[],email:'qa@example.invalid',name:'검증 교사'};
-export const useAuth=()=>({config,currentUser:{uid:'naval-qa',email:'qa@example.invalid'},userData});
+export const userData={uid:'naval-qa',role:readonly?'student':'teacher',teacherPortalEnabled:true,staffPermissions:readonly?['lesson_read']:[],email:'qa@example.invalid',name:'검증 교사',weplayGuideCompleted:true};
+export const auth={currentUser:{uid:'naval-qa',email:'qa@example.invalid'}};
+export const useAuth=()=>({config,currentUser:auth.currentUser,userData});
 export const qa=window.navalQa={calls:[],writes:[],answers:[],completions:[],settings:${JSON.stringify(core.DEFAULT_GAME_SETTINGS)},lessons:${JSON.stringify(lessons)},failFinish:0};
 const management=()=>({settings:structuredClone(qa.settings),lessons:structuredClone(qa.lessons),availableWordCount:6,previewWordCount:6});
 export const getHttpsCallable=async name=>async data=>{

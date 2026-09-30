@@ -1,5 +1,6 @@
 import React, {
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -64,7 +65,13 @@ export default function NavalBattleGame({
   onComplete,
   preview = false,
   transport,
+  onShowGuide,
+  guideDemo = false,
 }: HistoryRainGameProps) {
+  const uniqueInputId = useId();
+  const inputId = guideDemo
+    ? `${uniqueInputId}-naval-answer`
+    : "naval-answer-input";
   const [now, setNow] = useState(session.serverNowMs);
   const clock = useRef({
     server: session.serverNowMs,
@@ -94,9 +101,11 @@ export default function NavalBattleGame({
   const exitOpenRef = useRef(false);
   const exitRequestedRef = useRef(false);
   const [effects, setEffects] = useState<Effect[]>([]);
+  const [specialCutin, setSpecialCutin] = useState<Effect | null>(null);
+  const [pageHidden, setPageHidden] = useState(document.hidden);
   const [impacts, setImpacts] = useState<Impact[]>([]);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [compactViewport, setCompactViewport] = useState(false);
+  const [compactViewport, setCompactViewport] = useState(guideDemo);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(
     window.visualViewport?.height || window.innerHeight,
@@ -244,6 +253,14 @@ export default function NavalBattleGame({
 
   useEffect(() => {
     alive.current = true;
+    if (guideDemo)
+      return () => {
+        alive.current = false;
+      };
+    for (const file of ["yi-sunsin-cutin.webp", "impact-lines.webp"]) {
+      const art = new Image();
+      art.src = `${ART}${file}`;
+    }
     const timer = window.setInterval(
       () =>
         setNow(clock.current.server + performance.now() - clock.current.local),
@@ -251,6 +268,8 @@ export default function NavalBattleGame({
     );
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener("beforeunload", warn);
+    const visibilityChanged = () => setPageHidden(document.hidden);
+    document.addEventListener("visibilitychange", visibilityChanged);
     const viewport = window.visualViewport;
     const viewportChanged = () => {
       const height = viewport?.height || window.innerHeight;
@@ -277,6 +296,7 @@ export default function NavalBattleGame({
       alive.current = false;
       window.clearInterval(timer);
       window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("visibilitychange", visibilityChanged);
       viewport?.removeEventListener("resize", viewportChanged);
       viewport?.removeEventListener("scroll", viewportChanged);
       refreshViewport.current = () => undefined;
@@ -287,12 +307,13 @@ export default function NavalBattleGame({
     if (compactViewport) keepInputVisible();
   }, [compactViewport, keyboardInset]);
   useEffect(() => {
-    if (started && !ended && !exitOpenRef.current) {
+    if (started && !ended && !exitOpenRef.current && !guideDemo) {
       input.current?.focus({ preventScroll: true });
       requestAnimationFrame(() => requestAnimationFrame(keepInputVisible));
     }
   }, [started, ended]);
   useEffect(() => {
+    if (guideDemo) return;
     const previous = previousBattle.current;
     if (battle.enemyShots < previous.enemyShots)
       setDisplayBattle((current) => ({
@@ -362,6 +383,17 @@ export default function NavalBattleGame({
       );
     };
     show(next);
+    const cutin = next.find((effect) => effect.kind === "special");
+    if (cutin) {
+      setSpecialCutin(cutin);
+      later(
+        () =>
+          setSpecialCutin((current) =>
+            current?.id === cutin.id ? null : current,
+          ),
+        1400,
+      );
+    }
     later(() => {
       const enemyHit = next.some((effect) => effect.kind !== "enemy");
       const alliedHit = next.some((effect) => effect.kind === "enemy");
@@ -419,7 +451,7 @@ export default function NavalBattleGame({
   ]);
 
   const finish = async (options?: WeplayFinishOptions) => {
-    if (finishingRef.current) return;
+    if (finishingRef.current || guideDemo) return;
     if (exitOpenRef.current) {
       exitRequestedRef.current = true;
       setExitRequested(true);
@@ -448,7 +480,7 @@ export default function NavalBattleGame({
   };
   finishRef.current = (options) => void finish(options);
   useEffect(() => {
-    if ((!ended && !exitRequested) || finishOnce.current) return;
+    if ((!ended && !exitRequested) || finishOnce.current || guideDemo) return;
     let timer: ReturnType<typeof setTimeout>;
     const settle = () => {
       if (
@@ -494,7 +526,7 @@ export default function NavalBattleGame({
     wordId: string;
     answer: string;
   }) => {
-    if (pending.current.has(data.wordId)) return;
+    if (pending.current.has(data.wordId) || guideDemo) return;
     pending.current.add(data.wordId);
     setAnswer("");
     setFeedback("");
@@ -516,14 +548,13 @@ export default function NavalBattleGame({
       eventsRef.current = next;
       setEvents(next);
       retryData.current.delete(data.wordId);
-      if (!response.accepted)
-        setFeedback("입력 시간이 지났습니다. 다음 단어를 입력해 주세요.");
+      if (!response.accepted) setFeedback("입력 시간이 지났습니다.");
       else
         setFeedback(
           session.words.find((word) => word.id === data.wordId)?.kind ===
             "special"
             ? "특수 전술 발동!"
-            : "정답! 포탄을 장전했습니다.",
+            : "정답! 장전했습니다.",
         );
     } catch (caught) {
       if (alive.current) {
@@ -549,7 +580,8 @@ export default function NavalBattleGame({
       !started ||
       ended ||
       exitOpenRef.current ||
-      exitRequestedRef.current
+      exitRequestedRef.current ||
+      guideDemo
     )
       return;
     const value = normalizeWeplayAnswer(answer);
@@ -560,7 +592,7 @@ export default function NavalBattleGame({
         !acceptedRef.current.has(item.id),
     );
     if (!word) {
-      setFeedback("표시된 단어를 확인해 주세요.");
+      setFeedback("단어를 다시 확인해 주세요.");
       return;
     }
     void send(
@@ -579,13 +611,15 @@ export default function NavalBattleGame({
       : "위스 도전";
   return (
     <section
-      className={`naval-game${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}`}
+      className={`naval-game${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}${pageHidden ? " naval-game--hidden" : ""}${guideDemo ? " naval-game--guide" : ""}`}
       style={
         {
           "--naval-ocean-art": `url(${ART}sea-battle.webp)`,
           "--naval-explosion-art": `url(${ART}explosion.webp)`,
           "--naval-keyboard-inset": `${keyboardInset}px`,
-          "--naval-viewport-height": `${Math.max(340, Math.min(400, viewportHeight - 8))}px`,
+          "--naval-viewport-height": guideDemo
+            ? "380px"
+            : `${Math.max(340, Math.min(400, viewportHeight - 8))}px`,
         } as React.CSSProperties
       }
       aria-label="내가 충무공이라고?! 해전 게임"
@@ -593,9 +627,11 @@ export default function NavalBattleGame({
       <div
         className={`naval-scene${effects.some((effect) => effect.kind === "sunk") ? " has-sinking" : ""}`}
       >
+        <div className="naval-ocean" aria-hidden="true" />
         <div className="naval-vignette" aria-hidden="true" />
         <div
           className="naval-fuse"
+          data-weplay-guide="timeline"
           role="progressbar"
           aria-label="전투 진행 시간"
           aria-valuemin={0}
@@ -639,11 +675,11 @@ export default function NavalBattleGame({
           />
           <div className="naval-hud">
             <div className="naval-hud-score">
-              <span>SCORE</span>
+              <span>점수</span>
               <strong>{battle.score.toLocaleString()}</strong>
             </div>
             <div className="naval-hud-combo">
-              <span>COMBO</span>
+              <span>연속</span>
               <strong>{combo}</strong>
             </div>
             <div
@@ -674,6 +710,7 @@ export default function NavalBattleGame({
         <div
           key={`allied-health-${alliedImpact?.id || 0}`}
           className={`naval-health naval-health--allied${alliedImpact ? " is-hit" : ""}`}
+          data-weplay-guide="health-allied"
           aria-label={`아군 체력 ${displayBattle.playerHp}`}
         >
           <div className="naval-health-heading">
@@ -699,6 +736,7 @@ export default function NavalBattleGame({
         <div
           key={`enemy-health-${enemyImpact?.id || 0}`}
           className={`naval-health naval-health--enemy${enemyImpact ? " is-hit" : ""}`}
+          data-weplay-guide="health"
           aria-label={`적군 체력 ${displayBattle.enemyHp}`}
         >
           <div className="naval-health-heading">
@@ -870,7 +908,35 @@ export default function NavalBattleGame({
             </div>
           </div>
         )}
-        <div className="naval-prompts" aria-label="입력할 단어">
+        {specialCutin && !special && (
+          <div
+            className="naval-cutin"
+            key={specialCutin.id}
+            aria-hidden="true"
+            data-tactic={specialCutin.tactic}
+          >
+            <img
+              className="naval-cutin-lines"
+              src={`${ART}impact-lines.webp`}
+              alt=""
+            />
+            <img
+              className="naval-cutin-eyes"
+              src={`${ART}yi-sunsin-cutin.webp`}
+              alt=""
+            />
+            <strong className="naval-cutin-title">
+              {specialCutin.tactic === "last-stand"
+                ? "생즉사 사즉생"
+                : "학익진"}
+            </strong>
+          </div>
+        )}
+        <div
+          className="naval-prompts"
+          aria-label="입력할 단어"
+          data-weplay-guide="words"
+        >
           {prompts.map((word) => (
             <div
               className="naval-word"
@@ -930,7 +996,9 @@ export default function NavalBattleGame({
         )}
         <form className="naval-command" onSubmit={submit}>
           <div
-            className="naval-ammo"
+            key={`ammo-${battle.normalCorrectCount}`}
+            className={`naval-ammo${battle.normalCorrectCount > 0 ? " is-charged" : ""}`}
+            data-weplay-guide="charge"
             aria-label={`포탄 장전 ${battle.ammo} / ${rules.ammoRequired}`}
           >
             <Sprite className="naval-cannon-icon" rect={[1091, 95, 107, 77]} />
@@ -949,12 +1017,12 @@ export default function NavalBattleGame({
               </span>
             </strong>
           </div>
-          <div className="naval-input-frame">
-            <label htmlFor="naval-answer-input" className="naval-sr-only">
+          <div className="naval-input-frame" data-weplay-guide="input">
+            <label htmlFor={inputId} className="naval-sr-only">
               단어 입력
             </label>
             <input
-              id="naval-answer-input"
+              id={inputId}
               ref={input}
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
@@ -977,7 +1045,7 @@ export default function NavalBattleGame({
               autoComplete="off"
               autoCapitalize="off"
               spellCheck={false}
-              disabled={!started || ended || exitRequested}
+              disabled={!started || ended || exitRequested || guideDemo}
               onCompositionStart={() => {
                 composing.current = true;
               }}
@@ -996,7 +1064,13 @@ export default function NavalBattleGame({
             />
             <button
               type="submit"
-              disabled={!started || ended || exitRequested || !answer.trim()}
+              disabled={
+                !started ||
+                ended ||
+                exitRequested ||
+                !answer.trim() ||
+                guideDemo
+              }
             >
               장전
             </button>
@@ -1005,8 +1079,9 @@ export default function NavalBattleGame({
         <div className="naval-footer">
           <button
             className="weplay-exit-button"
+            data-weplay-guide="exit"
             type="button"
-            disabled={finishing || exitRequested}
+            disabled={finishing || exitRequested || guideDemo}
             onClick={() => {
               exitOpenRef.current = true;
               setExitOpen(true);
@@ -1014,13 +1089,27 @@ export default function NavalBattleGame({
           >
             나가기
           </button>
+          {onShowGuide && (
+            <button
+              className="weplay-exit-button naval-help-button"
+              type="button"
+              data-weplay-guide="help"
+              aria-label="게임 도움말"
+              disabled={finishing || exitRequested || guideDemo}
+              onClick={onShowGuide}
+            >
+              도움말
+            </button>
+          )}
           <label>
             <input
               type="checkbox"
               checked={reducedMotion}
+              aria-label="움직임 줄이기"
+              disabled={guideDemo}
               onChange={(event) => setReducedMotion(event.target.checked)}
             />
-            움직임 줄이기
+            효과 줄이기
           </label>
           <div className="naval-footer-info">
             <span>

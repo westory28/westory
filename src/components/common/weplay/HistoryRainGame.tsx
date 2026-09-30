@@ -30,6 +30,8 @@ export interface HistoryRainGameProps {
   onComplete: (result: WeplayResult) => void;
   preview?: boolean;
   transport?: HistoryRainTransport;
+  onShowGuide?: () => void;
+  guideDemo?: boolean;
 }
 
 export default function HistoryRainGame({ ...props }: HistoryRainGameProps) {

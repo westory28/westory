@@ -44,6 +44,28 @@ function createWeplayFunctions(deps) {
     }
     return { uid, profile };
   };
+  const completeWeplayGuide = onCall({ region: REGION }, async (request) => {
+    const { uid } = assertAllowedWestoryUser(request);
+    // accountUid is only a stale-account guard; it never chooses a write target.
+    if (request.data?.accountUid !== uid) {
+      throw new HttpsError('permission-denied', '로그인 계정이 변경되었습니다. 다시 확인해 주세요.');
+    }
+    return db.runTransaction(async (transaction) => {
+      const userRef = db.doc(`users/${uid}`);
+      const snapshot = await transaction.get(userRef);
+      if (!snapshot.exists) throw new HttpsError('failed-precondition', '사용자 정보를 확인하지 못했습니다. 다시 로그인해 주세요.');
+      const profile = snapshot.data();
+      const allowed = profile.role === 'student' || profile.role === 'teacher'
+        || (profile.role === 'staff' && profile.teacherPortalEnabled === true && Array.isArray(profile.staffPermissions) && profile.staffPermissions.includes('lesson_read'));
+      if (!allowed || profile.isDeleted === true || profile.deletedAt || profile.weplayDeletionPending === true) {
+        throw new HttpsError('permission-denied', '위플레이를 이용할 수 있는 계정으로 로그인해 주세요.');
+      }
+      if (profile.weplayGuideCompleted !== true) {
+        transaction.update(userRef, { weplayGuideCompleted: true, weplayGuideCompletedAt: FieldValue.serverTimestamp() });
+      }
+      return { uid, guideCompleted: true };
+    });
+  });
   const classKey = (profile) => {
     const grade = String(profile.studentGrade || profile.grade || '').trim().replace(/학년$/, '').trim();
     const className = String(profile.studentClass || profile.class || '').trim().replace(/반$/, '').trim();
@@ -551,7 +573,7 @@ function createWeplayFunctions(deps) {
     }
   });
 
-  return { getWeplayManagement, saveWeplayGameSettings, previewWeplayGame, getWeplayPolicy, saveWeplayPolicy, getWeplayLobby, startWeplayGame, submitWeplayAnswer, finishWeplayGame, settleWeplayOnSchedule };
+  return { completeWeplayGuide, getWeplayManagement, saveWeplayGameSettings, previewWeplayGame, getWeplayPolicy, saveWeplayPolicy, getWeplayLobby, startWeplayGame, submitWeplayAnswer, finishWeplayGame, settleWeplayOnSchedule };
 }
 
 module.exports = { createWeplayFunctions };

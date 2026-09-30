@@ -426,3 +426,71 @@
   .weplay-exit-dialog h2 { font-size: 20px; margin-bottom: 12px; }
   .weplay-exit-actions { margin-top: 16px; }
 }
+
+/* Quiet battlefield; contrast belongs to readable words and confirmed actions. */
+.naval-scene { background-image: none; border-color: rgba(216,174,102,.35); }
+.naval-ocean { position: absolute; z-index: 0; inset: 0; pointer-events: none; background: var(--naval-sea) var(--naval-ocean-art) center bottom / auto 130% no-repeat; filter: saturate(.58) brightness(.8); transform: scale(1.025); animation: naval-sea-drift 16s ease-in-out infinite alternate; will-change: transform; }
+.naval-game--hidden .naval-ocean, .naval-game--still .naval-ocean, .naval-game--guide .naval-ocean { animation-play-state: paused; }
+.naval-hud { gap: 0; border-radius: 8px; background: rgba(23,30,36,.82); overflow: hidden; }
+.naval-hud > div { border: 0; border-right: 1px solid rgba(244,229,197,.18); border-radius: 0; background: transparent; box-shadow: none; }
+.naval-hud > div:last-child { border-right: 0; }
+.naval-hud strong { color: var(--naval-text); }
+.naval-hud span, .naval-hud small { color: var(--naval-parchment); }
+.naval-hud-time.is-urgent strong { color: var(--naval-gold); }
+.naval-title-art { opacity: .8; }
+.naval-battle-status > span { background: rgba(23,30,36,.65); }
+.naval-difficulty-badge { border-color: rgba(244,229,197,.25); background: var(--naval-ink); color: var(--naval-parchment); }
+.naval-difficulty-badge--mild { color: var(--naval-allied); }
+.naval-difficulty-badge--spicy { color: var(--naval-text); border-color: rgba(186,66,54,.65); }
+.naval-health { padding: 8px 12px; border: 1px solid rgba(244,229,197,.35); border-radius: 8px; background: rgba(23,30,36,.9); box-shadow: none; }
+.naval-health::before, .naval-health::after, .naval-health .naval-health-crest { display: none; }
+.naval-health .naval-health-track { border: 0; padding: 0; background: var(--naval-ink); }
+.naval-health-track::after { inset: 0; opacity: .5; }
+.naval-health meter::-webkit-meter-optimum-value { background: var(--naval-hp); }
+.naval-fleet .naval-reinforcement { opacity: .82; filter: saturate(.3) brightness(.65); }
+.naval-ship { filter: saturate(.75); }
+.naval-ship.is-hit { filter: saturate(1); }
+.naval-commander { filter: saturate(.45) brightness(.8); opacity: .78; }
+.naval-fuse-phases li { border-right-color: rgba(244,229,197,.25); background: rgba(23,30,36,.65); }
+.naval-fuse-phases li[aria-current] { background: rgba(23,30,36,.9); color: var(--naval-text); }
+.naval-fuse-rope { border-color: rgba(216,174,102,.35); box-shadow: none; opacity: .75; }
+.naval-fuse-ember { box-shadow: 0 0 4px var(--naval-gold); }
+.naval-fuse-ember::after { animation: none; opacity: .35; }
+.naval-prompts { z-index: 9; }
+.naval-word .naval-word-splash { opacity: .48; }
+.naval-ammo { border-color: rgba(244,229,197,.3); background: rgba(23,30,36,.94); }
+.naval-ammo-slots { border: 0; border-radius: 4px; background: rgba(244,229,197,.12); }
+.naval-ammo-slots span { transform: none; background: rgba(244,229,197,.12); }
+.naval-ammo.is-charged { animation: naval-charge 600ms ease-out; }
+.naval-input-frame { border: 1px solid rgba(216,174,102,.6); box-shadow: none; }
+.naval-input-frame:focus-within { border-color: var(--naval-gold); box-shadow: 0 0 0 2px var(--naval-wood); }
+.naval-footer { gap: 8px; border-top-color: rgba(244,229,197,.15); }
+.naval-footer label { min-width: 104px; }
+.naval-cutin { position: absolute; z-index: 7; inset: 0; overflow: hidden; pointer-events: none; background: rgba(23,30,36,.7); animation: naval-cutin-envelope 1400ms linear both; }
+.naval-cutin-lines { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: naval-cutin-lines 1400ms ease-out both; }
+.naval-cutin-eyes { position: absolute; top: 16%; left: 0; width: 100%; height: 28%; object-fit: cover; object-position: center; border-block: 2px solid var(--naval-text); filter: contrast(1.15); animation: naval-cutin-eyes 1400ms cubic-bezier(.16,1,.3,1) both; }
+.naval-cutin-title { position: absolute; top: 36%; left: 4%; right: 4%; text-align: center; font-size: clamp(24px, 4cqi, 48px); line-height: 1.2; font-weight: 900; color: var(--naval-text); text-shadow: 0 2px 4px var(--naval-ink), -2px 0 var(--naval-ink), 2px 0 var(--naval-ink); animation: naval-cutin-title 1400ms ease-out both; }
+.naval-game--still .naval-cutin { display: none; }
+.naval-game:not(.naval-game--still) .naval-scene:has(.naval-cutin) .naval-tactic-name { visibility: hidden; }
+.naval-game--still .naval-ammo.is-charged { animation: none; }
+.naval-game--guide { margin-bottom: 0; }
+.naval-game--guide *, .naval-game--guide *::before, .naval-game--guide *::after { animation: none !important; }
+.naval-game--guide .naval-word { opacity: 1; }
+.naval-game--guide .naval-ocean { transform: scale(1.025); }
+@container naval-game (max-width: 600px) {
+  .naval-footer { gap: 4px; }
+  .naval-footer label { min-width: 80px; font-size: 10px; }
+  .naval-feedback { font-size: 10px; }
+  .naval-cutin-eyes { top: 17%; height: 21%; }
+  .naval-cutin-title { top: 34%; font-size: 28px; }
+}
+.naval-game--compact .naval-health { padding: 4px 8px; }
+.naval-game--compact .naval-footer label { min-width: 76px; }
+.naval-game--compact .naval-cutin-eyes { top: 12%; height: 42%; }
+.naval-game--compact .naval-cutin-title { top: 22%; font-size: 20px; }
+@keyframes naval-sea-drift { from { transform: translate(-.5%, .3%) scale(1.025); } to { transform: translate(.5%, -.3%) scale(1.025); } }
+@keyframes naval-charge { 0% { border-color: var(--naval-gold); box-shadow: 0 0 12px rgba(216,174,102,.8); } 100% { border-color: rgba(244,229,197,.3); box-shadow: none; } }
+@keyframes naval-cutin-envelope { 0% { opacity: 0; } 8%,75% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes naval-cutin-lines { 0% { transform: scale(1.12); opacity: 0; } 16% { transform: scale(1); opacity: 1; } 76% { transform: scale(1.025); opacity: .9; } 100% { transform: scale(1.04); opacity: 0; } }
+@keyframes naval-cutin-eyes { 0% { transform: translateX(-12%); opacity: 0; } 14%,76% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(4%); opacity: 0; } }
+@keyframes naval-cutin-title { 0%,12% { transform: translateY(8px); opacity: 0; } 24%,76% { transform: translateY(0); opacity: 1; } 100% { opacity: 0; } }

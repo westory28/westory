@@ -14,6 +14,8 @@ import {
 } from "../../lib/weplay";
 import HistoryRainGame from "./weplay/HistoryRainGame";
 import NavalBattleResult from "../../components/common/weplay/NavalBattleResult";
+import WeplayGuide from "../../components/common/weplay/WeplayGuide";
+import useWeplayGuide from "../../components/common/weplay/useWeplayGuide";
 import "./weplay/weplay.css";
 import "./weplay/lobby.css";
 
@@ -26,7 +28,7 @@ const date = (value: number) =>
   });
 
 export default function Weplay() {
-  const { config, currentUser } = useAuth();
+  const { config, currentUser, userData } = useAuth();
   const [lobby, setLobby] = useState<WeplayLobby | null>(null);
   const [session, setSession] = useState<WeplaySession | null>(null);
   const [result, setResult] = useState<WeplayResult | null>(null);
@@ -41,6 +43,17 @@ export default function Weplay() {
   const requestKey = useRef("");
   const generation = useRef(0);
   const scope = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`;
+  const [loadedScope, setLoadedScope] = useState("");
+  const guide = useWeplayGuide(
+    currentUser?.uid,
+    userData,
+    loadedScope === scope &&
+      !!lobby &&
+      !loading &&
+      !starting &&
+      !session &&
+      !result,
+  );
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const load = useCallback(
@@ -52,6 +65,7 @@ export default function Weplay() {
         const next = await getWeplayLobby(config);
         if (request !== generation.current) return;
         setLobby(next);
+        setLoadedScope(scope);
         if (restore && next.activeSession) {
           setSession(next.activeSession);
           setMode(next.activeSession.mode);
@@ -171,6 +185,14 @@ export default function Weplay() {
           <h1>내가 충무공이라고?!</h1>
         </div>
         {lobby && <strong>내 위스 {lobby.balance.toLocaleString()}</strong>}
+        <button
+          type="button"
+          className="weplay-guide-launch"
+          onClick={guide.openGuide}
+          disabled={!currentUser || starting}
+        >
+          <span aria-hidden="true">i</span>게임 안내
+        </button>
       </header>
       {session ? (
         <HistoryRainGame
@@ -178,6 +200,7 @@ export default function Weplay() {
           session={session}
           config={config}
           onComplete={complete}
+          onShowGuide={guide.openGuide}
         />
       ) : (
         <>
@@ -549,6 +572,14 @@ export default function Weplay() {
           )}
         </>
       )}
+      <WeplayGuide
+        open={guide.open}
+        saving={guide.saving}
+        error={guide.error}
+        gameRunning={!!session}
+        onFinish={() => void guide.finishGuide()}
+        onCloseForNow={guide.closeForNow}
+      />
     </main>
   );
 }
