@@ -1498,6 +1498,12 @@ const ManageMaps: React.FC = () => {
           heading="지도"
           items={sidebarItems}
           selectedId={`map-group:${currentDisplayGroup?.key || ""}`}
+          selectedChildId={currentPreviewItem?.id || ""}
+          getChildItems={(item) =>
+            displayGroupMap.get(item.id.replace(/^map-group:/u, ""))?.items ||
+            []
+          }
+          onSelectChild={setSelectedId}
           onSelect={(id) => {
             const nextGroupKey = id.replace(/^map-group:/u, "");
             const nextGroup = displayGroupMap.get(nextGroupKey);
@@ -1590,12 +1596,9 @@ const ManageMaps: React.FC = () => {
               <div className="border-b border-gray-100 p-4 pb-4 sm:p-6 sm:pb-4 lg:p-8 lg:pb-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                      {currentPreviewItem.category}
-                    </div>
                     <div className="flex flex-wrap items-center gap-3">
                       <h1 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
-                        {currentDisplayGroup?.title || currentPreviewItem.title}
+                        {currentPreviewItem.title}
                       </h1>
                       <button
                         type="button"
@@ -1622,27 +1625,6 @@ const ManageMaps: React.FC = () => {
                   )}
                 </div>
               </div>
-
-              {currentDisplayItems.length > 1 && (
-                <div className="border-b border-gray-100 px-6">
-                  <div className="flex overflow-x-auto">
-                    {currentDisplayItems.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setSelectedId(item.id)}
-                        className={`shrink-0 border-b-2 px-4 py-4 text-sm font-bold transition ${
-                          currentPreviewItem.id === item.id
-                            ? "border-blue-600 text-blue-600"
-                            : "border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        }`}
-                      >
-                        {item.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div className="bg-gray-50 p-4 md:p-6">
                 <MapViewer
