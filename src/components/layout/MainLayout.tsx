@@ -17,8 +17,9 @@ import {
 import "./teacherLayout.css";
 import "./studentLayout.css";
 import { PageLoading } from "../common/LoadingState";
+import AuthRecoveryState from "../common/AuthRecoveryState";
 import { useAuth } from "../../contexts/AuthContext";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { markLoginPerf, measureLoginPerf } from "../../lib/loginPerf";
 import { readStorage } from "../../lib/safeStorage";
 import { runAfterNextPaint } from "../../lib/browserTasks";
@@ -55,6 +56,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     currentUser,
     userData,
     loading,
+    authPhase,
+    authError,
+    retryAuth,
+    logout,
     config,
     configReady,
     menuConfig,
@@ -68,6 +73,35 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
   const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const profileReady = Boolean(
+    authPhase === "ready" &&
+    !loading &&
+    currentUser &&
+    userData &&
+    userData.uid === currentUser.uid,
+  );
+  const canUseTeacherPortal = Boolean(
+    profileReady && canAccessTeacherPortal(userData, currentUser?.email),
+  );
+  const savedRole = profileReady ? readStorage(ROLE_SESSION_KEY) : null;
+  let permissionRedirect: string | null = null;
+  if (profileReady && isTeacherRoute) {
+    if (!canUseTeacherPortal) {
+      permissionRedirect = "/student/dashboard";
+    } else if (
+      !canAccessTeacherPath(location.pathname, userData, currentUser?.email)
+    ) {
+      permissionRedirect = getDefaultTeacherRoute(userData, currentUser?.email);
+    }
+  } else if (
+    profileReady &&
+    isStudentRoute &&
+    savedRole === "teacher" &&
+    canUseTeacherPortal
+  ) {
+    permissionRedirect = getDefaultTeacherRoute(userData, currentUser?.email);
+  }
+  const portalAllowed = profileReady && !permissionRedirect;
   const [teacherSidebarCollapsed, setTeacherSidebarCollapsed] =
     React.useState(false);
   const toggleTeacherSidebar = React.useCallback(() => {
@@ -76,6 +110,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
     !isSemesterArchive &&
+    portalAllowed &&
     currentUser &&
     isTeacherRoute &&
     isAdminUser(userData, currentUser.email),
@@ -126,48 +161,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 
   useEffect(() => {
-    if (!loading && !currentUser) {
-      navigate("/");
-      return;
-    }
-
-    if (!loading && currentUser) {
-      const savedRole = readStorage(ROLE_SESSION_KEY);
-      const sessionRole =
-        savedRole === "teacher" || savedRole === "student" ? savedRole : null;
-      const canUseTeacherPortal = canAccessTeacherPortal(
-        userData,
-        currentUser.email,
-      );
-      if (location.pathname.startsWith("/teacher")) {
-        if (!canUseTeacherPortal) {
-          navigate("/student/dashboard", { replace: true });
-          return;
-        }
-
-        if (
-          !canAccessTeacherPath(location.pathname, userData, currentUser.email)
-        ) {
-          navigate(getDefaultTeacherRoute(userData, currentUser.email), {
-            replace: true,
-          });
-        }
-      } else if (
-        location.pathname.startsWith("/student") &&
-        sessionRole === "teacher" &&
-        canUseTeacherPortal
-      ) {
-        navigate(getDefaultTeacherRoute(userData, currentUser.email), {
-          replace: true,
-        });
-      }
-    }
-  }, [currentUser, userData, loading, location.pathname, navigate]);
-
-  useEffect(() => {
     if (
-      loading ||
-      !currentUser ||
+      !portalAllowed ||
       !isStudentRoute ||
       !isVisibilityControlledStudentRoute ||
       !configReady ||
@@ -209,6 +204,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     location.pathname,
     location.search,
     menuConfigReady,
+    portalAllowed,
     refreshConfig,
     refreshMenuConfig,
     settingsLoadedAt,
@@ -217,8 +213,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     if (
-      loading ||
-      !currentUser ||
+      !portalAllowed ||
       !isStudentRoute ||
       !studentAccessReady ||
       studentRouteAccess.allowed
@@ -237,26 +232,37 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     isStudentRoute,
     loading,
     navigate,
+    portalAllowed,
     showToast,
     studentAccessReady,
     studentRouteAccess,
   ]);
 
   useEffect(() => {
-    if (loading || !currentUser) return;
+    if (
+      !portalAllowed ||
+      !studentAccessReady ||
+      (isStudentRoute && !studentRouteAccess.allowed)
+    )
+      return;
 
-    markLoginPerf("westory-main-layout-ready", {
-      pathname: location.pathname,
-    });
+    markLoginPerf("westory-main-layout-ready");
     measureLoginPerf(
       "westory-route-ready",
       "westory-login-first-route-decided",
       "westory-main-layout-ready",
     );
-  }, [currentUser, loading, location.pathname]);
+  }, [
+    currentUser,
+    isStudentRoute,
+    location.pathname,
+    portalAllowed,
+    studentAccessReady,
+    studentRouteAccess.allowed,
+  ]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return undefined;
+    if (!portalAllowed || typeof window === "undefined") return undefined;
 
     const originalAlert = window.alert.bind(window);
     window.alert = (message?: unknown) => {
@@ -268,13 +274,25 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => {
       window.alert = originalAlert;
     };
-  }, [showToast]);
+  }, [portalAllowed, showToast]);
 
   useEffect(() => {
     setStudentEnhancementsReady(false);
-    if (!currentUser || loading || !isStudentRoute) return undefined;
+    if (
+      !portalAllowed ||
+      !isStudentRoute ||
+      !studentAccessReady ||
+      !studentRouteAccess.allowed
+    )
+      return undefined;
     return runAfterNextPaint(() => setStudentEnhancementsReady(true));
-  }, [currentUser?.uid, isStudentRoute, loading]);
+  }, [
+    currentUser?.uid,
+    isStudentRoute,
+    portalAllowed,
+    studentAccessReady,
+    studentRouteAccess.allowed,
+  ]);
 
   useEffect(() => {
     setTeacherEnhancementsReady(false);
@@ -282,8 +300,29 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return runAfterNextPaint(() => setTeacherEnhancementsReady(true));
   }, [canUseTeacherPatchMemo, currentUser?.uid, loading]);
 
-  if (loading)
+  if (authPhase === "error") {
+    return (
+      <AuthRecoveryState
+        error={authError}
+        onRetry={retryAuth}
+        onRestart={async () => {
+          await logout();
+          navigate("/", { replace: true });
+        }}
+      />
+    );
+  }
+
+  if (
+    loading ||
+    authPhase === "resolving" ||
+    authPhase === "opening-session" ||
+    authPhase === "loading-profile"
+  )
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
+
+  if (!profileReady) return <Navigate to="/" replace />;
+  if (permissionRedirect) return <Navigate to={permissionRedirect} replace />;
 
   if (currentUser && isStudentRoute && !studentAccessReady) {
     return <PageLoading message="학생 공개 설정을 확인하는 중입니다." />;

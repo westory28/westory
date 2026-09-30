@@ -1,5 +1,42 @@
 const PERF_QUERY_KEY = "westoryPerfLogin";
 const PERF_STORAGE_KEY = "westoryPerfLogin";
+const DETAIL_ENUMS: Record<string, readonly string[]> = {
+  phase: [
+    "resolving",
+    "opening-session",
+    "loading-profile",
+    "ready",
+    "onboarding",
+    "signed-out",
+    "error",
+  ],
+  mode: ["student", "teacher"],
+  role: ["student", "staff", "teacher"],
+  source: ["finish-login", "auto-resume", "shared-bootstrap"],
+  exists: ["true", "false", "cached"],
+  hit: ["true", "false"],
+  recovered: ["true", "fallback"],
+};
+const safeDetail = (detail?: Record<string, unknown>) => {
+  const result: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(detail || {})) {
+    if (
+      ["hasUser", "exists", "hit", "recovered"].includes(key) &&
+      typeof value === "boolean"
+    )
+      result[key] = value;
+    else if (
+      key === "attempt" &&
+      typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= 0
+    )
+      result[key] = value;
+    else if (typeof value === "string" && DETAIL_ENUMS[key]?.includes(value))
+      result[key] = value;
+  }
+  return result;
+};
 
 const isPerfEnabled = () => {
   if (typeof window === "undefined") return false;
@@ -25,7 +62,7 @@ export const markLoginPerf = (
     performance.mark(name);
     console.info(`[Perf] ${name}`, {
       at: Math.round(performance.now()),
-      ...(detail || {}),
+      ...safeDetail(detail),
     });
   } catch {
     // Ignore performance API failures.

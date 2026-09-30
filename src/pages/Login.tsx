@@ -5,7 +5,6 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  signOut,
   User,
 } from "firebase/auth";
 import {
@@ -29,7 +28,7 @@ import {
 } from "../lib/firebase";
 import { InlineLoading, PageLoading } from "../components/common/LoadingState";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
-import { prepareApplicationSession } from "../lib/applicationSession";
+import AuthRecoveryState from "../components/common/AuthRecoveryState";
 import { readSiteSettingDoc } from "../lib/siteSettings";
 import {
   readLocalOnly,
@@ -54,6 +53,31 @@ const PENDING_LOGIN_MODE_KEY = "westoryPendingLoginMode";
 const REDIRECT_ATTEMPT_KEY = "westoryRedirectAttempt";
 const REDIRECT_ATTEMPT_MAX_AGE_MS = 10 * 60 * 1000;
 type LoginMode = "student" | "teacher";
+const staleLoginError = () =>
+  Object.assign(new Error("로그인 상태가 변경되었습니다."), {
+    code: "auth/stale-attempt",
+  });
+const awaitLoginNetwork = async <T,>(promise: Promise<T>): Promise<T> => {
+  let timer: number | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = window.setTimeout(
+          () =>
+            reject(
+              Object.assign(new Error("로그인 응답이 지연되고 있습니다."), {
+                code: "auth/startup-timeout",
+              }),
+            ),
+          15000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+};
 
 interface SchoolOption {
   value: string;
@@ -317,10 +341,12 @@ const scheduleDeferredUserMerge = (
   userRef: ReturnType<typeof doc>,
   payload: Record<string, unknown>,
   label: string,
+  stillCurrent: () => boolean,
 ) => {
   const run = () => {
-    void setDoc(userRef, payload, { merge: true }).catch((error) => {
-      console.warn(`[Auth] Deferred ${label} merge failed`, error);
+    if (!stillCurrent()) return;
+    void setDoc(userRef, payload, { merge: true }).catch(() => {
+      console.warn(`[Auth] Deferred ${label} merge failed`);
     });
   };
 
@@ -385,7 +411,7 @@ const pickStudentRosterProfile = async (
 
     return best;
   } catch (error) {
-    console.warn("Failed to read student roster profile", error);
+    console.warn("Failed to read student roster profile");
     return null;
   }
 };
@@ -616,7 +642,28 @@ const isIgnorableRedirectError = (error: unknown): boolean => {
 };
 
 const Login: React.FC = () => {
-  const { currentUser, userData, interfaceConfig, loading } = useAuth();
+  const {
+    currentUser: verifiedUser,
+    onboardingUser,
+    userData,
+    interfaceConfig,
+    loading,
+    authPhase,
+    authError,
+    authGeneration,
+    retryAuth,
+    logout,
+    beginLoginFlow,
+    isLoginFlowCurrent,
+    failLoginFlow,
+    abandonLoginFlow,
+    discardStaleLoginUser,
+    claimLoginBootstrap,
+    isAuthAttemptCurrent,
+    assertAuthAttemptCurrent,
+    waitForAuthProfile,
+  } = useAuth();
+  const currentUser = verifiedUser || onboardingUser;
   const navigate = useNavigate();
   const restrictedInAppBrowser = isRestrictedInAppBrowser();
   const ddayTitle = String(interfaceConfig?.ddayTitle || "").trim();
@@ -670,24 +717,39 @@ const Login: React.FC = () => {
   const consentResolverRef = useRef<((value: string[] | null) => void) | null>(
     null,
   );
-  const redirectHandledRef = useRef(false);
+  const redirectResultRef = useRef<ReturnType<typeof getRedirectResult> | null>(
+    null,
+  );
+  const modalGenerationRef = useRef<number | null>(null);
+  const resumeFlowRef = useRef<number | null>(null);
+  const mountedRef = useRef(false);
+  const actionVersionRef = useRef(0);
+  const activeActionFlowRef = useRef<number | null>(null);
   const autoResumeUidRef = useRef<string | null>(null);
   const authActionLockRef = useRef(false);
-  const latestCurrentUserRef = useRef<User | null>(currentUser);
-  const latestUserDataRef = useRef<UserData | null>(userData);
   const preferredRole = getSavedRole();
   const canUseTeacherPortal = canAccessTeacherPortal(
     userData,
     currentUser?.email || "",
   );
-  const isTeacherUser = preferredRole === "teacher" || canUseTeacherPortal;
+  const isTeacherUser = canUseTeacherPortal;
 
-  const forceRoute = (targetPath: string) => {
+  const forceRoute = (
+    targetPath: string,
+    user: User,
+    generation: number,
+    flow?: number,
+  ) => {
+    const current = () =>
+      isAuthAttemptCurrent(generation, user) &&
+      (flow === undefined || isLoginFlowCurrent(flow));
+    if (!current()) return;
     navigate(targetPath, { replace: true });
 
     if (typeof window === "undefined") return;
 
     window.setTimeout(() => {
+      if (!current()) return;
       const desiredHash = `#${targetPath}`;
       if (window.location.hash !== desiredHash) {
         window.location.replace(
@@ -721,61 +783,31 @@ const Login: React.FC = () => {
     clearRedirectAttempt();
     autoResumeUidRef.current = null;
     setLoginNotice(getUnauthorizedEmailNotice(email));
-    await signOut(auth);
+    await logout();
   };
 
   useEffect(() => {
-    latestCurrentUserRef.current = currentUser;
-    latestUserDataRef.current = userData;
-  }, [currentUser, userData]);
-
-  const suppressRecoveredStudentBootstrapAlert = async (
-    user: User,
-    source: "finish-login" | "redirect-resume" | "auto-resume",
-    error: unknown,
-  ): Promise<boolean> => {
-    const code = (error as Partial<AuthError>)?.code || "";
-    if (code !== "permission-denied") return false;
-
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const liveUser = latestCurrentUserRef.current;
-      const liveUserData = latestUserDataRef.current;
-      const studentRouteReady =
-        typeof window !== "undefined" &&
-        /^#\/student(?:\/|$)/.test(window.location.hash || "");
-
-      if (
-        liveUser?.uid === user.uid &&
-        (studentRouteReady ||
-          (liveUserData?.uid === user.uid &&
-            isStudentBootstrapReadyForRoute(liveUserData)))
-      ) {
-        console.warn(
-          "[Auth] Suppressing false student bootstrap alert after recovered student session",
-          {
-            uid: user.uid,
-            source,
-            code,
-          },
-        );
-        setLoginNotice("");
-        saveRoleCache("student");
-        clearPendingLoginMode();
-        clearRedirectAttempt();
-        autoResumeUidRef.current = user.uid;
-        forceRoute("/student/dashboard");
-        return true;
-      }
-
-      if (attempt < 7) {
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, 200);
-        });
-      }
-    }
-
-    return false;
-  };
+    if (
+      modalGenerationRef.current === null ||
+      modalGenerationRef.current === authGeneration
+    )
+      return;
+    modalGenerationRef.current = null;
+    profileResolverRef.current?.(null);
+    consentResolverRef.current?.(null);
+    profileResolverRef.current = null;
+    consentResolverRef.current = null;
+    setProfileModalOpen(false);
+    setConsentModalOpen(false);
+    setProfileForm({
+      email: "",
+      name: "",
+      grade: "",
+      className: "",
+      number: "",
+    });
+    setConsentItems([]);
+  }, [authGeneration]);
 
   useEffect(() => {
     const loadSchoolConfig = async () => {
@@ -810,7 +842,7 @@ const Login: React.FC = () => {
           }
         }
       } catch (error) {
-        console.warn("Failed to load school config", error);
+        console.warn("Failed to load school config");
       }
     };
 
@@ -818,7 +850,36 @@ const Login: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (
+      loading &&
+      (resumeFlowRef.current === null ||
+        !isLoginFlowCurrent(resumeFlowRef.current))
+    ) {
+      const flow = beginLoginFlow(true);
+      if (flow >= 0) resumeFlowRef.current = flow;
+    }
+  }, [loading, authGeneration, beginLoginFlow, isLoginFlowCurrent]);
+
+  useEffect(() => {
+    if (
+      activeActionFlowRef.current !== null &&
+      !isLoginFlowCurrent(activeActionFlowRef.current)
+    ) {
+      actionVersionRef.current += 1;
+      activeActionFlowRef.current = null;
+      authActionLockRef.current = false;
+      setAuthBusy(false);
+      setRedirectRecoveryPending(false);
+    }
+  }, [authGeneration, isLoginFlowCurrent]);
+
+  useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      actionVersionRef.current += 1;
+      if (resumeFlowRef.current !== null)
+        abandonLoginFlow(resumeFlowRef.current);
       if (profileResolverRef.current) {
         profileResolverRef.current(null);
         profileResolverRef.current = null;
@@ -931,7 +992,7 @@ const Login: React.FC = () => {
       });
       return items;
     } catch (error) {
-      console.warn("Failed to load consent items", error);
+      console.warn("Failed to load consent items");
       return [];
     }
   };
@@ -971,6 +1032,55 @@ const Login: React.FC = () => {
     consentResolverRef.current = null;
     resolver?.(result);
   };
+
+  useEffect(() => {
+    if (!profileModalOpen && !consentModalOpen) return;
+    const dialog = document.querySelector<HTMLElement>("[data-auth-dialog]");
+    if (!dialog) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const controls = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex='0']",
+        ),
+      ).filter((element) => element.getClientRects().length > 0);
+    (
+      dialog.querySelector<HTMLElement>(
+        "input:not([readonly]), select, button",
+      ) || dialog
+    ).focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (profileModalOpen) closeProfileModal(null);
+        else closeConsentModal(null);
+      } else if (event.key === "Tab") {
+        const targets = controls();
+        const first = targets[0],
+          last = targets[targets.length - 1];
+        if (!first) {
+          event.preventDefault();
+          dialog.focus();
+          return;
+        }
+        if (!dialog.contains(document.activeElement)) {
+          event.preventDefault();
+          first.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [profileModalOpen, consentModalOpen]);
 
   const consentReady = consentItems
     .filter((item) => item.required)
@@ -1041,6 +1151,7 @@ const Login: React.FC = () => {
     user: User,
     existing: Partial<UserData> | null,
     rosterProfile: Partial<UserData> | null,
+    assertLive: () => Promise<void>,
   ): Promise<StudentOnboardingResult | null> => {
     let resolvedName =
       (existing?.name || "").trim() ||
@@ -1072,6 +1183,7 @@ const Login: React.FC = () => {
         number: numberValue,
       });
 
+      await assertLive();
       if (!profile) return null;
 
       resolvedName = normalizeStudentName(profile.name);
@@ -1105,7 +1217,8 @@ const Login: React.FC = () => {
     let consentAgreedItems = existingConsentItems;
 
     if (!privacyAgreed) {
-      const items = await loadConsentItems();
+      const items = await awaitLoginNetwork(loadConsentItems());
+      await assertLive();
       if (items.length === 0) {
         alert(
           "개인정보 동의 항목을 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.",
@@ -1113,6 +1226,7 @@ const Login: React.FC = () => {
         return null;
       }
       const selected = await openConsentModal(items, existingConsentItems);
+      await assertLive();
       if (selected === null) return null;
       privacyAgreed = true;
       consentAgreedItems = selected;
@@ -1131,7 +1245,20 @@ const Login: React.FC = () => {
     };
   };
 
-  const finishLoginForRole = async (user: User, mode: LoginMode) => {
+  const finishLoginForRole = async (
+    user: User,
+    mode: LoginMode,
+    flow: number,
+  ) => {
+    const assertFlow = () => {
+      if (
+        !mountedRef.current ||
+        !isLoginFlowCurrent(flow) ||
+        auth.currentUser !== user
+      )
+        throw staleLoginError();
+    };
+    assertFlow();
     markLoginPerf("westory-login-bootstrap-start", {
       mode,
       source: "finish-login",
@@ -1142,18 +1269,24 @@ const Login: React.FC = () => {
       return;
     }
 
-    await prepareApplicationSession(user);
-
+    const bootstrap = await claimLoginBootstrap(user, flow);
+    assertFlow();
+    const generation = bootstrap.generation;
+    const current = () =>
+      isAuthAttemptCurrent(generation, user) && isLoginFlowCurrent(flow);
+    const assertLive = async () => {
+      assertFlow();
+      await assertAuthAttemptCurrent(generation, user);
+      assertFlow();
+    };
+    modalGenerationRef.current = generation;
     const isTeacherEmail = user.email === TEACHER_EMAIL;
     const userRef = doc(db, "users", user.uid);
-    const userSnap = await getDoc(userRef);
+    const existing = bootstrap.profile;
     markLoginPerf("westory-login-user-doc-read", {
-      exists: userSnap.exists() ? "true" : "false",
-      source: "finish-login",
+      exists: !!existing,
+      source: "shared-bootstrap",
     });
-    const existing = userSnap.exists()
-      ? (userSnap.data() as Partial<UserData>)
-      : null;
     const staffPermissions = normalizeStaffPermissions(
       existing?.staffPermissions,
     );
@@ -1174,7 +1307,7 @@ const Login: React.FC = () => {
       clearPendingLoginMode();
       clearRoleCache();
       clearRedirectAttempt();
-      await signOut(auth);
+      await logout();
       return;
     }
 
@@ -1187,8 +1320,9 @@ const Login: React.FC = () => {
 
     const rosterProfile =
       nextRole === "student" && shouldLookupStudentRosterProfile(existing)
-        ? await pickStudentRosterProfile(user.email || "")
+        ? await awaitLoginNetwork(pickStudentRosterProfile(user.email || ""))
         : null;
+    await assertLive();
     if (nextRole === "student") {
       markLoginPerf("westory-login-roster-profile-read", {
         hit: rosterProfile ? "true" : "false",
@@ -1205,12 +1339,14 @@ const Login: React.FC = () => {
         user,
         existing,
         rosterProfile,
+        assertLive,
       );
+      await assertLive();
       if (!onboardingResult) {
         clearPendingLoginMode();
         clearRoleCache();
         clearRedirectAttempt();
-        await signOut(auth);
+        await logout();
         return;
       }
       resolvedName = onboardingResult.name;
@@ -1254,11 +1390,12 @@ const Login: React.FC = () => {
     }
 
     if (nextRole === "student") {
+      await assertLive();
       if (!onboardingResult) {
         clearPendingLoginMode();
         clearRoleCache();
         clearRedirectAttempt();
-        await signOut(auth);
+        await logout();
         return;
       }
       basePayload.privacyAgreed = onboardingResult.privacyAgreed;
@@ -1274,15 +1411,12 @@ const Login: React.FC = () => {
       } else if (onboardingResult.profileIncomplete) {
         console.warn(
           "[Auth] Existing student profile is locked for self-edit; skipping profile rewrite during login.",
-          {
-            uid: user.uid,
-          },
         );
       }
     }
 
     const requiresBlockingWrite =
-      !userSnap.exists() ||
+      !existing ||
       shouldBlockUserProfileWrite({
         existing,
         nextRole,
@@ -1291,31 +1425,47 @@ const Login: React.FC = () => {
         onboardingResult,
       });
 
-    if (!userSnap.exists()) {
-      await setDoc(
-        userRef,
-        {
-          ...basePayload,
-          grade:
-            nextRole === "student" && onboardingResult
-              ? onboardingResult.grade
-              : "",
-          class:
-            nextRole === "student" && onboardingResult
-              ? onboardingResult.classValue
-              : "",
-          number:
-            nextRole === "student" && onboardingResult
-              ? onboardingResult.number
-              : "",
-          createdAt: serverTimestamp(),
-        },
-        { merge: true },
+    await assertLive();
+    if (!existing) {
+      await awaitLoginNetwork(
+        setDoc(
+          userRef,
+          {
+            ...basePayload,
+            grade:
+              nextRole === "student" && onboardingResult
+                ? onboardingResult.grade
+                : "",
+            class:
+              nextRole === "student" && onboardingResult
+                ? onboardingResult.classValue
+                : "",
+            number:
+              nextRole === "student" && onboardingResult
+                ? onboardingResult.number
+                : "",
+            createdAt: serverTimestamp(),
+          },
+          { merge: true },
+        ),
       );
     } else if (requiresBlockingWrite) {
-      await setDoc(userRef, basePayload, { merge: true });
+      await awaitLoginNetwork(setDoc(userRef, basePayload, { merge: true }));
     }
 
+    await assertLive();
+    if (requiresBlockingWrite) {
+      await waitForAuthProfile(generation, user, (profile) =>
+        Object.entries(basePayload).every(([key, value]) => {
+          if (["lastLogin", "privacyAgreedAt"].includes(key)) return true;
+          const actual = (profile as unknown as Record<string, unknown>)[key];
+          return Array.isArray(value)
+            ? Array.isArray(actual) && areSameStringLists(actual, value)
+            : actual === value;
+        }),
+      );
+      await assertLive();
+    }
     const nextPortalMode: LoginMode =
       nextRole === "student" ? "student" : "teacher";
     const teacherRouteUser: Partial<UserData> = {
@@ -1347,35 +1497,72 @@ const Login: React.FC = () => {
       "westory-login-bootstrap-start",
       "westory-login-first-route-decided",
     );
-    autoResumeUidRef.current = user.uid;
-    forceRoute(targetPath);
+    autoResumeUidRef.current = `${generation}:${user.uid}`;
+    forceRoute(targetPath, user, generation, flow);
 
-    if (userSnap.exists() && !requiresBlockingWrite) {
-      scheduleDeferredUserMerge(userRef, basePayload, `${nextRole}-login`);
+    if (existing && !requiresBlockingWrite) {
+      scheduleDeferredUserMerge(
+        userRef,
+        basePayload,
+        `${nextRole}-login`,
+        current,
+      );
     }
   };
 
   useEffect(() => {
-    if (redirectHandledRef.current) return;
-    redirectHandledRef.current = true;
     if (!redirectRecoveryPending) return;
-
+    let cancelled = false;
+    let timer: number | undefined;
+    const operation = ++actionVersionRef.current;
+    const ownsAction = () =>
+      !cancelled &&
+      mountedRef.current &&
+      actionVersionRef.current === operation;
     const resolveRedirect = async () => {
       setAuthBusy(true);
       markLoginPerf("westory-login-redirect-resume-start");
       try {
-        await authPersistenceReady;
-        const result = await getRedirectResult(auth);
+        // Keep the acquisition promise across StrictMode effect replay. It is
+        // distinct from the server bootstrap and must only consume Firebase's
+        // redirect result once.
+        redirectResultRef.current ??= authPersistenceReady.then(() =>
+          getRedirectResult(auth),
+        );
+        let result;
+        try {
+          result = await Promise.race([
+            redirectResultRef.current,
+            new Promise<never>((_, reject) => {
+              timer = window.setTimeout(
+                () =>
+                  reject(
+                    Object.assign(
+                      new Error("로그인 응답이 지연되고 있습니다."),
+                      { code: "auth/startup-timeout" },
+                    ),
+                  ),
+                15000,
+              );
+            }),
+          ]);
+        } catch (error) {
+          if (!ownsAction()) return;
+          // Recovery is allowed only for redirect acquisition failure; a
+          // rejected server handshake is never retried here automatically.
+          if (!isIgnorableRedirectError(error)) throw error;
+          result = null;
+        }
+        if (!ownsAction()) return;
         const savedMode = getPendingLoginMode();
         const redirectMode = readRedirectAttemptMode();
-        const hasRedirectBreadcrumb = !!savedMode || !!redirectMode;
         const redirectedUser =
           result?.user ||
           (shouldReuseCurrentUserForRedirect(savedMode, redirectMode)
             ? auth.currentUser
             : null);
         if (!redirectedUser) {
-          if (hasRedirectBreadcrumb) {
+          if (savedMode || redirectMode) {
             clearRedirectAttempt();
             clearPendingLoginMode();
             setLoginNotice(
@@ -1384,101 +1571,60 @@ const Login: React.FC = () => {
           }
           return;
         }
-
-        const resolvedMode: LoginMode =
+        const mode: LoginMode =
           savedMode ||
           redirectMode ||
           (redirectedUser.email === TEACHER_EMAIL ? "teacher" : "student");
-        await finishLoginForRole(redirectedUser, resolvedMode);
+        const flow =
+          resumeFlowRef.current !== null &&
+          isLoginFlowCurrent(resumeFlowRef.current)
+            ? resumeFlowRef.current
+            : beginLoginFlow(true);
+        resumeFlowRef.current = flow;
+        activeActionFlowRef.current = flow;
+        try {
+          await finishLoginForRole(redirectedUser, mode, flow);
+        } catch (error) {
+          if (
+            ownsAction() &&
+            isLoginFlowCurrent(flow) &&
+            (error as Partial<AuthError>)?.code !== "auth/stale-attempt"
+          )
+            failLoginFlow(flow, error);
+          throw error;
+        }
+        if (!ownsAction() || !isLoginFlowCurrent(flow)) return;
         clearRedirectAttempt();
         setLoginNotice("");
-        markLoginPerf("westory-login-redirect-resume-end", {
-          recovered: "true",
-        });
+        markLoginPerf("westory-login-redirect-resume-end", { recovered: true });
         measureLoginPerf(
           "westory-redirect-resume",
           "westory-login-redirect-resume-start",
           "westory-login-redirect-resume-end",
         );
       } catch (error) {
-        if (isIgnorableRedirectError(error)) {
-          console.warn(
-            "Redirect state unavailable, skipping redirect recovery",
-            error,
-          );
-          if (getPendingLoginMode() || readRedirectAttemptMode()) {
-            clearRedirectAttempt();
-            clearPendingLoginMode();
-            setLoginNotice(
-              "로그인 화면으로 다시 돌아왔습니다. 학생 로그인 버튼을 다시 눌러주세요.",
-            );
-          }
-          return;
-        }
-
-        console.error("Redirect login failed", error);
-        const savedMode = getPendingLoginMode();
-        const redirectMode = readRedirectAttemptMode();
-        const recoveredUser = shouldReuseCurrentUserForRedirect(
-          savedMode,
-          redirectMode,
-        )
-          ? auth.currentUser
-          : null;
-        if (recoveredUser) {
-          const effectiveMode: LoginMode =
-            savedMode ||
-            redirectMode ||
-            (recoveredUser.email === TEACHER_EMAIL ? "teacher" : "student");
-          try {
-            await finishLoginForRole(recoveredUser, effectiveMode);
-            clearRedirectAttempt();
-            setLoginNotice("");
-            markLoginPerf("westory-login-redirect-resume-end", {
-              recovered: "fallback",
-            });
-            measureLoginPerf(
-              "westory-redirect-resume",
-              "westory-login-redirect-resume-start",
-              "westory-login-redirect-resume-end",
-            );
-            return;
-          } catch (recoveredError) {
-            if (
-              await suppressRecoveredStudentBootstrapAlert(
-                recoveredUser,
-                "redirect-resume",
-                recoveredError,
-              )
-            ) {
-              return;
-            }
-            error = recoveredError;
-          }
-        }
-        const activeUser = auth.currentUser;
         if (
-          activeUser &&
-          (await suppressRecoveredStudentBootstrapAlert(
-            activeUser,
-            "redirect-resume",
-            error,
-          ))
-        ) {
+          !ownsAction() ||
+          (error as Partial<AuthError>)?.code === "auth/stale-attempt"
+        )
           return;
-        }
         clearRedirectAttempt();
         clearPendingLoginMode();
-        alert(
-          `리다이렉트 로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요. (${(error as Partial<AuthError>)?.code || "unknown"})`,
-        );
+        setLoginNotice(getLoginFailureMessage(error));
       } finally {
-        setAuthBusy(false);
-        setRedirectRecoveryPending(false);
+        if (timer !== undefined) window.clearTimeout(timer);
+        if (ownsAction()) {
+          activeActionFlowRef.current = null;
+          setAuthBusy(false);
+          setRedirectRecoveryPending(false);
+        }
       }
     };
-
     void resolveRedirect();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [redirectRecoveryPending]);
 
   useEffect(() => {
@@ -1486,214 +1632,92 @@ const Login: React.FC = () => {
       autoResumeUidRef.current = null;
       return;
     }
-
-    if (loading || authBusy || redirectRecoveryPending) return;
-    if (preferredRole === "teacher" && !userData) return;
-    if (!isAllowedLoginEmail(currentUser.email)) {
-      void rejectUnauthorizedEmailLogin(currentUser.email);
+    if (loading || authBusy || redirectRecoveryPending || authPhase === "error")
       return;
-    }
-    if (autoResumeUidRef.current === currentUser.uid) return;
-
-    autoResumeUidRef.current = currentUser.uid;
-
-    const resumeAuthenticatedSession = async () => {
-      const resolvedRole: LoginMode =
-        canAccessTeacherPortal(userData, currentUser.email || "") ||
-        preferredRole === "teacher"
-          ? "teacher"
-          : "student";
-
-      if (resolvedRole === "teacher") {
-        saveRoleCache("teacher");
-        clearPendingLoginMode();
-        forceRoute(getDefaultTeacherRoute(userData, currentUser.email || ""));
-        return;
-      }
-
-      await goToDashboard();
-    };
-
-    void resumeAuthenticatedSession();
+    const key = `${authGeneration}:${currentUser.uid}`;
+    if (autoResumeUidRef.current === key) return;
+    autoResumeUidRef.current = key;
+    void goToDashboard();
   }, [
     authBusy,
     currentUser,
     loading,
-    navigate,
-    preferredRole,
     redirectRecoveryPending,
+    authPhase,
+    authGeneration,
     userData?.role,
   ]);
 
   const goToDashboard = async () => {
-    if (!currentUser) return;
-    markLoginPerf("westory-login-bootstrap-start", {
-      mode: "student",
-      source: "auto-resume",
-    });
-    if (preferredRole === "teacher" && !userData) {
-      setLoginNotice(
-        "교사 계정 정보를 확인하는 중입니다. 잠시만 기다려주세요.",
-      );
+    if (!currentUser || !isAuthAttemptCurrent(authGeneration, currentUser))
       return;
-    }
     if (!isAllowedLoginEmail(currentUser.email)) {
       await rejectUnauthorizedEmailLogin(currentUser.email);
       return;
     }
-    if (isTeacherUser) {
+    if (verifiedUser && userData && canUseTeacherPortal) {
       saveRoleCache("teacher");
       clearPendingLoginMode();
-      forceRoute(getDefaultTeacherRoute(userData, currentUser.email || ""));
+      forceRoute(
+        getDefaultTeacherRoute(userData, currentUser.email || ""),
+        currentUser,
+        authGeneration,
+      );
       return;
     }
-
     if (authBusy || authActionLockRef.current) return;
     authActionLockRef.current = true;
     setAuthBusy(true);
-
+    const flow =
+      resumeFlowRef.current !== null &&
+      isLoginFlowCurrent(resumeFlowRef.current)
+        ? resumeFlowRef.current
+        : beginLoginFlow(true);
+    resumeFlowRef.current = flow;
+    const operation = ++actionVersionRef.current;
+    activeActionFlowRef.current = flow;
     try {
-      const userRef = doc(db, "users", currentUser.uid);
-      const cachedStudent =
-        userData?.uid === currentUser.uid &&
-        isReturningConfirmedStudent(userData)
-          ? userData
-          : null;
-      let existing: Partial<UserData> | null = cachedStudent;
-      let userDocExists = !!cachedStudent;
-
-      if (!existing) {
-        const userSnap = await getDoc(userRef);
-        userDocExists = userSnap.exists();
-        existing = userSnap.exists()
-          ? (userSnap.data() as Partial<UserData>)
-          : null;
-        markLoginPerf("westory-login-user-doc-read", {
-          exists: userSnap.exists() ? "true" : "false",
-          source: "auto-resume",
-        });
-      } else {
-        markLoginPerf("westory-login-user-doc-read", {
-          exists: "cached",
-          source: "auto-resume",
-        });
-      }
-
-      const rosterProfile = shouldLookupStudentRosterProfile(existing)
-        ? await pickStudentRosterProfile(currentUser.email || "")
-        : null;
-      markLoginPerf("westory-login-roster-profile-read", {
-        hit: rosterProfile ? "true" : "false",
-        source: "auto-resume",
-      });
-      const setup = await completeStudentOnboarding(
+      await finishLoginForRole(
         currentUser,
-        existing,
-        rosterProfile,
+        canUseTeacherPortal ? "teacher" : "student",
+        flow,
       );
-      if (!setup) {
-        clearRoleCache();
+    } catch (error) {
+      if (
+        !mountedRef.current ||
+        actionVersionRef.current !== operation ||
+        !isLoginFlowCurrent(flow)
+      )
+        return;
+      if ((error as Partial<AuthError>)?.code !== "auth/stale-attempt") {
         clearPendingLoginMode();
         clearRedirectAttempt();
-        await signOut(auth);
-        return;
+        failLoginFlow(flow, error);
+        setLoginNotice(getStudentBootstrapFailureMessage(error));
       }
-
-      const updatePayload: Record<string, unknown> = {
-        uid: currentUser.uid,
-        email: currentUser.email || "",
-        photoURL: currentUser.photoURL || "",
-        role: "student",
-        privacyAgreed: setup.privacyAgreed,
-        consentAgreedItems: setup.consentAgreedItems,
-        lastLogin: serverTimestamp(),
-      };
-
-      if (setup.shouldPersistProfile) {
-        updatePayload.name = setup.name;
-        updatePayload.customNameConfirmed = true;
-        updatePayload.grade = setup.grade;
-        updatePayload.class = setup.classValue;
-        updatePayload.number = setup.number;
-      } else if (setup.profileIncomplete) {
-        console.warn(
-          "[Auth] Existing student profile is locked for self-edit; skipping profile rewrite during auto-resume.",
-          {
-            uid: currentUser.uid,
-          },
-        );
-      }
-
-      if (setup.newlyAgreedPrivacy) {
-        updatePayload.privacyAgreedAt = serverTimestamp();
-      }
-
-      if (!userDocExists) {
-        updatePayload.staffPermissions = [];
-        updatePayload.teacherPortalEnabled = false;
-        updatePayload.createdAt = serverTimestamp();
-      }
-
-      const requiresBlockingWrite =
-        !userDocExists ||
-        shouldBlockUserProfileWrite({
-          existing,
-          nextRole: "student",
-          nextStaffPermissions: [],
-          nextTeacherPortalEnabled: false,
-          onboardingResult: setup,
-        });
-
-      if (requiresBlockingWrite) {
-        await setDoc(userRef, updatePayload, { merge: true });
-      }
-
-      markLoginPerf("westory-login-role-resolved", {
-        role: "student",
-        targetPath: "/student/dashboard",
-        source: "auto-resume",
-      });
-      saveRoleCache("student");
-      clearPendingLoginMode();
-      markLoginPerf("westory-login-first-route-decided", {
-        targetPath: "/student/dashboard",
-        source: "auto-resume",
-      });
-      measureLoginPerf(
-        "westory-login-bootstrap",
-        "westory-login-bootstrap-start",
-        "westory-login-first-route-decided",
-      );
-      forceRoute("/student/dashboard");
-
-      if (userDocExists && !requiresBlockingWrite) {
-        scheduleDeferredUserMerge(
-          userRef,
-          updatePayload,
-          "student-auto-resume",
-        );
-      }
-    } catch (error) {
-      console.error("Failed to continue student onboarding", error);
-      clearPendingLoginMode();
-      clearRedirectAttempt();
-      if (
-        await suppressRecoveredStudentBootstrapAlert(
-          currentUser,
-          "auto-resume",
-          error,
-        )
-      ) {
-        return;
-      }
-      alert(getStudentBootstrapFailureMessage(error));
     } finally {
-      authActionLockRef.current = false;
-      setAuthBusy(false);
+      if (actionVersionRef.current === operation) {
+        activeActionFlowRef.current = null;
+        authActionLockRef.current = false;
+        setAuthBusy(false);
+      }
     }
   };
 
   const startGoogleLogin = async (mode: LoginMode) => {
+    const flow = beginLoginFlow();
+    resumeFlowRef.current = flow;
+    const operation = ++actionVersionRef.current;
+    activeActionFlowRef.current = flow;
+    const assertAcquisition = () => {
+      if (
+        !mountedRef.current ||
+        actionVersionRef.current !== operation ||
+        !isLoginFlowCurrent(flow)
+      )
+        throw staleLoginError();
+    };
+    let acquired = false;
     const provider = buildGoogleProvider();
     const useRedirect = shouldPreferRedirectLogin();
     setPendingLoginMode(mode);
@@ -1702,52 +1726,60 @@ const Login: React.FC = () => {
 
     try {
       if (useRedirect) {
-        await authPersistenceReady;
+        await awaitLoginNetwork(authPersistenceReady);
+        assertAcquisition();
         markRedirectAttempt(mode);
         console.info("[Auth] Starting Google redirect login", { mode });
         setLoginNotice(getRedirectStartMessage(mode));
-        await signInWithRedirect(auth, provider);
+        await awaitLoginNetwork(signInWithRedirect(auth, provider));
         return;
       }
       console.info("[Auth] Starting Google popup login", { mode });
       const result = await signInWithPopup(auth, provider);
-      await authPersistenceReady;
-      await finishLoginForRole(result.user, mode);
+      acquired = true;
+      if (!mountedRef.current || !isLoginFlowCurrent(flow)) {
+        await discardStaleLoginUser(result.user, flow);
+        return;
+      }
+      await awaitLoginNetwork(authPersistenceReady);
+      assertAcquisition();
+      await finishLoginForRole(result.user, mode, flow);
     } catch (error) {
-      if (shouldFallbackToRedirectLogin(error)) {
+      if (
+        !mountedRef.current ||
+        actionVersionRef.current !== operation ||
+        !isLoginFlowCurrent(flow)
+      )
+        return;
+      if (!acquired && shouldFallbackToRedirectLogin(error)) {
         try {
-          await authPersistenceReady;
+          await awaitLoginNetwork(authPersistenceReady);
+          assertAcquisition();
           markRedirectAttempt(mode);
           console.info("[Auth] Falling back to Google redirect login", {
             mode,
             code: (error as Partial<AuthError>)?.code || "unknown",
           });
           setLoginNotice(getRedirectStartMessage(mode));
-          await signInWithRedirect(auth, provider);
+          await awaitLoginNetwork(signInWithRedirect(auth, provider));
           return;
         } catch (redirectError) {
-          console.error("Redirect fallback login failed", redirectError);
+          console.error("Redirect fallback login failed");
         }
       }
 
-      console.error("Login failed", error);
+      if ((error as Partial<AuthError>)?.code === "auth/stale-attempt") return;
+      assertAcquisition();
+      failLoginFlow(flow, error);
       clearPendingLoginMode();
       clearRedirectAttempt();
-      const activeUser = auth.currentUser;
-      if (
-        activeUser &&
-        (await suppressRecoveredStudentBootstrapAlert(
-          activeUser,
-          "finish-login",
-          error,
-        ))
-      ) {
-        return;
-      }
-      alert(getLoginFailureMessage(error));
+      setLoginNotice(getLoginFailureMessage(error));
     } finally {
-      authActionLockRef.current = false;
-      setAuthBusy(false);
+      if (actionVersionRef.current === operation) {
+        activeActionFlowRef.current = null;
+        authActionLockRef.current = false;
+        setAuthBusy(false);
+      }
     }
   };
 
@@ -1762,7 +1794,7 @@ const Login: React.FC = () => {
 
     // Re-enter chooser through the dedicated cleanup path when a cached
     // Firebase session already exists in this regular-tab browser state.
-    if (currentUser) {
+    if (auth.currentUser) {
       await handleSwitchAccount(mode);
       return;
     }
@@ -1790,10 +1822,10 @@ const Login: React.FC = () => {
 
     let signOutSucceeded = false;
     try {
-      await signOut(auth);
+      await logout();
       signOutSucceeded = true;
     } catch (error) {
-      console.error("Failed to sign out before switching account", error);
+      console.error("Failed to sign out before switching account");
     } finally {
       if (retryMode) {
         if (!signOutSucceeded) {
@@ -1834,7 +1866,7 @@ const Login: React.FC = () => {
         );
       }
     } catch (error) {
-      console.error("Policy load error:", error);
+      console.error("Policy load error:");
       setPolicyHtml(
         '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>',
       );
@@ -1842,6 +1874,16 @@ const Login: React.FC = () => {
       setPolicyLoading(false);
     }
   };
+
+  if (authPhase === "error") {
+    return (
+      <AuthRecoveryState
+        error={authError}
+        onRetry={retryAuth}
+        onRestart={() => handleSwitchAccount()}
+      />
+    );
+  }
 
   if (loading)
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
@@ -2029,10 +2071,18 @@ const Login: React.FC = () => {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 md:p-8 mx-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="student-profile-title"
+            data-auth-dialog
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-center mb-5">
-              <h2 className="text-2xl font-bold text-gray-800">
+              <h2
+                id="student-profile-title"
+                className="text-2xl font-bold text-gray-800"
+              >
                 {"\u{1F44B} 반가워요!"}
               </h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -2047,6 +2097,7 @@ const Login: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  aria-label="이메일"
                   value={profileForm.email}
                   readOnly
                   className="w-full bg-gray-100 border border-gray-200 rounded-lg p-3 text-gray-500 text-sm font-mono"
@@ -2059,6 +2110,7 @@ const Login: React.FC = () => {
                     학년
                   </label>
                   <select
+                    aria-label="학년"
                     value={profileForm.grade}
                     onChange={(e) =>
                       setProfileForm((prev) => ({
@@ -2080,6 +2132,7 @@ const Login: React.FC = () => {
                     반
                   </label>
                   <select
+                    aria-label="반"
                     value={profileForm.className}
                     onChange={(e) =>
                       setProfileForm((prev) => ({
@@ -2102,6 +2155,7 @@ const Login: React.FC = () => {
                     번호
                   </label>
                   <select
+                    aria-label="번호"
                     value={profileForm.number}
                     onChange={(e) =>
                       setProfileForm((prev) => ({
@@ -2132,6 +2186,7 @@ const Login: React.FC = () => {
                   lang="ko"
                   inputMode="text"
                   type="text"
+                  aria-label="이름"
                   value={profileForm.name}
                   maxLength={4}
                   onChange={(e) => handleProfileNameChange(e.target.value)}
@@ -2156,7 +2211,7 @@ const Login: React.FC = () => {
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 onClick={handleProfileCancel}
-                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
+                className="min-h-11 px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
               >
                 취소
               </button>
@@ -2177,13 +2232,21 @@ const Login: React.FC = () => {
         >
           <div
             className="bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-4xl p-6 md:p-8 mx-4 max-h-[90vh] flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="student-consent-title"
+            data-auth-dialog
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-center mb-5 shrink-0">
               <div className="bg-blue-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
                 {"\u{1F6E1}\uFE0F"}
               </div>
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+              <h2
+                id="student-consent-title"
+                className="text-2xl md:text-3xl font-bold text-gray-900"
+              >
                 개인정보 활용 동의
               </h2>
               <p className="text-gray-600 text-base mt-2 font-medium">
@@ -2295,7 +2358,7 @@ const Login: React.FC = () => {
             <div className="shrink-0 flex items-center justify-end gap-2">
               <button
                 onClick={handleConsentCancel}
-                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
+                className="min-h-11 px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
               >
                 취소
               </button>
