@@ -140,7 +140,7 @@ const result = await build({
   metafile: true,
   format: "esm",
   platform: "browser",
-  loader: { ".css": "empty", ".svg": "dataurl" },
+  loader: { ".css": "empty", ".svg": "dataurl", ".webp": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -176,6 +176,7 @@ const cssFiles = [
   "src/assets/index.css",
   "src/components/layout/teacherLayout.css",
   "src/components/layout/studentLayout.css",
+  "src/components/public-entry/public-entry.css",
 ];
 const css = (
   await Promise.all(
@@ -224,6 +225,8 @@ report.sourceSha256 = Object.fromEntries(
       "src/pages/Login.tsx",
       "src/components/layout/MainLayout.tsx",
       "src/components/common/AuthRecoveryState.tsx",
+      "src/components/public-entry/PublicEntry.tsx",
+      "src/components/public-entry/public-entry.css",
     ].map(async (file) => [
       file,
       createHash("sha256")
@@ -289,7 +292,13 @@ const contrastRatio = (foreground, background) => {
   );
   return (high + 0.05) / (low + 0.05);
 };
-const newPage = async (width, scenario, route = "/", touch = false) => {
+const newPage = async (
+  width,
+  scenario,
+  route = "/",
+  touch = false,
+  variant = "public",
+) => {
   const page = await browser.newPage({
     viewport: { width, height: 900 },
     hasTouch: touch,
@@ -301,7 +310,9 @@ const newPage = async (width, scenario, route = "/", touch = false) => {
     report.externalRequests.push(new URL(route.request().url()).origin);
     return route.abort();
   });
-  await page.goto(`${origin}/?scenario=${scenario}#${route}`);
+  await page.goto(
+    `${origin}/?scenario=${scenario}${variant === "classic" ? "&entry=classic" : ""}#${route}`,
+  );
   await page.waitForTimeout(150);
   return page;
 };
@@ -391,7 +402,7 @@ try {
       .getByRole("button", { name: "다시 로그인", exact: true })
       .click();
     await page.waitForURL(/#\/$/);
-    await page.getByRole("heading", { name: "Westory", exact: true }).waitFor();
+    await page.locator(".public-entry").waitFor();
     await noProtected(page);
     check("restart-logs-out-and-opens-login", { width });
     await capture(page, "restart-signed-out", width);
@@ -418,13 +429,44 @@ try {
     await capture(onboard, "onboarding", width);
     const dialog = onboard.getByRole("dialog");
     await dialog.waitFor();
+    assert.equal(
+      await dialog.count(),
+      1,
+      "Exactly one accessible dialog must be exposed",
+    );
     assert.equal(await dialog.getAttribute("aria-modal"), "true");
+    assert.equal(
+      await onboard
+        .locator(".public-entry")
+        .evaluate((element) => element.hasAttribute("inert")),
+      true,
+    );
+    assert.equal(
+      await onboard.evaluate(() => document.body.style.overflow),
+      "hidden",
+    );
+    await onboard
+      .getByRole("textbox", { name: "이름", exact: true })
+      .evaluate((element) =>
+        element.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Escape",
+            isComposing: true,
+            bubbles: true,
+            cancelable: true,
+          }),
+        ),
+      );
+    await dialog.waitFor();
+    check("public-modal-inert-scroll-lock-and-composing-escape-safe", {
+      width,
+    });
     const modalFocus = await onboard.evaluate(() => {
-      const overlay = document.querySelector(".fixed.inset-0");
+      const overlay = document.querySelector("[data-auth-dialog]");
       return {
         insideModal: Boolean(overlay?.contains(document.activeElement)),
         tag: document.activeElement?.tagName,
-        dialogRole: overlay?.querySelector('[role="dialog"]') !== null,
+        dialogRole: overlay?.getAttribute("role") === "dialog",
       };
     });
     check("onboarding-modal-keyboard-entry", { width, ...modalFocus });
@@ -532,22 +574,136 @@ try {
     await capture(complete, "onboarding-completed", width);
     await complete.close();
     const popup = await newPage(width, "popup-cancel");
-    await popup.getByRole("button", { name: /학생 로그인/ }).click();
     await popup
-      .getByRole("heading", { name: "Westory", exact: true })
-      .waitFor();
+      .getByRole("button", { name: /학생 로그인/ })
+      .first()
+      .click();
+    await popup.locator(".public-entry").waitFor();
     await popup.waitForFunction(() =>
       window.authQa.events.includes("login-flow-failed"),
     );
     assert.equal(await popup.getByRole("status").count(), 0);
     assert.equal(
-      await popup.getByRole("button", { name: /학생 로그인/ }).isEnabled(),
+      await popup
+        .getByRole("button", { name: /학생 로그인/ })
+        .first()
+        .isEnabled(),
       true,
     );
     await noProtected(popup);
     check("popup-cancel-exits-spinner-and-restores-login-action", { width });
     await capture(popup, "popup-cancel", width);
     await popup.close();
+  }
+  for (const width of [320, 390, 768, 1280]) {
+    const entry = await newPage(width, "signed-out");
+    await entry.locator(".public-entry").waitFor();
+    await entry.locator(".entry-hero-screen img").waitFor();
+    await entry.waitForFunction(() => {
+      const image = document.querySelector(".entry-hero-screen img");
+      return image?.complete && image.naturalWidth > 0;
+    });
+    assert.equal(
+      await entry
+        .locator(".entry-header")
+        .evaluate((element) => getComputedStyle(element).display),
+      "flex",
+      "Actual PublicEntry CSS must be applied",
+    );
+    await noOverflow(entry, "actual-public-entry", width);
+    const height = await entry.evaluate(
+      () => document.documentElement.scrollHeight,
+    );
+    for (let y = 0; y < height; y += 850) {
+      await entry.evaluate((position) => window.scrollTo(0, position), y);
+      await entry.waitForTimeout(30);
+    }
+    await entry.evaluate(() => window.scrollTo(0, 0));
+    await capture(entry, "actual-public-entry", width);
+    check("public-local-screen-assets-loaded", {
+      width,
+      heroNaturalWidth: await entry
+        .locator(".entry-hero-screen img")
+        .evaluate((image) => image.naturalWidth),
+    });
+    await entry.close();
+  }
+  for (const width of [390, 768, 1280]) {
+    const classic = await newPage(
+      width,
+      "onboarding",
+      "/",
+      width === 390,
+      "classic",
+    );
+    const dialog = classic.getByRole("dialog");
+    await dialog.waitFor();
+    assert.equal(await dialog.count(), 1);
+    assert.equal(await classic.locator(".public-entry").count(), 0);
+    assert.equal(
+      await dialog.evaluate((element) =>
+        element.contains(document.activeElement),
+      ),
+      true,
+    );
+    await classic
+      .getByRole("textbox", { name: "이름", exact: true })
+      .evaluate((element) =>
+        element.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Escape",
+            isComposing: true,
+            bubbles: true,
+            cancelable: true,
+          }),
+        ),
+      );
+    await dialog.waitFor();
+    for (let i = 0; i < 10; i++) {
+      await classic.keyboard.press("Tab");
+      assert.equal(
+        await dialog.evaluate((element) =>
+          element.contains(document.activeElement),
+        ),
+        true,
+      );
+    }
+    await noProtected(classic);
+    await noOverflow(classic, "classic-onboarding", width);
+    await capture(classic, "classic-onboarding", width);
+    await classic.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    await noProtected(classic);
+    await classic
+      .getByRole("heading", { name: "Westory", exact: true })
+      .waitFor();
+    check("classic-modal-focus-ime-tab-escape-and-signout", { width });
+    await classic.close();
+    const fallback = await newPage(
+      width,
+      "popup-cancel",
+      "/",
+      false,
+      "classic",
+    );
+    await fallback
+      .getByRole("button", { name: /학생 로그인/ })
+      .first()
+      .click();
+    await fallback.waitForFunction(() =>
+      window.authQa.events.includes("login-flow-failed"),
+    );
+    assert.equal(
+      await fallback
+        .getByRole("button", { name: /학생 로그인/ })
+        .first()
+        .isEnabled(),
+      true,
+    );
+    await noProtected(fallback);
+    await capture(fallback, "classic-popup-cancel", width);
+    check("classic-login-cancel-recovery", { width });
+    await fallback.close();
   }
   const redirectPage = await newPage(390, "redirect-timeout");
   const redirectStarted = Date.now();
@@ -559,9 +715,15 @@ try {
   await redirectPage
     .getByText(/auth\/startup-timeout/)
     .waitFor({ timeout: 20000 });
-  await redirectPage.getByRole("button", { name: /학생 로그인/ }).waitFor();
+  await redirectPage
+    .getByRole("button", { name: /학생 로그인/ })
+    .first()
+    .waitFor();
   assert.equal(
-    await redirectPage.getByRole("button", { name: /학생 로그인/ }).isEnabled(),
+    await redirectPage
+      .getByRole("button", { name: /학생 로그인/ })
+      .first()
+      .isEnabled(),
     true,
   );
   assert.equal(await redirectPage.getByRole("status").count(), 0);

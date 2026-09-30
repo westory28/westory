@@ -64,3 +64,15 @@ The deployed openApplicationSession source was previously verified read-only aga
 For release rollback, retain the prior verified Vercel production deployment/commit. If login smoke fails, restore that prior deployment to the production domain and verify teacher/student access again. Revert this frontend commit through the integration branch for source history. No backend or rules rollback should be necessary because this patch does not change them.
 
 If live stage timing still shows long session waits, the next separately reviewed candidates are backend cold-start/module loading and the deployed session transaction path, after recovering and reconciling its authoritative source. Persistence/redirect initialization remains a separate compatibility investigation; do not change it on the strength of synthetic timing.
+
+## Integrated release checkpoint - 2026-10-01
+
+The patch was integrated onto remote main `7b2d268749c25b5c878e364f2d5a883714aa674c` in `%TEMP%\westory-release-20261001\westory`, branch `codex/login-release-20261001`. Public entry and the Joseon rank correction are preserved. Auth implementation commit: `974d5ab19f5070a58512fc5323f3ad64679e8c3f`. The earlier scope/verification sections describe the original independent patch, not current deployment status.
+
+Integration resolves Login's dialog semantics with a single outer dialog, keeps accessible labels, and runs the legacy focus handler only for `?entry=classic`; PublicEntry owns the normal focus handling. Both ignore IME composition Escape. A separate read-only safety review approved the integration. No auth core behavior changed during integration.
+
+Repeated checks: 63 auth regression cases; route-gate/recovery tests; existing session proof tests; controlled performance comparison; full-source Prettier; TypeScript; production build and semester archive verification all passed. Integrated browser QA passed 81 checks with 51 screenshots, including PublicEntry at 320/390/768/1280px and classic at 390/768/1280px, modal focus/IME/scroll locking, retry and server acknowledgement before rendering. Evidence: sibling `../evidence/auth-startup-browser/report.json`. These are synthetic-auth browser checks, not real OAuth or production speed measurements.
+
+Production read-only baseline: student maintenance enabled, blockedRoles includes student, one existing bypass entry (identity omitted). Five Joseon grades and point policy hash match the verified rank task. Baseline production deployment: `dpl_6zkEgbnqeNFA2hQfP8YtNTPJS4H3`, source main `7b2d268749c25b5c878e364f2d5a883714aa674c`. Retain this deployment for rollback. Settings hashes/update times are in `%TEMP%\westory-login-preservation-20261001\evidence\before.json`; compare after frontend release. Functions/rules and all access/rank settings remain outside the deployment scope.
+
+Release status at this commit: integration and local validation complete; production push, domain verification and live-account smoke must be recorded in the external release evidence after deployment. Do not interpret this checkpoint as completed production verification.
