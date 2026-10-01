@@ -181,8 +181,7 @@ export function LessonScene() {
           <div className="entry-slide-copy" aria-live="polite">
             <span className="entry-slide-count">0{slide + 1} / 03</span>
             <h3>
-              {lessonSlides[slide].title[0]}
-              <br />
+              {lessonSlides[slide].title[0]} <br />
               <span>{lessonSlides[slide].title[1]}</span>
             </h3>
             <p>{lessonSlides[slide].description}</p>

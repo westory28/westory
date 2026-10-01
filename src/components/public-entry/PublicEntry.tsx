@@ -26,8 +26,8 @@ import "./entry-detail.css";
 import "./entry-space.css";
 import "./entry-flow.css";
 import "./entry-motion-control.css";
-import "./entry-polish.css";
 import "./entry-timing.css";
+import "./entry-polish.css";
 interface Props {
   controls: React.ReactNode;
   onStudentLogin: () => void;
@@ -293,7 +293,8 @@ function PublicEntryContent({
               {teacher}
             </div>
             <p className="entry-school">
-              학교 Google 계정(@{schoolDomain})으로 이용할 수 있습니다.
+              학교 Google 계정<span>(@{schoolDomain})</span>으로 이용할 수
+              있습니다.
             </p>
           </div>
         </section>
