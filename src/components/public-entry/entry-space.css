@@ -5,7 +5,7 @@
 .public-entry .entry-header {
   inset: 16px auto auto 50%;
   transform: translateX(-50%);
-  width: min(1040px, calc(100% - 32px));
+  width: min(1040px, calc(100% - 32px - var(--entry-scrollbar, 0px)));
   height: 64px;
   padding: 8px 24px;
   gap: 24px;
@@ -17,6 +17,12 @@
 }
 .public-entry .entry-header .entry-wordmark {
   font-size: 36px;
+}
+.public-entry[data-finale-locked="true"] .entry-header {
+  margin-left: calc(var(--entry-scrollbar, 0px) * -0.5);
+}
+.public-entry[data-finale-locked="true"] .entry-back-top {
+  margin-right: var(--entry-scrollbar, 0px);
 }
 .public-entry .entry-header-actions > button {
   min-height: 44px;
@@ -373,10 +379,25 @@
     gap: 24px;
   }
 }
+@media (max-width: 1023px) and (prefers-reduced-motion: no-preference) {
+  .public-entry[data-motion="on"] .entry-feature-visual {
+    transform: translateY(calc((0.5 - var(--pass)) * 12px));
+  }
+  .public-entry[data-motion="on"] .entry-map-composition .entry-device {
+    transform: rotateY(calc(-3deg + var(--ribbon) * 4deg));
+  }
+  .public-entry[data-motion="on"] .entry-hero-tablet {
+    transform: perspective(1300px) translateY(calc((0.5 - var(--pass)) * 12px))
+      rotateX(calc(4deg - var(--pass) * 4deg));
+  }
+  .public-entry[data-motion="on"] .entry-hero-visual .entry-hero-phone {
+    transform: translateY(calc((0.5 - var(--pass)) * 24px)) rotateZ(-3deg);
+  }
+}
 @media (max-width: 767px) {
   .public-entry .entry-header {
     top: 8px;
-    width: calc(100% - 24px);
+    width: calc(100% - 24px - var(--entry-scrollbar, 0px));
     padding: 8px 12px;
     border-radius: 16px;
     gap: 8px;

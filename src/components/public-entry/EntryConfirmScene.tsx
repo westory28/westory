@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
 import EntryRibbon from "./EntryRibbon";
 import { useEntrySceneProgress } from "./useEntryMotion";
@@ -24,14 +24,92 @@ const screens = [
     title: "확인 후 서명",
     image: signature,
     description: "확인한 내용을 서명으로 마무리합니다.",
-    alt: "실제 수행평가 확인 및 서명 화면: 가상 점수와 비어 있는 서명 칸",
+    alt: "실제 수행평가 확인 및 서명 화면: 가상 점수와 위스토리 손글씨 서명 예시",
   },
 ];
+
+// Invented handwriting of the brand, never a student's name or signature.
+const signatureStrokes = [
+  {
+    d: "M103 43 C132 38 142 68 116 80 C91 91 76 69 88 51 C92 45 98 43 103 43",
+    delay: 0,
+    duration: 180,
+  },
+  { d: "M72 106 Q104 101 140 98", delay: 180, duration: 90 },
+  { d: "M108 103 Q106 126 104 151", delay: 270, duration: 90 },
+  { d: "M157 43 Q154 94 157 151", delay: 360, duration: 100 },
+  { d: "M224 46 Q216 78 192 96", delay: 460, duration: 90 },
+  { d: "M220 61 Q235 83 249 91", delay: 550, duration: 90 },
+  { d: "M184 132 Q220 127 264 126", delay: 640, duration: 100 },
+  { d: "M304 47 Q331 42 366 42", delay: 740, duration: 60 },
+  { d: "M305 47 L301 96 Q334 91 369 91", delay: 800, duration: 100 },
+  { d: "M305 71 Q332 68 357 67", delay: 900, duration: 80 },
+  { d: "M339 109 Q339 125 338 143", delay: 980, duration: 120 },
+  { d: "M298 148 Q336 142 384 142", delay: 1100, duration: 100 },
+  {
+    d: "M427 49 Q452 45 479 44 L476 79 L427 83 L425 116 Q450 114 485 110",
+    delay: 1200,
+    duration: 220,
+  },
+  { d: "M512 40 Q507 92 510 150", delay: 1420, duration: 180 },
+];
+
+function SignatureWriting({ imageReady }: { imageReady: boolean }) {
+  const surface = useRef<SVGSVGElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = surface.current;
+    if (!node) return;
+    if (!("IntersectionObserver" in window)) {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting || entry.intersectionRatio < 0.35) return;
+        setVisible(true);
+        observer.disconnect();
+      },
+      { threshold: 0.35, rootMargin: "-80px 0px -8% 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <svg
+      ref={surface}
+      className="entry-confirm-signature"
+      viewBox="0 0 660 210"
+      data-writing={visible && imageReady}
+      aria-hidden="true"
+    >
+      <g transform="translate(35 20)">
+        {signatureStrokes.map((stroke, index) => (
+          <path
+            key={index}
+            d={stroke.d}
+            pathLength="1"
+            style={
+              {
+                "--stroke-delay": `${stroke.delay}ms`,
+                "--stroke-duration": `${stroke.duration}ms`,
+              } as CSSProperties
+            }
+          />
+        ))}
+      </g>
+    </svg>
+  );
+}
 
 export default function EntryConfirmScene() {
   const root = useRef<HTMLElement>(null);
   const progress = useEntrySceneProgress(root);
   const [slide, setSlide] = useState(0);
+  const [signatureImageReady, setSignatureImageReady] = useState(false);
+  const [signatureReplay, setSignatureReplay] = useState(0);
   useEffect(() => {
     if (
       innerHeight < 700 ||
@@ -83,7 +161,18 @@ export default function EntryConfirmScene() {
                     height="960"
                     loading="lazy"
                     decoding="async"
+                    onLoad={
+                      index === 2
+                        ? () => setSignatureImageReady(true)
+                        : undefined
+                    }
                   />
+                  {index === 2 && slide === 2 && (
+                    <SignatureWriting
+                      key={signatureReplay}
+                      imageReady={signatureImageReady}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -97,7 +186,10 @@ export default function EntryConfirmScene() {
                 key={screen.title}
                 type="button"
                 aria-pressed={slide === index}
-                onClick={() => setSlide(index)}
+                onClick={() => {
+                  setSlide(index);
+                  if (index === 2) setSignatureReplay((current) => current + 1);
+                }}
               >
                 <span>0{index + 1}</span>
                 {screen.title}
@@ -105,7 +197,7 @@ export default function EntryConfirmScene() {
             ))}
           </div>
           <p className="entry-confirm-example">
-            실제 성적 확인 화면 · 가상 점수 예시
+            실제 성적 확인 화면 · 가상 점수·서명 예시
           </p>
         </div>
       </div>

@@ -31,8 +31,8 @@ function brush(curves: Curve[], width: number, height: number) {
         dy = after[1] - before[1];
       const length = Math.hypot(dx, dy) || 1;
       const pressure =
-        (width < 768 ? 2.6 : 5.2) *
-        (0.2 + Math.sin((i / (points.length - 1)) * Math.PI * 3) ** 2);
+        (width < 768 ? 2 : 4) *
+        (0.25 + 0.75 * Math.sin((i / (points.length - 1)) * Math.PI) ** 2);
       const offset = direction * pressure * (strand ? 0.58 : 1);
       return [
         p[0] - (dy / length) * offset,
@@ -70,162 +70,103 @@ export default function EntryRibbon({
     if (!stage) return;
     const protectedText = Array.from(
       stage.querySelectorAll<HTMLElement>(
-        ".entry-heading, .entry-hero-copy h1, .entry-hero-copy > .entry-eyebrow, .entry-hero-copy > .entry-benefit, .entry-hero-copy > .entry-login, .entry-deck-heading, .entry-confirm-copy, .entry-record-value, .entry-record-dates, .entry-record-tags, .entry-mypage-demo-note, :scope > .entry-eyebrow, :scope > .entry-motion-title",
+        ".entry-motion-title .entry-type-mask, .entry-hero-copy h1, .entry-eyebrow, .entry-benefit, .entry-login, .entry-finale-phrase, .entry-record-value, .entry-record-dates, .entry-record-tags, .entry-mypage-demo-note",
       ),
     );
     const measure = () => {
       const width = stage.offsetWidth,
         height = stage.offsetHeight;
       if (!width || !height) return;
-      const mobile = width < 768;
+      const compact = width < 1024;
+      const stageRect = stage.getBoundingClientRect();
       let curves: Curve[];
       if (variant === "finish") {
         const target = stage.querySelector<HTMLElement>(".entry-finale-story");
-        const sr = stage.getBoundingClientRect(),
-          tr = target?.getBoundingClientRect();
+        const tr = target?.getBoundingClientRect();
         const end: Point = tr
           ? [
-              (tr.left + tr.width * 0.68 - sr.left) / width,
-              (tr.top + tr.height * 0.6 - sr.top) / height,
+              (tr.left + tr.width * 0.68 - stageRect.left) / width,
+              (tr.top + tr.height * 0.6 - stageRect.top) / height,
             ]
           : [0.65, 0.5];
+        // A single gesture arrives directly in the orange word, without a loop.
         curves = [
-          [
-            [0.5, 0],
-            [0.5, 0.12],
-            [0.18, 0.15],
-            [0.24, 0.35],
-          ],
-          [
-            [0.24, 0.35],
-            [0.3, 0.63],
-            [end[0] - 0.2, end[1]],
-            [end[0], end[1]],
-          ],
+          [[0.5, 0], [0.5, end[1] * 0.35], [end[0] - 0.2, end[1] * 0.8], end],
         ];
-      } else if (variant === "hero") {
-        curves = mobile
-          ? [
-              [
-                [0.5, 0],
-                [0.97, 0.1],
-                [0.98, 0.48],
-                [0.91, 0.68],
-              ],
-              [
-                [0.91, 0.68],
-                [0.86, 0.84],
-                [0.06, 0.9],
-                [0.09, 0.72],
-              ],
-              [
-                [0.09, 0.72],
-                [0.1, 0.57],
-                [0.75, 0.88],
-                [0.5, 1],
-              ],
-            ]
-          : [
-              [
-                [0.5, 0],
-                [0.73, 0.1],
-                [0.98, 0.02],
-                [0.97, 0.43],
-              ],
-              [
-                [0.97, 0.43],
-                [0.97, 0.8],
-                [0.4, 0.87],
-                [0.47, 0.56],
-              ],
-              [
-                [0.47, 0.56],
-                [0.51, 0.36],
-                [0.77, 0.83],
-                [0.5, 1],
-              ],
-            ];
-      } else if (variant === "wide") {
+      } else {
+        const anchor = stage.querySelector<HTMLElement>(
+          ".entry-hero-mask:last-child, .entry-motion-title .entry-type-mask:last-child",
+        );
+        const ar = anchor?.getBoundingClientRect();
+        const text = anchor?.firstElementChild as HTMLElement | null;
+        const textWidth = Math.min(
+          ar?.width || width * 0.4,
+          text?.offsetWidth || width * 0.4,
+        );
+        const centered =
+          anchor && getComputedStyle(anchor).textAlign === "center";
+        const textLeft = ar
+          ? ar.left -
+            stageRect.left +
+            (centered ? (ar.width - textWidth) / 2 : 0)
+          : width * 0.3;
+        const clampX = (x: number) => Math.max(0.06, Math.min(0.94, x));
+        const left = clampX((textLeft + textWidth * 0.08) / width);
+        const right = clampX((textLeft + textWidth * 0.92) / width);
+        const titleY = Math.max(
+          0.1,
+          Math.min(0.72, ar ? (ar.bottom - stageRect.top + 8) / height : 0.3),
+        );
+        // Read stable line-box geometry, not the animated inner text transform.
+        const reversed = variant === "left" && !compact;
+        const start: Point = [reversed ? right : left, titleY];
+        const end: Point = [reversed ? left : right, titleY];
+        const side = reversed ? 0.04 : 0.96;
+        const exitY = Math.max(titleY + 0.1, 0.76);
+        const outside = reversed
+          ? Math.min(0.975, start[0] + 32 / width)
+          : Math.max(0.025, start[0] - 32 / width);
         curves = [
           [
             [0.5, 0],
-            [0.5, 0.12],
-            [0.98, 0.08],
-            [0.96, 0.52],
+            [0.5, titleY * 0.1],
+            [outside, titleY * 0.25],
+            [outside, titleY * 0.6],
           ],
           [
-            [0.96, 0.52],
-            [0.97, 0.96],
-            [0.06, 0.94],
-            [0.04, 0.65],
+            [outside, titleY * 0.6],
+            [outside, titleY * 0.85],
+            [outside, titleY],
+            start,
           ],
           [
-            [0.04, 0.65],
-            [0.04, 0.5],
-            [0.5, 0.88],
+            start,
+            [start[0] + (end[0] - start[0]) / 3, titleY],
+            [start[0] + ((end[0] - start[0]) * 2) / 3, end[1]],
+            end,
+          ],
+          [
+            end,
+            [side, end[1] + 0.06],
+            [side, Math.max(end[1] + 0.07, exitY - 0.12)],
+            [side, exitY],
+          ],
+          [
+            [side, exitY],
+            [side, 0.91],
+            [0.5, 0.94],
             [0.5, 1],
           ],
         ];
-      } else {
-        curves = mobile
-          ? [
-              [
-                [0.5, 0],
-                [0.18, 0.07],
-                [0.98, 0.29],
-                [0.96, 0.56],
-              ],
-              [
-                [0.96, 0.56],
-                [0.95, 0.99],
-                [0.02, 0.9],
-                [0.04, 0.59],
-              ],
-              [
-                [0.04, 0.59],
-                [0.08, 0.48],
-                [0.49, 0.91],
-                [0.5, 1],
-              ],
-            ]
-          : [
-              [
-                [0.5, 0],
-                [0.53, 0.14],
-                [0.97, 0.08],
-                [0.96, 0.48],
-              ],
-              [
-                [0.96, 0.48],
-                [0.96, 0.97],
-                [0.41, 0.86],
-                [0.43, 0.54],
-              ],
-              [
-                [0.43, 0.54],
-                [0.45, 0.35],
-                [0.5, 0.85],
-                [0.5, 1],
-              ],
-            ];
+        if (variant === "hero") curves = curves.slice(2);
       }
-      if (variant !== "finish") {
-        curves[0][1] = [0.5, 0.12];
-        curves[curves.length - 1][2] = [0.5, 0.88];
-      }
-      if (variant === "left") {
-        curves = curves.map(
-          (curve) => curve.map(([x, y]) => [1 - x, y] as Point) as Curve,
-        );
-      }
-      const stageRect = stage.getBoundingClientRect();
       const textBounds = protectedText.map((element) => {
         const rect = element.getBoundingClientRect();
         return {
-          x: rect.left - stageRect.left - 8,
-          y: rect.top - stageRect.top - 8,
-          width: rect.width + 16,
-          height: rect.height + 16,
+          x: rect.left - stageRect.left - 4,
+          y: rect.top - stageRect.top - 4,
+          width: rect.width + 8,
+          height: rect.height + 8,
         };
       });
       setShape({ ...brush(curves, width, height), width, height, textBounds });

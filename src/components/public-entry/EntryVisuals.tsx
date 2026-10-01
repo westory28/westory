@@ -2,7 +2,7 @@ import React from "react";
 
 export function FinaleTitle() {
   return (
-    <div className="entry-finale-art" data-entry-reveal>
+    <div className="entry-finale-art">
       <h2
         id="entry-finish-title"
         className="entry-finale-title"

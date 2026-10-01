@@ -71,7 +71,12 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
     let frame = 0;
     const update = () => {
       frame = 0;
-      if (document.hidden || preference.matches) return;
+      if (
+        document.hidden ||
+        preference.matches ||
+        page.dataset.finaleLocked === "true"
+      )
+        return;
       const viewport = window.innerHeight;
       // Read layout in one pass, then write only compositor properties via CSS variables.
       const positions = scenes.map((scene) => ({
@@ -104,7 +109,9 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
       }
     };
     const request = () => {
-      page.dataset.scrolled = String(window.scrollY > 600);
+      page.dataset.scrolled = String(
+        window.scrollY > 600 || page.dataset.finaleLocked === "true",
+      );
       if (!frame && !document.hidden && !preference.matches)
         frame = window.requestAnimationFrame(update);
     };

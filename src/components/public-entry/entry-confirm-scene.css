@@ -37,6 +37,46 @@
   height: 100%;
   object-fit: contain;
 }
+/* The source is 1280×960; its signature pad is x310/y558, 660×210. */
+.public-entry .entry-confirm-signature {
+  position: absolute;
+  left: 24.21875%;
+  top: 58.125%;
+  width: 51.5625%;
+  height: 21.875%;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+}
+.public-entry .entry-confirm-signature[data-writing="true"] {
+  opacity: 1;
+}
+.public-entry .entry-confirm-signature path {
+  fill: none;
+  stroke: var(--entry-ink);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+@media (prefers-reduced-motion: no-preference) and (min-height: 600px) {
+  .public-entry .entry-confirm-signature path {
+    stroke-dashoffset: 1;
+  }
+  .public-entry .entry-confirm-signature[data-writing="true"] path {
+    animation: entry-confirm-handwriting var(--stroke-duration) linear
+      calc(550ms + var(--stroke-delay)) both;
+  }
+}
+@keyframes entry-confirm-handwriting {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
 .entry-confirm-controls {
   display: flex;
   justify-content: center;

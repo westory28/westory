@@ -15,6 +15,7 @@ import EntryPlayScene from "./EntryPlayScene";
 import EntryMyPageScene from "./EntryMyPageScene";
 import EntryRibbon from "./EntryRibbon";
 import { useEntryMotion } from "./useEntryMotion";
+import { useEntryFinale } from "./useEntryFinale";
 import "./public-entry.css";
 import "./entry-story-scenes.css";
 import "./entry-detail.css";
@@ -67,6 +68,7 @@ export default function PublicEntry({
       : "Google 학생 로그인";
 
   useEntryMotion(root);
+  useEntryFinale(root, Boolean(activeDialog) || busy);
 
   useEffect(() => {
     const page = root.current;
@@ -280,7 +282,22 @@ export default function PublicEntry({
           });
         }}
       >
-        <span aria-hidden="true">↑</span>
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="m4 13 6-6 6 6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
       <footer className="entry-footer">
         <Wordmark />
