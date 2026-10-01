@@ -379,6 +379,8 @@ export default function EntryRibbon({
     };
   }, [variant, enabled]);
 
+  if (!enabled) return null;
+
   return (
     <svg
       ref={svg}
