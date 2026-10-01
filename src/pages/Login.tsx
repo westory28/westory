@@ -1894,6 +1894,17 @@ const Login: React.FC = () => {
   if (loading)
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
+  const publicTeacherLogin = !classicEntry && (
+    <button
+      type="button"
+      onClick={() => handleLogin("teacher")}
+      disabled={authBusy || restrictedInAppBrowser}
+      className="entry-secondary"
+    >
+      관리자 로그인
+    </button>
+  );
+
   const loginControls = (
     <>
       {ddayCount !== null && (
@@ -1943,13 +1954,16 @@ const Login: React.FC = () => {
           <p className="text-sm text-gray-500 break-all text-center px-2">
             {currentUser.email || "로그인 계정"}
           </p>
-          <button
-            onClick={goToDashboard}
-            disabled={authBusy}
-            className="w-full bg-blue-600 text-white border border-blue-600 px-6 py-3 rounded-full text-base font-bold shadow hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {authBusy ? "처리 중..." : "계속하기"}
-          </button>
+          <div className={classicEntry ? "contents" : "entry-login-actions"}>
+            <button
+              onClick={goToDashboard}
+              disabled={authBusy}
+              className="w-full bg-blue-600 text-white border border-blue-600 px-6 py-3 rounded-full text-base font-bold shadow hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {authBusy ? "처리 중..." : "계속하기"}
+            </button>
+            {publicTeacherLogin}
+          </div>
           <button
             onClick={() => handleLogin("student")}
             disabled={authBusy || restrictedInAppBrowser}
@@ -1969,19 +1983,22 @@ const Login: React.FC = () => {
         </div>
       ) : (
         <div className="w-full max-w-sm flex flex-col gap-3">
-          <button
-            onClick={() => handleLogin("student")}
-            disabled={authBusy || restrictedInAppBrowser}
-            className="w-full bg-white border border-gray-200 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <img
-              src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg"
-              width={24}
-              height={24}
-              alt="Google"
-            />
-            학생 로그인
-          </button>
+          <div className={classicEntry ? "contents" : "entry-login-actions"}>
+            <button
+              onClick={() => handleLogin("student")}
+              disabled={authBusy || restrictedInAppBrowser}
+              className="w-full bg-white border border-gray-200 px-8 py-4 rounded-full text-lg font-bold text-gray-700 shadow hover:bg-gray-50 transition flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <img
+                src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg"
+                width={24}
+                height={24}
+                alt="Google"
+              />
+              학생 로그인
+            </button>
+            {publicTeacherLogin}
+          </div>
           <p className="text-center text-xs leading-5 text-gray-500 whitespace-nowrap">
             학교 Google 계정(@{ALLOWED_SCHOOL_EMAIL_DOMAIN})으로만 로그인할 수
             있습니다.

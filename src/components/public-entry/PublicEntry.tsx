@@ -118,7 +118,7 @@ export default function PublicEntry({
   const teacher = (
     <button
       type="button"
-      className="entry-text-button"
+      className="entry-secondary"
       onClick={onTeacherLogin}
       disabled={teacherDisabled ?? disabled}
     >
@@ -135,14 +135,17 @@ export default function PublicEntry({
     >
       <header className="entry-header">
         <Wordmark />
-        <button
-          type="button"
-          className="entry-primary entry-header-login"
-          onClick={onStudentLogin}
-          disabled={disabled}
-        >
-          {busy ? "처리 중..." : signedIn ? "계속하기" : "학생 로그인"}
-        </button>
+        <div className="entry-header-actions">
+          <button
+            type="button"
+            className="entry-primary entry-header-login"
+            onClick={onStudentLogin}
+            disabled={disabled}
+          >
+            {busy ? "처리 중..." : signedIn ? "계속하기" : "학생 로그인"}
+          </button>
+          {teacher}
+        </div>
       </header>
       <div className="entry-story-thread" aria-hidden="true">
         <svg viewBox="0 0 80 1800" preserveAspectRatio="none">
@@ -183,10 +186,7 @@ export default function PublicEntry({
                 <br />
                 배움의 변화를 확인하는 우리의 역사 교실.
               </p>
-              <div className="entry-login entry-first-login">
-                {controls}
-                {teacher}
-              </div>
+              <div className="entry-login entry-first-login">{controls}</div>
             </div>
             <div className="entry-hero-visual">
               <span className="entry-visual-orbit" aria-hidden="true" />
@@ -314,19 +314,21 @@ export default function PublicEntry({
               id="entry-finish-title"
               lines={["이제 우리의 이야기로.", "위스토리"]}
             />
-            <button
-              type="button"
-              className="entry-primary"
-              onClick={onStudentLogin}
-              disabled={disabled}
-            >
-              {label}
-              <span aria-hidden="true"> ↗</span>
-            </button>
+            <div className="entry-login-actions entry-finish-actions">
+              <button
+                type="button"
+                className="entry-primary"
+                onClick={onStudentLogin}
+                disabled={disabled}
+              >
+                {label}
+                <span aria-hidden="true"> ↗</span>
+              </button>
+              {teacher}
+            </div>
             <p className="entry-school">
               학교 Google 계정(@{schoolDomain})으로 이용할 수 있습니다.
             </p>
-            {teacher}
           </div>
         </section>
       </main>

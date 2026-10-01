@@ -64,9 +64,12 @@
   border-bottom: 1px solid rgb(229 231 235 / 65%);
 }
 .entry-wordmark {
+  display: inline-flex;
+  flex-shrink: 0;
   color: var(--entry-blue);
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1;
   letter-spacing: -0.055em;
 }
 .entry-wordmark > span:last-child {
@@ -89,18 +92,27 @@
   transform: translateY(-2px);
   background: #1d4ed8;
 }
-.entry-header-login {
+.entry-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex-shrink: 0;
 }
-.entry-text-button {
-  border: 0;
-  background: none;
-  color: var(--entry-muted);
-  min-height: 44px;
-  padding: 12px 16px;
-  font-size: 13px !important;
+.entry-secondary {
+  min-height: 48px;
+  padding: 12px 24px;
+  border: 1px solid var(--entry-blue);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--entry-blue);
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+  transition: background 180ms ease;
 }
-.entry-text-button:hover,
+.entry-secondary:hover:not(:disabled) {
+  background: #eff6ff;
+}
 .entry-footer button:hover {
   color: var(--entry-blue);
 }
@@ -214,7 +226,7 @@
   font-size: 16px;
 }
 .entry-login {
-  max-width: 350px;
+  max-width: 420px;
   margin-top: 32px;
 }
 .entry-login button {
@@ -226,14 +238,24 @@
 .entry-login > div {
   max-width: 100%;
 }
-.entry-login > div > button:first-of-type {
+.entry-login-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+.entry-login-actions > button {
+  min-width: 0;
+  min-height: 56px;
+  padding: 12px 16px;
+  font-size: 16px !important;
+  white-space: nowrap;
+}
+.entry-login .entry-login-actions > button:first-child {
   background: var(--entry-blue);
   color: #fff;
   border-color: var(--entry-blue);
   box-shadow: none;
-}
-.entry-login > .entry-text-button {
-  padding-left: 0;
 }
 .entry-hero-visual {
   position: relative;
@@ -1075,8 +1097,9 @@
   width: 2px;
   background: linear-gradient(transparent, var(--entry-orange));
 }
-.entry-finish .entry-primary {
-  margin-top: 40px;
+.entry-finish-actions {
+  max-width: 420px;
+  margin: 40px auto 0;
 }
 .entry-school {
   color: var(--entry-muted);
@@ -1104,7 +1127,7 @@
   color: var(--entry-muted);
 }
 .entry-footer .entry-wordmark {
-  font-size: 22px;
+  font-size: 28px;
 }
 .entry-back-top {
   position: fixed;
@@ -1217,6 +1240,15 @@
   .entry-hero .entry-benefit {
     font-size: 14px;
   }
+  .entry-login-actions > button {
+    padding: 12px 10px;
+    font-size: 14px !important;
+    gap: 8px;
+  }
+  .entry-login-actions img {
+    width: 20px;
+    height: 20px;
+  }
   .entry-split-stage {
     grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
     gap: 24px;
@@ -1265,16 +1297,23 @@
     --entry-gutter: 24px;
   }
   .entry-header {
-    padding-left: 24px;
-    padding-right: 24px;
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 12px;
   }
   .entry-wordmark {
-    font-size: 24px;
+    font-size: 32px;
   }
-  .entry-header-login {
+  .entry-header-actions {
+    gap: 8px;
+  }
+  .entry-header-actions > button {
     min-height: 44px;
-    font-size: 13px !important;
-    padding: 10px 20px;
+    font-size: 12px !important;
+    padding: 10px;
+  }
+  .entry-login-actions {
+    gap: 8px;
   }
   .entry-stage {
     padding-top: 72px;
@@ -1599,6 +1638,20 @@
   .entry-back-top {
     right: 16px;
     bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+@media (max-width: 359px) {
+  .entry-header {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 8px;
+  }
+  .entry-header .entry-wordmark {
+    font-size: 28px;
+  }
+  .entry-header-actions > button {
+    font-size: 11px !important;
+    padding: 10px 8px;
   }
 }
 @media (max-height: 720px) and (min-height: 600px) {
