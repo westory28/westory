@@ -1,0 +1,229 @@
+/* Reuse game artwork on a reversible scroll timeline; no game runtime or timer. */
+.public-entry .entry-play {
+  position: relative;
+  background: var(--entry-surface);
+}
+.public-entry .entry-play > .entry-play-stage {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+  padding-top: 32px;
+  padding-bottom: 32px;
+}
+.public-entry .entry-play .entry-heading {
+  text-align: center;
+  margin-bottom: 0;
+}
+.public-entry .entry-play .entry-eyebrow {
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.public-entry .entry-play .entry-motion-title {
+  font-size: clamp(30px, 3.5vw, 48px);
+}
+.public-entry .entry-play .entry-benefit {
+  margin: 16px auto 0;
+  font-size: 14px;
+}
+.public-entry .entry-play .entry-game-name,
+.public-entry .entry-play .entry-play-caption strong {
+  white-space: nowrap;
+}
+.public-entry .entry-play .entry-ocean {
+  position: relative;
+  width: 100%;
+  height: clamp(260px, 44svh, 420px);
+  flex: none;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 28px;
+  background: #153f80;
+}
+.public-entry .entry-play .entry-sea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.public-entry .entry-play .entry-sea-wash {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(10 31 65 / 68%), transparent 65%);
+}
+.public-entry .entry-play .entry-ship-rig {
+  position: absolute;
+  width: min(72%, 720px);
+  aspect-ratio: 1000 / 667;
+  left: 2%;
+  bottom: -13%;
+  transform-origin: 72% 62%;
+}
+.public-entry .entry-play .entry-ship {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  right: auto;
+  bottom: auto;
+  filter: drop-shadow(0 18px 12px rgb(7 24 57 / 24%));
+}
+.public-entry .entry-play .entry-play-caption {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  top: 28px;
+  left: auto;
+  right: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #fff;
+  text-align: right;
+}
+.public-entry .entry-play .entry-play-caption > span {
+  font-size: 14px;
+  opacity: 0.75;
+}
+.public-entry .entry-play .entry-play-caption strong {
+  max-width: none;
+  font-size: clamp(22px, 3vw, 36px);
+  letter-spacing: -0.055em;
+  line-height: 1.35;
+}
+.public-entry .entry-play .entry-game-cutin {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  background: rgb(23 30 36 / 64%);
+}
+.public-entry .entry-play .entry-game-cutin-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.72;
+}
+.public-entry .entry-play .entry-game-cutin-eyes {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  width: 100%;
+  height: 38%;
+  object-fit: cover;
+  object-position: center;
+  border-block: 2px solid rgb(255 255 255 / 80%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .public-entry[data-motion="on"] .entry-play {
+    --approach: clamp(0, calc((var(--scene) - 0.04) / 0.54), 1);
+    --cutin-enter: clamp(0, calc((var(--scene) - 0.6) / 0.12), 1);
+    --cutin-exit: clamp(0, calc((var(--scene) - 0.86) / 0.14), 1);
+    --cutin-visible: calc(var(--cutin-enter) * (1 - var(--cutin-exit)));
+  }
+  .public-entry[data-motion="on"] .entry-play .entry-ship-rig {
+    transform: translate(
+        calc((1 - var(--approach)) * 12%),
+        calc((1 - var(--approach)) * -12%)
+      )
+      scale(calc(0.24 + var(--approach) * 0.76));
+    filter: blur(calc((1 - var(--approach)) * 9px));
+    opacity: calc(0.25 + var(--approach) * 0.75);
+  }
+  .public-entry[data-motion="on"] .entry-play .entry-game-cutin {
+    opacity: var(--cutin-visible);
+  }
+  .public-entry[data-motion="on"] .entry-play .entry-game-cutin-lines {
+    transform: scale(
+      calc(1.1 - var(--cutin-enter) * 0.1 + var(--cutin-exit) * 0.03)
+    );
+  }
+  .public-entry[data-motion="on"] .entry-play .entry-game-cutin-eyes {
+    transform: translateX(
+      calc((1 - var(--cutin-enter)) * -10% + var(--cutin-exit) * 4%)
+    );
+  }
+}
+
+@media (min-height: 700px) and (prefers-reduced-motion: no-preference) {
+  .public-entry[data-motion="on"] .entry-play {
+    height: 240svh;
+  }
+  .public-entry[data-motion="on"] .entry-play > .entry-play-stage {
+    position: sticky;
+    top: 80px;
+    min-height: calc(100svh - 80px);
+  }
+}
+
+@media (max-width: 767px) {
+  .public-entry .entry-play > .entry-play-stage {
+    gap: 20px;
+  }
+  .public-entry .entry-play .entry-heading {
+    text-align: left;
+  }
+  .public-entry .entry-play .entry-eyebrow {
+    justify-content: flex-start;
+  }
+  .public-entry .entry-play .entry-motion-title {
+    font-size: 30px;
+  }
+  .public-entry .entry-play .entry-benefit {
+    font-size: 12px;
+    margin-left: 0;
+  }
+  .public-entry .entry-play .entry-ocean {
+    height: clamp(260px, 40svh, 360px);
+    border-radius: 20px;
+  }
+  .public-entry .entry-play .entry-play-caption {
+    left: 20px;
+    right: auto;
+    top: 20px;
+    text-align: left;
+  }
+  .public-entry .entry-play .entry-play-caption > span {
+    font-size: 12px;
+  }
+  .public-entry .entry-play .entry-play-caption strong {
+    font-size: clamp(20px, 6vw, 26px);
+  }
+  .public-entry .entry-play .entry-ship-rig {
+    width: 103%;
+    left: -22%;
+    bottom: 5%;
+  }
+  .public-entry .entry-play .entry-game-cutin-eyes {
+    top: 34%;
+    height: 32%;
+  }
+}
+
+@media (max-height: 699px), (prefers-reduced-motion: reduce) {
+  .public-entry .entry-play {
+    height: auto;
+  }
+  .public-entry .entry-play > .entry-play-stage {
+    position: relative;
+    top: auto;
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-entry .entry-play .entry-ship-rig {
+    transform: none;
+    filter: none;
+    opacity: 1;
+  }
+  .public-entry .entry-play .entry-game-cutin {
+    display: none;
+  }
+}

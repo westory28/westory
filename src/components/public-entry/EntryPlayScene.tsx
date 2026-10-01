@@ -1,4 +1,6 @@
 import { MotionTitle, StoryLink } from "./EntryVisuals";
+import EntryRibbon from "./EntryRibbon";
+import "./entry-play-scene.css";
 
 /** Static game art and scroll-scrubbed effects; no game session or network calls. */
 export default function EntryPlayScene() {
@@ -12,6 +14,7 @@ export default function EntryPlayScene() {
       aria-labelledby="entry-play-title"
     >
       <div className="entry-stage entry-play-stage">
+        <EntryRibbon variant="wide" />
         <div className="entry-heading">
           <StoryLink number="06" label="위플레이" />
           <MotionTitle
@@ -27,19 +30,21 @@ export default function EntryPlayScene() {
         <div
           className="entry-ocean"
           role="img"
-          aria-label="위플레이 거북선이 멀리서 가까이 다가와 포탄을 발사하고 바다에 물보라가 이는 장면"
+          aria-label="실제 위플레이 게임 아트: 거북선이 다가온 뒤 이순신의 눈빛이 등장하는 장면"
         >
           <img
             className="entry-sea"
             src={
               import.meta.env.BASE_URL + "assets/weplay/naval/sea-battle.webp"
             }
+            width="1672"
+            height="941"
             alt=""
             loading="lazy"
+            decoding="async"
           />
           <span className="entry-sea-wash" />
           <div className="entry-ship-rig" aria-hidden="true">
-            <span className="entry-ship-wake" />
             <img
               className="entry-ship"
               src={
@@ -50,29 +55,34 @@ export default function EntryPlayScene() {
               height="667"
               alt=""
               loading="lazy"
+              decoding="async"
             />
-            <span className="entry-muzzle">
-              <span className="entry-muzzle-flash" />
-              <span className="entry-muzzle-smoke" />
-              <span className="entry-cannon-trail" />
-              <span className="entry-cannonball" />
-            </span>
-            <svg className="entry-impact" viewBox="0 0 160 130">
-              <ellipse
-                className="entry-impact-ring"
-                cx="80"
-                cy="106"
-                rx="64"
-                ry="12"
-              />
-              <g className="entry-impact-water">
-                <path d="M22 106 Q48 85 32 46 Q69 69 65 14 Q85 51 86 78 Q105 56 127 35 Q110 86 143 106 Z" />
-                <path d="M49 108 Q70 84 67 53 M88 106 Q89 83 108 67" />
-                <circle cx="35" cy="26" r="4" />
-                <circle cx="96" cy="12" r="5" />
-                <circle cx="137" cy="53" r="3" />
-              </g>
-            </svg>
+          </div>
+          <div className="entry-game-cutin" aria-hidden="true">
+            <img
+              className="entry-game-cutin-lines"
+              src={
+                import.meta.env.BASE_URL +
+                "assets/weplay/naval/impact-lines.webp"
+              }
+              width="1200"
+              height="800"
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
+            <img
+              className="entry-game-cutin-eyes"
+              src={
+                import.meta.env.BASE_URL +
+                "assets/weplay/naval/yi-sunsin-cutin.webp"
+              }
+              width="1440"
+              height="480"
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
           </div>
           <div className="entry-play-caption">
             <span>위플레이</span>

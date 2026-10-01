@@ -73,13 +73,6 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
       frame = 0;
       if (document.hidden || preference.matches) return;
       const viewport = window.innerHeight;
-      page.style.setProperty(
-        "--story",
-        clamp(
-          (window.scrollY + viewport * 0.65 - 700) /
-            Math.max(1, page.offsetHeight - 1000),
-        ).toFixed(4),
-      );
       // Read layout in one pass, then write only compositor properties via CSS variables.
       const positions = scenes.map((scene) => ({
         scene,
@@ -95,8 +88,15 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           scene.hasAttribute("data-entry-timeline"),
         );
         const enter = clamp((viewport - rect.top) / Math.max(1, viewport - 80));
+        const pass = clamp(
+          (viewport * 0.8 - rect.top) / (rect.height + viewport * 0.35),
+        );
+        const pinned = stage && rect.height > stage.height + 100;
+        const ribbon = pinned ? enter * 0.18 + progress * 0.82 : pass;
         scene.style.setProperty("--scene", progress.toFixed(4));
         scene.style.setProperty("--enter", enter.toFixed(4));
+        scene.style.setProperty("--pass", pass.toFixed(4));
+        scene.style.setProperty("--ribbon", ribbon.toFixed(4));
         scene.style.setProperty(
           "--phase",
           clamp((progress - 0.15) / 0.7).toFixed(4),
@@ -118,6 +118,8 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           scene.style.removeProperty("--scene");
           scene.style.removeProperty("--enter");
           scene.style.removeProperty("--phase");
+          scene.style.removeProperty("--pass");
+          scene.style.removeProperty("--ribbon");
         });
       } else request();
     };
@@ -132,6 +134,31 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
         ? null
         : new ResizeObserver(request);
     resize?.observe(page);
+    const reveals = Array.from(
+      page.querySelectorAll<HTMLElement>("[data-entry-reveal]"),
+    );
+    const entrance =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                const scene =
+                  entry.target.closest<HTMLElement>("[data-entry-scene]");
+                if (scene) scene.dataset.entered = "true";
+                entrance?.unobserve(entry.target);
+              }
+            },
+            { threshold: 0.3, rootMargin: "0px 0px -12% 0px" },
+          );
+    reveals.forEach((element) => {
+      if (entrance) entrance.observe(element);
+      else
+        element
+          .closest<HTMLElement>("[data-entry-scene]")
+          ?.setAttribute("data-entered", "true");
+    });
     window.addEventListener("scroll", request, { passive: true });
     window.addEventListener("resize", request, { passive: true });
     document.addEventListener("visibilitychange", visibility);
@@ -142,6 +169,7 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
       resize?.disconnect();
+      entrance?.disconnect();
       window.removeEventListener("scroll", request);
       window.removeEventListener("resize", request);
       document.removeEventListener("visibilitychange", visibility);

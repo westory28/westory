@@ -1,5 +1,11 @@
 # Public entry preview assets
 
+## Score confirmation and naval detail (2026-10-01)
+
+`confirmation-score.webp` (40,278 bytes), `confirmation-question.webp` (38,532 bytes), and `confirmation-signature.webp` (27,250 bytes) are 1280×960 captures of the actual `ScoreConfirmationView` exported by `src/pages/student/PerformanceScoreView.tsx`. A local-only harness supplied a fictional 52/60 history evaluation and no student identifier. Firebase imports, loaders, authentication, notification and write functions were replaced with offline fixtures or throwing stubs; CSP blocked external connections. The original page and modal JSX/CSS were retained. The small header is capture-only framing. No real student account, score, signature or inquiry was read or submitted. The last image deliberately keeps the signature field empty. Raw screenshots and harness are in ignored `.superloopy/sessions/2026-10-01-home-details/`.
+
+The three images total 106,060 bytes, load lazily, and slide inside a CSS tablet. The homepage reuses the game's existing `yi-sunsin-cutin.webp` (206,926 bytes) and `impact-lines.webp` (440,682 bytes) for the commander entrance without importing game logic, playing video or making game requests.
+
 ## Current homepage: actual teaching materials (2026-10-01)
 
 The white-background homepage replaces the synthetic lesson and dashboard crops below with user-authorized teaching materials. These four optimized, content-hashed WebP imports total **574,580 bytes** (about 561 KiB). Images outside the hero load lazily. The homepage does not fetch lessons, maps, student records, or cloud responses from Firebase.

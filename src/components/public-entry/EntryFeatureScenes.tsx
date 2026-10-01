@@ -4,6 +4,8 @@ import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
 import PublicScoreDemo from "./PublicScoreDemo";
 import { useEntrySceneProgress } from "./useEntryMotion";
 import { entryMaterial } from "./entryMaterial";
+import EntryRibbon from "./EntryRibbon";
+import EntryConfirmScene from "./EntryConfirmScene";
 import lessonScreen from "../../assets/public-entry/lesson-real.webp";
 import worksheet from "../../assets/public-entry/worksheet-real.webp";
 import heritage from "../../assets/public-entry/heritage-real.webp";
@@ -22,14 +24,23 @@ export function moveToEntrySection(id: string) {
 
 export function EntryOverview() {
   return (
-    <nav className="entry-overview" aria-label="위스토리 전체 기능">
+    <nav
+      className="entry-overview"
+      aria-label="위스토리 전체 기능"
+      data-entry-reveal
+    >
       {[
         ["01", "탐구", "자료 · 지도 · 생각모아", "entry-lesson"],
         ["02", "확인", "문제풀이 · 성적 확인", "entry-check"],
         ["03", "성장", "평가 · 목표 · 마이페이지", "entry-growth"],
         ["04", "몰입", "위플레이", "entry-game"],
-      ].map(([n, title, sub, id]) => (
-        <button type="button" key={id} onClick={() => moveToEntrySection(id)}>
+      ].map(([n, title, sub, id], index) => (
+        <button
+          type="button"
+          key={id}
+          onClick={() => moveToEntrySection(id)}
+          style={{ "--order": index } as React.CSSProperties}
+        >
           <span>{n}</span>
           <strong>
             {title}
@@ -117,9 +128,13 @@ export function LessonScene() {
       aria-label="실제 수업 자료 둘러보기"
     >
       <div className="entry-stage entry-deck-stage">
+        <EntryRibbon variant="wide" />
         <div className="entry-deck-heading">
           <StoryLink number="01" label="수업 자료" />
-          <MotionTitle lines={["한 장의 자료에서,", "깊어지는 생각."]} />
+          <MotionTitle
+            effect="depth"
+            lines={["한 장의 자료에서,", "깊어지는 생각."]}
+          />
         </div>
         <div
           className="entry-deck-content"
@@ -227,9 +242,14 @@ function FeatureScene({
       aria-labelledby={`${id}-title`}
     >
       <div className="entry-stage entry-split-stage">
+        <EntryRibbon />
         <div className="entry-heading">
           <StoryLink number={number} label={label} />
-          <MotionTitle id={`${id}-title`} lines={lines} />
+          <MotionTitle
+            id={`${id}-title`}
+            lines={lines}
+            effect={id === "entry-map" ? "add" : "gather"}
+          />
           <p className="entry-benefit">{description}</p>
         </div>
         <div className="entry-feature-visual">{children}</div>
@@ -385,7 +405,6 @@ export function ThinkScene() {
 
 export function CheckScene() {
   const [answer, setAnswer] = useState<number | null>(null);
-  const [step, setStep] = useState(0);
   const q = entryMaterial.quiz;
   return (
     <>
@@ -424,42 +443,7 @@ export function CheckScene() {
           </p>
         </div>
       </FeatureScene>
-      <section
-        className="entry-confirm-section"
-        aria-labelledby="entry-confirm-title"
-      >
-        <div>
-          <StoryLink number="CHECK" label="성적 확인" />
-          <h2 id="entry-confirm-title">확인하고, 묻고, 마무리.</h2>
-          <p>점수와 채점 내용을 살펴본 뒤 문의와 확인·서명을 이어갑니다.</p>
-        </div>
-        <div className="entry-confirm-flow">
-          <div>
-            {["점수·채점 확인", "문의·이의 제기", "확인 후 서명"].map(
-              (text, i) => (
-                <button
-                  type="button"
-                  key={text}
-                  aria-pressed={step === i}
-                  onClick={() => setStep(i)}
-                >
-                  <span>0{i + 1}</span>
-                  {text}
-                </button>
-              ),
-            )}
-          </div>
-          <p aria-live="polite">
-            {
-              [
-                "평가 항목과 채점 내용을 내 답안과 비교합니다.",
-                "답안지 확인을 요청하거나 이의를 제기하고, 처리 후 점수를 다시 살펴봅니다.",
-                "내용을 확인한 뒤 서명으로 마무리합니다. 이 소개 화면에서는 서명하지 않습니다.",
-              ][step]
-            }
-          </p>
-        </div>
-      </section>
+      <EntryConfirmScene />
     </>
   );
 }

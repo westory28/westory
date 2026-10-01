@@ -1,0 +1,125 @@
+.public-entry .entry-confirm-scene {
+  background: var(--entry-surface);
+}
+.public-entry .entry-confirm-scene > .entry-confirm-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.35fr);
+  gap: 40px;
+  align-items: center;
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+.entry-confirm-preview {
+  min-width: 0;
+}
+.entry-confirm-screens {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+.entry-confirm-screen {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateX(6%);
+  transition:
+    opacity 450ms ease,
+    transform 550ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.entry-confirm-screen[data-active="true"] {
+  opacity: 1;
+  transform: translateX(0);
+  z-index: 1;
+}
+.entry-confirm-screen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.entry-confirm-controls {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+.public-entry .entry-confirm-controls button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  padding: 8px 16px;
+  color: var(--entry-muted);
+  background: transparent;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.entry-confirm-controls button span {
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--entry-orange);
+  font-size: 12px;
+}
+.entry-confirm-controls button[aria-pressed="true"] {
+  background: #fff;
+  color: var(--entry-blue);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
+}
+.entry-confirm-example {
+  font-size: 11px;
+  color: var(--entry-muted);
+  text-align: center;
+  margin: 16px 0 0;
+}
+@media (min-height: 700px) and (prefers-reduced-motion: no-preference) {
+  .public-entry[data-motion="on"] .entry-confirm-scene {
+    height: 240svh;
+  }
+  .public-entry[data-motion="on"] .entry-confirm-stage {
+    position: sticky;
+    top: 80px;
+    min-height: calc(100svh - 80px);
+  }
+}
+@media (max-width: 1023px) {
+  .public-entry .entry-confirm-scene > .entry-confirm-stage {
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+    gap: 24px;
+  }
+  .public-entry .entry-confirm-controls button {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .entry-confirm-controls button span {
+    display: none;
+  }
+}
+@media (max-width: 767px) {
+  .public-entry .entry-confirm-scene > .entry-confirm-stage {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    align-content: center;
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+  .entry-confirm-controls {
+    gap: 4px;
+    margin-top: 16px;
+  }
+  .public-entry .entry-confirm-controls button {
+    flex: 1;
+    padding: 8px 4px;
+  }
+  .entry-confirm-example {
+    margin-top: 12px;
+  }
+}
+@media (max-height: 699px), (prefers-reduced-motion: reduce) {
+  .public-entry .entry-confirm-scene {
+    height: auto;
+  }
+  .public-entry .entry-confirm-stage {
+    position: relative;
+    top: auto;
+    min-height: 0;
+  }
+}

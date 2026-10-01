@@ -2,53 +2,39 @@ import React from "react";
 
 export function FinaleTitle() {
   return (
-    <div className="entry-finale-art">
-      <div className="entry-finale-rings" aria-hidden="true">
-        <span />
-        <span />
-      </div>
+    <div className="entry-finale-art" data-entry-reveal>
       <h2
         id="entry-finish-title"
         className="entry-finale-title"
         aria-label="이제 우리의 이야기로. 위스토리"
       >
         <span className="entry-finale-phrase" aria-hidden="true">
-          {["이제", "우리의", "이야기로."].map((word, index) => (
-            <span key={word} style={{ "--word": index } as React.CSSProperties}>
-              {word}
-            </span>
-          ))}
+          이제 우리의 이야기로.
         </span>
         <span className="entry-finale-brand" aria-hidden="true">
-          <svg viewBox="0 0 600 190" preserveAspectRatio="none">
-            <path
-              pathLength="1"
-              d="M15 138 C75 190 100 110 155 144 S250 184 303 140 S400 110 455 144 S545 182 585 132"
-            />
-          </svg>
-          {Array.from("위스토리").map((letter, index) => (
-            <span
-              key={letter}
-              style={
-                {
-                  "--letter": index,
-                  "--spread": (index - 1.5) * 30,
-                } as React.CSSProperties
-              }
-            >
-              {letter}
-              <i />
-            </span>
-          ))}
+          <span className="entry-finale-we">위</span>
+          <span className="entry-finale-story">스토리</span>
         </span>
       </h2>
     </div>
   );
 }
 
-export function MotionTitle({ lines, id }: { lines: string[]; id?: string }) {
+export function MotionTitle({
+  lines,
+  id,
+  effect = "gather",
+}: {
+  lines: string[];
+  id?: string;
+  effect?: "gather" | "depth" | "add";
+}) {
   return (
-    <h2 className="entry-motion-title" id={id} aria-label={lines.join(" ")}>
+    <h2
+      className={`entry-motion-title entry-type--${effect}`}
+      id={id}
+      aria-label={lines.join(" ")}
+    >
       {lines.map((line, index) => (
         <span className="entry-type-mask" key={line} aria-hidden="true">
           <span style={{ "--line": index } as React.CSSProperties}>{line}</span>

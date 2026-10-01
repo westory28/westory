@@ -12,9 +12,11 @@ import {
 } from "./EntryFeatureScenes";
 import { Device, FinaleTitle, MotionTitle, StoryLink } from "./EntryVisuals";
 import EntryPlayScene from "./EntryPlayScene";
+import EntryRibbon from "./EntryRibbon";
 import { useEntryMotion } from "./useEntryMotion";
 import "./public-entry.css";
 import "./entry-story-scenes.css";
+import "./entry-detail.css";
 interface Props {
   controls: React.ReactNode;
   onStudentLogin: () => void;
@@ -149,19 +151,6 @@ export default function PublicEntry({
           {teacher}
         </div>
       </header>
-      <div className="entry-story-thread" aria-hidden="true">
-        <svg viewBox="0 0 80 1800" preserveAspectRatio="none">
-          <path
-            className="entry-thread-base"
-            d="M40 0 V90 C40 140 72 130 72 175 S12 225 12 270 V450 C12 500 64 500 64 550 V750 C64 800 16 820 16 880 V1100 C16 1180 66 1160 66 1240 V1500 C66 1560 40 1600 40 1660 V1800"
-          />
-          <path
-            pathLength="1"
-            className="entry-thread-draw"
-            d="M40 0 V90 C40 140 72 130 72 175 S12 225 12 270 V450 C12 500 64 500 64 550 V750 C64 800 16 820 16 880 V1100 C16 1180 66 1160 66 1240 V1500 C66 1560 40 1600 40 1660 V1800"
-          />
-        </svg>
-      </div>
       <main>
         <section
           className="entry-hero entry-scene"
@@ -169,7 +158,8 @@ export default function PublicEntry({
           aria-labelledby="entry-title"
         >
           <div className="entry-stage entry-hero-stage">
-            <div className="entry-hero-copy">
+            <EntryRibbon variant="hero" />
+            <div className="entry-hero-copy" data-entry-reveal>
               <p className="entry-eyebrow">함께 배우고, 스스로 생각하는 역사</p>
               <h1
                 id="entry-title"
@@ -191,8 +181,7 @@ export default function PublicEntry({
               <div className="entry-login entry-first-login">{controls}</div>
             </div>
             <div className="entry-hero-visual">
-              <span className="entry-visual-orbit" aria-hidden="true" />
-              <Device kind="laptop" className="entry-hero-laptop">
+              <Device kind="tablet" className="entry-hero-tablet">
                 <img
                   src={lessonReal}
                   alt="실제 위스토리 빈칸 학습지 화면"
@@ -227,6 +216,7 @@ export default function PublicEntry({
           aria-labelledby="entry-structure-title"
         >
           <div className="entry-stage">
+            <EntryRibbon variant="wide" />
             <StoryLink number="WESTORY" label="한눈에 보는 위스토리" />
             <MotionTitle
               id="entry-structure-title"
@@ -245,11 +235,10 @@ export default function PublicEntry({
         <section
           className="entry-finish entry-scene"
           data-entry-scene
-          data-entry-timeline
           aria-labelledby="entry-finish-title"
         >
           <div className="entry-stage">
-            <span className="entry-finish-dot" aria-hidden="true" />
+            <EntryRibbon variant="finish" />
             <p className="entry-eyebrow">함께 써 내려갈 다음 장</p>
             <FinaleTitle />
             <div className="entry-login-actions entry-finish-actions">
