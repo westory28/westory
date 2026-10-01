@@ -1,24 +1,47 @@
 import { useEffect, useId, useRef, useState } from "react";
+import {
+  createEntryBrush,
+  type Curve,
+  type Point,
+} from "./entryRibbonGeometry";
 
-type Point = [number, number];
-type Curve = [Point, Point, Point, Point];
 type Variant = "hero" | "wide" | "wrap" | "left" | "finish";
 
-// Measure only the upper-right ink of 리: its ㅣ. Local font rendering keeps
-// the connection accurate even when Korean falls back to a device's own font.
-function finaleStroke(target: HTMLElement): Point {
+// Read layout coordinates without the title's entrance animation transform.
+function layoutBox(element: HTMLElement, stage: HTMLElement) {
+  let left = 0,
+    top = 0;
+  let node: HTMLElement | null = element;
+  while (node && node !== stage) {
+    left += node.offsetLeft;
+    top += node.offsetTop;
+    node = node.offsetParent as HTMLElement | null;
+  }
+  return {
+    left,
+    top,
+    right: left + element.offsetWidth,
+    bottom: top + element.offsetHeight,
+  };
+}
+
+// Measure both the position and the full width of the actual font's ㅣ ink.
+function finaleStroke(target: HTMLElement) {
   const style = getComputedStyle(target);
   const size = parseFloat(style.fontSize);
+  const fallback = {
+    point: [size * 0.82, -size * 0.76] as Point,
+    width: size * 0.12,
+  };
   const canvas = document.createElement("canvas");
   canvas.width = 160;
   canvas.height = 200;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return [size * 0.82, -size * 0.76];
+  if (!ctx) return fallback;
   ctx.font = `${style.fontWeight} 100px ${style.fontFamily}`;
   ctx.fillText("리", 16, 150);
   const { data } = ctx.getImageData(0, 0, 160, 200);
   for (let y = 25; y < 150; y++) {
-    // The rightmost run excludes the ㄹ on the left of the syllable.
     let right = -1;
     for (let x = 130; x >= 86; x--) {
       if (data[(y * 160 + x) * 4 + 3] >= 128) {
@@ -29,61 +52,18 @@ function finaleStroke(target: HTMLElement): Point {
     if (right < 0) continue;
     let left = right;
     while (left > 86 && data[(y * 160 + left - 1) * 4 + 3] >= 128) left--;
-    return [
-      (((left + right + 1) / 2 - 16) * size) / 100,
-      ((y - 148) * size) / 100,
-    ];
+    return {
+      point: [
+        (((left + right + 1) / 2 - 16) * size) / 100,
+        ((y - 148) * size) / 100,
+      ] as Point,
+      width: ((right - left + 1) * size) / 100,
+    };
   }
-  return [size * 0.82, -size * 0.76];
+  return fallback;
 }
 
-function brush(curves: Curve[], width: number, height: number) {
-  const points = curves.flatMap(([a, b, c, d], segment) =>
-    Array.from({ length: 33 }, (_, i) => {
-      const t = i / 32,
-        u = 1 - t;
-      return [
-        (u ** 3 * a[0] +
-          3 * u * u * t * b[0] +
-          3 * u * t * t * c[0] +
-          t ** 3 * d[0]) *
-          width,
-        (u ** 3 * a[1] +
-          3 * u * u * t * b[1] +
-          3 * u * t * t * c[1] +
-          t ** 3 * d[1]) *
-          height,
-      ] as Point;
-    }).slice(segment ? 1 : 0),
-  );
-  const edge = (direction: number, strand = false) =>
-    points.map((p, i) => {
-      const before = points[Math.max(0, i - 1)],
-        after = points[Math.min(points.length - 1, i + 1)];
-      const dx = after[0] - before[0],
-        dy = after[1] - before[1];
-      const length = Math.hypot(dx, dy) || 1;
-      const pressure =
-        (width < 768 ? 2 : 4) *
-        (0.25 + 0.75 * Math.sin((i / (points.length - 1)) * Math.PI) ** 2);
-      const offset = direction * pressure * (strand ? 0.58 : 1);
-      return [
-        p[0] - (dy / length) * offset,
-        p[1] + (dx / length) * offset,
-      ] as Point;
-    });
-  const path = (pts: Point[]) =>
-    pts
-      .map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`)
-      .join(" ");
-  return {
-    center: path(points),
-    outline: `${path(edge(1))} ${path(edge(-1).reverse()).replace(/^M/, "L")} Z`,
-    strands: [path(edge(1, true)), path(edge(-1, true))],
-  };
-}
-
-/** One continuous hand-drawn stroke per stage, joining at the center between scenes. */
+/** One solid, pressure-shaped stroke, routed through the composition's whitespace. */
 export default function EntryRibbon({
   variant = "wrap",
 }: {
@@ -92,150 +72,235 @@ export default function EntryRibbon({
   const svg = useRef<SVGSVGElement>(null);
   const id = `entry-ink-${useId().replace(/:/g, "")}`;
   const [shape, setShape] = useState<
-    ReturnType<typeof brush> & {
+    ReturnType<typeof createEntryBrush> & {
       width: number;
       height: number;
-      textBounds: { x: number; y: number; width: number; height: number }[];
+      endWidth?: number;
     }
   >();
+
   useEffect(() => {
     const stage = svg.current?.parentElement;
     if (!stage) return;
-    let active = true;
-    const protectedText = Array.from(
-      stage.querySelectorAll<HTMLElement>(
-        ".entry-motion-title .entry-type-mask, .entry-hero-copy h1, .entry-eyebrow, .entry-benefit, .entry-login, .entry-finale-phrase, .entry-record-value, .entry-record-dates, .entry-record-tags, .entry-mypage-demo-note",
-      ),
+    const scene = stage.closest<HTMLElement>("[data-entry-scene]");
+    const source = stage.querySelector<HTMLElement>(".entry-hero-ink-source");
+    const target = stage.querySelector<HTMLElement>(".entry-finale-ri");
+    const anchor = stage.querySelector<HTMLElement>(
+      ".entry-motion-title .entry-type-mask:last-child > span",
     );
+    let active = true;
+    let visible = true;
+    let frame = 0;
     const measure = () => {
-      if (!active) return;
+      frame = 0;
+      if (!active || document.hidden) return;
       const width = stage.offsetWidth,
         height = stage.offsetHeight;
       if (!width || !height) return;
-      const compact = width < 1024;
+      const compact = window.innerWidth < 768;
+      const edge = compact ? 10 : 16;
+      const joinX = compact ? 48 : 96;
+      const joinY = compact ? 24 : 32;
+      const center = width / 2;
+      const side = width - edge;
       const stageRect = stage.getBoundingClientRect();
       let curves: Curve[];
-      if (variant === "finish") {
-        const target = stage.querySelector<HTMLElement>(".entry-finale-ri");
-        const tr = target?.getBoundingClientRect();
+      let emphasisSegment: number | undefined;
+      let endWidth: number | undefined;
+      let taperStart = false;
+
+      // Pixel coordinates make tangents identical across stages of different widths.
+      if (variant === "finish" && target) {
+        const tr = target.getBoundingClientRect();
         const baseline = target
-          ?.querySelector(".entry-finale-baseline")
+          .querySelector(".entry-finale-baseline")
           ?.getBoundingClientRect();
-        const ink = target ? finaleStroke(target) : [0, 0];
-        const end: Point =
-          tr && baseline
-            ? [
-                (tr.left + ink[0] - stageRect.left) / width,
-                (baseline.top + ink[1] - stageRect.top) / height,
-              ]
-            : [0.65, 0.5];
-        // The last control point shares the endpoint's x: arrive vertically
-        // into the top of ㅣ, just inside its ink rather than across the word.
-        curves = [
-          [[0.5, 0], [end[0], end[1] * 0.12], [end[0], end[1] * 0.5], end],
+        const ink = finaleStroke(target);
+        const end: Point = [
+          tr.left + ink.point[0] - stageRect.left,
+          (baseline?.top ?? tr.bottom) + ink.point[1] - stageRect.top,
         ];
+        endWidth = ink.width;
+        const guideX = Math.min(side, end[0] + 32);
+        const guideY = end[1] * 0.42;
+        curves = [
+          [
+            [center, 0],
+            [center - joinX, joinY],
+            [guideX, guideY * 0.25],
+            [guideX, guideY],
+          ],
+          [
+            [guideX, guideY],
+            [guideX, end[1] * 0.68],
+            [end[0], end[1] * 0.84],
+            end,
+          ],
+        ];
+      } else if (variant === "hero" && source) {
+        const sr = source.getBoundingClientRect();
+        const start: Point = [sr.left - stageRect.left, sr.top - stageRect.top];
+        const visual = stage.querySelector<HTMLElement>(".entry-hero-visual");
+        const bottom = visual ? layoutBox(visual, stage).bottom : height - 128;
+        const turnY = Math.min(
+          height - 48,
+          Math.max(start[1] + 80, bottom + 24),
+        );
+        curves = [
+          [start, [side, start[1]], [side, turnY - 48], [side, turnY]],
+          [
+            [side, turnY],
+            [side, turnY + (height - turnY) * 0.3],
+            [center + joinX, height - joinY],
+            [center, height],
+          ],
+        ];
+        emphasisSegment = 0;
+        taperStart = true;
       } else {
-        const anchor = stage.querySelector<HTMLElement>(
-          ".entry-hero-mask:last-child, .entry-motion-title .entry-type-mask:last-child",
+        const ar = anchor
+          ? layoutBox(anchor, stage)
+          : {
+              left: width * 0.3,
+              right: width * 0.7,
+              top: height * 0.15,
+              bottom: height * 0.25,
+            };
+        const titleRows = Array.from(
+          stage.querySelectorAll<HTMLElement>(
+            ".entry-motion-title .entry-type-mask > span",
+          ),
         );
-        const ar = anchor?.getBoundingClientRect();
-        const text = anchor?.firstElementChild as HTMLElement | null;
-        const textWidth = Math.min(
-          ar?.width || width * 0.4,
-          text?.offsetWidth || width * 0.4,
+        const rowBoxes = titleRows.map((element) => layoutBox(element, stage));
+        const outside = Math.max(
+          edge,
+          Math.min(ar.left, ...rowBoxes.map((r) => r.left)) - 28,
         );
-        const centered =
-          anchor && getComputedStyle(anchor).textAlign === "center";
-        const textLeft = ar
-          ? ar.left -
-            stageRect.left +
-            (centered ? (ar.width - textWidth) / 2 : 0)
-          : width * 0.3;
-        const clampX = (x: number) => Math.max(0.06, Math.min(0.94, x));
-        const left = clampX((textLeft + textWidth * 0.08) / width);
-        const right = clampX((textLeft + textWidth * 0.92) / width);
-        const titleY = Math.max(
-          0.1,
-          Math.min(0.72, ar ? (ar.bottom - stageRect.top + 8) / height : 0.3),
+        const approachY = Math.max(
+          48,
+          Math.min(ar.top - 24, ...rowBoxes.map((r) => r.top - 16)),
         );
-        // Read stable line-box geometry, not the animated inner text transform.
-        const reversed = variant === "left" && !compact;
-        const start: Point = [reversed ? right : left, titleY];
-        const end: Point = [reversed ? left : right, titleY];
-        const side = reversed ? 0.04 : 0.96;
-        const exitY = Math.max(titleY + 0.1, 0.76);
-        const outside = reversed
-          ? Math.min(0.975, start[0] + 32 / width)
-          : Math.max(0.025, start[0] - 32 / width);
+        const titleY = ar.bottom + 12;
+        const left = Math.max(edge + 24, ar.left + (ar.right - ar.left) * 0.04);
+        const right = Math.min(
+          side - 16,
+          ar.right - (ar.right - ar.left) * 0.04,
+        );
+        // Turn back toward the shared endpoint only below the final content row.
+        const contentBottom = Math.max(
+          titleY,
+          ...Array.from(stage.children)
+            .filter((node): node is HTMLElement => node instanceof HTMLElement)
+            .map((node) => layoutBox(node, stage).bottom),
+        );
+        const turnY = Math.min(
+          height - 24,
+          Math.max(titleY + 64, contentBottom + 12),
+        );
         curves = [
           [
-            [0.5, 0],
-            [0.5, titleY * 0.1],
-            [outside, titleY * 0.25],
-            [outside, titleY * 0.6],
+            [center, 0],
+            [center - joinX, joinY],
+            [outside, Math.max(joinY, approachY * 0.2)],
+            [outside, approachY],
           ],
           [
-            [outside, titleY * 0.6],
-            [outside, titleY * 0.85],
+            [outside, approachY],
             [outside, titleY],
-            start,
+            [left - 24, titleY],
+            [left, titleY],
           ],
           [
-            start,
-            [start[0] + (end[0] - start[0]) / 3, titleY],
-            [start[0] + ((end[0] - start[0]) * 2) / 3, end[1]],
-            end,
+            [left, titleY],
+            [left + (right - left) / 3, titleY],
+            [right - (right - left) / 3, titleY],
+            [right, titleY],
           ],
           [
-            end,
-            [side, end[1] + 0.06],
-            [side, Math.max(end[1] + 0.07, exitY - 0.12)],
-            [side, exitY],
+            [right, titleY],
+            [side, titleY],
+            [side, titleY],
+            [side, titleY + 16],
           ],
           [
-            [side, exitY],
-            [side, 0.91],
-            [0.5, 0.94],
-            [0.5, 1],
+            [side, titleY + 16],
+            [side, titleY + 48],
+            [side, turnY - 32],
+            [side, turnY],
+          ],
+          [
+            [side, turnY],
+            [side, turnY + (height - turnY) * 0.3],
+            [center + joinX, height - joinY],
+            [center, height],
           ],
         ];
-        if (variant === "hero") curves = curves.slice(2);
+        emphasisSegment = 2;
       }
-      const textBounds = protectedText.map((element) => {
-        // The finale line passes beside the phrase. Protect its text, not the
-        // wider block inherited from the brand, which would cut the ink in midair.
-        let rect = element.getBoundingClientRect();
-        if (element.classList.contains("entry-finale-phrase")) {
-          const range = document.createRange();
-          range.selectNodeContents(element);
-          rect = range.getBoundingClientRect();
-        }
-        return {
-          x: rect.left - stageRect.left - 4,
-          y: rect.top - stageRect.top - 4,
-          width: rect.width + 8,
-          height: rect.height + 8,
-        };
+      const normalized = curves.map(
+        (curve) => curve.map(([x, y]) => [x / width, y / height]) as Curve,
+      );
+      setShape({
+        ...createEntryBrush(normalized, width, height, {
+          compact,
+          emphasisSegment,
+          taperStart,
+          endWidth,
+        }),
+        width,
+        height,
+        endWidth,
       });
-      setShape({ ...brush(curves, width, height), width, height, textBounds });
     };
-    const observer = new ResizeObserver(measure);
+    const request = () => {
+      if (!frame && active && !document.hidden)
+        frame = requestAnimationFrame(measure);
+    };
+    const observer = new ResizeObserver(request);
     observer.observe(stage);
-    protectedText.forEach((element) => observer.observe(element));
-    const target = stage.querySelector(".entry-finale-ri");
-    if (target) observer.observe(target);
+    stage
+      .querySelectorAll<HTMLElement>(
+        ".entry-motion-title, .entry-hero-tablet, .entry-finale-ri",
+      )
+      .forEach((element) => observer.observe(element));
+    // Only the hero needs to follow a transformed object while scrolling.
+    const visibility =
+      variant === "hero"
+        ? new IntersectionObserver(([entry]) => {
+            visible = entry.isIntersecting;
+            if (visible) request();
+          })
+        : null;
+    if (visibility) visibility.observe(stage);
+    const motion =
+      variant === "hero"
+        ? new MutationObserver(() => {
+            if (visible) request();
+          })
+        : null;
+    if (motion && scene)
+      motion.observe(scene, { attributes: true, attributeFilter: ["style"] });
+    window.addEventListener("resize", request, { passive: true });
+    document.addEventListener("visibilitychange", request);
     measure();
-    if (variant === "finish") void document.fonts.ready.then(measure);
+    void document.fonts.ready.then(request);
     return () => {
       active = false;
+      cancelAnimationFrame(frame);
       observer.disconnect();
+      visibility?.disconnect();
+      motion?.disconnect();
+      window.removeEventListener("resize", request);
+      document.removeEventListener("visibilitychange", request);
     };
   }, [variant]);
+
   return (
     <svg
       ref={svg}
       className={`entry-ribbon entry-ribbon--${variant}`}
       viewBox={shape ? `0 0 ${shape.width} ${shape.height}` : undefined}
+      data-end-width={shape?.endWidth}
       aria-hidden="true"
       focusable="false"
     >
@@ -243,25 +308,12 @@ export default function EntryRibbon({
         <>
           <defs>
             <mask
-              id={`${id}-text`}
-              maskUnits="userSpaceOnUse"
-              x="0"
-              y="0"
-              width={shape.width}
-              height={shape.height}
-            >
-              <rect width={shape.width} height={shape.height} fill="white" />
-              {shape.textBounds.map((bounds, i) => (
-                <rect key={i} {...bounds} fill="black" />
-              ))}
-            </mask>
-            <mask
               id={id}
               maskUnits="userSpaceOnUse"
-              x="0"
-              y="0"
-              width={shape.width}
-              height={shape.height}
+              x="-32"
+              y="-32"
+              width={shape.width + 64}
+              height={shape.height + 64}
             >
               <path
                 className="entry-ribbon-reveal"
@@ -269,19 +321,16 @@ export default function EntryRibbon({
                 pathLength="1"
                 fill="none"
                 stroke="white"
-                strokeWidth="24"
+                strokeWidth={Math.max(40, (shape.endWidth ?? 0) + 8)}
                 strokeLinecap="round"
               />
             </mask>
           </defs>
-          <g mask={`url(#${id}-text)`}>
-            <g mask={`url(#${id})`}>
-              <path className="entry-ribbon-body" d={shape.outline} />
-              {shape.strands.map((d, i) => (
-                <path key={i} className="entry-ribbon-grain" d={d} />
-              ))}
-            </g>
-          </g>
+          <path
+            className="entry-ribbon-body"
+            d={shape.outline}
+            mask={`url(#${id})`}
+          />
         </>
       )}
     </svg>

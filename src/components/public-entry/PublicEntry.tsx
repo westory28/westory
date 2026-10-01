@@ -186,6 +186,7 @@ export default function PublicEntry({
             </div>
             <div className="entry-hero-visual">
               <Device kind="tablet" className="entry-hero-tablet">
+                <span className="entry-hero-ink-source" aria-hidden="true" />
                 <img
                   src={lessonReal}
                   alt="실제 위스토리 빈칸 학습지 화면"

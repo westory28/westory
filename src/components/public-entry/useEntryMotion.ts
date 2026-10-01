@@ -97,7 +97,9 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           (viewport * 0.8 - rect.top) / (rect.height + viewport * 0.35),
         );
         const pinned = stage && rect.height > stage.height + 100;
-        const ribbon = pinned ? enter * 0.18 + progress * 0.82 : pass;
+        const ribbon = pinned
+          ? enter * 0.18 + progress * 0.82
+          : clamp((viewport * 0.85 - rect.top) / Math.max(1, rect.height));
         scene.style.setProperty("--scene", progress.toFixed(4));
         scene.style.setProperty("--enter", enter.toFixed(4));
         scene.style.setProperty("--pass", pass.toFixed(4));

@@ -13,14 +13,17 @@
 }
 .entry-ribbon-body {
   fill: var(--entry-orange);
-  opacity: 0.74;
 }
-.entry-ribbon-grain {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 0.8;
-  stroke-dasharray: 36 8 3 9 70 12;
-  opacity: 0.55;
+.entry-ribbon--hero {
+  z-index: 3;
+}
+.entry-hero-ink-source {
+  position: absolute;
+  top: 14%;
+  left: 94%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 .entry-ribbon-reveal {
   stroke-dasharray: 1;
