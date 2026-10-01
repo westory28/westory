@@ -1,4 +1,5 @@
 import { RefObject, useEffect, useState } from "react";
+import { useEntryMotionEnabled } from "./EntryMotionContext";
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -21,13 +22,13 @@ function sceneProgress(
 
 /** A small SVG chart needs numeric progress; the other scenes stay CSS-driven. */
 export function useEntrySceneProgress(root: RefObject<HTMLElement>) {
+  const enabled = useEntryMotionEnabled();
   const [progress, setProgress] = useState(1);
   useEffect(() => {
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0;
     const read = () => {
       frame = 0;
-      if (preference.matches) {
+      if (!enabled) {
         setProgress(1);
         return;
       }
@@ -45,40 +46,30 @@ export function useEntrySceneProgress(root: RefObject<HTMLElement>) {
     window.addEventListener("scroll", request, { passive: true });
     window.addEventListener("resize", request, { passive: true });
     document.addEventListener("visibilitychange", request);
-    if (preference.addEventListener)
-      preference.addEventListener("change", request);
-    else preference.addListener(request);
     request();
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", request);
       window.removeEventListener("resize", request);
       document.removeEventListener("visibilitychange", request);
-      if (preference.removeEventListener)
-        preference.removeEventListener("change", request);
-      else preference.removeListener(request);
     };
-  }, [root]);
+  }, [root, enabled]);
   return progress;
 }
 
 /** Native scrolling is the timeline, including touch, keyboard and reverse travel. */
 export function useEntryMotion(root: RefObject<HTMLDivElement>) {
+  const enabled = useEntryMotionEnabled();
   useEffect(() => {
     const page = root.current;
     if (!page) return;
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const scenes = Array.from(
       page.querySelectorAll<HTMLElement>("[data-entry-scene]"),
     );
     let frame = 0;
     const update = () => {
       frame = 0;
-      if (
-        document.hidden ||
-        preference.matches ||
-        page.dataset.finaleLocked === "true"
-      )
+      if (document.hidden || !enabled || page.dataset.finaleLocked === "true")
         return;
       const viewport = window.innerHeight;
       // Read layout in one pass, then write only compositor properties via CSS variables.
@@ -117,7 +108,12 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           );
         }
         if (scene.classList.contains("entry-hero")) {
-          const open = clamp(0.06 + (80 - rect.top) / (viewport * 0.62));
+          const travelled = Math.max(0, 80 - rect.top);
+          scene.style.setProperty(
+            "--hero-reveal",
+            clamp(travelled / 96).toFixed(4),
+          );
+          const open = clamp(0.06 + travelled / (viewport * 0.62));
           scene.style.setProperty("--open", open.toFixed(4));
         }
         scene.style.setProperty(
@@ -130,15 +126,15 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
       page.dataset.scrolled = String(
         window.scrollY > 600 || page.dataset.finaleLocked === "true",
       );
-      if (!frame && !document.hidden && !preference.matches)
+      if (!frame && !document.hidden && enabled)
         frame = window.requestAnimationFrame(update);
     };
     const sync = () => {
-      page.dataset.motion = preference.matches ? "off" : "on";
+      page.dataset.motion = !enabled ? "off" : "on";
       page.dataset.scrolled = String(window.scrollY > 600);
       if (frame) window.cancelAnimationFrame(frame);
       frame = 0;
-      if (preference.matches) {
+      if (!enabled) {
         scenes.forEach((scene) => {
           scene.style.removeProperty("--scene");
           scene.style.removeProperty("--enter");
@@ -146,6 +142,7 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           scene.style.removeProperty("--pass");
           scene.style.removeProperty("--ribbon");
           scene.style.removeProperty("--open");
+          scene.style.removeProperty("--hero-reveal");
           scene.style.removeProperty("--title-enter");
         });
       } else request();
@@ -189,9 +186,6 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
     window.addEventListener("scroll", request, { passive: true });
     window.addEventListener("resize", request, { passive: true });
     document.addEventListener("visibilitychange", visibility);
-    if (preference.addEventListener)
-      preference.addEventListener("change", sync);
-    else preference.addListener(sync);
     sync();
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
@@ -200,9 +194,6 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
       window.removeEventListener("scroll", request);
       window.removeEventListener("resize", request);
       document.removeEventListener("visibilitychange", visibility);
-      if (preference.removeEventListener)
-        preference.removeEventListener("change", sync);
-      else preference.removeListener(sync);
     };
-  }, [root]);
+  }, [root, enabled]);
 }

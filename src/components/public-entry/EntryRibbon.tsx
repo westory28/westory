@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useEntryMotionEnabled } from "./EntryMotionContext";
 import {
   createEntryBrush,
   type Curve,
@@ -6,24 +7,6 @@ import {
 } from "./entryRibbonGeometry";
 
 type Variant = "hero" | "wide" | "wrap" | "left" | "finish";
-
-// Read layout coordinates without the title's entrance animation transform.
-function layoutBox(element: HTMLElement, stage: HTMLElement) {
-  let left = 0,
-    top = 0;
-  let node: HTMLElement | null = element;
-  while (node && node !== stage) {
-    left += node.offsetLeft;
-    top += node.offsetTop;
-    node = node.offsetParent as HTMLElement | null;
-  }
-  return {
-    left,
-    top,
-    right: left + element.offsetWidth,
-    bottom: top + element.offsetHeight,
-  };
-}
 
 // Measure both the position and the full width of the actual font's ㅣ ink.
 function letterStroke(target: HTMLElement, origin = false) {
@@ -90,296 +73,318 @@ function letterStroke(target: HTMLElement, origin = false) {
   return fallback;
 }
 
-/** One solid, pressure-shaped stroke, routed through the composition's whitespace. */
+/** A curved comet is absorbed into this scene, never joined at a section seam. */
 export default function EntryRibbon({
   variant = "wrap",
 }: {
   variant?: Variant;
 }) {
   const svg = useRef<SVGSVGElement>(null);
+  const reveal = useRef<SVGPathElement>(null);
+  const head = useRef<SVGCircleElement>(null);
+  const enabled = useEntryMotionEnabled();
   const id = `entry-ink-${useId().replace(/:/g, "")}`;
   const [shape, setShape] = useState<
     ReturnType<typeof createEntryBrush> & {
       width: number;
       height: number;
-      endWidth?: number;
-      startWidth?: number;
     }
   >();
 
   useEffect(() => {
     const stage = svg.current?.parentElement;
-    if (!stage) return;
-    const scene = stage.closest<HTMLElement>("[data-entry-scene]");
+    const scene = stage?.closest<HTMLElement>("[data-entry-scene]");
+    if (!stage || !scene || !enabled) return;
     const source = stage.querySelector<HTMLElement>(".entry-hero-da");
-    const target = stage.querySelector<HTMLElement>(".entry-finale-ri");
-    const anchor = stage.querySelector<HTMLElement>(
-      ".entry-motion-title .entry-type-mask:last-child > span",
-    );
-    let active = true;
-    let visible = true;
-    let frame = 0;
-    let introUntil = 0;
+    const target =
+      stage.querySelector<HTMLElement>("[data-entry-absorb]") ??
+      stage.querySelector<HTMLElement>(
+        variant === "hero"
+          ? ".entry-opening-screen"
+          : variant === "finish"
+            ? ".entry-finale-ri"
+            : "[data-entry-absorb], .entry-motion-title .entry-type-mask:last-child > span",
+      );
+    if (!target) return;
+    let frame = 0,
+      startTime = 0,
+      pausedAt = 0,
+      glowTime = 0;
+    let active = true,
+      running = false,
+      completed = false;
     let sourceInk: ReturnType<typeof letterStroke> | undefined;
+    let pathLength = 0;
+    let geometryKey = "";
+    let measuredPath = "";
+    scene.dataset.ink = "ready";
+    target.setAttribute("data-ink-target", "");
+
     const measure = () => {
-      frame = 0;
-      if (!active || document.hidden) return;
       const width = stage.offsetWidth,
         height = stage.offsetHeight;
       if (!width || !height) return;
+      const box = stage.getBoundingClientRect();
+      const tr = target.getBoundingClientRect();
+      const sr = source?.getBoundingClientRect();
+      const key = [
+        width,
+        height,
+        tr.left - box.left,
+        tr.top - box.top,
+        tr.width,
+        tr.height,
+        sr ? sr.left - box.left : 0,
+        sr ? sr.top - box.top : 0,
+      ]
+        .map((value) => value.toFixed(1))
+        .join(":");
+      if (key === geometryKey) return;
+      geometryKey = key;
       const compact = window.innerWidth < 768;
-      const edge = compact ? 10 : 16;
-      const joinX = compact ? 48 : 96;
-      const joinY = compact ? 24 : 32;
-      const center = width / 2;
-      const side = width - edge;
-      const stageRect = stage.getBoundingClientRect();
+      const edge = compact ? 16 : 32;
       let curves: Curve[];
-      let emphasisSegment: number | undefined;
-      let endWidth: number | undefined;
       let startWidth: number | undefined;
-      let taperStart = false;
-
-      // Pixel coordinates make tangents identical across stages of different widths.
-      if (variant === "finish" && target) {
-        const tr = target.getBoundingClientRect();
-        const baseline = target
-          .querySelector(".entry-finale-baseline")
-          ?.getBoundingClientRect();
-        const ink = letterStroke(target);
-        const end: Point = [
-          tr.left + ink.point[0] - stageRect.left,
-          (baseline?.top ?? tr.bottom) + ink.point[1] - stageRect.top,
-        ];
-        endWidth = ink.width;
-        const guideX = Math.min(side, end[0] + 32);
-        const guideY = end[1] * 0.42;
-        curves = [
-          [
-            [center, 0],
-            [center - joinX, joinY],
-            [guideX, guideY * 0.25],
-            [guideX, guideY],
-          ],
-          [
-            [guideX, guideY],
-            [guideX, end[1] * 0.68],
-            [end[0], end[1] * 0.84],
-            end,
-          ],
-        ];
-      } else if (variant === "hero" && source) {
+      let end: Point = [
+        tr.right - box.left - Math.min(64, tr.width * 0.2),
+        tr.top - box.top + tr.height * 0.5,
+      ];
+      if (variant === "hero" && source) {
         const sr = source.getBoundingClientRect();
         const baseline = source
           .querySelector(".entry-hero-baseline")!
           .getBoundingClientRect();
         sourceInk ??= letterStroke(source, true);
         const start: Point = [
-          sr.left + sourceInk.point[0] - stageRect.left,
-          baseline.top + sourceInk.point[1] - stageRect.top,
+          sr.left - box.left + sourceInk.point[0],
+          baseline.top - box.top + sourceInk.point[1],
         ];
         startWidth = sourceInk.width;
-        const visual = stage.querySelector<HTMLElement>(".entry-hero-visual");
-        const bottom = visual ? layoutBox(visual, stage).bottom : height - 128;
-        const radius = Math.min(compact ? 96 : 180, (side - start[0]) * 0.8);
-        const turnY = Math.max(
-          start[1] + radius + 40,
-          bottom - (compact ? 72 : 120),
-        );
+        // Land inside the opening screen, following its actual transformed bounds.
+        end = [
+          tr.right - box.left - tr.width * 0.12,
+          tr.top - box.top + tr.height * 0.25,
+        ];
+        const side = width - edge;
+        const turn: Point = [
+          side - Math.min(40, width * 0.04),
+          start[1] + Math.max(96, (end[1] - start[1]) * 0.5),
+        ];
         curves = [
           [
             start,
-            [start[0] + (side - start[0]) * 0.7, start[1]],
-            [side, start[1] + radius * 0.4],
-            [side, start[1] + radius],
+            [start[0] + (side - start[0]) * 0.72, start[1]],
+            [side, turn[1] - 80],
+            turn,
           ],
           [
-            [side, start[1] + radius],
-            [side, start[1] + radius + 64],
-            [side, turnY - 64],
-            [side, turnY],
-          ],
-          [
-            [side, turnY],
-            [side, turnY + (height - turnY) * 0.65],
-            [center + joinX, height - joinY],
-            [center, height],
+            turn,
+            [2 * turn[0] - side, turn[1] + 80],
+            [end[0] + 72, end[1] + 64],
+            end,
           ],
         ];
-        emphasisSegment = 0;
       } else {
-        const ar = anchor
-          ? layoutBox(anchor, stage)
-          : {
-              left: width * 0.3,
-              right: width * 0.7,
-              top: height * 0.15,
-              bottom: height * 0.25,
-            };
-        const titleRows = Array.from(
-          stage.querySelectorAll<HTMLElement>(
-            ".entry-motion-title .entry-type-mask > span",
-          ),
-        );
-        const rowBoxes = titleRows.map((element) => layoutBox(element, stage));
-        const menuNumber =
-          stage.querySelector<HTMLElement>(".entry-menu-number");
-        const menuLeft = menuNumber
-          ? layoutBox(menuNumber, stage).left
-          : ar.left;
-        const outside = Math.max(
-          edge,
-          Math.min(ar.left, menuLeft, ...rowBoxes.map((r) => r.left)) -
-            (window.innerWidth < 1024 ? 32 : 56),
-        );
-        const approachY = Math.max(
-          48,
-          Math.min(ar.top - 24, ...rowBoxes.map((r) => r.top - 16)),
-        );
-        const titleY = ar.bottom + 12;
-        const left = Math.max(edge + 32, ar.left + (ar.right - ar.left) * 0.1);
-        const right = Math.min(
-          side - 16,
-          ar.right - (ar.right - ar.left) * 0.08,
-        );
-        // Turn back toward the shared endpoint only below the final content row.
-        const contentBottom = Math.max(
-          titleY,
-          ...Array.from(stage.children)
-            .filter((node): node is HTMLElement => node instanceof HTMLElement)
-            .map((node) => layoutBox(node, stage).bottom),
-        );
-        const turnY = Math.max(
-          titleY + 96,
-          Math.min(height * 0.78, contentBottom - 48),
-        );
-        // An elliptical shoulder uses the available whitespace, never a 16px elbow.
-        const shoulder = Math.min(
-          compact ? 64 : 120,
-          Math.max(32, (side - right) * 0.6),
-        );
+        if (variant === "finish") {
+          const ink = letterStroke(target);
+          const baseline = target
+            .querySelector(".entry-finale-baseline")
+            ?.getBoundingClientRect();
+          end = [
+            tr.left - box.left + ink.point[0],
+            (baseline?.top ?? tr.bottom) - box.top + ink.point[1],
+          ];
+        }
+        const side = width - edge;
+        const start: Point = [
+          Math.max(width * 0.54, end[0] - width * 0.2),
+          Math.max(16, end[1] - 240),
+        ];
+        const shoulder: Point = [
+          side - Math.min(32, width * 0.035),
+          Math.max(start[1] + 32, end[1] - 64),
+        ];
         curves = [
           [
-            [center, 0],
-            [center - joinX, joinY],
-            [outside, Math.max(joinY, approachY * 0.2)],
-            [outside, approachY],
+            start,
+            [start[0] + (side - start[0]) * 0.45, start[1] - 24],
+            [side, shoulder[1] - 64],
+            shoulder,
           ],
           [
-            [outside, approachY],
-            [outside, approachY + (titleY - approachY) * 0.65],
-            [left - (left - outside) * 0.55, titleY],
-            [left, titleY],
-          ],
-          [
-            [left, titleY],
-            [left + (right - left) / 3, titleY],
-            [right - (right - left) / 3, titleY],
-            [right, titleY],
-          ],
-          [
-            [right, titleY],
-            [right + (side - right) * 0.55, titleY],
-            [side, titleY + shoulder * 0.45],
-            [side, titleY + shoulder],
-          ],
-          [
-            [side, titleY + shoulder],
-            [side, titleY + shoulder + (turnY - titleY - shoulder) / 3],
-            [side, turnY - (turnY - titleY - shoulder) / 3],
-            [side, turnY],
-          ],
-          [
-            [side, turnY],
-            [side, turnY + (height - turnY) * 0.72],
-            [center + joinX, height - joinY],
-            [center, height],
+            shoulder,
+            [2 * shoulder[0] - side, shoulder[1] + 64],
+            variant === "finish"
+              ? [end[0], end[1] - 32]
+              : [
+                  end[0] + Math.max(8, (shoulder[0] - end[0]) * 0.45),
+                  end[1] + 32,
+                ],
+            end,
           ],
         ];
-        emphasisSegment = 2;
       }
-      const normalized = curves.map(
-        (curve) => curve.map(([x, y]) => [x / width, y / height]) as Curve,
-      );
       setShape({
-        ...createEntryBrush(normalized, width, height, {
-          compact,
-          emphasisSegment,
-          taperStart,
-          startWidth,
-          endWidth,
-        }),
+        ...createEntryBrush(
+          curves.map(
+            (curve) => curve.map(([x, y]) => [x / width, y / height]) as Curve,
+          ),
+          width,
+          height,
+          {
+            compact,
+            startWidth,
+            taperStart: !source,
+            taperEnd: true,
+            emphasisSegment: 0,
+          },
+        ),
         width,
         height,
-        endWidth,
-        startWidth,
       });
-      if (variant === "hero" && visible && performance.now() < introUntil)
-        frame = requestAnimationFrame(measure);
     };
-    const request = () => {
-      if (!frame && active && !document.hidden)
-        frame = requestAnimationFrame(measure);
+    const hide = () => {
+      if (reveal.current) reveal.current.style.strokeDasharray = "0 2";
+      head.current?.setAttribute("opacity", "0");
     };
-    const remeasure = () => {
-      sourceInk = undefined;
-      request();
+    const clearGlow = () => {
+      delete target.dataset.inkGlow;
+      glowTime = 0;
     };
-    const observer = new ResizeObserver(remeasure);
-    observer.observe(stage);
-    stage
-      .querySelectorAll<HTMLElement>(
-        ".entry-motion-title, .entry-hero-da, .entry-finale-ri",
+    const paint = (time: number) => {
+      frame = 0;
+      if (!active || document.hidden) return;
+      const t = Math.max(0, Math.min(1, (time - startTime - 180) / 1600));
+      const ease = (v: number) => {
+        const x = Math.max(0, Math.min(1, v));
+        return x * x * (3 - 2 * x);
+      };
+      const front = ease(t / 0.72);
+      const tail = ease((t - 0.24) / 0.76);
+      measure();
+      const path = reveal.current;
+      if (path) {
+        path.style.strokeDasharray = `${Math.max(0, front - tail)} 2`;
+        path.style.strokeDashoffset = String(-tail);
+        if (measuredPath !== path.getAttribute("d")) {
+          measuredPath = path.getAttribute("d") || "";
+          pathLength = path.getTotalLength();
+        }
+        const point = path.getPointAtLength(pathLength * front);
+        head.current?.setAttribute("cx", String(point.x));
+        head.current?.setAttribute("cy", String(point.y));
+        head.current?.setAttribute(
+          "r",
+          String((innerWidth < 768 ? 3 : 4) * (1 - ease((t - 0.72) / 0.28))),
+        );
+        head.current?.setAttribute("opacity", t > 0 && t < 1 ? "1" : "0");
+      }
+      if (t >= 0.72 && !glowTime) {
+        target.dataset.inkGlow = "true";
+        glowTime = window.setTimeout(clearGlow, 900);
+      }
+      if (t < 1) frame = requestAnimationFrame(paint);
+      else {
+        running = false;
+        completed = true;
+        scene.dataset.ink = "absorbed";
+        hide();
+      }
+    };
+    const inspect = () => {
+      if (!active || document.hidden || running || completed) return;
+      const rect = scene.getBoundingClientRect();
+      const tr = target.getBoundingClientRect();
+      // Reading the page at the top must never start the hero ink.
+      const ready =
+        variant === "hero"
+          ? window.scrollY >= 96
+          : variant === "finish"
+            ? scene.dataset.entered === "true"
+            : tr.top < innerHeight * 0.82;
+      if (
+        !ready ||
+        rect.bottom <= 80 ||
+        tr.bottom <= 80 ||
+        tr.top >= innerHeight
       )
-      .forEach((element) => observer.observe(element));
-    // Only the hero needs to follow a transformed object while scrolling.
-    const visibility =
-      variant === "hero"
-        ? new IntersectionObserver(([entry]) => {
-            visible = entry.isIntersecting;
-            if (visible) request();
-          })
-        : null;
-    if (visibility) visibility.observe(stage);
-    const motion =
-      variant === "hero"
-        ? new MutationObserver((records) => {
-            if (
-              records.some((record) => record.attributeName === "data-entered")
-            )
-              introUntil = performance.now() + 1400;
-            if (visible) request();
-          })
-        : null;
-    if (motion && scene)
-      motion.observe(scene, {
-        attributes: true,
-        attributeFilter: ["style", "data-entered"],
-      });
-    if (scene?.dataset.entered === "true")
-      introUntil = performance.now() + 1400;
-    window.addEventListener("resize", remeasure, { passive: true });
-    document.addEventListener("visibilitychange", request);
+        return;
+      measure();
+      running = true;
+      scene.dataset.ink = "running";
+      startTime = performance.now();
+      frame = requestAnimationFrame(paint);
+    };
+    const resize = () => {
+      sourceInk = undefined;
+      geometryKey = "";
+      measure();
+      inspect();
+    };
+    const scroll = () => {
+      // Returning to the very top starts a fresh, scroll-triggered hero sequence.
+      if (variant === "hero" && window.scrollY < 8) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+        running = false;
+        completed = false;
+        scene.dataset.ink = "ready";
+        hide();
+        if (reveal.current) reveal.current.style.strokeDasharray = "0 2";
+        clearTimeout(glowTime);
+        clearGlow();
+      }
+      inspect();
+    };
+    const visibility = () => {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      if (document.hidden) pausedAt = performance.now();
+      else {
+        if (pausedAt) startTime += performance.now() - pausedAt;
+        pausedAt = 0;
+        if (running) frame = requestAnimationFrame(paint);
+        else inspect();
+      }
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(stage);
+    observer.observe(target);
+    const finale = variant === "finish" ? new MutationObserver(inspect) : null;
+    finale?.observe(scene, {
+      attributes: true,
+      attributeFilter: ["data-entered"],
+    });
+    window.addEventListener("scroll", scroll, { passive: true });
+    window.addEventListener("resize", resize, { passive: true });
+    document.addEventListener("visibilitychange", visibility);
     measure();
-    void document.fonts.ready.then(remeasure);
+    inspect();
+    void document.fonts.ready.then(() => {
+      if (active) resize();
+    });
     return () => {
       active = false;
       cancelAnimationFrame(frame);
+      clearTimeout(glowTime);
       observer.disconnect();
-      visibility?.disconnect();
-      motion?.disconnect();
-      window.removeEventListener("resize", remeasure);
-      document.removeEventListener("visibilitychange", request);
+      finale?.disconnect();
+      clearGlow();
+      hide();
+      delete scene.dataset.ink;
+      target.removeAttribute("data-ink-target");
+      window.removeEventListener("scroll", scroll);
+      window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", visibility);
     };
-  }, [variant]);
+  }, [variant, enabled]);
 
   return (
     <svg
       ref={svg}
       className={`entry-ribbon entry-ribbon--${variant}`}
+      data-comet="true"
       viewBox={shape ? `0 0 ${shape.width} ${shape.height}` : undefined}
-      data-end-width={shape?.endWidth}
-      data-start-width={shape?.startWidth}
       aria-hidden="true"
       focusable="false"
     >
@@ -395,17 +400,15 @@ export default function EntryRibbon({
               height={shape.height + 64}
             >
               <path
-                className="entry-ribbon-reveal"
+                ref={reveal}
+                className="entry-comet-reveal"
                 d={shape.center}
                 pathLength="1"
                 fill="none"
                 stroke="white"
-                strokeWidth={Math.max(
-                  40,
-                  (shape.endWidth ?? 0) + 8,
-                  (shape.startWidth ?? 0) + 8,
-                )}
-                strokeLinecap="round"
+                strokeWidth="48"
+                strokeLinecap="butt"
+                strokeDasharray="0 2"
               />
             </mask>
           </defs>
@@ -414,6 +417,7 @@ export default function EntryRibbon({
             d={shape.outline}
             mask={`url(#${id})`}
           />
+          <circle ref={head} className="entry-comet-head" r="0" opacity="0" />
         </>
       )}
     </svg>

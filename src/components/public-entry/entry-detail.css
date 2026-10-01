@@ -205,111 +205,127 @@
   visibility: hidden;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .public-entry[data-motion="on"] .entry-ribbon-reveal {
-    stroke-dashoffset: calc(1 - var(--ribbon, 0));
-  }
-  .public-entry[data-motion="on"] .entry-hero-mask > span {
-    opacity: 0;
-  }
-  .public-entry[data-motion="on"]
-    .entry-hero[data-entered="true"]
-    .entry-hero-mask:first-child
-    > span {
-    animation: entry-gather-left 1000ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .public-entry[data-motion="on"]
-    .entry-hero[data-entered="true"]
-    .entry-hero-mask:last-child
-    > span {
-    animation: entry-gather-right 1000ms 100ms cubic-bezier(0.16, 1, 0.3, 1)
-      both;
-  }
-  .public-entry[data-motion="on"] .entry-hero-tablet {
-    transform: translateY(calc(var(--scene) * -24px))
-      rotateY(calc(-9deg + var(--ribbon) * 9deg))
-      rotateZ(calc(-3deg + var(--ribbon) * 3deg));
-  }
-  .public-entry[data-motion="on"]
-    .entry-structure:not([data-entered="true"])
-    .entry-overview
-    > button {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-  .public-entry[data-motion="on"]
-    .entry-structure[data-entered="true"]
-    .entry-overview
-    > button {
-    animation: entry-rise 700ms calc(var(--order) * 100ms)
-      cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .public-entry[data-motion="on"] .entry-type-mask > span {
-    --type-enter: clamp(0, calc((var(--enter) - 0.08) / 0.82), 1);
-    opacity: calc(0.15 + var(--type-enter) * 0.85);
-    transform: translateY(calc((1 - var(--type-enter)) * 24px));
-  }
-  .public-entry[data-motion="on"]
-    .entry-type--depth
-    .entry-type-mask:last-child
-    > span {
-    transform: perspective(600px)
-      translateZ(calc((1 - var(--type-enter)) * -64px));
-    filter: blur(calc((1 - var(--type-enter)) * 4px));
-  }
-  .public-entry[data-motion="on"]
-    .entry-type--add
-    .entry-type-mask:last-child
-    > span {
-    transform: translateX(calc((1 - var(--type-enter)) * 32px));
-  }
-  .public-entry[data-motion="on"]
-    .entry-type--add
-    .entry-type-mask:last-child
-    > span::after {
-    transform: scaleX(var(--type-enter));
-  }
-  .public-entry[data-motion="on"] .entry-feature-visual {
-    transform: translateY(calc((0.5 - var(--pass)) * 28px));
-  }
-  .public-entry[data-motion="on"] .entry-map-composition .entry-device {
-    transform: rotateY(calc(-7deg + var(--ribbon) * 10deg))
-      rotateZ(calc(3deg - var(--ribbon) * 4deg));
-  }
-  .public-entry[data-motion="on"] .entry-finish .entry-finale-phrase,
-  .public-entry[data-motion="on"] .entry-finish .entry-finale-we,
-  .public-entry[data-motion="on"] .entry-finish .entry-finale-story,
-  .public-entry[data-motion="on"] .entry-finish .entry-finish-actions {
-    opacity: 0;
-  }
-  .public-entry[data-motion="on"] .entry-finish .entry-ribbon-reveal {
-    stroke-dashoffset: 1;
-  }
-  .public-entry[data-motion="on"]
-    .entry-finish[data-entered="true"]
-    .entry-finale-phrase {
-    animation: entry-rise 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .public-entry[data-motion="on"]
-    .entry-finish[data-entered="true"]
-    .entry-finale-we {
-    animation: entry-rise 900ms 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .public-entry[data-motion="on"]
-    .entry-finish[data-entered="true"]
-    .entry-finale-story {
-    animation: entry-ink-word 700ms 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  .public-entry[data-motion="on"]
-    .entry-finish[data-entered="true"]
-    .entry-ribbon-reveal {
-    animation: entry-ink-absorb 1800ms cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
-  .public-entry[data-motion="on"]
-    .entry-finish[data-entered="true"]
-    .entry-finish-actions {
-    animation: entry-rise 500ms 1200ms ease both;
-  }
+.public-entry[data-motion="on"] .entry-ribbon-reveal {
+  stroke-dashoffset: calc(1 - var(--ribbon, 0));
+}
+
+.public-entry[data-motion="on"] .entry-hero-mask > span {
+  opacity: 0;
+}
+
+.public-entry[data-motion="on"]
+  .entry-hero[data-entered="true"]
+  .entry-hero-mask:first-child
+  > span {
+  animation: entry-gather-left 1000ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.public-entry[data-motion="on"]
+  .entry-hero[data-entered="true"]
+  .entry-hero-mask:last-child
+  > span {
+  animation: entry-gather-right 1000ms 100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.public-entry[data-motion="on"] .entry-hero-tablet {
+  transform: translateY(calc(var(--scene) * -24px))
+    rotateY(calc(-9deg + var(--ribbon) * 9deg))
+    rotateZ(calc(-3deg + var(--ribbon) * 3deg));
+}
+
+.public-entry[data-motion="on"]
+  .entry-structure:not([data-entered="true"])
+  .entry-overview
+  > button {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.public-entry[data-motion="on"]
+  .entry-structure[data-entered="true"]
+  .entry-overview
+  > button {
+  animation: entry-rise 700ms calc(var(--order) * 100ms)
+    cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.public-entry[data-motion="on"] .entry-type-mask > span {
+  --type-enter: clamp(0, calc((var(--enter) - 0.08) / 0.82), 1);
+  opacity: calc(0.15 + var(--type-enter) * 0.85);
+  transform: translateY(calc((1 - var(--type-enter)) * 24px));
+}
+
+.public-entry[data-motion="on"]
+  .entry-type--depth
+  .entry-type-mask:last-child
+  > span {
+  transform: perspective(600px)
+    translateZ(calc((1 - var(--type-enter)) * -64px));
+  filter: blur(calc((1 - var(--type-enter)) * 4px));
+}
+
+.public-entry[data-motion="on"]
+  .entry-type--add
+  .entry-type-mask:last-child
+  > span {
+  transform: translateX(calc((1 - var(--type-enter)) * 32px));
+}
+
+.public-entry[data-motion="on"]
+  .entry-type--add
+  .entry-type-mask:last-child
+  > span::after {
+  transform: scaleX(var(--type-enter));
+}
+
+.public-entry[data-motion="on"] .entry-feature-visual {
+  transform: translateY(calc((0.5 - var(--pass)) * 28px));
+}
+
+.public-entry[data-motion="on"] .entry-map-composition .entry-device {
+  transform: rotateY(calc(-7deg + var(--ribbon) * 10deg))
+    rotateZ(calc(3deg - var(--ribbon) * 4deg));
+}
+
+.public-entry[data-motion="on"] .entry-finish .entry-finale-phrase,
+.public-entry[data-motion="on"] .entry-finish .entry-finale-we,
+.public-entry[data-motion="on"] .entry-finish .entry-finale-story,
+.public-entry[data-motion="on"] .entry-finish .entry-finish-actions {
+  opacity: 0;
+}
+
+.public-entry[data-motion="on"] .entry-finish .entry-ribbon-reveal {
+  stroke-dashoffset: 1;
+}
+
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-finale-phrase {
+  animation: entry-rise 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-finale-we {
+  animation: entry-rise 900ms 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-finale-story {
+  animation: entry-ink-word 700ms 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-ribbon-reveal {
+  animation: entry-ink-absorb 1800ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-finish-actions {
+  animation: entry-rise 500ms 1200ms ease both;
 }
 @keyframes entry-gather-left {
   from {
@@ -434,22 +450,20 @@
     font-size: clamp(66px, 20vw, 104px);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .public-entry .entry-ribbon-reveal {
-    stroke-dashoffset: 0;
-  }
-  .public-entry .entry-ribbon--finish {
-    display: none;
-  }
-  .public-entry .entry-hero-tablet {
-    transform: none;
-  }
+.public-entry[data-motion="off"] .entry-ribbon-reveal {
+  stroke-dashoffset: 0;
+}
+.public-entry[data-motion="off"] .entry-ribbon--finish {
+  display: none;
+}
+.public-entry[data-motion="off"] .entry-hero-tablet {
+  transform: none;
 }
 /* The existing short-viewport rule disables all animations. Keep their contents visible. */
 @media (max-height: 599px) {
   .public-entry[data-motion="on"]
     :is(
-      .entry-hero-mask > span,
+      .entry-hero-mask:first-child > span,
       .entry-overview > button,
       .entry-finale-phrase,
       .entry-finale-we,

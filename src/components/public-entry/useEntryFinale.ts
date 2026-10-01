@@ -1,4 +1,5 @@
 import { RefObject, useLayoutEffect, useRef } from "react";
+import { useEntryMotionEnabled } from "./EntryMotionContext";
 
 const interactive =
   'a[href],button,input,select,textarea,summary,[contenteditable="true"],[role="button"],[tabindex]';
@@ -20,13 +21,13 @@ export function useEntryFinale(
   suspended: boolean,
 ) {
   const consumed = useRef(false);
+  const motionEnabled = useEntryMotionEnabled();
   useLayoutEffect(() => {
     const page = root.current;
     const scene = page?.querySelector<HTMLElement>(".entry-finish");
     if (!page || !scene || suspended) return;
     const body = document.body;
     const html = document.documentElement;
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0,
       timer = 0,
       locked = false,
@@ -75,7 +76,7 @@ export function useEntryFinale(
     const start = (top: number) => {
       const stage = scene.querySelector<HTMLElement>(".entry-stage");
       if (
-        preference.matches ||
+        !motionEnabled ||
         viewportHeight() < 600 ||
         !stage ||
         stage.scrollHeight > viewportHeight() - offset() + 2 ||
@@ -194,11 +195,6 @@ export function useEntryFinale(
       if (document.hidden) release();
       else request();
     };
-    const preferenceChanged = () => {
-      release();
-      if (preference.matches) complete();
-      else request();
-    };
     window.addEventListener("scroll", request, { passive: true });
     window.addEventListener("resize", resize);
     window.addEventListener("orientationchange", release);
@@ -207,10 +203,7 @@ export function useEntryFinale(
     document.addEventListener("pointerdown", pointerdown, true);
     document.addEventListener("focusin", release, true);
     document.addEventListener("visibilitychange", visibility);
-    if (preference.addEventListener)
-      preference.addEventListener("change", preferenceChanged);
-    else preference.addListener(preferenceChanged);
-    if (preference.matches || viewportHeight() < 600) complete();
+    if (!motionEnabled || viewportHeight() < 600) complete();
     else request();
     return () => {
       window.cancelAnimationFrame(frame);
@@ -225,10 +218,7 @@ export function useEntryFinale(
       document.removeEventListener("pointerdown", pointerdown, true);
       document.removeEventListener("focusin", release, true);
       document.removeEventListener("visibilitychange", visibility);
-      if (preference.removeEventListener)
-        preference.removeEventListener("change", preferenceChanged);
-      else preference.removeListener(preferenceChanged);
       window.cancelAnimationFrame(frame);
     };
-  }, [root, suspended]);
+  }, [root, suspended, motionEnabled]);
 }

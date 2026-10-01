@@ -60,11 +60,13 @@
   stroke-dasharray: 1;
   stroke-dashoffset: 0;
 }
-@media (prefers-reduced-motion: no-preference) and (min-height: 600px) {
-  .public-entry .entry-confirm-signature path {
+@media (min-height: 600px) {
+  .public-entry[data-motion="on"] .entry-confirm-signature path {
     stroke-dashoffset: 1;
   }
-  .public-entry .entry-confirm-signature[data-writing="true"] path {
+  .public-entry[data-motion="on"]
+    .entry-confirm-signature[data-writing="true"]
+    path {
     animation: entry-confirm-handwriting var(--stroke-duration) linear
       calc(550ms + var(--stroke-delay)) both;
   }
@@ -110,7 +112,7 @@
   text-align: center;
   margin: 16px 0 0;
 }
-@media (min-height: 700px) and (prefers-reduced-motion: no-preference) {
+@media (min-height: 700px) {
   .public-entry[data-motion="on"] .entry-confirm-scene {
     height: 240svh;
   }
@@ -153,7 +155,7 @@
     margin-top: 12px;
   }
 }
-@media (max-height: 699px), (prefers-reduced-motion: reduce) {
+@media (max-height: 699px) {
   .public-entry .entry-confirm-scene {
     height: auto;
   }
@@ -162,4 +164,12 @@
     top: auto;
     min-height: 0;
   }
+}
+.public-entry[data-motion="off"] .entry-confirm-scene {
+  height: auto;
+}
+.public-entry[data-motion="off"] .entry-confirm-stage {
+  position: relative;
+  top: auto;
+  min-height: 0;
 }

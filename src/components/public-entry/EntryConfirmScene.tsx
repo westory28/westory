@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
 import EntryRibbon from "./EntryRibbon";
 import { useEntrySceneProgress } from "./useEntryMotion";
+import { useEntryMotionEnabled } from "./EntryMotionContext";
 import score from "../../assets/public-entry/confirmation-score.webp";
 import question from "../../assets/public-entry/confirmation-question.webp";
 import signature from "../../assets/public-entry/confirmation-signature.webp";
@@ -106,18 +107,15 @@ function SignatureWriting({ imageReady }: { imageReady: boolean }) {
 
 export default function EntryConfirmScene() {
   const root = useRef<HTMLElement>(null);
+  const motionEnabled = useEntryMotionEnabled();
   const progress = useEntrySceneProgress(root);
   const [slide, setSlide] = useState(0);
   const [signatureImageReady, setSignatureImageReady] = useState(false);
   const [signatureReplay, setSignatureReplay] = useState(0);
   useEffect(() => {
-    if (
-      innerHeight < 700 ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    )
-      return;
+    if (innerHeight < 700 || !motionEnabled) return;
     setSlide(Math.min(2, Math.floor(progress * 3)));
-  }, [progress]);
+  }, [progress, motionEnabled]);
   return (
     <section
       ref={root}

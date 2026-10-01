@@ -194,7 +194,15 @@ export function createEntryBrush(
       ? cap(radii[last], right[last])
       : `L${coordinate(right[last])}`;
   return {
-    center: `M${path(samples.map(({ point }) => point))}`,
+    center: curves
+      .map((curve, index) => {
+        const [a, b, c, d] = curve.map(([x, y]) => [
+          x * width,
+          y * height,
+        ]) as Curve;
+        return `${index === 0 ? `M${coordinate(a)} ` : ""}C${coordinate(b)} ${coordinate(c)} ${coordinate(d)}`;
+      })
+      .join(" "),
     outline: `M${path(left)} ${terminalCap} L${path(right.slice(0, -1).reverse())} ${initialCap} Z`,
   };
 }

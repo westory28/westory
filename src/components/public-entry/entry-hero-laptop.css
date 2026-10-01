@@ -167,7 +167,12 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce), (max-height: 599px) {
+.public-entry[data-motion="off"] .entry-opening-laptop {
+  --lid-open: 1;
+  transform: none;
+}
+
+@media (max-height: 599px) {
   .entry-opening-laptop {
     --lid-open: 1;
     transform: none;

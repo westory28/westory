@@ -1160,7 +1160,7 @@
     transform: none;
   }
 }
-@media (min-height: 600px) and (prefers-reduced-motion: no-preference) {
+@media (min-height: 600px) {
   .public-entry[data-motion="on"] .entry-hero {
     min-height: 150svh;
   }
@@ -1661,7 +1661,36 @@
     font-size: 18px;
   }
 }
-@media (prefers-reduced-motion: reduce), (max-height: 599px) {
+.public-entry[data-motion="off"] .entry-lesson-deck {
+  height: auto;
+}
+.public-entry[data-motion="off"] .entry-stage {
+  min-height: 0;
+}
+.public-entry[data-motion="off"] .entry-hero-stage,
+.public-entry[data-motion="off"] .entry-deck-stage {
+  position: relative;
+  top: auto;
+}
+.public-entry[data-motion="off"] .entry-type-mask > span,
+.public-entry[data-motion="off"] .entry-hero-mask > span,
+.public-entry[data-motion="off"] .entry-feature-visual {
+  transform: none;
+  opacity: 1;
+}
+.public-entry[data-motion="off"] *,
+.public-entry[data-motion="off"] *::before,
+.public-entry[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+.public-entry[data-motion="off"] .entry-thread-draw {
+  stroke-dashoffset: 0;
+}
+.public-entry[data-motion="off"] .entry-scroll-cue {
+  display: none;
+}
+@media (max-height: 599px) {
   .public-entry[data-motion="on"] .entry-lesson-deck,
   .public-entry .entry-lesson-deck {
     height: auto;

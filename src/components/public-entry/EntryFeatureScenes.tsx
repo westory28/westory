@@ -3,6 +3,7 @@ import EntryThinkCloud from "./EntryThinkCloud";
 import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
 import PublicScoreDemo from "./PublicScoreDemo";
 import { useEntrySceneProgress } from "./useEntryMotion";
+import { useEntryMotionEnabled } from "./EntryMotionContext";
 import { entryMaterial } from "./entryMaterial";
 import EntryRibbon from "./EntryRibbon";
 import EntryConfirmScene from "./EntryConfirmScene";
@@ -15,9 +16,10 @@ export function moveToEntrySection(id: string) {
   const section = document.getElementById(id);
   section?.focus({ preventScroll: true });
   section?.scrollIntoView({
-    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? "auto"
-      : "smooth",
+    behavior:
+      section?.closest<HTMLElement>(".public-entry")?.dataset.motion === "off"
+        ? "auto"
+        : "smooth",
     block: "start",
   });
 }
@@ -82,15 +84,16 @@ const lessonSlides = [
 
 export function LessonScene() {
   const root = useRef<HTMLElement>(null);
+  const motionEnabled = useEntryMotionEnabled();
   const [slide, setSlide] = useState(0);
   useEffect(() => {
+    if (!motionEnabled) return;
     let frame = 0,
       last = -1;
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const read = () => {
       frame = 0;
       const el = root.current;
-      if (!el || media.matches || innerHeight < 800) return;
+      if (!el || innerHeight < 800) return;
       const rect = el.getBoundingClientRect();
       const stage = el.firstElementChild as HTMLElement;
       const progress = Math.max(
@@ -117,7 +120,7 @@ export function LessonScene() {
       window.removeEventListener("scroll", request);
       window.removeEventListener("resize", request);
     };
-  }, []);
+  }, [motionEnabled]);
   return (
     <section
       ref={root}

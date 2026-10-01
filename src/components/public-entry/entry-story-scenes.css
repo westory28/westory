@@ -5,7 +5,7 @@
 .entry-record-value strong {
   font-variant-numeric: tabular-nums;
 }
-@media (min-height: 700px) and (prefers-reduced-motion: no-preference) {
+@media (min-height: 700px) {
   .public-entry[data-motion="on"] .entry-record-scene {
     height: 220svh;
   }
@@ -52,7 +52,7 @@
     max-height: 120px;
   }
 }
-@media (max-height: 699px), (prefers-reduced-motion: reduce) {
+@media (max-height: 699px) {
   .public-entry .entry-record-scene {
     height: auto;
   }
@@ -61,4 +61,12 @@
     top: auto;
     min-height: 0;
   }
+}
+.public-entry[data-motion="off"] .entry-record-scene {
+  height: auto;
+}
+.public-entry[data-motion="off"] .entry-record-scene > .entry-stage {
+  position: relative;
+  top: auto;
+  min-height: 0;
 }

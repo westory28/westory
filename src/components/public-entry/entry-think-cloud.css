@@ -87,24 +87,26 @@
   color: var(--entry-ink);
   font-size: 12px;
 }
-@media (prefers-reduced-motion: no-preference) and (min-height: 600px) {
-  .public-entry
+@media (min-height: 600px) {
+  .public-entry[data-motion="on"]
     #entry-think
     .entry-think-cloud[data-entered="false"]
     .entry-think-word-ink {
     opacity: 0;
   }
-  .public-entry
+  .public-entry[data-motion="on"]
     #entry-think
     .entry-think-cloud[data-entered="true"]
     .entry-think-word-ink[data-revised="false"] {
     animation: entry-think-gather 900ms cubic-bezier(0.16, 1, 0.3, 1)
       var(--word-delay) both;
   }
-  .public-entry #entry-think .entry-think-word-ink[data-revised="true"] {
+  .public-entry[data-motion="on"]
+    #entry-think
+    .entry-think-word-ink[data-revised="true"] {
     animation: entry-think-grow 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-  .public-entry #entry-think .entry-think-word-arrival {
+  .public-entry[data-motion="on"] #entry-think .entry-think-word-arrival {
     animation: entry-think-arrival 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 }

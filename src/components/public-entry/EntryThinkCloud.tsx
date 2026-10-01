@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from "react";
 import { entryMaterial } from "./entryMaterial";
+import { useEntryMotionEnabled } from "./EntryMotionContext";
 import "./entry-think-cloud.css";
 
 type CloudWord = {
@@ -127,6 +128,7 @@ function arrangeWords(
 }
 
 export default function EntryThinkCloud() {
+  const motionEnabled = useEntryMotionEnabled();
   const [words, setWords] = useState(initialWords);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
@@ -210,11 +212,11 @@ export default function EntryThinkCloud() {
 
   useLayoutEffect(() => {
     previousLayout.current = layout;
-    const reduce =
-      window.innerHeight < 600 ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = window.innerHeight < 600 || !motionEnabled;
     const next = new Map<string, { x: number; y: number }>();
     wordNodes.current.forEach((node, key) => {
+      if (reduce)
+        node.getAnimations().forEach((animation) => animation.cancel());
       const position = { x: node.offsetLeft, y: node.offsetTop };
       const previous = positions.current.get(key);
       next.set(key, position);
@@ -233,7 +235,7 @@ export default function EntryThinkCloud() {
       );
     });
     positions.current = next;
-  }, [layout, entered]);
+  }, [layout, entered, motionEnabled]);
 
   const addWord = (raw: string) => {
     const text = raw.trim().normalize("NFC");

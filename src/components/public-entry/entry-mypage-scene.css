@@ -18,245 +18,240 @@
 .public-entry .entry-mypage-heading .entry-eyebrow {
   justify-content: center;
 }
-.public-entry .entry-mypage-space {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: start;
-  gap: 48px;
-  max-width: 1100px;
-  margin: 64px auto 0;
-}
-.public-entry .entry-mypage-profile,
-.public-entry .entry-mypage-goals {
+.public-entry .entry-mypage-preview {
   position: relative;
-  min-width: 0;
+  z-index: 2;
+  max-width: 960px;
+  margin: 64px auto 0;
   border: 1px solid var(--entry-line);
   border-radius: 32px;
   background: #fff;
-}
-.public-entry .entry-mypage-profile {
-  padding: 32px;
   box-shadow: 0 28px 64px rgb(15 23 42 / 12%);
-  z-index: 2;
 }
-.public-entry .entry-mypage-goals {
-  margin-top: 96px;
-  padding: 32px;
-  box-shadow: 0 8px 32px rgb(15 23 42 / 6%);
-}
-.public-entry .entry-mypage-panel-heading {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.public-entry .entry-mypage-panel-heading h3 {
-  margin: 0;
-  color: var(--entry-ink);
-  font-size: clamp(20px, 2vw, 24px);
-  font-weight: 700;
-  letter-spacing: -0.04em;
-}
-.public-entry .entry-mypage-avatar {
-  width: 240px;
-  max-width: 100%;
-  height: 240px;
-  display: grid;
-  place-items: center;
-  margin: 16px auto 24px;
-  background: radial-gradient(
-    circle,
-    rgb(37 99 235 / 12%),
-    rgb(37 99 235 / 4%) 60%,
-    transparent 72%
-  );
-}
-.public-entry .entry-mypage-avatar > span {
-  display: block;
-  font-size: clamp(120px, 14vw, 176px);
-  line-height: 1;
-  filter: drop-shadow(0 16px 16px rgb(15 23 42 / 12%));
-}
-.public-entry .entry-mypage-emoji-picker {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-}
-.public-entry .entry-mypage-emoji-picker > button {
-  display: grid;
-  place-items: center;
-  flex: 0 1 56px;
-  min-width: 48px;
-  min-height: 56px;
-  padding: 4px;
-  border: 1px solid transparent;
-  border-radius: 16px;
-  background: var(--entry-surface);
-  font-size: 28px;
-  line-height: 1;
-  transition:
-    transform 180ms ease,
-    background 180ms ease,
-    border-color 180ms ease;
-}
-.public-entry .entry-mypage-emoji-picker > button[aria-pressed="true"] {
-  background: rgb(37 99 235 / 10%);
-  border-color: var(--entry-blue);
-  transform: translateY(-4px);
-}
-.public-entry .entry-mypage-emoji-picker > button:hover {
-  background: rgb(37 99 235 / 10%);
-}
-.public-entry .entry-mypage-out-of {
-  margin-left: auto;
-  padding-left: 8px;
-  color: var(--entry-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.public-entry .entry-mypage-goal-list {
-  margin-top: 24px;
-}
-.public-entry .entry-mypage-goal-row {
+.public-entry .entry-mypage-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 16px 0;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 24px 32px;
   border-bottom: 1px solid var(--entry-line);
 }
-.public-entry .entry-mypage-goal-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-.public-entry .entry-mypage-goal-row > label {
-  color: var(--entry-ink);
+.public-entry .entry-mypage-topbar > strong {
   font-size: 18px;
-  font-weight: 500;
+  font-weight: 700;
 }
-.public-entry .entry-mypage-goal-value {
-  display: flex;
-  align-items: baseline;
+.public-entry .entry-mypage-topbar > span,
+.public-entry .entry-mypage-label {
+  color: var(--entry-muted);
+  font-size: 14px;
+}
+.public-entry .entry-mypage-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  margin: 24px 32px 0;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--entry-surface);
+}
+.public-entry .entry-mypage-tabs > button {
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 8px;
+  background: transparent;
+  color: var(--entry-muted);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.public-entry .entry-mypage-tabs > button[aria-selected="true"] {
+  border-color: var(--entry-line);
+  background: #fff;
+  color: var(--entry-blue);
+  font-weight: 700;
+}
+.public-entry .entry-mypage-content {
+  padding: 32px 48px 48px;
+}
+.public-entry .entry-mypage-content > [role="tabpanel"] {
+  min-height: 320px;
+}
+.public-entry .entry-mypage-content > [role="tabpanel"]:focus-visible {
+  outline: 3px solid var(--entry-blue);
+  outline-offset: 8px;
+  border-radius: 16px;
+}
+.public-entry .entry-mypage-content h3 {
+  margin: 8px 0 0;
+  color: var(--entry-ink);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  word-break: keep-all;
+}
+.public-entry .entry-mypage-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.public-entry .entry-mypage-class {
+  margin: 8px 0 0;
   color: var(--entry-muted);
   font-size: 16px;
 }
-.public-entry .entry-mypage-goal-value input {
-  width: 112px;
-  min-height: 56px;
-  padding: 4px 8px;
-  border: 1px solid var(--entry-line);
-  border-radius: 16px;
-  background: var(--entry-surface);
-  color: var(--entry-blue);
-  font: inherit;
-  font-size: 32px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-.public-entry .entry-mypage-demo-note {
-  margin: 48px 0 0;
-  text-align: center;
-  color: var(--entry-muted);
-  font-size: 12px;
-}
-.public-entry .entry-mypage-help {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-}
-.public-entry .entry-mypage-help-button {
+.public-entry .entry-mypage-initial {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  padding: 0;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 24px;
+  background: rgb(37 99 235 / 8%);
+  color: var(--entry-blue);
+  font-size: 24px;
+  font-weight: 700;
+}
+.public-entry .entry-mypage-summary {
+  margin: 24px 0 16px;
+}
+.public-entry .entry-mypage-summary > div {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--entry-line);
+  line-height: 1.75;
+}
+.public-entry .entry-mypage-summary dt {
+  flex: 0 0 96px;
+  color: var(--entry-muted);
+  font-size: 14px;
+}
+.public-entry .entry-mypage-summary dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  word-break: keep-all;
+}
+.public-entry .entry-mypage-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+  padding: 8px 0;
   border: 0;
   background: transparent;
-  color: var(--entry-muted);
-  font-size: 12px;
+  color: var(--entry-blue);
+  font-size: 16px;
   font-weight: 700;
 }
-.public-entry .entry-mypage-help-button > span {
+.public-entry .entry-mypage-action:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.public-entry .entry-mypage-score {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 32px;
+}
+.public-entry .entry-mypage-score > div {
   display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
+  gap: 8px;
 }
-.public-entry .entry-mypage-tooltip {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 240px;
-  padding: 16px;
-  border: 1px solid var(--entry-line);
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 8px 32px rgb(15 23 42 / 12%);
-  color: var(--entry-ink);
+.public-entry .entry-mypage-score > div:last-child {
+  text-align: right;
+}
+.public-entry .entry-mypage-score span {
+  color: var(--entry-muted);
   font-size: 14px;
-  font-weight: 400;
-  line-height: 1.6;
-  text-align: left;
 }
-@media (prefers-reduced-motion: no-preference) {
-  .public-entry[data-motion="on"] .entry-mypage-profile {
-    transform: translateY(calc((0.5 - var(--pass, 0.5)) * 24px));
-  }
-  .public-entry[data-motion="on"] .entry-mypage-goals {
-    transform: translateY(calc((var(--pass, 0.5) - 0.5) * 24px));
-  }
+.public-entry .entry-mypage-score strong {
+  color: var(--entry-blue);
+  font-size: 32px;
+  line-height: 1;
 }
-@media (max-width: 1000px) {
-  .public-entry .entry-mypage-space {
-    gap: 24px;
-  }
-  .public-entry .entry-mypage-profile,
-  .public-entry .entry-mypage-goals {
-    padding: 24px;
-  }
-  .public-entry .entry-mypage-emoji-picker {
-    flex-wrap: wrap;
-    max-width: 184px;
-    margin-inline: auto;
-  }
-  .public-entry .entry-mypage-out-of {
-    display: none;
-  }
+.public-entry .entry-mypage-score small {
+  margin-left: 4px;
+  font-size: 16px;
+}
+.public-entry .entry-mypage-score b {
+  font-size: 18px;
+  font-weight: 500;
+}
+.public-entry .entry-mypage-progress {
+  height: 8px;
+  margin-top: 24px;
+  border-radius: 999px;
+  background: var(--entry-surface);
+}
+.public-entry .entry-mypage-progress > span {
+  display: block;
+  width: 91.76%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--entry-blue);
+}
+.public-entry .entry-mypage-goal-gap {
+  margin: 16px 0 0;
+  color: var(--entry-muted);
+  font-size: 16px;
+}
+.public-entry .entry-mypage-question {
+  max-width: 32em;
+  margin: 24px 0 8px;
+  font-size: 18px;
+  line-height: 1.75;
+  word-break: keep-all;
+}
+.public-entry .entry-mypage-explanation {
+  margin-top: 16px;
+  padding-top: 24px;
+  border-top: 1px solid var(--entry-line);
+  font-size: 16px;
+  line-height: 1.75;
+  word-break: keep-all;
+}
+.public-entry .entry-mypage-explanation strong {
+  color: var(--entry-blue);
+  font-size: 14px;
+}
+.public-entry .entry-mypage-explanation p {
+  margin: 8px 0 16px;
+}
+.public-entry .entry-mypage-explanation p:last-child {
+  margin-bottom: 0;
 }
 @media (max-width: 767px) {
   .public-entry .entry-mypage > .entry-stage {
     padding-top: 96px;
     padding-bottom: 96px;
   }
-  .public-entry .entry-mypage-space {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 480px;
-    gap: 32px;
+  .public-entry .entry-mypage-preview {
     margin-top: 48px;
+    border-radius: 24px;
   }
-  .public-entry .entry-mypage-goals {
-    margin-top: 0;
+  .public-entry .entry-mypage-topbar {
+    padding: 24px;
   }
-  .public-entry .entry-mypage-avatar {
-    width: 224px;
-    height: 224px;
+  .public-entry .entry-mypage-tabs {
+    margin: 16px 16px 0;
+    gap: 4px;
   }
-  .public-entry .entry-mypage-avatar > span {
-    font-size: 144px;
+  .public-entry .entry-mypage-tabs > button {
+    font-size: 14px;
+    padding: 8px 4px;
   }
-  .public-entry .entry-mypage-emoji-picker {
-    max-width: 224px;
+  .public-entry .entry-mypage-content {
+    padding: 24px;
   }
-  .public-entry .entry-mypage-demo-note {
-    margin-top: 32px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .public-entry .entry-mypage-emoji-picker > button {
-    transition: none;
+  .public-entry .entry-mypage-summary > div {
+    display: grid;
+    gap: 4px;
   }
 }

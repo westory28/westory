@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import mapReal from "../../assets/public-entry/map-real.webp";
 import {
   EntryOverview,
@@ -16,11 +16,16 @@ import EntryRibbon from "./EntryRibbon";
 import EntryHeroLaptop from "./EntryHeroLaptop";
 import { useEntryMotion } from "./useEntryMotion";
 import { useEntryFinale } from "./useEntryFinale";
+import {
+  EntryMotionProvider,
+  useEntryMotionEnabled,
+} from "./EntryMotionContext";
 import "./public-entry.css";
 import "./entry-story-scenes.css";
 import "./entry-detail.css";
 import "./entry-space.css";
 import "./entry-flow.css";
+import "./entry-motion-control.css";
 interface Props {
   controls: React.ReactNode;
   onStudentLogin: () => void;
@@ -45,7 +50,19 @@ function Wordmark() {
 }
 
 /** Presentation only: no application, auth, database or game imports. */
-export default function PublicEntry({
+export default function PublicEntry(props: Props) {
+  const [motionEnabled, setMotionEnabled] = useState(true);
+  return (
+    <EntryMotionProvider enabled={motionEnabled}>
+      <PublicEntryContent
+        {...props}
+        onToggleMotion={() => setMotionEnabled((enabled) => !enabled)}
+      />
+    </EntryMotionProvider>
+  );
+}
+
+function PublicEntryContent({
   controls,
   onStudentLogin,
   onTeacherLogin,
@@ -57,7 +74,9 @@ export default function PublicEntry({
   activeDialog = null,
   onDialogDismiss,
   schoolDomain,
-}: Props) {
+  onToggleMotion,
+}: Props & { onToggleMotion: () => void }) {
+  const motionEnabled = useEntryMotionEnabled();
   const root = useRef<HTMLDivElement>(null);
   const lastPageFocus = useRef<HTMLElement | null>(null);
   const dismissDialog = useRef(onDialogDismiss);
@@ -138,6 +157,7 @@ export default function PublicEntry({
     <div
       ref={root}
       className="public-entry"
+      data-motion={motionEnabled ? "on" : "off"}
       onFocusCapture={(event) => {
         lastPageFocus.current = event.target as HTMLElement;
       }}
@@ -165,7 +185,6 @@ export default function PublicEntry({
           <div className="entry-stage entry-hero-stage">
             <EntryRibbon variant="hero" />
             <div className="entry-hero-copy" data-entry-reveal>
-              <p className="entry-eyebrow">함께 배우고, 스스로 생각하는 역사</p>
               <h1
                 id="entry-title"
                 tabIndex={-1}
@@ -275,10 +294,7 @@ export default function PublicEntry({
             ?.focus({ preventScroll: true });
           window.scrollTo({
             top: 0,
-            behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
-              .matches
-              ? "auto"
-              : "smooth",
+            behavior: motionEnabled ? "smooth" : "auto",
           });
         }}
       >
@@ -301,7 +317,17 @@ export default function PublicEntry({
       </button>
       <footer className="entry-footer">
         <Wordmark />
-        <div>
+        <div className="entry-footer-actions">
+          <button
+            type="button"
+            className="entry-motion-control"
+            aria-label={motionEnabled ? "대문 모션 끄기" : "대문 모션 켜기"}
+            aria-pressed={motionEnabled}
+            onClick={onToggleMotion}
+          >
+            <span className="entry-motion-indicator" aria-hidden="true" />
+            {motionEnabled ? "모션 끄기" : "모션 켜기"}
+          </button>
           <button type="button" onClick={() => onPolicy("terms")}>
             이용 약관
           </button>
