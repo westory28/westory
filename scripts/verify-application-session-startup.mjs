@@ -116,7 +116,7 @@ function sessionHarness({ archive = false, reply = async () => valid } = {}) {
   });
   return { ...api, auth, calls };
 }
-function startupHarness() {
+function startupHarness({ onListen } = {}) {
   const auth = { currentUser: null },
     timer = clock(),
     changes = [],
@@ -133,6 +133,7 @@ function startupHarness() {
     listenProfile: (account, next, error) => {
       const record = { account, next, error, stopped: false };
       snapshots.push(record);
+      onListen?.(record);
       return () => {
         record.stopped = true;
       };
@@ -302,12 +303,12 @@ for (const role of ["teacher", "student", "staff", "unexpected"])
         account = user(`synthetic-${role}`);
       await h.observe(account);
       assert.equal(h.state.currentUser, null);
-      assert.equal(h.snapshots.length, 0);
+      assert.equal(h.snapshots.length, 1);
       await h.finishSession();
       assert.equal(
         h.settings.length,
         1,
-        "Settings run in parallel with profile after session",
+        "Settings wait for the verified session",
       );
       assert.equal(h.state.phase, "loading-profile");
       h.profile({ role }, { fromCache: true });
@@ -346,6 +347,246 @@ await check(
     assert.equal(h.state.currentUser, null);
     assert.equal(h.state.userData, null);
     assert.equal(h.state.onboardingUser, account);
+    h.controller.dispose();
+  },
+);
+for (const role of ["teacher", "student", "staff", null])
+  await check(
+    `Early ${role ?? "missing"} profile waits for the verified session`,
+    async () => {
+      const h = startupHarness(),
+        account = user("synthetic-early-profile"),
+        flow = h.controller.beginLoginFlow(true);
+      await h.observe(account);
+      let consumed = false;
+      const claim = h.controller
+        .claimLoginBootstrap(account, flow)
+        .then((result) => {
+          consumed = true;
+          return result;
+        });
+      h.profile(role ? { role } : null);
+      await flush();
+      assert.equal(h.sessions.length, 1);
+      assert.equal(h.snapshots.length, 1);
+      assert.equal(h.state.phase, "opening-session");
+      assert.equal(h.state.currentUser, null);
+      assert.equal(h.state.onboardingUser, null);
+      assert.equal(h.state.userData, null);
+      assert.equal(h.settings.length, 0);
+      assert.equal(consumed, false);
+      assert.equal(
+        h.timer.size,
+        1,
+        "Early profile must not cancel startup deadline",
+      );
+      await h.finishSession();
+      const result = await claim;
+      assert.equal(result.profile?.role ?? null, role);
+      assert.equal(h.state.phase, role ? "ready" : "onboarding");
+      assert.equal(h.settings.length, 1);
+      assert.equal(h.snapshots.length, 1, "Use the existing live listener");
+      assert.equal(h.timer.size, 0);
+      h.controller.dispose();
+    },
+  );
+for (const replacement of [{ role: "student" }, null])
+  await check(
+    "Latest buffered role or removal wins before session readiness",
+    async () => {
+      const h = startupHarness();
+      await h.observe(user("synthetic-buffer-revocation"));
+      h.profile({ role: "teacher", teacherPortalEnabled: true });
+      h.profile(replacement);
+      await h.finishSession();
+      assert.equal(h.state.userData?.role ?? null, replacement?.role ?? null);
+      assert.equal(h.state.phase, replacement ? "ready" : "onboarding");
+      assert.equal(
+        h.changes.some((state) => state.userData?.role === "teacher"),
+        false,
+      );
+      h.controller.dispose();
+    },
+  );
+for (const metadata of [{ fromCache: true }, { hasPendingWrites: true }])
+  await check(
+    `Later ${Object.keys(metadata)[0]} invalidates buffered authority`,
+    async () => {
+      const h = startupHarness();
+      await h.observe(user("synthetic-invalidated-buffer"));
+      h.profile({ role: "teacher" });
+      h.profile({ role: "student" }, metadata);
+      await h.finishSession();
+      assert.equal(h.state.phase, "loading-profile");
+      assert.equal(h.state.currentUser, null);
+      assert.equal(h.timer.size, 1);
+      h.profile({ role: "student" });
+      assert.equal(h.state.userData.role, "student");
+      assert.equal(
+        h.changes.some((state) => state.userData?.role === "teacher"),
+        false,
+      );
+      h.controller.dispose();
+    },
+  );
+await check(
+  "Profile denial while session is pending cannot be revived by session success",
+  async () => {
+    const h = startupHarness();
+    await h.observe(user("synthetic-early-profile-denial"));
+    h.profile({ role: "teacher" });
+    h.snapshots[0].error({ code: "permission-denied" });
+    await h.finishSession();
+    h.profile({ role: "teacher" });
+    assert.equal(h.state.phase, "error");
+    assert.equal(h.state.error.code, "permission-denied");
+    assert.equal(h.state.currentUser, null);
+    assert.equal(h.settings.length, 0);
+    assert.equal(h.snapshots[0].stopped, true);
+    assert.equal(h.timer.size, 0);
+    assert.equal(
+      h.changes.some((state) => state.phase === "ready"),
+      false,
+    );
+    h.controller.dispose();
+  },
+);
+await check(
+  "Synchronous profile callback is buffered and its listener is cleaned up",
+  async () => {
+    const h = startupHarness({
+      onListen: ({ next }) =>
+        next({
+          exists: true,
+          data: { role: "teacher" },
+          fromCache: false,
+          hasPendingWrites: false,
+        }),
+    });
+    await h.observe(user("synthetic-sync-profile"));
+    assert.equal(h.state.currentUser, null);
+    assert.equal(h.snapshots[0].stopped, false);
+    await h.finishSession();
+    assert.equal(h.state.userData.role, "teacher");
+    h.controller.dispose();
+    assert.equal(h.snapshots[0].stopped, true);
+  },
+);
+await check(
+  "Synchronous listener error cleans up without starting a session",
+  async () => {
+    const h = startupHarness({
+      onListen: ({ error, next }) => {
+        error({ code: "permission-denied" });
+        next({
+          exists: true,
+          data: { role: "teacher" },
+          fromCache: false,
+          hasPendingWrites: false,
+        });
+      },
+    });
+    await h.observe(user("synthetic-sync-profile-error"));
+    assert.equal(h.state.phase, "error");
+    assert.equal(h.sessions.length, 0);
+    assert.equal(h.snapshots[0].stopped, true);
+    assert.equal(h.timer.size, 0);
+    assert.equal(h.state.currentUser, null);
+    h.controller.dispose();
+  },
+);
+await check(
+  "Synchronous listener throw fails without exposing a buffered profile",
+  async () => {
+    const h = startupHarness({
+      onListen: ({ next }) => {
+        next({
+          exists: true,
+          data: { role: "teacher" },
+          fromCache: false,
+          hasPendingWrites: false,
+        });
+        throw Object.assign(new Error("synthetic listener failure"), {
+          code: "permission-denied",
+        });
+      },
+    });
+    await h.observe(user("synthetic-listener-throw"));
+    assert.equal(h.state.phase, "error");
+    assert.equal(h.sessions.length, 0);
+    assert.equal(h.state.currentUser, null);
+    assert.equal(h.timer.size, 0);
+    h.controller.dispose();
+  },
+);
+await check(
+  "Buffered profile waits for final token assertion and keeps the latest role",
+  async () => {
+    const h = startupHarness(),
+      account = user("synthetic-final-token-delay"),
+      token = deferred();
+    await h.observe(account);
+    h.profile({ role: "teacher" });
+    account.getIdTokenResult = () => token.promise;
+    await h.finishSession();
+    assert.equal(h.state.currentUser, null);
+    assert.equal(h.settings.length, 0);
+    h.profile({ role: "student" });
+    token.resolve({ claims: { auth_time: account.epoch } });
+    await flush();
+    assert.equal(h.state.userData.role, "student");
+    assert.equal(
+      h.changes.some((state) => state.userData?.role === "teacher"),
+      false,
+    );
+    h.controller.dispose();
+  },
+);
+await check(
+  "Changed auth epoch discards buffered authority before a fresh session",
+  async () => {
+    const h = startupHarness(),
+      account = user("synthetic-buffer-epoch");
+    await h.observe(account);
+    h.profile({ role: "teacher" });
+    account.epoch++;
+    await h.finishSession();
+    assert.equal(h.state.currentUser, null);
+    assert.equal(h.snapshots[0].stopped, true);
+    assert.equal(h.sessions.length, 2);
+    assert.equal(h.settings.length, 0);
+    h.profile({ role: "teacher" }, {}, 0);
+    h.profile({ role: "student" });
+    await h.finishSession();
+    assert.equal(h.state.userData.role, "student");
+    assert.equal(
+      h.changes.some((state) => state.userData?.role === "teacher"),
+      false,
+    );
+    h.controller.dispose();
+  },
+);
+await check(
+  "Buffered profile cannot prevent timeout or satisfy a later retry",
+  async () => {
+    const h = startupHarness();
+    await h.observe(user("synthetic-buffer-timeout"));
+    h.profile({ role: "teacher" });
+    h.timer.advance(startup.AUTH_STARTUP_DEADLINE_MS);
+    assert.equal(h.state.phase, "error");
+    assert.equal(h.snapshots[0].stopped, true);
+    await h.finishSession(0);
+    assert.equal(h.state.currentUser, null);
+    const retry = h.controller.retry();
+    await flush();
+    assert.equal(h.sessions[1].options.fresh, true);
+    await h.finishSession(1);
+    assert.equal(h.state.phase, "loading-profile");
+    h.profile({ role: "teacher" }, {}, 0);
+    assert.equal(h.state.currentUser, null);
+    h.profile({ role: "student" });
+    await retry;
+    assert.equal(h.state.userData.role, "student");
     h.controller.dispose();
   },
 );
@@ -406,7 +647,8 @@ await check(
     h.timer.advance(1);
     assert.equal(h.state.phase, "error");
     await h.finishSession();
-    assert.equal(h.snapshots.length, 0);
+    assert.equal(h.snapshots.length, 2);
+    assert.ok(h.snapshots.every((snapshot) => snapshot.stopped));
     h.controller.dispose();
   },
 );
@@ -414,11 +656,13 @@ for (const boundary of ["logout", "replace", "dispose"])
   await check(`Late handshake cannot escape ${boundary}`, async () => {
     const h = startupHarness();
     await h.observe(user("synthetic-old"));
+    h.profile({ role: "teacher" });
     if (boundary === "logout") h.controller.invalidate();
     if (boundary === "replace") await h.observe(user("synthetic-next"));
     if (boundary === "dispose") h.controller.dispose();
     await h.finishSession(0);
-    assert.equal(h.snapshots.length, 0);
+    assert.equal(h.snapshots[0].stopped, true);
+    h.profile({ role: "teacher" }, {}, 0);
     assert.equal(h.state.currentUser, null);
     h.controller.dispose();
   });
@@ -585,13 +829,19 @@ for (const failure of [
     async () => {
       const h = startupHarness();
       await h.observe(user("synthetic-denied"));
+      h.profile({ role: "teacher" });
       h.sessions[0].gate.reject(failure);
       await flush();
       assert.equal(h.state.phase, "error");
       assert.equal(h.state.error.retryable, false);
       assert.equal(h.state.currentUser, null);
+      assert.equal(
+        h.changes.some((state) => state.phase === "ready"),
+        false,
+      );
       assert.equal(h.sessions.length, 1);
-      assert.equal(h.snapshots.length, 0);
+      assert.equal(h.snapshots.length, 1);
+      assert.equal(h.snapshots[0].stopped, true);
       h.controller.dispose();
     },
   );
@@ -920,7 +1170,8 @@ await check(
     await rejected;
     await h.finishSession(0);
     assert.equal(h.state.currentUser, null);
-    assert.equal(h.snapshots.length, 0);
+    assert.equal(h.snapshots.length, 2);
+    assert.equal(h.snapshots[0].stopped, true);
     h.controller.dispose();
   },
 );
@@ -1111,7 +1362,7 @@ for (const role of ["teacher", "student"])
       await h.render();
       const account = user(`synthetic-provider-${role}`);
       await h.observe(account);
-      assert.equal(h.reads.length, 0);
+      assert.deepEqual(h.reads, [`users/${account.uid}`]);
       assert.equal(h.value.currentUser, null);
       h.sessions[0].gate.resolve();
       await h.render();

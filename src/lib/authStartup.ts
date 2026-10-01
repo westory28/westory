@@ -445,56 +445,75 @@ export class AuthStartupController {
       if (!Number.isFinite(authTime)) throw staleError();
       attempt.authTime = authTime;
       this.publish(this.empty("opening-session"));
-      await this.deps.prepareSession(user, { fresh, isCurrent: current });
-      await this.assertCurrent(generation, user);
-      if (!current()) return;
-      this.deps.sessionReady(user, generation);
-      this.publish(this.empty("loading-profile"));
+      let sessionReady = false;
+      let verifiedSnapshot: ProfileSnapshot | null = null;
+      const publishProfile = () => {
+        if (!current() || !sessionReady || !verifiedSnapshot) return;
+        try {
+          const raw = verifiedSnapshot.data;
+          const profile: UserData | null =
+            verifiedSnapshot.exists && raw
+              ? ({
+                  ...raw,
+                  uid: user.uid,
+                  role:
+                    raw.role === "teacher"
+                      ? "teacher"
+                      : raw.role === "staff"
+                        ? "staff"
+                        : "student",
+                  staffPermissions: normalizeStaffPermissions(
+                    raw.staffPermissions,
+                  ),
+                  teacherPortalEnabled: raw.teacherPortalEnabled === true,
+                } as UserData)
+              : null;
+          this.clearDeadline();
+          this.publish({
+            phase: profile ? "ready" : "onboarding",
+            generation,
+            currentUser: profile ? user : null,
+            onboardingUser: profile ? null : user,
+            userData: profile,
+            error: null,
+          });
+          if (!attempt.settled) {
+            attempt.settled = true;
+            attempt.resolve({ generation, user, authTime, profile });
+          }
+        } catch (error) {
+          this.fail(generation, error);
+        }
+      };
+      // Own-profile reads are allowed before opening the application session.
+      // Fetch in parallel, but expose no profile until the server session and
+      // auth epoch have both been verified for this attempt.
       const stopProfile = this.deps.listenProfile(
         user,
         (snapshot) => {
-          if (!current() || snapshot.fromCache || snapshot.hasPendingWrites)
+          if (!current()) return;
+          if (snapshot.fromCache || snapshot.hasPendingWrites) {
+            verifiedSnapshot = null;
             return;
-          try {
-            const raw = snapshot.data;
-            const profile: UserData | null =
-              snapshot.exists && raw
-                ? ({
-                    ...raw,
-                    uid: user.uid,
-                    role:
-                      raw.role === "teacher"
-                        ? "teacher"
-                        : raw.role === "staff"
-                          ? "staff"
-                          : "student",
-                    staffPermissions: normalizeStaffPermissions(
-                      raw.staffPermissions,
-                    ),
-                    teacherPortalEnabled: raw.teacherPortalEnabled === true,
-                  } as UserData)
-                : null;
-            this.clearDeadline();
-            this.publish({
-              phase: profile ? "ready" : "onboarding",
-              generation,
-              currentUser: profile ? user : null,
-              onboardingUser: profile ? null : user,
-              userData: profile,
-              error: null,
-            });
-            if (!attempt.settled) {
-              attempt.settled = true;
-              attempt.resolve({ generation, user, authTime, profile });
-            }
-          } catch (error) {
-            this.fail(generation, error);
           }
+          verifiedSnapshot = snapshot;
+          publishProfile();
         },
         (error) => this.fail(generation, error),
       );
       if (current()) this.stopProfile = stopProfile;
-      else stopProfile();
+      else {
+        stopProfile();
+        return;
+      }
+      await this.deps.prepareSession(user, { fresh, isCurrent: current });
+      await this.assertCurrent(generation, user);
+      if (!current()) return;
+      this.deps.sessionReady(user, generation);
+      if (!current()) return;
+      this.publish(this.empty("loading-profile"));
+      sessionReady = true;
+      publishProfile();
     } catch (error) {
       this.fail(generation, error);
     }
