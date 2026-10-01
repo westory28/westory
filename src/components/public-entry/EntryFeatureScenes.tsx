@@ -90,7 +90,7 @@ export function LessonScene() {
     const read = () => {
       frame = 0;
       const el = root.current;
-      if (!el || media.matches || innerHeight < 600) return;
+      if (!el || media.matches || innerHeight < 800) return;
       const rect = el.getBoundingClientRect();
       const stage = el.firstElementChild as HTMLElement;
       const progress = Math.max(
@@ -242,7 +242,9 @@ function FeatureScene({
       aria-labelledby={`${id}-title`}
     >
       <div className="entry-stage entry-split-stage">
-        <EntryRibbon />
+        <EntryRibbon
+          variant={id === "entry-map" || id === "entry-check" ? "left" : "wide"}
+        />
         <div className="entry-heading">
           <StoryLink number={number} label={label} />
           <MotionTitle
@@ -488,10 +490,10 @@ export function RecordScene() {
       timeline
       className="entry-record-scene"
       id="entry-record"
-      number="07"
-      label="마이페이지"
-      lines={["돌아본 만큼,", "다음 이야기는 깊게."]}
-      description="과목별 성취 현황과 목표, 최근 평가를 한곳에서 돌아봅니다. 보완할 내용을 찾고, 다음 공부를 스스로 계획합니다."
+      number="05"
+      label="평가 돌아보기"
+      lines={["한 번의 점수보다,", "쌓여가는 변화."]}
+      description="점수의 변화에서 잘한 점과 보완할 점을 찾아갑니다. 결과를 다음 학습의 출발점으로."
     >
       <div className="entry-record-chart">
         <div className="entry-panel-label">

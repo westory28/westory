@@ -12,11 +12,13 @@ import {
 } from "./EntryFeatureScenes";
 import { Device, FinaleTitle, MotionTitle, StoryLink } from "./EntryVisuals";
 import EntryPlayScene from "./EntryPlayScene";
+import EntryMyPageScene from "./EntryMyPageScene";
 import EntryRibbon from "./EntryRibbon";
 import { useEntryMotion } from "./useEntryMotion";
 import "./public-entry.css";
 import "./entry-story-scenes.css";
 import "./entry-detail.css";
+import "./entry-space.css";
 interface Props {
   controls: React.ReactNode;
   onStudentLogin: () => void;
@@ -230,8 +232,9 @@ export default function PublicEntry({
         <ThinkScene />
         <CheckScene />
         <GrowthScene />
-        <EntryPlayScene />
         <RecordScene />
+        <EntryPlayScene />
+        <EntryMyPageScene />
         <section
           className="entry-finish entry-scene"
           data-entry-scene

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 type Point = [number, number];
 type Curve = [Point, Point, Point, Point];
-type Variant = "hero" | "wide" | "wrap" | "finish";
+type Variant = "hero" | "wide" | "wrap" | "left" | "finish";
 
 function brush(curves: Curve[], width: number, height: number) {
   const points = curves.flatMap(([a, b, c, d], segment) =>
@@ -70,7 +70,7 @@ export default function EntryRibbon({
     if (!stage) return;
     const protectedText = Array.from(
       stage.querySelectorAll<HTMLElement>(
-        ".entry-heading, .entry-hero-copy, .entry-deck-heading, .entry-confirm-copy, :scope > .entry-eyebrow, :scope > .entry-motion-title",
+        ".entry-heading, .entry-hero-copy h1, .entry-hero-copy > .entry-eyebrow, .entry-hero-copy > .entry-benefit, .entry-hero-copy > .entry-login, .entry-deck-heading, .entry-confirm-copy, .entry-record-value, .entry-record-dates, .entry-record-tags, .entry-mypage-demo-note, :scope > .entry-eyebrow, :scope > .entry-motion-title",
       ),
     );
     const measure = () => {
@@ -212,6 +212,11 @@ export default function EntryRibbon({
       if (variant !== "finish") {
         curves[0][1] = [0.5, 0.12];
         curves[curves.length - 1][2] = [0.5, 0.88];
+      }
+      if (variant === "left") {
+        curves = curves.map(
+          (curve) => curve.map(([x, y]) => [1 - x, y] as Point) as Curve,
+        );
       }
       const stageRect = stage.getBoundingClientRect();
       const textBounds = protectedText.map((element) => {
