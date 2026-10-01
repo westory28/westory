@@ -82,9 +82,9 @@ export function StoryLink({
   label: string;
 }) {
   return (
-    <p className="entry-eyebrow">
-      <span>{number}</span>
-      {label}
+    <p className="entry-eyebrow entry-menu-label">
+      <span className="entry-menu-number">{number}</span>
+      <span className="entry-menu-name">{label}</span>
     </p>
   );
 }

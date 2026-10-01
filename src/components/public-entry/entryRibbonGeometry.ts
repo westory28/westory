@@ -7,6 +7,7 @@ type BrushOptions = {
   taperStart?: boolean;
   taperEnd?: boolean;
   compact?: boolean;
+  startWidth?: number;
   endWidth?: number;
 };
 
@@ -127,6 +128,9 @@ export function createEntryBrush(
   const base = compact ? 3 : 4;
   const peak = compact ? 10 : 16;
   const taperLength = Math.min(total * 0.15, 48);
+  const startWidth = Number.isFinite(options.startWidth)
+    ? Math.max(0.02, options.startWidth!)
+    : undefined;
   const endWidth = Number.isFinite(options.endWidth)
     ? Math.max(0.02, options.endWidth!)
     : undefined;
@@ -141,9 +145,13 @@ export function createEntryBrush(
       const phase = (distance - emphasis[0]) / (emphasis[1] - emphasis[0]);
       thickness += (peak - base) * Math.sin(phase * Math.PI) ** 2;
     }
-    if (options.taperStart)
+    if (startWidth !== undefined) {
+      const blend = smoothstep(1 - distance / Math.min(total * 0.3, 120));
+      thickness += (startWidth - thickness) * blend;
+    } else if (options.taperStart) {
       thickness =
         0.02 + (thickness - 0.02) * smoothstep(distance / taperLength);
+    }
     if (endWidth !== undefined) {
       const blend = smoothstep(
         1 - (total - distance) / Math.min(total * 0.3, 120),
@@ -176,13 +184,17 @@ export function createEntryBrush(
   const last = samples.length - 1;
   const cap = (radius: number, point: Point) =>
     `A${radius.toFixed(2)} ${radius.toFixed(2)} 0 0 0 ${coordinate(point)}`;
-  // A measured glyph connection ends on its normal, without a round bulge.
+  // Measured glyph connections meet their normals without a round bulge.
+  const initialCap =
+    startWidth === undefined
+      ? cap(radii[0], left[0])
+      : `L${coordinate(left[0])}`;
   const terminalCap =
     endWidth === undefined
       ? cap(radii[last], right[last])
       : `L${coordinate(right[last])}`;
   return {
     center: `M${path(samples.map(({ point }) => point))}`,
-    outline: `M${path(left)} ${terminalCap} L${path(right.slice(0, -1).reverse())} ${cap(radii[0], left[0])} Z`,
+    outline: `M${path(left)} ${terminalCap} L${path(right.slice(0, -1).reverse())} ${initialCap} Z`,
   };
 }

@@ -13,6 +13,9 @@ function sceneProgress(
       (viewport * 0.82 - rect.top) / (viewport * 0.65 + rect.height * 0.3),
     );
   }
+  if (rect.height <= stageHeight + 100) {
+    return clamp((viewport * 0.85 - rect.top) / (viewport * 0.7 + rect.height));
+  }
   return clamp((80 - rect.top) / Math.max(1, rect.height - stageHeight));
 }
 
@@ -83,8 +86,11 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
         scene,
         rect: scene.getBoundingClientRect(),
         stage: scene.firstElementChild?.getBoundingClientRect(),
+        title: scene
+          .querySelector(".entry-motion-title")
+          ?.getBoundingClientRect(),
       }));
-      for (const { scene, rect, stage } of positions) {
+      for (const { scene, rect, stage, title } of positions) {
         if (rect.bottom < 0 || rect.top > viewport) continue;
         const progress = sceneProgress(
           rect,
@@ -104,6 +110,16 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
         scene.style.setProperty("--enter", enter.toFixed(4));
         scene.style.setProperty("--pass", pass.toFixed(4));
         scene.style.setProperty("--ribbon", ribbon.toFixed(4));
+        if (title) {
+          scene.style.setProperty(
+            "--title-enter",
+            clamp((viewport * 0.88 - title.top) / (viewport * 0.48)).toFixed(4),
+          );
+        }
+        if (scene.classList.contains("entry-hero")) {
+          const open = clamp(0.06 + (80 - rect.top) / (viewport * 0.62));
+          scene.style.setProperty("--open", open.toFixed(4));
+        }
         scene.style.setProperty(
           "--phase",
           clamp((progress - 0.15) / 0.7).toFixed(4),
@@ -129,6 +145,8 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           scene.style.removeProperty("--phase");
           scene.style.removeProperty("--pass");
           scene.style.removeProperty("--ribbon");
+          scene.style.removeProperty("--open");
+          scene.style.removeProperty("--title-enter");
         });
       } else request();
     };

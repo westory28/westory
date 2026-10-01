@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from "react";
-import lessonReal from "../../assets/public-entry/lesson-real.webp";
 import mapReal from "../../assets/public-entry/map-real.webp";
 import {
   EntryOverview,
@@ -14,12 +13,14 @@ import { Device, FinaleTitle, MotionTitle, StoryLink } from "./EntryVisuals";
 import EntryPlayScene from "./EntryPlayScene";
 import EntryMyPageScene from "./EntryMyPageScene";
 import EntryRibbon from "./EntryRibbon";
+import EntryHeroLaptop from "./EntryHeroLaptop";
 import { useEntryMotion } from "./useEntryMotion";
 import { useEntryFinale } from "./useEntryFinale";
 import "./public-entry.css";
 import "./entry-story-scenes.css";
 import "./entry-detail.css";
 import "./entry-space.css";
+import "./entry-flow.css";
 interface Props {
   controls: React.ReactNode;
   onStudentLogin: () => void;
@@ -168,13 +169,21 @@ export default function PublicEntry({
               <h1
                 id="entry-title"
                 tabIndex={-1}
-                aria-label="역사를 읽고, 생각을 연결하다."
+                aria-label="역사를 읽고, 생각을 연결하다"
               >
                 <span className="entry-hero-mask" aria-hidden="true">
                   <span>역사를 읽고,</span>
                 </span>
                 <span className="entry-hero-mask" aria-hidden="true">
-                  <span>생각을 연결하다.</span>
+                  <span className="entry-hero-sentence">
+                    <span className="entry-hero-thought">생각을</span>{" "}
+                    <span className="entry-hero-connect">
+                      연결하
+                      <span className="entry-hero-da">
+                        다<span className="entry-hero-baseline" />
+                      </span>
+                    </span>
+                  </span>
                 </span>
               </h1>
               <p className="entry-benefit">
@@ -185,17 +194,7 @@ export default function PublicEntry({
               <div className="entry-login entry-first-login">{controls}</div>
             </div>
             <div className="entry-hero-visual">
-              <Device kind="tablet" className="entry-hero-tablet">
-                <span className="entry-hero-ink-source" aria-hidden="true" />
-                <img
-                  src={lessonReal}
-                  alt="실제 위스토리 빈칸 학습지 화면"
-                  width="1340"
-                  height="1050"
-                  decoding="async"
-                  {...{ fetchpriority: "high" }}
-                />
-              </Device>
+              <EntryHeroLaptop />
               <Device kind="phone" className="entry-hero-phone">
                 <div className="entry-phone-title">역사를 지도로</div>
                 <img
