@@ -10,9 +10,11 @@ import {
   GrowthScene,
   RecordScene,
 } from "./EntryFeatureScenes";
-import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
+import { Device, FinaleTitle, MotionTitle, StoryLink } from "./EntryVisuals";
+import EntryPlayScene from "./EntryPlayScene";
 import { useEntryMotion } from "./useEntryMotion";
 import "./public-entry.css";
+import "./entry-story-scenes.css";
 interface Props {
   controls: React.ReactNode;
   onStudentLogin: () => void;
@@ -238,82 +240,18 @@ export default function PublicEntry({
         <ThinkScene />
         <CheckScene />
         <GrowthScene />
-        <section
-          id="entry-game"
-          tabIndex={-1}
-          className="entry-play entry-scene"
-          data-entry-scene
-          aria-labelledby="entry-play-title"
-        >
-          <div className="entry-stage">
-            <div className="entry-heading">
-              <StoryLink number="06" label="위플레이" />
-              <MotionTitle
-                id="entry-play-title"
-                lines={["다시 만난 역사 용어,", "이번에는 플레이로."]}
-              />
-              <p className="entry-benefit">
-                역사 단어를 입력해 화포를 발사하는 ‘내가 충무공이라고?!’.
-                <br />
-                도전하는 즐거움 속에서 수업의 기억을 다시 꺼냅니다.
-              </p>
-            </div>
-            <div
-              className="entry-ocean"
-              role="img"
-              aria-label="실제 위플레이 게임 아트: 바다를 가르는 거북선"
-            >
-              <img
-                className="entry-sea"
-                src={
-                  import.meta.env.BASE_URL +
-                  "assets/weplay/naval/sea-battle.webp"
-                }
-                alt=""
-                loading="lazy"
-              />
-              <span className="entry-sea-wash" />
-              <img
-                className="entry-ship"
-                src={
-                  import.meta.env.BASE_URL +
-                  "assets/weplay/naval/allied-ship.webp"
-                }
-                alt=""
-                loading="lazy"
-              />
-              <div className="entry-play-caption">
-                <span>위플레이</span>
-                <strong>내가 충무공이라고?!</strong>
-              </div>
-              <span
-                className="entry-play-word entry-play-word--one"
-                aria-hidden="true"
-              >
-                한산도
-              </span>
-              <span
-                className="entry-play-word entry-play-word--two"
-                aria-hidden="true"
-              >
-                거북선
-              </span>
-            </div>
-          </div>
-        </section>
+        <EntryPlayScene />
         <RecordScene />
         <section
           className="entry-finish entry-scene"
           data-entry-scene
+          data-entry-timeline
           aria-labelledby="entry-finish-title"
         >
           <div className="entry-stage">
             <span className="entry-finish-dot" aria-hidden="true" />
             <p className="entry-eyebrow">함께 써 내려갈 다음 장</p>
-            <MotionTitle
-              id="entry-finish-title"
-              lines={["이제 우리의 이야기로.", "위스토리"]}
-            />
+            <FinaleTitle />
             <div className="entry-login-actions entry-finish-actions">
               <button
                 type="button"

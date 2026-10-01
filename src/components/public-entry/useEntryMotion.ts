@@ -1,6 +1,63 @@
-import { RefObject, useEffect } from "react";
+import { RefObject, useEffect, useState } from "react";
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
+
+function sceneProgress(
+  rect: DOMRect,
+  stageHeight: number,
+  viewport: number,
+  timeline: boolean,
+) {
+  if (timeline && viewport < 700) {
+    return clamp(
+      (viewport * 0.82 - rect.top) / (viewport * 0.65 + rect.height * 0.3),
+    );
+  }
+  return clamp((80 - rect.top) / Math.max(1, rect.height - stageHeight));
+}
+
+/** A small SVG chart needs numeric progress; the other scenes stay CSS-driven. */
+export function useEntrySceneProgress(root: RefObject<HTMLElement>) {
+  const [progress, setProgress] = useState(1);
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      if (preference.matches) {
+        setProgress(1);
+        return;
+      }
+      const scene = root.current;
+      if (!scene || document.hidden) return;
+      const rect = scene.getBoundingClientRect();
+      if (rect.bottom < 0 || rect.top > innerHeight) return;
+      const stage = scene.firstElementChild as HTMLElement;
+      const next = sceneProgress(rect, stage.offsetHeight, innerHeight, true);
+      setProgress(Math.round(next * 200) / 200);
+    };
+    const request = () => {
+      if (!frame && !document.hidden) frame = requestAnimationFrame(read);
+    };
+    window.addEventListener("scroll", request, { passive: true });
+    window.addEventListener("resize", request, { passive: true });
+    document.addEventListener("visibilitychange", request);
+    if (preference.addEventListener)
+      preference.addEventListener("change", request);
+    else preference.addListener(request);
+    request();
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", request);
+      window.removeEventListener("resize", request);
+      document.removeEventListener("visibilitychange", request);
+      if (preference.removeEventListener)
+        preference.removeEventListener("change", request);
+      else preference.removeListener(request);
+    };
+  }, [root]);
+  return progress;
+}
 
 /** Native scrolling is the timeline, including touch, keyboard and reverse travel. */
 export function useEntryMotion(root: RefObject<HTMLDivElement>) {
@@ -31,11 +88,12 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
       }));
       for (const { scene, rect, stage } of positions) {
         if (rect.bottom < 0 || rect.top > viewport) continue;
-        const travel = Math.max(
-          1,
-          rect.height - (stage?.height || viewport - 80),
+        const progress = sceneProgress(
+          rect,
+          stage?.height || viewport - 80,
+          viewport,
+          scene.hasAttribute("data-entry-timeline"),
         );
-        const progress = clamp((80 - rect.top) / travel);
         const enter = clamp((viewport - rect.top) / Math.max(1, viewport - 80));
         scene.style.setProperty("--scene", progress.toFixed(4));
         scene.style.setProperty("--enter", enter.toFixed(4));

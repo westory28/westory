@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import WordCloudView from "../common/WordCloudView";
 import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
 import PublicScoreDemo from "./PublicScoreDemo";
+import { useEntrySceneProgress } from "./useEntryMotion";
 import { entryMaterial } from "./entryMaterial";
 import lessonScreen from "../../assets/public-entry/lesson-real.webp";
 import worksheet from "../../assets/public-entry/worksheet-real.webp";
@@ -202,6 +203,8 @@ function FeatureScene({
   description,
   children,
   className = "",
+  sceneRef,
+  timeline = false,
 }: {
   id: string;
   number: string;
@@ -210,13 +213,17 @@ function FeatureScene({
   description: string;
   children: React.ReactNode;
   className?: string;
+  sceneRef?: React.RefObject<HTMLElement>;
+  timeline?: boolean;
 }) {
   return (
     <section
+      ref={sceneRef}
       id={id}
       tabIndex={-1}
       className={`entry-feature entry-scene ${className}`}
       data-entry-scene
+      data-entry-timeline={timeline ? "" : undefined}
       aria-labelledby={`${id}-title`}
     >
       <div className="entry-stage entry-split-stage">
@@ -472,11 +479,30 @@ export function GrowthScene() {
 }
 
 export function RecordScene() {
-  const [selected, setSelected] = useState(3);
-  const values = [62, 74, 70, 84];
+  const scene = useRef<HTMLElement>(null);
+  const scrollProgress = useEntrySceneProgress(scene);
+  const [manualProgress, setManualProgress] = useState<number | null>(null);
+  useEffect(() => setManualProgress(null), [scrollProgress]);
+  const progress =
+    manualProgress ?? Math.max(0, Math.min(1, (scrollProgress - 0.08) / 0.78));
+  const values = [62, 74, 84, 94];
   const points = values.map((v, i) => [52 + i * 114, 228 - v * 1.7]);
+  const travel = progress * (values.length - 1);
+  const selected = Math.floor(travel);
+  const segment = Math.min(selected, values.length - 2);
+  const fraction = travel - segment;
+  const current = Math.round(
+    values[segment] + (values[segment + 1] - values[segment]) * fraction,
+  );
+  const cursor = points[segment].map(
+    (v, axis) => v + (points[segment + 1][axis] - v) * fraction,
+  );
+  const revealed = [...points.slice(0, segment + 1), cursor];
   return (
     <FeatureScene
+      sceneRef={scene}
+      timeline
+      className="entry-record-scene"
       id="entry-record"
       number="07"
       label="마이페이지"
@@ -490,12 +516,12 @@ export function RecordScene() {
         </div>
         <div className="entry-record-value">
           <strong>
-            {values[selected]}
+            {current}
             <small>점</small>
           </strong>
           <span>
             {
-              ["첫 기록", "이해를 넓히고", "다시 점검하고", "한 걸음 더"][
+              ["첫 기록", "이해를 넓히고", "근거를 더하고", "한 걸음 더"][
                 selected
               ]
             }
@@ -504,7 +530,7 @@ export function RecordScene() {
         <svg
           viewBox="0 0 440 270"
           role="img"
-          aria-label={`가상 학습 기록 ${values.slice(0, selected + 1).join(", ")}점`}
+          aria-label={`가상 성장 그래프: 첫 기록 62점에서 현재 ${current}점`}
         >
           <defs>
             <linearGradient id="entry-growth-fill" x1="0" y1="0" x2="0" y2="1">
@@ -523,10 +549,9 @@ export function RecordScene() {
             />
           ))}
           <path
-            d={`M52 240 L${points
-              .slice(0, selected + 1)
+            d={`M52 240 L${revealed
               .map((p) => p.join(" "))
-              .join(" L")} L${points[selected][0]} 240 Z`}
+              .join(" L")} L${cursor[0]} 240 Z`}
             fill="url(#entry-growth-fill)"
           />
           <polyline
@@ -534,10 +559,7 @@ export function RecordScene() {
             className="entry-chart-future"
           />
           <polyline
-            points={points
-              .slice(0, selected + 1)
-              .map((p) => p.join(","))
-              .join(" ")}
+            points={revealed.map((p) => p.join(",")).join(" ")}
             className="entry-chart-line"
           />
           {points.map(([x, y], i) => (
@@ -545,12 +567,24 @@ export function RecordScene() {
               key={i}
               cx={x}
               cy={y}
-              r={i === selected ? 8 : 5}
+              r={5}
               className={
                 i <= selected ? "entry-chart-point" : "entry-chart-future-point"
               }
             />
           ))}
+          <circle
+            cx={cursor[0]}
+            cy={cursor[1]}
+            r="14"
+            className="entry-chart-cursor-halo"
+          />
+          <circle
+            cx={cursor[0]}
+            cy={cursor[1]}
+            r="7"
+            className="entry-chart-point"
+          />
           <line x1="32" x2="418" y1="75" y2="75" className="entry-chart-goal" />
           <text x="412" y="65" textAnchor="end">
             목표 90
@@ -562,7 +596,7 @@ export function RecordScene() {
               key={i}
               type="button"
               aria-pressed={selected === i}
-              onClick={() => setSelected(i)}
+              onClick={() => setManualProgress(i / (values.length - 1))}
             >
               {i + 1}번째 기록<span>{v}점</span>
             </button>
