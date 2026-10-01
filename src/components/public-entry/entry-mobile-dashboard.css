@@ -1,0 +1,101 @@
+/* The 360 × 780 SVG screen scales as a unit, including its 12px labels. */
+.public-entry .entry-mobile-dashboard {
+  width: 180px;
+  flex-shrink: 0;
+  color: var(--entry-ink);
+  filter: drop-shadow(0 28px 64px rgb(15 23 42 / 16%));
+}
+.public-entry .entry-mobile-dashboard-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 384 / 804;
+  overflow: visible;
+  font-family: "Noto Sans KR", sans-serif;
+}
+.public-entry .entry-mobile-dashboard .emd-frame {
+  fill: var(--entry-ink);
+  stroke: var(--entry-muted);
+  stroke-width: 3;
+}
+.public-entry .entry-mobile-dashboard .emd-background {
+  fill: var(--entry-surface);
+}
+.public-entry .entry-mobile-dashboard .emd-card,
+.public-entry .entry-mobile-dashboard .emd-surface {
+  fill: var(--ws-surface, #fff);
+}
+.public-entry .entry-mobile-dashboard .emd-card {
+  stroke: var(--entry-line);
+}
+.public-entry .entry-mobile-dashboard .emd-rule {
+  stroke: var(--entry-line);
+  stroke-width: 1;
+}
+.public-entry .entry-mobile-dashboard .emd-status {
+  fill: var(--entry-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.public-entry .entry-mobile-dashboard .emd-status-icons,
+.public-entry .entry-mobile-dashboard .emd-menu-icon {
+  stroke: var(--entry-ink);
+}
+.public-entry .entry-mobile-dashboard .emd-wordmark {
+  fill: var(--entry-blue);
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -1px;
+}
+.public-entry .entry-mobile-dashboard .emd-accent {
+  fill: var(--entry-orange);
+}
+.public-entry .entry-mobile-dashboard .emd-title,
+.public-entry .entry-mobile-dashboard .emd-shortcut,
+.public-entry .entry-mobile-dashboard .emd-date {
+  fill: var(--entry-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+.public-entry .entry-mobile-dashboard .emd-body {
+  fill: var(--entry-ink);
+  font-size: 14px;
+}
+.public-entry .entry-mobile-dashboard .emd-label,
+.public-entry .entry-mobile-dashboard .emd-day {
+  fill: var(--entry-muted);
+  font-size: 12px;
+}
+.public-entry .entry-mobile-dashboard .emd-book,
+.public-entry .entry-mobile-dashboard .emd-chevron {
+  stroke: var(--entry-blue);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.public-entry .entry-mobile-dashboard .emd-attendance,
+.public-entry .entry-mobile-dashboard .emd-event-date {
+  fill: var(--entry-blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+.public-entry .entry-mobile-dashboard .emd-event {
+  fill: var(--entry-ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+.public-entry .entry-mobile-dashboard .emd-blue-soft {
+  fill: var(--ws-primary-soft, #eff6ff);
+}
+.public-entry .entry-mobile-dashboard .emd-blue {
+  fill: var(--entry-blue);
+}
+.public-entry .entry-mobile-dashboard .emd-white {
+  fill: var(--ws-surface, #fff);
+}
+.public-entry .entry-mobile-dashboard .emd-notch,
+.public-entry .entry-mobile-dashboard .emd-home-indicator {
+  fill: var(--entry-ink);
+}
+.public-entry .entry-mobile-dashboard .emd-camera {
+  fill: var(--entry-muted);
+}

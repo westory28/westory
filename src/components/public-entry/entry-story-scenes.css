@@ -5,6 +5,48 @@
 .entry-record-value strong {
   font-variant-numeric: tabular-nums;
 }
+.public-entry .entry-record-scene .entry-record-chart {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 960px;
+  margin-inline: auto;
+}
+.public-entry .entry-record-scene .entry-record-chart .entry-panel-label {
+  grid-column: 1;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px 16px;
+  margin: 0;
+}
+.public-entry .entry-record-scene .entry-record-value {
+  grid-column: 2;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+.public-entry .entry-record-scene .entry-record-value strong {
+  font-size: 56px;
+}
+.public-entry .entry-record-scene .entry-record-chart > svg {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: clamp(320px, 36svh, 420px);
+  max-height: none;
+}
+.public-entry .entry-record-scene .entry-record-chart .entry-chart-axis-label {
+  fill: var(--entry-muted);
+  font-variant-numeric: tabular-nums;
+}
+.public-entry .entry-record-scene .entry-record-dates {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.public-entry .entry-record-scene .entry-record-tags {
+  grid-column: 1 / -1;
+}
 @media (min-height: 700px) {
   .public-entry[data-motion="on"] .entry-record-scene {
     height: 220svh;
@@ -28,13 +70,18 @@
     font-size: 13px;
     margin-top: 16px;
   }
-  .entry-record-scene .entry-record-chart {
-    padding: 18px;
+  .public-entry .entry-record-scene .entry-record-chart {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
   }
-  .entry-record-scene .entry-record-chart svg {
-    max-height: 190px;
+  .public-entry .entry-record-scene .entry-record-value {
+    grid-column: 1;
+    justify-content: space-between;
   }
-  .entry-record-scene .entry-record-value strong {
+  .public-entry .entry-record-scene .entry-record-chart > svg {
+    height: clamp(240px, 38svh, 320px);
+  }
+  .public-entry .entry-record-scene .entry-record-value strong {
     font-size: 44px;
   }
   .entry-record-scene .entry-record-tags {
@@ -47,9 +94,6 @@
     padding-top: 24px;
     padding-bottom: 24px;
     gap: 16px;
-  }
-  .entry-record-scene .entry-record-chart svg {
-    max-height: 120px;
   }
 }
 @media (max-height: 699px) {

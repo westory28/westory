@@ -7,7 +7,7 @@ import {
   getPointRankTierMeta,
   getPointRankUnlockTierCodeForEmoji,
 } from "../../lib/pointRanks";
-import EntryRibbon from "./EntryRibbon";
+import EntryGlow from "./EntryGlow";
 import { entryMaterial } from "./entryMaterial";
 import { MotionTitle, StoryLink } from "./EntryVisuals";
 import "./entry-mypage-scene.css";
@@ -70,7 +70,7 @@ export default function EntryMyPageScene() {
       aria-labelledby="entry-mypage-title"
     >
       <div className="entry-stage">
-        <EntryRibbon variant="wide" />
+        <EntryGlow variant="wide" />
         <div className="entry-heading entry-mypage-heading">
           <StoryLink number="07" label="마이페이지" />
           <MotionTitle

@@ -1709,12 +1709,6 @@
     transform: none;
     opacity: 1;
   }
-  .public-entry *,
-  .public-entry *::before,
-  .public-entry *::after {
-    animation: none !important;
-    transition: none !important;
-  }
   .entry-thread-draw {
     stroke-dashoffset: 0;
   }

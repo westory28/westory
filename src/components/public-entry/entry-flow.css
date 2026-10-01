@@ -1,4 +1,4 @@
-/* One typographic stroke opens the journey; native scroll gives objects depth. */
+/* Native scroll gives the opening words and devices depth. */
 .public-entry .entry-hero-thought {
   color: var(--entry-blue);
 }
@@ -64,8 +64,8 @@
   .entry-hero-mask:last-child
   > span {
   animation: none;
-  opacity: var(--hero-reveal, 0);
-  transform: translateY(calc((1 - var(--hero-reveal, 0)) * 24px));
+  opacity: 1;
+  transform: none;
 }
 
 @media (min-height: 600px) {

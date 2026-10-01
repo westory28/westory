@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
-import EntryRibbon from "./EntryRibbon";
+import EntryGlow from "./EntryGlow";
 import { useEntrySceneProgress } from "./useEntryMotion";
 import { useEntryMotionEnabled } from "./EntryMotionContext";
 import score from "../../assets/public-entry/confirmation-score.webp";
@@ -126,7 +126,7 @@ export default function EntryConfirmScene() {
       aria-labelledby="entry-confirm-title"
     >
       <div className="entry-stage entry-confirm-stage">
-        <EntryRibbon variant="wide" />
+        <EntryGlow variant="wide" />
         <div className="entry-confirm-copy">
           <StoryLink number="CHECK" label="성적 확인" />
           <MotionTitle

@@ -1,25 +1,114 @@
-/* Shared viewport overlay prevents clipping at the edge of a story section. */
-.public-entry .entry-journey {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 3;
+/* Local light stays behind each composition; no moving line crosses the page. */
+.public-entry .entry-section-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(92%, 800px);
+  height: clamp(240px, 40vw, 480px);
+  z-index: -1;
   pointer-events: none;
-  visibility: hidden;
-  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgb(245 158 11 / 16%), transparent 68%);
+  opacity: 0;
+  transform: translate(-50%, -50%);
 }
-.public-entry .entry-journey-trail {
-  fill: none;
-  stroke: var(--entry-orange);
-  stroke-width: 4px;
-  stroke-linecap: round;
+.public-entry .entry-section-glow[data-glow-variant="hero"] {
+  top: 32%;
 }
-.public-entry [data-ink-glow="true"] {
-  animation-duration: 600ms !important;
+.public-entry[data-motion="on"] .entry-section-glow[data-glow-entered="true"] {
+  animation: entry-soft-light 1200ms ease-in-out both;
 }
-.public-entry[data-motion="on"] .entry-type-mask > span {
-  --type-enter: clamp(0, var(--title-enter, 1), 1);
+@keyframes entry-soft-light {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.25;
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+}
+.public-entry .entry-title-word {
+  display: inline-block;
+}
+.public-entry[data-motion="on"]
+  .entry-motion-title:not([data-title-entered="true"])
+  .entry-title-word {
+  opacity: 0;
+}
+.public-entry[data-motion="on"]
+  .entry-motion-title[data-title-entered="true"]
+  .entry-type-mask
+  > span {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+.public-entry[data-motion="on"]
+  .entry-motion-title[data-title-entered="true"]
+  .entry-title-word {
+  animation: var(--title-animation, entry-title-down) 850ms
+    cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--line) * 100ms + var(--word) * 60ms);
+}
+.public-entry .entry-structure,
+.public-entry #entry-growth,
+.public-entry .entry-record-scene {
+  --title-animation: entry-title-rise;
+}
+.public-entry .entry-type--depth,
+.public-entry #entry-think,
+.public-entry .entry-play {
+  --title-animation: entry-title-focus;
+}
+.public-entry .entry-type--add,
+.public-entry .entry-confirm-scene {
+  --title-animation: entry-title-slide;
+}
+@keyframes entry-title-down {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes entry-title-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes entry-title-focus {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.94);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes entry-title-slide {
+  from {
+    opacity: 0;
+    transform: translate3d(-24px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 .public-entry[data-motion="on"] .entry-feature-visual {
   transform: translateY(calc((1 - var(--enter)) * 24px));
@@ -28,17 +117,51 @@
   transform: perspective(1200px) rotateY(calc((1 - var(--enter)) * -6deg));
 }
 .public-entry[data-motion="on"]
-  .entry-structure[data-entered="true"]
-  .entry-overview
+  .entry-structure
+  .entry-overview[data-entry-reveal]
   > button {
-  animation-duration: 420ms;
-  animation-delay: calc(var(--order) * 60ms);
+  animation: none;
+  opacity: 0;
+  transform: translate3d(0, 24px, 0);
+}
+.public-entry[data-motion="on"]
+  .entry-structure
+  .entry-overview[data-entry-reveal]
+  > button[data-badge-entered="true"] {
+  animation: entry-title-rise 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--order) * 120ms);
+}
+.public-entry[data-motion="on"]
+  .entry-structure
+  .entry-overview[data-entry-reveal]
+  > button:focus-visible {
+  animation: none;
+  opacity: 1;
+  transform: none;
 }
 .public-entry[data-motion="on"]
   .entry-hero[data-entered="true"]
   .entry-hero-mask:first-child
   > span {
-  animation-duration: 600ms;
+  animation-name: entry-title-down;
+  animation-duration: 850ms;
+}
+.public-entry .entry-hero-thought,
+.public-entry .entry-hero-connect {
+  display: inline-block;
+}
+.public-entry[data-motion="on"] .entry-hero-thought {
+  opacity: var(--thought-reveal, 0);
+  transform: translate3d(0, calc((1 - var(--thought-reveal, 0)) * -24px), 0);
+}
+.public-entry[data-motion="on"] .entry-hero-connect {
+  opacity: var(--connect-reveal, 0);
+  transform: translate3d(calc((1 - var(--connect-reveal, 0)) * 24px), 0, 0);
+}
+.public-entry .entry-hero-visual .entry-hero-phone {
+  width: clamp(80px, 24%, 192px);
+  right: 0;
+  bottom: 4%;
 }
 
 /* Open early, then retain the whole composition while the next scroll passes. */
@@ -72,9 +195,9 @@
     transform: translateY(calc((1 - var(--lid-open)) * -96px));
   }
   .public-entry[data-motion="on"] .entry-hero-visual .entry-hero-phone {
-    width: 20%;
-    right: 2%;
-    bottom: 12%;
+    width: clamp(80px, 24%, 192px);
+    right: 0;
+    bottom: 4%;
     transform: translateY(calc((1 - var(--open, 1)) * 24px)) rotateZ(-2deg);
   }
 }
@@ -91,8 +214,8 @@
   #entry-think
   .entry-think-cloud[data-entered="true"]
   .entry-think-word-ink[data-revised="false"] {
-  animation-duration: 600ms;
-  animation-delay: min(var(--word-delay), 160ms);
+  animation-duration: 800ms;
+  animation-delay: min(var(--word-delay), 240ms);
 }
 .public-entry[data-motion="on"]
   .entry-confirm-signature[data-writing="true"]
@@ -132,11 +255,6 @@
   .entry-finish-actions {
   animation-delay: 420ms;
   animation-duration: 420ms;
-}
-@media (max-width: 767px) {
-  .public-entry .entry-journey-trail {
-    stroke-width: 3px;
-  }
 }
 .public-entry[data-motion="on"] .entry-scene[data-stage-overflow="true"] {
   height: auto;

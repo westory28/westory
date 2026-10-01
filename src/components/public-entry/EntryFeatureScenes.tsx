@@ -5,7 +5,7 @@ import PublicScoreDemo from "./PublicScoreDemo";
 import { useEntrySceneProgress } from "./useEntryMotion";
 import { useEntryMotionEnabled } from "./EntryMotionContext";
 import { entryMaterial } from "./entryMaterial";
-import EntryRibbon from "./EntryRibbon";
+import EntryGlow from "./EntryGlow";
 import EntryConfirmScene from "./EntryConfirmScene";
 import lessonScreen from "../../assets/public-entry/lesson-real.webp";
 import worksheet from "../../assets/public-entry/worksheet-real.webp";
@@ -164,7 +164,7 @@ export function LessonScene() {
       aria-label="실제 수업 자료 둘러보기"
     >
       <div className="entry-stage entry-deck-stage">
-        <EntryRibbon variant="wide" />
+        <EntryGlow variant="wide" />
         <div className="entry-deck-heading">
           <StoryLink number="01" label="수업 자료" />
           <MotionTitle
@@ -277,7 +277,7 @@ function FeatureScene({
       aria-labelledby={`${id}-title`}
     >
       <div className="entry-stage entry-split-stage">
-        <EntryRibbon
+        <EntryGlow
           variant={id === "entry-map" || id === "entry-check" ? "left" : "wide"}
         />
         <div className="entry-heading">
@@ -471,13 +471,48 @@ export function GrowthScene() {
 
 export function RecordScene() {
   const scene = useRef<HTMLElement>(null);
+  const chart = useRef<SVGSVGElement>(null);
+  const [chartSize, setChartSize] = useState({ width: 640, height: 360 });
   const scrollProgress = useEntrySceneProgress(scene);
   const [manualProgress, setManualProgress] = useState<number | null>(null);
-  useEffect(() => setManualProgress(null), [scrollProgress]);
+  useEffect(() => {
+    const resumeScroll = () => setManualProgress(null);
+    window.addEventListener("scroll", resumeScroll, { passive: true });
+    return () => window.removeEventListener("scroll", resumeScroll);
+  }, []);
+  useEffect(() => {
+    const svg = chart.current;
+    if (!svg) return;
+    const measure = () => {
+      const width = svg.clientWidth;
+      const height = svg.clientHeight;
+      if (!width || !height) return;
+      setChartSize((current) =>
+        current.width === width && current.height === height
+          ? current
+          : { width, height },
+      );
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(svg);
+    measure();
+    return () => observer.disconnect();
+  }, []);
   const progress =
     manualProgress ?? Math.max(0, Math.min(1, (scrollProgress - 0.08) / 0.78));
-  const values = [62, 74, 84, 94];
-  const points = values.map((v, i) => [52 + i * 114, 228 - v * 1.7]);
+  const values = [28, 46, 72, 96];
+  const plot = {
+    left: 40,
+    right: chartSize.width - 24,
+    top: 24,
+    bottom: chartSize.height - 24,
+  };
+  const scoreY = (score: number) =>
+    plot.bottom - (score / 100) * (plot.bottom - plot.top);
+  const points = values.map((value, index) => [
+    plot.left + (index / (values.length - 1)) * (plot.right - plot.left),
+    scoreY(value),
+  ]);
   const travel = progress * (values.length - 1);
   const selected = Math.floor(travel);
   const segment = Math.min(selected, values.length - 2);
@@ -519,9 +554,10 @@ export function RecordScene() {
           </span>
         </div>
         <svg
-          viewBox="0 0 440 270"
+          ref={chart}
+          viewBox={`0 0 ${chartSize.width} ${chartSize.height}`}
           role="img"
-          aria-label={`가상 성장 그래프: 첫 기록 62점에서 현재 ${current}점`}
+          aria-label={`0점부터 100점까지의 가상 성장 그래프: 기록 28점, 46점, 72점, 96점 중 현재 ${current}점`}
         >
           <defs>
             <linearGradient id="entry-growth-fill" x1="0" y1="0" x2="0" y2="1">
@@ -529,20 +565,30 @@ export function RecordScene() {
               <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
             </linearGradient>
           </defs>
-          {[60, 100, 140, 180, 220].map((y) => (
-            <line
-              key={y}
-              x1="32"
-              x2="418"
-              y1={y}
-              y2={y}
-              className="entry-chart-grid"
-            />
+          {[0, 20, 40, 60, 80, 100].map((value) => (
+            <g key={value} aria-hidden="true">
+              <line
+                x1={plot.left}
+                x2={plot.right}
+                y1={scoreY(value)}
+                y2={scoreY(value)}
+                className="entry-chart-grid"
+              />
+              <text
+                x={plot.left - 12}
+                y={scoreY(value)}
+                textAnchor="end"
+                dominantBaseline="middle"
+                className="entry-chart-axis-label"
+              >
+                {value}
+              </text>
+            </g>
           ))}
           <path
-            d={`M52 240 L${revealed
+            d={`M${plot.left} ${plot.bottom} L${revealed
               .map((p) => p.join(" "))
-              .join(" L")} L${cursor[0]} 240 Z`}
+              .join(" L")} L${cursor[0]} ${plot.bottom} Z`}
             fill="url(#entry-growth-fill)"
           />
           <polyline
@@ -576,8 +622,14 @@ export function RecordScene() {
             r="7"
             className="entry-chart-point"
           />
-          <line x1="32" x2="418" y1="75" y2="75" className="entry-chart-goal" />
-          <text x="412" y="65" textAnchor="end">
+          <line
+            x1={plot.left}
+            x2={plot.right}
+            y1={scoreY(90)}
+            y2={scoreY(90)}
+            className="entry-chart-goal"
+          />
+          <text x={plot.left + 8} y={scoreY(90) - 8}>
             목표 90
           </text>
         </svg>

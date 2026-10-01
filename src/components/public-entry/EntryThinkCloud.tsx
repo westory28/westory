@@ -28,8 +28,8 @@ const initialWords = (): CloudWord[] =>
   }));
 const fontSize = (count: number, mobile = false) =>
   Math.min(
-    mobile ? 40 : 64,
-    (mobile ? 14 : 16) + Math.sqrt(count - 1) * (mobile ? 8 : 13),
+    mobile ? 48 : 80,
+    (mobile ? 16 : 18) + Math.sqrt(count - 1) * (mobile ? 12 : 24),
   );
 
 type WordPosition = {
@@ -57,10 +57,12 @@ function arrangeWords(
   previous: CloudLayout | null,
 ): CloudLayout {
   const placed = new Map<string, WordPosition>();
-  if (!width) return { width, height: 320, words: placed, top: 0 };
+  const minimumHeight = mobile ? 360 : 440;
+  if (!width) return { width, height: minimumHeight, words: placed, top: 0 };
   const context = document.createElement("canvas").getContext("2d");
   const edge = 16;
-  const gap = mobile ? 8 : 12;
+  // Opposing float phases can close horizontal gaps by 6px and vertical gaps by 10px.
+  const gap = mobile ? 14 : 18;
   const boxes: WordPosition[] = [];
   const candidates = [...words].sort(
     (a, b) =>
@@ -118,7 +120,7 @@ function arrangeWords(
   }
   const top = Math.min(...boxes.map((box) => box.y));
   const bottom = Math.max(...boxes.map((box) => box.y + box.height));
-  const height = Math.max(320, bottom - top + 48);
+  const height = Math.max(minimumHeight, bottom - top + 48);
   return {
     width,
     height,
@@ -134,6 +136,10 @@ export default function EntryThinkCloud() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [entered, setEntered] = useState(false);
+  const [inView, setInView] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(
+    () => !document.hidden,
+  );
   const [width, setWidth] = useState(0);
   const [font, setFont] = useState({
     family: "sans-serif",
@@ -164,6 +170,7 @@ export default function EntryThinkCloud() {
   useEffect(() => {
     const node = cloud.current;
     if (!node) return;
+    const visibility = () => setDocumentVisible(!document.hidden);
     const measure = () => {
       setWidth(node.clientWidth);
       const family = getComputedStyle(node).fontFamily;
@@ -178,6 +185,7 @@ export default function EntryThinkCloud() {
     const resize = new ResizeObserver(measure);
     resize.observe(node);
     window.addEventListener("resize", measure, { passive: true });
+    document.addEventListener("visibilitychange", visibility);
     let active = true;
     void document.fonts.ready.then(() => {
       if (active) {
@@ -185,27 +193,39 @@ export default function EntryThinkCloud() {
         setFont((current) => ({ ...current, ready: current.ready + 1 }));
       }
     });
-    if (!("IntersectionObserver" in window)) {
-      setEntered(true);
+    if (typeof IntersectionObserver === "undefined") {
+      const inspect = () => {
+        const rect = node.getBoundingClientRect();
+        const visible =
+          rect.bottom > 80 && rect.top < window.innerHeight * 0.92;
+        setInView(visible);
+        if (visible) setEntered(true);
+      };
+      inspect();
+      window.addEventListener("scroll", inspect, { passive: true });
+      window.addEventListener("resize", inspect, { passive: true });
       return () => {
         active = false;
         resize.disconnect();
         window.removeEventListener("resize", measure);
+        window.removeEventListener("scroll", inspect);
+        window.removeEventListener("resize", inspect);
+        document.removeEventListener("visibilitychange", visibility);
       };
     }
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (!entry.isIntersecting) return;
-        setEntered(true);
-        observer.disconnect();
+        setInView(entry.isIntersecting);
+        if (entry.isIntersecting) setEntered(true);
       },
-      { threshold: 0.25, rootMargin: "-80px 0px -8% 0px" },
+      { threshold: 0, rootMargin: "-80px 0px -8% 0px" },
     );
     observer.observe(node);
     return () => {
       active = false;
       resize.disconnect();
       window.removeEventListener("resize", measure);
+      document.removeEventListener("visibilitychange", visibility);
       observer.disconnect();
     };
   }, []);
@@ -288,6 +308,7 @@ export default function EntryThinkCloud() {
         className="entry-think-cloud"
         style={{ height: layout.height }}
         data-entered={entered}
+        data-floating={motionEnabled && inView && documentVisible}
         role="img"
         aria-label={`익명 생각모아: ${words.map((word) => `${word.text} ${word.count}회`).join(", ")}`}
       >
@@ -314,6 +335,8 @@ export default function EntryThinkCloud() {
                   "--word-delay": `${(index % 8) * 40}ms`,
                   "--word-from-x": `${Math.cos(angle) * distance}px`,
                   "--word-from-y": `${Math.sin(angle) * distance}px`,
+                  "--word-float-duration": `${6 + (index % 4)}s`,
+                  "--word-float-delay": `${-index * 0.65}s`,
                 } as CSSProperties
               }
             >
@@ -322,7 +345,7 @@ export default function EntryThinkCloud() {
                 className="entry-think-word-ink"
                 data-revised={word.revision > 0}
               >
-                {word.text}
+                <span className="entry-think-word-float">{word.text}</span>
               </span>
               {word.revision > 0 && (
                 <span

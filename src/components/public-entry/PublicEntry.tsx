@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import mapReal from "../../assets/public-entry/map-real.webp";
 import {
   EntryOverview,
   LessonScene,
@@ -9,10 +8,11 @@ import {
   GrowthScene,
   RecordScene,
 } from "./EntryFeatureScenes";
-import { Device, FinaleTitle, MotionTitle, StoryLink } from "./EntryVisuals";
+import { FinaleTitle, MotionTitle, StoryLink } from "./EntryVisuals";
 import EntryPlayScene from "./EntryPlayScene";
 import EntryMyPageScene from "./EntryMyPageScene";
-import EntryRibbon, { EntryJourney } from "./EntryRibbon";
+import EntryGlow from "./EntryGlow";
+import EntryMobileDashboard from "./EntryMobileDashboard";
 import EntryHeroLaptop from "./EntryHeroLaptop";
 import { useEntryMotion } from "./useEntryMotion";
 import { useEntryFinale } from "./useEntryFinale";
@@ -178,7 +178,6 @@ function PublicEntryContent({
           {teacher}
         </div>
       </header>
-      <EntryJourney />
       <main>
         <section
           className="entry-hero entry-scene"
@@ -186,7 +185,7 @@ function PublicEntryContent({
           aria-labelledby="entry-title"
         >
           <div className="entry-stage entry-hero-stage">
-            <EntryRibbon variant="hero" />
+            <EntryGlow variant="hero" />
             <div className="entry-hero-copy" data-entry-reveal>
               <h1
                 id="entry-title"
@@ -199,12 +198,7 @@ function PublicEntryContent({
                 <span className="entry-hero-mask" aria-hidden="true">
                   <span className="entry-hero-sentence">
                     <span className="entry-hero-thought">생각을</span>{" "}
-                    <span className="entry-hero-connect">
-                      연결하
-                      <span className="entry-hero-da">
-                        다<span className="entry-hero-baseline" />
-                      </span>
-                    </span>
+                    <span className="entry-hero-connect">연결하다</span>
                   </span>
                 </span>
               </h1>
@@ -217,16 +211,7 @@ function PublicEntryContent({
             </div>
             <div className="entry-hero-visual">
               <EntryHeroLaptop />
-              <Device kind="phone" className="entry-hero-phone">
-                <div className="entry-phone-title">역사를 지도로</div>
-                <img
-                  src={mapReal}
-                  alt="실제 제작 한반도 역사 지리 지도"
-                  width="1037"
-                  height="1383"
-                  loading="lazy"
-                />
-              </Device>
+              <EntryMobileDashboard className="entry-hero-phone" />
               <span className="entry-hero-annotation">
                 한 장의 자료에서 시작되는 탐구
               </span>
@@ -239,7 +224,7 @@ function PublicEntryContent({
           aria-labelledby="entry-structure-title"
         >
           <div className="entry-stage">
-            <EntryRibbon variant="wide" />
+            <EntryGlow variant="wide" />
             <StoryLink number="WESTORY" label="한눈에 보는 위스토리" />
             <MotionTitle
               id="entry-structure-title"
@@ -262,7 +247,7 @@ function PublicEntryContent({
           aria-labelledby="entry-finish-title"
         >
           <div className="entry-stage">
-            <EntryRibbon variant="finish" />
+            <EntryGlow variant="finish" />
             <p className="entry-eyebrow">함께 써 내려갈 다음 장</p>
             <FinaleTitle />
             <div className="entry-login-actions entry-finish-actions">

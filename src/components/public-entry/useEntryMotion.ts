@@ -2,6 +2,26 @@ import { RefObject, useEffect, useState } from "react";
 import { useEntryMotionEnabled } from "./EntryMotionContext";
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
+const settleDistance = 0.0005;
+const motionProperties = [
+  "--scene",
+  "--enter",
+  "--phase",
+  "--pass",
+  "--ribbon",
+  "--open",
+  "--hero-reveal",
+  "--thought-reveal",
+  "--connect-reveal",
+  "--title-enter",
+] as const;
+type MotionProperty = (typeof motionProperties)[number];
+type MotionValues = Partial<Record<MotionProperty, number>>;
+
+function approach(current: number, target: number, elapsed: number) {
+  const next = current + (target - current) * (1 - Math.exp(-elapsed / 100));
+  return Math.abs(target - next) < settleDistance ? target : next;
+}
 
 function sceneProgress(
   rect: DOMRect,
@@ -24,44 +44,86 @@ function sceneProgress(
   );
 }
 
-/** A small SVG chart needs numeric progress; the other scenes stay CSS-driven. */
+/** Numeric charts use the same time-based damping as the CSS-driven scenes. */
 export function useEntrySceneProgress(root: RefObject<HTMLElement>) {
   const enabled = useEntryMotionEnabled();
-  const [progress, setProgress] = useState(1);
+  const [progress, setProgress] = useState(enabled ? 0 : 1);
   useEffect(() => {
+    if (!enabled) {
+      setProgress(1);
+      return;
+    }
     let frame = 0;
-    const read = () => {
+    let previousTime = 0;
+    let dirty = true;
+    let current = 0;
+    let target = 0;
+    let visible = false;
+    const update = (time: number) => {
       frame = 0;
-      if (!enabled) {
-        setProgress(1);
-        return;
-      }
       const scene = root.current;
       if (!scene || document.hidden) return;
-      const rect = scene.getBoundingClientRect();
-      if (rect.bottom < 0 || rect.top > innerHeight) return;
-      const stage = scene.firstElementChild as HTMLElement;
-      const next = sceneProgress(rect, stage.offsetHeight, innerHeight, true);
-      setProgress(Math.round(next * 200) / 200);
+      if (dirty) {
+        dirty = false;
+        const rect = scene.getBoundingClientRect();
+        visible = rect.bottom >= 0 && rect.top <= innerHeight;
+        if (visible) {
+          const stage = scene.querySelector<HTMLElement>(".entry-stage");
+          target = sceneProgress(
+            rect,
+            stage?.offsetHeight || innerHeight - 80,
+            innerHeight,
+            true,
+          );
+        }
+      }
+      if (!visible) {
+        previousTime = 0;
+        return;
+      }
+      const elapsed = previousTime ? Math.min(64, time - previousTime) : 16.67;
+      previousTime = time;
+      const next = approach(current, target, elapsed);
+      if (next !== current) {
+        current = next;
+        setProgress(next);
+      }
+      if (current !== target) frame = requestAnimationFrame(update);
+      else previousTime = 0;
     };
     const request = () => {
-      if (!frame && !document.hidden) frame = requestAnimationFrame(read);
+      dirty = true;
+      if (!frame && !document.hidden) frame = requestAnimationFrame(update);
     };
+    const visibility = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+        previousTime = 0;
+      } else request();
+    };
+    const resize =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(request);
+    if (root.current) resize?.observe(root.current);
+    setProgress(0);
     window.addEventListener("scroll", request, { passive: true });
     window.addEventListener("resize", request, { passive: true });
-    document.addEventListener("visibilitychange", request);
+    document.addEventListener("visibilitychange", visibility);
     request();
     return () => {
       cancelAnimationFrame(frame);
+      resize?.disconnect();
       window.removeEventListener("scroll", request);
       window.removeEventListener("resize", request);
-      document.removeEventListener("visibilitychange", request);
+      document.removeEventListener("visibilitychange", visibility);
     };
   }, [root, enabled]);
-  return progress;
+  return enabled ? progress : 1;
 }
 
-/** Native scrolling is the timeline, including touch, keyboard and reverse travel. */
+/** Native scrolling stays in control; only the visual progress is softened. */
 export function useEntryMotion(root: RefObject<HTMLDivElement>) {
   const enabled = useEntryMotionEnabled();
   useEffect(() => {
@@ -70,154 +132,208 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
     const scenes = Array.from(
       page.querySelectorAll<HTMLElement>("[data-entry-scene]"),
     );
+    const states = scenes.map((scene) => ({
+      scene,
+      stage: scene.querySelector<HTMLElement>(".entry-stage"),
+      title: scene.querySelector<HTMLElement>(".entry-motion-title"),
+      current: {} as MotionValues,
+      target: {} as MotionValues,
+      visible: false,
+    }));
     const fitStages = () => {
-      scenes.forEach((scene) => {
-        const stage = scene.firstElementChild as HTMLElement | null;
+      states.forEach(({ scene, stage }) => {
         if (
           stage &&
           (getComputedStyle(stage).position === "sticky" ||
             scene.dataset.stageOverflow === "true")
         ) {
-          scene.dataset.stageOverflow = String(
-            stage.scrollHeight > innerHeight - 78,
-          );
+          const overflow = String(stage.scrollHeight > innerHeight - 78);
+          if (scene.dataset.stageOverflow !== overflow)
+            scene.dataset.stageOverflow = overflow;
         }
       });
     };
     let frame = 0;
-    const update = () => {
+    let previousTime = 0;
+    let dirty = true;
+    let needsFit = true;
+    const update = (time: number) => {
       frame = 0;
-      if (document.hidden || !enabled || page.dataset.finaleLocked === "true")
-        return;
-      const viewport = window.innerHeight;
-      // Read layout in one pass, then write only compositor properties via CSS variables.
-      const positions = scenes.map((scene) => ({
-        scene,
-        rect: scene.getBoundingClientRect(),
-        stage: scene.firstElementChild?.getBoundingClientRect(),
-        title: scene
-          .querySelector(".entry-motion-title")
-          ?.getBoundingClientRect(),
-      }));
-      for (const { scene, rect, stage, title } of positions) {
-        if (rect.bottom < 0 || rect.top > viewport) continue;
-        const progress = sceneProgress(
-          rect,
-          stage?.height || viewport - 80,
-          viewport,
-          scene.hasAttribute("data-entry-timeline"),
-        );
-        const enter = clamp((viewport * 0.95 - rect.top) / (viewport * 0.35));
-        const pass = clamp(
-          (viewport * 0.8 - rect.top) / (rect.height + viewport * 0.35),
-        );
-        const pinned = stage && rect.height > stage.height + 100;
-        const ribbon = pinned
-          ? enter * 0.18 + progress * 0.82
-          : clamp((viewport * 0.85 - rect.top) / Math.max(1, rect.height));
-        scene.style.setProperty("--scene", progress.toFixed(4));
-        scene.style.setProperty("--enter", enter.toFixed(4));
-        scene.style.setProperty("--pass", pass.toFixed(4));
-        scene.style.setProperty("--ribbon", ribbon.toFixed(4));
-        if (title) {
-          scene.style.setProperty(
-            "--title-enter",
-            clamp((viewport * 0.95 - title.top) / (viewport * 0.3)).toFixed(4),
-          );
-        }
-        if (scene.classList.contains("entry-hero")) {
-          const travelled = Math.max(0, 80 - rect.top);
-          scene.style.setProperty(
-            "--hero-reveal",
-            clamp(travelled / 48).toFixed(4),
-          );
-          const open = clamp(0.06 + travelled / 96);
-          scene.style.setProperty("--open", open.toFixed(4));
-        }
-        scene.style.setProperty(
-          "--phase",
-          clamp((progress - 0.15) / 0.7).toFixed(4),
-        );
+      if (document.hidden || !enabled) return;
+      if (needsFit) {
+        needsFit = false;
+        fitStages();
       }
+      if (dirty) {
+        dirty = false;
+        const viewport = window.innerHeight;
+        // Layout is read only after scroll/resize, not on every damping frame.
+        const positions = states.map((state) => ({
+          state,
+          rect: state.scene.getBoundingClientRect(),
+          stage: state.stage?.getBoundingClientRect(),
+          title: state.title?.getBoundingClientRect(),
+        }));
+        for (const { state, rect, stage, title } of positions) {
+          state.visible = rect.bottom >= 0 && rect.top <= viewport;
+          if (!state.visible) continue;
+          const progress = sceneProgress(
+            rect,
+            stage?.height || viewport - 80,
+            viewport,
+            state.scene.hasAttribute("data-entry-timeline"),
+          );
+          const enter = clamp((viewport * 0.95 - rect.top) / (viewport * 0.35));
+          const pinned = stage && rect.height > stage.height + 100;
+          const target: MotionValues = {
+            "--scene": progress,
+            "--enter": enter,
+            "--pass": clamp(
+              (viewport * 0.8 - rect.top) / (rect.height + viewport * 0.35),
+            ),
+            "--ribbon": pinned
+              ? enter * 0.18 + progress * 0.82
+              : clamp((viewport * 0.85 - rect.top) / Math.max(1, rect.height)),
+            "--phase": clamp((progress - 0.15) / 0.7),
+          };
+          if (title)
+            target["--title-enter"] = clamp(
+              (viewport * 0.95 - title.top) / (viewport * 0.3),
+            );
+          if (state.scene.classList.contains("entry-hero")) {
+            const travelled = Math.max(0, 80 - rect.top);
+            target["--hero-reveal"] = clamp(travelled / 48);
+            target["--thought-reveal"] = clamp(travelled / 40);
+            target["--connect-reveal"] = clamp((travelled - 16) / 48);
+            target["--open"] = clamp(0.06 + travelled / 96);
+          }
+          state.target = target;
+        }
+      }
+      const elapsed = previousTime ? Math.min(64, time - previousTime) : 16.67;
+      previousTime = time;
+      let pending = false;
+      for (const state of states) {
+        if (!state.visible) continue;
+        for (const property of motionProperties) {
+          const target = state.target[property];
+          if (target === undefined) continue;
+          const current = state.current[property] ?? target;
+          const next = approach(current, target, elapsed);
+          if (state.current[property] !== next) {
+            state.current[property] = next;
+            state.scene.style.setProperty(property, next.toFixed(5));
+          }
+          pending ||= next !== target;
+        }
+      }
+      if (pending) frame = window.requestAnimationFrame(update);
+      else previousTime = 0;
     };
     const request = () => {
-      page.dataset.scrolled = String(
-        window.scrollY > 600 || page.dataset.finaleLocked === "true",
-      );
+      page.dataset.scrolled = String(window.scrollY > 600);
+      dirty = true;
       if (!frame && !document.hidden && enabled)
         frame = window.requestAnimationFrame(update);
     };
-    const sync = () => {
-      page.dataset.motion = !enabled ? "off" : "on";
-      page.dataset.scrolled = String(window.scrollY > 600);
-      if (frame) window.cancelAnimationFrame(frame);
-      frame = 0;
-      if (!enabled) {
-        scenes.forEach((scene) => {
-          scene.style.removeProperty("--scene");
-          scene.style.removeProperty("--enter");
-          scene.style.removeProperty("--phase");
-          scene.style.removeProperty("--pass");
-          scene.style.removeProperty("--ribbon");
-          scene.style.removeProperty("--open");
-          scene.style.removeProperty("--hero-reveal");
-          scene.style.removeProperty("--title-enter");
-        });
-      } else request();
+    const onResize = () => {
+      needsFit = true;
+      request();
     };
     const visibility = () => {
       if (document.hidden) {
-        if (frame) window.cancelAnimationFrame(frame);
+        window.cancelAnimationFrame(frame);
         frame = 0;
+        previousTime = 0;
       } else request();
     };
     const resize =
-      typeof ResizeObserver === "undefined"
+      !enabled || typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(() => {
-            fitStages();
-            request();
-          });
+        : new ResizeObserver(onResize);
     resize?.observe(page);
-    scenes.forEach((scene) => {
-      if (scene.firstElementChild) resize?.observe(scene.firstElementChild);
+    states.forEach(({ stage }) => {
+      if (stage) resize?.observe(stage);
     });
-    const reveals = Array.from(
-      page.querySelectorAll<HTMLElement>("[data-entry-reveal]"),
-    );
+    const entrances = new Map<Element, () => void>();
+    page
+      .querySelectorAll<HTMLElement>("[data-entry-reveal]")
+      .forEach((element) => {
+        entrances.set(element, () => {
+          const scene = element.closest<HTMLElement>("[data-entry-scene]");
+          if (scene) scene.dataset.entered = "true";
+        });
+      });
+    page
+      .querySelectorAll<HTMLElement>(".entry-overview > button")
+      .forEach((badge) => {
+        entrances.set(badge, () => {
+          badge.dataset.badgeEntered = "true";
+        });
+      });
+    page
+      .querySelectorAll<HTMLElement>(".entry-section-glow")
+      .forEach((glow) => {
+        entrances.set(glow, () => {
+          glow.dataset.glowEntered = "true";
+          const scene = glow.closest<HTMLElement>("[data-entry-scene]");
+          if (scene) scene.dataset.glowEntered = "true";
+        });
+      });
     const entrance =
-      typeof IntersectionObserver === "undefined"
+      !enabled || typeof IntersectionObserver === "undefined"
         ? null
         : new IntersectionObserver(
             (entries) => {
               for (const entry of entries) {
                 if (!entry.isIntersecting) continue;
-                const scene =
-                  entry.target.closest<HTMLElement>("[data-entry-scene]");
-                if (scene) scene.dataset.entered = "true";
+                entrances.get(entry.target)?.();
                 entrance?.unobserve(entry.target);
               }
             },
             { threshold: 0.12, rootMargin: "0px 0px -4% 0px" },
           );
-    reveals.forEach((element) => {
+    entrances.forEach((enter, element) => {
+      if (!enabled) return;
       if (entrance) entrance.observe(element);
-      else
-        element
-          .closest<HTMLElement>("[data-entry-scene]")
-          ?.setAttribute("data-entered", "true");
+      else enter();
     });
+    const titleEntrance =
+      !enabled || typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                (entry.target as HTMLElement).dataset.titleEntered = "true";
+                titleEntrance?.unobserve(entry.target);
+              }
+            },
+            { threshold: 0.15, rootMargin: "0px 0px -10% 0px" },
+          );
+    states.forEach(({ title }) => {
+      if (!enabled || !title) return;
+      if (titleEntrance) titleEntrance.observe(title);
+      else title.dataset.titleEntered = "true";
+    });
+    page.dataset.motion = enabled ? "on" : "off";
+    if (!enabled)
+      scenes.forEach((scene) => {
+        motionProperties.forEach((property) =>
+          scene.style.removeProperty(property),
+        );
+      });
     window.addEventListener("scroll", request, { passive: true });
-    window.addEventListener("resize", request, { passive: true });
+    window.addEventListener("resize", onResize, { passive: true });
     document.addEventListener("visibilitychange", visibility);
-    fitStages();
-    sync();
+    request();
     return () => {
-      if (frame) window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(frame);
       resize?.disconnect();
       entrance?.disconnect();
+      titleEntrance?.disconnect();
       window.removeEventListener("scroll", request);
-      window.removeEventListener("resize", request);
+      window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [root, enabled]);

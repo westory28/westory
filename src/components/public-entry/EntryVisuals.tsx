@@ -13,12 +13,7 @@ export function FinaleTitle() {
         </span>
         <span className="entry-finale-brand" aria-hidden="true">
           <span className="entry-finale-we">위</span>
-          <span className="entry-finale-story">
-            스토
-            <span className="entry-finale-ri">
-              리<span className="entry-finale-baseline" />
-            </span>
-          </span>
+          <span className="entry-finale-story">스토리</span>
         </span>
       </h2>
     </div>
@@ -42,7 +37,19 @@ export function MotionTitle({
     >
       {lines.map((line, index) => (
         <span className="entry-type-mask" key={line} aria-hidden="true">
-          <span style={{ "--line": index } as React.CSSProperties}>{line}</span>
+          <span style={{ "--line": index } as React.CSSProperties}>
+            {line.split(" ").map((word, wordIndex) => (
+              <React.Fragment key={`${word}-${wordIndex}`}>
+                {wordIndex > 0 && " "}
+                <span
+                  className="entry-title-word"
+                  style={{ "--word": wordIndex } as React.CSSProperties}
+                >
+                  {word}
+                </span>
+              </React.Fragment>
+            ))}
+          </span>
         </span>
       ))}
     </h2>

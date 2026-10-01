@@ -1,5 +1,5 @@
 import { MotionTitle, StoryLink } from "./EntryVisuals";
-import EntryRibbon from "./EntryRibbon";
+import EntryGlow from "./EntryGlow";
 import "./entry-play-scene.css";
 
 /** Static game art and scroll-scrubbed effects; no game session or network calls. */
@@ -14,7 +14,7 @@ export default function EntryPlayScene() {
       aria-labelledby="entry-play-title"
     >
       <div className="entry-stage entry-play-stage">
-        <EntryRibbon variant="wide" />
+        <EntryGlow variant="wide" />
         <div className="entry-heading">
           <StoryLink number="06" label="위플레이" />
           <MotionTitle

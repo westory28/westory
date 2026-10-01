@@ -1,8 +1,8 @@
 .public-entry #entry-think .entry-think-cloud {
   position: relative;
   width: 100%;
-  max-width: 680px;
-  min-height: 320px;
+  max-width: 1040px;
+  min-height: 440px;
   margin: 24px auto 32px;
   isolation: isolate;
 }
@@ -24,6 +24,23 @@
   position: relative;
   display: block;
   transform-origin: center;
+}
+.public-entry #entry-think .entry-think-word-float {
+  display: block;
+}
+.public-entry[data-motion="on"]
+  #entry-think
+  .entry-think-cloud[data-entered="true"]
+  .entry-think-word-float {
+  animation: entry-think-float var(--word-float-duration) ease-in-out
+    var(--word-float-delay) infinite;
+  animation-play-state: paused;
+}
+.public-entry[data-motion="on"]
+  #entry-think
+  .entry-think-cloud[data-floating="true"]
+  .entry-think-word-float {
+  animation-play-state: running;
 }
 .public-entry #entry-think .entry-think-word-arrival {
   position: absolute;
@@ -141,9 +158,24 @@
     transform: translateY(0) scale(1);
   }
 }
+@keyframes entry-think-float {
+  0%,
+  100% {
+    transform: translate(-3px, -2px);
+  }
+  25% {
+    transform: translate(1px, -5px);
+  }
+  50% {
+    transform: translate(3px, 2px);
+  }
+  75% {
+    transform: translate(-1px, 5px);
+  }
+}
 @media (max-width: 767px) {
   .public-entry #entry-think .entry-think-cloud {
-    min-height: 280px;
+    min-height: 360px;
     margin-top: 16px;
   }
 }
