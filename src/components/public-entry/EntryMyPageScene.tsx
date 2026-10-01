@@ -1,4 +1,12 @@
 import { useId, useRef, useState } from "react";
+import {
+  DEFAULT_POINT_RANK_POLICY,
+  getPointRankAllowedEmojiIds,
+  getPointRankDisplay,
+  getPointRankEmojiRegistry,
+  getPointRankTierMeta,
+  getPointRankUnlockTierCodeForEmoji,
+} from "../../lib/pointRanks";
 import EntryRibbon from "./EntryRibbon";
 import { entryMaterial } from "./entryMaterial";
 import { MotionTitle, StoryLink } from "./EntryVisuals";
@@ -12,11 +20,46 @@ const menus = [
 ] as const;
 type Menu = (typeof menus)[number]["id"];
 
+const previewRank = getPointRankDisplay({
+  rankPolicy: DEFAULT_POINT_RANK_POLICY,
+  wallet: { earnedTotal: 180, rankEarnedTotal: 180 },
+});
+const allowedEmojiIds = getPointRankAllowedEmojiIds(
+  DEFAULT_POINT_RANK_POLICY,
+  previewRank?.tierCode,
+);
+const previewEmojiIds = new Set([
+  "smile",
+  "book",
+  "cool",
+  "clover",
+  "nerd",
+  "rocket",
+  "sparkles",
+  "fox",
+]);
+const previewEmojis = getPointRankEmojiRegistry(DEFAULT_POINT_RANK_POLICY)
+  .filter((entry) => previewEmojiIds.has(entry.id))
+  .map((entry) => ({
+    ...entry,
+    unlocked: allowedEmojiIds.includes(entry.id),
+    unlockLabel: getPointRankTierMeta(
+      DEFAULT_POINT_RANK_POLICY,
+      DEFAULT_POINT_RANK_POLICY.activeThemeId,
+      getPointRankUnlockTierCodeForEmoji(DEFAULT_POINT_RANK_POLICY, entry.id) ||
+        "tier_1",
+    ).label,
+  }));
+
 export default function EntryMyPageScene() {
   const [menu, setMenu] = useState<Menu>("profile");
+  const [profileEmojiId, setProfileEmojiId] = useState("nerd");
   const [showExplanation, setShowExplanation] = useState(false);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const id = useId();
+  const profileEmoji = previewEmojis.find(
+    (entry) => entry.id === profileEmojiId,
+  )!;
 
   return (
     <section
@@ -89,22 +132,91 @@ export default function EntryMyPageScene() {
               hidden={menu !== "profile"}
               tabIndex={0}
             >
-              <div className="entry-mypage-identity">
-                <span className="entry-mypage-initial" aria-hidden="true">
-                  나
-                </span>
+              <div className="entry-mypage-profile">
                 <div>
-                  <span className="entry-mypage-label">나의 기본 정보</span>
-                  <h3>예시 학생</h3>
-                  <p className="entry-mypage-class">2학년 1반 1번</p>
+                  <div className="entry-mypage-identity">
+                    <span className="entry-mypage-initial" aria-hidden="true">
+                      {profileEmoji.emoji}
+                    </span>
+                    <div>
+                      <span className="entry-mypage-label">나의 기본 정보</span>
+                      <h3>예시 학생</h3>
+                      <p className="entry-mypage-class">2학년 1반 1번</p>
+                    </div>
+                  </div>
+                  <dl className="entry-mypage-summary">
+                    <div>
+                      <dt>현재 등급</dt>
+                      <dd>{previewRank?.label}</dd>
+                    </div>
+                    <div>
+                      <dt>학습 진행</dt>
+                      <dd>60%</dd>
+                    </div>
+                  </dl>
+                </div>
+                <div
+                  className="entry-mypage-emoji-picker"
+                  role="group"
+                  aria-labelledby={`${id}-emoji-title`}
+                >
+                  <div className="entry-mypage-emoji-heading">
+                    <strong id={`${id}-emoji-title`}>프로필 이모지</strong>
+                    <span aria-live="polite">{profileEmoji.label} 선택됨</span>
+                  </div>
+                  <div className="entry-mypage-emoji-options">
+                    {previewEmojis.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        disabled={!entry.unlocked}
+                        aria-pressed={profileEmojiId === entry.id}
+                        aria-label={
+                          entry.unlocked
+                            ? `${entry.label} 이모지 선택`
+                            : `${entry.label}, ${entry.unlockLabel}부터 선택 가능`
+                        }
+                        onClick={() => setProfileEmojiId(entry.id)}
+                      >
+                        <span aria-hidden="true">{entry.emoji}</span>
+                        {profileEmojiId === entry.id && (
+                          <svg
+                            className="entry-mypage-emoji-check"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            aria-hidden="true"
+                          >
+                            <path d="m5 12 4 4L19 6" />
+                          </svg>
+                        )}
+                        {!entry.unlocked && (
+                          <small>
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              aria-hidden="true"
+                            >
+                              <rect
+                                x="5"
+                                y="10"
+                                width="14"
+                                height="11"
+                                rx="2"
+                              />
+                              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                            </svg>
+                            {entry.unlockLabel}
+                          </small>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <dl className="entry-mypage-summary">
-                <div>
-                  <dt>학습 진행</dt>
-                  <dd>60%</dd>
-                </div>
-              </dl>
               <button
                 type="button"
                 className="entry-mypage-action"

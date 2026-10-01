@@ -25,6 +25,22 @@ export function moveToEntrySection(id: string) {
 }
 
 export function EntryOverview() {
+  const icons = [
+    <React.Fragment key="explore">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 4.5 4.5M8 10.5h5m-2.5-2.5v5" />
+    </React.Fragment>,
+    <React.Fragment key="check">
+      <rect x="5" y="3" width="14" height="18" rx="3" />
+      <path d="m8 12 3 3 5-6" />
+    </React.Fragment>,
+    <React.Fragment key="growth">
+      <path d="M4 20V4m0 16h16M8 16l4-5 4 2 4-7m-5 0h5v5" />
+    </React.Fragment>,
+    <React.Fragment key="play">
+      <path d="M8 6h8c2 0 3 1 3.5 3l1.5 7c.5 2.5-2 4-3.5 2L15 15H9l-2.5 3C5 20 2.5 18.5 3 16l1.5-7C5 7 6 6 8 6ZM7 9v4m-2-2h4m7-1h.01M18 12h.01" />
+    </React.Fragment>,
+  ];
   return (
     <nav
       className="entry-overview"
@@ -43,7 +59,22 @@ export function EntryOverview() {
           onClick={() => moveToEntrySection(id)}
           style={{ "--order": index } as React.CSSProperties}
         >
-          <span>{n}</span>
+          <span className="entry-overview-symbol" aria-hidden="true">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              focusable="false"
+            >
+              {icons[index]}
+            </svg>
+            <span>{n}</span>
+          </span>
           <strong>
             {title}
             <span aria-hidden="true">↗</span>
@@ -96,11 +127,13 @@ export function LessonScene() {
       if (!el || innerHeight < 800) return;
       const rect = el.getBoundingClientRect();
       const stage = el.firstElementChild as HTMLElement;
+      if (getComputedStyle(stage).position !== "sticky") return;
       const progress = Math.max(
         0,
         Math.min(
           1,
-          (80 - rect.top) / Math.max(1, rect.height - stage.offsetHeight),
+          (80 - rect.top) /
+            Math.max(1, (rect.height - stage.offsetHeight) * 0.6),
         ),
       );
       const next = Math.min(2, Math.floor(progress * 3));
@@ -378,19 +411,43 @@ export function CheckScene() {
                 type="button"
                 key={option}
                 aria-pressed={answer === i}
+                aria-describedby="entry-question-feedback"
+                data-result={
+                  answer === i
+                    ? option === q.answer
+                      ? "correct"
+                      : "incorrect"
+                    : undefined
+                }
                 onClick={() => setAnswer(i)}
               >
                 <span>{i + 1}</span>
                 {option}
+                {answer === i && (
+                  <small className="entry-answer-result">
+                    {option === q.answer ? "정답" : "오답"}
+                  </small>
+                )}
               </button>
             ))}
           </div>
-          <p className="entry-question-feedback" aria-live="polite">
+          <p
+            id="entry-question-feedback"
+            className="entry-question-feedback"
+            data-result={
+              answer === null
+                ? undefined
+                : q.options[answer] === q.answer
+                  ? "correct"
+                  : "incorrect"
+            }
+            aria-live="polite"
+          >
             {answer === null
               ? "어떤 설명이 가장 적절할까요?"
               : (q.options[answer] === q.answer
-                  ? "맞아요. "
-                  : "다시 확인해 볼까요? ") + q.explanation}
+                  ? "정답입니다. "
+                  : "오답입니다. ") + q.explanation}
           </p>
         </div>
       </FeatureScene>

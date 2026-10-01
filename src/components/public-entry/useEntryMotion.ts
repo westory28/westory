@@ -11,13 +11,17 @@ function sceneProgress(
 ) {
   if (timeline && viewport < 700) {
     return clamp(
-      (viewport * 0.82 - rect.top) / (viewport * 0.65 + rect.height * 0.3),
+      (viewport * 0.9 - rect.top) / (viewport * 0.35 + rect.height * 0.15),
     );
   }
   if (rect.height <= stageHeight + 100) {
-    return clamp((viewport * 0.85 - rect.top) / (viewport * 0.7 + rect.height));
+    return clamp(
+      (viewport * 0.9 - rect.top) / (viewport * 0.3 + rect.height * 0.3),
+    );
   }
-  return clamp((80 - rect.top) / Math.max(1, rect.height - stageHeight));
+  return clamp(
+    (80 - rect.top) / Math.max(1, (rect.height - stageHeight) * 0.6),
+  );
 }
 
 /** A small SVG chart needs numeric progress; the other scenes stay CSS-driven. */
@@ -66,6 +70,20 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
     const scenes = Array.from(
       page.querySelectorAll<HTMLElement>("[data-entry-scene]"),
     );
+    const fitStages = () => {
+      scenes.forEach((scene) => {
+        const stage = scene.firstElementChild as HTMLElement | null;
+        if (
+          stage &&
+          (getComputedStyle(stage).position === "sticky" ||
+            scene.dataset.stageOverflow === "true")
+        ) {
+          scene.dataset.stageOverflow = String(
+            stage.scrollHeight > innerHeight - 78,
+          );
+        }
+      });
+    };
     let frame = 0;
     const update = () => {
       frame = 0;
@@ -89,7 +107,7 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           viewport,
           scene.hasAttribute("data-entry-timeline"),
         );
-        const enter = clamp((viewport - rect.top) / Math.max(1, viewport - 80));
+        const enter = clamp((viewport * 0.95 - rect.top) / (viewport * 0.35));
         const pass = clamp(
           (viewport * 0.8 - rect.top) / (rect.height + viewport * 0.35),
         );
@@ -104,16 +122,16 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
         if (title) {
           scene.style.setProperty(
             "--title-enter",
-            clamp((viewport * 0.88 - title.top) / (viewport * 0.48)).toFixed(4),
+            clamp((viewport * 0.95 - title.top) / (viewport * 0.3)).toFixed(4),
           );
         }
         if (scene.classList.contains("entry-hero")) {
           const travelled = Math.max(0, 80 - rect.top);
           scene.style.setProperty(
             "--hero-reveal",
-            clamp(travelled / 96).toFixed(4),
+            clamp(travelled / 48).toFixed(4),
           );
-          const open = clamp(0.06 + travelled / (viewport * 0.62));
+          const open = clamp(0.06 + travelled / 96);
           scene.style.setProperty("--open", open.toFixed(4));
         }
         scene.style.setProperty(
@@ -156,8 +174,14 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
     const resize =
       typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(request);
+        : new ResizeObserver(() => {
+            fitStages();
+            request();
+          });
     resize?.observe(page);
+    scenes.forEach((scene) => {
+      if (scene.firstElementChild) resize?.observe(scene.firstElementChild);
+    });
     const reveals = Array.from(
       page.querySelectorAll<HTMLElement>("[data-entry-reveal]"),
     );
@@ -174,7 +198,7 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
                 entrance?.unobserve(entry.target);
               }
             },
-            { threshold: 0.3, rootMargin: "0px 0px -12% 0px" },
+            { threshold: 0.12, rootMargin: "0px 0px -4% 0px" },
           );
     reveals.forEach((element) => {
       if (entrance) entrance.observe(element);
@@ -186,6 +210,7 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
     window.addEventListener("scroll", request, { passive: true });
     window.addEventListener("resize", request, { passive: true });
     document.addEventListener("visibilitychange", visibility);
+    fitStages();
     sync();
     return () => {
       if (frame) window.cancelAnimationFrame(frame);

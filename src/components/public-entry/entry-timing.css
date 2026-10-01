@@ -1,0 +1,150 @@
+/* Shared viewport overlay prevents clipping at the edge of a story section. */
+.public-entry .entry-journey {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  visibility: hidden;
+  overflow: hidden;
+}
+.public-entry .entry-journey-trail {
+  fill: none;
+  stroke: var(--entry-orange);
+  stroke-width: 4px;
+  stroke-linecap: round;
+}
+.public-entry [data-ink-glow="true"] {
+  animation-duration: 600ms !important;
+}
+.public-entry[data-motion="on"] .entry-type-mask > span {
+  --type-enter: clamp(0, var(--title-enter, 1), 1);
+}
+.public-entry[data-motion="on"] .entry-feature-visual {
+  transform: translateY(calc((1 - var(--enter)) * 24px));
+}
+.public-entry[data-motion="on"] .entry-map-composition .entry-device {
+  transform: perspective(1200px) rotateY(calc((1 - var(--enter)) * -6deg));
+}
+.public-entry[data-motion="on"]
+  .entry-structure[data-entered="true"]
+  .entry-overview
+  > button {
+  animation-duration: 420ms;
+  animation-delay: calc(var(--order) * 60ms);
+}
+.public-entry[data-motion="on"]
+  .entry-hero[data-entered="true"]
+  .entry-hero-mask:first-child
+  > span {
+  animation-duration: 600ms;
+}
+
+/* Open early, then retain the whole composition while the next scroll passes. */
+@media (min-height: 600px) {
+  .public-entry[data-motion="on"] .entry-hero {
+    height: calc(100svh + 240px);
+    min-height: 0;
+  }
+  .public-entry[data-motion="on"] .entry-hero > .entry-hero-stage {
+    position: sticky;
+    top: 80px;
+    height: calc(100svh - 80px);
+    min-height: 0;
+    padding-top: 24px;
+    padding-bottom: 24px;
+    justify-content: center;
+  }
+  .public-entry[data-motion="on"] .entry-hero h1 {
+    font-size: clamp(38px, 5vw, 64px);
+  }
+  .public-entry[data-motion="on"] .entry-hero .entry-benefit {
+    margin-top: 16px;
+    font-size: 14px;
+  }
+  .public-entry[data-motion="on"] .entry-hero-visual {
+    width: min(100%, 800px, calc((100svh - 390px) * 1.35));
+    margin-top: 24px;
+  }
+  .public-entry[data-motion="on"] .entry-opening-laptop {
+    margin-bottom: 64px;
+    transform: translateY(calc((1 - var(--lid-open)) * -96px));
+  }
+  .public-entry[data-motion="on"] .entry-hero-visual .entry-hero-phone {
+    width: 20%;
+    right: 2%;
+    bottom: 12%;
+    transform: translateY(calc((1 - var(--open, 1)) * 24px)) rotateZ(-2deg);
+  }
+}
+@media (min-height: 800px) {
+  .public-entry .entry-deck-stage {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .public-entry[data-motion="on"] .entry-lesson-deck {
+    height: 200svh;
+  }
+}
+.public-entry[data-motion="on"]
+  #entry-think
+  .entry-think-cloud[data-entered="true"]
+  .entry-think-word-ink[data-revised="false"] {
+  animation-duration: 600ms;
+  animation-delay: min(var(--word-delay), 160ms);
+}
+.public-entry[data-motion="on"]
+  .entry-confirm-signature[data-writing="true"]
+  path {
+  animation-duration: calc(var(--stroke-duration) * 0.6);
+  animation-delay: calc(160ms + var(--stroke-delay) * 0.6);
+}
+@media (min-height: 700px) {
+  .public-entry[data-motion="on"] .entry-confirm-scene {
+    height: 180svh;
+  }
+  .public-entry[data-motion="on"] .entry-record-scene {
+    height: 160svh;
+  }
+  .public-entry[data-motion="on"] .entry-play {
+    height: 175svh;
+  }
+}
+/* Keep the final game composition on screen instead of fading it out at 100%. */
+.public-entry[data-motion="on"] .entry-play {
+  --cutin-exit: 0;
+}
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-finale-phrase,
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-finale-we,
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-finale-story {
+  animation-duration: 600ms;
+  animation-delay: 0ms;
+}
+.public-entry[data-motion="on"]
+  .entry-finish[data-entered="true"]
+  .entry-finish-actions {
+  animation-delay: 420ms;
+  animation-duration: 420ms;
+}
+@media (max-width: 767px) {
+  .public-entry .entry-journey-trail {
+    stroke-width: 3px;
+  }
+}
+.public-entry[data-motion="on"] .entry-scene[data-stage-overflow="true"] {
+  height: auto;
+}
+.public-entry[data-motion="on"]
+  .entry-scene[data-stage-overflow="true"]
+  > .entry-stage {
+  position: relative;
+  top: auto;
+  height: auto;
+}

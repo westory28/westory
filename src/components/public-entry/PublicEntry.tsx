@@ -12,7 +12,7 @@ import {
 import { Device, FinaleTitle, MotionTitle, StoryLink } from "./EntryVisuals";
 import EntryPlayScene from "./EntryPlayScene";
 import EntryMyPageScene from "./EntryMyPageScene";
-import EntryRibbon from "./EntryRibbon";
+import EntryRibbon, { EntryJourney } from "./EntryRibbon";
 import EntryHeroLaptop from "./EntryHeroLaptop";
 import { useEntryMotion } from "./useEntryMotion";
 import { useEntryFinale } from "./useEntryFinale";
@@ -26,6 +26,8 @@ import "./entry-detail.css";
 import "./entry-space.css";
 import "./entry-flow.css";
 import "./entry-motion-control.css";
+import "./entry-polish.css";
+import "./entry-timing.css";
 interface Props {
   controls: React.ReactNode;
   onStudentLogin: () => void;
@@ -176,6 +178,7 @@ function PublicEntryContent({
           {teacher}
         </div>
       </header>
+      <EntryJourney />
       <main>
         <section
           className="entry-hero entry-scene"
@@ -228,9 +231,6 @@ function PublicEntryContent({
                 한 장의 자료에서 시작되는 탐구
               </span>
             </div>
-            <span className="entry-scroll-cue" aria-hidden="true">
-              이야기를 따라 내려가 보세요 <span>↓</span>
-            </span>
           </div>
         </section>
         <section
@@ -269,11 +269,26 @@ function PublicEntryContent({
               <button
                 type="button"
                 className="entry-primary"
+                aria-label={label}
                 onClick={onStudentLogin}
                 disabled={disabled}
               >
-                {label}
-                <span aria-hidden="true"> ↗</span>
+                <svg
+                  className="entry-google-icon"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    fill="currentColor"
+                    d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.87h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.35ZM12 22c2.7 0 4.96-.9 6.61-2.42l-3.24-2.51c-.9.6-2.05.96-3.37.96-2.6 0-4.8-1.76-5.59-4.13H3.07v2.6A10 10 0 0 0 12 22ZM6.41 13.9a6 6 0 0 1 0-3.8V7.5H3.07a10 10 0 0 0 0 9l3.34-2.6ZM12 5.97c1.47 0 2.79.5 3.83 1.51l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.93 5.5l3.34 2.6A6.01 6.01 0 0 1 12 5.97Z"
+                  />
+                </svg>
+                <span>
+                  {label === "Google 학생 로그인" ? "학생 로그인" : label}
+                </span>
               </button>
               {teacher}
             </div>

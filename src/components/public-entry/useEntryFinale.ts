@@ -141,7 +141,7 @@ export function useEntryFinale(
         passive: false,
         capture: true,
       });
-      timer = window.setTimeout(release, 2200);
+      timer = window.setTimeout(release, 1400);
       scene.dataset.entered = "true";
     };
     const read = () => {
