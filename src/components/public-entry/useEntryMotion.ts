@@ -16,6 +16,13 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
       frame = 0;
       if (document.hidden || preference.matches) return;
       const viewport = window.innerHeight;
+      page.style.setProperty(
+        "--story",
+        clamp(
+          (window.scrollY + viewport * 0.65 - 700) /
+            Math.max(1, page.offsetHeight - 1000),
+        ).toFixed(4),
+      );
       // Read layout in one pass, then write only compositor properties via CSS variables.
       const positions = scenes.map((scene) => ({
         scene,

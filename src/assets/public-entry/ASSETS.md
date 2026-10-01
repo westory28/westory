@@ -1,5 +1,26 @@
 # Public entry preview assets
 
+## Current homepage: actual teaching materials (2026-10-01)
+
+The white-background homepage replaces the synthetic lesson and dashboard crops below with user-authorized teaching materials. These four optimized, content-hashed WebP imports total **574,580 bytes** (about 561 KiB). Images outside the hero load lazily. The homepage does not fetch lessons, maps, student records, or cloud responses from Firebase.
+
+| File | Bytes | Source |
+| --- | ---: | --- |
+| `worksheet-real.webp` | 143,042 | First page of the published 2026-2 lesson **② 500년 국가의 기틀 확립** |
+| `heritage-real.webp` | 205,924 | First page of the published 2026-2 lesson **② 조선 전기의 문화 유산** |
+| `map-real.webp` | 100,968 | Existing **한반도 역사 지리** map resource |
+| `lesson-real.webp` | 124,646 | Actual `LessonWorksheetStage` in `student-solve` preview with the first lesson's 47 blank definitions; local capture shell |
+
+The worksheet images retain their original author attribution. The lesson screen is a capture of the real worksheet renderer with persistence disabled, not a claim that its minimal capture-only shell matches the entire authenticated portal. No student account, answer, score, or identifier appears in these assets.
+
+`entryMaterial.ts` contains the existing question 133 about Pericles and its original choices/explanation, plus 22 anonymous word/count aggregates from the actual **한국사라고 하면 떠오르는 것은?** activity. The first-semester activity was used because the current semester's activities had no responses. Only normalized response text was requested; submitter identities were not loaded. Irrelevant words were excluded. `WordCloudView` renders those aggregates locally, with `showSubmitters={false}`. The homepage's word additions and quiz choices are temporary local demonstrations.
+
+The score calculator and growth line graph use explicitly labeled fictional values. The calculator reuses `getGradeBand` and its rounding convention; its 60/40 weights are a demonstration, not a fetched grading plan. Game art still comes from the existing naval-game assets without starting gameplay. CSS builds the device mockups; no video, 3D engine, remote rendering, or animation package is added.
+
+Read-only source retrieval, original files, capture harness, and visual verification evidence are kept in ignored `.superloopy/sessions/2026-10-01-public-entry-v2/`. Raw server metadata and token-bearing source URLs are not published or committed.
+
+## Previous previews (retained, not used by the current homepage)
+
 Captured 2026-09-30 from the actual Westory source at baseline `4244155` in the isolated working copy. These are static screenshots, not embedded application instances. No production student, school, notice, score, account session, or credential was used.
 
 ## Files
@@ -47,7 +68,7 @@ Pixel boxes inside `dashboard-desktop.webp` (1280 × 800), measured from the rea
 | NoticeBoard | 791.84375 | 80 | 464.15625 | 316 |
 | Wis ranking | 791.84375 | 412 | 464.15625 | 328 |
 
-Reuse the same dashboard image for crops. Do not produce or preload separate duplicate panel files. As of the 2026-10-01 public-home redesign, desktop and mobile both reuse these panel crops as independent scroll-controlled layers. The lesson uses a content-only crop (584, 104, 664, 676) from the desktop capture. Score demonstrations use local synthetic controls instead of screenshot identities. The game scene layers the existing sea-battle.webp and allied-ship.webp art from public/assets/weplay/naval; it does not start the game runtime.
+The earlier public-home version reused these panel crops as independent scroll-controlled layers and used a content-only lesson crop (584, 104, 664, 676). The current homepage uses the actual materials documented above instead. The game scene continues to layer the existing sea-battle.webp and allied-ship.webp art from public/assets/weplay/naval; it does not start the game runtime.
 
 ## Validation limits
 
