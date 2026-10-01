@@ -1,0 +1,147 @@
+.public-entry #entry-think .entry-think-cloud {
+  position: relative;
+  width: 100%;
+  max-width: 680px;
+  min-height: 320px;
+  margin: 24px auto 32px;
+  isolation: isolate;
+}
+.public-entry #entry-think .entry-think-word {
+  position: absolute;
+  display: inline-block;
+  max-width: 100%;
+  color: var(--entry-muted);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+.public-entry #entry-think .entry-think-word[data-weight="strong"] {
+  color: var(--entry-blue);
+  font-weight: 800;
+}
+.public-entry #entry-think .entry-think-word-ink {
+  position: relative;
+  display: block;
+  transform-origin: center;
+}
+.public-entry #entry-think .entry-think-word-arrival {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--entry-orange);
+  opacity: 0;
+}
+.public-entry #entry-think .entry-think-form {
+  max-width: 520px;
+  margin: 0 auto 16px;
+}
+.public-entry #entry-think .entry-think-input-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.public-entry #entry-think .entry-think-input-label label {
+  color: var(--entry-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.public-entry #entry-think .entry-think-input-label > span {
+  color: var(--entry-muted);
+  font-size: 12px;
+}
+.public-entry #entry-think .entry-think-input-row {
+  display: flex;
+  gap: 8px;
+}
+.public-entry #entry-think .entry-think-input-row input {
+  min-width: 0;
+  min-height: 48px;
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--entry-line);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--entry-ink);
+  font: inherit;
+  font-size: 16px;
+}
+.public-entry #entry-think .entry-think-input-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--entry-blue);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+.public-entry #entry-think .entry-think-error {
+  margin: 8px 0 0;
+  color: var(--entry-ink);
+  font-size: 12px;
+}
+@media (prefers-reduced-motion: no-preference) and (min-height: 600px) {
+  .public-entry
+    #entry-think
+    .entry-think-cloud[data-entered="false"]
+    .entry-think-word-ink {
+    opacity: 0;
+  }
+  .public-entry
+    #entry-think
+    .entry-think-cloud[data-entered="true"]
+    .entry-think-word-ink[data-revised="false"] {
+    animation: entry-think-gather 900ms cubic-bezier(0.16, 1, 0.3, 1)
+      var(--word-delay) both;
+  }
+  .public-entry #entry-think .entry-think-word-ink[data-revised="true"] {
+    animation: entry-think-grow 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .public-entry #entry-think .entry-think-word-arrival {
+    animation: entry-think-arrival 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+@keyframes entry-think-gather {
+  from {
+    opacity: 0;
+    transform: translate(var(--word-from-x), var(--word-from-y)) scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+@keyframes entry-think-grow {
+  from {
+    transform: scale(0.82);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes entry-think-arrival {
+  0% {
+    opacity: 0;
+    transform: translateY(48px) scale(0.5);
+  }
+  30% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (max-width: 767px) {
+  .public-entry #entry-think .entry-think-cloud {
+    min-height: 280px;
+    margin-top: 16px;
+  }
+}

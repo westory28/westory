@@ -170,6 +170,15 @@
   display: inline-block;
   color: var(--entry-orange);
 }
+.entry-finale-ri {
+  display: inline-block;
+}
+.entry-finale-baseline {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  vertical-align: baseline;
+}
 .public-entry .entry-finish-actions {
   margin-top: 48px;
 }
@@ -294,7 +303,7 @@
   .public-entry[data-motion="on"]
     .entry-finish[data-entered="true"]
     .entry-finale-story {
-    animation: entry-ink-word 900ms 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: entry-ink-word 700ms 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .public-entry[data-motion="on"]
     .entry-finish[data-entered="true"]

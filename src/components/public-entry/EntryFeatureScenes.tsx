@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import WordCloudView from "../common/WordCloudView";
+import EntryThinkCloud from "./EntryThinkCloud";
 import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
 import PublicScoreDemo from "./PublicScoreDemo";
 import { useEntrySceneProgress } from "./useEntryMotion";
@@ -338,12 +338,6 @@ export function MapScene() {
 }
 
 export function ThinkScene() {
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [last, setLast] = useState("");
-  const words = entryMaterial.words.map((w) => ({
-    ...w,
-    count: w.count + (counts[w.text] || 0),
-  }));
   return (
     <FeatureScene
       id="entry-think"
@@ -352,55 +346,7 @@ export function ThinkScene() {
       lines={["나의 한 단어가,", "우리의 관점으로."]}
       description="같은 질문에 모인 서로 다른 생각. 자주 나온 단어와 낯선 관점을 비교하며 내 해석을 넓혀 갑니다."
     >
-      <div className="entry-cloud-panel">
-        <div className="entry-panel-label">
-          <span>실제 수업의 익명 응답</span>
-          <span className="entry-live-dot" aria-hidden="true" />
-        </div>
-        <h3>{entryMaterial.cloudTitle}</h3>
-        <div
-          className="entry-cloud-native"
-          role="img"
-          aria-label={`익명 생각모아: ${words.map((w) => `${w.text} ${w.count}회`).join(", ")}`}
-        >
-          <div aria-hidden="true">
-            <WordCloudView entries={words} showSubmitters={false} />
-          </div>
-        </div>
-        <div className="entry-cloud-choices" aria-label="단어 더해 보기">
-          {["한글", "조선", "고구려"].map((word) => (
-            <button
-              type="button"
-              key={word}
-              onClick={() => {
-                setCounts((c) => ({ ...c, [word]: (c[word] || 0) + 1 }));
-                setLast(word);
-              }}
-            >
-              {word}
-              <span>+1</span>
-            </button>
-          ))}
-        </div>
-        <div className="entry-demo-bottom">
-          <p aria-live="polite">
-            {last
-              ? `${last}, ${words.find((w) => w.text === last)?.count}개의 생각`
-              : "단어를 더해 보는 체험 · 저장되지 않습니다"}
-          </p>
-          {last && (
-            <button
-              type="button"
-              onClick={() => {
-                setCounts({});
-                setLast("");
-              }}
-            >
-              처음으로
-            </button>
-          )}
-        </div>
-      </div>
+      <EntryThinkCloud />
     </FeatureScene>
   );
 }

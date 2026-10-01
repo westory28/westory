@@ -13,7 +13,12 @@ export function FinaleTitle() {
         </span>
         <span className="entry-finale-brand" aria-hidden="true">
           <span className="entry-finale-we">위</span>
-          <span className="entry-finale-story">스토리</span>
+          <span className="entry-finale-story">
+            스토
+            <span className="entry-finale-ri">
+              리<span className="entry-finale-baseline" />
+            </span>
+          </span>
         </span>
       </h2>
     </div>

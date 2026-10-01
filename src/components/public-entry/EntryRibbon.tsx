@@ -4,6 +4,39 @@ type Point = [number, number];
 type Curve = [Point, Point, Point, Point];
 type Variant = "hero" | "wide" | "wrap" | "left" | "finish";
 
+// Measure only the upper-right ink of 리: its ㅣ. Local font rendering keeps
+// the connection accurate even when Korean falls back to a device's own font.
+function finaleStroke(target: HTMLElement): Point {
+  const style = getComputedStyle(target);
+  const size = parseFloat(style.fontSize);
+  const canvas = document.createElement("canvas");
+  canvas.width = 160;
+  canvas.height = 200;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return [size * 0.82, -size * 0.76];
+  ctx.font = `${style.fontWeight} 100px ${style.fontFamily}`;
+  ctx.fillText("리", 16, 150);
+  const { data } = ctx.getImageData(0, 0, 160, 200);
+  for (let y = 25; y < 150; y++) {
+    // The rightmost run excludes the ㄹ on the left of the syllable.
+    let right = -1;
+    for (let x = 130; x >= 86; x--) {
+      if (data[(y * 160 + x) * 4 + 3] >= 128) {
+        right = x;
+        break;
+      }
+    }
+    if (right < 0) continue;
+    let left = right;
+    while (left > 86 && data[(y * 160 + left - 1) * 4 + 3] >= 128) left--;
+    return [
+      (((left + right + 1) / 2 - 16) * size) / 100,
+      ((y - 148) * size) / 100,
+    ];
+  }
+  return [size * 0.82, -size * 0.76];
+}
+
 function brush(curves: Curve[], width: number, height: number) {
   const points = curves.flatMap(([a, b, c, d], segment) =>
     Array.from({ length: 33 }, (_, i) => {
@@ -68,12 +101,14 @@ export default function EntryRibbon({
   useEffect(() => {
     const stage = svg.current?.parentElement;
     if (!stage) return;
+    let active = true;
     const protectedText = Array.from(
       stage.querySelectorAll<HTMLElement>(
         ".entry-motion-title .entry-type-mask, .entry-hero-copy h1, .entry-eyebrow, .entry-benefit, .entry-login, .entry-finale-phrase, .entry-record-value, .entry-record-dates, .entry-record-tags, .entry-mypage-demo-note",
       ),
     );
     const measure = () => {
+      if (!active) return;
       const width = stage.offsetWidth,
         height = stage.offsetHeight;
       if (!width || !height) return;
@@ -81,17 +116,23 @@ export default function EntryRibbon({
       const stageRect = stage.getBoundingClientRect();
       let curves: Curve[];
       if (variant === "finish") {
-        const target = stage.querySelector<HTMLElement>(".entry-finale-story");
+        const target = stage.querySelector<HTMLElement>(".entry-finale-ri");
         const tr = target?.getBoundingClientRect();
-        const end: Point = tr
-          ? [
-              (tr.left + tr.width * 0.68 - stageRect.left) / width,
-              (tr.top + tr.height * 0.6 - stageRect.top) / height,
-            ]
-          : [0.65, 0.5];
-        // A single gesture arrives directly in the orange word, without a loop.
+        const baseline = target
+          ?.querySelector(".entry-finale-baseline")
+          ?.getBoundingClientRect();
+        const ink = target ? finaleStroke(target) : [0, 0];
+        const end: Point =
+          tr && baseline
+            ? [
+                (tr.left + ink[0] - stageRect.left) / width,
+                (baseline.top + ink[1] - stageRect.top) / height,
+              ]
+            : [0.65, 0.5];
+        // The last control point shares the endpoint's x: arrive vertically
+        // into the top of ㅣ, just inside its ink rather than across the word.
         curves = [
-          [[0.5, 0], [0.5, end[1] * 0.35], [end[0] - 0.2, end[1] * 0.8], end],
+          [[0.5, 0], [end[0], end[1] * 0.12], [end[0], end[1] * 0.5], end],
         ];
       } else {
         const anchor = stage.querySelector<HTMLElement>(
@@ -161,7 +202,14 @@ export default function EntryRibbon({
         if (variant === "hero") curves = curves.slice(2);
       }
       const textBounds = protectedText.map((element) => {
-        const rect = element.getBoundingClientRect();
+        // The finale line passes beside the phrase. Protect its text, not the
+        // wider block inherited from the brand, which would cut the ink in midair.
+        let rect = element.getBoundingClientRect();
+        if (element.classList.contains("entry-finale-phrase")) {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          rect = range.getBoundingClientRect();
+        }
         return {
           x: rect.left - stageRect.left - 4,
           y: rect.top - stageRect.top - 4,
@@ -174,10 +222,14 @@ export default function EntryRibbon({
     const observer = new ResizeObserver(measure);
     observer.observe(stage);
     protectedText.forEach((element) => observer.observe(element));
-    const target = stage.querySelector(".entry-finale-story");
+    const target = stage.querySelector(".entry-finale-ri");
     if (target) observer.observe(target);
     measure();
-    return () => observer.disconnect();
+    if (variant === "finish") void document.fonts.ready.then(measure);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
   }, [variant]);
   return (
     <svg
