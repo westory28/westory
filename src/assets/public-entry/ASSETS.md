@@ -47,7 +47,7 @@ Pixel boxes inside `dashboard-desktop.webp` (1280 × 800), measured from the rea
 | NoticeBoard | 791.84375 | 80 | 464.15625 | 316 |
 | Wis ranking | 791.84375 | 412 | 464.15625 | 328 |
 
-Reuse the same dashboard image for crops. Do not produce or preload separate duplicate panel files. Mobile uses the completed single-column screenshot, without the desktop assembly pinning effect.
+Reuse the same dashboard image for crops. Do not produce or preload separate duplicate panel files. As of the 2026-10-01 public-home redesign, desktop and mobile both reuse these panel crops as independent scroll-controlled layers. The lesson uses a content-only crop (584, 104, 664, 676) from the desktop capture. Score demonstrations use local synthetic controls instead of screenshot identities. The game scene layers the existing sea-battle.webp and allied-ship.webp art from public/assets/weplay/naval; it does not start the game runtime.
 
 ## Validation limits
 

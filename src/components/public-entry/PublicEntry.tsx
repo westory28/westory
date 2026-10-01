@@ -1,12 +1,15 @@
 import React, { useEffect, useRef } from "react";
 import dashboardDesktop from "../../assets/public-entry/dashboard-desktop.webp";
-import dashboardMobile from "../../assets/public-entry/dashboard-mobile.webp";
 import lessonDesktop from "../../assets/public-entry/lesson-desktop.webp";
-import lessonMobile from "../../assets/public-entry/lesson-mobile.webp";
-import scoreDesktop from "../../assets/public-entry/score-desktop.webp";
-import scoreMobile from "../../assets/public-entry/score-mobile.webp";
-import weplayDesktop from "../../assets/public-entry/weplay-desktop.webp";
-import weplayMobile from "../../assets/public-entry/weplay-mobile.webp";
+import {
+  EntryOverview,
+  MapScene,
+  ThinkScene,
+  CheckScene,
+  GrowthScene,
+  RecordScene,
+} from "./EntryFeatureScenes";
+import { useEntryMotion } from "./useEntryMotion";
 import "./public-entry.css";
 
 interface Props {
@@ -32,44 +35,69 @@ function Wordmark() {
   );
 }
 
-function Screen({
-  desktop,
-  mobile,
+/** Crop existing synthetic captures into independent visual layers. */
+function Crop({
+  src,
+  box,
   alt,
   eager = false,
-  className = "",
 }: {
-  desktop: string;
-  mobile: string;
+  src: string;
+  box: [number, number, number, number];
   alt: string;
   eager?: boolean;
-  className?: string;
 }) {
-  const desktopSize = desktop === weplayDesktop ? [1000, 380] : [1280, 800];
-  const mobileSize =
-    desktop === weplayDesktop
-      ? [537, 570]
-      : desktop === scoreDesktop
-        ? [537, 952]
-        : [585, 1266];
+  const [x, y, width, height] = box;
   return (
-    <picture className={"entry-screen " + className}>
-      <source
-        media="(max-width: 767px)"
-        srcSet={mobile}
-        width={mobileSize[0]}
-        height={mobileSize[1]}
-      />
+    <div className="entry-crop" style={{ aspectRatio: width + " / " + height }}>
       <img
-        src={desktop}
+        src={src}
         alt={alt}
-        width={desktopSize[0]}
-        height={desktopSize[1]}
+        width="1280"
+        height="800"
         loading={eager ? "eager" : "lazy"}
         decoding="async"
-        fetchPriority={eager ? "high" : "auto"}
+        {...{ fetchpriority: eager ? "high" : "auto" }}
+        style={{
+          width: (1280 / width) * 100 + "%",
+          left: (-x / width) * 100 + "%",
+          top: (-y / height) * 100 + "%",
+        }}
       />
-    </picture>
+    </div>
+  );
+}
+
+function DayPanels({ hero = false }: { hero?: boolean }) {
+  return (
+    <div
+      className={"entry-day-panels" + (hero ? " entry-day-panels--hero" : "")}
+    >
+      <div className="entry-day-week">
+        <Crop
+          src={dashboardDesktop}
+          box={[256, 80, 520, 660]}
+          eager={hero}
+          alt="예시 화면: 이번 주 학사 일정"
+        />
+      </div>
+      <div className="entry-day-notice">
+        <Crop
+          src={dashboardDesktop}
+          box={[792, 80, 464, 316]}
+          eager={hero}
+          alt="예시 화면: 알림장"
+        />
+      </div>
+      <div className="entry-day-ranking">
+        <Crop
+          src={dashboardDesktop}
+          box={[792, 412, 464, 328]}
+          eager={hero}
+          alt="예시 화면: 위스 랭킹"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -89,8 +117,6 @@ export default function PublicEntry({
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const lastPageFocus = useRef<HTMLElement | null>(null);
-  const assembly = useRef<HTMLElement>(null);
-  const game = useRef<HTMLDivElement>(null);
   const dismissDialog = useRef(onDialogDismiss);
   dismissDialog.current = onDialogDismiss;
   const label = busy
@@ -99,123 +125,7 @@ export default function PublicEntry({
       ? "계속하기"
       : "Google 학생 로그인";
 
-  useEffect(() => {
-    const element = root.current;
-    const assemble = assembly.current;
-    const gameElement = game.current;
-    if (
-      !element ||
-      !assemble ||
-      !gameElement ||
-      typeof IntersectionObserver === "undefined"
-    )
-      return;
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const desktop = window.matchMedia(
-      "(min-width: 1024px) and (min-height: 600px)",
-    );
-    let assembleVisible = false;
-    let gamePlayed = false;
-    let frame = 0;
-    const clamp = (value: number) => Math.max(0, Math.min(1, value));
-    const updateAssembly = () => {
-      frame = 0;
-      if (preference.matches || !desktop.matches || !assembleVisible) return;
-      const rect = assemble.getBoundingClientRect();
-      const progress = clamp(
-        (window.innerHeight * 0.15 - rect.top) /
-          Math.max(1, rect.height - window.innerHeight * 0.85),
-      );
-      assemble.style.setProperty("--entry-progress", String(progress));
-    };
-    const requestAssembly = () => {
-      if (
-        !frame &&
-        assembleVisible &&
-        !preference.matches &&
-        desktop.matches &&
-        !document.hidden
-      )
-        frame = window.requestAnimationFrame(updateAssembly);
-    };
-    const syncMotion = () => {
-      element.dataset.motion = preference.matches ? "off" : "on";
-      if (frame) window.cancelAnimationFrame(frame);
-      frame = 0;
-      if (preference.matches && gamePlayed)
-        gameElement.dataset.finished = "true";
-      assemble.style.setProperty("--entry-progress", "1");
-      requestAssembly();
-    };
-    const updateVisibility = () => {
-      element.dataset.pageVisible = String(!document.hidden);
-      if (document.hidden && frame) {
-        window.cancelAnimationFrame(frame);
-        frame = 0;
-      } else requestAssembly();
-    };
-    const sceneObserver = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            (entry.target as HTMLElement).dataset.revealed = "true";
-            sceneObserver.unobserve(entry.target);
-          }
-        }
-      },
-      { threshold: 0.15 },
-    );
-    const assemblyObserver = new IntersectionObserver(([entry]) => {
-      assembleVisible = entry.isIntersecting;
-      if (assembleVisible) requestAssembly();
-      else if (frame) {
-        window.cancelAnimationFrame(frame);
-        frame = 0;
-      }
-    });
-    const gameObserver = new IntersectionObserver(
-      ([entry]) => {
-        gameElement.dataset.inView = String(entry.isIntersecting);
-        if (entry.isIntersecting && !gamePlayed && !preference.matches) {
-          gamePlayed = true;
-          gameElement.dataset.played = "true";
-        }
-      },
-      { threshold: 0.25 },
-    );
-    element
-      .querySelectorAll<HTMLElement>("[data-entry-reveal]")
-      .forEach((node) => sceneObserver.observe(node));
-    assemblyObserver.observe(assemble);
-    gameObserver.observe(gameElement);
-    window.addEventListener("scroll", requestAssembly, { passive: true });
-    window.addEventListener("resize", requestAssembly, { passive: true });
-    document.addEventListener("visibilitychange", updateVisibility);
-    const listen = (query: MediaQueryList) => {
-      if (query.addEventListener) query.addEventListener("change", syncMotion);
-      else query.addListener?.(syncMotion);
-    };
-    const unlisten = (query: MediaQueryList) => {
-      if (query.removeEventListener)
-        query.removeEventListener("change", syncMotion);
-      else query.removeListener?.(syncMotion);
-    };
-    listen(preference);
-    listen(desktop);
-    updateVisibility();
-    syncMotion();
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      sceneObserver.disconnect();
-      assemblyObserver.disconnect();
-      gameObserver.disconnect();
-      window.removeEventListener("scroll", requestAssembly);
-      window.removeEventListener("resize", requestAssembly);
-      document.removeEventListener("visibilitychange", updateVisibility);
-      unlisten(preference);
-      unlisten(desktop);
-    };
-  }, []);
+  useEntryMotion(root);
 
   useEffect(() => {
     const page = root.current;
@@ -300,166 +210,190 @@ export default function PublicEntry({
         </button>
       </header>
       <main>
-        <section className="entry-hero" aria-labelledby="entry-title">
-          <h1 id="entry-title">
-            우리가 써 내려가는
-            <br />
-            <span className="entry-story">
-              이야기.
-              <svg aria-hidden="true" viewBox="0 0 300 18">
-                <path
-                  pathLength="1"
-                  d="M5 12 C65 3 130 4 185 9 S255 12 295 5"
-                />
-              </svg>
-            </span>
-          </h1>
-          <p className="entry-subtitle">수업부터 기록까지, 위스토리에서.</p>
-          <div className="entry-login entry-first-login">
-            {controls}
-            {teacher}
-          </div>
-          <div className="entry-hero-screen">
-            <Screen
-              desktop={dashboardDesktop}
-              mobile={dashboardMobile}
-              eager
-              alt="가상 데이터로 촬영한 실제 위스토리 학생 홈: 공지와 주간 일정"
-            />
-          </div>
-        </section>
-
         <section
-          ref={assembly}
-          className="entry-assembly"
-          aria-labelledby="entry-today-title"
-          style={
-            {
-              "--entry-dashboard": "url(" + dashboardDesktop + ")",
-            } as React.CSSProperties
-          }
+          className="entry-hero entry-scene"
+          data-entry-scene
+          aria-labelledby="entry-title"
         >
-          <div className="entry-assembly-stick">
-            <div className="entry-heading" data-entry-reveal>
-              <p className="entry-eyebrow">오늘의 위스토리</p>
-              <h2 id="entry-today-title">
-                오늘 필요한 것만,
+          <div className="entry-stage entry-hero-stage">
+            <div className="entry-hero-copy">
+              <p className="entry-eyebrow">수업부터 기록까지, 위스토리</p>
+              <h1 id="entry-title" tabIndex={-1}>
+                <span>역사를 읽고,</span>
                 <br />
-                한눈에.
-              </h2>
-            </div>
-            <div className="entry-assembled-screen">
-              <Screen
-                desktop={dashboardDesktop}
-                mobile={dashboardMobile}
-                alt="공지와 이번 주 일정이 한 화면에 모인 실제 학생 홈 미리보기"
-              />
-              <div className="entry-fragments" aria-hidden="true">
-                <div className="entry-fragment entry-fragment-notice" />
-                <div className="entry-fragment entry-fragment-week" />
-                <div className="entry-fragment entry-fragment-learning" />
+                <span className="entry-story">나의 생각으로.</span>
+              </h1>
+              <p className="entry-benefit">
+                자료 속 근거를 찾고, 서로의 관점을 만나고.
+                <br />
+                배움의 변화를 확인하는 나만의 역사 교실.
+              </p>
+              <div className="entry-login entry-first-login">
+                {controls}
+                {teacher}
               </div>
-              <svg
-                className="entry-outline"
-                aria-hidden="true"
-                viewBox="0 0 1000 625"
-                preserveAspectRatio="none"
-              >
-                <rect
-                  x="3"
-                  y="3"
-                  width="994"
-                  height="619"
-                  rx="16"
-                  pathLength="1"
-                />
-              </svg>
             </div>
+            <div className="entry-hero-visual">
+              <DayPanels hero />
+            </div>
+            <span className="entry-scroll-cue" aria-hidden="true">
+              SCROLL TO EXPLORE <span>↓</span>
+            </span>
           </div>
         </section>
-
         <section
-          className="entry-learning entry-section"
-          aria-labelledby="entry-learning-title"
+          className="entry-structure"
+          aria-labelledby="entry-structure-title"
         >
-          <div className="entry-heading" data-entry-reveal>
-            <p className="entry-eyebrow">학습과 기록</p>
-            <h2 id="entry-learning-title">
-              배우고, <br />
-              확인하고, <br />
-              <span>기록하다.</span>
-            </h2>
-            <p className="entry-description">
-              수업에서 시작한 배움이
+          <div className="entry-heading">
+            <p className="entry-eyebrow">위스토리 한눈에 보기</p>
+            <h2 id="entry-structure-title">
+              수업의 시작부터,
               <br />
-              나의 기록으로 이어집니다.
+              <span className="entry-accent">나의 성장까지.</span>
+            </h2>
+            <p className="entry-benefit">
+              오늘의 공지와 일정에서 출발해, 탐구하고 확인하고 돌아보는 흐름.
+              흩어진 학습 경험을 한곳에서 연결합니다.
             </p>
           </div>
-          <div className="entry-learning-screens">
-            <figure data-entry-reveal>
-              <Screen
-                desktop={lessonDesktop}
-                mobile={lessonMobile}
-                alt="실제 수업 자료 화면에 가상 역사 수업 내용을 넣은 학습 미리보기"
-              />
-              <figcaption>수업 자료</figcaption>
-            </figure>
-            <figure data-entry-reveal>
-              <Screen
-                desktop={scoreDesktop}
-                mobile={scoreMobile}
-                alt="가상 평가 결과로 촬영한 실제 나의 성적 화면"
-              />
-              <figcaption>나의 성적과 기록</figcaption>
-            </figure>
+          <EntryOverview />
+        </section>
+        <section
+          id="entry-lesson"
+          tabIndex={-1}
+          className="entry-learning entry-scene"
+          data-entry-scene
+          aria-labelledby="entry-learning-title"
+        >
+          <div className="entry-stage entry-split-stage">
+            <div className="entry-heading">
+              <p className="entry-eyebrow">
+                <span>01</span> 수업 자료
+              </p>
+              <h2 id="entry-learning-title">
+                <span className="entry-line">읽고, 채우고.</span>
+
+                <span className="entry-line entry-accent">근거를 찾다.</span>
+              </h2>
+              <p className="entry-benefit">
+                본문과 영상으로 내용을 읽고, PDF 학습지의 빈칸을 채우며 이해를
+                확인합니다. 참고자료를 오가며 내 답을 뒷받침할 근거를
+                찾아갑니다.
+              </p>
+            </div>
+            <div className="entry-learning-visual">
+              <figure className="entry-lesson-panel">
+                <figcaption>
+                  수업 자료 <span>↗</span>
+                </figcaption>
+                <Crop
+                  src={lessonDesktop}
+                  box={[584, 104, 664, 676]}
+                  alt="예시 수업 자료: 조선의 문화와 훈민정음"
+                />
+              </figure>
+              <figure className="entry-score-panel entry-source-note">
+                <figcaption>
+                  자료에서 생각으로 <span>↗</span>
+                </figcaption>
+                <blockquote>
+                  “백성을 위한
+                  <br />
+                  새로운 문자”
+                </blockquote>
+                <p>
+                  누구를 위한 변화였을까?
+                  <br />
+                  자료 속 표현에서 근거를 찾아보세요.
+                </p>
+              </figure>
+            </div>
+            <div className="entry-scene-track" aria-hidden="true">
+              <span />
+            </div>
           </div>
         </section>
-
+        <MapScene />
+        <ThinkScene />
+        <CheckScene />
+        <GrowthScene />
         <section
-          className="entry-play entry-section"
+          id="entry-game"
+          tabIndex={-1}
+          className="entry-play entry-scene"
+          data-entry-scene
           aria-labelledby="entry-play-title"
         >
-          <div className="entry-heading" data-entry-reveal>
-            <p className="entry-eyebrow">위플레이</p>
-            <h2 id="entry-play-title">
-              배운 역사가,
-              <br />
-              <span>플레이가 되다.</span>
-            </h2>
-            <p className="entry-description">내가 충무공이라고?!</p>
-          </div>
-          <div
-            ref={game}
-            className="entry-game-preview"
-            onAnimationEnd={(event) => {
-              if (event.animationName === "entry-word")
-                event.currentTarget.dataset.finished = "true";
-            }}
-          >
-            <Screen
-              desktop={weplayDesktop}
-              mobile={weplayMobile}
-              alt="실제 위플레이 해전 화면의 정지 미리보기: 함선과 단어 장전"
-            />
-            <div className="entry-game-demo" aria-hidden="true">
-              <span className="entry-game-word entry-game-word-first">
-                거북선
-              </span>
-              <span className="entry-game-word entry-game-word-second">
+          <div className="entry-stage entry-play-stage">
+            <div className="entry-heading">
+              <p className="entry-eyebrow">
+                <span>06</span> 위플레이
+              </p>
+              <h2 id="entry-play-title">
+                <span className="entry-line">배운 역사 용어,</span>
+                <span className="entry-line entry-accent">
+                  플레이로 한 번 더.
+                </span>
+              </h2>
+              <p className="entry-benefit">
+                역사 단어를 입력해 화포를 발사하는 ‘내가 충무공이라고?!’. 연습과
+                도전으로 수업에서 만난 용어를 다시 떠올립니다.
+              </p>
+            </div>
+            <div
+              className="entry-ocean"
+              role="img"
+              aria-label="위플레이 내가 충무공이라고?! 게임 아트: 바다를 가르는 거북선"
+            >
+              <img
+                className="entry-sea"
+                src={
+                  import.meta.env.BASE_URL +
+                  "assets/weplay/naval/sea-battle.webp"
+                }
+                alt=""
+                loading="lazy"
+              />
+              <span className="entry-sea-wash" />
+              <img
+                className="entry-ship"
+                src={
+                  import.meta.env.BASE_URL +
+                  "assets/weplay/naval/allied-ship.webp"
+                }
+                alt=""
+                loading="lazy"
+              />
+              <span
+                className="entry-play-word entry-play-word--one"
+                aria-hidden="true"
+              >
                 한산도
               </span>
-              <span className="entry-game-answer">거북선</span>
+              <span
+                className="entry-play-word entry-play-word--two"
+                aria-hidden="true"
+              >
+                거북선
+              </span>
             </div>
-            <span className="entry-preview-label">게임 미리보기</span>
+            <p className="entry-play-caption">
+              내가 충무공이라고?! <span>위플레이</span>
+            </p>
+            <div className="entry-scene-track" aria-hidden="true">
+              <span />
+            </div>
           </div>
         </section>
-
-        <section
-          className="entry-finish entry-section"
-          aria-labelledby="entry-finish-title"
-        >
-          <Wordmark />
-          <h2 id="entry-finish-title">이제, 나의 위스토리로.</h2>
+        <RecordScene />
+        <section className="entry-finish" aria-labelledby="entry-finish-title">
+          <p className="entry-eyebrow">다음 이야기는, 너로부터.</p>
+          <h2 id="entry-finish-title">
+            이제, 나의
+            <br />
+            <span className="entry-accent">위스토리로.</span>
+          </h2>
           <button
             type="button"
             className="entry-primary"
@@ -467,6 +401,7 @@ export default function PublicEntry({
             disabled={disabled}
           >
             {label}
+            <span aria-hidden="true"> ↗</span>
           </button>
           <p className="entry-school">
             학교 Google 계정(@{schoolDomain})으로 이용할 수 있습니다.
@@ -474,6 +409,26 @@ export default function PublicEntry({
           {teacher}
         </section>
       </main>
+      <button
+        type="button"
+        className="entry-back-top"
+        aria-label="맨 위로 가기"
+        title="맨 위로 가기"
+        onClick={() => {
+          root.current
+            ?.querySelector<HTMLElement>("#entry-title")
+            ?.focus({ preventScroll: true });
+          window.scrollTo({
+            top: 0,
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+              .matches
+              ? "auto"
+              : "smooth",
+          });
+        }}
+      >
+        <span aria-hidden="true">↑</span>
+      </button>
       <footer className="entry-footer">
         <button type="button" onClick={() => onPolicy("terms")}>
           이용 약관
