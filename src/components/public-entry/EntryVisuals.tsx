@@ -12,8 +12,34 @@ export function FinaleTitle() {
           이제 우리의 이야기로,
         </span>
         <span className="entry-finale-brand" aria-hidden="true">
-          <span className="entry-finale-we">위</span>
-          <span className="entry-finale-story">스토리</span>
+          <span className="entry-finale-latin">
+            {Array.from("Westory").map((letter, index) => (
+              <span
+                key={index}
+                style={{ "--glyph": index } as React.CSSProperties}
+              >
+                {letter}
+              </span>
+            ))}
+          </span>
+          <span className="entry-finale-korean">
+            {Array.from("위스토리").map((letter, index) => (
+              <span
+                key={letter}
+                style={{ "--glyph": index } as React.CSSProperties}
+              >
+                {letter}
+              </span>
+            ))}
+          </span>
+          <span className="entry-finale-sparks">
+            {[0, 1, 2, 3].map((index) => (
+              <i
+                key={index}
+                style={{ "--spark": index } as React.CSSProperties}
+              />
+            ))}
+          </span>
         </span>
       </h2>
     </div>

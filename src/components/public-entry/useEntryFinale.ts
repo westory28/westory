@@ -18,13 +18,21 @@ export function useEntryFinale(
     if (suspended || scene.dataset.entered === "true") return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
+        if (
+          !entries.some(
+            (entry) => entry.isIntersecting && entry.intersectionRatio >= 0.55,
+          )
+        )
+          return;
         scene.dataset.entered = "true";
         observer.disconnect();
       },
-      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+      { threshold: 0.55, rootMargin: "0px 0px -6% 0px" },
     );
-    observer.observe(scene.querySelector(".entry-finale-title") || scene);
+    observer.observe(scene.querySelector(".entry-finale-brand") || scene);
+    // A fast jump can pass the letters on a short screen; keep login visible.
+    const actions = scene.querySelector(".entry-finish-actions");
+    if (actions) observer.observe(actions);
     return () => observer.disconnect();
   }, [root, suspended, motionEnabled]);
 }

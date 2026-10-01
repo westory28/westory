@@ -459,17 +459,9 @@
 .public-entry[data-motion="off"] .entry-hero-tablet {
   transform: none;
 }
-/* The existing short-viewport rule disables all animations. Keep their contents visible. */
+/* Short viewports show the opening sentence immediately. */
 @media (max-height: 599px) {
-  .public-entry[data-motion="on"]
-    :is(
-      .entry-hero-mask:first-child > span,
-      .entry-overview > button,
-      .entry-finale-phrase,
-      .entry-finale-we,
-      .entry-finale-story,
-      .entry-finish-actions
-    ) {
+  .public-entry[data-motion="on"] .entry-hero-mask:first-child > span {
     opacity: 1 !important;
     transform: none !important;
     clip-path: none;

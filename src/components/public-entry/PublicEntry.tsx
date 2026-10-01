@@ -28,6 +28,7 @@ import "./entry-flow.css";
 import "./entry-motion-control.css";
 import "./entry-timing.css";
 import "./entry-polish.css";
+import "./entry-brand-motion.css";
 interface Props {
   controls: React.ReactNode;
   onStudentLogin: () => void;

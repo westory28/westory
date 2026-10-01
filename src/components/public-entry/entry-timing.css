@@ -122,14 +122,39 @@
   > button {
   animation: none;
   opacity: 0;
-  transform: translate3d(0, 24px, 0);
+  transform: translate3d(0, -48px, 0);
 }
 .public-entry[data-motion="on"]
   .entry-structure
   .entry-overview[data-entry-reveal]
   > button[data-badge-entered="true"] {
-  animation: entry-title-rise 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--order) * 120ms);
+  animation: entry-badge-drop 1200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--order) * 220ms);
+}
+@keyframes entry-badge-drop {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -48px, 0) scale(0.96);
+  }
+  28% {
+    opacity: 1;
+  }
+  48% {
+    transform: translate3d(0, 6px, 0) scale(1.015);
+  }
+  68% {
+    transform: translate3d(0, -6px, 0) scale(1);
+  }
+  82% {
+    transform: translate3d(0, 2px, 0);
+  }
+  92% {
+    transform: translate3d(0, -1.5px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
 }
 .public-entry[data-motion="on"]
   .entry-structure
@@ -237,24 +262,6 @@
 /* Keep the final game composition on screen instead of fading it out at 100%. */
 .public-entry[data-motion="on"] .entry-play {
   --cutin-exit: 0;
-}
-.public-entry[data-motion="on"]
-  .entry-finish[data-entered="true"]
-  .entry-finale-phrase,
-.public-entry[data-motion="on"]
-  .entry-finish[data-entered="true"]
-  .entry-finale-we,
-.public-entry[data-motion="on"]
-  .entry-finish[data-entered="true"]
-  .entry-finale-story {
-  animation-duration: 600ms;
-  animation-delay: 0ms;
-}
-.public-entry[data-motion="on"]
-  .entry-finish[data-entered="true"]
-  .entry-finish-actions {
-  animation-delay: 420ms;
-  animation-duration: 420ms;
 }
 .public-entry[data-motion="on"] .entry-scene[data-stage-overflow="true"] {
   height: auto;
