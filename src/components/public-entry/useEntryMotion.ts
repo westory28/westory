@@ -44,8 +44,11 @@ function sceneProgress(
   );
 }
 
-/** Numeric charts use the same time-based damping as the CSS-driven scenes. */
-export function useEntrySceneProgress(root: RefObject<HTMLElement>) {
+/** The graph keeps reading time before and after its full scroll interval. */
+export function useEntrySceneProgress(
+  root: RefObject<HTMLElement>,
+  visual: RefObject<SVGSVGElement>,
+) {
   const enabled = useEntryMotionEnabled();
   const [progress, setProgress] = useState(enabled ? 0 : 1);
   useEffect(() => {
@@ -62,19 +65,31 @@ export function useEntrySceneProgress(root: RefObject<HTMLElement>) {
     const update = (time: number) => {
       frame = 0;
       const scene = root.current;
-      if (!scene || document.hidden) return;
+      const chart = visual.current;
+      if (!scene || !chart || document.hidden) return;
       if (dirty) {
         dirty = false;
         const rect = scene.getBoundingClientRect();
-        visible = rect.bottom >= 0 && rect.top <= innerHeight;
+        const chartRect = chart.getBoundingClientRect();
+        visible = chartRect.bottom >= 0 && chartRect.top <= innerHeight;
         if (visible) {
           const stage = scene.querySelector<HTMLElement>(".entry-stage");
-          target = sceneProgress(
-            rect,
-            stage?.offsetHeight || innerHeight - 80,
-            innerHeight,
-            true,
-          );
+          const style = stage ? getComputedStyle(stage) : null;
+          const distance = rect.height - (stage?.offsetHeight || rect.height);
+          if (style?.position === "sticky" && distance > 100) {
+            const inset = parseFloat(style.top);
+            const travelled =
+              ((Number.isFinite(inset) ? inset : 80) - rect.top) / distance;
+            // Preserve the opening 12% and the completed final 10% of the stage.
+            target = clamp((travelled - 0.12) / 0.78);
+          } else {
+            // On a flowing page, wait for the graph itself rather than its heading.
+            const start = innerHeight * 0.8;
+            const finish = Math.max(80, innerHeight * 0.2);
+            target = clamp(
+              (start - chartRect.top) / Math.max(1, start - finish),
+            );
+          }
         }
       }
       if (!visible) {
@@ -107,6 +122,9 @@ export function useEntrySceneProgress(root: RefObject<HTMLElement>) {
         ? null
         : new ResizeObserver(request);
     if (root.current) resize?.observe(root.current);
+    if (visual.current) resize?.observe(visual.current);
+    const stage = root.current?.querySelector<HTMLElement>(".entry-stage");
+    if (stage) resize?.observe(stage);
     setProgress(0);
     window.addEventListener("scroll", request, { passive: true });
     window.addEventListener("resize", request, { passive: true });
@@ -119,7 +137,7 @@ export function useEntrySceneProgress(root: RefObject<HTMLElement>) {
       window.removeEventListener("resize", request);
       document.removeEventListener("visibilitychange", visibility);
     };
-  }, [root, enabled]);
+  }, [root, visual, enabled]);
   return enabled ? progress : 1;
 }
 
@@ -147,7 +165,24 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           (getComputedStyle(stage).position === "sticky" ||
             scene.dataset.stageOverflow === "true")
         ) {
-          const overflow = String(stage.scrollHeight > innerHeight - 78);
+          let contentHeight = stage.scrollHeight;
+          const preview = stage.querySelector<HTMLElement>(
+            "[data-entry-slide-stage]",
+          );
+          const copy = stage.querySelector<HTMLElement>(".entry-confirm-copy");
+          if (preview && copy) {
+            // The compact preview has its own scroll track; it is not content overflow.
+            const style = getComputedStyle(stage);
+            contentHeight =
+              (innerWidth < 768
+                ? copy.offsetHeight +
+                  preview.offsetHeight +
+                  parseFloat(style.rowGap)
+                : Math.max(copy.offsetHeight, preview.offsetHeight)) +
+              parseFloat(style.paddingTop) +
+              parseFloat(style.paddingBottom);
+          }
+          const overflow = String(contentHeight > innerHeight - 78);
           if (scene.dataset.stageOverflow !== overflow)
             scene.dataset.stageOverflow = overflow;
         }

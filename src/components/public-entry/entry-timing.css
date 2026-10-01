@@ -253,7 +253,7 @@
     height: 280svh;
   }
   .public-entry[data-motion="on"] .entry-record-scene {
-    height: 160svh;
+    height: 240svh;
   }
   .public-entry[data-motion="on"] .entry-play {
     height: 175svh;
@@ -271,6 +271,46 @@
 }
 .public-entry[data-motion="on"] .entry-scene[data-stage-overflow="true"] {
   height: auto;
+}
+
+/* Fit the whole confirmation on laptops; pin only its preview when space is tight. */
+.public-entry .entry-confirm-preview-track {
+  min-width: 0;
+}
+.public-entry[data-motion="on"] .entry-confirm-preview .entry-device {
+  width: min(100%, calc((100svh - 288px) * 4 / 3));
+  margin-inline: auto;
+}
+.public-entry[data-motion="on"]
+  .entry-confirm-scene[data-stage-overflow="true"]
+  > .entry-confirm-stage {
+  grid-template-columns: 1fr;
+}
+.public-entry[data-motion="on"]
+  .entry-confirm-scene[data-stage-overflow="true"]
+  .entry-confirm-preview-track {
+  height: 280svh;
+}
+.public-entry[data-motion="on"]
+  .entry-confirm-scene[data-stage-overflow="true"]
+  .entry-confirm-preview {
+  position: sticky;
+  top: 80px;
+}
+@media (max-height: 699px) {
+  .public-entry[data-motion="on"] .entry-confirm-scene > .entry-confirm-stage {
+    grid-template-columns: 1fr;
+  }
+  .public-entry[data-motion="on"] .entry-confirm-preview-track {
+    height: 280svh;
+  }
+  .public-entry[data-motion="on"] .entry-confirm-preview {
+    position: sticky;
+    top: 80px;
+  }
+  .public-entry[data-motion="on"] .entry-confirm-preview .entry-device {
+    width: min(100%, calc((100svh - 224px) * 4 / 3));
+  }
 }
 .public-entry[data-motion="on"]
   .entry-scene[data-stage-overflow="true"]

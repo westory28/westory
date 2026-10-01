@@ -130,66 +130,69 @@ export default function EntryConfirmScene() {
             {screens[slide].description}
           </p>
         </div>
-        <div className="entry-confirm-preview">
-          <Device kind="tablet">
+        <div className="entry-confirm-preview-track" data-entry-slide-track>
+          <div className="entry-confirm-preview" data-entry-slide-stage>
+            <Device kind="tablet">
+              <div
+                className="entry-confirm-screens"
+                role="region"
+                aria-roledescription="슬라이드쇼"
+                aria-label="실제 성적 확인 화면 3단계"
+              >
+                {screens.map((screen, index) => (
+                  <div
+                    key={screen.title}
+                    className="entry-confirm-screen"
+                    data-active={slide === index}
+                    aria-hidden={slide !== index}
+                  >
+                    <img
+                      src={screen.image}
+                      alt={screen.alt}
+                      width="1280"
+                      height="960"
+                      loading="lazy"
+                      decoding="async"
+                      onLoad={
+                        index === 2
+                          ? () => setSignatureImageReady(true)
+                          : undefined
+                      }
+                    />
+                    {index === 2 && slide === 2 && (
+                      <SignatureWriting
+                        key={signatureReplay}
+                        imageReady={signatureImageReady}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Device>
             <div
-              className="entry-confirm-screens"
-              role="region"
-              aria-roledescription="슬라이드쇼"
-              aria-label="실제 성적 확인 화면 3단계"
+              className="entry-confirm-controls"
+              aria-label="성적 확인 단계 선택"
             >
               {screens.map((screen, index) => (
-                <div
+                <button
                   key={screen.title}
-                  className="entry-confirm-screen"
-                  data-active={slide === index}
-                  aria-hidden={slide !== index}
+                  type="button"
+                  aria-pressed={slide === index}
+                  onClick={() => {
+                    setSlide(index);
+                    if (index === 2)
+                      setSignatureReplay((current) => current + 1);
+                  }}
                 >
-                  <img
-                    src={screen.image}
-                    alt={screen.alt}
-                    width="1280"
-                    height="960"
-                    loading="lazy"
-                    decoding="async"
-                    onLoad={
-                      index === 2
-                        ? () => setSignatureImageReady(true)
-                        : undefined
-                    }
-                  />
-                  {index === 2 && slide === 2 && (
-                    <SignatureWriting
-                      key={signatureReplay}
-                      imageReady={signatureImageReady}
-                    />
-                  )}
-                </div>
+                  <span>0{index + 1}</span>
+                  {screen.title}
+                </button>
               ))}
             </div>
-          </Device>
-          <div
-            className="entry-confirm-controls"
-            aria-label="성적 확인 단계 선택"
-          >
-            {screens.map((screen, index) => (
-              <button
-                key={screen.title}
-                type="button"
-                aria-pressed={slide === index}
-                onClick={() => {
-                  setSlide(index);
-                  if (index === 2) setSignatureReplay((current) => current + 1);
-                }}
-              >
-                <span>0{index + 1}</span>
-                {screen.title}
-              </button>
-            ))}
+            <p className="entry-confirm-example">
+              실제 성적 확인 화면 · 가상 점수·서명 예시
+            </p>
           </div>
-          <p className="entry-confirm-example">
-            실제 성적 확인 화면 · 가상 점수·서명 예시
-          </p>
         </div>
       </div>
     </section>

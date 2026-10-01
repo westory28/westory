@@ -435,7 +435,7 @@ export function RecordScene() {
   const scene = useRef<HTMLElement>(null);
   const chart = useRef<SVGSVGElement>(null);
   const [chartSize, setChartSize] = useState({ width: 640, height: 360 });
-  const scrollProgress = useEntrySceneProgress(scene);
+  const scrollProgress = useEntrySceneProgress(scene, chart);
   const [manualProgress, setManualProgress] = useState<number | null>(null);
   useEffect(() => {
     const resumeScroll = () => setManualProgress(null);
@@ -460,8 +460,7 @@ export function RecordScene() {
     measure();
     return () => observer.disconnect();
   }, []);
-  const progress =
-    manualProgress ?? Math.max(0, Math.min(1, (scrollProgress - 0.08) / 0.78));
+  const progress = manualProgress ?? scrollProgress;
   const values = [28, 46, 72, 96];
   const plot = {
     left: 40,

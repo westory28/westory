@@ -16,12 +16,25 @@ export function useEntryScrollSlides(
     const read = () => {
       frame = 0;
       const scene = root.current;
-      if (!scene || document.hidden || innerHeight < minimumHeight) return;
-      const stage = scene.querySelector<HTMLElement>(".entry-stage");
+      if (!scene || document.hidden) return;
+      let track = scene;
+      let stage = scene.querySelector<HTMLElement>(".entry-stage");
       if (!stage) return;
-      const style = getComputedStyle(stage);
+      let style = getComputedStyle(stage);
+      if (style.position !== "sticky" || innerHeight < minimumHeight) {
+        const previewTrack = scene.querySelector<HTMLElement>(
+          "[data-entry-slide-track]",
+        );
+        const preview = previewTrack?.querySelector<HTMLElement>(
+          "[data-entry-slide-stage]",
+        );
+        if (!previewTrack || !preview) return;
+        track = previewTrack;
+        stage = preview;
+        style = getComputedStyle(stage);
+      }
       if (style.position !== "sticky") return;
-      const rect = scene.getBoundingClientRect();
+      const rect = track.getBoundingClientRect();
       if (rect.top >= innerHeight || rect.bottom <= 0) return;
       const distance = rect.height - stage.offsetHeight;
       if (distance <= 100) return;
