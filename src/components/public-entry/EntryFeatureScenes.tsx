@@ -3,7 +3,7 @@ import EntryThinkCloud from "./EntryThinkCloud";
 import { Device, MotionTitle, StoryLink } from "./EntryVisuals";
 import PublicScoreDemo from "./PublicScoreDemo";
 import { useEntrySceneProgress } from "./useEntryMotion";
-import { useEntryMotionEnabled } from "./EntryMotionContext";
+import { useEntryScrollSlides } from "./useEntryScrollSlides";
 import { entryMaterial } from "./entryMaterial";
 import EntryGlow from "./EntryGlow";
 import EntryConfirmScene from "./EntryConfirmScene";
@@ -115,45 +115,7 @@ const lessonSlides = [
 
 export function LessonScene() {
   const root = useRef<HTMLElement>(null);
-  const motionEnabled = useEntryMotionEnabled();
-  const [slide, setSlide] = useState(0);
-  useEffect(() => {
-    if (!motionEnabled) return;
-    let frame = 0,
-      last = -1;
-    const read = () => {
-      frame = 0;
-      const el = root.current;
-      if (!el || innerHeight < 800) return;
-      const rect = el.getBoundingClientRect();
-      const stage = el.firstElementChild as HTMLElement;
-      if (getComputedStyle(stage).position !== "sticky") return;
-      const progress = Math.max(
-        0,
-        Math.min(
-          1,
-          (80 - rect.top) /
-            Math.max(1, (rect.height - stage.offsetHeight) * 0.6),
-        ),
-      );
-      const next = Math.min(2, Math.floor(progress * 3));
-      if (rect.top < innerHeight && rect.bottom > 0 && last !== next) {
-        last = next;
-        setSlide(next);
-      }
-    };
-    const request = () => {
-      if (!frame && !document.hidden) frame = requestAnimationFrame(read);
-    };
-    window.addEventListener("scroll", request, { passive: true });
-    window.addEventListener("resize", request, { passive: true });
-    request();
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", request);
-      window.removeEventListener("resize", request);
-    };
-  }, [motionEnabled]);
+  const [slide, setSlide] = useEntryScrollSlides(root, 800);
   return (
     <section
       ref={root}

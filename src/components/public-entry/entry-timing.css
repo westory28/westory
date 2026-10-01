@@ -232,7 +232,7 @@
     padding-bottom: 16px;
   }
   .public-entry[data-motion="on"] .entry-lesson-deck {
-    height: 200svh;
+    height: 280svh;
   }
 }
 .public-entry[data-motion="on"]
@@ -250,7 +250,7 @@
 }
 @media (min-height: 700px) {
   .public-entry[data-motion="on"] .entry-confirm-scene {
-    height: 180svh;
+    height: 280svh;
   }
   .public-entry[data-motion="on"] .entry-record-scene {
     height: 160svh;
@@ -258,6 +258,12 @@
   .public-entry[data-motion="on"] .entry-play {
     height: 175svh;
   }
+}
+.public-entry .entry-material-slide,
+.public-entry .entry-confirm-screen {
+  transition:
+    opacity 600ms ease,
+    transform 750ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 /* Keep the final game composition on screen instead of fading it out at 100%. */
 .public-entry[data-motion="on"] .entry-play {
