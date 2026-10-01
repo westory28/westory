@@ -6,10 +6,10 @@ export function FinaleTitle() {
       <h2
         id="entry-finish-title"
         className="entry-finale-title"
-        aria-label="이제 우리의 이야기로. 위스토리"
+        aria-label="이제 우리의 이야기로, 위스토리"
       >
         <span className="entry-finale-phrase" aria-hidden="true">
-          이제 우리의 이야기로.
+          이제 우리의 이야기로,
         </span>
         <span className="entry-finale-brand" aria-hidden="true">
           <span className="entry-finale-we">위</span>
