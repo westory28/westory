@@ -11,17 +11,20 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(path.join(root, "package.json"));
 const { build } = require("esbuild");
+const serveOnly = process.env.AUTH_BROWSER_SERVE_ONLY === "1";
 let playwright;
-try {
-  playwright = require("playwright");
-} catch {
-  playwright = require(
-    process.env.PLAYWRIGHT_MODULE_PATH ||
-      path.join(
-        os.homedir(),
-        ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
-      ),
-  );
+if (!serveOnly) {
+  try {
+    playwright = require("playwright");
+  } catch {
+    playwright = require(
+      process.env.PLAYWRIGHT_MODULE_PATH ||
+        path.join(
+          os.homedir(),
+          ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
+        ),
+    );
+  }
 }
 const evidence = path.resolve(
   process.env.AUTH_BROWSER_EVIDENCE_DIR ||
@@ -85,7 +88,7 @@ export const useAuth = () => {
 `;
 const mocks = {
   "qa-auth": fakeAuth,
-  "qa-firebase": `export {auth} from "qa-auth"; export const db={};export const authPersistenceReady=Promise.resolve();export const configuredAuthDomain="127.0.0.1";`,
+  "qa-firebase": `export {auth} from "qa-auth";import {events} from "qa-auth";export const db={};export const authPersistenceReady=Promise.resolve();export const configuredAuthDomain="127.0.0.1";export const getFirebaseFunctions=async()=>{events.push("functions-sdk-prepared");return {};};`,
   "qa-firebase-auth": `import {auth,phase,user,events} from "qa-auth";export class GoogleAuthProvider {setCustomParameters(){}addScope(){}};export const getRedirectResult=async()=>{if(new URLSearchParams(location.search).get("scenario")==="redirect-timeout"){events.push("redirect-result-pending");return new Promise(()=>{});}return null};export const signInWithPopup=async()=>{events.push("popup");const scenario=new URLSearchParams(location.search).get("scenario");if(scenario==="popup-cancel")throw Object.assign(new Error("synthetic popup cancelled"),{code:"auth/popup-closed-by-user"});phase("onboarding");return {user}};export const signInWithRedirect=async()=>{throw new Error("Unexpected redirect in localhost fixture")};export const signOut=async()=>{events.push("sdk-signout");phase("signed-out")};`,
   "qa-firestore": `import {events,profileWritten} from "qa-auth";export const doc=(db,...parts)=>({parts});export const collection=(db,...parts)=>({parts});export const query=(base,...filters)=>({...base,filters});export const where=(...parts)=>parts;export const limit=(n)=>n;export const orderBy=(...parts)=>parts;export const serverTimestamp=()=>({synthetic:true});export const getDoc=async()=>({exists:()=>false,data:()=>({})});export const getDocs=async(ref)=>{const consent=ref.parts?.includes("consent");const docs=consent?[{id:"fixture-consent",data:()=>({title:"합성 개인정보 동의",text:"로컬 QA를 위한 합성 동의 내용입니다.",required:true,order:1})}]:[];return {empty:!docs.length,docs,forEach:fn=>docs.forEach(fn)}};export const setDoc=async(ref,payload)=>{profileWritten(payload)};`,
   "qa-settings": `export const readSiteSettingDoc=async()=>null;`,
@@ -141,7 +144,10 @@ const result = await build({
   format: "esm",
   platform: "browser",
   loader: { ".css": "empty", ".svg": "dataurl", ".webp": "dataurl" },
-  define: { "process.env.NODE_ENV": '"production"' },
+  define: {
+    "process.env.NODE_ENV": '"production"',
+    "import.meta.env.BASE_URL": '"/"',
+  },
   plugins: [
     {
       name: "synthetic-auth-services",
@@ -171,6 +177,11 @@ assert.equal(
   "All Firebase runtime imports must resolve to synthetic fixture services",
 );
 const script = result.outputFiles[0].text;
+assert.equal(
+  script.includes("import.meta.env"),
+  false,
+  "Every Vite environment reference in the fixture must have an explicit local value",
+);
 const cssFiles = [
   "assets/css/style.css",
   "src/assets/index.css",
@@ -188,6 +199,14 @@ const css = (
   .replace(/@tailwind[^;]+;/g, "");
 const html = `<!doctype html><html lang="ko"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Isolated Westory Auth UI QA</title><script src="/tailwind.js"></script><style>${css}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const server = http.createServer((request, response) => {
+  if (serveOnly) {
+    // CUA uses the local fixture without Playwright's request interception.
+    // Keep remote fonts, images, fetches and preconnects out of this QA page.
+    response.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' data:",
+    );
+  }
   const target = request.url?.split("?")[0];
   if (target === "/fixture.js") {
     response.setHeader("Content-Type", "text/javascript");
@@ -203,7 +222,17 @@ const server = http.createServer((request, response) => {
     response.end("Fixture resource unavailable");
   }
 });
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+const requestedPort = Number(process.env.AUTH_BROWSER_PORT || 0);
+assert.ok(
+  Number.isInteger(requestedPort) &&
+    requestedPort >= 0 &&
+    requestedPort <= 65535,
+  "AUTH_BROWSER_PORT must be an integer between 0 and 65535",
+);
+await new Promise((resolve, reject) => {
+  server.once("error", reject);
+  server.listen(requestedPort, "127.0.0.1", resolve);
+});
 const origin = `http://127.0.0.1:${server.address().port}`;
 const report = {
   kind: "isolated-real-browser-synthetic-auth-ui",
@@ -235,6 +264,36 @@ report.sourceSha256 = Object.fromEntries(
     ]),
   ),
 );
+if (serveOnly) {
+  console.log(
+    JSON.stringify({
+      status: "serving",
+      origin,
+      exampleUrl: `${origin}/?scenario=popup-cancel#/`,
+      scenarios: [
+        "signed-out",
+        "popup-cancel",
+        "redirect-timeout",
+        "loading",
+        "timeout",
+        "forced",
+        "onboarding",
+        "onboarding-complete",
+      ],
+      sourceSha256: report.sourceSha256,
+      limitations: [
+        "Serve-only mode does not load Playwright or launch a browser. Inspect with CUA; no automated browser assertions have run.",
+        ...report.limitations,
+      ],
+    }),
+  );
+  const closed = new Promise((resolve) => server.once("close", resolve));
+  const close = () => server.close();
+  process.once("SIGINT", close);
+  process.once("SIGTERM", close);
+  await closed;
+  process.exit(0);
+}
 let browser;
 const check = (name, details = {}) => report.checks.push({ name, ...details });
 const capture = async (page, label, width) => {

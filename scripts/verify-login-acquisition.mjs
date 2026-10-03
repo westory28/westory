@@ -105,12 +105,28 @@ const CHROME =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 const SAFARI =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
+// Chrome's documented Android tablet desktop UA omits Android/Mobile and its
+// platform client hint becomes Linux: https://developer.chrome.com/blog/desktop-mode
+const ANDROID_DESKTOP_CHROME =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36";
+const CHROME_OS =
+  "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+const MAC_CHROME = CHROME.replace(
+  "Windows NT 10.0; Win64; x64",
+  "Macintosh; Intel Mac OS X 10_15_7",
+);
 
 function harness({
   ua = CHROME,
   hostname = "www.westory.kr",
   protocol = "https:",
   maxTouchPoints = 0,
+  touchInfoAvailable = true,
+  pointer = "fine",
+  hover = "hover",
+  anyCoarse = false,
+  matchMediaMode = "available",
+  uaPlatform = "Windows",
   embedded = false,
   webview = false,
   popup,
@@ -141,6 +157,19 @@ function harness({
   browserWindow.self = browserWindow;
   browserWindow.top = embedded ? {} : browserWindow;
   if (webview) browserWindow.chrome = { webview: {} };
+  if (matchMediaMode !== "missing") {
+    browserWindow.matchMedia = (query) => {
+      if (matchMediaMode === "throw")
+        throw new Error("Synthetic media capability failure");
+      const capabilities = {
+        "(any-pointer: coarse)": anyCoarse,
+        "(pointer: fine)": pointer === "fine",
+        "(hover: hover)": hover === "hover",
+      };
+      assert.ok(query in capabilities, `Unexpected media query: ${query}`);
+      return { matches: capabilities[query] };
+    };
+  }
   const account = { uid: "synthetic-acquisition-user" };
   const sdkAuth = { currentUser: null };
   const exports = {};
@@ -148,8 +177,9 @@ function harness({
     exports,
     navigator: {
       userAgent: ua,
-      maxTouchPoints,
+      ...(touchInfoAvailable ? { maxTouchPoints } : {}),
       platform: /Macintosh/.test(ua) ? "MacIntel" : "Win32",
+      userAgentData: { platform: uaPlatform, mobile: false },
     },
     window: browserWindow,
     console: { info() {}, error() {}, warn() {} },
@@ -237,8 +267,108 @@ const policyCases = [
     false,
   ],
   ["desktop Chromium derivative", { ua: `${CHROME} Whale/4.34.333.13` }, false],
+  ["non-touch macOS Chrome", { ua: MAC_CHROME }, false],
+  ["non-touch macOS Edge", { ua: `${MAC_CHROME} Edg/140.0.0.0` }, false],
+  [
+    "non-touch macOS Firefox",
+    {
+      ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:143.0) Gecko/20100101 Firefox/143.0",
+    },
+    false,
+  ],
+  ["desktop touch laptop with fine pointer", { maxTouchPoints: 10 }, true],
+  ["single-touch display", { maxTouchPoints: 1 }, true],
+  ["missing touch capability", { touchInfoAvailable: false }, true],
+  ["null touch capability", { maxTouchPoints: null }, true],
+  ["string touch capability", { maxTouchPoints: "0" }, true],
+  ["missing media capabilities", { matchMediaMode: "missing" }, true],
+  ["throwing media capabilities", { matchMediaMode: "throw" }, true],
+  [
+    "secondary coarse pointer despite primary fine pointer",
+    { anyCoarse: true },
+    true,
+  ],
+  ["primary coarse pointer", { pointer: "coarse" }, true],
+  ["primary pointer unavailable", { pointer: "none" }, true],
+  ["hover unavailable", { hover: "none" }, true],
+  [
+    "Galaxy Tab Chrome desktop site with touch",
+    {
+      ua: ANDROID_DESKTOP_CHROME,
+      maxTouchPoints: 5,
+      pointer: "coarse",
+      anyCoarse: true,
+      uaPlatform: "Linux",
+    },
+    true,
+  ],
+  [
+    "Galaxy Tab Chrome desktop site with external mouse and Linux client hint",
+    {
+      ua: ANDROID_DESKTOP_CHROME,
+      maxTouchPoints: 5,
+      pointer: "fine",
+      uaPlatform: "Linux",
+    },
+    true,
+  ],
+  [
+    "Android desktop-shaped UA with zero touch information",
+    { ua: ANDROID_DESKTOP_CHROME, maxTouchPoints: 0, uaPlatform: "Linux" },
+    true,
+  ],
+  [
+    "Android desktop-shaped UA with missing touch information",
+    {
+      ua: ANDROID_DESKTOP_CHROME,
+      touchInfoAvailable: false,
+      uaPlatform: "Linux",
+    },
+    true,
+  ],
+  [
+    "Samsung Internet DeX desktop UA",
+    {
+      ua: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/13.0 Chrome/83.0.4103.106 Safari/537.36",
+      maxTouchPoints: 5,
+      uaPlatform: "Linux",
+    },
+    true,
+  ],
+  [
+    "touch Chromebook tablet",
+    { ua: CHROME_OS, maxTouchPoints: 10, uaPlatform: "Chrome OS" },
+    true,
+  ],
+  ["non-touch Chromebook", { ua: CHROME_OS, uaPlatform: "Chrome OS" }, true],
+  [
+    "Linux Firefox desktop remains conservative",
+    {
+      ua: "Mozilla/5.0 (X11; Linux x86_64; rv:143.0) Gecko/20100101 Firefox/143.0",
+      uaPlatform: "Linux",
+    },
+    true,
+  ],
+  [
+    "Windows tablet Edge",
+    {
+      ua: `${CHROME} Edg/140.0.0.0`,
+      maxTouchPoints: 10,
+      pointer: "coarse",
+      anyCoarse: true,
+    },
+    true,
+  ],
   ["desktop Safari", { ua: SAFARI }, true],
   ["iPad desktop mode", { ua: SAFARI, maxTouchPoints: 5 }, true],
+  [
+    "iPad Chrome requests desktop site with mouse",
+    {
+      ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/85 Version/11.1.1 Safari/605.1.15",
+      maxTouchPoints: 5,
+    },
+    true,
+  ],
   [
     "touch iPad presenting a desktop Chrome UA",
     {
@@ -376,19 +506,43 @@ for (const code of [
     assert.equal(h.state.completed.length, 0);
   });
 
-await check(
-  "Mobile redirect preserves persistence-before-navigation ordering",
-  async () => {
-    const h = harness({ ua: `${CHROME} Android Mobile` });
-    const pending = h.startGoogleLogin("student");
-    await flush();
-    assert.deepEqual(h.state.calls, []);
-    h.persistence.resolve();
-    await pending;
-    assert.deepEqual(h.state.calls, ["mark-redirect", "redirect"]);
-    assert.equal(h.state.redirectMode, "student");
-  },
-);
+for (const [device, options] of [
+  ["Android mobile", { ua: `${CHROME} Android Mobile` }],
+  [
+    "Galaxy Tab desktop site with mouse",
+    {
+      ua: ANDROID_DESKTOP_CHROME,
+      maxTouchPoints: 5,
+      pointer: "fine",
+      uaPlatform: "Linux",
+    },
+  ],
+  [
+    "Galaxy Tab desktop-shaped UA without touch report",
+    { ua: ANDROID_DESKTOP_CHROME, maxTouchPoints: 0, uaPlatform: "Linux" },
+  ],
+  ["iPad desktop site", { ua: SAFARI, maxTouchPoints: 5 }],
+])
+  for (const mode of ["student", "teacher"])
+    await check(
+      `${device} ${mode} redirect waits for persistence`,
+      async () => {
+        const h = harness(options);
+        const pending = h.startGoogleLogin(mode);
+        await flush();
+        assert.deepEqual(h.state.calls, []);
+        assert.equal(h.state.pendingMode, mode);
+        assert.equal(h.state.redirectMode, null);
+        assert.equal(h.state.completed.length, 0);
+        h.persistence.resolve();
+        await pending;
+        assert.deepEqual(h.state.calls, ["mark-redirect", "redirect"]);
+        assert.equal(h.state.redirectMode, mode);
+        assert.equal(h.state.providers[0].parameters.prompt, "select_account");
+        assert.equal(h.state.completed.length, 0);
+        assert.equal(h.state.failures.length, 0);
+      },
+    );
 
 for (const code of ["functions/unauthenticated", "auth/network-request-failed"])
   await check(

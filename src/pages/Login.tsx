@@ -476,17 +476,29 @@ const shouldPreferRedirectLogin = (): boolean => {
     return true;
   if (typeof navigator === "undefined" || typeof window === "undefined")
     return true;
+  const ua = navigator.userAgent || "";
+  // Android tablets in desktop mode report Linux, including with a mouse.
+  // Only positively identified non-touch Windows/macOS desktops use popups.
+  if (!/(Windows NT|Macintosh)/i.test(ua) || navigator.maxTouchPoints !== 0)
+    return true;
+  try {
+    if (
+      typeof window.matchMedia !== "function" ||
+      window.matchMedia("(any-pointer: coarse)").matches ||
+      !window.matchMedia("(pointer: fine)").matches ||
+      !window.matchMedia("(hover: hover)").matches
+    )
+      return true;
+  } catch {
+    return true;
+  }
   // Embedded/unknown browsers keep the redirect workaround for lost openers.
   // Regular desktop browsers retain the loaded app across the Google chooser.
   const webViewBridge = (window as Window & { chrome?: { webview?: unknown } })
     .chrome?.webview;
-  if (
-    webViewBridge ||
-    window.self !== window.top ||
-    /Mobile/i.test(navigator.userAgent)
-  )
+  if (webViewBridge || window.self !== window.top || /Mobile/i.test(ua))
     return true;
-  return !/(Chrome|Chromium|Edg|Firefox)\//i.test(navigator.userAgent);
+  return !/(Chrome|Chromium|Edg|Firefox)\//i.test(ua);
 };
 
 const markRedirectAttempt = (mode: LoginMode) => {
