@@ -25,9 +25,11 @@ import {
   authPersistenceReady,
   configuredAuthDomain,
   db,
+  getFirebaseFunctions,
 } from "../lib/firebase";
 import { InlineLoading, PageLoading } from "../components/common/LoadingState";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
+import { isSemesterArchive } from "../lib/semesterArchive";
 import AuthRecoveryState from "../components/common/AuthRecoveryState";
 import { readSiteSettingDoc } from "../lib/siteSettings";
 import {
@@ -421,7 +423,7 @@ const pickStudentRosterProfile = async (
 const isLikelyInAppBrowser = (): boolean => {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
-  return /(KAKAOTALK|FBAN|FBAV|Instagram|Line|NAVER|DaumApps|; wv\)|WebView)/i.test(
+  return /(KAKAOTALK|FBAN|FBAV|Instagram|Line|NAVER|DaumApps|; wv\)|WebView|Electron|Codex|ChatGPT|CEF|HeadlessChrome)/i.test(
     ua,
   );
 };
@@ -429,7 +431,10 @@ const isLikelyInAppBrowser = (): boolean => {
 const isIOSDevice = (): boolean => {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
-  return /iPhone|iPad|iPod/i.test(ua);
+  return (
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)
+  );
 };
 
 const isAndroidDevice = (): boolean => {
@@ -462,12 +467,26 @@ const isLocalAuthHost = (): boolean => {
 
 const shouldPreferRedirectLogin = (): boolean => {
   if (isLocalAuthHost()) return false;
-  if (typeof window !== "undefined" && window.location.protocol === "https:") {
-    // Some embedded desktop browsers do not preserve the popup opener state,
-    // which can leave Firebase's auth helper page open instead of returning.
+  if (
+    isSafariBrowser() ||
+    isIOSDevice() ||
+    isAndroidDevice() ||
+    isLikelyInAppBrowser()
+  )
     return true;
-  }
-  return isSafariBrowser() || isIOSDevice() || isAndroidDevice();
+  if (typeof navigator === "undefined" || typeof window === "undefined")
+    return true;
+  // Embedded/unknown browsers keep the redirect workaround for lost openers.
+  // Regular desktop browsers retain the loaded app across the Google chooser.
+  const webViewBridge = (window as Window & { chrome?: { webview?: unknown } })
+    .chrome?.webview;
+  if (
+    webViewBridge ||
+    window.self !== window.top ||
+    /Mobile/i.test(navigator.userAgent)
+  )
+    return true;
+  return !/(Chrome|Chromium|Edg|Firefox)\//i.test(navigator.userAgent);
 };
 
 const markRedirectAttempt = (mode: LoginMode) => {
@@ -570,6 +589,13 @@ const buildGoogleProvider = () => {
 const getLoginFailureMessage = (error?: unknown): string => {
   const code = (error as Partial<AuthError>)?.code || "";
 
+  if (
+    code === "auth/popup-closed-by-user" ||
+    code === "auth/cancelled-popup-request"
+  ) {
+    return "로그인이 취소되었습니다. 다시 로그인할 수 있습니다.";
+  }
+
   if (isIOSDevice() && hasCrossOriginAuthDomain()) {
     return "현재 서비스 도메인과 Firebase 인증 도메인이 달라 iPhone에서 로그인 세션이 복구되지 않고 있습니다. Firebase Authentication의 authDomain을 현재 도메인으로 맞추거나 동일 사이트 프록시 설정을 확인해주세요.";
   }
@@ -617,8 +643,6 @@ const isPopupFallbackError = (error: unknown): boolean => {
   const code = (error as Partial<AuthError>)?.code || "";
   return [
     "auth/popup-blocked",
-    "auth/popup-closed-by-user",
-    "auth/cancelled-popup-request",
     "auth/operation-not-supported-in-this-environment",
     "auth/internal-error",
     "auth/network-request-failed",
@@ -790,6 +814,24 @@ const Login: React.FC = () => {
     setLoginNotice(getUnauthorizedEmailNotice(email));
     await logout();
   };
+
+  useEffect(() => {
+    if (isSemesterArchive) return;
+    // Prepare code while the chooser is still idle; never open a server session
+    // before an interactive credential has passed through the existing gates.
+    void getFirebaseFunctions().catch(() => undefined);
+    const connections = [
+      "https://accounts.google.com",
+      "https://apis.google.com",
+    ].map((href) => {
+      const link = document.createElement("link");
+      link.rel = "preconnect";
+      link.href = href;
+      document.head.appendChild(link);
+      return link;
+    });
+    return () => connections.forEach((link) => link.remove());
+  }, []);
 
   useEffect(() => {
     if (
@@ -1729,6 +1771,7 @@ const Login: React.FC = () => {
     setPendingLoginMode(mode);
     setLoginNotice("");
     setAuthBusy(true);
+    markLoginPerf("westory-login-requested", { mode });
 
     try {
       if (useRedirect) {
@@ -1743,6 +1786,7 @@ const Login: React.FC = () => {
       console.info("[Auth] Starting Google popup login", { mode });
       const result = await signInWithPopup(auth, provider);
       acquired = true;
+      markLoginPerf("westory-login-popup-credential", { mode });
       if (!mountedRef.current || !isLoginFlowCurrent(flow)) {
         await discardStaleLoginUser(result.user, flow);
         return;
@@ -1770,6 +1814,13 @@ const Login: React.FC = () => {
           await awaitLoginNetwork(signInWithRedirect(auth, provider));
           return;
         } catch (redirectError) {
+          if (
+            !mountedRef.current ||
+            actionVersionRef.current !== operation ||
+            !isLoginFlowCurrent(flow) ||
+            (redirectError as Partial<AuthError>)?.code === "auth/stale-attempt"
+          )
+            return;
           console.error("Redirect fallback login failed");
         }
       }
