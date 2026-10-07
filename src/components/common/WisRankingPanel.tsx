@@ -117,7 +117,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
             type="button"
             onClick={() => navigate(hallOfFamePath)}
             className="wis-ranking-title wis-ranking-title-link flex items-center rounded-md bg-transparent p-0 text-left text-lg font-extrabold text-gray-900 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-            aria-label="화랑의 전당으로 이동"
+            aria-label="명예의 전당으로 이동"
           >
             <i className="fas fa-trophy mr-2 text-blue-600"></i>
             위스 순위
@@ -133,7 +133,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
             type="button"
             onClick={() => navigate(hallOfFamePath)}
             className="wis-ranking-more-button inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 text-xs font-black text-blue-700 transition hover:border-blue-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-            aria-label="화랑의 전당 더보기"
+            aria-label="명예의 전당 더보기"
           >
             더보기
             <i

@@ -50,7 +50,7 @@ const WisHallOfFameRecognitionModal: React.FC<
               type="button"
               onClick={onClose}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
-              aria-label="화랑의 전당 팝업 닫기"
+              aria-label="명예의 전당 팝업 닫기"
             >
               <i className="fas fa-times" aria-hidden="true"></i>
             </button>
@@ -92,7 +92,7 @@ const WisHallOfFameRecognitionModal: React.FC<
               onClick={onOpenHallOfFame}
               className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
             >
-              화랑의 전당 보기
+              명예의 전당 보기
             </button>
           )}
         </div>

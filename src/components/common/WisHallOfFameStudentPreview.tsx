@@ -148,7 +148,7 @@ const WisHallOfFameStudentPreview: React.FC<
     effectiveView === "grade"
       ? snapshot
         ? `${previewGradeKey}학년 전교 랭킹을 집계 중이에요.`
-        : "화랑의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다."
+        : "명예의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다."
       : snapshot
         ? "아직 우리 학급 랭킹이 없어요."
         : "우리 학급 랭킹도 잠시 후 다시 표시됩니다.";
@@ -217,7 +217,7 @@ const WisHallOfFameStudentPreview: React.FC<
     <div ref={previewRootRef} className="space-y-3" style={previewStyle}>
       {showSnapshotAlert && !snapshot && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-900">
-          화랑의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다.
+          명예의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다.
         </div>
       )}
 

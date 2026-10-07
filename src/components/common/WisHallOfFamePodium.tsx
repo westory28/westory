@@ -220,8 +220,8 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   entries = [],
   hallOfFameConfig,
   imageUrl,
-  emptyMessage = "아직 화랑의 전당이 준비되지 않았어요.",
-  title = "화랑의 전당",
+  emptyMessage = "아직 명예의 전당이 준비되지 않았어요.",
+  title = "명예의 전당",
   subtitle = "",
   action = null,
   showHeader = true,
@@ -394,7 +394,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
           <div className="absolute inset-0 overflow-hidden rounded-[1.65rem]">
             <img
               src={resolvedImageUrl}
-              alt="화랑의 전당 시상대"
+              alt="명예의 전당 시상대"
               className="absolute inset-0 h-full w-full scale-[1.03] object-cover object-center opacity-35 blur-xl"
               aria-hidden="true"
             />

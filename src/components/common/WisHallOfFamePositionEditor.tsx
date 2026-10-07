@@ -275,7 +275,7 @@ const WisHallOfFamePositionEditor: React.FC<
     effectivePreviewView === "grade"
       ? snapshot
         ? `${previewGradeKey}학년 전교 랭킹을 집계 중이에요.`
-        : "화랑의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다."
+        : "명예의 전당을 준비 중이에요. 잠시 후 다시 표시됩니다."
       : snapshot
         ? "아직 우리 학급 랭킹이 없어요."
         : "우리 학급 랭킹도 잠시 후 다시 표시됩니다.";

@@ -64,7 +64,7 @@ export const MENUS: MenuConfig = {
       icon: "M12 8c-2.761 0-5 1.567-5 3.5S9.239 15 12 15s5-1.567 5-3.5S14.761 8 12 8zm0 0V5m0 10v4m-7-7H3m18 0h-2",
       children: [
         { name: "내 위스", url: "/student/points" },
-        { name: "화랑의 전당", url: "/student/points?tab=hall-of-fame" },
+        { name: "명예의 전당", url: "/student/points?tab=hall-of-fame" },
         { name: "위스 상점", url: "/student/points?tab=shop" },
         { name: "구매 내역", url: "/student/points?tab=orders" },
       ],
@@ -127,7 +127,7 @@ export const MENUS: MenuConfig = {
         { name: "위스 현황", url: "/teacher/points" },
         { name: "지급 및 환수", url: "/teacher/points?tab=grant" },
         { name: "운영 정책", url: "/teacher/points?tab=policy" },
-        { name: "화랑의 전당 관리", url: "/teacher/points?tab=hall-of-fame" },
+        { name: "명예의 전당 관리", url: "/teacher/points?tab=hall-of-fame" },
         { name: "상품 관리", url: "/teacher/points?tab=products" },
         { name: "구매 요청 관리", url: "/teacher/points?tab=requests" },
       ],

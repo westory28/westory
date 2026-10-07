@@ -11,7 +11,7 @@ export const TEACHER_POINT_TAB_LABELS = {
   grant: "지급 및 환수",
   policy: "운영 정책",
   ranks: "등급 관리",
-  "hall-of-fame": "화랑의 전당 관리",
+  "hall-of-fame": "명예의 전당 관리",
   products: "상품 관리",
   requests: "구매 요청 관리",
 } as const;
@@ -161,7 +161,7 @@ export const POINT_RANK_FIELD_HELPERS = {
 
 export const STUDENT_POINT_TAB_LABELS = {
   overview: "내 위스",
-  "hall-of-fame": "화랑의 전당",
+  "hall-of-fame": "명예의 전당",
   shop: "위스 상점",
   orders: "구매 내역",
 } as const;

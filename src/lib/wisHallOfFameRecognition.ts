@@ -29,7 +29,7 @@ export interface HallOfFameRecognition {
 
 const buildHeadline = (scope: WisHallOfFameRecognition["scope"]) =>
   scope === "grade"
-    ? "축하합니다! 화랑의 전당에 올랐어요."
+    ? "축하합니다! 명예의 전당에 올랐어요."
     : "축하합니다! 우리 반 화랑으로 빛났어요.";
 
 const buildMessage = (scope: WisHallOfFameRecognition["scope"]) =>

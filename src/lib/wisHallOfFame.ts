@@ -1,4 +1,4 @@
-import defaultPodiumImage from "../assets/wis-hall-of-fame-podium.svg";
+import defaultPodiumImage from "../assets/wis-hall-of-fame-joseon-podium.webp";
 import { doc, getDoc } from "firebase/firestore";
 import { db, getHttpsCallable } from "./firebase";
 import { getYearSemester } from "./semesterScope";

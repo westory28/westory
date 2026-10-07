@@ -154,7 +154,7 @@ const loadImageElement = (file: File) =>
     };
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error("화랑의 전당 배경 이미지를 읽지 못했습니다."));
+      reject(new Error("명예의 전당 배경 이미지를 읽지 못했습니다."));
     };
     image.src = objectUrl;
   });
@@ -171,14 +171,14 @@ const buildResizedImageBlob = async (
   canvas.height = Math.max(1, Math.round(image.height * scale));
   const context = canvas.getContext("2d");
   if (!context) {
-    throw new Error("화랑의 전당 배경 캔버스를 준비하지 못했습니다.");
+    throw new Error("명예의 전당 배경 캔버스를 준비하지 못했습니다.");
   }
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(new Error("화랑의 전당 배경 이미지를 압축하지 못했습니다."));
+          reject(new Error("명예의 전당 배경 이미지를 압축하지 못했습니다."));
           return;
         }
         resolve(blob);
@@ -246,7 +246,7 @@ const getHallOfFameRefreshStageMessage = (stage: string, detail: string) => {
     return {
       title: "공개 랭킹 기준을 읽지 못했습니다.",
       message:
-        "화랑의 전당 공개 범위 설정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        "명예의 전당 공개 범위 설정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
 
@@ -327,7 +327,7 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
   ) {
     return {
       title: "학생 화면 설정을 저장할 권한이 없습니다.",
-      message: "화랑의 전당 관리 권한을 확인한 뒤 다시 시도해 주세요.",
+      message: "명예의 전당 관리 권한을 확인한 뒤 다시 시도해 주세요.",
     };
   }
 
@@ -404,7 +404,7 @@ const getHallOfFameSnapshotRefreshFailureText = (error: any) => {
   ) {
     return {
       title: "최신 위스 현황을 반영할 권한이 없습니다.",
-      message: "화랑의 전당 관리 권한을 확인한 뒤 다시 시도해 주세요.",
+      message: "명예의 전당 관리 권한을 확인한 뒤 다시 시도해 주세요.",
     };
   }
 
@@ -718,7 +718,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       applySnapshotState(nextSnapshot);
       showToast({
         tone: "success",
-        title: "최신 위스 현황을 화랑의 전당에 반영했습니다.",
+        title: "최신 위스 현황을 명예의 전당에 반영했습니다.",
         message: "현재 학기 학생 위스 현황이 공개 랭킹에 반영됐습니다.",
       });
     } catch (error: any) {
@@ -866,7 +866,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
       showToast({
         tone: "success",
-        title: "화랑의 전당 변경사항을 저장했습니다.",
+        title: "명예의 전당 변경사항을 저장했습니다.",
         message:
           "공개 범위, 팝업, 배경, 배치 설정을 현재 설정값으로 반영했습니다.",
       });
@@ -874,7 +874,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       const failure = getHallOfFameConfigSaveFailureText(error);
       showToast({
         tone: "error",
-        title: failure.title || "화랑의 전당 설정 저장에 실패했습니다.",
+        title: failure.title || "명예의 전당 설정 저장에 실패했습니다.",
         message: failure.message || "잠시 후 다시 시도해 주세요.",
       });
     } finally {
@@ -894,7 +894,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-black text-slate-950">
-            화랑의 전당 관리
+            명예의 전당 관리
           </h2>
           <p className="mt-1 text-sm font-semibold text-slate-500 break-keep">
             학생에게 공개되는 시상대, 공개 랭킹, 팝업과 반영 상태를 한 화면에서
@@ -937,7 +937,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             <i className="fas fa-spinner fa-spin"></i>
           </div>
           <p className="font-bold">
-            화랑의 전당 관리 데이터를 불러오는 중입니다.
+            명예의 전당 관리 데이터를 불러오는 중입니다.
           </p>
         </div>
       ) : (
@@ -1305,7 +1305,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                     <img
                       src={imageUrl}
-                      alt="화랑의 전당 배경"
+                      alt="명예의 전당 배경"
                       className="h-full min-h-[4.5rem] w-full object-cover"
                     />
                   </div>
@@ -1401,7 +1401,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="화랑의 전당 배치 편집"
+            aria-label="명예의 전당 배치 편집"
           >
             <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
               <div className="flex items-start justify-between gap-4">
@@ -1410,7 +1410,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     배치 편집
                   </div>
                   <h3 className="mt-2 text-xl font-black text-slate-900">
-                    화랑의 전당 배치 편집
+                    명예의 전당 배치 편집
                   </h3>
                   <p className="mt-2 text-sm leading-6 text-slate-500 break-keep">
                     1위, 2위, 3위 시상대와 우측 공개 랭킹 패널을 충분히 큰
