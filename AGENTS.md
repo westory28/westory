@@ -111,6 +111,7 @@
 - 포털별 운영 용어와 흐름은 상대 포털에 그대로 복제하지 않는다.
 
 ## 문서 참조 관계
+- 회사/집 PC 동기화, Windows Node 환경, Vercel 연결·승격 및 현재 백엔드 소스 불일치 주의사항은 `docs/runbooks/production-release.md`를 따른다.
 - 공통 UI 규칙은 `UI_RULES.md`를 따른다.
 - 프론트엔드 시각 작업은 `DESIGN.md` 토큰 계약을 먼저 확인하고, `loopy`/Superloopy 작업이면 evidence root에 검증 기록을 남긴다.
 - 교사 포털 추가 제약은 `src/pages/teacher/AGENTS.md`를 따른다.
