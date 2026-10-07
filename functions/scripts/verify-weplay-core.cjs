@@ -190,6 +190,69 @@ test('recognized historical terms retain internal middle dots, periods and hyphe
   assert.ok(!gameCatalog([{unitId:'modern-history',worksheetPageImages:[{page:1,imageUrl:'page.jpg'}],worksheetTextRegions:[{page:1,width:200,height:24,label:'3·1운동 6·25전쟁 고려'}]}],settings).some(word=>word.text==='3·1운동'||word.text==='6·25전쟁'));
 });
 
+test('PDF space glyphs, merged heading numbers and template OCR are cleaned without losing history terms', () => {
+  const region = (label, top = 300, extra = {}) => ({ page: 1, left: 50, top, width: 180, height: 25.6, label, ...extra });
+  // Geometry and broken labels mirror the public 1348 x 953 lesson PDFs.
+  const words = extractLessonWords([{
+    unitId: 'public-pdf', worksheetPageImages: [{page:1,width:1348,height:953,imageUrl:'page.jpg'}],
+    worksheetTextRegions: [
+      region('조선의堺', 55), region('세종堺'), region('경연堺'), region('법전을堺'),
+      region('발전.Ⅳ', 55), region('관계1.Westory', 63), region('pp. 116➋', 71),
+      region('확립500', 75), region('번 이름3', 111), region('학년', 111), region('반', 111),
+      region('우리가堺 써堺 내려가는堺 이야기', 97), region('직계제vs 6', 316),
+      region('3·1운동 6·25전쟁 4.19혁명 6두품 UN OECD'),
+      region('조선 세종 경연 법전 직계제'),
+      region('예조 춘추관 성균관 훈민정음해례본', 831),
+      region('방재석© 2026', 873), region('수업용堺 재구성堺 자료이므로堺', 890),
+      region('무단堺 전재 재배포堺 금지·', 890),
+    ],
+  }]).map(word => word.text);
+  for (const expected of ['조선','세종','경연','법전','발전','관계','확립','직계제','3·1운동','6·25전쟁','4.19혁명','6두품','UN','OECD','예조','춘추관','성균관','훈민정음해례본']) assert.ok(words.includes(expected), expected);
+  for (const noise of ['조선의堺','세종堺','경연堺','법전을堺','발전.IV','IV','관계1.Westory','Westory','pp','직계제vs','vs','확립500','이름3','이름','학년','반','번','우리가','써','내려가는','이야기','방재석','수업용','재구성','자료이므로','무단','전재','재배포','금지']) assert.ok(!words.includes(noise), noise);
+  assert.ok(!words.some(word => word.includes('堺')));
+});
+
+test('copyright filtering is local to confirmed footer lines and never drops a whole-page body region', () => {
+  const words = extractLessonWords([{
+    unitId: 'page-regions', worksheetPageImages: [{page:1,width:1348,height:953,imageUrl:'page.jpg'},{page:2,width:1348,height:953,imageUrl:'page2.jpg'}],
+    worksheetTextRegions: [
+      {page:1,left:0,top:0,width:1348,height:953,label:'천상열차분야지도 3·1운동 김교사© 2026 훈민정음해례본'},
+      {page:1,left:50,top:873,width:200,height:25,label:'이교사© 2026'},
+      {page:1,left:50,top:891,width:200,height:25,label:'재배포 금지'},
+      {page:2,left:50,top:891,width:200,height:25,label:'고려대장경판'},
+    ],
+  }]).map(word => word.text);
+  assert.deepEqual(words, ['천상열차분야지도','3·1운동','훈민정음해례본','고려대장경판']);
+});
+
+test('OCR cleanup preserves lone Hanja and explicit blank/custom words even when they resemble noisy OCR', () => {
+  const lessons = [{
+    unitId:'protected', contentHtml:'[발전.IV] [직계제vs]',
+    worksheetPageImages:[{page:1,width:1348,height:953,imageUrl:'page.jpg'}],
+    worksheetBlanks:[{page:1,widthRatio:10,heightRatio:10,answer:'세종堺'}],
+    worksheetTextRegions:[
+      {page:1,width:400,height:24,label:'사카이堺 [확립500] [UN 헌장]'},
+      {page:1,width:400,height:24,label:'사카이堺'},
+      {page:1,width:400,height:24,label:'사카이堺'},
+    ],
+  }];
+  const settings = validateGameSettings({...DEFAULT_GAME_SETTINGS,customWords:['이름3','pp','관계1.Westory']});
+  assert.deepEqual(gameCatalog(lessons,settings).map(word=>word.text), ['세종堺','발전.IV','직계제vs','사카이堺','확립500','UN 헌장','이름3','pp','관계1.Westory']);
+  assert.ok(!gameCatalog(lessons,validateGameSettings({...settings,excludedWords:['세종堺','확립500']})).some(word=>['세종堺','확립500'].includes(word.text)));
+});
+
+test('OCR-only Hanja numerals are omitted while historical terms and explicitly selected numerals are preserved', () => {
+  const lesson = {
+    unitId:'han-numbers', worksheetPageImages:[{page:1,imageUrl:'page.jpg'}],
+    worksheetTextRegions:[{page:1,width:400,height:24,label:'三 四 七 九 十一 百二十 零 〇 三國史記'}],
+  };
+  assert.deepEqual(extractLessonWords([lesson]).map(word=>word.text), ['三國史記']);
+  const explicit = {...lesson, contentHtml:'[七]', worksheetBlanks:[{page:1,widthRatio:10,heightRatio:10,answer:'九'}],
+    worksheetTextRegions:[...lesson.worksheetTextRegions,{page:1,width:200,height:24,label:'[三] [四]'}]};
+  const settings = validateGameSettings({...DEFAULT_GAME_SETTINGS,customWords:['十']});
+  assert.deepEqual(gameCatalog([explicit],settings).map(word=>word.text), ['九','七','三國史記','三','四','十']);
+});
+
 test('long blank/custom terms remain available for specials and exclusions while normal difficulty limits stay at twelve', () => {
   const long = '대한민국임시정부수립과정과활동';
   assert.ok(Array.from(long).length > 12);
