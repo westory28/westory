@@ -1,4 +1,4 @@
-import defaultPodiumImage from "../assets/wis-hall-of-fame-joseon-podium.webp";
+import defaultPodiumImage from "../assets/wis-hall-of-fame-royal-podium.webp";
 import { doc, getDoc } from "firebase/firestore";
 import { db, getHttpsCallable } from "./firebase";
 import { getYearSemester } from "./semesterScope";
@@ -27,7 +27,7 @@ export const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 6;
 export const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 export const WIS_HALL_OF_FAME_STALE_MS =
   WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
-export const DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET = "classic_podium_v1";
+export const DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET = "royal_podium_v2";
 export const DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL = defaultPodiumImage;
 
 /** Replace the retired Hwarang artwork while preserving other uploaded images. */
@@ -78,6 +78,17 @@ const DEFAULT_MOBILE_POSITIONS: HallOfFamePodiumPositions = {
   first: { leftPercent: 50, topPercent: 28, widthPercent: 28 },
   second: { leftPercent: 28, topPercent: 46, widthPercent: 21 },
   third: { leftPercent: 72, topPercent: 46, widthPercent: 21 },
+};
+
+const ROYAL_PODIUM_POSITIONS: HallOfFamePodiumPositions = {
+  first: { leftPercent: 50, topPercent: 27, widthPercent: 24 },
+  second: { leftPercent: 20, topPercent: 39, widthPercent: 24 },
+  third: { leftPercent: 80, topPercent: 43, widthPercent: 24 },
+};
+const ROYAL_MOBILE_POSITIONS: HallOfFamePodiumPositions = {
+  first: { leftPercent: 50, topPercent: 18, widthPercent: 24 },
+  second: { leftPercent: 20, topPercent: 30, widthPercent: 24 },
+  third: { leftPercent: 80, topPercent: 34, widthPercent: 24 },
 };
 
 const DEFAULT_DESKTOP_LEADERBOARD_PANEL: HallOfFameLeaderboardPanelPosition = {
@@ -229,6 +240,7 @@ const normalizeEntry = (value: unknown): WisHallOfFameEntry | null => {
     podiumSlot,
     grade,
     class: className,
+    number: normalizeSchoolValue(raw.number) || undefined,
     classKey: resolvedClassKey,
     studentName: studentName || displayName,
     displayName,
@@ -376,8 +388,8 @@ const resolveBestPodiumEntries = (
 };
 
 export const DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS = {
-  desktop: DEFAULT_DESKTOP_POSITIONS,
-  mobile: DEFAULT_MOBILE_POSITIONS,
+  desktop: ROYAL_PODIUM_POSITIONS,
+  mobile: ROYAL_MOBILE_POSITIONS,
 } as const;
 
 export const DEFAULT_WIS_HALL_OF_FAME_LEADERBOARD_PANEL = {
@@ -386,8 +398,16 @@ export const DEFAULT_WIS_HALL_OF_FAME_LEADERBOARD_PANEL = {
 } as const;
 
 export const getDefaultHallOfFamePositions = () => ({
-  desktop: { ...DEFAULT_DESKTOP_POSITIONS },
-  mobile: { ...DEFAULT_MOBILE_POSITIONS },
+  desktop: {
+    first: { ...ROYAL_PODIUM_POSITIONS.first },
+    second: { ...ROYAL_PODIUM_POSITIONS.second },
+    third: { ...ROYAL_PODIUM_POSITIONS.third },
+  },
+  mobile: {
+    first: { ...ROYAL_MOBILE_POSITIONS.first },
+    second: { ...ROYAL_MOBILE_POSITIONS.second },
+    third: { ...ROYAL_MOBILE_POSITIONS.third },
+  },
 });
 
 export const getDefaultHallOfFameLeaderboardPanel = () => ({
@@ -841,20 +861,28 @@ export const resolveHallOfFameInterfaceConfig = (
       ? interfaceConfig.hallOfFame || {}
       : ((interfaceConfig || {}) as HallOfFameInterfaceConfig);
 
+  const royalArtwork =
+    resolveWisHallOfFamePodiumImageUrl(hallOfFameConfig.podiumImageUrl) ===
+    DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL;
+  const migrateRoyalPositions =
+    royalArtwork &&
+    toSafeText(hallOfFameConfig.positionPreset) !==
+      DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET;
+
   return {
     podiumImageUrl: toSafeText(hallOfFameConfig.podiumImageUrl),
     podiumStoragePath: toSafeText(hallOfFameConfig.podiumStoragePath),
-    positionPreset:
-      toSafeText(hallOfFameConfig.positionPreset) ||
-      DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
+    positionPreset: royalArtwork
+      ? DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET
+      : toSafeText(hallOfFameConfig.positionPreset) || "classic_podium_v1",
     positions: {
       desktop: normalizePositions(
-        hallOfFameConfig.positions?.desktop,
-        DEFAULT_DESKTOP_POSITIONS,
+        migrateRoyalPositions ? undefined : hallOfFameConfig.positions?.desktop,
+        royalArtwork ? ROYAL_PODIUM_POSITIONS : DEFAULT_DESKTOP_POSITIONS,
       ),
       mobile: normalizePositions(
-        hallOfFameConfig.positions?.mobile,
-        DEFAULT_MOBILE_POSITIONS,
+        migrateRoyalPositions ? undefined : hallOfFameConfig.positions?.mobile,
+        royalArtwork ? ROYAL_MOBILE_POSITIONS : DEFAULT_MOBILE_POSITIONS,
       ),
     },
     leaderboardPanel: {

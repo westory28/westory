@@ -537,6 +537,7 @@ export interface WisHallOfFameEntry {
   podiumSlot?: 1 | 2 | 3;
   grade: string;
   class: string;
+  number?: string;
   classKey: string;
   studentName: string;
   displayName: string;

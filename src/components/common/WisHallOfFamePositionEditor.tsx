@@ -405,7 +405,11 @@ const WisHallOfFamePositionEditor: React.FC<
     key: EditableKey,
   ) => {
     const measurementTarget =
-      key === "leaderboard" ? sceneRef.current : podiumStageRef.current;
+      key === "leaderboard"
+        ? sceneRef.current
+        : podiumStageRef.current?.querySelector<HTMLElement>(
+            "[data-hall-podium-stage]",
+          ) || podiumStageRef.current;
     if (disabled || !measurementTarget) return;
     event.preventDefault();
     event.stopPropagation();

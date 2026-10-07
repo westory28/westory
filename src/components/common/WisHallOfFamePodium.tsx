@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
+import RoyalHallOfFamePodium from "./RoyalHallOfFamePodium";
 import { formatWisAmount } from "../../lib/pointFormatters";
 import {
   resolveWisHallOfFamePodiumImageUrl,
+  DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
   getDefaultHallOfFamePositions,
   normalizeHallOfFameInterfaceConfig,
 } from "../../lib/wisHallOfFame";
@@ -12,7 +14,7 @@ import type {
   WisHallOfFameEntry,
 } from "../../types";
 
-interface WisHallOfFamePodiumProps {
+export interface WisHallOfFamePodiumProps {
   entries?: WisHallOfFameEntry[] | null;
   hallOfFameConfig?: HallOfFameInterfaceConfig | null;
   imageUrl?: string;
@@ -216,7 +218,7 @@ const getInfoCardAlignClassName = (
   return slotKey === "second" ? "self-start" : "self-end";
 };
 
-const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
+const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   entries = [],
   hallOfFameConfig,
   imageUrl,
@@ -389,6 +391,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
       <div className="relative overflow-visible px-2 pb-3 pt-2 sm:px-3 sm:pb-4 sm:pt-2.5">
         <div
           ref={stageRef}
+          data-hall-podium-stage
           className="relative aspect-[80/49] w-full min-h-[var(--hall-podium-stage-min-height)] max-w-full overflow-visible rounded-[1.65rem] bg-[#f5f7fb]"
         >
           <div className="absolute inset-0 overflow-hidden rounded-[1.65rem]">
@@ -534,6 +537,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                         >
                           <div className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[9px]">
                             {primaryEntry.grade}학년 {primaryEntry.class}반
+                            {primaryEntry.number && ` ${primaryEntry.number}번`}
                           </div>
                           <div className="mt-1 whitespace-normal break-keep text-[10px] font-black leading-[1.28] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-[13px] lg:text-[14px]">
                             {primaryEntry.displayName ||
@@ -605,6 +609,8 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                             <div className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[9px]">
                               {displayedEntry.grade}학년 {displayedEntry.class}
                               반
+                              {displayedEntry.number &&
+                                ` ${displayedEntry.number}번`}
                             </div>
                             <div className="mt-1 whitespace-normal break-keep text-[10px] font-black leading-[1.28] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-[13px] lg:text-[14px]">
                               {displayedEntry.displayName ||
@@ -630,5 +636,14 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
     </div>
   );
 };
+
+const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = (props) =>
+  resolveWisHallOfFamePodiumImageUrl(
+    props.imageUrl || props.hallOfFameConfig?.podiumImageUrl,
+  ) === DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL ? (
+    <RoyalHallOfFamePodium {...props} />
+  ) : (
+    <LegacyWisHallOfFamePodium {...props} />
+  );
 
 export default WisHallOfFamePodium;
