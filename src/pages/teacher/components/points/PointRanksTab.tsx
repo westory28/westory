@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import PortalWorkspace from "../../../../components/common/PortalWorkspace";
 import StudentRankPromotionPopup from "../../../../components/common/StudentRankPromotionPopup";
 import { POINT_RANK_BADGE_STYLE_OPTIONS } from "../../../../constants/pointLabels";
 import { buildStudentRankPromotionPreview } from "../../../../lib/pointRankPromotion";
@@ -719,7 +720,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="teacher-sub-workspace">
+      <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page">
         <RankSettingsSidebar
           activePanel={activePanel}
           items={sidebarItems}
@@ -727,6 +728,11 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
         />
 
         <div className="teacher-sub-content">
+          {!canManage && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+              읽기 전용 권한으로 접속 중입니다.
+            </div>
+          )}
           <div className="border-b border-gray-100 px-4 py-3 sm:px-6">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">
@@ -820,7 +826,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             )}
           </div>
         </div>
-      </div>
+      </PortalWorkspace>
 
       {celebrationPreview && celebrationPreview.rank && (
         <StudentRankPromotionPopup

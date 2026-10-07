@@ -1841,7 +1841,7 @@ const ManagePoints: React.FC = () => {
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main
         className={
-          activeTab === "policy"
+          activeTab === "policy" || activeTab === "ranks"
             ? "flex w-full flex-1 flex-col"
             : [
                 "mx-auto flex w-full flex-1 flex-col px-4 py-6",
@@ -1851,7 +1851,7 @@ const ManagePoints: React.FC = () => {
               ].join(" ")
         }
       >
-        {!canManage && activeTab !== "policy" && (
+        {!canManage && activeTab !== "policy" && activeTab !== "ranks" && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
             읽기 전용 권한으로 접속 중입니다.
           </div>
