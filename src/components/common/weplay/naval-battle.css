@@ -67,7 +67,6 @@
 .naval-special b { color: var(--naval-gold); font-size: 18px; font-variant-numeric: tabular-nums; }
 .naval-command { position: absolute; z-index: 10; left: 3%; right: 3%; bottom: 16px; display: flex; gap: 16px; align-items: end; }
 .naval-ammo { position: relative; flex: 0 0 22%; min-width: 120px; padding: 8px 8px 8px 40px; border: 1px solid var(--naval-gold); border-radius: var(--radius-md, 8px); background: var(--naval-ink); }
-.naval-cannon-icon { position: absolute; display: block; left: -12px; top: 4px; width: 64px; }
 .naval-ammo-slots { display: flex; gap: 4px; height: 24px; padding: 4px; border: 1px solid var(--naval-gold); border-radius: var(--radius-full, 9999px); overflow: hidden; }
 .naval-ammo-slots span { flex: 1; background: var(--naval-wood); transform: skew(-12deg); border-radius: 2px; }
 .naval-ammo-slots span.is-ready { background: var(--naval-gold); box-shadow: inset 0 0 4px var(--naval-parchment); }
@@ -441,7 +440,7 @@
 .naval-hud strong { color: var(--naval-text); }
 .naval-hud span, .naval-hud small { color: var(--naval-parchment); }
 .naval-hud-time.is-urgent strong { color: var(--naval-gold); }
-.naval-title-art { opacity: .8; }
+.naval-title-art { width: min(28%, 240px); flex-basis: min(28%, 240px); opacity: .8; }
 .naval-battle-status > span { background: rgba(23,30,36,.65); }
 .naval-difficulty-badge { border-color: rgba(244,229,197,.25); background: var(--naval-ink); color: var(--naval-parchment); }
 .naval-difficulty-badge--mild { color: var(--naval-allied); }
@@ -462,7 +461,7 @@
 .naval-fuse-ember::after { animation: none; opacity: .35; }
 .naval-prompts { z-index: 9; }
 .naval-word .naval-word-splash { opacity: .48; }
-.naval-ammo { border-color: rgba(244,229,197,.3); background: rgba(23,30,36,.94); }
+.naval-game .naval-ammo { height: auto; padding-left: 8px; border-color: rgba(244,229,197,.3); background: rgba(23,30,36,.94); }
 .naval-ammo-slots { border: 0; border-radius: 4px; background: rgba(244,229,197,.12); }
 .naval-ammo-slots span { transform: none; background: rgba(244,229,197,.12); }
 .naval-ammo.is-charged { animation: naval-charge 600ms ease-out; }
@@ -498,3 +497,10 @@
 @keyframes naval-cutin-lines { 0% { transform: scale(1.12); opacity: 0; } 16% { transform: scale(1); opacity: 1; } 76% { transform: scale(1.025); opacity: .9; } 100% { transform: scale(1.04); opacity: 0; } }
 @keyframes naval-cutin-eyes { 0% { transform: translateX(-12%); opacity: 0; } 14%,76% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(4%); opacity: 0; } }
 @keyframes naval-cutin-title { 0%,12% { transform: translateY(8px); opacity: 0; } 24%,76% { transform: translateY(0); opacity: 1; } 100% { opacity: 0; } }
+
+/* Resolve each launch against the rendered artwork, including ship movement. */
+.naval-shot-origin { position: absolute; inset: 0; }
+.naval-effect--cannon .naval-cannonball { left: calc(var(--shot-x) - 16px); top: calc(var(--shot-y) - 16px); animation-name: naval-mouth-shot; }
+.naval-effect--cannon .naval-muzzle-flash { left: calc(var(--shot-x) - 32px); top: calc(var(--shot-y) - 32px); }
+.naval-shot-origin .naval-impact { left: calc(var(--shot-target-x) - 11%); top: calc(var(--shot-target-y) - 17%); right: auto; }
+@keyframes naval-mouth-shot { 0% { transform: translate(0,0) scale(1); opacity: 1; } 90% { opacity: 1; } 100% { transform: translate(var(--shot-dx), var(--shot-dy)) scale(.5); opacity: 0; } }

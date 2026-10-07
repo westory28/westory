@@ -18,6 +18,7 @@ import useWeplayMusic from "../../components/common/weplay/useWeplayMusic";
 import WeplayMusicButton from "../../components/common/weplay/WeplayMusicButton";
 import { getWeplayGameTitle } from "../../lib/weplayTitle";
 import { notifyPointsUpdated } from "../../lib/appEvents";
+import { preloadWeplayAssets } from "../../lib/weplayAssets";
 import WeplayLobbyIcon from "./weplay/WeplayLobbyIcon";
 import WeplayRecordsDialog, {
   type WeplayRecordsView,
@@ -90,6 +91,7 @@ export default function Weplay() {
     [config?.year, config?.semester, currentUser?.uid],
   );
   useEffect(() => {
+    preloadWeplayAssets();
     setSession(null);
     setResult(null);
     setLobby(null);
@@ -104,6 +106,7 @@ export default function Weplay() {
   const start = async () => {
     if (starting || !lobby || lobby.gameEnabled === false) return;
     music.start();
+    preloadWeplayAssets(true);
     const startedScope = scope;
     setStarting(true);
     setError("");

@@ -199,7 +199,8 @@ try {
       assert.equal(await cannon.locator('.naval-effect--cannon').count(), 0);
       await cannon.evaluate(() => { window.navalQa.holdAnswer = 2; });
       assert.equal((await answerVisible(cannon)).accepted, true);
-      assert.equal(await cannon.locator('.naval-effect--cannon').count(), 0, 'Pending answer cannot fire an unconfirmed shot');
+      await cannon.locator('.naval-effect--cannon').waitFor({ timeout: 2000 });
+      assert.equal(await cannon.locator('.naval-effect--cannon').count(), 1, 'Locally correct second word fires while acknowledgement is still pending');
       await cannon.evaluate(() => window.navalQa.releaseAnswer());
       await cannon.locator('.naval-effect--cannon').waitFor({ timeout: 2000 });
       assert.equal(await cannon.locator('.naval-effect--cannon').count(), 1, 'Second accepted normal word fires exactly once without another clock tick');
@@ -219,7 +220,7 @@ try {
       assert.equal(await cannon.locator('.naval-special-attack').count(), 0);
       await cannon.close();
     }
-    checks.push('Practice/challenge: server clock 2000ms ahead, first normal loads, pending second never fires, acknowledged second/fourth immediately fire one cannon each and damage at420ms');
+    checks.push('Practice/challenge: server clock 2000ms ahead, first normal loads, second fires before acknowledgement, and acknowledgements never duplicate the cannon');
     const reordered = await open('lobby', 768, 'seen=1');
     await reordered.evaluate(() => { window.navalQa.ackOffset = 2000; window.navalQa.holdAnswer = 1; });
     await reordered.locator('.weplay-start').click();
@@ -268,9 +269,11 @@ try {
     await special.getByRole('textbox',{name:'단어 입력'}).fill('오답검증');await special.getByRole('textbox',{name:'단어 입력'}).press('Enter');
     assert.equal(await special.locator('.naval-special-attack').count(),0);assert.equal(await special.evaluate(()=>window.navalQa.answers.length),0);
     await special.evaluate(()=>{window.navalQa.holdAnswer=1});assert.equal((await answerVisible(special,true)).accepted,true);
-    assert.equal(await special.locator('.naval-special-attack').count(),0,'No effect until transport acknowledges the accepted special');
+    await special.locator('.naval-special-attack').waitFor();
+    assert.equal(await special.locator('.naval-special-attack').count(),1,'Locally correct special starts before its transport acknowledgement');
     const hpBefore=await special.locator('.naval-health--enemy').getAttribute('aria-label');
     await special.evaluate(()=>window.navalQa.releaseAnswer());await special.clock.runFor(50);await special.locator('.naval-special-attack:not(.is-paused)').waitFor();
+    assert.equal(await special.locator('.naval-special-attack').count(),1,'Acknowledgement does not add a second special effect');
     await special.waitForFunction(()=>[...document.querySelectorAll('.naval-special-attack img')].every(img=>img.complete&&img.naturalWidth>0));
     assert.equal(await special.locator('.naval-special-intro').evaluate(element=>getComputedStyle(element).animationDuration),'0.5s');
     assert.equal(await special.locator('.naval-special-trace.trace-core').count(),10);
@@ -288,7 +291,7 @@ try {
     assert.deepEqual(actualCalls,view==='lobby'?['getWeplayLobby','startWeplayGame','submitWeplayAnswer']:[]);
     await capture(special,`focus-${view}-after-barrage-${width}`);await special.close();
   }
-  checks.push('Special prompt/wrong answer/pending response show no effect; accepted special has 500ms eyes, 10 ballistic trails and 5 bursts, HP unchanged before1400ms and updated at impact, removal at2500ms, word/input layers preserved, no extra calls');
+  checks.push('Special prompt/wrong answer show no effect; locally correct special starts before acknowledgement without duplication, has500ms eyes,10 ballistic trails and5 bursts, HP unchanged before1400ms and updated at impact, removal at2500ms, word/input layers preserved, no extra calls');
 
   const paused=await open('battle',390,'seen=1');await paused.locator('.naval-game').waitFor();await advanceTo(paused,2200);
   await paused.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))});

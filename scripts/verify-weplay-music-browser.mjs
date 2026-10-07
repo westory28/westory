@@ -114,7 +114,7 @@ async function waitPaused(page) {
 }
 try {
   const { context, page } = await contextPage();
-  assert.equal(await button(page).getAttribute('aria-label'), '배경음악 켜기');
+  assert.equal(await button(page).getAttribute('aria-label'), '소리 켜기');
   assert.equal(await page.evaluate(() => window.musicQa.players.length), 0, 'No media player is allocated before an explicit start.');
   const decoded = await page.evaluate(async url => {
     const buffer = await fetch(url).then(response => response.arrayBuffer());
@@ -129,7 +129,7 @@ try {
 
   await page.getByRole('button', { name: '게임 시작', exact: true }).click();
   await waitPlaying(page);
-  assert.equal(await button(page).getAttribute('aria-label'), '배경음악 끄기');
+  assert.equal(await button(page).getAttribute('aria-label'), '소리 끄기');
   assert.equal(await button(page).getAttribute('aria-pressed'), 'true');
   const active = await page.evaluate(() => { const a = window.musicQa.players.at(-1); return { duration: a.duration, volume: a.volume, loop: a.loop, error: a.error?.message || null }; });
   assert.ok(Math.abs(active.duration - 45) < 0.02);
