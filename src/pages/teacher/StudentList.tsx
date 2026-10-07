@@ -793,7 +793,7 @@ const StudentList: React.FC = () => {
                   pagedStudents.map((student) => (
                     <tr
                       key={student.id}
-                      className="group transition hover:bg-blue-50"
+                      className="student-list-row group transition hover:bg-blue-50"
                     >
                       <td className="p-4 text-center">
                         <input
@@ -863,7 +863,7 @@ const StudentList: React.FC = () => {
                                   setEnrollmentTargets([student]);
                                   setRosterModalMode("registration");
                                 }}
-                                className="min-h-11 rounded-lg bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                                className="student-list-row__action min-h-11 rounded-lg bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
                                 aria-label={`${student.name || "학생"} 등록 승인`}
                               >
                                 등록 승인
@@ -876,7 +876,7 @@ const StudentList: React.FC = () => {
                                     setDetailInitialTab("profile");
                                     setDetailModalOpen(true);
                                   }}
-                                  className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
+                                  className="student-list-row__action flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
                                   aria-label={`${student.name || "학생"} 정보 수정`}
                                   title="수정"
                                 >
@@ -888,7 +888,7 @@ const StudentList: React.FC = () => {
                                     setEnrollmentTargets([student]);
                                     setRosterModalMode("enrollment");
                                   }}
-                                  className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-200"
+                                  className="student-list-row__action flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-200"
                                   title="학적 상태 변경"
                                   aria-label={`${student.name || "학생"} 학적 상태 변경`}
                                 >

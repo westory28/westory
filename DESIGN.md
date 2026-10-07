@@ -240,6 +240,8 @@ Layout tokens:
 
 ### Buttons
 
+- Teacher student-list data cells use 8px vertical padding. Row management buttons keep 44px touch targets; on fine-pointer, hover-capable screens at least 768px wide, use a compact 32px minimum height. Preserve horizontal padding, text sizes, wrapping and keyboard focus.
+
 Primary button:
 
 - Background: `--ws-primary`, hover `--ws-primary-hover`.

@@ -1,3 +1,14 @@
+.student-list-row > td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+@media (min-width: 768px) and (hover: hover) and (pointer: fine) {
+  .student-list-row .student-list-row__action {
+    min-height: 32px;
+  }
+}
+
 .student-list-controls,
 .points-student-filter-header {
   padding: 20px;
