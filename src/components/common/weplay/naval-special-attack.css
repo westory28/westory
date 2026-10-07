@@ -1,0 +1,285 @@
+.naval-special-attack {
+  --attack-target-x: 76%;
+  --attack-target-y: 39%;
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  overflow: hidden;
+  contain: layout paint;
+  pointer-events: none;
+  user-select: none;
+}
+.naval-special-intro {
+  position: absolute;
+  inset: 21% 0 auto;
+  height: 21%;
+  overflow: hidden;
+  border-block: 1px solid var(--naval-gold);
+  background: var(--naval-ink);
+  opacity: 0;
+  animation: naval-special-intro 500ms ease-out both;
+}
+.naval-special-eyes,
+.naval-special-speedlines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.naval-special-eyes {
+  object-position: center 48%;
+  animation: naval-special-eyes 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.naval-special-speedlines {
+  opacity: 0.45;
+}
+.naval-special-intro strong {
+  position: absolute;
+  right: 4%;
+  bottom: 8%;
+  margin: 0;
+  font-size: clamp(20px, 3.2cqi, 40px);
+  font-weight: 800;
+  color: var(--naval-text);
+  line-height: 1.2;
+  text-shadow:
+    0 2px 4px var(--naval-ink),
+    2px 0 var(--naval-ink),
+    -2px 0 var(--naval-ink);
+}
+.naval-special-barrage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.naval-special-trace {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 18 182;
+  stroke-dashoffset: 18;
+  opacity: 0;
+  animation: naval-special-trail 560ms var(--attack-delay)
+    cubic-bezier(0.32, 0.1, 0.8, 1) both;
+}
+.naval-special-trace.trace-glow {
+  stroke: var(--naval-enemy);
+  stroke-width: 16px;
+  --trace-opacity: 0.5;
+}
+.naval-special-trace.trace-fire {
+  stroke: var(--naval-gold);
+  stroke-width: 8px;
+  --trace-opacity: 0.95;
+}
+.naval-special-trace.trace-core {
+  stroke: var(--naval-parchment);
+  stroke-width: 3px;
+  --trace-opacity: 1;
+}
+.naval-special-trace.trace-head {
+  stroke: var(--naval-text);
+  stroke-width: 10px;
+  stroke-dasharray: 0.15 199.85;
+  stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 4px var(--naval-gold));
+  animation-name: naval-special-head;
+}
+.naval-special-impacts {
+  position: absolute;
+  inset: 0;
+}
+.naval-special-burst {
+  position: absolute;
+  left: calc(var(--attack-target-x) + var(--burst-x));
+  top: calc(var(--attack-target-y) + var(--burst-y));
+  width: var(--burst-size);
+  height: auto;
+  opacity: 0;
+  transform-origin: 30% 55%;
+  animation: naval-special-burst 900ms var(--attack-delay) ease-out both;
+}
+.naval-special-water {
+  position: absolute;
+  left: var(--attack-target-x);
+  top: calc(var(--attack-target-y) + 5%);
+  width: 18%;
+  aspect-ratio: 1;
+  background-image: var(--naval-special-sprites);
+  background-repeat: no-repeat;
+  background-size: 857.436% 482.564%;
+  background-position: 69.397% 98.123%;
+  opacity: 0;
+  animation: naval-special-water 800ms var(--attack-delay) ease-out both;
+}
+.naval-special-water.water-left {
+  --water-x: -90%;
+  --attack-delay: 1280ms;
+}
+.naval-special-water.water-right {
+  --water-x: -10%;
+  --attack-delay: 1460ms;
+}
+.naval-special-water.water-center {
+  --water-x: -50%;
+  --attack-delay: 1620ms;
+  width: 22%;
+}
+.naval-special-static {
+  display: none;
+  position: absolute;
+  left: 4%;
+  top: 29%;
+  max-width: 44%;
+  padding: 8px 12px;
+  border-left: 3px solid var(--naval-gold);
+  background: var(--naval-ink);
+  color: var(--naval-text);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.naval-special-attack.is-paused *,
+.naval-game--hidden .naval-special-attack * {
+  animation-play-state: paused !important;
+}
+.naval-special-attack.is-still .naval-special-intro,
+.naval-special-attack.is-still .naval-special-barrage,
+.naval-special-attack.is-still .naval-special-impacts,
+.naval-game--still .naval-special-attack .naval-special-intro,
+.naval-game--still .naval-special-attack .naval-special-barrage,
+.naval-game--still .naval-special-attack .naval-special-impacts {
+  display: none;
+}
+.naval-special-attack.is-still .naval-special-static,
+.naval-game--still .naval-special-attack .naval-special-static {
+  display: block;
+}
+@container naval-game (max-width: 600px) {
+  .naval-special-attack {
+    --attack-target-x: 64%;
+    --attack-target-y: 35%;
+  }
+  .naval-special-barrage {
+    transform: translate(-12%, -4%);
+  }
+  .naval-special-intro {
+    top: 25%;
+    height: 13%;
+  }
+  .naval-special-intro strong {
+    font-size: 20px;
+  }
+  .naval-special-burst {
+    width: calc(var(--burst-size) * 1.25);
+  }
+  .naval-special-static {
+    top: 27%;
+    left: 3%;
+    max-width: 45%;
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+}
+.naval-game--compact .naval-special-attack {
+  --attack-target-x: 64%;
+  --attack-target-y: 30%;
+}
+.naval-game--compact .naval-special-barrage {
+  transform: translate(-12%, -9%);
+}
+.naval-game--compact .naval-special-intro {
+  top: 54%;
+  height: 8%;
+}
+.naval-game--compact .naval-special-intro strong {
+  font-size: 12px;
+}
+.naval-game--compact .naval-special-static {
+  top: auto;
+  bottom: 40%;
+  max-width: 38%;
+  font-size: 12px;
+}
+@keyframes naval-special-intro {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.9);
+  }
+  14%,
+  72% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1.04);
+  }
+}
+@keyframes naval-special-eyes {
+  from {
+    transform: translateX(-8%) scale(1.1);
+  }
+  to {
+    transform: translateX(2%) scale(1.02);
+  }
+}
+@keyframes naval-special-trail {
+  0% {
+    stroke-dashoffset: 18;
+    opacity: 0;
+  }
+  12%,
+  84% {
+    opacity: var(--trace-opacity);
+  }
+  100% {
+    stroke-dashoffset: -82;
+    opacity: 0;
+  }
+}
+@keyframes naval-special-head {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+  8%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+@keyframes naval-special-burst {
+  0% {
+    transform: translate(-30%, -55%) rotate(var(--burst-turn)) scale(0.35);
+    opacity: 0;
+  }
+  16% {
+    opacity: 0.95;
+  }
+  38% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-30%, -64%) rotate(var(--burst-turn)) scale(1.25);
+    opacity: 0;
+  }
+}
+@keyframes naval-special-water {
+  0% {
+    transform: translate(var(--water-x), -35%) scale(0.35);
+    opacity: 0;
+  }
+  22% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(var(--water-x), -58%) scale(1.15);
+    opacity: 0;
+  }
+}

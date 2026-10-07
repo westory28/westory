@@ -34,6 +34,10 @@ export interface HistoryRainGameProps {
   transport?: HistoryRainTransport;
   onShowGuide?: () => void;
   guideDemo?: boolean;
+  guideInteractive?: {
+    wordId: string | null;
+    onAttempt: (accepted: boolean) => void;
+  };
 }
 
 export default function HistoryRainGame({ ...props }: HistoryRainGameProps) {

@@ -4,7 +4,7 @@ const {
   DEFAULT_POLICY, TOTAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, normalizeAnswer,
   validatePolicy, effectiveLessons, extractLessonWords, buildWords,
   assessAnswer, gameReward, periodBounds, compareEntries,
-  DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, validateGameSettings, readGameSettings, filterGameLessons, uniqueWordCount, gameCatalog, validateDifficultySettings,
+  DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, MAX_CATALOG_WORD_LENGTH, SPECIAL_FALLBACK_WORDS, validateGameSettings, readGameSettings, filterGameLessons, uniqueWordCount, gameCatalog, validateDifficultySettings,
 } = require('../weplayCore');
 
 const policy = () => structuredClone(DEFAULT_POLICY);
@@ -31,8 +31,8 @@ test('latest semester hidden lesson shadows the legacy public lesson', () => {
   assert.deepEqual(items.map((item) => item.unitId), ['b', 'c']);
 });
 
-test('extracts only teacher HTML/PDF blank answers, deduplicates, excludes footnotes and long prose', () => {
-  const words = extractLessonWords([{ unitId: 'u', title: '제목', contentHtml: '<p>[고조선] [fn:ref] [고조선] [삼국&nbsp;시대]</p><script>[몰래]</script>', worksheetPageImages: [{ page: 1, imageUrl: 'https://example.test/page.jpg' }], worksheetBlanks: [{ answer: '한글', page: 1, widthRatio: 10, heightRatio: 10 }, { answer: '가'.repeat(13), page: 1, widthRatio: 10, heightRatio: 10 }, { answer: '삭제된페이지', page: 2, widthRatio: 10, heightRatio: 10 }, { answer: '영역없는빈칸', page: 1 }] }]);
+test('extracts teacher HTML/PDF blank answers, deduplicates, excludes footnotes and oversized prose', () => {
+  const words = extractLessonWords([{ unitId: 'u', title: '제목', contentHtml: '<p title="[숨은속성]">[고조선] [fn:ref] [고조선] [삼국&nbsp;시대]</p><script>[몰래]</script>', worksheetPageImages: [{ page: 1, imageUrl: 'https://example.test/page.jpg' }], worksheetBlanks: [{ answer: '한글', page: 1, widthRatio: 10, heightRatio: 10 }, { answer: '가'.repeat(MAX_CATALOG_WORD_LENGTH + 1), page: 1, widthRatio: 10, heightRatio: 10 }, { answer: '삭제된페이지', page: 2, widthRatio: 10, heightRatio: 10 }, { answer: '영역없는빈칸', page: 1 }] }]);
   assert.deepEqual(words.map((word) => word.text), ['한글', '고조선', '삼국 시대']);
   assert.equal(normalizeAnswer(' ＡＢＣ\t 삼국 시대 '), 'abc삼국시대');
 });
@@ -121,7 +121,7 @@ test('editable words normalize, deduplicate, respect exclusions and selected les
   assert.deepEqual(settings.excludedWords, ['abc', '삼국시대']);
   const lessons = effectiveLessons([{ unitId: 'public', contentHtml: '[고조선] [삼국 시대]' }, { unitId: 'hidden', contentHtml: '[비밀]', isVisibleToStudents: false }], []);
   assert.deepEqual(gameCatalog(lessons, settings).map((word) => word.text), ['고조선', '고려']);
-  for (const customWords of [[''], ['<b>안녕</b>'], ['가'.repeat(13)], Array(1001).fill('고려'), [123]]) assert.throws(() => validateGameSettings({ ...DEFAULT_GAME_SETTINGS, customWords }));
+  for (const customWords of [[''], ['<b>안녕</b>'], ['가'.repeat(MAX_CATALOG_WORD_LENGTH + 1)], Array(1001).fill('고려'), [123]]) assert.throws(() => validateGameSettings({ ...DEFAULT_GAME_SETTINGS, customWords }));
   assert.deepEqual(readGameSettings({ enabled: true, sourceMode: 'all', unitIds: [], version: 3 }).difficulties, DEFAULT_DIFFICULTY_SETTINGS);
 });
 
@@ -151,4 +151,88 @@ test('teacher preview retains hidden scoped lessons while student filtering neve
   assert.deepEqual(filterGameLessons(studentLessons, settings), []);
   assert.deepEqual(filterGameLessons(teacherLessons, settings).map((lesson) => lesson.unitId), ['private']);
   assert.equal(uniqueWordCount([{ text: '공개 정답' }, { text: '공개정답' }]), 1);
+});
+
+test('recognized worksheet text supplies tokens without blanks, skips removed pages/noise, and preserves known terms', () => {
+  const region = (label, page = 1, extra = {}) => ({ label, page, left: 20, top: 20, width: 300, height: 24, ...extra });
+  const words = extractLessonWords([{
+    unitId: 'worksheet', title: '조선의 과학', worksheetPageImages: [{ page: 1, imageUrl: 'page.jpg' }], worksheetBlanks: [],
+    worksheetTextRegions: [
+      region('[천상열차분야지도] 혼일강리역대국도지도 [훈민정음 해례본] 1592 42 !!! 은 는 [fn:ref]'),
+      region('천상열차분야지도를 훈민정음해례본'),
+      region('국가 가야'), region('고려'), region('고려는'),
+      region('삭제한페이지의비공개단어', 2), region('이미지없는단어', 3),
+      region('영역없는단어', 1, { width: 0 }), region('높이없는단어', 1, { height: 0 }),
+    ],
+  }]);
+  assert.deepEqual(words.map(word => word.text), ['천상열차분야지도', '혼일강리역대국도지도', '훈민정음 해례본', '국가', '가야', '고려']);
+  assert.ok(words.every(word => word.unitId === 'worksheet' && word.lessonTitle === '조선의 과학'));
+});
+
+test('recognized words obey current semester, selected lesson, hidden/deleted lesson and teacher exclusion boundaries', () => {
+  const lesson = (unitId, text, extra = {}) => ({unitId, worksheetPageImages:[{page:1,imageUrl:'page.jpg'}], worksheetTextRegions:[{page:1,label:text,width:200,height:20}], ...extra});
+  const scoped = [lesson('public', '천상열차분야지도 직지심체요절 세종대왕'), lesson('private', '비공개인식단어', {isVisibleToStudents:false}), lesson('deleted','삭제자료단어',{deletedAt:'2026-10-07'}), lesson('other','선택하지않은자료')];
+  const legacy = [lesson('private','과거공개인식단어'), lesson('legacy','구학기보충단어')];
+  const visible = effectiveLessons(scoped, legacy);
+  const settings = validateGameSettings({...DEFAULT_GAME_SETTINGS,sourceMode:'selected',unitIds:['public'],excludedWords:['천상열차분야지도']});
+  assert.deepEqual(gameCatalog(visible, settings).map(word=>word.text), ['직지심체요절','세종대왕']);
+  assert.ok(!gameCatalog(visible, DEFAULT_GAME_SETTINGS).some(word=>/비공개|과거공개|삭제자료/.test(word.text)));
+  assert.ok(gameCatalog(visible, DEFAULT_GAME_SETTINGS).some(word=>word.text==='구학기보충단어'));
+});
+
+test('recognized historical terms retain internal middle dots, periods and hyphens without importing numeric dates or trailing punctuation', () => {
+  const words = extractLessonWords([{
+    unitId: 'modern-history', worksheetPageImages: [{page:1,imageUrl:'page.jpg'}],
+    worksheetTextRegions: [{page:1,width:400,height:24,label:'3·1운동, 6·25전쟁. 4.19혁명 5-18민주화운동 4‧19혁명 한‐일의정서 한‑일협약 1592.10.1 3·1 6-25 --- ··· 고려.'}],
+  }]);
+  assert.deepEqual(words.map(word=>word.text), ['3·1운동','6·25전쟁','4.19혁명','5-18민주화운동','4‧19혁명','한‐일의정서','한‐일협약','고려']);
+  const settings = validateGameSettings({...DEFAULT_GAME_SETTINGS,excludedWords:['3·1운동','6·25전쟁']});
+  assert.ok(!gameCatalog([{unitId:'modern-history',worksheetPageImages:[{page:1,imageUrl:'page.jpg'}],worksheetTextRegions:[{page:1,width:200,height:24,label:'3·1운동 6·25전쟁 고려'}]}],settings).some(word=>word.text==='3·1운동'||word.text==='6·25전쟁'));
+});
+
+test('long blank/custom terms remain available for specials and exclusions while normal difficulty limits stay at twelve', () => {
+  const long = '대한민국임시정부수립과정과활동';
+  assert.ok(Array.from(long).length > 12);
+  const lesson = {unitId:'long',contentHtml:`[${long}] [천상열차분야지도] [고려] [신라] [조선]`};
+  const settings = validateGameSettings({...DEFAULT_GAME_SETTINGS, customWords:[long]});
+  const words = gameCatalog([lesson],settings);
+  assert.ok(words.some(word=>word.text===long));
+  const deck = buildWords(words,'long-source','mild');
+  assert.deepEqual(new Set(deck.filter(word=>word.kind==='special').map(word=>word.text)), new Set([long,'천상열차분야지도']));
+  assert.ok(deck.filter(word=>word.kind==='normal').every(word=>Array.from(normalizeAnswer(word.text)).length<=12));
+  assert.ok(!gameCatalog([lesson], validateGameSettings({...settings,excludedWords:[long]})).some(word=>word.text===long));
+});
+
+test('specials use distinct seeded lesson terms; one source term gets a different fallback instead of repeating', () => {
+  const short = catalog();
+  const long = ['혼일강리역대국도지도','천상열차분야지도','훈민정음해례본'].map(text=>({text,unitId:'source'}));
+  const pick = (pool,seed,options={}) => buildWords(pool,seed,'mild',DEFAULT_DIFFICULTY_SETTINGS.mild,options).filter(word=>word.kind==='special');
+  for(let seed=0;seed<30;seed++) {
+    const selected=pick([...short,...long],String(seed));
+    assert.equal(new Set(selected.map(word=>normalizeAnswer(word.text))).size,2);
+    assert.ok(selected.every(word=>word.unitId==='source'));
+    assert.deepEqual(pick([...short,...long],String(seed)),selected);
+    const single=pick([...short,long[0]],String(seed));
+    assert.equal(single[0].text,long[0].text);
+    assert.equal(new Set(single.map(word=>normalizeAnswer(word.text))).size,2);
+    assert.equal(single[1].unitId,'__weplay_tactic__');
+  }
+  const excluded=pick([...short,...long],'excluded',{excludedWords:['천상 열차 분야 지도','혼일강리역대국도지도']});
+  assert.equal(excluded[0].text,'훈민정음해례본');
+  assert.ok(excluded.every(word=>!['천상열차분야지도','혼일강리역대국도지도'].includes(word.text)));
+});
+
+test('historical fallback specials rotate with the seed and all exclusions are honored without duplicate slots', () => {
+  const observed = new Set();
+  for(let seed=0;seed<50;seed++) {
+    const specials=buildWords(catalog(),String(seed)).filter(word=>word.kind==='special');
+    assert.equal(new Set(specials.map(word=>word.text)).size,2);
+    specials.forEach(word=>observed.add(word.text));
+  }
+  assert.ok(observed.size>2);
+  assert.ok(observed.has('천상열차분야지도'));
+  const excludedWords=SPECIAL_FALLBACK_WORDS.filter(text=>text!=='천상열차분야지도');
+  const single=buildWords(catalog(),'one','mild',DEFAULT_DIFFICULTY_SETTINGS.mild,{excludedWords}).filter(word=>word.kind==='special');
+  assert.deepEqual(single.map(word=>word.text),['천상열차분야지도']);
+  assert.equal(buildWords(catalog(),'none','mild',DEFAULT_DIFFICULTY_SETTINGS.mild,{excludedWords:SPECIAL_FALLBACK_WORDS}).filter(word=>word.kind==='special').length,0);
 });

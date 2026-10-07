@@ -4,42 +4,35 @@ import {
   DEFAULT_WEPLAY_DIFFICULTIES,
   type WeplaySession,
 } from "../../../lib/weplay";
-import "./weplay-guide.css";
 import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
+import "./weplay-guide.css";
 
-const ART = `${import.meta.env?.BASE_URL || "/"}assets/weplay/naval/`;
 const STEPS = [
   {
-    target: "timeline",
-    title: "맛을 고르고, 전투 흐름을 확인하세요",
-    text: "착한맛·중간맛·매운맛 중 하나를 고릅니다. 한 판은 초반·중반·후반으로 갈수록 빨라집니다. 연습은 위스 변동이 없고, 도전은 시작 전 참가비와 보상을 확인하세요.",
-  },
-  {
-    target: "words",
-    title: "물보라 위로 떠오르는 단어",
-    text: "수업 자료에서 가져온 단어입니다. 단어 아래의 시간이 끝나기 전에 화면에 보이는 단어를 입력하세요.",
-  },
-  {
     target: "input",
-    title: "단어를 쓰고 Enter를 누르세요",
-    text: "모바일에서는 ‘장전’ 버튼도 사용할 수 있습니다. 화면에 떠 있는 단어라면 어느 것부터 입력해도 됩니다.",
+    wordId: "guide-1",
+    title: "거북선을 입력해 보세요",
+    text: "아래 칸에 쓰고 장전 또는 Enter를 누르세요.",
   },
   {
     target: "charge",
-    title: "포탄을 모으면 자동으로 발사합니다",
-    text: "착한맛은 2개, 중간맛은 3개, 매운맛은 4개 단어마다 함포가 나갑니다. 장전 칸이 얼마나 찼는지 확인하세요.",
+    wordId: "guide-2",
+    title: "한 단어 더 맞히면 화포 발사",
+    text: "이번에는 이순신을 입력해 보세요.",
   },
   {
     target: "special",
-    title: "긴 단어는 5초 안에!",
-    text: "필살기 단어를 정확히 입력하면 학익진 또는 생즉사 사즉생이 발동합니다. 눈빛 연출과 함께 적에게 큰 피해를 줍니다.",
+    wordId: "guide-3",
+    title: "긴 단어로 필살기를 써 보세요",
+    text: "실전에서는 5초 안에 입력해요.",
   },
   {
-    target: "health",
-    title: "적은 위, 아군은 아래",
-    text: "적 체력을 깎으면 격침할 수 있습니다. 입력이 늦어지면 적도 공격합니다. 나가기에서 현재 기록으로 종료할 수 있고, 도움말에서 이 안내를 다시 볼 수 있습니다.",
+    target: "complete",
+    wordId: null,
+    title: "출전할 준비가 됐어요!",
+    text: "장전부터 필살기까지 모두 해냈어요.",
   },
-];
+] as const;
 const DEMO: WeplaySession = {
   id: "weplay-guide-demo",
   difficulty: "mild",
@@ -49,20 +42,21 @@ const DEMO: WeplaySession = {
   serverNowMs: 102000,
   endsAtMs: 190000,
   battleVersion: 1,
-  acceptedWordIds: ["guide-loaded"],
-  acceptedEvents: [{ wordId: "guide-loaded", elapsedMs: 1000 }],
-  correctCount: 1,
+  acceptedWordIds: [],
+  acceptedEvents: [],
+  correctCount: 0,
   difficultySettings: DEFAULT_WEPLAY_DIFFICULTIES.mild,
-  words: ["훈민정음", "거북선", "한산도", "신기전"].map((text, index) => ({
-    id: index === 0 ? "guide-loaded" : `guide-word-${index}`,
+  words: ["거북선", "이순신", "천상열차분야지도"].map((text, index) => ({
+    id: `guide-${index + 1}`,
     text,
     unitId: "guide",
     lessonTitle: "게임 안내",
     context: "",
     stage: 1,
     spawnAtMs: 0,
-    fallDurationMs: 12000,
-    kind: "normal",
+    fallDurationMs: index === 2 ? 5000 : 12000,
+    kind: index === 2 ? "special" : "normal",
+    ...(index === 2 ? { tactic: "crane-wing" as const } : {}),
   })),
   policy: {
     enabled: false,
@@ -99,13 +93,30 @@ export default function WeplayGuide({
   onCloseForNow,
 }: Props) {
   const [step, setStep] = useState(0);
+  const [waiting, setWaiting] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [wrong, setWrong] = useState(false);
+  const [run, setRun] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(
+    window.visualViewport?.height || window.innerHeight,
+  );
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const retry = useRef<HTMLButtonElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
+  const transition = useRef<ReturnType<typeof setTimeout>>();
   const titleId = useId();
   const descriptionId = useId();
+  const feedbackId = useId();
   const selected = STEPS[step];
+  const reset = () => {
+    clearTimeout(transition.current);
+    setStep(0);
+    setWaiting(false);
+    setFeedback("");
+    setWrong(false);
+    setRun((value) => value + 1);
+  };
   useEffect(() => {
     const element = dialog.current;
     if (!element) return;
@@ -114,10 +125,11 @@ export default function WeplayGuide({
         document.activeElement instanceof HTMLElement
           ? document.activeElement
           : null;
-      setStep(0);
+      reset();
       element.showModal();
       heading.current?.focus({ preventScroll: true });
     } else if (!open && element.open) {
+      clearTimeout(transition.current);
       element.close();
       const previous = returnTo.current;
       const container = element.closest("main");
@@ -128,17 +140,77 @@ export default function WeplayGuide({
         preventScroll: true,
       });
     }
+    return () => clearTimeout(transition.current);
   }, [open]);
   useEffect(() => {
-    if (open) heading.current?.focus({ preventScroll: true });
-  }, [step]);
+    if (!open) return;
+    const viewport = window.visualViewport;
+    const resize = () =>
+      setViewportHeight(viewport?.height || window.innerHeight);
+    resize();
+    viewport?.addEventListener("resize", resize);
+    window.addEventListener("resize", resize);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      viewport?.removeEventListener("resize", resize);
+      window.removeEventListener("resize", resize);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
   useEffect(() => {
     if (error) retry.current?.focus({ preventScroll: true });
   }, [error]);
+  useEffect(() => {
+    if (!open) return;
+    const input = dialog.current?.querySelector<HTMLInputElement>(
+      ".naval-input-frame input",
+    );
+    input?.setAttribute("aria-describedby", `${descriptionId} ${feedbackId}`);
+    input?.setAttribute("aria-invalid", String(wrong));
+  }, [open, run, wrong, descriptionId, feedbackId]);
+  const attempt = (accepted: boolean) => {
+    if (waiting || saving || error) return;
+    setWrong(!accepted);
+    if (!accepted) {
+      setFeedback("화면의 단어를 확인하고 다시 입력해 보세요.");
+      return;
+    }
+    if (step === 0) {
+      setFeedback("장전 완료! 포탄이 한 칸 채워졌어요.");
+      setStep(1);
+    } else {
+      setWaiting(true);
+      setFeedback(
+        step === 1
+          ? "화포 발사! 적 체력이 줄었어요."
+          : "학익진 발동! 필살기 성공이에요.",
+      );
+      transition.current = setTimeout(
+        () => {
+          setWaiting(false);
+          setStep(step + 1);
+          requestAnimationFrame(() => {
+            if (step === 1)
+              dialog.current
+                ?.querySelector<HTMLInputElement>(".naval-input-frame input")
+                ?.focus({ preventScroll: true });
+            else heading.current?.focus({ preventScroll: true });
+          });
+        },
+        step === 1 ? 1800 : 2700,
+      );
+    }
+  };
   return (
     <dialog
       ref={dialog}
-      className="weplay-guide"
+      className={`weplay-guide${viewportHeight < 560 ? " is-compact" : ""}`}
+      style={
+        {
+          "--guide-visible-height": `${viewportHeight}px`,
+        } as React.CSSProperties
+      }
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       aria-busy={saving}
@@ -149,48 +221,97 @@ export default function WeplayGuide({
           else onFinish();
         }
       }}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const controls = Array.from(
+          event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), [href], [tabindex="0"]',
+          ),
+        ).filter((element) => element.getClientRects().length > 0);
+        const first = controls[0],
+          last = controls[controls.length - 1];
+        if (
+          event.shiftKey &&
+          (document.activeElement === first ||
+            document.activeElement === heading.current)
+        ) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }}
     >
       {open && (
         <>
-          <div className="weplay-guide-header">
-            <strong>{gameTitle} · 게임 안내</strong>
-            <span>
-              {step + 1} / {STEPS.length}
-            </span>
-          </div>
+          <header className="weplay-guide-header">
+            <div>
+              <strong>게임 안내</strong>
+              <span>{gameTitle}</span>
+            </div>
+            <ol
+              className="weplay-guide-progress"
+              aria-label="직접 해 보기 진행 단계"
+            >
+              {["장전", "화포", "필살기"].map((label, index) => (
+                <li
+                  key={label}
+                  aria-current={step === index ? "step" : undefined}
+                  className={step > index ? "is-done" : ""}
+                >
+                  <span aria-hidden="true">
+                    {step > index ? "✓" : index + 1}
+                  </span>
+                  {label}
+                </li>
+              ))}
+            </ol>
+          </header>
           {gameRunning && (
             <p className="weplay-guide-live" role="status">
               진행 중인 전투의 시간은 계속 흐릅니다.
             </p>
           )}
+          <div className="weplay-guide-coach">
+            <h2 ref={heading} tabIndex={-1} id={titleId}>
+              {selected.title}
+            </h2>
+            <p id={descriptionId}>{selected.text}</p>
+            <p
+              id={feedbackId}
+              className={`weplay-guide-feedback${wrong ? " is-wrong" : ""}`}
+              role="status"
+              aria-live="polite"
+            >
+              {feedback || "안내에서는 시간 제한과 위스 변동이 없어요."}
+            </p>
+          </div>
           <div
             className="weplay-guide-demo weplay-page"
-            data-guide-step={selected.target}
-            aria-label="시간이 흐르지 않는 안내 화면"
+            data-guide-step={waiting ? "effect" : selected.target}
+            aria-label="시간과 위스 변동 없는 게임 체험"
           >
             <NavalBattleGame
+              key={run}
               gameTitle={gameTitle}
               session={DEMO}
               config={null}
               onComplete={() => undefined}
               guideDemo
+              guideInteractive={{
+                wordId: waiting || saving || error ? null : selected.wordId,
+                onAttempt: attempt,
+              }}
             />
-            {selected.target === "special" && (
-              <div className="weplay-guide-special">
-                <img
-                  src={`${ART}yi-sunsin-cutin.webp`}
-                  alt="필살기 발동 시 나타나는 이순신 장군의 눈빛 연출"
-                />
-                <strong>학익진 발동</strong>
-                <span>혼일강리역대국도지도 · 5초</span>
+            {step === 3 && (
+              <div className="weplay-guide-complete" aria-hidden="true">
+                <span>✓</span>
+                <strong>장전 · 화포 · 필살기</strong>
               </div>
             )}
           </div>
           <div className="weplay-guide-card">
-            <h2 ref={heading} tabIndex={-1} id={titleId}>
-              {selected.title}
-            </h2>
-            <p id={descriptionId}>{selected.text}</p>
             {error && (
               <p className="weplay-guide-error" role="alert">
                 {error}
@@ -224,31 +345,23 @@ export default function WeplayGuide({
                     onClick={onFinish}
                     disabled={saving}
                   >
-                    건너뛰기
+                    {saving ? "저장 중…" : "건너뛰기"}
                   </button>
-                  {step > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setStep(step - 1)}
-                      disabled={saving}
-                    >
-                      이전
-                    </button>
+                  {step === 3 && (
+                    <>
+                      <button type="button" onClick={reset} disabled={saving}>
+                        다시 체험
+                      </button>
+                      <button
+                        type="button"
+                        className="weplay-guide-next"
+                        onClick={onFinish}
+                        disabled={saving}
+                      >
+                        {saving ? "저장 중…" : "안내 마치기"}
+                      </button>
+                    </>
                   )}
-                  <button
-                    type="button"
-                    className="weplay-guide-next"
-                    disabled={saving}
-                    onClick={() =>
-                      step === STEPS.length - 1 ? onFinish() : setStep(step + 1)
-                    }
-                  >
-                    {saving
-                      ? "저장 중…"
-                      : step === STEPS.length - 1
-                        ? "안내 마치기"
-                        : "다음"}
-                  </button>
                 </>
               )}
             </div>

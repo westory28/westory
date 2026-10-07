@@ -31,6 +31,8 @@ import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import NavalBattleResult from "../../components/common/weplay/NavalBattleResult";
 import WeplayGuide from "../../components/common/weplay/WeplayGuide";
 import useWeplayGuide from "../../components/common/weplay/useWeplayGuide";
+import useWeplayMusic from "../../components/common/weplay/useWeplayMusic";
+import WeplayMusicButton from "../../components/common/weplay/WeplayMusicButton";
 import TeacherNavigationIcon from "../../components/layout/TeacherNavigationIcon";
 import "../../components/common/weplay/weplay.css";
 import "./ManageWeplay.css";
@@ -42,6 +44,7 @@ import { getWeplayGameTitle } from "../../lib/weplayTitle";
 export default function ManageWeplay() {
   const { config, currentUser, userData, menuConfig } = useAuth();
   const gameTitle = getWeplayGameTitle(menuConfig);
+  const music = useWeplayMusic();
   const [params] = useSearchParams();
   const game =
     WEPLAY_GAMES.find((item) => item.id === params.get("game")) ||
@@ -201,6 +204,7 @@ export default function ManageWeplay() {
   };
   const startPreview = async () => {
     if (starting || previewCount < 3 || !draft || difficultyError) return;
+    music.start();
     const requestedScope = scope;
     setStarting(true);
     setError("");
@@ -279,6 +283,7 @@ export default function ManageWeplay() {
               위스 설정
             </Link>
           )}
+          <WeplayMusicButton {...music} />
         </div>
         {!preview && <WeplayTitleEditor title={gameTitle} />}
         {loading ? (

@@ -475,7 +475,7 @@
 .naval-game:not(.naval-game--still) .naval-scene:has(.naval-cutin) .naval-tactic-name { visibility: hidden; }
 .naval-game--still .naval-ammo.is-charged { animation: none; }
 .naval-game--guide { margin-bottom: 0; }
-.naval-game--guide *, .naval-game--guide *::before, .naval-game--guide *::after { animation: none !important; }
+.naval-game--guide:not(.naval-game--guide-interactive) *, .naval-game--guide:not(.naval-game--guide-interactive) *::before, .naval-game--guide:not(.naval-game--guide-interactive) *::after { animation: none !important; }
 .naval-game--guide .naval-word { opacity: 1; }
 .naval-game--guide .naval-ocean { transform: scale(1.025); }
 @container naval-game (max-width: 600px) {

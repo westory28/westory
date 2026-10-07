@@ -8,7 +8,8 @@
   inset: 0;
   margin: auto;
   width: min(960px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
+  max-width: calc(100vw - 16px);
+  max-height: calc(var(--guide-visible-height, 100dvh) - 16px);
   padding: 0;
   border: 1px solid var(--guide-gold);
   border-radius: 12px;
@@ -21,18 +22,63 @@
   background: rgba(23, 30, 36, 0.85);
 }
 .weplay-guide-header {
+  position: static;
   display: flex;
   gap: 16px;
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  font-size: 14px;
+  background: transparent;
   border-bottom: 1px solid
     color-mix(in srgb, var(--guide-gold) 30%, transparent);
 }
-.weplay-guide-header > span {
+.weplay-guide-header > div {
+  min-width: 0;
+  flex-shrink: 0;
+  display: grid;
+  gap: 4px;
+}
+.weplay-guide-header strong {
+  font-size: 16px;
   white-space: nowrap;
+}
+.weplay-guide-header > div > span {
+  font-size: 12px;
   color: var(--guide-parchment);
+  overflow-wrap: anywhere;
+}
+.weplay-guide-progress {
+  flex-shrink: 0;
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.weplay-guide-progress li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--guide-parchment);
+  font-size: 14px;
+}
+.weplay-guide-progress li > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-weight: 800;
+}
+.weplay-guide-progress li[aria-current],
+.weplay-guide-progress .is-done {
+  color: var(--guide-gold);
+}
+.weplay-guide-progress li[aria-current] > span {
+  background: var(--guide-gold);
+  color: var(--guide-ink);
+  border-color: var(--guide-gold);
 }
 .weplay-guide .weplay-guide-live {
   margin: 0;
@@ -40,105 +86,228 @@
   color: var(--guide-gold);
   font-size: 14px;
 }
+.weplay-guide-coach {
+  padding: 16px 24px;
+}
+.weplay-guide .weplay-guide-coach h2 {
+  margin: 0 0 8px;
+  color: var(--guide-text);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.weplay-guide .weplay-guide-coach p {
+  margin: 0;
+  color: var(--guide-parchment);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.weplay-guide .weplay-guide-coach .weplay-guide-feedback {
+  min-height: 24px;
+  margin-top: 8px;
+  color: var(--guide-gold);
+  font-size: 14px;
+}
+.weplay-guide .weplay-guide-coach .is-wrong {
+  color: var(--guide-text);
+}
 .weplay-guide-demo.weplay-page {
   position: relative;
   padding: 0;
-  margin: 0;
+  margin: 0 16px;
   max-width: none;
   overflow: hidden;
-}
-.weplay-guide-demo .weplay-game {
-  margin: 0;
-  border: 0;
-  border-radius: 0;
+  border: 1px solid color-mix(in srgb, var(--guide-gold) 40%, transparent);
+  border-radius: 8px;
 }
 .weplay-guide-demo .naval-game {
   padding: 0;
+  margin: 0;
 }
-.weplay-guide-demo .naval-scene {
+.weplay-guide-demo .naval-game--compact .naval-scene {
+  min-height: 380px;
+  height: 380px;
+  max-height: 380px;
+  border: 0;
   border-radius: 0;
-}
-.weplay-guide-demo .naval-game--guide {
-  pointer-events: none;
 }
 .weplay-guide-demo .naval-scene::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 14;
-  background: rgba(23, 30, 36, 0.3);
+  background: rgba(23, 30, 36, 0.72);
   pointer-events: none;
 }
-.weplay-guide-demo [data-weplay-guide] {
-  transition: none;
+.weplay-guide-demo[data-guide-step="effect"] .naval-scene::after,
+.weplay-guide-demo[data-guide-step="complete"] .naval-scene::after {
+  background: rgba(23, 30, 36, 0.08);
 }
-.weplay-guide-demo[data-guide-step="timeline"] [data-weplay-guide="timeline"],
-.weplay-guide-demo[data-guide-step="words"] [data-weplay-guide="words"],
-.weplay-guide-demo[data-guide-step="input"] [data-weplay-guide="input"],
-.weplay-guide-demo[data-guide-step="charge"] [data-weplay-guide="charge"],
-.weplay-guide-demo[data-guide-step="health"] [data-weplay-guide="health"],
-.weplay-guide-demo[data-guide-step="health"]
-  [data-weplay-guide="health-allied"] {
-  z-index: 15;
+.weplay-guide-demo .naval-fuse,
+.weplay-guide-demo .naval-topbar {
+  opacity: 0.6;
+}
+.weplay-guide-demo .naval-footer {
+  display: none;
+}
+.weplay-guide-demo .naval-game--compact .naval-command {
+  z-index: 20;
+  bottom: 16px;
+  width: calc(100% - 32px);
+}
+.weplay-guide-demo .naval-input-frame {
+  position: relative;
   outline: 3px solid var(--guide-gold);
-  outline-offset: 2px;
+  outline-offset: 4px;
+  background: var(--guide-parchment);
+}
+.weplay-guide-demo .naval-input-frame input {
+  min-width: 0;
+  min-height: 44px;
+}
+.weplay-guide-demo .naval-input-frame button {
+  min-width: 64px;
+  min-height: 44px;
+}
+.weplay-guide-demo .naval-game--compact .naval-ammo {
+  right: 0;
+  bottom: calc(100% + 32px);
+  width: 160px;
+  height: 36px;
+  padding: 4px 8px;
+}
+.weplay-guide-demo .naval-game--compact .naval-ammo strong {
+  font-size: 12px;
+}
+.weplay-guide-demo[data-guide-step="charge"] .naval-ammo {
+  outline: 3px solid var(--guide-gold);
+  outline-offset: 3px;
+}
+.weplay-guide-demo .naval-game--compact .naval-prompts {
+  z-index: 20;
+  top: 124px;
+  left: 20%;
+  right: 20%;
+  grid-template-columns: minmax(0, 1fr);
+}
+.weplay-guide-demo .naval-word {
+  animation: none !important;
+  opacity: 1;
+  grid-column: 1 !important;
+  min-height: 72px;
   border-radius: 8px;
+  outline: 3px solid var(--guide-gold);
+  outline-offset: 4px;
+  background: var(--guide-ink);
 }
-.weplay-guide-demo[data-guide-step="input"] .naval-command,
-.weplay-guide-demo[data-guide-step="charge"] .naval-command {
-  z-index: 15;
+.weplay-guide-demo .naval-game--compact .naval-word strong {
+  font-size: 28px;
+  line-height: 1.5;
 }
-.weplay-guide-special {
+.weplay-guide-demo .naval-word-timer,
+.weplay-guide-demo .naval-word > i,
+.weplay-guide-demo .naval-word-splash {
+  display: none;
+}
+.weplay-guide-demo .naval-game--compact .naval-special {
+  z-index: 20;
+  top: 116px;
+  left: 8%;
+  right: 8%;
+  padding: 12px;
+  outline: 3px solid var(--guide-gold);
+  outline-offset: 4px;
+}
+.weplay-guide-demo .naval-game--compact .naval-special > strong {
+  font-size: 24px;
+  line-height: 1.4;
+}
+.weplay-guide-demo .naval-special > div {
+  justify-content: center;
+}
+.weplay-guide-demo .naval-special b {
+  display: none;
+}
+.weplay-guide-demo .naval-game--compact .naval-health--allied {
+  bottom: 120px;
+}
+.weplay-guide-demo .naval-game--compact .naval-health--enemy {
+  top: 76px;
+}
+.weplay-guide-demo .naval-game--compact .naval-ship--allied {
+  bottom: 26%;
+}
+.weplay-guide-demo .naval-game--compact .naval-ship--enemy {
+  bottom: 52%;
+}
+.weplay-guide-demo .naval-ship:not(.is-hit),
+.weplay-guide-demo .naval-fleet .naval-reinforcement,
+.weplay-guide-demo .naval-commander,
+.weplay-guide-demo .naval-fuse-ember::after {
+  animation: none !important;
+}
+.weplay-guide-pointer {
   position: absolute;
-  inset: 24px 0;
-  z-index: 16;
+  z-index: 22;
+  left: 0;
+  bottom: calc(100% + 16px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  color: var(--guide-ink);
+  background: var(--guide-gold);
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 800;
+  pointer-events: none;
+}
+.weplay-guide-pointer > span {
+  font-size: 24px;
+  line-height: 1;
+}
+.weplay-guide-complete {
+  position: absolute;
+  z-index: 22;
+  inset: 24px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 12px;
-  background: var(--guide-ink);
+  gap: 16px;
+  color: var(--guide-text);
+  background: rgba(23, 30, 36, 0.85);
+  border: 1px solid var(--guide-gold);
+  border-radius: 8px;
   pointer-events: none;
 }
-.weplay-guide-special img {
-  width: 100%;
-  height: auto;
-  max-height: 240px;
-  object-fit: cover;
-}
-.weplay-guide-special strong {
-  font-size: 24px;
+.weplay-guide-complete > span {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 2px solid var(--guide-gold);
+  border-radius: 50%;
   color: var(--guide-gold);
+  font-size: 32px;
 }
-.weplay-guide-special span {
-  font-size: 16px;
-  color: var(--guide-text);
+.weplay-guide-complete strong {
+  font-size: 20px;
 }
 .weplay-guide-card {
-  padding: 24px;
+  padding: 12px 24px 16px;
 }
-.weplay-guide .weplay-guide-card h2 {
+.weplay-guide .weplay-guide-error {
   margin: 0 0 12px;
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.4;
-  color: var(--guide-text);
-}
-.weplay-guide .weplay-guide-card p {
-  margin: 0;
-  font-size: 16px;
-  line-height: 1.6;
-  color: var(--guide-parchment);
-}
-.weplay-guide .weplay-guide-card .weplay-guide-error {
-  margin-top: 12px;
   color: var(--guide-gold);
+  font-size: 16px;
 }
 .weplay-guide-actions {
   display: flex;
-  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   align-items: center;
-  margin-top: 16px;
+  gap: 8px;
 }
 .weplay-guide .weplay-guide-actions button {
   min-height: 44px;
@@ -155,6 +324,7 @@
 .weplay-guide .weplay-guide-actions .weplay-guide-skip {
   margin-right: auto;
   border-color: transparent;
+  font-size: 14px;
   font-weight: 400;
 }
 .weplay-guide .weplay-guide-actions .weplay-guide-next {
@@ -177,38 +347,149 @@
   min-width: 44px;
   min-height: 44px;
 }
-.weplay-guide-launch > span {
-  display: inline-grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 700;
-  font-family: sans-serif;
-  line-height: 1;
-}
-.weplay-guide-header > strong { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 600px) {
   .weplay-guide {
     width: calc(100vw - 16px);
-    max-height: calc(100dvh - 16px);
   }
   .weplay-guide-header {
+    padding: 12px;
+    gap: 8px;
+  }
+  .weplay-guide-header > div > span {
+    display: none;
+  }
+  .weplay-guide-progress {
+    gap: 8px;
+  }
+  .weplay-guide-progress li {
+    font-size: 12px;
+  }
+  .weplay-guide-coach {
     padding: 12px 16px;
   }
-  .weplay-guide-card {
-    padding: 16px;
+  .weplay-guide .weplay-guide-coach h2 {
+    font-size: 20px;
   }
-  .weplay-guide .weplay-guide-card h2 {
-    font-size: 18px;
+  .weplay-guide-demo.weplay-page {
+    margin: 0 12px;
+  }
+  .weplay-guide-demo .naval-game--compact .naval-scene {
+    min-height: 340px;
+    height: 340px;
+    max-height: 340px;
+  }
+  .weplay-guide-demo .naval-game--compact .naval-prompts {
+    top: 104px;
+  }
+  .weplay-guide-demo .naval-game--compact .naval-special {
+    top: 104px;
+    left: 5%;
+    right: 5%;
+  }
+  .weplay-guide-demo .naval-game--compact .naval-special > strong {
+    font-size: 20px;
+  }
+  .weplay-guide-demo .naval-game--compact .naval-ammo {
+    width: 116px;
+    bottom: calc(100% + 28px);
+  }
+  .weplay-guide-demo .naval-game--compact .naval-ammo strong {
+    font-size: 10px;
+  }
+  .weplay-guide-pointer {
+    left: 0;
+    bottom: calc(100% + 16px);
+    font-size: 12px;
+    gap: 4px;
+    padding-inline: 4px;
+  }
+  .weplay-guide-card {
+    padding: 8px 12px 12px;
   }
   .weplay-guide .weplay-guide-live {
     padding: 8px 16px;
   }
   .weplay-guide .weplay-guide-actions button {
-    padding-inline: 12px;
+    padding-inline: 8px;
+  }
+}
+.weplay-guide.is-compact .weplay-guide-header {
+  padding: 8px 12px;
+}
+.weplay-guide.is-compact .weplay-guide-header > div {
+  display: none;
+}
+.weplay-guide.is-compact .weplay-guide-progress {
+  margin: auto;
+}
+.weplay-guide.is-compact .weplay-guide-coach {
+  padding: 8px 12px;
+}
+.weplay-guide.is-compact .weplay-guide-coach h2 {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.weplay-guide.is-compact .weplay-guide-coach > p:not(.weplay-guide-feedback) {
+  font-size: 14px;
+}
+.weplay-guide.is-compact .weplay-guide-coach .weplay-guide-feedback {
+  font-size: 12px;
+  min-height: 18px;
+  margin-top: 4px;
+}
+.weplay-guide.is-compact .naval-game--compact .naval-scene {
+  min-height: 152px;
+  height: 152px;
+  max-height: 152px;
+}
+.weplay-guide.is-compact .naval-fuse,
+.weplay-guide.is-compact .naval-topbar,
+.weplay-guide.is-compact .naval-battle-status,
+.weplay-guide.is-compact .naval-health,
+.weplay-guide.is-compact .weplay-guide-pointer,
+.weplay-guide.is-compact .naval-commander {
+  display: none;
+}
+.weplay-guide.is-compact .naval-game--compact .naval-prompts {
+  top: 12px;
+  left: 8%;
+  right: 50%;
+}
+.weplay-guide.is-compact .naval-game--compact .naval-word {
+  min-height: 36px;
+}
+.weplay-guide.is-compact .naval-game--compact .naval-word strong {
+  font-size: 20px;
+}
+.weplay-guide.is-compact .naval-game--compact .naval-command {
+  bottom: 12px;
+}
+.weplay-guide.is-compact .naval-game--compact .naval-ammo {
+  bottom: calc(100% + 16px);
+}
+.weplay-guide.is-compact .naval-game--compact .naval-special {
+  top: 8px;
+  padding: 4px 8px;
+}
+.weplay-guide.is-compact .naval-special > span,
+.weplay-guide.is-compact .naval-special > div {
+  display: none;
+}
+.weplay-guide.is-compact [data-guide-step="special"] .naval-ammo {
+  visibility: hidden;
+}
+.weplay-guide.is-compact .weplay-guide-card {
+  padding-block: 4px;
+}
+.weplay-guide.is-compact .weplay-guide-live {
+  padding-block: 4px;
+  font-size: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .weplay-guide *,
+  .weplay-guide *::before,
+  .weplay-guide *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

@@ -16,6 +16,8 @@ import HistoryRainGame from "./weplay/HistoryRainGame";
 import NavalBattleResult from "../../components/common/weplay/NavalBattleResult";
 import WeplayGuide from "../../components/common/weplay/WeplayGuide";
 import useWeplayGuide from "../../components/common/weplay/useWeplayGuide";
+import useWeplayMusic from "../../components/common/weplay/useWeplayMusic";
+import WeplayMusicButton from "../../components/common/weplay/WeplayMusicButton";
 import { getWeplayGameTitle } from "../../lib/weplayTitle";
 import WeplayLobbyIcon from "./weplay/WeplayLobbyIcon";
 import WeplayRecordsDialog, {
@@ -28,6 +30,7 @@ const signed = (value: number) => `${value > 0 ? "+" : ""}${value}`;
 export default function Weplay() {
   const { config, currentUser, userData, menuConfig } = useAuth();
   const gameTitle = getWeplayGameTitle(menuConfig);
+  const music = useWeplayMusic();
   const [lobby, setLobby] = useState<WeplayLobby | null>(null);
   const [session, setSession] = useState<WeplaySession | null>(null);
   const [result, setResult] = useState<WeplayResult | null>(null);
@@ -101,6 +104,7 @@ export default function Weplay() {
   }, [load]);
   const start = async () => {
     if (starting || !lobby || lobby.gameEnabled === false) return;
+    music.start();
     const startedScope = scope;
     setStarting(true);
     setError("");
@@ -199,6 +203,7 @@ export default function Weplay() {
             <WeplayLobbyIcon name="info" />
             게임 안내
           </button>
+          <WeplayMusicButton {...music} />
         </div>
       </header>
       {session ? (

@@ -186,6 +186,7 @@ async function advanceTo(page, elapsed) {
 }
 let failure = null;
 try {
+  if (process.env.WEPLAY_QA_GUIDE_ONLY !== '1') {
   for (const width of [320, 390, 768, 1280]) {
     const battle = await open('battle', width, 'seen=1');
     await battle.locator('.naval-game').waitFor(); await advanceTo(battle, 2200);
@@ -200,30 +201,42 @@ try {
     assert.equal(metrics.ocean.animation, 'naval-sea-drift');assert.equal(metrics.ocean.duration, '16s');assert.equal(metrics.ocean.state, 'running');
     assert.ok(metrics.inputBelowWords&&metrics.footerFits&&metrics.words.every(word=>word.font>=16&&word.fits),JSON.stringify(metrics));
     assert.ok(metrics.controls.every(control=>control.width>=44&&control.height>=44),JSON.stringify(metrics.controls));
-    assert.equal(await battle.locator('.naval-cutin').count(),0);
+    assert.equal(await battle.locator('.naval-special-attack').count(),0);
     assert.equal(await battle.evaluate(()=>window.navalQa.calls.length),0);
     layoutMeasurements.push(metrics);await capture(battle,`focus-normal-${width}`);await battle.close();
   }
   checks.push('320/390/768/1280 ordinary battle: subdued raster sea, 16-second CSS drift, legible 16px water words, 44px controls, input/footer separation, no cut-in or background RPC');
 
-  for (const width of [390,1280]) {
-    const special = await open('battle',width,'seen=1');await special.locator('.naval-game').waitFor();await advanceTo(special,30100);
-    assert.equal(await special.locator('.naval-special').count(),1);assert.equal(await special.locator('.naval-cutin').count(),0);
-    await capture(special,`focus-special-prompt-${width}`);
+  for (const {width,view} of [{width:390,view:'battle'},{width:1280,view:'battle'},{width:390,view:'lobby'}]) {
+    const special = await open(view,width,'seen=1');
+    if(view==='lobby') {await special.getByRole('button',{name:'도전하기 위스 획득·차감',exact:true}).click();await special.locator('.weplay-start').click();}
+    await special.locator('.naval-game').waitFor();await advanceTo(special,30100);
+    assert.equal(await special.locator('.naval-special').count(),1);assert.equal(await special.locator('.naval-special-attack').count(),0);
+    await capture(special,`focus-${view}-special-prompt-${width}`);
     await special.getByRole('textbox',{name:'단어 입력'}).fill('오답검증');await special.getByRole('textbox',{name:'단어 입력'}).press('Enter');
-    assert.equal(await special.locator('.naval-cutin').count(),0);assert.equal(await special.evaluate(()=>window.navalQa.answers.length),0);
+    assert.equal(await special.locator('.naval-special-attack').count(),0);assert.equal(await special.evaluate(()=>window.navalQa.answers.length),0);
     await special.evaluate(()=>{window.navalQa.holdAnswer=1});assert.equal((await answerVisible(special,true)).accepted,true);
-    assert.equal(await special.locator('.naval-cutin').count(),0,'No cut-in until server/local transport acknowledges the accepted special');
-    await special.evaluate(()=>window.navalQa.releaseAnswer());await special.clock.runFor(50);await special.locator('.naval-cutin').waitFor();
-    await special.waitForFunction(()=>[...document.querySelectorAll('.naval-cutin img')].every(img=>img.complete&&img.naturalWidth>0));
-    assert.equal(await special.locator('.naval-cutin').evaluate(element=>getComputedStyle(element).animationDuration),'1.4s');
-    const layers=await special.evaluate(()=>{const cutin=getComputedStyle(document.querySelector('.naval-cutin'));return{cutin:Number(cutin.zIndex),words:Number(getComputedStyle(document.querySelector('.naval-prompts')).zIndex),input:Number(getComputedStyle(document.querySelector('.naval-command')).zIndex),pointer:cutin.pointerEvents}});
-    assert.ok(layers.words>layers.cutin&&layers.input>layers.cutin&&layers.pointer==='none',JSON.stringify(layers));
-    await special.clock.runFor(400);await special.waitForTimeout(350);await capture(special,`focus-successful-special-cutin-${width}`);
-    await special.clock.runFor(1100);assert.equal(await special.locator('.naval-cutin').count(),0);assert.equal(await special.getByRole('textbox',{name:'단어 입력'}).isEnabled(),true);
-    assert.equal(await special.evaluate(()=>window.navalQa.calls.length),0);await capture(special,`focus-after-cutin-${width}`);await special.close();
+    assert.equal(await special.locator('.naval-special-attack').count(),0,'No effect until transport acknowledges the accepted special');
+    const hpBefore=await special.locator('.naval-health--enemy').getAttribute('aria-label');
+    await special.evaluate(()=>window.navalQa.releaseAnswer());await special.clock.runFor(50);await special.locator('.naval-special-attack:not(.is-paused)').waitFor();
+    await special.waitForFunction(()=>[...document.querySelectorAll('.naval-special-attack img')].every(img=>img.complete&&img.naturalWidth>0));
+    assert.equal(await special.locator('.naval-special-intro').evaluate(element=>getComputedStyle(element).animationDuration),'0.5s');
+    assert.equal(await special.locator('.naval-special-trace.trace-core').count(),10);
+    assert.equal(await special.locator('.naval-special-burst').count(),5);
+    const layers=await special.evaluate(()=>{const attack=getComputedStyle(document.querySelector('.naval-special-attack'));return{effects:Number(getComputedStyle(document.querySelector('.naval-effects')).zIndex),words:Number(getComputedStyle(document.querySelector('.naval-prompts')).zIndex),input:Number(getComputedStyle(document.querySelector('.naval-command')).zIndex),pointer:attack.pointerEvents}});
+    assert.ok(layers.words>layers.effects&&layers.input>layers.effects&&layers.pointer==='none',JSON.stringify(layers));
+    await special.clock.runFor(1250);
+    assert.equal(await special.locator('.naval-health--enemy').getAttribute('aria-label'),hpBefore,'Special HP stays unchanged before the 1400ms impact');
+    await special.clock.runFor(150);
+    assert.notEqual(await special.locator('.naval-health--enemy').getAttribute('aria-label'),hpBefore,'Special HP updates at the 1400ms impact');
+    await special.locator('.naval-special-attack').evaluate(element=>{for(const animation of element.getAnimations({subtree:true})){animation.pause();animation.currentTime=1400;}});
+    await capture(special,`focus-${view}-successful-special-barrage-${width}`);
+    await special.clock.runFor(1100);assert.equal(await special.locator('.naval-special-attack').count(),0);assert.equal(await special.getByRole('textbox',{name:'단어 입력'}).isEnabled(),true);
+    const actualCalls=await special.evaluate(()=>window.navalQa.calls.map(call=>call.name));
+    assert.deepEqual(actualCalls,view==='lobby'?['getWeplayLobby','startWeplayGame','submitWeplayAnswer']:[]);
+    await capture(special,`focus-${view}-after-barrage-${width}`);await special.close();
   }
-  checks.push('Special prompt/wrong answer/pending response do not show cut-in; accepted special loads two raster assets for 1.4s, preserves word/input layers, and restores ordinary play without extra calls');
+  checks.push('Special prompt/wrong answer/pending response show no effect; accepted special has 500ms eyes, 10 ballistic trails and 5 bursts, HP unchanged before1400ms and updated at impact, removal at2500ms, word/input layers preserved, no extra calls');
 
   const paused=await open('battle',390,'seen=1');await paused.locator('.naval-game').waitFor();await advanceTo(paused,2200);
   await paused.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))});
@@ -234,7 +247,9 @@ try {
   await paused.getByRole('checkbox',{name:/(움직임|효과) 줄이기/}).check();
   assert.equal(await paused.locator('.naval-ocean').evaluate(element=>getComputedStyle(element).animationPlayState),'paused');
   await advanceTo(paused,30100);await answerVisible(paused,true);await paused.clock.runFor(100);
-  assert.equal(await paused.locator('.naval-cutin').evaluate(element=>getComputedStyle(element).display),'none');
+  assert.equal(await paused.locator('.naval-special-attack.is-still').count(),1);
+  assert.notEqual(await paused.locator('.naval-special-static').evaluate(element=>getComputedStyle(element).display),'none');
+  assert.equal(await paused.locator('.naval-special-barrage').evaluate(element=>getComputedStyle(element).display),'none');
   await capture(paused,'focus-reduced-motion-special-390');await paused.close();
   checks.push('Document hidden state pauses CSS sea motion and visibility restores it; explicit reduced motion pauses sea and suppresses accepted-special cut-in');
 
@@ -249,6 +264,7 @@ try {
   assert.equal(await feedback.evaluate(()=>document.querySelector('.naval-footer').getBoundingClientRect().top>=document.querySelector('.naval-input-frame').getBoundingClientRect().bottom),true,'320px accepted-answer feedback must not expand footer over input');
   await capture(feedback,'focus-feedback-footer-320');await feedback.close();
   checks.push('320px accepted-answer feedback keeps the footer below the input');
+  }
 
   const unknown=await open('lobby',390,'profile=loading');await unknown.locator('.weplay-launch').waitFor();
   assert.equal(await unknown.locator('.weplay-guide[open]').count(),0,'Unknown profile must not be treated as unseen');
@@ -257,23 +273,60 @@ try {
   checks.push('First-entry guide waits for matching loaded profile rather than treating unknown profile as incomplete');
 
   for(const width of [320,390,768,1280]){
-    const guidePage=await open('lobby',width);const guide=guidePage.locator('.weplay-guide[open]');await guide.waitFor();
+    const guidePage=await open('lobby',width,'',{hasTouch:width<=390});const guide=guidePage.locator('.weplay-guide[open]');await guide.waitFor();
     assert.equal(await guide.locator('.naval-game--guide').count(),1);
-    assert.equal(await guide.locator('.naval-input-frame input').isDisabled(),true);
+    const input=guide.getByRole('textbox',{name:'단어 입력',exact:true});
+    assert.equal(await input.isEnabled(),true);
     const baseline=await guidePage.evaluate(()=>({calls:window.navalQa.calls.length,words:[...document.querySelectorAll('.weplay-guide .naval-word strong')].map(el=>el.textContent),time:document.querySelector('.weplay-guide .naval-hud-time').textContent,hp:document.querySelector('.weplay-guide .naval-health--allied').getAttribute('aria-label')}));
     await guidePage.clock.runFor(120000);
     const after=await guidePage.evaluate(()=>({calls:window.navalQa.calls.length,words:[...document.querySelectorAll('.weplay-guide .naval-word strong')].map(el=>el.textContent),time:document.querySelector('.weplay-guide .naval-hud-time').textContent,hp:document.querySelector('.weplay-guide .naval-health--allied').getAttribute('aria-label')}));
     assert.deepEqual(after,baseline,'Guide demo stays frozen and performs no session/tick/answer/finish calls');
     assert.equal(await guide.locator('.naval-ocean').evaluate(el=>{const style=getComputedStyle(el);return style.animationName==='none'||style.animationPlayState==='paused'}),true);
-    for(const [index,target] of ['timeline','words','input','charge','special','health'].entries()){
-      assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),target);
-      const geometry=await guide.evaluate(element=>{const r=element.getBoundingClientRect();const controls=[...element.querySelectorAll('.weplay-guide-actions button')].map(button=>{const b=button.getBoundingClientRect();return{width:b.width,height:b.height}});return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,controls}});
-      assert.ok(geometry.left>=0&&geometry.right<=geometry.width&&geometry.top>=0&&geometry.bottom<=geometry.height+1,JSON.stringify(geometry));
-      assert.ok(geometry.controls.every(control=>control.width>=44&&control.height>=44),JSON.stringify(geometry));
-      await capture(guidePage,`guide-step-${index+1}-${target}-${width}`);
-      if(index<5)await guide.getByRole('button',{name:'다음',exact:true}).click();
-    }
-    assert.equal(await guide.locator('.weplay-guide-card h2').evaluate(el=>document.activeElement===el),true);
+    const geometry=await guide.evaluate(element=>{const r=element.getBoundingClientRect();const controls=[...element.querySelectorAll('.weplay-guide-actions button,.naval-input-frame input,.naval-input-frame button')].map(button=>{const b=button.getBoundingClientRect();return{width:b.width,height:b.height}});return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,controls}});
+    assert.ok(geometry.left>=0&&geometry.right<=geometry.width&&geometry.top>=0&&geometry.bottom<=geometry.height+1,JSON.stringify(geometry));
+    assert.ok(geometry.controls.every(control=>control.width>=44&&control.height>=44),JSON.stringify(geometry));
+    assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'input');
+    assert.equal(await guide.locator('.naval-word').evaluate(element=>getComputedStyle(element).opacity),'1','The current guide word is fully visible immediately');
+    layoutMeasurements.push(await guide.evaluate(element=>({guideWidth:innerWidth,targets:[...element.querySelectorAll('.naval-scene,.naval-prompts,.naval-word,.naval-command')].map(target=>({name:target.className,opacity:getComputedStyle(target).opacity,position:getComputedStyle(target).position,zIndex:getComputedStyle(target).zIndex,filter:getComputedStyle(target).filter,animation:getComputedStyle(target).animationName}))})));
+    await capture(guidePage,`guide-input-${width}`);
+    await input.fill('오답검증');await input.press('Enter');
+    assert.match(await guide.locator('.weplay-guide-feedback').textContent(),/다시 입력/);
+    assert.equal(await input.getAttribute('aria-invalid'),'true');
+    assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'input');
+    await input.fill('거북선');await input.dispatchEvent('compositionstart');await input.press('Enter');
+    assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'input','IME confirmation Enter does not submit');
+    await input.dispatchEvent('compositionend');await input.press('Enter');
+    assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'charge');
+    assert.equal(await input.getAttribute('aria-invalid'),'false');
+    assert.match(await guide.locator('.naval-ammo').getAttribute('aria-label'),/1 \/ 2/);
+    assert.equal(await guide.locator('.naval-word strong').textContent(),'이순신');
+    await capture(guidePage,`guide-loaded-${width}`);
+    await input.fill('이순신');
+    if(width<=390)await guide.getByRole('button',{name:'장전',exact:true}).tap();else await input.press('Enter');
+    await guide.locator('.naval-effect--cannon').waitFor();
+    assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'effect');
+    await guidePage.clock.runFor(500);await capture(guidePage,`guide-cannon-${width}`);
+    await guidePage.clock.runFor(1400);
+    assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'special');
+    assert.equal(await guide.locator('.naval-special strong').textContent(),'천상열차분야지도');
+    assert.match(await guide.locator('.naval-special').textContent(),/시간 제한이 없어요/);
+    await guidePage.clock.runFor(60000);
+    assert.equal(await input.isEnabled(),true,'Guide special has no time limit');
+    await capture(guidePage,`guide-special-${width}`);
+    await input.fill('천상열차분야지도');await input.press('Enter');
+    await guide.locator('.naval-special-attack:not(.is-paused)').waitFor();
+    assert.notEqual(await guide.locator('.naval-special-trace.trace-core').first().evaluate(element=>getComputedStyle(element).animationName),'none','Interactive guide preserves the shared special animation');
+    await guidePage.clock.runFor(1450);
+    await guide.locator('.naval-special-attack').evaluate(element=>{for(const animation of element.getAnimations({subtree:true})){animation.pause();animation.currentTime=1400;}});
+    await capture(guidePage,`guide-special-effect-${width}`);
+    await guidePage.clock.runFor(1350);
+    assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'complete');
+    assert.equal(await guide.locator('.weplay-guide-coach h2').evaluate(el=>document.activeElement===el),true);
+    const local=await guidePage.evaluate(()=>({calls:window.navalQa.calls.length,answers:window.navalQa.answers.length,finishes:window.navalQa.finishAttempts.length,balance:window.navalQa.balance}));
+    assert.deepEqual(local,{calls:baseline.calls,answers:0,finishes:0,balance:34});
+    for(let index=0;index<6;index++){await guidePage.keyboard.press('Tab');assert.equal(await guide.evaluate(element=>element.contains(document.activeElement)),true);}
+    for(let index=0;index<6;index++){await guidePage.keyboard.press('Shift+Tab');assert.equal(await guide.evaluate(element=>element.contains(document.activeElement)),true);}
+    await capture(guidePage,`guide-complete-${width}`);
     await guide.getByRole('button',{name:'안내 마치기',exact:true}).click();
     await guidePage.waitForFunction(()=>!document.querySelector('.weplay-guide[open]'));
     assert.deepEqual(await guidePage.evaluate(()=>window.navalQa.guideWrites),['guide-account-a']);
@@ -283,7 +336,27 @@ try {
     assert.equal(await guidePage.evaluate(()=>window.navalQa.guideWrites.length),1,'Manual replay after completion must not write again');
     await guidePage.close();
   }
-  checks.push('320/390/768/1280 six-step guide uses real frozen battle, no gameplay calls, bounded dialog/44px controls, step focus, one account completion write, manual replay without additional write');
+  checks.push('320/390/768/1280 interactive guide: frozen real arena, wrong-answer retry, IME-safe Enter, touch Load, 1/2 charge and real cannon, unlimited long-word special, completion focus/Tab trap, zero gameplay RPC/Wis change, one account completion write and manual replay without another write');
+
+  const guideKeyboard=await open('lobby',390);let keyboardGuide=guideKeyboard.locator('.weplay-guide[open]');await keyboardGuide.waitFor();
+  await keyboardGuide.getByRole('textbox',{name:'단어 입력'}).focus();await guideKeyboard.setViewportSize({width:390,height:360});await guideKeyboard.clock.runFor(300);
+  await guideKeyboard.locator('.weplay-guide.is-compact').waitFor();
+  const keyGeometry=await keyboardGuide.evaluate(element=>{const dialog=element.getBoundingClientRect();const input=element.querySelector('.naval-input-frame').getBoundingClientRect();const word=element.querySelector('.naval-word strong').getBoundingClientRect();return{dialogBottom:dialog.bottom,inputTop:input.top,inputBottom:input.bottom,wordTop:word.top,wordBottom:word.bottom,height:visualViewport.height}});
+  assert.ok(keyGeometry.inputTop>=0&&keyGeometry.inputBottom<=keyGeometry.height&&keyGeometry.wordTop>=0&&keyGeometry.wordBottom<=keyGeometry.inputTop,JSON.stringify(keyGeometry));
+  await capture(guideKeyboard,'guide-keyboard-viewport-390x360');
+  await keyboardGuide.getByRole('textbox',{name:'단어 입력'}).fill('거북선');await keyboardGuide.getByRole('textbox',{name:'단어 입력'}).press('Enter');
+  assert.equal(await keyboardGuide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'charge');await guideKeyboard.close();
+  checks.push('390×360 keyboard viewport keeps the current word and 44px input/load controls visible and interactive');
+
+  const reducedGuidePage=await open('lobby',390,'',{reducedMotion:'reduce'});const reducedGuide=reducedGuidePage.locator('.weplay-guide[open]');await reducedGuide.waitFor();
+  const reducedInput=reducedGuide.getByRole('textbox',{name:'단어 입력'});
+  await reducedInput.fill('거북선');await reducedInput.press('Enter');await reducedInput.fill('이순신');await reducedInput.press('Enter');await reducedGuidePage.clock.runFor(1900);
+  await reducedInput.fill('천상열차분야지도');await reducedInput.press('Enter');
+  await reducedGuide.locator('.naval-special-attack.is-still').waitFor();
+  assert.notEqual(await reducedGuide.locator('.naval-special-static').evaluate(element=>getComputedStyle(element).display),'none');
+  assert.equal(await reducedGuide.locator('.naval-special-barrage').evaluate(element=>getComputedStyle(element).display),'none');
+  await capture(reducedGuidePage,'guide-reduced-motion-special-390');await reducedGuidePage.close();
+  checks.push('OS reduced motion keeps the interactive guide usable and shows a static special result instead of animation');
 
   const skip=await open('lobby',390);let guide=skip.locator('.weplay-guide[open]');await guide.waitFor();
   await skip.evaluate(()=>{window.navalQa.hold.completeWeplayGuide=true});

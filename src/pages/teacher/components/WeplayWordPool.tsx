@@ -89,14 +89,14 @@ export default function WeplayWordPool({
     const key = normalizeWeplayAnswer(text);
     if (
       !key ||
-      Array.from(text).length > 12 ||
+      Array.from(text).length > 40 ||
       !/[\p{L}\p{N}]/u.test(text) ||
       /[<>\u0000-\u001f\u007f]/.test(manual) ||
       /[<>]/.test(text) ||
       text.startsWith("fn:")
     ) {
       setMessage(
-        "단어는 글자나 숫자를 포함해 1~12자로 입력해 주세요. <, >, 제어 문자 및 fn:으로 시작하는 단어는 사용할 수 없습니다.",
+        "단어는 글자나 숫자를 포함해 1~40자로 입력해 주세요. <, >, 제어 문자 및 fn:으로 시작하는 단어는 사용할 수 없습니다.",
       );
       return;
     }
@@ -315,7 +315,7 @@ export default function WeplayWordPool({
           <p>
             {query
               ? "검색 결과가 없습니다."
-              : "연결한 자료의 빈칸 단어가 없습니다. 단어를 직접 추가할 수 있습니다."}
+              : "연결한 자료에서 인식한 단어가 없습니다. 단어를 직접 추가할 수 있습니다."}
           </p>
         )}
       </div>

@@ -90,7 +90,7 @@ test('special challenge succeeds at four seconds, expires at five seconds, and n
 test('server and real teacher preview preserve each special snapshot window, including stored three-second games', async () => {
   // Run the actual TS preview transport with an injected monotonic clock and
   // disconnected SDK imports. No Firebase or browser network calls are possible.
-  const definitions = loadTs('weplay.ts', { './firebase': {}, './semesterScope': {} });
+  const definitions = loadTs('weplay.ts', { './firebase': {}, './semesterScope': {}, './weplayTitle': loadTs('weplayTitle.ts', {}) });
   for (const storedWindow of [5000, 3000]) for (const offset of [2999, 3000, 4000, 4999, 5000]) {
     let clockMs = 0;
     const session = { ...sessionFor('mild'), id: 'preview-special-window', serverNowMs: 100000 };
@@ -109,7 +109,7 @@ test('server and real teacher preview preserve each special snapshot window, inc
 });
 
 test('teacher preview early exit is explicit, locally idempotent, and keeps the original game denominator', async () => {
-  const definitions = loadTs('weplay.ts', { './firebase': {}, './semesterScope': {} });
+  const definitions = loadTs('weplay.ts', { './firebase': {}, './semesterScope': {}, './weplayTitle': loadTs('weplayTitle.ts', {}) });
   let clockMs = 0;
   const session = { ...sessionFor('mild'), id: 'preview-exit', serverNowMs: 100000 };
   const { createWeplayPreviewTransport } = loadTs('weplayPreview.ts', { './weplay': definitions, './weplayBattle': compiled.exports }, { now: () => clockMs });
@@ -161,7 +161,7 @@ test('stored 30/60-second settings migrate without mutation while new writes enf
     assert.equal(stored.difficulties.mild.durationSeconds, durationSeconds);
     assert.throws(() => core.validateGameSettings(stored), /90~180/);
   }
-  const excluded = ['혼일강리역대국도지도', '생즉사사즉생', '학익진전술을펼쳐라'];
+  const excluded = core.SPECIAL_FALLBACK_WORDS;
   const words = core.buildWords(catalog.slice(0, 3), 'excluded', 'mild', core.DEFAULT_DIFFICULTY_SETTINGS.mild, { excludedWords: excluded });
   assert.equal(words.filter((word) => word.kind === 'special').length, 0);
 });

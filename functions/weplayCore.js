@@ -10,6 +10,10 @@ const PERIOD_SETTLEMENT_DELAY_MS = 240000;
 const DIFFICULTIES = ['mild', 'medium', 'spicy'];
 const FALL_DURATIONS = { mild: [12000, 10000, 8000], medium: [10000, 8000, 6000], spicy: [8000, 6000, 4000] };
 const GAME_ID = 'history-rain';
+const MAX_CATALOG_WORD_LENGTH = 40;
+const SPECIAL_FALLBACK_WORDS = ['혼일강리역대국도지도', '천상열차분야지도', '훈민정음해례본', '조선왕조실록', '직지심체요절', '고려대장경판', '무구정광대다라니경', '백제금동대향로'];
+const OCR_STOP_WORDS = new Set(['은', '는', '이', '가', '을', '를', '의', '와', '과', '에', '에서', '에게', '으로', '로', '부터', '까지', '그리고', '그러나', '또는', '및', '등']);
+const OCR_PARTICLES = ['에서는', '으로는', '에게는', '에서', '에게', '으로', '부터', '까지', '에는', '은', '는', '이', '가', '을', '를', '의', '와', '과', '에', '로', '도', '만'];
 const DEFAULT_DIFFICULTY_SETTINGS = Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, {
   durationSeconds: 90, fallSeconds: FALL_DURATIONS[difficulty].map((ms) => ms / 1000), minWordLength: 1, maxWordLength: 12,
 }]));
@@ -100,7 +104,7 @@ function validateWordList(input, normalize = false) {
     if (typeof raw !== 'string') throw new Error('단어를 확인해 주세요.');
     const text = raw.normalize('NFKC').replace(/\s+/g, ' ').trim();
     const key = normalizeAnswer(text);
-    if (!key || Array.from(text).length > 12 || !/[\p{L}\p{N}]/u.test(text) || /[<>\u0000-\u001f]/.test(text) || text.startsWith('fn:')) throw new Error('단어는 글자나 숫자를 포함해 1~12자로 입력해 주세요.');
+    if (!key || Array.from(text).length > MAX_CATALOG_WORD_LENGTH || !/[\p{L}\p{N}]/u.test(text) || /[<>\u0000-\u001f]/.test(text) || text.startsWith('fn:')) throw new Error(`단어는 글자나 숫자를 포함해 1~${MAX_CATALOG_WORD_LENGTH}자로 입력해 주세요.`);
     if (!unique.has(key)) unique.set(key, normalize ? key : text);
   }
   return [...unique.values()];
@@ -191,7 +195,7 @@ function extractLessonWords(lessons) {
     const add = (raw, context = '') => {
       const text = decodeText(raw).normalize('NFKC');
       const key = normalizeAnswer(text);
-      if (!key || text.length > 12 || text.startsWith('fn:') || !/[\p{L}\p{N}]/u.test(text) || seen.has(key)) return;
+      if (!key || Array.from(text).length > MAX_CATALOG_WORD_LENGTH || text.startsWith('fn:') || !/[\p{L}\p{N}]/u.test(text) || /[<>\u0000-\u001f]/.test(text) || seen.has(key)) return;
       seen.add(key);
       words.push({ text, unitId, lessonTitle: decodeText(lesson.title).slice(0, 120), context: decodeText(context).slice(0, 240) });
     };
@@ -200,9 +204,28 @@ function extractLessonWords(lessons) {
     for (const blank of Array.isArray(lesson.worksheetBlanks) ? lesson.worksheetBlanks : []) {
       if (visiblePages.has(Math.max(1, Number(blank?.page) || 1)) && Number(blank?.widthRatio) > 0 && Number(blank?.heightRatio) > 0) add(blank.answer);
     }
-    const html = String(lesson.contentHtml || '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+    const html = decodeText(String(lesson.contentHtml || '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ''));
     for (const match of html.matchAll(/\[([^\]\r\n]+)\]/g)) {
       add(match[1], html.slice(Math.max(0, match.index - 100), match.index + match[0].length + 100));
+    }
+    // Saved OCR/PDF text regions cover recognizable worksheet words even when
+    // the teacher has not made them into blanks. Removed pages stay excluded.
+    const recognized = [];
+    for (const region of Array.isArray(lesson.worksheetTextRegions) ? lesson.worksheetTextRegions : []) {
+      if (!visiblePages.has(Math.max(1, Number(region?.page) || 1)) || !(Number(region?.width) > 0) || !(Number(region?.height) > 0)) continue;
+      const label = decodeText(region.label).normalize('NFKC').replace(/\[fn:[^\]]*\]/gi, '');
+      for (const token of label.matchAll(/\[([^\]\r\n]+)\]|[\p{L}\p{N}]+(?:[·‧.‐‑-][\p{L}\p{N}]+)*/gu)) {
+        const text = token[1] || token[0];
+        if (/[\p{L}]/u.test(text) && !OCR_STOP_WORDS.has(normalizeAnswer(text))) recognized.push({ text, context: label });
+      }
+    }
+    const knownTerms = new Set([...seen, ...recognized.map((word) => normalizeAnswer(word.text)), ...SPECIAL_FALLBACK_WORDS.map(normalizeAnswer)]);
+    for (const word of recognized) {
+      // Strip an attached particle only when the remaining term is actually
+      // known; never guess at endings of proper nouns such as 국가 or 가야.
+      const key = normalizeAnswer(word.text);
+      const suffix = OCR_PARTICLES.find((particle) => key.endsWith(particle) && knownTerms.has(key.slice(0, -particle.length)));
+      add(suffix ? word.text.slice(0, -suffix.length).trim() : word.text, word.context);
     }
   }
   return words;
@@ -226,16 +249,23 @@ function buildWords(catalog, seed, difficulty = 'medium', difficultySettings = D
     const spawnAtMs = Math.floor((stage - 1) * phaseDurationMs + localIndex * (phaseDurationMs - fallDurationMs - 1000) / (count - 1));
     return { ...sorted[index % sorted.length], id: `word-${index + 1}`, kind: 'normal', stage, spawnAtMs, fallDurationMs };
   });
-  const excluded = new Set(options.excludedWords || []);
-  const longWords = [...new Map(catalog.filter((word) => Array.from(normalizeAnswer(word.text)).length >= 6).map((word) => [normalizeAnswer(word.text), word])).values()]
-    .sort((a, b) => hash(`${seed}:special:${a.text}`).localeCompare(hash(`${seed}:special:${b.text}`)));
-  const fallback = ['혼일강리역대국도지도', '생즉사사즉생', '학익진전술을펼쳐라'].filter((text) => !excluded.has(normalizeAnswer(text)))
-    .map((text) => ({ text, unitId: '__weplay_tactic__', lessonTitle: '전술 도전', context: '' }));
-  const specials = longWords.length ? longWords : fallback;
-  return [...normalWords, ...[1, 2].flatMap((phase, index) => specials.length ? [{
-    ...specials[index % specials.length], id: `special-${phase}`, kind: 'special', tactic: phase === 1 ? 'crane-wing' : 'last-stand',
-    stage: phase + 1, spawnAtMs: Math.floor(config.durationSeconds * 1000 * phase / 3), fallDurationMs: 5000,
-  }] : [])];
+  const excluded = new Set((options.excludedWords || []).map(normalizeAnswer));
+  const specialOrder = (a, b) => hash(`${seed}:special:${normalizeAnswer(a.text)}`).localeCompare(hash(`${seed}:special:${normalizeAnswer(b.text)}`));
+  const longWords = [...new Map(catalog.filter((word) => {
+    const key = normalizeAnswer(word.text);
+    return Array.from(key).length >= 6 && Array.from(key).length <= MAX_CATALOG_WORD_LENGTH && !excluded.has(key);
+  }).map((word) => [normalizeAnswer(word.text), word])).values()].sort(specialOrder);
+  const knownSpecials = new Set(longWords.map((word) => normalizeAnswer(word.text)));
+  const fallback = SPECIAL_FALLBACK_WORDS.filter((text) => !excluded.has(normalizeAnswer(text)) && !knownSpecials.has(normalizeAnswer(text)))
+    .map((text) => ({ text, unitId: '__weplay_tactic__', lessonTitle: '전술 도전', context: '' })).sort(specialOrder);
+  const specials = [...longWords, ...fallback].slice(0, 2);
+  return [...normalWords, ...specials.map((word, index) => {
+    const phase = index + 1;
+    return {
+      ...word, id: `special-${phase}`, kind: 'special', tactic: phase === 1 ? 'crane-wing' : 'last-stand',
+      stage: phase + 1, spawnAtMs: Math.floor(config.durationSeconds * 1000 * phase / 3), fallDurationMs: 5000,
+    };
+  })];
 }
 
 function assessAnswer(session, wordId, answer, nowMs) {
@@ -276,4 +306,4 @@ const compareEntries = (a, b) => Number(b.score || 0) - Number(a.score || 0)
   || Number(a.achievedAtMs || 0) - Number(b.achievedAtMs || 0)
   || String(a.uid).localeCompare(String(b.uid));
 
-module.exports = { TOTAL_WORDS, BATTLE_NORMAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, readDifficulties, validateDifficulties, validateDifficultySettings, gameCatalog, filterDifficultyWords, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };
+module.exports = { TOTAL_WORDS, BATTLE_NORMAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, MAX_CATALOG_WORD_LENGTH, SPECIAL_FALLBACK_WORDS, DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, readDifficulties, validateDifficulties, validateDifficultySettings, gameCatalog, filterDifficultyWords, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };

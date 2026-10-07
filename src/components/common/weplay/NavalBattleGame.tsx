@@ -22,6 +22,7 @@ import {
 import type { HistoryRainGameProps } from "./HistoryRainGame";
 import WeplayExitDialog from "./WeplayExitDialog";
 import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
+import NavalSpecialAttack, { NAVAL_SPECIAL_TIMING } from "./NavalSpecialAttack";
 import "./naval-battle.css";
 
 const ART = `${import.meta.env?.BASE_URL || "/"}assets/weplay/naval/`;
@@ -69,6 +70,7 @@ export default function NavalBattleGame({
   transport,
   onShowGuide,
   guideDemo = false,
+  guideInteractive,
 }: HistoryRainGameProps) {
   const uniqueInputId = useId();
   const inputId = guideDemo
@@ -103,7 +105,6 @@ export default function NavalBattleGame({
   const exitOpenRef = useRef(false);
   const exitRequestedRef = useRef(false);
   const [effects, setEffects] = useState<Effect[]>([]);
-  const [specialCutin, setSpecialCutin] = useState<Effect | null>(null);
   const [pageHidden, setPageHidden] = useState(document.hidden);
   const [impacts, setImpacts] = useState<Impact[]>([]);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -168,6 +169,7 @@ export default function NavalBattleGame({
   const effectSequence = useRef(0);
   const effectTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const effectFinishAt = useRef(0);
+  const enemyImpactAt = useRef(0);
   const enemySinkingUntil = useRef(0);
   const elapsed = Math.max(0, now - session.startsAtMs);
   const duration = session.endsAtMs - session.startsAtMs;
@@ -207,7 +209,8 @@ export default function NavalBattleGame({
       elapsed >= word.spawnAtMs &&
       elapsed < word.spawnAtMs + word.fallDurationMs &&
       !ended &&
-      started,
+      started &&
+      (!guideDemo || !guideInteractive || word.id === guideInteractive.wordId),
   );
   const normal = visible
     .filter((word) => word.kind !== "special")
@@ -258,6 +261,7 @@ export default function NavalBattleGame({
     if (guideDemo)
       return () => {
         alive.current = false;
+        effectTimers.current.forEach(clearTimeout);
       };
     for (const file of ["yi-sunsin-cutin.webp", "impact-lines.webp"]) {
       const art = new Image();
@@ -315,7 +319,7 @@ export default function NavalBattleGame({
     }
   }, [started, ended]);
   useEffect(() => {
-    if (guideDemo) return;
+    if (guideDemo && !guideInteractive) return;
     const previous = previousBattle.current;
     if (battle.enemyShots < previous.enemyShots)
       setDisplayBattle((current) => ({
@@ -359,9 +363,26 @@ export default function NavalBattleGame({
       sunkShips: battle.sunkShips,
     };
     if (!next.length && !sunk) return;
+    const hasSpecial = next.some((effect) => effect.kind === "special");
+    const enemyHit = next.some((effect) => effect.kind !== "enemy");
+    const impactDelay = enemyHit
+      ? Math.max(
+          hasSpecial ? NAVAL_SPECIAL_TIMING.finalImpactMs : 420,
+          enemyImpactAt.current - performance.now() + 16,
+        )
+      : 420;
+    // Keep confirmed hits in order when a regular shot follows the longer barrage.
+    if (enemyHit) enemyImpactAt.current = performance.now() + impactDelay;
     effectFinishAt.current = Math.max(
       effectFinishAt.current,
-      performance.now() + 1600,
+      performance.now() +
+        Math.max(
+          hasSpecial ? NAVAL_SPECIAL_TIMING.durationMs : 1600,
+          next.some((effect) => effect.kind === "cannon")
+            ? Math.max(0, impactDelay - 420) + 1600
+            : 0,
+          impactDelay + (sunk ? 1100 : 900),
+        ),
     );
     const later = (callback: () => void, delay: number) => {
       const timer = setTimeout(() => {
@@ -373,7 +394,8 @@ export default function NavalBattleGame({
       effectTimers.current.push(timer);
     };
     const show = (items: Effect[], lifetime = 1600) => {
-      setEffects((current) => [...current.slice(-5), ...items]);
+      if (!items.length) return;
+      setEffects((current) => [...current, ...items]);
       later(
         () =>
           setEffects((current) =>
@@ -384,45 +406,24 @@ export default function NavalBattleGame({
         lifetime,
       );
     };
-    show(next);
-    const cutin = next.find((effect) => effect.kind === "special");
-    if (cutin) {
-      setSpecialCutin(cutin);
-      later(
-        () =>
-          setSpecialCutin((current) =>
-            current?.id === cutin.id ? null : current,
-          ),
-        1400,
-      );
-    }
-    later(() => {
-      const enemyHit = next.some((effect) => effect.kind !== "enemy");
-      const alliedHit = next.some((effect) => effect.kind === "enemy");
-      if (enemyHit || sunk)
-        arrivedEnemy.current = {
-          enemyHp: battle.enemyHp,
-          sunkShips: battle.sunkShips,
-        };
-      if (sunk) enemySinkingUntil.current = performance.now() + 1100;
-      setDisplayBattle((current) => ({
-        ...current,
-        playerHp:
-          alliedHit && battle.enemyShots <= latestBattle.current.enemyShots
-            ? battle.playerHp
-            : current.playerHp,
-        ...(sunk
-          ? { enemyHp: 0 }
-          : enemyHit && performance.now() >= enemySinkingUntil.current
-            ? arrivedEnemy.current
-            : {}),
-      }));
-      const hits: Impact[] = next.map((effect) => ({
+    const cannonEffects = next.filter((effect) => effect.kind === "cannon");
+    const enemyEffects = next.filter((effect) => effect.kind === "enemy");
+    const cannonDelay = Math.max(0, impactDelay - 420);
+    if (cannonDelay) later(() => show(cannonEffects), cannonDelay);
+    else show(cannonEffects);
+    show(enemyEffects);
+    show(
+      next.filter((effect) => effect.kind === "special"),
+      NAVAL_SPECIAL_TIMING.durationMs,
+    );
+    const flashDamage = (items: Effect[], side: Impact["side"]) => {
+      if (!items.length) return;
+      const hits = items.map((effect) => ({
         id: effect.id,
-        side: effect.kind === "enemy" ? "allied" : "enemy",
+        side,
         damage: effect.damage || 0,
       }));
-      setImpacts((current) => [...current.slice(-3), ...hits]);
+      setImpacts((current) => [...current, ...hits]);
       later(
         () =>
           setImpacts((current) =>
@@ -431,6 +432,36 @@ export default function NavalBattleGame({
             ),
           ),
         900,
+      );
+    };
+    if (enemyEffects.length)
+      later(() => {
+        if (battle.enemyShots <= latestBattle.current.enemyShots)
+          setDisplayBattle((current) => ({
+            ...current,
+            playerHp: battle.playerHp,
+          }));
+        flashDamage(enemyEffects, "allied");
+      }, 420);
+    if (!enemyHit && !sunk) return;
+    later(() => {
+      if (enemyHit || sunk)
+        arrivedEnemy.current = {
+          enemyHp: battle.enemyHp,
+          sunkShips: battle.sunkShips,
+        };
+      if (sunk) enemySinkingUntil.current = performance.now() + 1100;
+      setDisplayBattle((current) => ({
+        ...current,
+        ...(sunk
+          ? { enemyHp: 0 }
+          : enemyHit && performance.now() >= enemySinkingUntil.current
+            ? arrivedEnemy.current
+            : {}),
+      }));
+      flashDamage(
+        next.filter((effect) => effect.kind !== "enemy"),
+        "enemy",
       );
       if (sunk) {
         show([{ id: ++effectSequence.current, kind: "sunk" }], 1100);
@@ -442,7 +473,7 @@ export default function NavalBattleGame({
             }));
         }, 1100);
       }
-    }, 420);
+    }, impactDelay);
   }, [
     battle.cannonShots,
     battle.enemyShots,
@@ -583,7 +614,13 @@ export default function NavalBattleGame({
       ended ||
       exitOpenRef.current ||
       exitRequestedRef.current ||
-      guideDemo
+      (guideDemo && !guideInteractive?.wordId)
+    )
+      return;
+    if (
+      guideDemo &&
+      guideInteractive?.wordId &&
+      acceptedRef.current.has(guideInteractive.wordId)
     )
       return;
     const value = normalizeWeplayAnswer(answer);
@@ -595,6 +632,22 @@ export default function NavalBattleGame({
     );
     if (!word) {
       setFeedback("단어를 다시 확인해 주세요.");
+      if (guideDemo) guideInteractive?.onAttempt(false);
+      return;
+    }
+    if (guideDemo) {
+      const next = [
+        ...eventsRef.current,
+        { wordId: word.id, elapsedMs: elapsed },
+      ];
+      eventsRef.current = next;
+      acceptedRef.current.add(word.id);
+      setEvents(next);
+      setAnswer("");
+      setFeedback(
+        word.kind === "special" ? "학익진 발동!" : "정답! 장전했습니다.",
+      );
+      guideInteractive?.onAttempt(true);
       return;
     }
     void send(
@@ -613,7 +666,7 @@ export default function NavalBattleGame({
       : "위스 도전";
   return (
     <section
-      className={`naval-game${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}${pageHidden ? " naval-game--hidden" : ""}${guideDemo ? " naval-game--guide" : ""}`}
+      className={`naval-game${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}${pageHidden ? " naval-game--hidden" : ""}${guideDemo ? " naval-game--guide" : ""}${guideDemo && guideInteractive ? " naval-game--guide-interactive" : ""}`}
       style={
         {
           "--naval-ocean-art": `url(${ART}sea-battle.webp)`,
@@ -827,88 +880,65 @@ export default function NavalBattleGame({
               </small>
             </strong>
           ))}
-          {effects.map((effect) => (
-            <div
-              key={effect.id}
-              className={`naval-effect naval-effect--${effect.kind}${effect.tactic ? ` naval-effect--${effect.tactic}` : ""}`}
-            >
-              {(effect.kind === "cannon" ||
-                effect.kind === "enemy" ||
-                effect.kind === "special") && (
-                <>
+          {effects.map((effect) =>
+            effect.kind === "special" ? (
+              <NavalSpecialAttack
+                key={effect.id}
+                tactic={effect.tactic}
+                reducedMotion={guideDemo ? undefined : reducedMotion}
+                paused={pageHidden}
+              />
+            ) : (
+              <div
+                key={effect.id}
+                className={`naval-effect naval-effect--${effect.kind}${effect.tactic ? ` naval-effect--${effect.tactic}` : ""}`}
+              >
+                {(effect.kind === "cannon" || effect.kind === "enemy") && (
+                  <>
+                    <Sprite
+                      className="naval-cannonball"
+                      rect={[1038, 641, 86, 88]}
+                    />
+                    <span className="naval-impact" />
+                  </>
+                )}
+                {(effect.kind === "enemy" || effect.kind === "sunk") && (
                   <Sprite
-                    className="naval-cannonball"
-                    rect={[1038, 641, 86, 88]}
+                    className={`naval-splash naval-splash--${effect.kind}`}
+                    rect={[1025, 732, 195, 195]}
                   />
-                  <span className="naval-impact" />
-                </>
-              )}
-              {effect.kind === "special" && (
-                <>
-                  {effect.tactic === "crane-wing" && (
-                    <>
-                      <img
-                        className="naval-flank naval-flank--upper"
-                        src={`${ART}allied-ship.webp`}
-                        alt=""
-                      />
-                      <img
-                        className="naval-flank naval-flank--lower"
-                        src={`${ART}allied-ship.webp`}
-                        alt=""
-                      />
-                    </>
-                  )}
-                  <Sprite
-                    className="naval-cannonball naval-cannonball--second"
-                    rect={[1038, 641, 86, 88]}
-                  />
-                  <Sprite
-                    className="naval-cannonball naval-cannonball--third"
-                    rect={[1038, 641, 86, 88]}
-                  />
-                  {effect.tactic === "last-stand" && (
-                    <>
-                      <span className="naval-impact naval-impact--second" />
-                      <span className="naval-impact naval-impact--third" />
-                      <span className="naval-shockwave" />
-                    </>
-                  )}
-                  <strong className="naval-tactic-name">
-                    {effect.tactic === "last-stand"
-                      ? "생즉사 사즉생"
-                      : "학익진"}
-                  </strong>
-                </>
-              )}
-              {(effect.kind === "enemy" || effect.kind === "sunk") && (
-                <Sprite
-                  className={`naval-splash naval-splash--${effect.kind}`}
-                  rect={[1025, 732, 195, 195]}
-                />
-              )}
-              {effect.kind === "sunk" && (
-                <>
-                  <img
-                    className="naval-sinking-ship"
-                    src={`${ART}enemy-ship.webp`}
-                    alt=""
-                  />
-                  <strong className="naval-sunk-label">적선 격침!</strong>
-                </>
-              )}
-            </div>
-          ))}
+                )}
+                {effect.kind === "sunk" && (
+                  <>
+                    <img
+                      className="naval-sinking-ship"
+                      src={`${ART}enemy-ship.webp`}
+                      alt=""
+                    />
+                    <strong className="naval-sunk-label">적선 격침!</strong>
+                  </>
+                )}
+              </div>
+            ),
+          )}
         </div>
         {special && (
-          <div className="naval-special" role="status">
+          <div
+            className="naval-special"
+            role="status"
+            data-weplay-guide="special"
+          >
             <span>
               특수 전술 ·{" "}
               {special.tactic === "last-stand" ? "생즉사 사즉생" : "학익진"}
             </span>
             <strong>{special.text}</strong>
             <div>
-              <span>{special.fallDurationMs / 1000}초 안에 입력</span>
+              <span>
+                {guideDemo
+                  ? "안내에서는 시간 제한이 없어요"
+                  : `${special.fallDurationMs / 1000}초 안에 입력`}
+              </span>
               <b>
                 {Math.max(
                   0,
@@ -917,30 +947,6 @@ export default function NavalBattleGame({
                 초
               </b>
             </div>
-          </div>
-        )}
-        {specialCutin && !special && (
-          <div
-            className="naval-cutin"
-            key={specialCutin.id}
-            aria-hidden="true"
-            data-tactic={specialCutin.tactic}
-          >
-            <img
-              className="naval-cutin-lines"
-              src={`${ART}impact-lines.webp`}
-              alt=""
-            />
-            <img
-              className="naval-cutin-eyes"
-              src={`${ART}yi-sunsin-cutin.webp`}
-              alt=""
-            />
-            <strong className="naval-cutin-title">
-              {specialCutin.tactic === "last-stand"
-                ? "생즉사 사즉생"
-                : "학익진"}
-            </strong>
           </div>
         )}
         <div
@@ -976,7 +982,7 @@ export default function NavalBattleGame({
               />
             </div>
           ))}
-          {!prompts.length && started && !ended && (
+          {!prompts.length && started && !ended && !guideDemo && (
             <div className="naval-word-wait">
               {pending.current.size ? "장전 확인 중…" : "다음 단어 준비 중…"}
             </div>
@@ -1029,6 +1035,11 @@ export default function NavalBattleGame({
             </strong>
           </div>
           <div className="naval-input-frame" data-weplay-guide="input">
+            {guideDemo && guideInteractive?.wordId && (
+              <span className="weplay-guide-pointer" aria-hidden="true">
+                여기에 입력 <span>↓</span>
+              </span>
+            )}
             <label htmlFor={inputId} className="naval-sr-only">
               단어 입력
             </label>
@@ -1047,7 +1058,7 @@ export default function NavalBattleGame({
                     alive.current &&
                     document.activeElement !== input.current
                   ) {
-                    setCompactViewport(false);
+                    if (!guideDemo) setCompactViewport(false);
                     setKeyboardInset(0);
                   }
                 }, 200);
@@ -1056,7 +1067,12 @@ export default function NavalBattleGame({
               autoComplete="off"
               autoCapitalize="off"
               spellCheck={false}
-              disabled={!started || ended || exitRequested || guideDemo}
+              disabled={
+                !started ||
+                ended ||
+                exitRequested ||
+                (guideDemo && !guideInteractive?.wordId)
+              }
               onCompositionStart={() => {
                 composing.current = true;
               }}
@@ -1080,7 +1096,7 @@ export default function NavalBattleGame({
                 ended ||
                 exitRequested ||
                 !answer.trim() ||
-                guideDemo
+                (guideDemo && !guideInteractive?.wordId)
               }
             >
               장전
