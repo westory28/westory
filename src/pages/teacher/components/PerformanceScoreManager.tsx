@@ -2,6 +2,8 @@ import NumericInput from "../../../components/common/NumericInput";
 import { readScoreWorkbookRows } from "../../../lib/scoreWorkbookReader";
 import { isSemesterArchive } from "../../../lib/semesterArchive";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import "./performance-score-list.css";
 import { useSearchParams } from "react-router-dom";
 import {
   collection,
@@ -566,6 +568,146 @@ const getPerformanceMaximumError = (
     return "입력된 학생 총점보다 총배점을 낮출 수 없습니다.";
   return "";
 };
+
+function ScoreCriterionName({ index, name }: { index: number; name: string }) {
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const pinned = useRef(false);
+  const [position, setPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
+  const close = () => {
+    pinned.current = false;
+    setPosition(null);
+  };
+  const show = () => {
+    const bounds = trigger.current?.getBoundingClientRect();
+    if (!bounds) return;
+    setPosition({
+      left: Math.max(16, Math.min(bounds.left, window.innerWidth - 304)),
+      top: bounds.bottom + 8,
+    });
+  };
+  useEffect(() => {
+    if (!position) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!trigger.current?.contains(event.target as Node)) close();
+    };
+    document.addEventListener("pointerdown", dismiss);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [position]);
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        aria-label={`평가 항목 ${index + 1} 이름 보기`}
+        aria-expanded={Boolean(position)}
+        aria-describedby={
+          position ? `score-criterion-name-${index}` : undefined
+        }
+        onMouseEnter={show}
+        onMouseLeave={() => {
+          if (!pinned.current) close();
+        }}
+        onFocus={show}
+        onBlur={close}
+        onClick={() => {
+          pinned.current = !pinned.current;
+          if (pinned.current) show();
+          else close();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && position) {
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+          }
+        }}
+        className="inline-flex h-9 min-w-6 items-center justify-center rounded text-xs font-black text-slate-600 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+      >
+        {index + 1}
+      </button>
+      {position &&
+        createPortal(
+          <div
+            id={`score-criterion-name-${index}`}
+            role="tooltip"
+            style={position}
+            className="pointer-events-none fixed z-[100] w-72 max-w-[calc(100vw-32px)] whitespace-normal break-keep rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold leading-5 text-white shadow-lg"
+          >
+            {name}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function ScoreUploadTableScroll({ children }: { children: React.ReactNode }) {
+  const topScroll = useRef<HTMLDivElement | null>(null);
+  const tableScroll = useRef<HTMLDivElement | null>(null);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    const viewport = tableScroll.current;
+    const table = viewport?.firstElementChild;
+    if (!viewport || !table) return;
+    const measure = () => {
+      setContentWidth(viewport.scrollWidth);
+      setOverflowing(viewport.scrollWidth > viewport.clientWidth);
+      if (topScroll.current) topScroll.current.scrollLeft = viewport.scrollLeft;
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    observer.observe(table);
+    measure();
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200">
+      <div
+        ref={topScroll}
+        role="region"
+        aria-label="점수표 좌우 스크롤"
+        tabIndex={0}
+        hidden={!overflowing}
+        onScroll={(event) => {
+          if (tableScroll.current)
+            tableScroll.current.scrollLeft = event.currentTarget.scrollLeft;
+        }}
+        className="score-upload-horizontal-scroll sticky -top-4 z-10 h-6 overflow-x-scroll overflow-y-hidden rounded-t-xl border-b border-slate-200 bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+      >
+        <div
+          aria-hidden="true"
+          className="h-px"
+          style={{ width: contentWidth }}
+        />
+      </div>
+      <div
+        ref={tableScroll}
+        role="region"
+        aria-label="업로드 점수표"
+        tabIndex={0}
+        onScroll={(event) => {
+          if (topScroll.current)
+            topScroll.current.scrollLeft = event.currentTarget.scrollLeft;
+        }}
+        className="overflow-x-auto rounded-b-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function ScoreUploadMaximumHelp() {
   const root = useRef<HTMLSpanElement | null>(null);
@@ -5935,19 +6077,25 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       ),
     [parsed, previewGradeFilter, previewClassFilter, previewNumberFilter],
   );
+  const previewShowsSingleClass =
+    new Set(filteredPreviewRows.map((row) => `${row.grade}:${row.class}`))
+      .size === 1;
+  const previewPageSize = previewShowsSingleClass
+    ? Math.max(1, filteredPreviewRows.length)
+    : PREVIEW_PAGE_SIZE;
   const previewTotalPages = Math.max(
     1,
-    Math.ceil(filteredPreviewRows.length / PREVIEW_PAGE_SIZE),
+    Math.ceil(filteredPreviewRows.length / previewPageSize),
   );
   const safePreviewPage = Math.min(Math.max(1, previewPage), previewTotalPages);
-  const previewStartIndex = (safePreviewPage - 1) * PREVIEW_PAGE_SIZE;
+  const previewStartIndex = (safePreviewPage - 1) * previewPageSize;
   const previewRows = filteredPreviewRows.slice(
     previewStartIndex,
-    previewStartIndex + PREVIEW_PAGE_SIZE,
+    previewStartIndex + previewPageSize,
   );
   const parsedHasObjectiveOmr = hasObjectiveOmrItems(parsed?.items || []);
   const previewRangeLabel = filteredPreviewRows.length
-    ? `${previewStartIndex + 1}-${Math.min(previewStartIndex + PREVIEW_PAGE_SIZE, filteredPreviewRows.length)}`
+    ? `${previewStartIndex + 1}-${Math.min(previewStartIndex + previewPageSize, filteredPreviewRows.length)}`
     : "0";
   const previewPageItems = useMemo(
     () => getPreviewPageItems(safePreviewPage, previewTotalPages),
@@ -13125,8 +13273,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               </div>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs font-bold text-slate-500">
-                  {previewRangeLabel} / {filteredPreviewRows.length}명 표시 ·{" "}
-                  {safePreviewPage} / {previewTotalPages}쪽
+                  {previewShowsSingleClass
+                    ? `${filteredPreviewRows.length}명 전체 표시`
+                    : `${previewRangeLabel} / ${filteredPreviewRows.length}명 표시 · ${safePreviewPage} / ${previewTotalPages}쪽`}
                 </div>
                 {previewTotalPages > 1 && (
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -13156,7 +13305,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 )}
               </div>
 
-              <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+              <ScoreUploadTableScroll>
                 <table
                   className={`w-full text-left text-sm ${
                     isSinglePerformanceUpload && parsed.items.length >= 4
@@ -13194,7 +13343,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       {parsedHasObjectiveOmr && (
                         <th className="w-24 px-3 py-3 text-center">OMR</th>
                       )}
-                      <th className="w-80 min-w-72 px-3 py-3">
+                      <th className="w-72 min-w-72 px-3 py-3 sm:w-80">
                         감점 요인 및 평가 근거
                       </th>
                     </tr>
@@ -13258,7 +13407,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             </button>
                           </td>
                         )}
-                        <td className="w-80 min-w-72 px-3 py-2">
+                        <td className="w-72 min-w-72 px-3 py-2 sm:w-80">
                           <textarea
                             lang="ko"
                             inputMode="text"
@@ -13269,7 +13418,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                               updateFeedback(row.rowKey, event.target.value)
                             }
                             rows={2}
-                            className="min-w-64 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                            className="ml-auto block w-full min-w-0 max-w-[calc(100vw-112px)] resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 sm:min-w-64 sm:max-w-none"
                             placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
                           />
                         </td>
@@ -13277,7 +13426,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ScoreUploadTableScroll>
             </div>
 
             <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
@@ -13760,13 +13909,19 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     )}
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div
+                  className={
+                    isWrittenExamMode ? "overflow-x-auto" : "score-list-compact"
+                  }
+                >
                   <table
                     className={[
                       "w-full text-left text-sm",
-                      scoreListShowsObjectiveSummary
-                        ? "min-w-[980px]"
-                        : "min-w-[1180px]",
+                      !isWrittenExamMode
+                        ? ""
+                        : scoreListShowsObjectiveSummary
+                          ? "min-w-[980px]"
+                          : "min-w-[1180px]",
                     ].join(" ")}
                   >
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
@@ -13781,10 +13936,46 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           </th>
                         )}
                         {scoreListTableItemEntries.map(({ item, index }) =>
-                          renderScoreListHeader(
-                            `item-${index}` as ScoreListSortKey,
-                            getItemLabel(item),
-                            "right",
+                          isWrittenExamMode ? (
+                            renderScoreListHeader(
+                              `item-${index}` as ScoreListSortKey,
+                              getItemLabel(item),
+                              "right",
+                            )
+                          ) : (
+                            <th
+                              key={`item-${index}`}
+                              data-score-criterion
+                              aria-sort={getScoreListAriaSort(
+                                `item-${index}` as ScoreListSortKey,
+                              )}
+                              className="px-2 py-2 text-right"
+                            >
+                              <div className="inline-flex items-center justify-end">
+                                <ScoreCriterionName
+                                  index={index}
+                                  name={item.name}
+                                />
+                                <button
+                                  type="button"
+                                  aria-label={`평가 항목 ${index + 1} 점수순 정렬`}
+                                  onClick={() =>
+                                    toggleScoreListSort(
+                                      `item-${index}` as ScoreListSortKey,
+                                    )
+                                  }
+                                  className="inline-flex h-9 w-4 items-center justify-center rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+                                >
+                                  <i
+                                    className={getSortIconClass(
+                                      scoreListSort.key === `item-${index}`,
+                                      scoreListSort.direction,
+                                    )}
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                              </div>
+                            </th>
                           ),
                         )}
                         {renderScoreListHeader("totalScore", "총점", "right")}
@@ -13886,6 +14077,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   return (
                                     <td
                                       key={`${recordKey}-${item.name}-${index}`}
+                                      data-score-label={
+                                        !isWrittenExamMode
+                                          ? String(index + 1)
+                                          : undefined
+                                      }
                                       className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700"
                                     >
                                       {hasAcademicStatus ? (
@@ -13946,7 +14142,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   );
                                 },
                               )}
-                              <td className="whitespace-nowrap px-3 py-3 text-right">
+                              <td
+                                data-score-summary={
+                                  !isWrittenExamMode ? "총점" : undefined
+                                }
+                                className="whitespace-nowrap px-3 py-3 text-right"
+                              >
                                 {hasAcademicStatus ? (
                                   <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
                                     {academicStatusLabel}
@@ -14003,7 +14204,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   )}
                                 </td>
                               )}
-                              <td className="whitespace-nowrap px-3 py-3 text-center">
+                              <td
+                                data-score-summary={
+                                  !isWrittenExamMode ? "사유" : undefined
+                                }
+                                className="whitespace-nowrap px-3 py-3 text-center"
+                              >
                                 <button
                                   type="button"
                                   onClick={() =>

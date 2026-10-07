@@ -254,9 +254,11 @@ assert.equal(
 );
 const css = (
   await Promise.all(
-    ["assets/css/style.css", "src/assets/index.css"].map((name) =>
-      fs.readFile(root + "/" + name, "utf8"),
-    ),
+    [
+      "assets/css/style.css",
+      "src/assets/index.css",
+      "src/pages/teacher/components/performance-score-list.css",
+    ].map((name) => fs.readFile(root + "/" + name, "utf8")),
   )
 )
   .join("\n")
@@ -316,6 +318,8 @@ try {
         ? { channel: "msedge" }
         : {}),
     headless: true,
+    // Keep native scrollbar geometry and thumbs visible in visual evidence.
+    ignoreDefaultArgs: ["--hide-scrollbars"],
   });
   for (const scoreKind of ["performance", "written_exam_essay"]) {
     const kindLabel = scoreKind === "performance" ? "수행평가" : "정기시험";
@@ -624,6 +628,7 @@ try {
   for (const width of [390, 768, 1280]) {
     const page = await browser.newPage({
       viewport: { width, height: 900 },
+      hasTouch: width === 390,
       acceptDownloads: true,
     });
     page.on("pageerror", (error) => report.pageErrors.push(error.message));
@@ -1112,6 +1117,7 @@ try {
   for (const width of [390, 768, 1280]) {
     const page = await browser.newPage({
       viewport: { width, height: 900 },
+      hasTouch: width === 390,
       acceptDownloads: true,
     });
     page.on("pageerror", (error) => report.pageErrors.push(error.message));
@@ -1133,6 +1139,140 @@ try {
       return preview;
     };
     let preview = await openDetailedPreview();
+    assert.equal(await preview.locator("tbody tr").count(), 32);
+    await preview.getByText("32명 전체 표시", { exact: true }).waitFor();
+    assert.equal(
+      await preview.locator("button[aria-current='page']").count(),
+      0,
+    );
+    const horizontalScroll = preview.getByRole("region", {
+      name: "점수표 좌우 스크롤",
+      exact: true,
+    });
+    const scoreTable = preview.getByRole("region", {
+      name: "업로드 점수표",
+      exact: true,
+    });
+    await horizontalScroll.scrollIntoViewIfNeeded();
+    await horizontalScroll.focus();
+    await horizontalScroll.press("ArrowRight");
+    await page.waitForFunction(() => {
+      const top = document.querySelector('[aria-label="점수표 좌우 스크롤"]');
+      const table = document.querySelector('[aria-label="업로드 점수표"]');
+      return (
+        top?.scrollLeft > 0 && Math.abs(top.scrollLeft - table?.scrollLeft) < 2
+      );
+    });
+    // Native ArrowRight scrolling animates across frames. Finish that gesture
+    // before independently testing a drag of the upper scrollbar to its end.
+    const keyboardScroll = await horizontalScroll.evaluate(async (element) => {
+      const positions = [];
+      let previous = element.scrollLeft;
+      let stableSince = performance.now();
+      const startedAt = stableSince;
+      while (performance.now() - stableSince < 150) {
+        await new Promise(requestAnimationFrame);
+        const next = element.scrollLeft;
+        if (next !== previous) {
+          positions.push(next);
+          stableSince = performance.now();
+          previous = next;
+        }
+        if (performance.now() - startedAt > 3000)
+          throw new Error("Keyboard scrolling did not settle");
+      }
+      return { positions, finalScrollLeft: element.scrollLeft };
+    });
+    assert.ok(keyboardScroll.finalScrollLeft > 0);
+    await horizontalScroll.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await page
+      .waitForFunction(() => {
+        const top = document.querySelector('[aria-label="점수표 좌우 스크롤"]');
+        const table = document.querySelector('[aria-label="업로드 점수표"]');
+        return (
+          Math.abs(top.scrollLeft - table.scrollLeft) < 2 &&
+          Math.abs(table.scrollLeft - (table.scrollWidth - table.clientWidth)) <
+            2
+        );
+      })
+      .catch(async (error) => {
+        const positions = await page.evaluate(() =>
+          ["점수표 좌우 스크롤", "업로드 점수표"].map((label) => {
+            const element = document.querySelector(`[aria-label="${label}"]`);
+            return {
+              label,
+              scrollLeft: element.scrollLeft,
+              scrollWidth: element.scrollWidth,
+              clientWidth: element.clientWidth,
+            };
+          }),
+        );
+        throw new Error(JSON.stringify({ width, keyboardScroll, positions }), {
+          cause: error,
+        });
+      });
+    const feedbackVisibility = await scoreTable.evaluate((element) => {
+      const viewport = element.getBoundingClientRect();
+      const feedback = element
+        .querySelector("textarea")
+        .getBoundingClientRect();
+      return {
+        viewportLeft: viewport.left,
+        viewportRight: viewport.right,
+        feedbackLeft: feedback.left,
+        feedbackRight: feedback.right,
+        scrollLeft: element.scrollLeft,
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+      };
+    });
+    report.scrollMetrics ??= [];
+    report.scrollMetrics.push({ width, keyboardScroll, feedbackVisibility });
+    assert.ok(
+      feedbackVisibility.feedbackLeft >= feedbackVisibility.viewportLeft &&
+        feedbackVisibility.feedbackRight <=
+          feedbackVisibility.viewportRight + 1,
+      JSON.stringify(feedbackVisibility),
+    );
+    const stickyResult = await horizontalScroll.evaluate(async (element) => {
+      let parent = element.parentElement;
+      while (parent && getComputedStyle(parent).overflowY !== "auto")
+        parent = parent.parentElement;
+      parent.scrollTop +=
+        element.getBoundingClientRect().top -
+        parent.getBoundingClientRect().top +
+        240;
+      await new Promise(requestAnimationFrame);
+      return {
+        top: element.getBoundingClientRect().top,
+        contentTop:
+          parent.getBoundingClientRect().top +
+          parseFloat(getComputedStyle(parent).paddingTop) +
+          parseFloat(getComputedStyle(element).top),
+        parentScrollTop: parent.scrollTop,
+        parentClass: parent.className,
+        position: getComputedStyle(element).position,
+      };
+    });
+    assert.ok(
+      Math.abs(stickyResult.top - stickyResult.contentTop) <= 1,
+      JSON.stringify({ width, stickyResult }),
+    );
+    await page.screenshot({
+      path: out + `/detailed-class-scroll-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`detailed-class-scroll-${width}.png`);
+    await scoreTable.evaluate((element) => {
+      element.scrollLeft = 0;
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector('[aria-label="점수표 좌우 스크롤"]')
+          .scrollLeft === 0,
+    );
     assert.equal(
       await preview.getByLabel("평가명", { exact: true }).inputValue(),
       detailedTitle,
@@ -1251,6 +1391,139 @@ try {
       assert.equal(score.feedback, detailedFeedback);
       assert.equal(score.totalScore, score.uid === "qa-32" ? 0 : 30);
     }
+    const rosterSelect = page.getByRole("combobox").filter({
+      has: page.getByRole("option", { name: detailedTitle, exact: true }),
+    });
+    await rosterSelect.selectOption({ label: detailedTitle });
+    await page.getByRole("button", { name: "조회", exact: true }).click();
+    const scoreList = page.locator(".score-list-compact");
+    await scoreList.locator("tbody tr").last().waitFor();
+    assert.equal(await scoreList.locator("tbody tr").count(), 32);
+    const listMetrics = await scoreList.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      tableWidth: element.querySelector("table").getBoundingClientRect().width,
+      pageWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth,
+    }));
+    assert.ok(
+      listMetrics.scrollWidth <= listMetrics.clientWidth + 1,
+      JSON.stringify({ width, listMetrics }),
+    );
+    assert.ok(
+      listMetrics.pageWidth <= listMetrics.viewportWidth + 1,
+      JSON.stringify({ width, listMetrics }),
+    );
+    report.mainListMetrics ??= [];
+    report.mainListMetrics.push({ width, ...listMetrics });
+    for (let index = 0; index < detailedCriteria.length; index += 1) {
+      const nameButton = scoreList.getByRole("button", {
+        name: `평가 항목 ${index + 1} 이름 보기`,
+        exact: true,
+      });
+      assert.equal((await nameButton.textContent()).trim(), String(index + 1));
+      const tooltip = page.getByRole("tooltip", {
+        name: detailedCriteria[index],
+        exact: true,
+      });
+      await nameButton.hover();
+      await tooltip.waitFor();
+      const tooltipBounds = await tooltip.boundingBox();
+      assert.ok(
+        tooltipBounds.x >= 0 && tooltipBounds.x + tooltipBounds.width <= width,
+      );
+      await page.mouse.move(0, 0);
+      await tooltip.waitFor({ state: "hidden" });
+      await nameButton.focus();
+      await tooltip.waitFor();
+      await nameButton.press("Escape");
+      await tooltip.waitFor({ state: "hidden" });
+      await nameButton.click();
+      await page.mouse.move(0, 0);
+      await tooltip.waitFor();
+      if (index === 2) {
+        await page.screenshot({
+          path: out + `/main-score-list-${width}.png`,
+          fullPage: false,
+        });
+        report.screenshots.push(`main-score-list-${width}.png`);
+      }
+      await nameButton.press("Escape");
+      await tooltip.waitFor({ state: "hidden" });
+    }
+    if (width === 390) {
+      const touchName = scoreList.getByRole("button", {
+        name: "평가 항목 1 이름 보기",
+        exact: true,
+      });
+      await touchName.tap();
+      await page
+        .getByRole("tooltip", { name: detailedCriteria[0], exact: true })
+        .waitFor();
+      await scoreList
+        .getByRole("button", { name: "사유 보기", exact: true })
+        .first()
+        .tap();
+    } else {
+      await scoreList
+        .getByRole("button", { name: "사유 보기", exact: true })
+        .first()
+        .click();
+    }
+    const evidenceDialog = page.getByRole("alertdialog", {
+      name: "사유",
+      exact: true,
+    });
+    await evidenceDialog.waitFor();
+    assert.equal(await page.getByRole("tooltip").count(), 0);
+    await evidenceDialog
+      .getByRole("button", { name: "닫기", exact: true })
+      .focus();
+    await page.keyboard.press("Escape");
+    await evidenceDialog.waitFor({ state: "hidden" });
+    assert.equal(await scoreList.isVisible(), true);
+    const sortButton = scoreList.getByRole("button", {
+      name: "평가 항목 1 점수순 정렬",
+      exact: true,
+    });
+    await sortButton.click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(".score-list-compact tbody tr td:nth-child(4)")
+          ?.textContent?.trim() === "가상학생32",
+    );
+    await sortButton.click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(".score-list-compact tbody tr td:nth-child(4)")
+          ?.textContent?.trim() === "가상학생01",
+    );
+    await page.getByRole("button", { name: "점수 수정", exact: true }).click();
+    const editOverflow = await scoreList.evaluate(
+      (element) => element.scrollWidth > element.clientWidth + 1,
+    );
+    assert.equal(editOverflow, false, `Score editing overflows at ${width}px`);
+    await scoreList.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: out + `/main-score-list-editing-${width}.png`,
+      fullPage: false,
+    });
+    report.screenshots.push(`main-score-list-editing-${width}.png`);
+    // Sorting remains active during editing, so bind to the student/item rather
+    // than the first row, which legitimately moves after its score changes.
+    const editLabel = await scoreList
+      .locator("tbody input")
+      .first()
+      .getAttribute("aria-label");
+    const editInput = scoreList.getByRole("textbox", {
+      name: editLabel,
+      exact: true,
+    });
+    await editInput.fill("5");
+    assert.equal(await editInput.inputValue(), "5");
+    await page.getByRole("button", { name: "취소", exact: true }).click();
     if (width === 1280) {
       await page.evaluate(() => {
         const [key, score] = [...window.scoreQa.docs].find(
@@ -1363,6 +1636,8 @@ try {
     await page.close();
   }
   report.checks.push(
+    "Saved score list at 390/768/1280px has no internal or page horizontal overflow, including editing. Numbered headers expose each full criterion on hover, focus and pinned click, support mobile touch and local Escape, dismiss before the evidence dialog, and preserve independent ascending/descending score sorting.",
+    "Single-class preview renders all 32 students without page buttons. The visible top horizontal scrollbar supports keyboard movement, stays at the modal's scroll edge, synchronizes in both directions and reveals the complete feedback field at 390/768/1280px.",
     "Detailed grading 390/768/1280: metadata title and fixed history subject, six compact list items, grade/class/number columns and filters, literal backslash feedback normalized into line breaks, one roster with six criteria and 32 student scores saved despite filtering preview to one student.",
   );
   const maximaPage = await browser.newPage({

@@ -1,0 +1,116 @@
+.score-upload-horizontal-scroll {
+  scrollbar-color: var(--ws-text-muted, #64748b) var(--ws-border, #e5e7eb);
+}
+
+.score-upload-horizontal-scroll::-webkit-scrollbar {
+  height: 16px;
+}
+
+.score-upload-horizontal-scroll::-webkit-scrollbar-track {
+  background: var(--ws-border, #e5e7eb);
+}
+
+.score-upload-horizontal-scroll::-webkit-scrollbar-thumb {
+  border: 4px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-text-muted, #64748b);
+}
+
+.score-list-compact {
+  width: 100%;
+  min-width: 0;
+}
+
+.score-list-compact th,
+.score-list-compact td {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.score-list-compact th:last-child {
+  width: 64px;
+}
+
+.score-list-compact td:nth-child(4) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.score-list-compact td[data-score-label] > div {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.score-list-compact td[data-score-label] input {
+  width: 48px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .score-list-compact table,
+  .score-list-compact thead,
+  .score-list-compact tbody {
+    display: block;
+  }
+
+  .score-list-compact thead tr {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .score-list-compact thead th {
+    padding: 4px;
+    width: auto;
+  }
+
+  .score-list-compact tbody tr {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    align-items: center;
+    padding: 12px;
+    gap: 8px 0;
+  }
+
+  .score-list-compact td {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .score-list-compact td:nth-child(4) {
+    grid-column: span 3;
+    text-align: right;
+  }
+
+  .score-list-compact td[data-score-label] {
+    text-align: center;
+  }
+
+  .score-list-compact td[data-score-label]::before,
+  .score-list-compact td[data-score-summary]::before {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--ws-text-muted, #64748b);
+    font-size: 12px;
+    font-weight: 700;
+    content: attr(data-score-label);
+  }
+
+  .score-list-compact td[data-score-label] > div {
+    justify-content: center;
+  }
+
+  .score-list-compact td[data-score-summary] {
+    grid-column: span 3;
+    text-align: center;
+  }
+
+  .score-list-compact td[data-score-summary]::before {
+    content: attr(data-score-summary);
+  }
+
+  .score-list-compact td[colspan] {
+    grid-column: 1 / -1;
+  }
+}
