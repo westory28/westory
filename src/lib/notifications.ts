@@ -252,6 +252,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
     reason: string;
     scoreKind?: string;
     targetDetails?: string;
+    answerSheetRequested?: boolean;
   },
 ): Promise<{
   objectionIds: string[];
@@ -270,6 +271,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
       reason: string;
       scoreKind?: string;
       targetDetails?: string;
+      answerSheetRequested?: boolean;
     },
     {
       objectionIds?: string[];
@@ -287,6 +289,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
     reason: input.reason,
     scoreKind: input.scoreKind,
     targetDetails: input.targetDetails,
+    answerSheetRequested: input.answerSheetRequested === true,
   });
   return {
     objectionIds: Array.isArray(result.data?.objectionIds)
@@ -295,63 +298,6 @@ export const notifyPerformanceScoreObjectionRequested = async (
     objectionSavedCount: Number(result.data?.objectionSavedCount || 0),
     objectionSkippedProcessedCount: Number(
       result.data?.objectionSkippedProcessedCount || 0,
-    ),
-    createdCount: Number(result.data?.createdCount || 0),
-    recipientCount: Number(result.data?.recipientCount || 0),
-    skippedCount: Number(result.data?.skippedCount || 0),
-  };
-};
-
-export const notifyPerformanceScoreAnswerSheetRequested = async (
-  config: ConfigLike,
-  input: {
-    scoreIds: string[];
-    reason: string;
-    scoreKind?: string;
-    targetDetails?: string;
-  },
-): Promise<{
-  requestIds: string[];
-  requestSavedCount: number;
-  requestSkippedPendingCount?: number;
-  createdCount: number;
-  recipientCount: number;
-  skippedCount?: number;
-}> => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getScoreWorkflowCallable<
-    {
-      year: string;
-      semester: string;
-      scoreIds: string[];
-      reason: string;
-      scoreKind?: string;
-      targetDetails?: string;
-    },
-    {
-      requestIds?: string[];
-      requestSavedCount?: number;
-      requestSkippedPendingCount?: number;
-      createdCount?: number;
-      recipientCount?: number;
-      skippedCount?: number;
-    }
-  >("notifyPerformanceScoreAnswerSheetRequested");
-  const result = await callable({
-    year,
-    semester,
-    scoreIds: Array.from(new Set(input.scoreIds || [])).filter(Boolean),
-    reason: input.reason,
-    scoreKind: input.scoreKind,
-    targetDetails: input.targetDetails,
-  });
-  return {
-    requestIds: Array.isArray(result.data?.requestIds)
-      ? result.data.requestIds.map((value) => String(value || ""))
-      : [],
-    requestSavedCount: Number(result.data?.requestSavedCount || 0),
-    requestSkippedPendingCount: Number(
-      result.data?.requestSkippedPendingCount || 0,
     ),
     createdCount: Number(result.data?.createdCount || 0),
     recipientCount: Number(result.data?.recipientCount || 0),

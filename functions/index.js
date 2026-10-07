@@ -900,6 +900,8 @@ const prepareNotificationInput = async (year, semester, input, fallbackAudience 
     actorUid: input.actorUid,
     priority: policy?.priority === 'high' || input.priority === 'high' ? 'high' : 'normal',
     dedupeKey: input.dedupeKey,
+    ...(type === 'performance_score_objection_requested'
+      ? { answerSheetRequested: input.answerSheetRequested === true } : {}),
   };
 };
 
@@ -1987,6 +1989,13 @@ const createUserNotificationWithPreparedInput = async (year, semester, recipient
   return db.runTransaction(async (transaction) => {
     const existing = await transaction.get(itemRef);
     if (existing.exists) {
+      if (type === 'performance_score_objection_requested' && input.answerSheetRequested === true
+        && existing.data().answerSheetRequested !== true) {
+        transaction.update(itemRef, {
+          answerSheetRequested: true,
+          body: sanitizeNotificationText(input.body, 500),
+        });
+      }
       return { created: false, recipientUid: uid, notificationId };
     }
 
@@ -2004,6 +2013,8 @@ const createUserNotificationWithPreparedInput = async (year, semester, recipient
       readAt: null,
       createdAt: FieldValue.serverTimestamp(),
       expiresAt: getNotificationExpiryTimestamp(),
+      ...(type === 'performance_score_objection_requested'
+        ? { answerSheetRequested: input.answerSheetRequested === true } : {}),
     };
 
     transaction.set(inboxRef, {
@@ -2277,14 +2288,31 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
   });
   return db.runTransaction(async (batch) => {
     await require('./scoreWorkflowGuard').assertLegacyScoreWritable({ db, transaction: batch, uid: actorUid, year, semester });
-    const [existingSnaps, scoreSnaps, confirmationSnaps, profileSnap] = await Promise.all([
+    const [existingSnaps, scoreSnaps, confirmationSnaps, profileSnap, consentSnap, settingsSnap] = await Promise.all([
       Promise.all(refs.map((item) => batch.get(item.ref))),
       Promise.all(refs.map((item) => batch.get(db.doc(`users/${actorUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${item.scoreId}`)))),
       Promise.all(refs.map((item) => batch.get(db.doc(`users/${actorUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${item.scoreId}/${PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION}/${actorUid}`)))),
       batch.get(db.doc(`users/${actorUid}`)),
+      batch.get(db.doc(`users/${actorUid}/performance_score_consents/current`)),
+      batch.get(db.doc(`${getSemesterRoot(year, semester)}/assessment_config/performance_score`)),
     ]);
     if (!profileSnap.exists || profileSnap.data().role !== 'student' || !require('./studentRoster').isActiveStudent(profileSnap.data())) {
       throw new HttpsError('failed-precondition', '현재 점수 확인 대상 학생이 아닙니다.');
+    }
+    const consent = consentSnap.data() || {};
+    const settings = settingsSnap.data() || {};
+    // Match the existing confirmation Rules contract, including its legacy
+    // default version and optional stored warning hash.
+    if (!consentSnap.exists || consent.uid !== actorUid || consent.acknowledged !== true
+      || consent.academicYear !== year || consent.semester !== semester
+      || typeof consent.warningVersion !== 'string' || typeof consent.warningTextHash !== 'string'
+      || (settingsSnap.exists
+        ? consent.warningVersion !== settings.warningVersion
+          || (Object.hasOwn(settings, 'warningTextHash') && consent.warningTextHash !== settings.warningTextHash)
+        : consent.warningVersion !== 'default-20260609')) {
+      throw new HttpsError('failed-precondition', '점수 확인 안내에 먼저 동의해 주세요. 화면을 새로고침한 뒤 다시 진행해 주세요.', {
+        reason: 'SCORE_WARNING_CONSENT_REQUIRED',
+      });
     }
     const savedItems = [];
     let skippedProcessedCount = 0;
@@ -2348,6 +2376,7 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
         targetDetails,
         items: buildPerformanceScoreObjectionItems(data.items),
         reason: objectionReason,
+        answerSheetRequested: input.answerSheetRequested === true || existing.data()?.answerSheetRequested === true,
         status: 'pending',
         reviewedAt: null,
         reviewedBy: '',
@@ -2365,13 +2394,14 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
       }
       batch.set(item.ref, payload, { merge: true });
       batch.update(scoreSnaps[index].ref, { objectionPending: true });
-      savedItems.push(item);
+      savedItems.push({ ...item, answerSheetRequested: payload.answerSheetRequested });
     });
 
     return {
       objectionIds: savedItems.map((item) => item.objectionId),
       scoreIds: savedItems.map((item) => item.scoreId).filter(Boolean),
       skippedProcessedCount,
+      answerSheetRequested: savedItems.some((item) => item.answerSheetRequested),
     };
   });
 };
@@ -2418,14 +2448,15 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
   return createUserNotifications(year, semester, recipients, {
     type: 'performance_score_objection_requested',
     title: `${scoreKindLabel} 점수 이의 제기`,
-    body: `${studentName} 학생이 ${titleLabel} 점수에 이의를 제기했습니다.${targetDetails ? ` 대상: ${targetDetails}.` : ''} 사유: ${objectionReason}`,
+    body: `${studentName} 학생이 ${titleLabel} 점수에 이의를 제기했습니다.${input.answerSheetRequested === true ? ' 답안지 확인도 요청했습니다.' : ''}${targetDetails ? ` 대상: ${targetDetails}.` : ''} 사유: ${objectionReason}`,
     targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
       ? '/teacher/exam?tab=written-essay&panel=objections'
-      : '/teacher/exam?tab=performance',
+      : '/teacher/exam?tab=performance&panel=objections',
     entityType: 'performance_score_objection',
     entityId: objectionHash,
     actorUid,
     priority: 'high',
+    answerSheetRequested: input.answerSheetRequested === true,
     dedupeKey: `performance_score_objection_requested:${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}`,
     templateValues: {
       studentName,
@@ -2435,6 +2466,7 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
       reason: objectionReason,
       targetDetails,
       scoreKind,
+      answerSheetRequested: input.answerSheetRequested === true ? '답안지 확인 요청' : '',
     },
   });
 };
@@ -3125,6 +3157,9 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
   return Array.from(refsByPath.values());
 };
 
+// Retired standalone intake: no callable invokes this helper. New requests must
+// use savePerformanceScoreObjections; existing collection records remain only
+// for teacher review and must not be migrated or recreated through this path.
 const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) => {
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const requestReason = sanitizeNotificationText(input.reason, 300);
@@ -3235,6 +3270,7 @@ const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) =>
   });
 };
 
+// Retired alongside standalone intake; do not reconnect this notification path.
 const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, semester, input) => {
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const scoreIds = uniqueNonEmptyStrings(input.scoreIds, 20);
@@ -6010,6 +6046,10 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
   ).filter(Boolean);
   const reason = sanitizeNotificationText(request.data?.reason, 300);
   const targetDetails = sanitizeNotificationText(request.data?.targetDetails, 240);
+  if (request.data?.answerSheetRequested !== undefined && typeof request.data.answerSheetRequested !== 'boolean') {
+    throw new HttpsError('invalid-argument', '답안지 확인 요청 여부를 확인해 주세요.');
+  }
+  const answerSheetRequested = request.data?.answerSheetRequested === true;
   const requestedScoreKind = normalizePerformanceScoreKind(request.data?.scoreKind);
   if (scoreIds.length === 0) {
     throw new HttpsError('invalid-argument', 'scoreIds are required.');
@@ -6039,6 +6079,7 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
     records,
     reason,
     targetDetails,
+    answerSheetRequested,
   });
   const savedScoreIds = new Set(objectionSaveResult.scoreIds);
   const savedRecords = records.filter((record) => savedScoreIds.has(record.id));
@@ -6059,6 +6100,7 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
     records: savedRecords,
     reason,
     targetDetails,
+    answerSheetRequested: objectionSaveResult.answerSheetRequested,
   });
 
   return {
@@ -6073,78 +6115,11 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
 
 exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, async (request) => {
   await require('./scoreWorkflowGuard').assertScoreWorkflowSession(request);
-  const { uid } = assertAllowedWestoryUser(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
-    sanitizeNotificationText(scoreId, 160),
-  ).filter(Boolean);
-  const reason = sanitizeNotificationText(request.data?.reason, 300);
-  const targetDetails = sanitizeNotificationText(request.data?.targetDetails, 240);
-  const requestedScoreKind = normalizePerformanceScoreKind(request.data?.scoreKind);
-  if (scoreIds.length === 0) {
-    throw new HttpsError('invalid-argument', 'scoreIds are required.');
-  }
-  if (!reason || reason.length < 10) {
-    throw new HttpsError('invalid-argument', 'A detailed reason is required.');
-  }
-
-  const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'student') {
-    throw new HttpsError('permission-denied', 'Only students can request answer sheet checks.');
-  }
-  if (!require('./studentRoster').isActiveStudent(profile)) {
-    throw new HttpsError('failed-precondition', '현재 점수 확인 대상 학생이 아닙니다.');
-  }
-
-  const records = await Promise.all(
-    scoreIds.map((scoreId) =>
-      loadStudentPerformanceScoreForNotification(uid, year, semester, scoreId, {
-        scoreKind: requestedScoreKind,
-        allowConfirmed: true,
-      }),
-    ),
-  );
-  const requestBatchId = typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : crypto.createHash('sha1').update(`${Date.now()}:${uid}:${scoreIds.join('|')}`).digest('hex').slice(0, 32);
-  const requestSaveResult = await savePerformanceScoreAnswerSheetRequests(year, semester, {
-    actorUid: uid,
-    profile,
-    records,
-    reason,
-    targetDetails,
-    requestBatchId,
+  assertAllowedWestoryUser(request);
+  throw new HttpsError('failed-precondition', '답안지 확인은 이의제기에서 요청해 주세요. 화면을 새로고침한 뒤 다시 진행해 주세요.', {
+    reason: 'ANSWER_SHEET_REQUEST_REQUIRES_OBJECTION',
+    replacement: 'notifyPerformanceScoreObjectionRequested',
   });
-  const savedScoreIds = new Set(requestSaveResult.scoreIds);
-  const savedRecords = records.filter((record) => savedScoreIds.has(record.id));
-  if (savedRecords.length === 0) {
-    return {
-      requestIds: [],
-      requestSavedCount: 0,
-      requestSkippedPendingCount: requestSaveResult.skippedPendingCount,
-      createdCount: 0,
-      skippedCount: 0,
-      recipientCount: 0,
-    };
-  }
-  const notificationResults = await createPerformanceScoreAnswerSheetRequestedNotifications(year, semester, {
-    actorUid: uid,
-    profile,
-    scoreIds: requestSaveResult.scoreIds,
-    records: savedRecords,
-    reason,
-    targetDetails,
-    requestBatchId,
-  });
-
-  return {
-    requestIds: requestSaveResult.requestIds,
-    requestSavedCount: requestSaveResult.requestIds.length,
-    requestSkippedPendingCount: requestSaveResult.skippedPendingCount,
-    createdCount: notificationResults.filter((result) => result.created).length,
-    skippedCount: notificationResults.filter((result) => result.skipped).length,
-    recipientCount: notificationResults.length,
-  };
 });
 
 exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (request) => {

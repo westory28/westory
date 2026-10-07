@@ -28,10 +28,7 @@ import {
 } from "../../../components/common/examOmr";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
-import {
-  notifyPerformanceScoreAnswerSheetRequested,
-  notifyPerformanceScoreObjectionRequested,
-} from "../../../lib/notifications";
+import { notifyPerformanceScoreObjectionRequested } from "../../../lib/notifications";
 import { getYearSemester } from "../../../lib/semesterScope";
 import { isActiveRosterStudent } from "../../../lib/studentRoster";
 import {
@@ -538,17 +535,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     string[]
   >([]);
   const [objectionReason, setObjectionReason] = useState("");
-  const [answerSheetRequestModalOpen, setAnswerSheetRequestModalOpen] =
+  const [objectionAnswerSheetRequested, setObjectionAnswerSheetRequested] =
     useState(false);
-  const [answerSheetRequesting, setAnswerSheetRequesting] = useState(false);
-  const [answerSheetRequestError, setAnswerSheetRequestError] = useState("");
-  const [answerSheetRequestSelectedIds, setAnswerSheetRequestSelectedIds] =
-    useState<string[]>([]);
-  const [
-    answerSheetRequestSelectedItemKeys,
-    setAnswerSheetRequestSelectedItemKeys,
-  ] = useState<string[]>([]);
-  const [answerSheetRequestReason, setAnswerSheetRequestReason] = useState("");
   const [selectedWrittenExamGroupKey, setSelectedWrittenExamGroupKey] =
     useState("");
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -558,6 +546,53 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const signatureDrawnRef = useRef(false);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const requestDialogRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!objectionModalOpen && !objectionResultModalOpen) return;
+    const trigger = document.activeElement;
+    requestDialogRef.current?.focus();
+    return () => {
+      if (trigger instanceof HTMLElement && trigger.isConnected)
+        trigger.focus();
+    };
+  }, [objectionModalOpen, objectionResultModalOpen]);
+
+  const handleRequestDialogKeyDown = (
+    event: React.KeyboardEvent<HTMLElement>,
+  ) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (objecting) return;
+      if (objectionModalOpen) setObjectionModalOpen(false);
+      else setObjectionResultModalOpen(false);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const panel = event.currentTarget;
+    const controls = Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex="0"]',
+      ),
+    ).filter((control) => control.getClientRects().length > 0);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (!first || !last) {
+      event.preventDefault();
+      panel.focus();
+      return;
+    }
+    if (
+      event.shiftKey &&
+      (document.activeElement === first || document.activeElement === panel)
+    ) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   useEffect(() => {
     if (!currentUser?.uid) {
@@ -957,8 +992,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const signaturePendingScopeLabel =
     signatureScoreSections.map((section) => section.label).join("과 ") ||
     resolvedCopy.scoreLabel;
-  const signatureActionPending =
-    confirming || objecting || answerSheetRequesting;
+  const signatureActionPending = confirming || objecting;
   const warningConsentCurrent = currentUser?.uid
     ? isPerformanceScoreWarningConsentCurrent(
         warningConsent,
@@ -1020,6 +1054,16 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     });
     return scoreIds;
   }, [pendingAnswerSheetRequests]);
+  const pendingObjectionAnswerSheetScoreIds = useMemo(() => {
+    const scoreIds = new Set<string>();
+    pendingObjections
+      .filter((item) => item.answerSheetRequested === true)
+      .forEach((item) => {
+        if (item.scoreId) scoreIds.add(item.scoreId);
+        if (item.rosterId) scoreIds.add(item.rosterId);
+      });
+    return scoreIds;
+  }, [pendingObjections]);
   const hasPendingObjection = pendingObjectionScoreIds.size > 0;
   const hasPendingAnswerSheetRequest =
     pendingAnswerSheetRequestScoreIds.size > 0;
@@ -1334,6 +1378,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     }
 
     setObjectionReason("");
+    setObjectionAnswerSheetRequested(false);
     setObjectionError("");
     setObjectionSelectedIds(getDefaultObjectionScoreIds());
     setObjectionSelectedItemKeys(getDefaultObjectionItemKeys());
@@ -1360,113 +1405,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
 
   const closeObjectionResultModal = () => {
     setObjectionResultModalOpen(false);
-  };
-
-  const getDefaultAnswerSheetRequestScoreIds = () => {
-    const selectedScoreId = selectedRecord
-      ? getRecordScoreId(selectedRecord)
-      : "";
-    if (
-      selectedScoreId &&
-      !pendingAnswerSheetRequestScoreIds.has(selectedScoreId)
-    ) {
-      return [selectedScoreId];
-    }
-    const firstAvailableRecord = records.find(
-      (record) =>
-        !pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)),
-    );
-    const firstRecordId = firstAvailableRecord
-      ? getRecordScoreId(firstAvailableRecord)
-      : "";
-    return firstRecordId ? [firstRecordId] : [];
-  };
-
-  const getDefaultAnswerSheetRequestItemKeys = () => {
-    if (!hasDetailedWrittenExamItems) return [];
-    if (
-      selectedRecord &&
-      !pendingAnswerSheetRequestScoreIds.has(
-        getRecordScoreId(selectedRecord),
-      ) &&
-      activeWrittenExamGroup
-    ) {
-      return getWrittenExamItemSelectionKeysForRecord(
-        selectedRecord,
-        activeWrittenExamGroup.key,
-      );
-    }
-    const firstAvailableRecord = records.find(
-      (record) =>
-        !pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)) &&
-        getWrittenExamItemGroups(record.items || []).length > 0,
-    );
-    return firstAvailableRecord
-      ? getWrittenExamItemSelectionKeysForRecord(
-          firstAvailableRecord,
-          getWrittenExamItemGroups(firstAvailableRecord.items || [])[0]?.key,
-        )
-      : [];
-  };
-
-  const openAnswerSheetRequestModal = () => {
-    if (!warningConsentCurrent) {
-      showToast({
-        title: "안내 동의가 필요합니다.",
-        message:
-          "경고 문구를 확인하고 동의를 저장한 뒤 답안지 확인을 요청할 수 있습니다.",
-        tone: "warning",
-      });
-      return;
-    }
-    if (!records.length) {
-      showToast({
-        title: "요청할 점수가 없습니다.",
-        message: `등록된 ${resolvedCopy.scoreLabel} 점수가 있을 때 답안지 확인을 요청할 수 있습니다.`,
-        tone: "warning",
-      });
-      return;
-    }
-    if (
-      records.every((record) =>
-        pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)),
-      )
-    ) {
-      showToast({
-        title: "이미 확인 요청 중입니다.",
-        message:
-          "담당 교사가 요청을 확인한 뒤 필요하면 다시 요청할 수 있습니다.",
-        tone: "info",
-      });
-      return;
-    }
-
-    setAnswerSheetRequestReason("");
-    setAnswerSheetRequestError("");
-    setAnswerSheetRequestSelectedIds(getDefaultAnswerSheetRequestScoreIds());
-    setAnswerSheetRequestSelectedItemKeys(
-      getDefaultAnswerSheetRequestItemKeys(),
-    );
-    setAnswerSheetRequestModalOpen(true);
-  };
-
-  const closeAnswerSheetRequestModal = () => {
-    if (answerSheetRequesting) return;
-    setAnswerSheetRequestModalOpen(false);
-  };
-
-  const toggleAnswerSheetRequestScore = (scoreId: string, checked: boolean) => {
-    if (!scoreId) return;
-    setAnswerSheetRequestError("");
-    setAnswerSheetRequestSelectedIds((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(scoreId);
-      } else {
-        next.delete(scoreId);
-      }
-      return Array.from(next);
-    });
   };
 
   const toggleRequestItemSelection = (
@@ -1531,99 +1469,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       })
       .filter(Boolean);
     return details.join(" | ");
-  };
-
-  const submitAnswerSheetRequest = async () => {
-    if (!currentUser?.uid || answerSheetRequesting) return;
-    if (!warningConsentCurrent) {
-      setAnswerSheetRequestError("안내 문구 동의를 먼저 저장해 주세요.");
-      return;
-    }
-    const selectedScoreIds = hasDetailedWrittenExamItems
-      ? getSelectedWrittenExamScoreIds(
-          answerSheetRequestSelectedItemKeys,
-          records,
-        )
-      : Array.from(new Set(answerSheetRequestSelectedIds)).filter(Boolean);
-    if (!selectedScoreIds.length) {
-      setAnswerSheetRequestError(
-        hasDetailedWrittenExamItems
-          ? "답안지 확인을 요청할 서답형 또는 논술형 문항을 선택해 주세요."
-          : "답안지 확인을 요청할 점수를 선택해 주세요.",
-      );
-      return;
-    }
-    if (
-      selectedScoreIds.some((scoreId) =>
-        pendingAnswerSheetRequestScoreIds.has(scoreId),
-      )
-    ) {
-      setAnswerSheetRequestError(
-        "이미 확인 요청 중인 점수는 다시 요청할 수 없습니다.",
-      );
-      return;
-    }
-    const reason = answerSheetRequestReason.replace(/\s+/g, " ").trim();
-    if (reason.length < 10) {
-      setAnswerSheetRequestError(
-        "교사가 확인할 수 있도록 사유를 10자 이상 자세히 입력해 주세요.",
-      );
-      return;
-    }
-    if (reason.length > 300) {
-      setAnswerSheetRequestError("사유는 300자 이내로 입력해 주세요.");
-      return;
-    }
-
-    setAnswerSheetRequesting(true);
-    setAnswerSheetRequestError("");
-    try {
-      const targetDetails = buildWrittenExamTargetDetails(
-        answerSheetRequestSelectedItemKeys,
-        records.filter((record) =>
-          selectedScoreIds.includes(getRecordScoreId(record)),
-        ),
-      );
-      const result = await notifyPerformanceScoreAnswerSheetRequested(config, {
-        scoreIds: selectedScoreIds,
-        reason,
-        scoreKind,
-        targetDetails,
-      });
-      const latestRequests = await loadUserPerformanceScoreAnswerSheetRequests(
-        config,
-        currentUser.uid,
-        { scoreKind },
-      );
-      setAnswerSheetRequests(latestRequests);
-      setAnswerSheetRequestModalOpen(false);
-      setAnswerSheetRequestSelectedIds([]);
-      setAnswerSheetRequestSelectedItemKeys([]);
-      if (result.requestSavedCount <= 0) {
-        showToast({
-          title: "이미 확인 요청 중입니다.",
-          message:
-            "기존 요청이 처리되기 전에는 같은 점수로 다시 요청할 수 없습니다.",
-          tone: "info",
-        });
-        return;
-      }
-      showToast({
-        title: "답안지 확인 요청을 보냈습니다.",
-        message:
-          result.createdCount > 0
-            ? "담당 교사에게 알림이 전송되었습니다."
-            : "요청은 저장했지만 알림 설정 때문에 새 알림은 만들지 않았습니다.",
-        tone: "success",
-      });
-    } catch (error) {
-      console.error("Failed to request answer sheet check:", error);
-      setAnswerSheetRequestError(
-        "답안지 확인 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
-    } finally {
-      setAnswerSheetRequesting(false);
-    }
   };
 
   const saveWarningConsent = async () => {
@@ -1760,18 +1605,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     toggleRequestItemSelection(setObjectionSelectedItemKeys, itemKeys, checked);
   };
 
-  const toggleAnswerSheetRequestItemSelection = (
-    itemKeys: string[],
-    checked: boolean,
-  ) => {
-    setAnswerSheetRequestError("");
-    toggleRequestItemSelection(
-      setAnswerSheetRequestSelectedItemKeys,
-      itemKeys,
-      checked,
-    );
-  };
-
   const submitPerformanceScoreObjection = async () => {
     if (!currentUser?.uid || signatureActionPending) return;
     if (!warningConsentCurrent) {
@@ -1825,6 +1658,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         reason,
         scoreKind,
         targetDetails,
+        answerSheetRequested: objectionAnswerSheetRequested,
       });
       if (result.objectionSavedCount > 0) {
         const latestObjections = await loadUserPerformanceScoreObjections(
@@ -2420,14 +2254,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   )}
                   <button
                     type="button"
-                    onClick={openAnswerSheetRequestModal}
-                    disabled={signatureActionPending}
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-blue-200 bg-white px-5 py-2 text-sm font-black leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    답안지 확인 요청
-                  </button>
-                  <button
-                    type="button"
                     disabled
                     aria-disabled="true"
                     className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black leading-5 text-blue-800 opacity-80"
@@ -2444,14 +2270,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                     className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     이의 신청
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openAnswerSheetRequestModal}
-                    disabled={signatureActionPending}
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-blue-200 bg-white px-5 py-2 text-sm font-black leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    답안지 확인 요청
                   </button>
                   {hasObjectionHistory && (
                     <button
@@ -2686,7 +2504,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                             getRecordScoreId(record),
                           ) && (
                             <span className="text-amber-700">
-                              이의 처리 대기
+                              {pendingObjectionAnswerSheetScoreIds.has(
+                                getRecordScoreId(record),
+                              )
+                                ? "이의·답안지 확인 처리 대기"
+                                : "이의 처리 대기"}
                             </span>
                           )}
                           {pendingAnswerSheetRequestScoreIds.has(
@@ -2737,7 +2559,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
                   {selectedRecordHasPendingObjection ? (
                     <span className="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
-                      이의 제기 처리 대기
+                      {pendingObjectionAnswerSheetScoreIds.has(
+                        getRecordScoreId(selectedRecord),
+                      )
+                        ? "이의·답안지 확인 처리 대기"
+                        : "이의 제기 처리 대기"}
                     </span>
                   ) : hasConfirmation ? (
                     <span className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
@@ -2873,10 +2699,21 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
 
       {objectionModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+          <section
+            ref={requestDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="performance-objection-title"
+            tabIndex={-1}
+            onKeyDown={handleRequestDialogKeyDown}
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+          >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div className="min-w-0 break-keep">
-                <h3 className="text-lg font-black text-slate-900">
+                <h3
+                  id="performance-objection-title"
+                  className="text-lg font-black text-slate-900"
+                >
                   {resolvedCopy.objectionTitle}
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
@@ -2976,8 +2813,24 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 </div>
               </div>
 
+              <label className="mt-4 flex min-h-11 cursor-pointer items-center gap-3 text-sm font-bold text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={objectionAnswerSheetRequested}
+                  onChange={(event) =>
+                    setObjectionAnswerSheetRequested(event.target.checked)
+                  }
+                  disabled={objecting}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                답안지 확인도 요청
+              </label>
+
               {objectionError && (
-                <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold leading-6 text-rose-700">
+                <div
+                  role="alert"
+                  className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold leading-6 text-rose-700"
+                >
                   {objectionError}
                 </div>
               )}
@@ -3005,159 +2858,23 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         </div>
       )}
 
-      {answerSheetRequestModalOpen && selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-              <div className="min-w-0 break-keep">
-                <h3 className="text-lg font-black text-slate-900">
-                  답안지 확인 요청
-                </h3>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                  확인하고 싶은 {resolvedCopy.scoreLabel} 점수를 선택하고,
-                  답안지를 확인하려는 이유를 자세히 적어 주세요.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeAnswerSheetRequestModal}
-                disabled={answerSheetRequesting}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
-                aria-label="답안지 확인 요청 창 닫기"
-              >
-                <i className="fas fa-times" aria-hidden="true"></i>
-              </button>
-            </div>
-
-            <div className="overflow-y-auto px-5 py-4">
-              <fieldset>
-                <legend className="text-sm font-black text-slate-800">
-                  확인 요청 대상
-                </legend>
-                {hasDetailedWrittenExamItems ? (
-                  renderWrittenExamRequestTargets({
-                    records,
-                    selectedItemKeys: answerSheetRequestSelectedItemKeys,
-                    disabled: answerSheetRequesting,
-                    pendingScoreIds: pendingAnswerSheetRequestScoreIds,
-                    tone: "blue",
-                    onToggle: toggleAnswerSheetRequestItemSelection,
-                  })
-                ) : (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {records.map((record) => {
-                      const scoreId = getRecordScoreId(record);
-                      const alreadyPending =
-                        pendingAnswerSheetRequestScoreIds.has(scoreId);
-                      const checked =
-                        !alreadyPending &&
-                        answerSheetRequestSelectedIds.includes(scoreId);
-                      return (
-                        <label
-                          key={`answer-sheet-${scoreId}`}
-                          className={`flex items-start gap-3 rounded-lg border px-3 py-3 transition ${
-                            alreadyPending
-                              ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-75"
-                              : checked
-                                ? "border-blue-200 bg-blue-50"
-                                : "border-slate-200 bg-white hover:bg-slate-50"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) =>
-                              toggleAnswerSheetRequestScore(
-                                scoreId,
-                                event.target.checked,
-                              )
-                            }
-                            disabled={answerSheetRequesting || alreadyPending}
-                            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="min-w-0">
-                            <span className="block whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
-                              {record.title}
-                            </span>
-                            <span className="mt-1 block text-xs font-bold text-slate-500">
-                              획득 {formatPerformanceScore(record.totalScore)} /{" "}
-                              {formatPerformanceScore(record.totalMaxScore)}점
-                            </span>
-                            {alreadyPending && (
-                              <span className="mt-1 block text-xs font-black text-blue-700">
-                                이미 확인 요청 중입니다.
-                              </span>
-                            )}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </fieldset>
-
-              <div className="mt-5">
-                <label
-                  htmlFor="performance-score-answer-sheet-reason"
-                  className="text-sm font-black text-slate-800"
-                >
-                  확인 요청 사유
-                </label>
-                <textarea
-                  lang="ko"
-                  inputMode="text"
-                  id="performance-score-answer-sheet-reason"
-                  value={answerSheetRequestReason}
-                  onChange={(event) => {
-                    setAnswerSheetRequestReason(event.target.value);
-                    setAnswerSheetRequestError("");
-                  }}
-                  disabled={answerSheetRequesting}
-                  maxLength={300}
-                  rows={5}
-                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
-                  placeholder="예: 논술형 채점 근거를 다시 확인하고 싶어 답안지 확인을 요청합니다."
-                />
-                <div className="mt-1 text-right text-xs font-bold text-slate-400">
-                  {answerSheetRequestReason.length}/300
-                </div>
-              </div>
-
-              {answerSheetRequestError && (
-                <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold leading-6 text-rose-700">
-                  {answerSheetRequestError}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
-              <button
-                type="button"
-                onClick={closeAnswerSheetRequestModal}
-                disabled={answerSheetRequesting}
-                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => void submitAnswerSheetRequest()}
-                disabled={answerSheetRequesting}
-                className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
-              >
-                {answerSheetRequesting ? "전송 중..." : "요청 보내기"}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
       {objectionResultModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+          <section
+            ref={requestDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="performance-objection-result-title"
+            tabIndex={-1}
+            onKeyDown={handleRequestDialogKeyDown}
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+          >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div className="min-w-0 break-keep">
-                <h3 className="text-lg font-black text-slate-900">
+                <h3
+                  id="performance-objection-result-title"
+                  className="text-lg font-black text-slate-900"
+                >
                   {resolvedCopy.objectionResultTitle}
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
@@ -3235,6 +2952,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                             <p className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-slate-800">
                               {objection.reason || "이의 신청 사유 없음"}
                             </p>
+                            {objection.answerSheetRequested === true && (
+                              <p className="mt-2 text-sm font-bold text-blue-700">
+                                답안지 확인 요청 포함
+                              </p>
+                            )}
                           </div>
 
                           {objection.status === "accepted" &&

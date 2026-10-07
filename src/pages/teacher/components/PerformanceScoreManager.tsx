@@ -1230,6 +1230,7 @@ interface PerformanceScoreObjection {
   targetDetails?: string;
   items: PerformanceScoreObjectionItem[];
   reason: string;
+  answerSheetRequested: boolean;
   status: PerformanceScoreObjectionStatus;
   requestedAt?: unknown;
   reviewedAt?: unknown;
@@ -1551,6 +1552,7 @@ const normalizePerformanceScoreObjection = (
     targetDetails: toText(data.targetDetails),
     items: normalizeObjectionItems(data.items),
     reason: toText(data.reason),
+    answerSheetRequested: data.answerSheetRequested === true,
     status: normalizeObjectionStatus(data.status),
     requestedAt: data.requestedAt,
     reviewedAt: data.reviewedAt,
@@ -5476,8 +5478,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     id: string;
     status: PerformanceScoreObjectionReviewAction;
   } | null>(null);
-  const [answerSheetRequestModalOpen, setAnswerSheetRequestModalOpen] =
+  const [legacyAnswerSheetRequestsOpen, setLegacyAnswerSheetRequestsOpen] =
     useState(false);
+  const objectionDialogRef = useRef<HTMLElement | null>(null);
   const [answerSheetRequests, setAnswerSheetRequests] = useState<
     PerformanceScoreAnswerSheetRequest[]
   >([]);
@@ -6846,6 +6849,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }),
     [answerSheetRequests],
   );
+  const objectionRequestsBusy = Boolean(
+    objectionReviewingAction || answerSheetRequestReviewingId,
+  );
+  const pendingObjectionRequestCount =
+    objectionSummary.pending + answerSheetRequestSummary.pending;
   const summaryExportRosters = useMemo(() => {
     return {
       firstRoster:
@@ -7919,14 +7927,25 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
   };
 
+  const refreshObjectionRequests = () => {
+    void loadPerformanceScoreObjections();
+    void loadAnswerSheetRequests();
+  };
+
   const openObjectionModal = () => {
     setObjectionModalOpen(true);
-    void loadPerformanceScoreObjections();
+    refreshObjectionRequests();
   };
 
   const closeObjectionModal = () => {
+    if (objectionRequestsBusy) return;
     setObjectionModalOpen(false);
-    if (searchParams.get("panel") !== "objections") return;
+    if (
+      !["objections", "answer-sheet-requests"].includes(
+        searchParams.get("panel") || "",
+      )
+    )
+      return;
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("panel");
     setSearchParams(nextParams, { replace: true });
@@ -7974,23 +7993,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
   };
 
-  const openAnswerSheetRequestModal = () => {
-    setAnswerSheetRequestModalOpen(true);
-    void loadAnswerSheetRequests();
-  };
-
-  const closeAnswerSheetRequestModal = () => {
-    setAnswerSheetRequestModalOpen(false);
-    if (searchParams.get("panel") !== "answer-sheet-requests") return;
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("panel");
-    setSearchParams(nextParams, { replace: true });
-  };
-
   const markAnswerSheetRequestReviewed = async (
     item: PerformanceScoreAnswerSheetRequest,
   ) => {
-    if (answerSheetRequestReviewingId) return;
+    if (objectionRequestsBusy) return;
     const memo = await promptDialog({
       title: "답안지 확인 요청 처리",
       message: `${item.studentName} 학생의 답안지 확인 요청을 확인 완료로 표시합니다. 남길 메모가 있으면 입력해 주세요.`,
@@ -8047,29 +8053,83 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   };
 
   useEffect(() => {
-    if (searchParams.get("panel") !== "objections" || objectionModalOpen) {
+    const panel = searchParams.get("panel");
+    if (
+      !["objections", "answer-sheet-requests"].includes(panel || "") ||
+      objectionModalOpen
+    )
       return;
-    }
-    setObjectionModalOpen(true);
-    void loadPerformanceScoreObjections();
+    if (panel === "answer-sheet-requests")
+      setLegacyAnswerSheetRequestsOpen(true);
+    openObjectionModal();
   }, [searchParams, objectionModalOpen]);
 
   useEffect(() => {
+    if (!objectionModalOpen) return;
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const frame = window.requestAnimationFrame(() =>
+      objectionDialogRef.current?.focus(),
+    );
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [objectionModalOpen]);
+
+  const handleObjectionDialogKeyDown = (
+    event: React.KeyboardEvent<HTMLElement>,
+  ) => {
+    const panel = event.currentTarget;
     if (
-      searchParams.get("panel") !== "answer-sheet-requests" ||
-      answerSheetRequestModalOpen
-    ) {
+      !(event.target instanceof Element) ||
+      event.target.closest('[role="dialog"], [role="alertdialog"]') !== panel
+    )
+      return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeObjectionModal();
       return;
     }
-    setAnswerSheetRequestModalOpen(true);
-    void loadAnswerSheetRequests();
-  }, [searchParams, answerSheetRequestModalOpen]);
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        "button, summary, [href], input, select, textarea, [tabindex]",
+      ),
+    ).filter(
+      (element) =>
+        element.tabIndex >= 0 &&
+        !element.hasAttribute("disabled") &&
+        element.getClientRects().length > 0,
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!first) {
+      event.preventDefault();
+      panel.focus();
+    } else if (
+      event.shiftKey &&
+      (document.activeElement === first || document.activeElement === panel)
+    ) {
+      event.preventDefault();
+      last.focus();
+    } else if (
+      !event.shiftKey &&
+      (document.activeElement === last || document.activeElement === panel)
+    ) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   const handleReviewObjection = async (
     objection: PerformanceScoreObjection,
     status: PerformanceScoreObjectionReviewAction,
   ) => {
-    if (objectionReviewingAction) return;
+    if (objectionRequestsBusy) return;
 
     let changedTotalScore: number | null = null;
     let changedScoreLabel = "";
@@ -11546,6 +11606,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       {objectionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section
+            ref={objectionDialogRef}
+            tabIndex={-1}
+            onKeyDown={handleObjectionDialogKeyDown}
             role="dialog"
             aria-modal="true"
             aria-labelledby="performance-score-objections-title"
@@ -11559,23 +11622,23 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 >
                   {managerCopy.objectionsTitle}
                 </h3>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  학생이 제출한 이의 제기 항목과 점수, 사유, 처리 상태를
-                  확인합니다.
-                </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void loadPerformanceScoreObjections()}
+                  onClick={refreshObjectionRequests}
                   disabled={
-                    objectionsLoading || Boolean(objectionReviewingAction)
+                    objectionsLoading ||
+                    answerSheetRequestsLoading ||
+                    objectionRequestsBusy
                   }
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <i
                     className={`fas fa-sync-alt text-xs ${
-                      objectionsLoading ? "animate-spin" : ""
+                      objectionsLoading || answerSheetRequestsLoading
+                        ? "animate-spin"
+                        : ""
                     }`}
                     aria-hidden="true"
                   />
@@ -11584,6 +11647,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 <button
                   type="button"
                   onClick={closeObjectionModal}
+                  disabled={objectionRequestsBusy}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
                   aria-label="이의 목록 창 닫기"
                 >
@@ -11714,6 +11778,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                 )}
                             </td>
                             <td className="px-4 py-4 align-top">
+                              {objection.answerSheetRequested && (
+                                <span className="mb-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700">
+                                  답안지 확인 요청
+                                </span>
+                              )}
                               <p className="whitespace-pre-wrap break-words font-semibold leading-6 text-slate-700">
                                 {objection.reason || "사유 없음"}
                               </p>
@@ -11746,7 +11815,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                         "rejected",
                                       )
                                     }
-                                    disabled={Boolean(objectionReviewingAction)}
+                                    disabled={objectionRequestsBusy}
                                     className="inline-flex h-8 min-w-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-white px-2.5 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     {reviewingStatus === "rejected"
@@ -11761,7 +11830,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                         "accepted",
                                       )
                                     }
-                                    disabled={Boolean(objectionReviewingAction)}
+                                    disabled={objectionRequestsBusy}
                                     className="inline-flex h-8 min-w-[44px] items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-2.5 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                                   >
                                     {reviewingStatus === "accepted"
@@ -11786,215 +11855,135 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   </table>
                 )}
               </div>
+              <details
+                className="mt-5 rounded-xl border border-slate-200 p-4"
+                open={legacyAnswerSheetRequestsOpen}
+                onToggle={(event) =>
+                  setLegacyAnswerSheetRequestsOpen(event.currentTarget.open)
+                }
+              >
+                <summary className="cursor-pointer rounded text-sm font-black text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600">
+                  이전 답안지 확인 요청
+                  <span className="ml-2 text-xs font-bold text-slate-500">
+                    {answerSheetRequestsLoading
+                      ? "불러오는 중"
+                      : answerSheetRequestsLoaded
+                        ? `전체 ${answerSheetRequestSummary.total}건 · 대기 ${answerSheetRequestSummary.pending}건 · 확인 완료 ${answerSheetRequestSummary.reviewed}건`
+                        : "조회 실패"}
+                  </span>
+                </summary>
+                <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                  {answerSheetRequestsLoading ? (
+                    <InlineLoading message="답안지 확인 요청을 불러오는 중입니다." />
+                  ) : answerSheetRequestsLoaded &&
+                    answerSheetRequests.length === 0 ? (
+                    <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                      이전 답안지 확인 요청이 없습니다.
+                    </div>
+                  ) : !answerSheetRequestsLoaded ? (
+                    <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                      이전 답안지 확인 요청을 불러오지 못했습니다. 새로고침해
+                      주세요.
+                    </div>
+                  ) : (
+                    <table className="w-full min-w-[960px] table-fixed text-left text-sm">
+                      <colgroup>
+                        <col className="w-[150px]" />
+                        <col className="w-[220px]" />
+                        <col className="w-[120px]" />
+                        <col className="w-[330px]" />
+                        <col className="w-[110px]" />
+                        <col className="w-[140px]" />
+                      </colgroup>
+                      <thead className="bg-slate-50 text-xs font-black text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">학생</th>
+                          <th className="px-4 py-3">
+                            {managerCopy.answerSheetItemHeader}
+                          </th>
+                          <th className="px-4 py-3">해당 점수</th>
+                          <th className="px-4 py-3">확인 요청 사유</th>
+                          <th className="px-4 py-3">요청 시간</th>
+                          <th className="px-4 py-3 text-center">상태/처리</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {answerSheetRequests.map((item) => (
+                          <tr key={item.id}>
+                            <td className="px-4 py-4 align-top">
+                              <div className="font-black text-slate-900">
+                                {item.studentName}
+                              </div>
+                              <div className="mt-1 text-xs font-bold text-slate-500">
+                                {item.grade || "-"}학년 {item.class || "-"}반{" "}
+                                {item.number || "-"}번
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <div className="font-black text-slate-900">
+                                {item.scoreTitle}
+                              </div>
+                              <div className="mt-1 text-xs font-bold text-slate-500">
+                                {item.subject || "과목 정보 없음"}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <div className="font-black text-blue-700">
+                                {item.scoreLabel || "-"}
+                              </div>
+                              {item.targetDetails && (
+                                <div className="mt-1 whitespace-pre-wrap break-keep text-xs font-bold leading-5 text-blue-800">
+                                  대상: {item.targetDetails}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <p className="whitespace-pre-wrap break-words font-semibold leading-6 text-slate-700">
+                                {item.reason || "사유 없음"}
+                              </p>
+                              {item.reviewMemo && (
+                                <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold leading-5 text-slate-500">
+                                  처리 메모: {item.reviewMemo}
+                                </p>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 align-top text-xs font-bold leading-5 text-slate-500">
+                              {formatObjectionTime(item.requestedAt)}
+                            </td>
+                            <td className="px-4 py-4 align-top text-center">
+                              {item.status === "pending" ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void markAnswerSheetRequestReviewed(item)
+                                  }
+                                  disabled={objectionRequestsBusy}
+                                  className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                >
+                                  {answerSheetRequestReviewingId === item.id
+                                    ? "처리 중"
+                                    : "확인 완료"}
+                                </button>
+                              ) : (
+                                <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                                  확인 완료
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </details>
             </div>
 
             <div className="flex justify-end border-t border-slate-200 px-5 py-4">
               <button
                 type="button"
                 onClick={closeObjectionModal}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-              >
-                닫기
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {answerSheetRequestModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="performance-score-answer-sheet-requests-title"
-            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-          >
-            <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <h3
-                  id="performance-score-answer-sheet-requests-title"
-                  className="text-lg font-black text-slate-900"
-                >
-                  답안지 확인 요청
-                </h3>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  학생이 점수 이의와 별개로 본인 답안지 확인을 요청한
-                  내역입니다.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void loadAnswerSheetRequests()}
-                  disabled={
-                    answerSheetRequestsLoading ||
-                    Boolean(answerSheetRequestReviewingId)
-                  }
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <i
-                    className={`fas fa-sync-alt text-xs ${
-                      answerSheetRequestsLoading ? "animate-spin" : ""
-                    }`}
-                    aria-hidden="true"
-                  />
-                  새로고침
-                </button>
-                <button
-                  type="button"
-                  onClick={closeAnswerSheetRequestModal}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
-                  aria-label="답안지 확인 요청 창 닫기"
-                >
-                  <i className="fas fa-times" aria-hidden="true"></i>
-                </button>
-              </div>
-            </div>
-
-            <div className="overflow-y-auto px-5 py-4">
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  {
-                    label: "전체 요청",
-                    value: answerSheetRequestSummary.total,
-                    className: "bg-slate-50 text-slate-900",
-                  },
-                  {
-                    label: "처리 대기",
-                    value: answerSheetRequestSummary.pending,
-                    className: "bg-amber-50 text-amber-800",
-                  },
-                  {
-                    label: "확인 완료",
-                    value: answerSheetRequestSummary.reviewed,
-                    className: "bg-emerald-50 text-emerald-800",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className={`rounded-lg px-4 py-3 ${item.className}`}
-                  >
-                    <div className="text-xs font-black opacity-80">
-                      {item.label}
-                    </div>
-                    <div className="mt-1 text-2xl font-black">
-                      {item.value}건
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-                {answerSheetRequestsLoading ? (
-                  <InlineLoading message="답안지 확인 요청을 불러오는 중입니다." />
-                ) : answerSheetRequestsLoaded &&
-                  answerSheetRequests.length === 0 ? (
-                  <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
-                    제출된 답안지 확인 요청이 없습니다.
-                  </div>
-                ) : !answerSheetRequestsLoaded ? (
-                  <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
-                    새로고침을 누르면 답안지 확인 요청 목록을 조회합니다.
-                  </div>
-                ) : (
-                  <table className="w-full min-w-[960px] table-fixed text-left text-sm">
-                    <colgroup>
-                      <col className="w-[150px]" />
-                      <col className="w-[220px]" />
-                      <col className="w-[120px]" />
-                      <col className="w-[330px]" />
-                      <col className="w-[110px]" />
-                      <col className="w-[140px]" />
-                    </colgroup>
-                    <thead className="bg-slate-50 text-xs font-black text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">학생</th>
-                        <th className="px-4 py-3">
-                          {managerCopy.answerSheetItemHeader}
-                        </th>
-                        <th className="px-4 py-3">해당 점수</th>
-                        <th className="px-4 py-3">확인 요청 사유</th>
-                        <th className="px-4 py-3">요청 시간</th>
-                        <th className="px-4 py-3 text-center">상태/처리</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {answerSheetRequests.map((item) => (
-                        <tr key={item.id}>
-                          <td className="px-4 py-4 align-top">
-                            <div className="font-black text-slate-900">
-                              {item.studentName}
-                            </div>
-                            <div className="mt-1 text-xs font-bold text-slate-500">
-                              {item.grade || "-"}학년 {item.class || "-"}반{" "}
-                              {item.number || "-"}번
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 align-top">
-                            <div className="font-black text-slate-900">
-                              {item.scoreTitle}
-                            </div>
-                            <div className="mt-1 text-xs font-bold text-slate-500">
-                              {item.subject || "과목 정보 없음"}
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 align-top">
-                            <div className="font-black text-blue-700">
-                              {item.scoreLabel || "-"}
-                            </div>
-                            {item.targetDetails && (
-                              <div className="mt-1 whitespace-pre-wrap break-keep text-xs font-bold leading-5 text-blue-800">
-                                대상: {item.targetDetails}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 align-top">
-                            <p className="whitespace-pre-wrap break-words font-semibold leading-6 text-slate-700">
-                              {item.reason || "사유 없음"}
-                            </p>
-                            {item.reviewMemo && (
-                              <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold leading-5 text-slate-500">
-                                처리 메모: {item.reviewMemo}
-                              </p>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 align-top text-xs font-bold leading-5 text-slate-500">
-                            {formatObjectionTime(item.requestedAt)}
-                          </td>
-                          <td className="px-4 py-4 align-top text-center">
-                            {item.status === "pending" ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void markAnswerSheetRequestReviewed(item)
-                                }
-                                disabled={Boolean(
-                                  answerSheetRequestReviewingId,
-                                )}
-                                className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                              >
-                                {answerSheetRequestReviewingId === item.id
-                                  ? "처리 중"
-                                  : "확인 완료"}
-                              </button>
-                            ) : (
-                              <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                                확인 완료
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeAnswerSheetRequestModal}
+                disabled={objectionRequestsBusy}
                 className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
               >
                 닫기
@@ -12871,30 +12860,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 aria-hidden="true"
               />
               이의제기
-              {objectionSummary.pending > 0 && (
+              {pendingObjectionRequestCount > 0 && (
                 <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
-                  {objectionSummary.pending}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={openAnswerSheetRequestModal}
-              disabled={
-                answerSheetRequestsLoading || scoreEditing || savingScoreEdits
-              }
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <i
-                className={`fas fa-file-signature text-xs ${
-                  answerSheetRequestsLoading ? "animate-spin" : ""
-                }`}
-                aria-hidden="true"
-              />
-              답안지 요청
-              {answerSheetRequestSummary.pending > 0 && (
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-600">
-                  {answerSheetRequestSummary.pending}
+                  {pendingObjectionRequestCount}
                 </span>
               )}
             </button>

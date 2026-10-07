@@ -296,7 +296,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     label: "수행평가 점수 이의 제기",
     audience: "teachers",
     description:
-      "학생이 수행평가 점수 확인 전에 이의 제기를 요청했을 때 담당 교사에게 안내합니다.",
+      "학생이 점수에 이의를 제기하거나 이의제기와 함께 답안지 확인을 요청하면 담당 교사에게 안내합니다.",
     triggerLabel: "학생이 수행평가 점수 이의를 제기했을 때",
     recipientLabel: "점수표 업로드 교사·관리자",
     status: "connected",
@@ -304,8 +304,8 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultPriority: "high",
     titleTemplate: "수행평가 점수 이의 제기",
     bodyTemplate:
-      "{studentName} 학생이 {scoreTitle} 점수에 이의를 제기했습니다. 사유: {reason}",
-    targetUrl: "/teacher/exam?tab=performance",
+      "{studentName} 학생이 {scoreTitle} 점수에 이의를 제기했습니다. {answerSheetRequested} 사유: {reason}",
+    targetUrl: "/teacher/exam?tab=performance&panel=objections",
     targetLabel: "교사 수행평가 점수 관리 화면",
     tokens: [
       { key: "studentName", label: "학생 이름" },
@@ -313,6 +313,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
       { key: "scoreTitle", label: "수행평가명" },
       { key: "scoreCount", label: "선택 평가 수" },
       { key: "reason", label: "이의 제기 사유" },
+      { key: "answerSheetRequested", label: "답안지 확인 요청 여부" },
     ],
   },
   {
@@ -359,30 +360,6 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
       { key: "studentScope", label: "학생 학급" },
       { key: "scoreTitle", label: "수행평가명" },
       { key: "scoreCount", label: "반려 평가 수" },
-    ],
-  },
-  {
-    key: "performance_score_answer_sheet_requested",
-    label: "답안지 확인 요청",
-    audience: "teachers",
-    description:
-      "학생이 점수 이의 제기와 별개로 본인의 답안지 확인을 요청했을 때 담당 교사에게 안내합니다.",
-    triggerLabel: "학생이 답안지 확인을 요청했을 때",
-    recipientLabel: "점수표 업로드 교사·관리자",
-    status: "connected",
-    defaultEnabled: true,
-    defaultPriority: "high",
-    titleTemplate: "답안지 확인 요청",
-    bodyTemplate:
-      "{studentName} 학생이 {scoreTitle} 답안지 확인을 요청했습니다. 사유: {reason}",
-    targetUrl: "/teacher/exam?tab=written-essay&panel=answer-sheet-requests",
-    targetLabel: "교사 정기시험 점수 관리 화면",
-    tokens: [
-      { key: "studentName", label: "학생 이름" },
-      { key: "studentScope", label: "학생 학급" },
-      { key: "scoreTitle", label: "점수표 이름" },
-      { key: "scoreCount", label: "선택 점수 수" },
-      { key: "reason", label: "확인 요청 사유" },
     ],
   },
   {

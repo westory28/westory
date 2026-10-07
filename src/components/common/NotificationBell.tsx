@@ -123,15 +123,15 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
       targetUrl === "/teacher/exam" ||
       targetUrl === "/teacher/exam?tab=written-essay"
     ) {
-      return "/teacher/exam?tab=written-essay&panel=answer-sheet-requests";
+      return "/teacher/exam?tab=written-essay&panel=objections";
     }
     if (
       targetUrl.startsWith("/teacher/exam?") &&
       !targetUrl.includes("panel=")
     ) {
-      return `${targetUrl}&panel=answer-sheet-requests`;
+      return `${targetUrl}&panel=objections`;
     }
-    return targetUrl;
+    return targetUrl.replace("panel=answer-sheet-requests", "panel=objections");
   }
   if (
     notification.type === "performance_score_objection_reviewed" ||

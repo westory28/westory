@@ -164,6 +164,7 @@ export interface PerformanceScoreObjection {
   rosterId?: string;
   scoreTitle?: string;
   targetDetails?: string;
+  answerSheetRequested?: boolean;
   status: PerformanceScoreObjectionStatus;
   reason?: string;
   requestedAt?: unknown;
@@ -523,6 +524,7 @@ export const loadUserPerformanceScoreObjections = async (
         scoreTitle: String(data.scoreTitle || ""),
         targetDetails: String(data.targetDetails || ""),
         status: normalizePerformanceScoreObjectionStatus(data.status),
+        answerSheetRequested: data.answerSheetRequested === true,
         reason: String(data.reason || ""),
         requestedAt: data.requestedAt,
         reviewedAt: data.reviewedAt,

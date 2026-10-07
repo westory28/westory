@@ -85,16 +85,22 @@ for(let i=1;i<=32;i++)docs.set('users/qa-'+i,{role:'student',grade:'3',class:'1'
 export const ref=(value)=>{const parts=value.split('/');return{path:value,id:parts.at(-1),parent:{id:parts.at(-2),path:parts.slice(0,-1).join('/')}}};
 export const snap=(r)=>({...r,ref:r,exists:()=>docs.has(r.path),data:()=>docs.get(r.path)});
 export const apply=(r,data,options)=>{let value=options?.merge?{...docs.get(r.path),...data}:{...data};for(const key of Object.keys(value))if(value[key]?.__delete)delete value[key];docs.set(r.path,value);events.push({op:'set',path:r.path});};
+for(const kind of ['performance','written_exam_essay']){
+ const base={uid:'qa-1',studentName:kind==='performance'?'가상수행학생':'가상정기학생',grade:'3',class:'1',number:'1',scoreKind:kind,scoreId:'qa-score-'+kind,rosterId:'qa-score-'+kind,scoreTitle:kind==='performance'?'가상 수행평가':'가상 정기시험',subject:'역사',academicYear:'2026',semester:'2',scoreLabel:'12 / 15점',totalScore:12,totalMaxScore:15,requestedAt:{seconds:1801850000},status:'pending'};
+ docs.set('years/2026/semesters/2/performance_score_objections/'+kind+'-flagged',{...base,reason:'채점 기준 확인 요청',answerSheetRequested:true});
+ docs.set('years/2026/semesters/2/performance_score_objections/'+kind+'-plain',{...base,studentName:base.studentName+'일반',reason:'점수 확인 요청',answerSheetRequested:false});
+ docs.set('years/2026/semesters/2/performance_score_answer_sheet_requests/'+kind+'-legacy',{...base,studentName:base.studentName+'이전',reason:'이전 답안지 확인 요청 사유'});
+}
 window.scoreQa={docs,events,toasts,timestampTick:0};
 `;
 const mocks = {
   "qa-state": state,
   "qa-auth": `export const useAuth=()=>({userData:{role:'teacher'},currentUser:{uid:'qa-teacher',displayName:'가상교사',email:'qa-teacher@example.test'},config:{year:'2026',semester:'2'}});`,
-  "qa-firestore": `import{docs,ref,snap,apply,events}from'qa-state';export const collection=(db,...parts)=>ref(parts.join('/'));export const collectionGroup=(db,name)=>({group:name});export const doc=(db,...parts)=>ref(parts.join('/'));export const getDoc=async(r)=>{if(window.scoreQa.rejectConfirmationReads&&r.path.includes("/confirmations/"))throw new Error("confirmation read denied");return snap(r)};export const getDocFromServer=getDoc;export const query=(base,...filters)=>({...base,filters});export const where=(field,op,value)=>({field,op,value});export const orderBy=(...args)=>({order:args});export const limit=n=>({limit:n});export const serverTimestamp=()=>({seconds:1801850400+window.scoreQa.timestampTick++,nanoseconds:0});export const deleteField=()=>({__delete:true});export const getDocs=async(r)=>{if(window.scoreQa.rejectConfirmationReads&&r.group==="confirmations")throw new Error("confirmation query denied");let entries=[...docs].filter(([key])=>r.group?key.split('/').at(-2)===r.group:key.startsWith(r.path+'/')&&key.slice(r.path.length+1).indexOf('/')<0);for(const filter of r.filters||[])if(filter.field)entries=entries.filter(([,value])=>filter.op==='=='?value[filter.field]===filter.value:true);const result=entries.map(([key])=>snap(ref(key)));return{docs:result,empty:!result.length,size:result.length,forEach:fn=>result.forEach(fn)};};export const setDoc=async(r,data,options)=>apply(r,data,options);export const updateDoc=(r,data)=>setDoc(r,data,{merge:true});export const runTransaction=async(db,callback)=>{if(window.scoreQa.pauseTransactions)await new Promise(resolve=>{window.scoreQa.resumeTransaction=resolve});const pending=[];const value=await callback({get:getDoc,set:(...args)=>pending.push(['set',args]),update:(r,data)=>pending.push(['set',[r,data,{merge:true}]]),delete:r=>pending.push(['delete',[r]])});pending.forEach(([op,args])=>op==='delete'?docs.delete(args[0].path):apply(...args));return value;};export const writeBatch=()=>{const pending=[];return{set:(...args)=>pending.push(args),update:(r,data)=>pending.push([r,data,{merge:true}]),delete:r=>docs.delete(r.path),commit:async()=>pending.forEach(args=>apply(...args))}};`,
+  "qa-firestore": `import{docs,ref,snap,apply,events}from'qa-state';export const collection=(db,...parts)=>ref(parts.join('/'));export const collectionGroup=(db,name)=>({group:name});export const doc=(db,...parts)=>ref(parts.join('/'));export const getDoc=async(r)=>{if(window.scoreQa.rejectConfirmationReads&&r.path.includes("/confirmations/"))throw new Error("confirmation read denied");return snap(r)};export const getDocFromServer=getDoc;export const query=(base,...filters)=>({...base,filters});export const where=(field,op,value)=>({field,op,value});export const orderBy=(...args)=>({order:args});export const limit=n=>({limit:n});export const serverTimestamp=()=>({seconds:1801850400+window.scoreQa.timestampTick++,nanoseconds:0});export const deleteField=()=>({__delete:true});export const getDocs=async(r)=>{if(window.scoreQa.rejectLegacyRequestReads&&r.path?.endsWith("/performance_score_answer_sheet_requests"))throw new Error("legacy request read denied");if(window.scoreQa.rejectConfirmationReads&&r.group==="confirmations")throw new Error("confirmation query denied");let entries=[...docs].filter(([key])=>r.group?key.split('/').at(-2)===r.group:key.startsWith(r.path+'/')&&key.slice(r.path.length+1).indexOf('/')<0);for(const filter of r.filters||[])if(filter.field)entries=entries.filter(([,value])=>filter.op==='=='?value[filter.field]===filter.value:true);const result=entries.map(([key])=>snap(ref(key)));return{docs:result,empty:!result.length,size:result.length,forEach:fn=>result.forEach(fn)};};export const setDoc=async(r,data,options)=>apply(r,data,options);export const updateDoc=async(r,data)=>{if(window.scoreQa.pauseLegacyReview&&r.path.includes("/performance_score_answer_sheet_requests/"))await new Promise(resolve=>window.scoreQa.resumeLegacyReview=resolve);return setDoc(r,data,{merge:true});};export const runTransaction=async(db,callback)=>{if(window.scoreQa.pauseTransactions)await new Promise(resolve=>{window.scoreQa.resumeTransaction=resolve});const pending=[];const value=await callback({get:getDoc,set:(...args)=>pending.push(['set',args]),update:(r,data)=>pending.push(['set',[r,data,{merge:true}]]),delete:r=>pending.push(['delete',[r]])});pending.forEach(([op,args])=>op==='delete'?docs.delete(args[0].path):apply(...args));return value;};export const writeBatch=()=>{const pending=[];return{set:(...args)=>pending.push(args),update:(r,data)=>pending.push([r,data,{merge:true}]),delete:r=>docs.delete(r.path),commit:async()=>pending.forEach(args=>apply(...args))}};`,
   "qa-firebase": `export const db={};export const auth={currentUser:{uid:"qa-teacher",getIdTokenResult:async()=>({claims:{auth_time:1801850400}})}};export const getHttpsCallable=async(name)=>async(input)=>({data:name==='getPrintClientInfo'?{maskedIp:'192.0.2.*'}:{}});`,
   "qa-student-profile-commands": `export const callStudentDataService=async(name)=>name==='getPrintClientInfo'?{maskedIp:'192.0.2.*'}:{};`,
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
-  "qa-notifications": `export const createManagedNotifications=async()=>({createdCount:0});export const reviewPerformanceScoreObjection=async()=>({});`,
+  "qa-notifications": `export const createManagedNotifications=async()=>({createdCount:0});export const reviewPerformanceScoreObjection=async(config,input)=>{const key='years/2026/semesters/2/performance_score_objections/'+input.objectionId;const value=window.scoreQa.docs.get(key);window.scoreQa.docs.set(key,{...value,...input});window.scoreQa.events.push({op:'reviewObjection',...input});return{notificationCreated:true};};`,
   "qa-toast": `import{toasts}from'qa-state';const showToast=(payload)=>{toasts.push(payload);document.getElementById('qa-toast').textContent=payload.title+' '+(payload.message||'');};export const useAppToast=()=>({showToast});`,
   "qa-dialog": `import{events}from'qa-state';const confirm=async(payload)=>{events.push({op:'confirm',title:payload.title});return true};const prompt=async()=>null;export const useAppDialog=()=>({confirm,prompt});`,
 };
@@ -112,7 +118,7 @@ const moduleFor = (request) => {
 };
 const result = await build({
   stdin: {
-    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter}from'react-router-dom';import Manager from'${root}/src/pages/teacher/components/PerformanceScoreManager';import{AppDialogProvider}from'${root}/src/components/common/AppDialogProvider';import'qa-state';createRoot(document.getElementById('root')).render(<BrowserRouter><AppDialogProvider><Manager/></AppDialogProvider></BrowserRouter>);`,
+    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter}from'react-router-dom';import Manager from'${root}/src/pages/teacher/components/PerformanceScoreManager';import{AppDialogProvider}from'${root}/src/components/common/AppDialogProvider';import'qa-state';createRoot(document.getElementById('root')).render(<BrowserRouter><AppDialogProvider><Manager scoreKind={new URLSearchParams(window.location.search).get("scoreKind")||"performance"}/></AppDialogProvider></BrowserRouter>);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -217,6 +223,309 @@ try {
         : {}),
     headless: true,
   });
+  for (const scoreKind of ["performance", "written_exam_essay"]) {
+    const kindLabel = scoreKind === "performance" ? "수행평가" : "정기시험";
+    const studentName =
+      scoreKind === "performance" ? "가상수행학생" : "가상정기학생";
+    for (const width of [390, 768, 1280]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      page.on("pageerror", (error) => report.pageErrors.push(error.message));
+      await page.route("**/*", (route) =>
+        route.request().url().startsWith(origin)
+          ? route.continue()
+          : route.abort(),
+      );
+      await page.goto(`${origin}/?scoreKind=${scoreKind}`);
+      assert.equal(
+        await page
+          .getByRole("button", { name: "답안지 요청", exact: true })
+          .count(),
+        0,
+      );
+      const trigger = page.getByRole("button", {
+        name: "이의제기",
+        exact: true,
+      });
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", {
+        name: `${kindLabel} 이의 목록`,
+        exact: true,
+      });
+      await dialog.waitFor();
+      const flaggedRow = dialog
+        .getByRole("row")
+        .filter({ hasText: "채점 기준 확인 요청" });
+      const plainRow = dialog
+        .getByRole("row")
+        .filter({ hasText: "점수 확인 요청" });
+      await flaggedRow.getByText("답안지 확인 요청", { exact: true }).waitFor();
+      assert.equal(await flaggedRow.count(), 1);
+      assert.equal(
+        await plainRow.getByText("답안지 확인 요청", { exact: true }).count(),
+        0,
+      );
+      assert.equal(
+        await flaggedRow.getByText(studentName, { exact: true }).count(),
+        1,
+      );
+      assert.equal(await dialog.getByRole("row").count(), 3);
+      const legacy = dialog.locator("details");
+      await legacy.locator("summary").click();
+      await legacy.getByText(studentName + "이전", { exact: true }).waitFor();
+      assert.equal(await legacy.getByRole("row").count(), 2);
+      assert.equal(await page.getByRole("dialog").count(), 1);
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+        true,
+      );
+      if (width < 1280) {
+        for (const table of await dialog.getByRole("table").all()) {
+          assert.equal(
+            await table.evaluate((element) => {
+              const container = element.parentElement;
+              const before = container.scrollLeft;
+              container.scrollLeft = 100;
+              const scrolled = container.scrollLeft > before;
+              container.scrollLeft = before;
+              return (
+                scrolled && getComputedStyle(container).overflowX === "auto"
+              );
+            }),
+            true,
+          );
+        }
+      }
+      await page.screenshot({
+        path: `${out}/unified-${scoreKind}-${width}.png`,
+        fullPage: true,
+      });
+      report.screenshots.push(`unified-${scoreKind}-${width}.png`);
+      // Canceling the nested memo keeps the combined dialog open and preserves the legacy record.
+      await legacy
+        .getByRole("button", { name: "확인 완료", exact: true })
+        .click();
+      const memo = page.getByRole("dialog", {
+        name: "답안지 확인 요청 처리",
+        exact: true,
+      });
+      await memo.waitFor();
+      await page.keyboard.press("Escape");
+      await memo.waitFor({ state: "hidden" });
+      assert.equal(await dialog.isVisible(), true);
+      assert.equal(
+        await page.evaluate(
+          (kind) =>
+            window.scoreQa.docs.get(
+              `years/2026/semesters/2/performance_score_answer_sheet_requests/${kind}-legacy`,
+            ).status,
+          scoreKind,
+        ),
+        "pending",
+      );
+      await legacy
+        .getByRole("button", { name: "확인 완료", exact: true })
+        .click();
+      await memo
+        .getByRole("textbox", { name: "처리 메모" })
+        .fill("가상 답안지 함께 확인함");
+      if (width === 1280)
+        await page.evaluate(() => (window.scoreQa.pauseLegacyReview = true));
+      await memo
+        .getByRole("button", { name: "확인 완료", exact: true })
+        .click();
+      await memo.waitFor({ state: "hidden" });
+      if (width === 1280) {
+        await page.waitForFunction(
+          () => typeof window.scoreQa.resumeLegacyReview === "function",
+        );
+        assert.equal(
+          await dialog
+            .getByRole("button", { name: "닫기", exact: true })
+            .isDisabled(),
+          true,
+        );
+        assert.equal(
+          await dialog
+            .getByRole("button", { name: "이의 목록 창 닫기", exact: true })
+            .isDisabled(),
+          true,
+        );
+        await dialog.focus();
+        await page.keyboard.press("Escape");
+        assert.equal(await dialog.isVisible(), true);
+        await page.evaluate(() => {
+          window.scoreQa.pauseLegacyReview = false;
+          window.scoreQa.resumeLegacyReview();
+        });
+      }
+      await legacy
+        .getByText("처리 메모: 가상 답안지 함께 확인함", { exact: true })
+        .waitFor();
+      assert.equal(
+        await legacy
+          .getByRole("button", { name: "확인 완료", exact: true })
+          .count(),
+        0,
+      );
+      const record = await page.evaluate(
+        (kind) =>
+          window.scoreQa.docs.get(
+            `years/2026/semesters/2/performance_score_answer_sheet_requests/${kind}-legacy`,
+          ),
+        scoreKind,
+      );
+      assert.equal(record.status, "reviewed");
+      assert.equal(record.reviewMemo, "가상 답안지 함께 확인함");
+      assert.equal(record.reason, "이전 답안지 확인 요청 사유");
+      assert.equal(
+        await page
+          .getByRole("button", { name: "이의제기 2", exact: true })
+          .count(),
+        1,
+      );
+      if (width === 1280) {
+        await plainRow
+          .getByRole("button", { name: "반려", exact: true })
+          .click();
+        const rejection = page.getByRole("dialog", {
+          name: "반려 사유 입력",
+          exact: true,
+        });
+        await rejection.getByRole("textbox").fill("가상 채점 기준 설명");
+        await rejection
+          .getByRole("button", { name: "반려 사유 확인", exact: true })
+          .click();
+        const rejectConfirm = page.getByRole("alertdialog", {
+          name: "이의 제기를 반려할까요?",
+          exact: true,
+        });
+        await rejectConfirm
+          .getByRole("button", { name: "반려 알림 보내기", exact: true })
+          .click();
+        await plainRow.getByText("반려", { exact: true }).waitFor();
+        await flaggedRow
+          .getByRole("button", { name: "수용", exact: true })
+          .click();
+        const scorePrompt = page.getByRole("dialog", {
+          name: "변경 후 점수 입력",
+          exact: true,
+        });
+        await scorePrompt.getByRole("textbox").fill("12");
+        await scorePrompt
+          .getByRole("button", { name: "점수 확인", exact: true })
+          .click();
+        const acceptMemo = page.getByRole("dialog", {
+          name: "처리 메모 입력",
+          exact: true,
+        });
+        await acceptMemo
+          .getByRole("textbox")
+          .fill("답안지를 함께 확인했습니다.");
+        await acceptMemo
+          .getByRole("button", { name: "메모 확인", exact: true })
+          .click();
+        const acceptConfirm = page.getByRole("alertdialog", {
+          name: "이의 제기를 수용할까요?",
+          exact: true,
+        });
+        await acceptConfirm
+          .getByRole("button", { name: "수용 알림 보내기", exact: true })
+          .click();
+        await flaggedRow.getByText("수용", { exact: true }).waitFor();
+        assert.equal(
+          await flaggedRow
+            .getByText("답안지 확인 요청", { exact: true })
+            .count(),
+          1,
+        );
+        assert.equal(
+          await page.evaluate(
+            (kind) =>
+              window.scoreQa.docs.get(
+                `years/2026/semesters/2/performance_score_objections/${kind}-flagged`,
+              ).answerSheetRequested,
+            scoreKind,
+          ),
+          true,
+        );
+      }
+      await dialog.getByRole("button", { name: "닫기", exact: true }).focus();
+      await page.keyboard.press("Tab");
+      assert.equal(
+        await dialog
+          .getByRole("button", { name: "새로고침", exact: true })
+          .evaluate((element) => element === document.activeElement),
+        true,
+      );
+      await page.keyboard.press("Shift+Tab");
+      assert.equal(
+        await dialog
+          .getByRole("button", { name: "닫기", exact: true })
+          .evaluate((element) => element === document.activeElement),
+        true,
+      );
+      await page.keyboard.press("Escape");
+      await dialog.waitFor({ state: "hidden" });
+      assert.equal(
+        await page
+          .getByRole("button", { name: /^이의제기/ })
+          .evaluate((element) => element === document.activeElement),
+        true,
+      );
+      await page.goto(
+        `${origin}/?scoreKind=${scoreKind}&panel=answer-sheet-requests`,
+      );
+      await dialog.waitFor();
+      await legacy.getByText(studentName + "이전", { exact: true }).waitFor();
+      assert.equal(await legacy.getAttribute("open"), "");
+      assert.equal(await page.getByRole("dialog").count(), 1);
+      await dialog
+        .getByRole("button", { name: "이의 목록 창 닫기", exact: true })
+        .click();
+      await dialog.waitFor({ state: "hidden" });
+      assert.equal(new URL(page.url()).searchParams.has("panel"), false);
+      await page.goto(`${origin}/?scoreKind=${scoreKind}&panel=objections`);
+      await dialog.waitFor();
+      await flaggedRow.getByText("답안지 확인 요청", { exact: true }).waitFor();
+      if (width === 1280) {
+        await page.evaluate(
+          () => (window.scoreQa.rejectLegacyRequestReads = true),
+        );
+        await dialog
+          .getByRole("button", { name: "새로고침", exact: true })
+          .click();
+        await page
+          .getByRole("status")
+          .filter({ hasText: "답안지 확인 요청을 불러오지 못했습니다." })
+          .waitFor();
+        await flaggedRow
+          .getByText("답안지 확인 요청", { exact: true })
+          .waitFor();
+        assert.equal(await plainRow.count(), 1);
+        await legacy.locator("summary").click();
+        await legacy
+          .getByText(
+            "이전 답안지 확인 요청을 불러오지 못했습니다. 새로고침해 주세요.",
+            { exact: true },
+          )
+          .waitFor();
+        await page.evaluate(
+          () => (window.scoreQa.rejectLegacyRequestReads = false),
+        );
+        await dialog
+          .getByRole("button", { name: "새로고침", exact: true })
+          .click();
+        await legacy.getByText(studentName + "이전", { exact: true }).waitFor();
+      }
+      await page.close();
+    }
+    report.checks.push(
+      `${kindLabel}: 390/768/1280 combined objection dialog displays the new boolean flag, filters score kind, reviews legacy requests without lost fields, supports both notification panel links, keeps nested Escape scoped, and restores keyboard focus. Accept/reject stays available at 1280; pending writes block closing; failed legacy reads preserve the current objection list and recover on refresh; horizontal scroll stays inside each table.`,
+    );
+  }
   for (const width of [390, 768, 1280]) {
     const page = await browser.newPage({
       viewport: { width, height: 900 },

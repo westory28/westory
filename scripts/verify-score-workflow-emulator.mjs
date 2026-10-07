@@ -90,6 +90,9 @@ try {
   assert.equal((await getDoc(doc(teacherDb, confirmationPath))).data().signatureName, creation.name);
   await assertFails(setDoc(doc(studentDb, confirmationPath), signature()));
   await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: "근거를 다시 확인해 주세요." })), { code: "failed-precondition" });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '답안을 확인하고 싶습니다.', answerSheetRequested: true })), { code: 'failed-precondition' });
+  await assert.rejects(functions.notifyPerformanceScoreAnswerSheetRequested.run(req(actor, { scoreIds: [scoreId], reason: '구 화면에서 답안을 확인하고 싶습니다.' })),
+    (error) => error.code === 'failed-precondition' && error.details?.reason === 'ANSWER_SHEET_REQUEST_REQUIRES_OBJECTION');
   check("upload → own score read → signature → teacher retrieval; foreign read, score editing, stale signature and signature replacement denied");
 
   const nextVersion = Timestamp.fromMillis(Date.now());
@@ -97,14 +100,48 @@ try {
   await assertFails(setDoc(doc(studentDb, confirmationPath), signature()));
   await assertSucceeds(setDoc(doc(studentDb, confirmationPath), signature(nextVersion)));
   await assertSucceeds(deleteDoc(doc(teacherDb, confirmationPath)));
+  const consentRef = admin.doc(`users/${uid}/performance_score_consents/current`);
+  const savedConsent = (await consentRef.get()).data();
+  const consentRejected = (error) => error.code === 'failed-precondition' && error.details?.reason === 'SCORE_WARNING_CONSENT_REQUIRED';
+  await consentRef.delete();
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '미동의 요청', answerSheetRequested: true })), consentRejected);
+  await consentRef.set({ ...savedConsent, acknowledged: false });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '동의 false 요청', answerSheetRequested: true })), consentRejected);
+  await consentRef.set({ ...savedConsent, semester: '1' });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '이전 학기 동의 요청', answerSheetRequested: true })), consentRejected);
+  await consentRef.set({ ...savedConsent, uid: 'other-student' });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '다른 UID 동의 요청', answerSheetRequested: true })), consentRejected);
+  await consentRef.set(savedConsent);
+  const scoreSettingsRef = admin.doc(`${root}/assessment_config/performance_score`);
+  await scoreSettingsRef.set({ warningVersion: 'updated-warning', warningTextHash: 'updated-hash' });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '이전 경고 버전 요청', answerSheetRequested: true })), consentRejected);
+  await consentRef.update({ warningVersion: 'updated-warning' });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '이전 경고 해시 요청', answerSheetRequested: true })), consentRejected);
+  await scoreSettingsRef.delete();
+  await consentRef.set(savedConsent);
+  check('missing, declined, wrong UID/semester and stale warning version/hash consent are rejected');
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '답안 확인', answerSheetRequested: 'true' })), { code: 'invalid-argument' });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '다른 학기', semester: '1', answerSheetRequested: true })), { code: 'invalid-argument' });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: '다른 평가 종류', scoreKind: 'written_exam_essay', answerSheetRequested: true })), { code: 'invalid-argument' });
+  await admin.doc(`users/${uid}/performance_scores/wrong-owner`).set({ ...score, uid: 'other-student', rosterId: 'wrong-owner', updatedAt: require('firebase-admin/firestore').Timestamp.fromMillis(version.toMillis()) });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: ['wrong-owner'], reason: '다른 학생 점수', answerSheetRequested: true })), { code: 'permission-denied' });
+  await admin.doc(`users/${uid}/performance_scores/wrong-owner`).delete();
+  const otherActor = { uid: 'other-student', token: { email: 'other@yongshin-ms.ms.kr', auth_time: authTime } };
+  await admin.doc('users/other-student').set({ uid: otherActor.uid, role: 'student', email: otherActor.token.email });
+  await seedSession(otherActor.uid);
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(otherActor, { uid, scoreIds: [scoreId], reason: 'UID 위조 요청', answerSheetRequested: true })), { code: 'not-found' });
   const objection = await functions.notifyPerformanceScoreObjectionRequested.run(req(actor, {
-    scoreIds: [scoreId], reason: "평가 요소의 근거를 다시 확인해 주세요.",
+    scoreIds: [scoreId], reason: "평가 요소의 근거를 다시 확인해 주세요.", answerSheetRequested: true,
   }));
   assert.equal(objection.objectionSavedCount, 1);
+  assert.equal((await admin.doc(`${root}/performance_score_objections/${objection.objectionIds[0]}`).get()).data().answerSheetRequested, true);
+  assert.equal((await admin.collection(`${root}/performance_score_answer_sheet_requests`).get()).size, 0);
   assert.equal(objection.createdCount, 1);
   const teacherNotifications = await admin.collection(`${root}/notification_inboxes/${teacher.uid}/items`).get();
   const objectionNotification = teacherNotifications.docs.find((entry) => entry.data().type === 'performance_score_objection_requested');
   assert.ok(objectionNotification);
+  assert.equal(objectionNotification.data().answerSheetRequested, true);
+  assert.match(objectionNotification.data().body, /답안지 확인도 요청/);
   await assertSucceeds(getDoc(doc(teacherDb, objectionNotification.ref.path)));
   await assertFails(getDoc(doc(studentDb, objectionNotification.ref.path)));
   assert.equal((await admin.doc(scorePath).get()).data().objectionPending, true);
@@ -112,6 +149,10 @@ try {
   await assert.rejects(functions.reviewPerformanceScoreObjection.run(req(actor, {
     objectionId: objection.objectionIds[0], status: "rejected", reviewMemo: "임의 검토",
   })), { code: "permission-denied" });
+  await assertSucceeds(updateDoc(doc(teacherDb, scorePath), { totalScore: 21 }));
+  await assert.rejects(functions.reviewPerformanceScoreObjection.run(req(teacher, { objectionId: objection.objectionIds[0], status: 'accepted', changedTotalScore: 21 })), { code: 'invalid-argument' });
+  await assertSucceeds(updateDoc(doc(teacherDb, scorePath), { totalScore: 16 }));
+  await assert.rejects(functions.reviewPerformanceScoreObjection.run(req(teacher, { objectionId: objection.objectionIds[0], status: 'accepted', changedTotalScore: 15 })), { code: 'failed-precondition' });
   const review = await functions.reviewPerformanceScoreObjection.run(req(teacher, {
     objectionId: objection.objectionIds[0], status: "accepted", changedTotalScore: 16, reviewMemo: "근거 확인 후 1점 반영",
   }));
@@ -123,14 +164,41 @@ try {
   await assertSucceeds(getDoc(doc(studentDb, reviewNotification.ref.path)));
   assert.equal((await admin.doc(scorePath).get()).data().objectionPending, false);
   assert.equal((await getDoc(doc(studentDb, `${root}/performance_score_objections/${objection.objectionIds[0]}`))).data().reviewMemo, "근거 확인 후 1점 반영");
-  const retry = await functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: "중복 요청" }));
+  const retry = await functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: "중복 요청", answerSheetRequested: true }));
   assert.equal(retry.objectionSavedCount, 0);
   assert.equal(retry.objectionSkippedProcessedCount, 1);
   await assertSucceeds(setDoc(doc(studentDb, confirmationPath), signature(nextVersion)));
-  const answerRequest = await functions.notifyPerformanceScoreAnswerSheetRequested.run(req(actor, { scoreIds: [scoreId], reason: '답안의 채점 근거를 확인하고 싶습니다.' }));
-  assert.equal(answerRequest.requestSavedCount, 1);
-  assert.equal(answerRequest.createdCount, 1);
+  await assert.rejects(functions.notifyPerformanceScoreAnswerSheetRequested.run(req(actor, { scoreIds: [scoreId], reason: '답안의 채점 근거를 확인하고 싶습니다.' })),
+    (error) => error.code === 'failed-precondition' && error.details?.reason === 'ANSWER_SHEET_REQUEST_REQUIRES_OBJECTION');
   check("changed score invalidates old version; objection blocks signature; teacher acceptance, student response read and duplicate protection");
+
+  const extraScoreId = 'pending-answer-option';
+  await admin.doc(`users/${uid}/performance_scores/${extraScoreId}`).set({ ...score, rosterId: extraScoreId, updatedAt: require('firebase-admin/firestore').Timestamp.fromMillis(version.toMillis()) });
+  const ordinary = await functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [extraScoreId], reason: '점수 근거만 확인 요청' }));
+  const ordinaryPath = `${root}/performance_score_objections/${ordinary.objectionIds[0]}`;
+  assert.equal((await admin.doc(ordinaryPath).get()).data().answerSheetRequested, false);
+  const promoted = await functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [extraScoreId], reason: '답안도 함께 확인 요청', answerSheetRequested: true }));
+  assert.equal(promoted.objectionIds[0], ordinary.objectionIds[0]);
+  assert.equal(promoted.createdCount, 0);
+  assert.equal((await admin.doc(ordinaryPath).get()).data().answerSheetRequested, true);
+  await functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [extraScoreId], reason: '구 클라이언트 재전송' }));
+  assert.equal((await admin.doc(ordinaryPath).get()).data().answerSheetRequested, true);
+  const pendingNotifications = (await admin.collection(`${root}/notification_inboxes/${teacher.uid}/items`).get()).docs.filter((entry) => entry.data().dedupeKey.includes(extraScoreId));
+  assert.equal(pendingNotifications.length, 1);
+  assert.equal(pendingNotifications[0].data().answerSheetRequested, true);
+  assert.match(pendingNotifications[0].data().body, /답안지 확인도 요청/);
+  const legacyRequestPath = `${root}/performance_score_answer_sheet_requests/legacy-answer-request`;
+  await admin.doc(legacyRequestPath).set({ uid, scoreId, academicYear: year, semester, status: 'pending', reason: '기존 답안 확인 요청', requestedAt: require('firebase-admin/firestore').Timestamp.fromMillis(version.toMillis()) });
+  const legacyBefore = (await admin.doc(legacyRequestPath).get()).data();
+  await assert.rejects(functions.notifyPerformanceScoreAnswerSheetRequested.run(req(actor, { scoreIds: [extraScoreId], reason: '독립 접수 차단 확인' })),
+    (error) => error.details?.reason === 'ANSWER_SHEET_REQUEST_REQUIRES_OBJECTION');
+  assert.deepEqual((await admin.doc(legacyRequestPath).get()).data(), legacyBefore);
+  await assertSucceeds(getDoc(doc(studentDb, legacyRequestPath)));
+  await assertFails(updateDoc(doc(studentDb, legacyRequestPath), { status: 'reviewed' }));
+  await assertSucceeds(updateDoc(doc(teacherDb, legacyRequestPath), { status: 'reviewed', reviewMemo: '기존 요청 확인 완료', reviewedAt: serverTimestamp() }));
+  assert.equal((await getDoc(doc(studentDb, legacyRequestPath))).data().status, 'reviewed');
+  assert.equal((await admin.collection(`${root}/performance_score_answer_sheet_requests`).get()).size, 1);
+  check('unified answer flag persists on objection and one notification; pending retries retain it; standalone requests are retired; legacy records stay readable and reviewable');
 
   await admin.doc("semester_enrollments/canonical-enrollment").set({
     studentUid: uid, semesterId: "2026-2", enrollmentStatus: "ACTIVE", revision: 7, enrollmentId: "canonical-enrollment", classId: "existing-class",
@@ -150,7 +218,7 @@ try {
   await assertFails(updateDoc(doc(studentDb, `users/${uid}`), { enrollmentStatus: "active" }));
   await assertSucceeds(deleteDoc(doc(teacherDb, confirmationPath)));
   await assertFails(setDoc(doc(studentDb, confirmationPath), signature(nextVersion)));
-  await assert.rejects(functions.notifyPerformanceScoreAnswerSheetRequested.run(req(actor, { scoreIds: [scoreId], reason: "답안 확인을 요청합니다." })), { code: "failed-precondition" });
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: "답안 확인을 요청합니다.", answerSheetRequested: true })), { code: "failed-precondition" });
   await functions.updateStudentEnrollment.run(req(teacher, { uid, status: "active", reason: "" }));
   await assertSucceeds(setDoc(doc(studentDb, confirmationPath), signature(nextVersion)));
   assert.equal((await admin.collection(`users/${uid}/enrollment_history`).get()).size, 2);
@@ -185,7 +253,7 @@ try {
   await admin.doc("semester_grade_records/canonical-grade").set({ studentUid: uid, semesterId: "2026-2" });
   await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: "공식 원장 확인" })),
     (error) => error.details?.reason === "CLIENT_UPDATE_REQUIRED");
-  await assert.rejects(functions.notifyPerformanceScoreAnswerSheetRequested.run(req(actor, { scoreIds: [scoreId], reason: "공식 원장 답안 확인 요청" })),
+  await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: "공식 원장 답안 확인 요청", answerSheetRequested: true })),
     (error) => error.details?.reason === "CLIENT_UPDATE_REQUIRED");
   await assert.rejects(functions.updateStudentEnrollment.run(req(teacher, { uid, status: "active", reason: "", _session: { ...sessionProof, revision: "a".repeat(64) } })),
     (error) => error.details?.reason === "SESSION_PROOF_INVALID");
