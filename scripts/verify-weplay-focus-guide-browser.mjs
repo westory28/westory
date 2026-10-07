@@ -340,6 +340,8 @@ try {
     const geometry=await guide.evaluate(element=>{const r=element.getBoundingClientRect();const controls=[...element.querySelectorAll('.weplay-guide-actions button,.naval-input-frame input,.naval-input-frame button')].map(button=>{const b=button.getBoundingClientRect();return{width:b.width,height:b.height}});return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,controls}});
     assert.ok(geometry.left>=0&&geometry.right<=geometry.width&&geometry.top>=0&&geometry.bottom<=geometry.height+1,JSON.stringify(geometry));
     assert.ok(geometry.controls.every(control=>control.width>=44&&control.height>=44),JSON.stringify(geometry));
+    const titleAndMode=await guide.evaluate(element=>({titleBottom:element.querySelector('.naval-title-art').getBoundingClientRect().bottom,modeTop:element.querySelector('.naval-battle-status > span').getBoundingClientRect().top}));
+    assert.ok(titleAndMode.titleBottom<=titleAndMode.modeTop+1,`Guide ${width}px: title and mode badge must not overlap ${JSON.stringify(titleAndMode)}`);
     assert.equal(await guide.locator('.weplay-guide-demo').getAttribute('data-guide-step'),'input');
     assert.equal(await guide.locator('.naval-word').evaluate(element=>getComputedStyle(element).opacity),'1','The current guide word is fully visible immediately');
     layoutMeasurements.push(await guide.evaluate(element=>({guideWidth:innerWidth,targets:[...element.querySelectorAll('.naval-scene,.naval-prompts,.naval-word,.naval-command')].map(target=>({name:target.className,opacity:getComputedStyle(target).opacity,position:getComputedStyle(target).position,zIndex:getComputedStyle(target).zIndex,filter:getComputedStyle(target).filter,animation:getComputedStyle(target).animationName}))})));

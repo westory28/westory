@@ -395,12 +395,13 @@
 .naval-game--compact .naval-fuse-ember { width: 5px; height: 5px; }
 .naval-game--compact .naval-fuse-ember::after { inset: -2px; }
 .naval-game--compact .naval-topbar { padding-top: 16px; padding-bottom: 0; }
-.naval-game--compact .naval-title-art { width: 25%; flex-basis: 25%; }
+.naval-game--compact .naval-title-art { width: min(25%, 112px); flex-basis: min(25%, 112px); }
+.naval-game--compact .naval-title-custom { font-size: 12px; line-height: 1.2; }
 .naval-game--compact .naval-hud { width: 71%; }
-.naval-game--compact .naval-battle-status { top: 36px; }
+.naval-game--compact .naval-battle-status { top: 48px; }
 .naval-game--compact .naval-difficulty-badge { font-size: 9px; padding: 1px 4px; border-width: 1px; margin-left: 4px; }
 .naval-game--compact .naval-battle-status > span { padding-block: 1px; }
-.naval-game--compact .naval-health--enemy { top: 54px; }
+.naval-game--compact .naval-health--enemy { top: 68px; }
 .naval-game--compact .naval-special { top: 110px; }
 .naval-game--compact .naval-damage { font-size: 20px; }
 .naval-game--compact .naval-damage small { font-size: 9px; }
