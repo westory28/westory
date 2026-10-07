@@ -100,10 +100,11 @@ const students = Array.from({ length: 32 }, (_, i) => ({
   firstRecord: { uid: `qa-${i}`, items: [{ score: 17, maxScore: 25, scoreEntered: true }], totalScore: 17, totalMaxScore: 25 },
   secondRecord: { uid: `qa-${i}`, items: [{ score: 29, maxScore: 35, scoreEntered: true }], totalScore: 29, totalMaxScore: 35 },
 }));
-const blob = await manager.buildClassSummaryWorkbookFromTemplate({
+const exportParams = {
   year: "2026", semester: "2", grade: "3", classValue: "2", subject: "역사", teacherName: "검증교사",
   clientIp: "192.0.*.*", printedAt: new Date("2026-10-07T04:05:00Z"), firstRoster, secondRoster, students,
-});
+};
+const blob = await manager.buildClassSummaryWorkbookFromTemplate(exportParams);
 const wb = new ExcelJS.Workbook();
 await wb.xlsx.load(await blob.arrayBuffer());
 const ws = wb.worksheets[0];
@@ -121,5 +122,67 @@ assert.equal(ws.getCell("H40").value, 1472);
 assert.equal(ws.getRow(7).height, 14.1);
 assert.ok(ws.model.merges.includes("J7:M7"));
 assert.equal(ws.pageSetup.paperSize, 9);
+
+// Inspect the serialized XLSX, not ExcelJS's merged-cell style aliases. The
+// user's reference stores these fine separators as "hair", not "dotted".
+const assertReferenceBorders = async (buffer, studentCount, label) => {
+  const zip = await JSZip.loadAsync(buffer);
+  const styles = await zip.file("xl/styles.xml").async("string");
+  const sheetXml = await zip.file("xl/worksheets/sheet1.xml").async("string");
+  const borders = [...styles.matchAll(/<border\b[^>]*(?:\/>|>[\s\S]*?<\/border>)/g)].map((match) => match[0]);
+  const xfSection = styles.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)?.[1];
+  assert.ok(xfSection, `${label}: cell styles exist`);
+  const xfs = [...xfSection.matchAll(/<xf\b[^>]*>/g)].map((match) => Number(match[0].match(/\bborderId="(\d+)"/)?.[1] || 0));
+  const cells = new Map([...sheetXml.matchAll(/<c\b[^>]*>/g)].map((match) => [
+    match[0].match(/\br="([A-Z]+\d+)"/)?.[1], Number(match[0].match(/\bs="(\d+)"/)?.[1] || 0),
+  ]));
+  const edge = (address, side, expected) => {
+    assert.ok(cells.has(address), `${label}: ${address} serialized`);
+    const border = borders[xfs[cells.get(address)]];
+    const actual = border?.match(new RegExp(`<${side}\\b[^>]*\\bstyle="([^"]+)"`))?.[1];
+    assert.equal(actual, expected, `${label}: ${address}.${side} must preserve reference ${expected}`);
+  };
+  const lastStudent = 6 + studentCount;
+  for (let row = 7; row < lastStudent; row++) {
+    for (const column of "BCDEFGHIJKLM") {
+      edge(`${column}${row}`, "bottom", "hair");
+      edge(`${column}${row + 1}`, "top", "hair");
+    }
+  }
+  for (let row = 6; row <= lastStudent + 3; row++) {
+    edge(`F${row}`, "right", "hair");
+    edge(`G${row}`, "left", "hair");
+    edge(`B${row}`, "left", "thin");
+    edge(`M${row}`, "right", "thin");
+    edge(`D${row}`, "right", "thin");
+    edge(`H${row}`, "left", "thin");
+  }
+  for (const column of "BCDEFGHIJKLM") {
+    edge(`${column}6`, "top", "thin");
+    edge(`${column}6`, "bottom", "thin");
+    edge(`${column}7`, "top", "thin");
+    edge(`${column}${lastStudent}`, "bottom", "thin");
+    edge(`${column}${lastStudent + 1}`, "top", "thin");
+  }
+};
+await assertReferenceBorders(await blob.arrayBuffer(), 32, "32 students");
+const solidRegression = await JSZip.loadAsync(await blob.arrayBuffer());
+solidRegression.file("xl/styles.xml", (await solidRegression.file("xl/styles.xml").async("string")).replaceAll('style="hair"', 'style="thin"'));
+await assert.rejects(
+  assertReferenceBorders(await solidRegression.generateAsync({ type: "uint8array" }), 32, "Solid-line regression"),
+  /must preserve reference hair/,
+  "The build guard must reject solid-line regressions",
+);
+for (const count of [1, 31, 33, 40]) {
+  const resizedStudents = Array.from({ length: count }, (_, index) => ({
+    ...students[index % students.length], uid: `border-qa-${index}`, number: String(index + 1), studentName: `검증${index + 1}`,
+  }));
+  const resized = await manager.buildClassSummaryWorkbookFromTemplate({ ...exportParams, students: resizedStudents });
+  await assertReferenceBorders(await resized.arrayBuffer(), count, `${count} students`);
+}
+if (process.env.SCORE_QA_BORDER_REFERENCE) {
+  const reference = await reader.normalizeScoreWorkbookNamespaces(await fs.readFile(process.env.SCORE_QA_BORDER_REFERENCE));
+  await assertReferenceBorders(reference, 32, "Original reference (no personal values read)");
+}
 if (process.env.SCORE_QA_OUTPUT) await fs.writeFile(process.env.SCORE_QA_OUTPUT, Buffer.from(await blob.arrayBuffer()));
-console.log("NEIS import, zero/blank/range validation, versioned signatures and template cell/layout contracts passed.");
+console.log("NEIS import, zero/blank/range validation, versioned signatures and template cell/layout contracts passed. Reference hair separators and solid outer/header boundaries preserved for 1/31/32/33/40 students.");

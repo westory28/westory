@@ -4067,6 +4067,9 @@ type ClassSheetCellStyle = {
   };
 };
 
+// User-locked reference layout (2026-10-07): the original's fine dotted-looking
+// separators are OOXML "hair". Never replace them with "thin" or reinterpret
+// them as "dotted". The build checks the final XLSX, including merged cells.
 const createClassSheetThinBorderSide = (): ClassSheetBorderSide => ({
   style: "hair",
   color: { indexed: 0 },
