@@ -8446,3 +8446,7 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
   await markWisHallOfFameDirtySafely(year, semester);
   return result;
 });
+
+// Notice images use the guarded server transport; direct Storage writes stay closed.
+exports.uploadNoticeImageContent = require('./noticeImages').uploadNoticeImageContent;
+exports.deleteNoticeImageContent = require('./noticeImages').deleteNoticeImageContent;

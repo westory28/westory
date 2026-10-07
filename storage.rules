@@ -11,18 +11,157 @@ service firebase.storage {
         && request.auth.token.email.matches('.*@yongshin-ms\\.ms\\.kr$');
     }
 
-    function canUseWestory() {
+    function applicationSessionPath() {
+      return /databases/(default)/documents/application_sessions/$(request.auth.uid)/sessions/$(request.auth.token.auth_time);
+    }
+
+    function applicationSessionTransitionPath() {
+      return /databases/(default)/documents/application_session_transitions/$(request.auth.uid);
+    }
+
+    function hasActiveApplicationSession() {
       return isSignedIn()
+        && request.auth.token.auth_time is int
+        && firestore.exists(applicationSessionPath())
+        && firestore.get(applicationSessionPath()).data.status == 'active'
+        && firestore.get(applicationSessionPath()).data.authTime == request.auth.token.auth_time
+        && firestore.get(applicationSessionPath()).data.schemaVersion == 2
+        && firestore.get(applicationSessionPath()).data.authorityGeneration == 'w1r2-2026-08-09'
+        && firestore.get(applicationSessionPath()).data.protocolVersion is int
+        && firestore.get(applicationSessionPath()).data.protocolVersion >= 2
+        && firestore.get(applicationSessionPath()).data.sessionRevision is string
+        && firestore.get(applicationSessionPath()).data.sessionRevision.matches('^[a-f0-9]{64}$')
+        && firestore.get(applicationSessionPath()).data.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
+        && firestore.get(applicationSessionPath()).data.generalExpiresAt is timestamp
+        && (
+          firestore.get(applicationSessionPath()).data.authorityModeAtOpen != 'ENFORCE'
+          || firestore.get(applicationSessionPath()).data.generalExpiresAt > request.time
+        );
+    }
+
+    function hasActiveReauthTransition() {
+      return isSignedIn()
+        && request.auth.token.auth_time is int
+        && firestore.exists(applicationSessionTransitionPath())
+        && firestore.get(applicationSessionTransitionPath()).data.status == 'pending'
+        && firestore.get(applicationSessionTransitionPath()).data.schemaVersion == 1
+        && firestore.get(applicationSessionTransitionPath()).data.authorityGeneration == 'w1r2-2026-08-09'
+        && firestore.get(applicationSessionTransitionPath()).data.protocolVersion is int
+        && firestore.get(applicationSessionTransitionPath()).data.protocolVersion >= 2
+        && firestore.get(applicationSessionTransitionPath()).data.fromAuthTime is int
+        && firestore.get(applicationSessionTransitionPath()).data.fromAuthTime < request.auth.token.auth_time
+        && firestore.get(applicationSessionTransitionPath()).data.expiresAt is timestamp
+        && firestore.get(applicationSessionTransitionPath()).data.expiresAt > request.time;
+    }
+
+    function hasWestoryIdentity() {
+      return isSignedIn()
+        && request.auth.token.email is string
         && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
     }
 
+    function hasValidMaintenanceBypassUids(uids) {
+      let padded = uids.concat([
+        'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x',
+        'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'
+      ]);
+      return padded[0] is string && padded[0].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[1] is string && padded[1].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[2] is string && padded[2].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[3] is string && padded[3].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[4] is string && padded[4].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[5] is string && padded[5].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[6] is string && padded[6].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[7] is string && padded[7].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[8] is string && padded[8].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[9] is string && padded[9].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[10] is string && padded[10].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[11] is string && padded[11].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[12] is string && padded[12].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[13] is string && padded[13].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[14] is string && padded[14].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[15] is string && padded[15].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[16] is string && padded[16].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[17] is string && padded[17].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[18] is string && padded[18].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[19] is string && padded[19].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$');
+    }
+
+    function isValidStudentMaintenanceConfig(config) {
+      return config.keys().hasAll([
+          'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
+          'startedAt', 'updatedAt', 'updatedBy', 'revision'
+        ])
+        && config.keys().hasOnly([
+          'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
+          'startedAt', 'updatedAt', 'updatedBy', 'revision'
+        ])
+        && config.enabled is bool
+        && config.blockedRoles == ['student']
+        && config.bypassUids is list
+        && config.bypassUids.size() <= 20
+        && config.bypassUids.toSet().size() == config.bypassUids.size()
+        && hasValidMaintenanceBypassUids(config.bypassUids)
+        && config.title is string
+        && config.title.matches('^\\S(?:[\\s\\S]{0,78}\\S)?$')
+        && config.message is string
+        && config.message.matches('^\\S(?:[\\s\\S]{0,498}\\S)?$')
+        && ((config.enabled == true && config.startedAt is timestamp)
+          || (config.enabled == false && config.startedAt == null))
+        && config.updatedAt is timestamp
+        && config.updatedBy is string
+        && config.updatedBy.matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && config.revision is int
+        && config.revision >= 0;
+    }
+
+    function canUseWestoryWithMaintenanceConfig(config) {
+      return isValidStudentMaintenanceConfig(config)
+        && (
+          config.enabled == false
+          || request.auth.token.email == "westoria28@gmail.com"
+          || request.auth.uid in config.bypassUids
+          || (
+            firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+            && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role is string
+            && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['student', 'teacher', 'staff']
+            && !(firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in config.blockedRoles)
+          )
+        );
+    }
+
+    function passesStudentMaintenanceFence() {
+      return !firestore.exists(/databases/(default)/documents/site_settings/student_maintenance)
+        || canUseWestoryWithMaintenanceConfig(
+          firestore.get(/databases/(default)/documents/site_settings/student_maintenance).data
+        );
+    }
+
+    function canUseWestory() {
+      return hasWestoryIdentity()
+        && (hasActiveApplicationSession() || hasActiveReauthTransition())
+        && passesStudentMaintenanceFence()
+        && passesStudentRegistrationFence();
+    }
+
+    function passesStudentRegistrationFence() {
+      return request.auth.token.email == "westoria28@gmail.com"
+        || (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+          && approvedRegistrationProfile(firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data));
+    }
+
+    function approvedRegistrationProfile(profile) {
+      return profile.role in ['student', 'teacher', 'staff']
+        && profile.get('registrationApprovalStatus', 'APPROVED') == 'APPROVED';
+    }
+
     function isAdmin() {
-      return canUseWestory() && request.auth.token.email == "westoria28@gmail.com";
+      return isSignedIn() && request.auth.token.email == "westoria28@gmail.com" && canUseWestory();
     }
 
     function hasUserProfile() {
-      return canUseWestory()
-        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+      return hasWestoryIdentity()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role is string;
     }
 
     function userProfile() {
@@ -30,14 +169,15 @@ service firebase.storage {
     }
 
     function hasStoragePermission(permission) {
-      return hasUserProfile()
+      return canUseWestory()
+        && hasUserProfile()
         && userProfile().teacherPortalEnabled == true
         && userProfile().staffPermissions is list
         && permission in userProfile().staffPermissions;
     }
 
     function isTeacherRole() {
-      return hasUserProfile() && userProfile().role == "teacher";
+      return canUseWestory() && hasUserProfile() && userProfile().role == "teacher";
     }
 
     function canReadSourceArchive() {
@@ -89,30 +229,38 @@ service firebase.storage {
       return request.resource == null || isLessonPdfAssetUpload();
     }
 
+    match /lesson_uploads/{uploadId}/source {
+      // Server transport validates the session, teacher role and upload ticket.
+      // Raw reads remain owner/admin only and fail closed during session fences.
+      // Shared lesson display/re-extraction uses its verified saved asset URL.
+      allow read: if canUseWestory() && resource != null
+        && (resource.metadata.ownerUid == request.auth.uid
+          || request.auth.token.email == "westoria28@gmail.com");
+      allow write: if false;
+    }
     match /map-resources/{resourceId}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /lesson_pdfs/{unitId}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin() && isSafeLessonPdfWrite();
+      allow write: if false;
     }
 
     match /years/{year}/semesters/{semester}/lesson_pdfs/{unitId}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin() && isSafeLessonPdfWrite();
+      allow write: if false;
     }
 
     match /years/{year}/semesters/{semester}/lesson_footnotes/{unitId}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /years/{year}/semesters/{semester}/notice_images/{noticeId}/{fileName} {
       allow read: if canUseWestory();
-      allow create, update: if canManageNoticeImages() && isNoticeImageUpload();
-      allow delete: if canManageNoticeImages();
+      allow create, update, delete: if false;
     }
 
     match /developer_log_images/{postId}/{fileName} {
@@ -123,12 +271,12 @@ service firebase.storage {
 
     match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /site-settings/interface/hall-of-fame/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin() || isTeacherRole() || hasStoragePermission('point_manage');
+      allow write: if false;
     }
 
     match /site-settings/interface/{allPaths=**} {
@@ -138,19 +286,7 @@ service firebase.storage {
 
     match /source-archive/{assetId}/incoming/{fileName} {
       allow read: if false;
-      allow write: if canWriteSourceArchive()
-        && request.resource != null
-        && request.resource.contentType is string
-        && (
-          (
-            request.resource.contentType.matches('image/.*')
-            && request.resource.size < 6 * 1024 * 1024
-          )
-          || (
-            request.resource.contentType == 'application/pdf'
-            && request.resource.size < 20 * 1024 * 1024
-          )
-        );
+      allow write: if false;
     }
 
     // Processed assets live under a revision folder. Keep incoming uploads private.

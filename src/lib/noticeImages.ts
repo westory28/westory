@@ -1,10 +1,5 @@
-import {
-  deleteObject,
-  getDownloadURL,
-  ref,
-  uploadBytes,
-} from "firebase/storage";
-import { getFirebaseStorage } from "./firebase";
+import type { User } from "firebase/auth";
+import { auth, getHttpsCallable } from "./firebase";
 import type { SystemConfig } from "../types";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
@@ -66,7 +61,7 @@ const canvasToBlob = (
     );
   });
 
-const getNoticeImageStoragePath = (config: ConfigLike, noticeId: string) => {
+const getNoticeImageScope = (config: ConfigLike, noticeId: string) => {
   const year = String(config?.year || "").trim();
   const semester = String(config?.semester || "").trim();
   const safeNoticeId = String(noticeId || "notice")
@@ -75,8 +70,88 @@ const getNoticeImageStoragePath = (config: ConfigLike, noticeId: string) => {
   if (!year || !semester) {
     throw new Error("학년도/학기 정보를 확인할 수 없습니다.");
   }
-  return `years/${year}/semesters/${semester}/notice_images/${safeNoticeId}/notice-${Date.now()}.webp`;
+  return { year, semester, noticeId: safeNoticeId };
 };
+
+type NoticeSession = {
+  status: string;
+  authTime: number;
+  authorityGeneration: string;
+  protocolVersion: number;
+  revision: string;
+};
+
+// Notice uploads use the server's existing session and permission guards.
+// Storage rules cannot fit session, maintenance and profile reads in one write.
+const callNoticeImageService = async <Response>(
+  name: "uploadNoticeImageContent" | "deleteNoticeImageContent",
+  input: Record<string, unknown>,
+  user: User | null,
+): Promise<Response> => {
+  const assertOwner = () => {
+    if (!user || auth.currentUser !== user) {
+      throw new Error("로그인 상태가 바뀌었습니다. 다시 로그인해 주세요.");
+    }
+  };
+  assertOwner();
+  const token = await user!.getIdTokenResult();
+  assertOwner();
+  const open = await getHttpsCallable<
+    { authorityGeneration: string; protocolVersion: number },
+    NoticeSession
+  >("openApplicationSession");
+  assertOwner();
+  const { data: session } = await open({
+    authorityGeneration: "w1r2-2026-08-09",
+    protocolVersion: 2,
+  });
+  assertOwner();
+  if (
+    session.status !== "active" ||
+    session.authTime !== Number(token.claims.auth_time) ||
+    session.authorityGeneration !== "w1r2-2026-08-09" ||
+    !Number.isInteger(session.protocolVersion) ||
+    session.protocolVersion < 2 ||
+    !/^[a-f0-9]{64}$/.test(session.revision)
+  ) {
+    throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요.");
+  }
+  const callable = await getHttpsCallable<Record<string, unknown>, Response>(
+    name,
+  );
+  const currentToken = await user!.getIdTokenResult();
+  assertOwner();
+  if (currentToken.claims.auth_time !== token.claims.auth_time) {
+    throw new Error("로그인 상태가 바뀌었습니다. 다시 저장해 주세요.");
+  }
+  const result = await callable({
+    ...input,
+    _session: {
+      authorityGeneration: session.authorityGeneration,
+      protocolVersion: session.protocolVersion,
+      revision: session.revision,
+    },
+  });
+  assertOwner();
+  return result.data;
+};
+
+const imageBlobToBase64 = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const separator = result.indexOf(",");
+      if (separator === -1) {
+        reject(new Error("이미지 전송 데이터를 준비하지 못했습니다."));
+        return;
+      }
+      resolve(result.slice(separator + 1));
+    };
+    reader.onerror = () =>
+      reject(new Error("이미지 전송 데이터를 준비하지 못했습니다."));
+    reader.readAsDataURL(blob);
+  });
 
 const getNoticeImageCenterCrop = (
   sourceWidth: number,
@@ -233,31 +308,30 @@ export const uploadNoticeImage = async ({
   noticeId: string;
   file: File;
 }): Promise<NoticeImageUploadResult> => {
+  const user = auth.currentUser;
+  const scope = getNoticeImageScope(config, noticeId);
   const compressed = await compressNoticeImage(file);
-  const storagePath = getNoticeImageStoragePath(config, noticeId);
-  const storage = await getFirebaseStorage();
-  const storageRef = ref(storage, storagePath);
-  await uploadBytes(storageRef, compressed.blob, {
-    contentType: compressed.mimeType,
-    cacheControl: "public,max-age=86400",
-  });
-  return {
-    imageUrl: await getDownloadURL(storageRef),
-    imageStoragePath: storageRef.fullPath,
-    imageByteSize: compressed.blob.size,
-    imageWidth: compressed.width,
-    imageHeight: compressed.height,
-    imageMimeType: compressed.mimeType,
-  };
+  return callNoticeImageService<NoticeImageUploadResult>(
+    "uploadNoticeImageContent",
+    {
+      ...scope,
+      imageBase64: await imageBlobToBase64(compressed.blob),
+      contentType: compressed.mimeType,
+    },
+    user,
+  );
 };
 
 export const tryDeleteNoticeImage = async (storagePath?: string | null) => {
   const normalizedPath = String(storagePath || "").trim();
   if (!normalizedPath) return false;
   try {
-    const storage = await getFirebaseStorage();
-    await deleteObject(ref(storage, normalizedPath));
-    return true;
+    const result = await callNoticeImageService<{ deleted: boolean }>(
+      "deleteNoticeImageContent",
+      { storagePath: normalizedPath },
+      auth.currentUser,
+    );
+    return result.deleted;
   } catch (error) {
     console.warn("Failed to delete notice image:", error);
     return false;
