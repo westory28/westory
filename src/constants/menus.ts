@@ -214,12 +214,25 @@ const isLegacyRemovedUrl = (value: unknown) => {
   );
 };
 
+const normalizeMenuName = (value: unknown, url: string) => {
+  const name = toSafeText(value);
+  const [path, query = ""] = url.split("?");
+  if (
+    (path === "/student/points" || path === "/teacher/points") &&
+    new URLSearchParams(query).get("tab") === "hall-of-fame" &&
+    (name === "화랑의 전당" || name === "화랑의 전당 관리")
+  ) {
+    return name.replace("화랑의 전당", "명예의 전당");
+  }
+  return name;
+};
+
 const sanitizeChildren = (children: unknown): MenuChild[] => {
   if (!Array.isArray(children)) return [];
   return children
     .map((child) => {
       const url = normalizeMenuUrl((child as MenuChild)?.url);
-      const name = toSafeText((child as MenuChild)?.name);
+      const name = normalizeMenuName((child as MenuChild)?.name, url);
       const gameTitleCustomized =
         (child as MenuChild)?.gameTitleCustomized === true;
       return {
@@ -278,7 +291,10 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
 
     const sanitized = source
       .map((item) => ({
-        name: toSafeText((item as MenuItem)?.name),
+        name: normalizeMenuName(
+          (item as MenuItem)?.name,
+          normalizeMenuUrl((item as MenuItem)?.url),
+        ),
         url: normalizeMenuUrl((item as MenuItem)?.url),
         icon: toSafeText((item as MenuItem)?.icon),
         children: sanitizeChildren((item as MenuItem)?.children),
