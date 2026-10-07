@@ -5,6 +5,7 @@
 - Original: `C:/Users/방재석/.codex/generated_images/01a1167e-6ee4-7a61-a2af-aaba5525ac50/exec-66cd5fa9-21e5-4d45-9a7c-3a94a92fff92.png`
 - Creative Joseon-inspired illustration, not an archaeological reconstruction. No third-party image inputs.
 - Use: shared student podium, teacher preview and default-image restoration. Existing custom uploads remain selectable.
+- Compatibility: the retired production artwork at `site-settings/interface/hall-of-fame/podium-1774967841751.jpg` in the existing Firebase bucket resolves to this new bundled image at render time. Stored settings and all other custom image URLs remain unchanged.
 
 ## Generation prompt
 

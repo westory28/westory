@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { formatWisAmount } from "../../lib/pointFormatters";
 import {
-  DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
+  resolveWisHallOfFamePodiumImageUrl,
   getDefaultHallOfFamePositions,
   normalizeHallOfFameInterfaceConfig,
 } from "../../lib/wisHallOfFame";
@@ -232,9 +232,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   const [stageWidth, setStageWidth] = useState(0);
   const safeEntries = entries || [];
   const normalizedConfig = normalizeHallOfFameInterfaceConfig(hallOfFameConfig);
-  const resolvedImageUrl =
-    (imageUrl || normalizedConfig.podiumImageUrl || "").trim() ||
-    DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL;
+  const resolvedImageUrl = resolveWisHallOfFamePodiumImageUrl(
+    imageUrl || normalizedConfig.podiumImageUrl,
+  );
   const normalizedPositions =
     normalizedConfig.positions || getDefaultHallOfFamePositions();
   const slotEntries = resolveSlotEntries(safeEntries);

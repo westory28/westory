@@ -12,7 +12,7 @@ import { getFirebaseStorage } from "../../../../lib/firebase";
 import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
 import { invalidateSiteSettingDocCache } from "../../../../lib/siteSettings";
 import {
-  DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
+  resolveWisHallOfFamePodiumImageUrl,
   WIS_HALL_OF_FAME_GRADE_KEY,
   WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS,
   ensureWisHallOfFameSnapshot,
@@ -607,10 +607,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       }),
     [combinedDraft, imagePreviewUrl],
   );
-  const imageUrl =
-    imagePreviewUrl ||
-    previewConfig.podiumImageUrl ||
-    DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL;
+  const imageUrl = resolveWisHallOfFamePodiumImageUrl(
+    imagePreviewUrl || previewConfig.podiumImageUrl,
+  );
 
   const gradeOptions = useMemo(
     () =>

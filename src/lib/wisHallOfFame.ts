@@ -29,6 +29,28 @@ export const WIS_HALL_OF_FAME_STALE_MS =
   WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 export const DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET = "classic_podium_v1";
 export const DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL = defaultPodiumImage;
+
+/** Replace the retired Hwarang artwork while preserving other uploaded images. */
+export const resolveWisHallOfFamePodiumImageUrl = (
+  imageUrl?: string | null,
+) => {
+  const value = String(imageUrl || "").trim();
+  if (!value) return DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL;
+  try {
+    const url = new URL(value);
+    if (
+      url.origin === "https://firebasestorage.googleapis.com" &&
+      decodeURIComponent(url.pathname) ===
+        "/v0/b/history-quiz-yongsin.firebasestorage.app/o/site-settings/interface/hall-of-fame/podium-1774967841751.jpg"
+    ) {
+      return DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL;
+    }
+  } catch {
+    // Relative asset paths and custom previews retain their original value.
+  }
+  return value;
+};
+
 export const DEFAULT_WIS_HALL_OF_FAME_PUBLIC_RANK_LIMIT = 10;
 export const DEFAULT_WIS_HALL_OF_FAME_STORED_RANK_LIMIT = 20;
 
