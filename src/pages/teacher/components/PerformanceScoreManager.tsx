@@ -1,4 +1,5 @@
 import NumericInput from "../../../components/common/NumericInput";
+import { readScoreWorkbookRows } from "../../../lib/scoreWorkbookReader";
 import { isSemesterArchive } from "../../../lib/semesterArchive";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -34,7 +35,8 @@ import {
 import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
-import { db } from "../../../lib/firebase";
+import { db, getHttpsCallable } from "../../../lib/firebase";
+import { callStudentDataService } from "../../../lib/studentProfileCommands";
 import {
   getSemesterCollectionPath,
   getYearSemester,
@@ -76,6 +78,7 @@ import {
 } from "../../../lib/performanceScores";
 import {
   parsePerformanceScoreWorkbook,
+  splitPerformanceScoreUpload,
   type ParsedPerformanceScoreRow,
   type ParsedPerformanceScoreUpload,
 } from "../../../lib/performanceScoreWorkbook";
@@ -84,7 +87,10 @@ import {
   createManagedNotifications,
   reviewPerformanceScoreObjection,
 } from "../../../lib/notifications";
-import { deleteStudentData } from "../../../lib/studentData";
+import {
+  isActiveRosterStudent,
+  isStudentRosterProfile,
+} from "../../../lib/studentRoster";
 
 interface StudentProfile {
   uid: string;
@@ -102,8 +108,6 @@ interface PerformanceScoreManagerProps {
   scoreKind?: PerformanceScoreKind;
 }
 
-type AssessmentPresetKey = "auto" | "first" | "second";
-type UploadAssessmentPresetKey = Exclude<AssessmentPresetKey, "auto">;
 type WrittenExamUploadMode = "objective" | "essay";
 type PreviewPageItem = number | { key: string; label: string };
 type ObjectiveOmrSourceItem =
@@ -131,7 +135,7 @@ const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_STUDENT_NAME_COLUMN = 4;
-const CLASS_SHEET_STUDENT_NAME_COLUMN_WIDTH = 6.88;
+const CLASS_SHEET_STUDENT_NAME_COLUMN_WIDTH = 6.875;
 const CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH =
   CLASS_SHEET_STUDENT_NAME_COLUMN_WIDTH;
 const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH = 13;
@@ -168,8 +172,8 @@ const CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN = 15;
 const CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN = 16;
 const CLASS_SHEET_PRINT_INFO_START_COLUMN = 8;
 const CLASS_SHEET_PRINT_INFO_END_COLUMN = 16;
-const CLASS_SHEET_NICE_REFERENCE_STUDENT_COUNT = 31;
-const CLASS_SHEET_NICE_REFERENCE_FOOTER_SPACER_HEIGHT = 175.6;
+const CLASS_SHEET_NICE_REFERENCE_STUDENT_COUNT = 32;
+const CLASS_SHEET_NICE_REFERENCE_FOOTER_SPACER_HEIGHT = 152.45;
 const CLASS_SHEET_STUDENT_ROW_HEIGHT = 14.1;
 const CLASS_SHEET_PRINT_INFO_SPACER_ROW_HEIGHT = 6;
 const CLASS_SHEET_PRINT_INFO_ROW_HEIGHT = 9;
@@ -178,12 +182,12 @@ const CLASS_SHEET_PRINT_INFO_FONT_NAME = "바탕";
 const CLASS_SHEET_PRINT_INFO_TRAILING_SPACES = "      ";
 const CLASS_SHEET_TOTAL_SCORE_NUMBER_FORMAT = "#,##0.00";
 const CLASS_SHEET_SCHOOL_NAME = "용신중학교";
-const CLASS_SHEET_PRINT_INFO_FIXED_IP = "10.182.***.93";
+
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const SCORE_LIST_ALL_ROSTERS_VALUE = "__all_performance_scores__";
-const SCORE_LIST_FIRST_SUMMARY_LABEL = "고조선 8조법 4컷 만화 그리기";
-const SCORE_LIST_SECOND_SUMMARY_LABEL = "삼국 시대 인물의 무덤에 평점 남기기";
+const SCORE_LIST_FIRST_SUMMARY_LABEL = "첫 번째 수행평가";
+const SCORE_LIST_SECOND_SUMMARY_LABEL = "두 번째 수행평가";
 const WRITTEN_EXAM_DEFAULT_ITEM_NAME = "논술형 점수";
 const WRITTEN_EXAM_DEFAULT_SUBJECT = "역사";
 const WRITTEN_EXAM_DEFAULT_MAX_SCORE = "20";
@@ -252,39 +256,6 @@ const isWrittenExamUploadModeCompatible = (
   return scoreContentKind === "essay";
 };
 
-const ASSESSMENT_PRESETS: Record<
-  UploadAssessmentPresetKey,
-  { title: string; subject: string; assessmentOrder: number }
-> = {
-  first: {
-    title: "고조선 8조법 4컷 만화 그리기",
-    subject: "역사",
-    assessmentOrder: 1,
-  },
-  second: {
-    title: "삼국 시대 인물의 무덤에 평점 남기기",
-    subject: "역사",
-    assessmentOrder: 2,
-  },
-};
-
-const UPLOAD_ASSESSMENT_OPTIONS: Array<{
-  key: UploadAssessmentPresetKey;
-  label: string;
-  description: string;
-}> = [
-  {
-    key: "first",
-    label: "1차 수행: 고조선 8조법 4컷 만화",
-    description: "20점 만점, 법 조항 서사와 당대 생활상 중심",
-  },
-  {
-    key: "second",
-    label: "2차 수행: 삼국 시대 인물의 무덤 평점",
-    description: "30점 만점, 업적·과오와 평점 근거 중심",
-  },
-];
-
 const SCORE_MANAGER_COPY: Record<
   PerformanceScoreKind,
   {
@@ -324,7 +295,7 @@ const SCORE_MANAGER_COPY: Record<
     scoreKindLabel: "수행평가",
     scoreKindParticle: "를",
     uploadTitle: "수행평가 점수표 업로드",
-    uploadDescription: "업로드할 수행평가를 선택한 뒤 엑셀 파일을 골라 주세요.",
+    uploadDescription: "",
     uploadSelectLabel: "수행평가 선택",
     uploadSuccessTitle: "수행평가 명단을 인식했습니다.",
     uploadErrorContext: "엑셀 파일의 헤더와 점수 컬럼을 확인해 주세요.",
@@ -382,26 +353,6 @@ const toText = (value: unknown) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
-
-const getDefaultAssessmentPreset = (
-  upload: ParsedUpload,
-): AssessmentPresetKey => {
-  if (upload.assessmentOrder === 1) return "first";
-  if (upload.assessmentOrder === 2) return "second";
-  return "auto";
-};
-
-const getAssessmentConfig = (
-  upload: ParsedUpload,
-  preset: AssessmentPresetKey,
-) => {
-  if (preset !== "auto") return ASSESSMENT_PRESETS[preset];
-  return {
-    title: upload.title,
-    subject: upload.subject,
-    assessmentOrder: upload.assessmentOrder,
-  };
-};
 
 const parseWrittenExamFeedbackByItemKey = (value: string) => {
   const text = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
@@ -833,18 +784,6 @@ const createBatchQueue = () => {
   };
 };
 
-const readWorkbookRows = async (file: File) => {
-  const { default: readXlsxFile } = await import("read-excel-file/browser");
-  const workbookRows = (await readXlsxFile(file)) as unknown;
-  return Array.isArray(workbookRows) &&
-    workbookRows.length === 1 &&
-    typeof workbookRows[0] === "object" &&
-    workbookRows[0] !== null &&
-    Array.isArray((workbookRows[0] as { data?: unknown }).data)
-    ? ((workbookRows[0] as { data: unknown[][] }).data as unknown[][])
-    : (workbookRows as unknown[][]);
-};
-
 const normalizeStudentProfile = (
   id: string,
   data: Record<string, unknown>,
@@ -899,7 +838,7 @@ const matchRowsToStudents = (
   rows: ParsedScoreRow[],
   students: StudentProfile[],
 ): ParsedScoreRow[] => {
-  const { byNumber, byName } = buildStudentMatchIndexes(students);
+  const { byNumber } = buildStudentMatchIndexes(students);
 
   return rows.map((row) => {
     const numberMatch = getUniqueStudentMatch(
@@ -907,32 +846,17 @@ const matchRowsToStudents = (
     );
     if (numberMatch) {
       const sameName =
-        !row.studentName ||
+        Boolean(row.studentName) &&
         normalizeStudentName(row.studentName) ===
           normalizeStudentName(numberMatch.name);
       return {
         ...row,
-        uid: numberMatch.uid,
-        studentName: row.studentName || numberMatch.name,
+        uid: sameName ? numberMatch.uid : "",
+        studentName: row.studentName,
         matchStatus: sameName ? "matched" : "name-mismatch",
         matchMessage: sameName
           ? "학년, 반, 번호, 이름이 일치합니다."
-          : `번호로 연결했습니다. 등록 명단 이름은 ${numberMatch.name || "이름 없음"}입니다.`,
-      };
-    }
-
-    const nameMatch = getUniqueStudentMatch(
-      byName.get(
-        buildStudentNameLookupKey(row.grade, row.class, row.studentName),
-      ),
-    );
-    if (nameMatch) {
-      return {
-        ...row,
-        uid: nameMatch.uid,
-        number: row.number || nameMatch.number,
-        matchStatus: "name-mismatch",
-        matchMessage: `이름으로 연결했습니다. 등록 명단 번호는 ${nameMatch.number || "-"}번입니다.`,
+          : "같은 학년·반·번호의 학생 이름이 다릅니다. 학생 명단과 파일을 확인해 주세요.",
       };
     }
 
@@ -940,7 +864,8 @@ const matchRowsToStudents = (
       ...row,
       uid: "",
       matchStatus: "unmatched",
-      matchMessage: "학생 명단에서 같은 학년, 반, 번호를 찾지 못했습니다.",
+      matchMessage:
+        "재학 학생 명단에 없습니다. 학생 명단 관리에서 등록·학적 상태를 확인해 주세요.",
     };
   });
 };
@@ -950,7 +875,8 @@ const getRosterRowStudentRepair = (
   indexes: StudentMatchIndexes,
   validStudentUids: Set<string>,
 ) => {
-  if (row.uid && !validStudentUids.has(row.uid)) return null;
+  // Excluded or deleted profiles must never cause score/signature deletion.
+  if (row.uid) return row;
   if (!rosterRowHasScore(row)) return row;
 
   const numberMatch = getUniqueStudentMatch(
@@ -960,10 +886,10 @@ const getRosterRowStudentRepair = (
   );
   if (numberMatch) {
     const sameName =
-      !row.studentName ||
+      Boolean(row.studentName) &&
       normalizeStudentName(row.studentName) ===
         normalizeStudentName(numberMatch.name);
-    if (!row.uid) {
+    if (sameName) {
       return {
         ...row,
         uid: numberMatch.uid,
@@ -976,21 +902,6 @@ const getRosterRowStudentRepair = (
           : `번호로 연결했습니다. 등록 명단 이름은 ${numberMatch.name || "이름 없음"}입니다.`,
       };
     }
-  }
-
-  const nameMatch = getUniqueStudentMatch(
-    indexes.byName.get(
-      buildStudentNameLookupKey(row.grade, row.class, row.studentName),
-    ),
-  );
-  if (nameMatch && !row.uid && !row.number && !isManualRosterRow(row)) {
-    return {
-      ...row,
-      uid: nameMatch.uid,
-      number: nameMatch.number,
-      matchStatus: "name-mismatch" as const,
-      matchMessage: `이름으로 연결했습니다. 학생 명단 번호는 ${nameMatch.number || "-"}번입니다.`,
-    };
   }
 
   return row;
@@ -1025,6 +936,104 @@ const repairRosterRowsWithStudentProfiles = (
     return [repaired];
   });
   return { rows: changed ? repairedRows : rows, changed, removedRows };
+};
+
+const clearLegacyScoreEnrollmentForActiveStudent = <T extends object>(
+  source: T,
+): T => {
+  if (isSemesterArchive) return source;
+  const active = { ...source } as T & TransferScoreMeta;
+  delete active.academicStatus;
+  delete active.isTransferred;
+  delete active.transferStatus;
+  return active;
+};
+
+const buildActiveStudentRoster = (
+  roster: PerformanceScoreRoster,
+  activeStudents: StudentProfile[],
+): PerformanceScoreRoster => {
+  if (isSemesterArchive) return roster;
+  const indexes = buildStudentMatchIndexes(activeStudents);
+  const studentsByUid = new Map(
+    activeStudents.map((student) => [student.uid, student]),
+  );
+  const includedUids = new Set<string>();
+  const rows = [...(roster.rows || [])]
+    .sort((a, b) => Number(Boolean(b.uid)) - Number(Boolean(a.uid)))
+    .flatMap((row) => {
+      const student = row.uid
+        ? studentsByUid.get(row.uid)
+        : getUniqueStudentMatch(
+            indexes.byNumber.get(
+              buildStudentLookupKey(row.grade, row.class, row.number),
+            ),
+          );
+      if (
+        !student ||
+        includedUids.has(student.uid) ||
+        (!row.uid &&
+          normalizeStudentName(row.studentName) !==
+            normalizeStudentName(student.name))
+      )
+        return [];
+      includedUids.add(student.uid);
+      return [
+        {
+          ...clearLegacyScoreEnrollmentForActiveStudent(row),
+          uid: student.uid,
+          grade: student.grade,
+          class: student.class,
+          number: student.number,
+          studentName: student.name,
+        },
+      ];
+    });
+  const targetGrades = new Set(
+    [roster.targetGrade, ...(roster.rows || []).map((row) => row.grade)]
+      .map(normalizeSchoolValue)
+      .filter(Boolean),
+  );
+  const targetClasses = new Set(
+    [
+      roster.targetClass,
+      ...(roster.classes || []),
+      ...(roster.rows || []).map((row) => row.class),
+    ]
+      .map(normalizeSchoolValue)
+      .filter(Boolean),
+  );
+  let nextRowNumber = Math.max(
+    0,
+    ...(roster.rows || []).map((row) => Number(row.rowNumber) || 0),
+  );
+  activeStudents.forEach((student) => {
+    if (
+      includedUids.has(student.uid) ||
+      !targetGrades.has(student.grade) ||
+      (targetClasses.size > 0 && !targetClasses.has(student.class))
+    )
+      return;
+    rows.push({
+      rowNumber: ++nextRowNumber,
+      uid: student.uid,
+      grade: student.grade,
+      class: student.class,
+      number: student.number,
+      studentName: student.name,
+      items: (roster.items || []).map((item) =>
+        buildScoreItemFromDefinition(item),
+      ),
+      enteredScoreCount: 0,
+      totalScore: 0,
+      totalMaxScore: roster.totalMaxScore || 0,
+      feedback: "",
+      evidence: "",
+      matchStatus: "matched",
+      matchMessage: "학생 명단에 등록된 학생입니다.",
+    });
+  });
+  return { ...roster, rows };
 };
 
 const getMatchBadgeClass = (
@@ -3400,7 +3409,7 @@ const formatClassSheetPrintDateTime = (date = new Date()) => {
 
 const normalizeClassSheetPrintIp = (value: unknown) => {
   const text = toText(value).slice(0, 80);
-  return text || CLASS_SHEET_PRINT_INFO_FIXED_IP;
+  return text || "확인 불가";
 };
 
 const getClassSheetPrintInfoText = (params: {
@@ -3416,9 +3425,13 @@ const getClassSheetPrintInfoText = (params: {
   }${CLASS_SHEET_PRINT_INFO_TRAILING_SPACES}`;
 
 const loadClassSheetPrintClientInfo = async () => {
-  return {
-    clientIp: CLASS_SHEET_PRINT_INFO_FIXED_IP,
-  };
+  const result = await callStudentDataService<
+    Record<string, never>,
+    { maskedIp: string }
+  >("getPrintClientInfo", {});
+  if (!result.maskedIp)
+    throw new Error("출력 IP를 확인하지 못했습니다. 다시 시도해 주세요.");
+  return { clientIp: result.maskedIp };
 };
 
 const excelCell = (
@@ -3801,7 +3814,7 @@ const buildClassSummaryWorkbook = (params: {
   setExcelCell(
     header,
     4,
-    `${params.firstRoster?.title || "고조선 8조법 4컷 만화 그리기"}\n(만점 ${formatPerformanceScore(
+    `${params.firstRoster?.title || "첫 번째 수행평가"}\n(만점 ${formatPerformanceScore(
       params.firstRoster?.totalMaxScore || 20,
     )})`,
     {
@@ -3814,7 +3827,7 @@ const buildClassSummaryWorkbook = (params: {
   setExcelCell(
     header,
     6,
-    `${params.secondRoster?.title || "삼국 시대 인물의 무덤에 평점 남기기"}\n(만점 ${formatPerformanceScore(
+    `${params.secondRoster?.title || "두 번째 수행평가"}\n(만점 ${formatPerformanceScore(
       params.secondRoster?.totalMaxScore || 30,
     )})`,
     {
@@ -4895,6 +4908,14 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   await workbook.xlsx.load(await response.arrayBuffer());
   const worksheet = workbook.worksheets[0];
   if (!worksheet) throw new Error("class-sheet-template-empty");
+  worksheet.pageSetup = {
+    ...worksheet.pageSetup,
+    paperSize: 9,
+    orientation: "portrait",
+    scale: 99,
+    horizontalDpi: 1200,
+    verticalDpi: 1200,
+  };
   const studentNameColumn = worksheet.getColumn(
     CLASS_SHEET_STUDENT_NAME_COLUMN,
   );
@@ -4922,6 +4943,13 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     params.students.length,
   );
   centerClassSheetStudentNameHeader(worksheet);
+  const assessmentHeader = (roster?: PerformanceScoreRoster) => {
+    if (!roster) return "";
+    const ratio = roster.items.length === 1 ? roster.items[0].ratio : undefined;
+    return `${roster.title}\n(만점 ${Number(roster.totalMaxScore).toFixed(2)}${ratio == null ? ")" : `,\n${Number(ratio).toFixed(2)}%)`}`;
+  };
+  setWorksheetCellValue(worksheet, 6, 5, assessmentHeader(params.firstRoster));
+  setWorksheetCellValue(worksheet, 6, 7, assessmentHeader(params.secondRoster));
 
   setWorksheetCellValue(worksheet, 1, 12, getTodayLabel());
   setWorksheetCellValue(worksheet, 2, 6, "수행평가 강의실별 일람표");
@@ -5301,12 +5329,91 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [scoreWarningModalOpen, setScoreWarningModalOpen] = useState(false);
   const [previewClassFilter, setPreviewClassFilter] = useState("all");
   const [previewPage, setPreviewPage] = useState(1);
-  const [assessmentPreset, setAssessmentPreset] =
-    useState<AssessmentPresetKey>("auto");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const uploadDialogRef = useRef<HTMLElement | null>(null);
+  const uploadPreviewDialogRef = useRef<HTMLElement | null>(null);
+  const uploadFlowOpenerRef = useRef<HTMLElement | null>(null);
+  const uploadFlowOpen = uploadModalOpen || Boolean(parsed);
+  const uploadPreviewOpen = Boolean(parsed);
+
+  useEffect(() => {
+    if (!uploadFlowOpen) return;
+    uploadFlowOpenerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    return () => {
+      const opener = uploadFlowOpenerRef.current;
+      uploadFlowOpenerRef.current = null;
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [uploadFlowOpen]);
+
+  useEffect(() => {
+    if (!uploadFlowOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      (uploadPreviewOpen
+        ? uploadPreviewDialogRef.current
+        : uploadDialogRef.current
+      )?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [uploadFlowOpen, uploadPreviewOpen]);
+
+  const closeScoreUploadDialog = (preview: boolean) => {
+    if (saving || parsing) return;
+    if (preview) setParsed(null);
+    else setUploadModalOpen(false);
+  };
+
+  const handleScoreUploadDialogKeyDown = (
+    event: React.KeyboardEvent<HTMLElement>,
+    preview: boolean,
+  ) => {
+    const panel = event.currentTarget;
+    if (
+      !(event.target instanceof Element) ||
+      event.target.closest('[role="dialog"], [role="alertdialog"]') !== panel
+    )
+      return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeScoreUploadDialog(preview);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        "button, [href], input, select, textarea, [tabindex]",
+      ),
+    ).filter(
+      (element) =>
+        element.tabIndex >= 0 &&
+        !element.hasAttribute("disabled") &&
+        element.getAttribute("aria-hidden") !== "true" &&
+        element.getClientRects().length > 0,
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!first) {
+      event.preventDefault();
+      panel.focus();
+    } else if (
+      event.shiftKey &&
+      (document.activeElement === first || document.activeElement === panel)
+    ) {
+      event.preventDefault();
+      last.focus();
+    } else if (
+      !event.shiftKey &&
+      (document.activeElement === last || document.activeElement === panel)
+    ) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
   const [omrPreview, setOmrPreview] = useState<OmrPreviewState | null>(null);
-  const [uploadAssessmentPreset, setUploadAssessmentPreset] =
-    useState<UploadAssessmentPresetKey>("first");
   const [scoreListRosterId, setScoreListRosterId] = useState(
     SCORE_LIST_ALL_ROSTERS_VALUE,
   );
@@ -5329,9 +5436,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [scoreEditOriginalRecords, setScoreEditOriginalRecords] = useState<
     ScoreListRecord[]
   >([]);
-  const [selectedScoreListRecordKeys, setSelectedScoreListRecordKeys] =
-    useState<Set<string>>(() => new Set<string>());
-  const scoreListSelectAllRef = useRef<HTMLInputElement | null>(null);
   const studentsLoadPromiseRef = useRef<Promise<StudentProfile[]> | null>(null);
   const scoreDocumentSyncCheckedKeysRef = useRef<Set<string>>(
     new Set<string>(),
@@ -5408,6 +5512,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   );
 
   useEffect(() => {
+    if (classSheetModalOpen && !isSemesterArchive)
+      void loadStudents({ force: true });
+  }, [classSheetModalOpen]);
+
+  useEffect(() => {
     setTitle(managerCopy.defaultTitle(year, semester));
     if (managerCopy.defaultSubject) {
       setSubject(managerCopy.defaultSubject);
@@ -5437,7 +5546,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   }, [rosters]);
 
   useEffect(() => {
-    if (!parsed || students.length === 0) return;
+    if (!parsed || !studentsLoaded) return;
     setParsed((current) =>
       current
         ? {
@@ -5446,7 +5555,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           }
         : current,
     );
-  }, [students.length]);
+  }, [students, studentsLoaded]);
 
   useEffect(() => {
     setPreviewPage(1);
@@ -5460,17 +5569,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreListLoadedRosterId,
     scoreListSearch,
   ]);
-
-  useEffect(() => {
-    setSelectedScoreListRecordKeys((current) => {
-      if (!scoreEditing) return current.size ? new Set<string>() : current;
-      const recordKeys = new Set(scoreListRecords.map(getScoreListRecordKey));
-      const next = new Set(
-        Array.from(current).filter((key) => recordKeys.has(key)),
-      );
-      return next.size === current.size ? current : next;
-    });
-  }, [scoreEditing, scoreListRecords]);
 
   useEffect(() => {
     setScoreListSort({ key: "number", direction: "asc" });
@@ -5678,11 +5776,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         )
       : null;
   const firstScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
-    isWrittenExamMode ? "서답형" : SCORE_LIST_FIRST_SUMMARY_LABEL,
+    isWrittenExamMode
+      ? "서답형"
+      : scoreListSummaryRosters.firstRoster?.title ||
+          SCORE_LIST_FIRST_SUMMARY_LABEL,
     firstScoreListSummaryMaxScore,
   );
   const secondScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
-    isWrittenExamMode ? "논술형" : SCORE_LIST_SECOND_SUMMARY_LABEL,
+    isWrittenExamMode
+      ? "논술형"
+      : scoreListSummaryRosters.secondRoster?.title ||
+          SCORE_LIST_SECOND_SUMMARY_LABEL,
     secondScoreListSummaryMaxScore,
   );
   const combinedScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
@@ -5927,14 +6031,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     const values = new Set<string>();
     rosters.forEach((roster) => {
       if (roster.targetGrade) values.add(roster.targetGrade);
-      (roster.rows || []).forEach((row) => {
+      (buildActiveStudentRoster(roster, students).rows || []).forEach((row) => {
         if (row.grade) values.add(row.grade);
       });
     });
     return Array.from(values).sort(
       (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
     );
-  }, [rosters]);
+  }, [rosters, students]);
   const scoreListClassOptions = useMemo(() => {
     const values = new Set<string>();
     const sourceRosters = scoreListAllSelected
@@ -5949,7 +6053,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       (roster?.classes || []).forEach((classValue) => {
         if (classValue) values.add(classValue);
       });
-      (roster?.rows || []).forEach((row) => {
+      (roster
+        ? buildActiveStudentRoster(roster, students).rows || []
+        : []
+      ).forEach((row) => {
         if (row.class) values.add(row.class);
       });
     });
@@ -5963,6 +6070,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreListSummaryRosters,
     selectedScoreRoster,
     usesCombinedPerformanceSummary,
+    students,
   ]);
   const scoreListReady =
     !scoreListAllSelected &&
@@ -5987,6 +6095,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const scoreListBaseRecords = useMemo(() => {
     if (!scoreListDisplayReady) return [];
     return scoreListRecords.filter((record) => {
+      if (
+        !isSemesterArchive &&
+        !students.some((student) => student.uid === record.uid)
+      )
+        return false;
       const gradeMatched =
         scoreListGradeFilter === "all" ||
         normalizeSchoolValue(record.grade) ===
@@ -6004,10 +6117,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreListRecords,
     scoreListSearchActive,
     scoreListSearchKey,
+    students,
   ]);
   const scoreListSummaryBaseStudents = useMemo(() => {
     if (!scoreListSummaryReady) return [];
     return scoreListSummaryStudents.filter((student) => {
+      if (
+        !isSemesterArchive &&
+        !students.some((profile) => profile.uid === student.uid)
+      )
+        return false;
       const gradeMatched =
         scoreListGradeFilter === "all" ||
         normalizeSchoolValue(student.grade) ===
@@ -6025,6 +6144,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreListSearchKey,
     scoreListSummaryReady,
     scoreListSummaryStudents,
+    students,
   ]);
   const scoreListClassPageOptions = useMemo(() => {
     if (scoreListSearchActive) return [];
@@ -6171,46 +6291,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         Math.max(max, getFiniteNumber(record.totalMaxScore) ?? 0),
       0,
     );
-  const visibleScoreListRecordKeys = useMemo(
-    () => sortedFilteredScoreListRecords.map(getScoreListRecordKey),
-    [sortedFilteredScoreListRecords],
-  );
-  const selectedVisibleScoreListRecordKeys = useMemo(() => {
-    const selected = new Set<string>();
-    visibleScoreListRecordKeys.forEach((key) => {
-      if (selectedScoreListRecordKeys.has(key)) selected.add(key);
-    });
-    return selected;
-  }, [selectedScoreListRecordKeys, visibleScoreListRecordKeys]);
-  const selectedScoreListRecordCount = selectedVisibleScoreListRecordKeys.size;
-  const visibleScoreListRecordsSelected =
-    visibleScoreListRecordKeys.length > 0 &&
-    visibleScoreListRecordKeys.every((key) =>
-      selectedScoreListRecordKeys.has(key),
-    );
-  const visibleScoreListRecordsPartiallySelected =
-    !visibleScoreListRecordsSelected &&
-    visibleScoreListRecordKeys.some((key) =>
-      selectedScoreListRecordKeys.has(key),
-    );
-
-  useEffect(() => {
-    if (!scoreEditing) return;
-    const visibleKeys = new Set(visibleScoreListRecordKeys);
-    setSelectedScoreListRecordKeys((current) => {
-      const next = new Set(
-        Array.from(current).filter((key) => visibleKeys.has(key)),
-      );
-      return next.size === current.size ? current : next;
-    });
-  }, [scoreEditing, visibleScoreListRecordKeys]);
-
-  useEffect(() => {
-    if (!scoreListSelectAllRef.current) return;
-    scoreListSelectAllRef.current.indeterminate =
-      visibleScoreListRecordsPartiallySelected;
-  }, [visibleScoreListRecordsPartiallySelected]);
-
   const scoreStatsFallbackRecords = useMemo(() => {
     if (isWrittenExamMode) {
       if (
@@ -6221,7 +6301,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         return [];
       }
       const records = writtenExamScoreStatsRosters.flatMap((roster) =>
-        (roster.rows || [])
+        (buildActiveStudentRoster(roster, students).rows || [])
           .filter((row) => rosterRowHasScore(row))
           .map((row) => buildRecordFromRosterRow(roster, row)),
       );
@@ -6232,7 +6312,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     if (scoreStatsAllSelected) {
       if (!usesCombinedPerformanceSummary) {
         return rosters.flatMap((roster) =>
-          (roster.rows || [])
+          (buildActiveStudentRoster(roster, students).rows || [])
             .filter((row) => rosterRowHasScore(row))
             .map((row) => buildRecordFromRosterRow(roster, row)),
         );
@@ -6241,8 +6321,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         ? scoreListSummaryStudents
         : scoreStatsFirstRoster && scoreStatsSecondRoster
           ? buildScoreListSummaryStudents(
-              buildScoreListRecordsFromRosterRows(scoreStatsFirstRoster),
-              buildScoreListRecordsFromRosterRows(scoreStatsSecondRoster),
+              buildScoreListRecordsFromRosterRows(
+                buildActiveStudentRoster(scoreStatsFirstRoster, students),
+              ),
+              buildScoreListRecordsFromRosterRows(
+                buildActiveStudentRoster(scoreStatsSecondRoster, students),
+              ),
             )
           : [];
       return buildCombinedScoreStatsRecords(summaryStudents, {
@@ -6254,7 +6338,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       });
     }
     if (!scoreStatsSelectedRoster) return [];
-    return (scoreStatsSelectedRoster.rows || [])
+    return (
+      buildActiveStudentRoster(scoreStatsSelectedRoster, students).rows || []
+    )
       .filter((row) => rosterRowHasScore(row))
       .map((row) => buildRecordFromRosterRow(scoreStatsSelectedRoster, row));
   }, [
@@ -6272,16 +6358,28 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     writtenExamScoreStatsRosters,
     writtenExamStatsGroupKey,
     year,
+    students,
   ]);
   const scoreStatsCombinedStudents = useMemo(() => {
     if (!usesCombinedPerformanceSummary) return [];
     if (!scoreStatsAllSelected) return [];
-    if (scoreListSummaryCacheReady) return scoreListSummaryStudents;
-    if (!scoreStatsFirstRoster || !scoreStatsSecondRoster) return [];
-    return buildScoreListSummaryStudents(
-      buildScoreListRecordsFromRosterRows(scoreStatsFirstRoster),
-      buildScoreListRecordsFromRosterRows(scoreStatsSecondRoster),
-    );
+    const combined = scoreListSummaryCacheReady
+      ? scoreListSummaryStudents
+      : scoreStatsFirstRoster && scoreStatsSecondRoster
+        ? buildScoreListSummaryStudents(
+            buildScoreListRecordsFromRosterRows(
+              buildActiveStudentRoster(scoreStatsFirstRoster, students),
+            ),
+            buildScoreListRecordsFromRosterRows(
+              buildActiveStudentRoster(scoreStatsSecondRoster, students),
+            ),
+          )
+        : [];
+    return isSemesterArchive
+      ? combined
+      : combined.filter((student) =>
+          students.some((profile) => profile.uid === student.uid),
+        );
   }, [
     scoreListSummaryCacheReady,
     scoreListSummaryStudents,
@@ -6289,34 +6387,57 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreStatsFirstRoster,
     scoreStatsSecondRoster,
     usesCombinedPerformanceSummary,
+    students,
   ]);
   const scoreStatsRecordsReady =
     !!scoreStatsLoadKey && scoreStatsLoadedRosterId === scoreStatsLoadKey;
   const scoreStatsSourceRecords = useMemo(() => {
-    if (isWrittenExamMode) {
-      return scoreStatsRecordsReady
-        ? scoreStatsRecords
-        : scoreStatsFallbackRecords;
-    }
-    if (scoreStatsRecordsReady) return scoreStatsRecords;
-    if (
-      scoreStatsAllSelected &&
-      scoreListSummaryCacheReady &&
-      scoreListSummaryStudents.length > 0
-    ) {
+    const selectRecords = () => {
+      if (isWrittenExamMode) {
+        return scoreStatsRecordsReady
+          ? scoreStatsRecords
+          : scoreStatsFallbackRecords;
+      }
+      if (scoreStatsRecordsReady) return scoreStatsRecords;
+      if (
+        scoreStatsAllSelected &&
+        scoreListSummaryCacheReady &&
+        scoreListSummaryStudents.length > 0
+      ) {
+        return scoreStatsFallbackRecords;
+      }
+      if (
+        !scoreStatsAllSelected &&
+        scoreListReady &&
+        scoreStatsSelectedRoster &&
+        scoreListLoadedRosterId === scoreStatsSelectedRoster.id &&
+        scoreListRecords.length > 0
+      ) {
+        return scoreListRecords;
+      }
       return scoreStatsFallbackRecords;
-    }
-    if (
-      !scoreStatsAllSelected &&
-      scoreListReady &&
-      scoreStatsSelectedRoster &&
-      scoreListLoadedRosterId === scoreStatsSelectedRoster.id &&
-      scoreListRecords.length > 0
-    ) {
-      return scoreListRecords;
-    }
-    return scoreStatsFallbackRecords;
+    };
+    const selectedRecords = selectRecords();
+    if (isSemesterArchive) return selectedRecords;
+    const activeByUid = new Map(
+      students.map((student) => [student.uid, student]),
+    );
+    return selectedRecords.flatMap((record) => {
+      const student = activeByUid.get(record.uid);
+      return student
+        ? [
+            {
+              ...record,
+              grade: student.grade,
+              class: student.class,
+              number: student.number,
+              studentName: student.name,
+            },
+          ]
+        : [];
+    });
   }, [
+    students,
     scoreListLoadedRosterId,
     scoreListReady,
     scoreListRecords,
@@ -6739,14 +6860,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       .filter(Boolean)
       .forEach((roster) => {
         if (roster?.targetGrade) values.add(roster.targetGrade);
-        (roster?.rows || []).forEach((row) => {
+        (roster
+          ? buildActiveStudentRoster(roster, students).rows || []
+          : []
+        ).forEach((row) => {
           if (row.grade) values.add(row.grade);
         });
       });
     return Array.from(values).sort(
       (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
     );
-  }, [summaryExportRosters, targetGrade]);
+  }, [summaryExportRosters, targetGrade, students]);
   const classSheetClassOptions = useMemo(() => {
     const values = new Set<string>();
     [summaryExportRosters.firstRoster, summaryExportRosters.secondRoster]
@@ -6755,14 +6879,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         (roster?.classes || []).forEach((classValue) => {
           if (classValue) values.add(classValue);
         });
-        (roster?.rows || []).forEach((row) => {
+        (roster
+          ? buildActiveStudentRoster(roster, students).rows || []
+          : []
+        ).forEach((row) => {
           if (row.class) values.add(row.class);
         });
       });
     return Array.from(values).sort(
       (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
     );
-  }, [summaryExportRosters]);
+  }, [summaryExportRosters, students]);
   const classSheetSelectionKey = [
     classSheetFirstRosterId,
     classSheetSecondRosterId,
@@ -6942,7 +7069,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   };
 
   const loadStudents = async (
-    options: { force?: boolean } = {},
+    options: { force?: boolean; throwOnError?: boolean } = {},
   ): Promise<StudentProfile[]> => {
     if (!options.force && studentsLoaded) return students;
     if (studentsLoadPromiseRef.current) return studentsLoadPromiseRef.current;
@@ -6954,6 +7081,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       const loaded: StudentProfile[] = [];
       snap.forEach((item) => {
         const data = item.data() as Record<string, unknown>;
+        if (!isActiveRosterStudent(data) || !isStudentRosterProfile(data))
+          return;
         const profile = normalizeStudentProfile(item.id, data);
         if (!profile.name && !profile.number && !profile.class) return;
         if (data.role === "teacher" && !profile.number) return;
@@ -6973,6 +7102,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       setStudentLoadError(
         "학생 명단을 불러오지 못했습니다. 학생 연결을 위해 학생 명단 조회 권한이 필요합니다.",
       );
+      if (options.throwOnError) throw error;
       return [];
     } finally {
       studentsLoadPromiseRef.current = null;
@@ -7122,15 +7252,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   ) => {
     if (isSemesterArchive) return;
     const activeStudentUids = new Set(
-      students.map((student) => student.uid).filter(Boolean),
+      (await loadStudents({ force: true }))
+        .map((student) => student.uid)
+        .filter(Boolean),
     );
     const candidates = loadedRosters.flatMap((roster) =>
       (roster.rows || [])
         .filter(
           (row) =>
-            row.uid &&
-            (!activeStudentUids.size || activeStudentUids.has(row.uid)) &&
-            rosterRowHasScore(row),
+            row.uid && activeStudentUids.has(row.uid) && rosterRowHasScore(row),
         )
         .map((row) => {
           const key = `${year}:${semester}:${row.uid}:${roster.id}`;
@@ -7233,6 +7363,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 shouldMarkChecked = true;
                 return;
               }
+
+              const studentSnap = await transaction.get(
+                doc(db, "users", candidate.row.uid),
+              );
+              if (
+                !studentSnap.exists() ||
+                !isActiveRosterStudent(studentSnap.data())
+              )
+                return;
 
               const rosterSnap = await transaction.get(
                 doc(db, rosterCollectionPath, candidate.roster.id),
@@ -7390,29 +7529,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             unmatchedCount: meta.unmatchedCount,
             updatedAt: serverTimestamp(),
           });
-          repaired.removedRows.forEach((row) => {
-            if (!row.uid) return;
-            transaction.delete(
-              doc(
-                db,
-                "users",
-                row.uid,
-                PERFORMANCE_SCORE_USER_COLLECTION,
-                latestRoster.id,
-                PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-                row.uid,
-              ),
-            );
-            transaction.delete(
-              doc(
-                db,
-                "users",
-                row.uid,
-                PERFORMANCE_SCORE_USER_COLLECTION,
-                latestRoster.id,
-              ),
-            );
-          });
           return nextRoster;
         });
         if (repairedRoster) repairedRosters.push(repairedRoster);
@@ -7459,29 +7575,20 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     roster: PerformanceScoreRoster,
     options: { includeStudentDocuments?: boolean } = {},
   ) => {
-    const activeStudentUids = new Set(
-      isSemesterArchive
-        ? []
-        : students.map((student) => student.uid).filter(Boolean),
-    );
-    const rosterRows = (roster.rows || []).filter(
-      (row) =>
-        !row.uid || !activeStudentUids.size || activeStudentUids.has(row.uid),
-    );
-    const activeRoster =
-      rosterRows.length === (roster.rows || []).length
-        ? roster
-        : { ...roster, rows: rosterRows };
+    const studentSnapshot = isSemesterArchive
+      ? []
+      : await loadStudents({ force: true, throwOnError: true });
+    const activeRoster = buildActiveStudentRoster(roster, studentSnapshot);
+    const rosterRows = activeRoster.rows || [];
     const shouldIncludeStudentDocuments =
       options.includeStudentDocuments || isWrittenExamObjectiveRoster(roster);
     if (!shouldIncludeStudentDocuments) {
       return buildScoreListRecordsFromRosterRows(activeRoster);
     }
 
-    const linkedRows = rosterRows.filter(
-      (row) =>
-        row.uid && (!activeStudentUids.size || activeStudentUids.has(row.uid)),
-    );
+    invalidateRosterReadCaches(roster.id);
+
+    const linkedRows = rosterRows.filter((row) => row.uid);
     let documentRecords: ScoreListRecord[] = [];
     try {
       documentRecords = await loadScoreDocumentRecordsForRoster(roster);
@@ -7503,14 +7610,33 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     );
     const loaded = linkedRows.map((row) => {
       const documentRecord = documentRecordsByUid.get(row.uid);
-      return documentRecord || buildScoreListRecordFromRosterRow(roster, row);
+      return documentRecord
+        ? {
+            ...clearLegacyScoreEnrollmentForActiveStudent(documentRecord),
+            grade: row.grade,
+            class: row.class,
+            number: row.number,
+            studentName: row.studentName,
+          }
+        : buildScoreListRecordFromRosterRow(roster, row);
     });
     rosterRows
       .filter((row) => !row.uid && shouldShowRosterRowInScoreList(row))
       .forEach((row) => {
         loaded.push(buildScoreListRecordFromRosterRow(roster, row));
       });
-    return sortStudentIdentityRows(loaded);
+    const confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
+      roster.id,
+    );
+    return sortStudentIdentityRows(
+      loaded.map((record) => ({
+        ...record,
+        ...applyPerformanceScoreConfirmation(
+          record,
+          confirmationsByUid.get(record.uid) || null,
+        ),
+      })),
+    );
   };
 
   const loadScoreListRecords = async (
@@ -7589,13 +7715,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         const { firstRoster, secondRoster } = scoreListSummaryRosters;
         if (!firstRoster || !secondRoster) {
           setScoreListLoadError(
-            "전체 조회는 고조선 8조법과 삼국 시대 무덤 수행평가 점수표가 모두 필요합니다.",
+            "전체 조회는 두 수행평가 점수표가 모두 필요합니다.",
           );
           showToast({
             tone: "warning",
             title: "전체 조회를 할 수 없습니다.",
             message:
-              "고조선 8조법과 삼국 시대 무덤 수행평가 점수표를 모두 업로드한 뒤 다시 조회해 주세요.",
+              "두 수행평가 점수표를 모두 업로드한 뒤 다시 조회해 주세요.",
           });
           return;
         }
@@ -7693,7 +7819,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             tone: "warning",
             title: "전체 통계를 볼 수 없습니다.",
             message:
-              "고조선 8조법과 삼국 시대 수행평가 점수표를 모두 업로드한 뒤 다시 시도해 주세요.",
+              "두 수행평가 점수표를 모두 업로드한 뒤 다시 시도해 주세요.",
           });
           return;
         }
@@ -8115,7 +8241,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     );
     setScoreEditOriginalRecords(cloneScoreListRecords(scoreListRecords));
     setScoreListRecords(editableRecords);
-    setSelectedScoreListRecordKeys(new Set<string>());
     setScoreEditing(true);
   };
 
@@ -8123,243 +8248,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     setScoreListRecords(cloneScoreListRecords(scoreEditOriginalRecords));
     setScoreEditOriginalRecords([]);
     setScoreEditing(false);
-    setSelectedScoreListRecordKeys(new Set<string>());
-  };
-
-  const addScoreListStudent = () => {
-    if (!selectedScoreRoster || !scoreEditing || savingScoreEdits) return;
-    const defaultGrade =
-      scoreListGradeFilter !== "all"
-        ? scoreListGradeFilter
-        : selectedScoreRoster.targetGrade || targetGrade;
-    const defaultClass =
-      activeScoreListClass ||
-      (scoreListClassFilter !== "all" ? scoreListClassFilter : "") ||
-      selectedScoreRoster.targetClass ||
-      selectedScoreRoster.classes?.[0] ||
-      fallbackClass;
-    const localKey = `manual:${selectedScoreRoster.id}:${Date.now()}:${Math.random()
-      .toString(36)
-      .slice(2, 8)}`;
-    const manualRecord = createManualScoreListRecord(selectedScoreRoster, {
-      year,
-      semester,
-      grade: defaultGrade,
-      classValue: defaultClass,
-      localKey,
-    });
-    setScoreListSearch("");
-    setScoreListRecords((current) => [...current, manualRecord]);
-  };
-
-  const toggleScoreListRecordSelection = (
-    recordKey: string,
-    checked: boolean,
-  ) => {
-    if (!scoreEditing || savingScoreEdits) return;
-    setSelectedScoreListRecordKeys((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(recordKey);
-      } else {
-        next.delete(recordKey);
-      }
-      return next;
-    });
-  };
-
-  const toggleVisibleScoreListRecordSelection = (checked: boolean) => {
-    if (!scoreEditing || savingScoreEdits) return;
-    setSelectedScoreListRecordKeys((current) => {
-      const next = new Set(current);
-      visibleScoreListRecordKeys.forEach((key) => {
-        if (checked) {
-          next.add(key);
-        } else {
-          next.delete(key);
-        }
-      });
-      return next;
-    });
-  };
-
-  const removeSelectedScoreListStudents = async () => {
-    if (!scoreEditing || savingScoreEdits || selectedScoreListRecordCount === 0)
-      return;
-    const selectedKeys = new Set(selectedVisibleScoreListRecordKeys);
-    const selectedRecords = scoreListRecords.filter((record) =>
-      selectedKeys.has(getScoreListRecordKey(record)),
-    );
-    const registeredRecords = selectedRecords.filter((record) => record.uid);
-    const registeredUids = Array.from(
-      new Set(registeredRecords.map((record) => record.uid).filter(Boolean)),
-    );
-    const manualSelectedCount =
-      selectedRecords.length - registeredRecords.length;
-    const selectedCount = selectedKeys.size;
-    const confirmed = await confirm({
-      title:
-        registeredUids.length > 0 ? "선택 학생 전체 삭제" : "선택 학생 삭제",
-      message:
-        registeredUids.length > 0
-          ? [
-              `선택한 학생 ${selectedCount}명 중 등록 학생 ${registeredUids.length}명은 학생 명단과 연결된 모든 영역에서 삭제됩니다.`,
-              manualSelectedCount > 0
-                ? `수동 추가 학생 ${manualSelectedCount}명은 이 점수표에서만 삭제됩니다.`
-                : "",
-              "삭제 후 복구할 수 없습니다.",
-            ]
-              .filter(Boolean)
-              .join("\n")
-          : [
-              `선택한 학생 ${selectedCount}명을 이 ${managerCopy.scoreKindLabel} 점수표에서 삭제합니다.`,
-              `변경 저장을 눌러야 DB와 다른 ${managerCopy.scoreKindLabel} 명단에 반영됩니다.`,
-            ].join("\n"),
-      confirmLabel: registeredUids.length > 0 ? "전체 삭제" : "학생 삭제",
-      tone: "danger",
-    });
-    if (!confirmed) return;
-
-    setScoreListRecords((current) =>
-      current.filter(
-        (record) => !selectedKeys.has(getScoreListRecordKey(record)),
-      ),
-    );
-    setScoreEditOriginalRecords((current) =>
-      current.filter(
-        (record) => !selectedKeys.has(getScoreListRecordKey(record)),
-      ),
-    );
-    setSelectedScoreListRecordKeys(new Set<string>());
-
-    if (registeredUids.length === 0) return;
-
-    const deletedUidSet = new Set(registeredUids);
-    setSavingScoreEdits(true);
-    setStudents((current) =>
-      current.filter((student) => !deletedUidSet.has(student.uid)),
-    );
-    setRosters((current) =>
-      sortPerformanceScoreRosters(
-        current.map((roster) => {
-          const nextRows = (roster.rows || []).filter(
-            (row) => !deletedUidSet.has(row.uid),
-          );
-          if (nextRows.length === (roster.rows || []).length) return roster;
-          const meta = buildRosterRowsMeta(roster, nextRows);
-          return {
-            ...roster,
-            rows: nextRows,
-            classes: meta.classes,
-            targetClass: meta.targetClass,
-            rowCount: meta.rowCount,
-            matchedCount: meta.matchedCount,
-            unmatchedCount: meta.unmatchedCount,
-            updatedAt: new Date(),
-          };
-        }),
-      ),
-    );
-
-    try {
-      for (const uid of registeredUids) {
-        await deleteStudentData(config, uid);
-      }
-      setScoreStatsRecords([]);
-      setScoreStatsLoadedRosterId("");
-      setClassSheetPreviewStudents([]);
-      setClassSheetPreviewLoadedKey("");
-      showToast({
-        tone: "success",
-        title: "학생 데이터를 삭제했습니다.",
-        message: `학생 명단과 ${managerCopy.scoreKindLabel}, 위스, 평가 기록에 남은 연결 데이터를 함께 정리했습니다.`,
-      });
-      void loadStudents({ force: true });
-      void loadRosters();
-    } catch (error) {
-      console.error("Failed to delete selected score list students:", error);
-      showToast({
-        tone: "error",
-        title: "학생 삭제에 실패했습니다.",
-        message: getFirestoreWriteErrorMessage(error),
-      });
-      void loadStudents({ force: true });
-      void loadRosters();
-    } finally {
-      setSavingScoreEdits(false);
-    }
-  };
-
-  const updateScoreListIdentity = (
-    recordKey: string,
-    field: "grade" | "class" | "number" | "studentName",
-    value: string,
-  ) => {
-    const nextValue =
-      field === "studentName"
-        ? value.replace(/\s+/g, " ").slice(0, 40)
-        : normalizeSchoolValue(value).slice(0, 10);
-    setScoreListRecords((current) =>
-      current.map((record) =>
-        getScoreListRecordKey(record) === recordKey &&
-        isManualScoreListRecord(record)
-          ? {
-              ...record,
-              [field]: nextValue,
-            }
-          : record,
-      ),
-    );
-  };
-
-  const updateScoreListAcademicStatus = (
-    recordKey: string,
-    statusValue: string,
-  ) => {
-    const academicStatus = normalizeAcademicStatus(statusValue);
-    setScoreListRecords((current) =>
-      current.map((record) => {
-        if (getScoreListRecordKey(record) !== recordKey) return record;
-        const statusMeta = getAcademicStatusRecordMeta(academicStatus);
-        if (!academicStatus) {
-          const original = scoreEditOriginalRecords.find(
-            (item) => getScoreListRecordKey(item) === recordKey,
-          );
-          const restoredFromOriginal =
-            original && !isTransferredScoreRecord(original);
-          const restoredItems = restoredFromOriginal
-            ? (original.items || []).map((item) => ({ ...item }))
-            : record.items || [];
-          return {
-            ...record,
-            items: restoredItems,
-            enteredScoreCount: restoredFromOriginal
-              ? original.enteredScoreCount
-              : getEnteredItemScoreCount(restoredItems),
-            totalScore: restoredFromOriginal
-              ? original.totalScore
-              : (getEnteredItemsTotalScore(restoredItems) ?? Number.NaN),
-            academicStatus: undefined,
-            isTransferred: false,
-            transferStatus: undefined,
-          };
-        }
-        const items = selectedScoreRoster
-          ? getRecordItemsForRoster(record, selectedScoreRoster)
-          : record.items || [];
-        return {
-          ...record,
-          items: items.map((item) => ({
-            ...item,
-            score: 0,
-            scoreEntered: false,
-          })),
-          enteredScoreCount: 1,
-          totalScore: Number.NaN,
-          ...statusMeta,
-        };
-      }),
-    );
   };
 
   const updateScoreListItemScore = (
@@ -8481,110 +8369,49 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       !selectedScoreRoster ||
       !scoreListReady ||
       !scoreEditing ||
-      savingScoreEdits
-    ) {
+      savingScoreEdits ||
+      isSemesterArchive
+    )
       return;
-    }
-
     const originalByKey = new Map(
       scoreEditOriginalRecords.map((record) => [
         getScoreListRecordKey(record),
         record,
       ]),
     );
-    const persistableScoreListRecords = scoreListRecords.filter(
-      (record) => !isEmptyManualScoreListRecord(record),
-    );
-    const persistableRecordKeys = new Set(
-      persistableScoreListRecords.map(getScoreListRecordKey),
-    );
-    const deletedRecords = scoreEditOriginalRecords.filter(
-      (record) => !persistableRecordKeys.has(getScoreListRecordKey(record)),
-    );
-    const manualRecordsToSave = persistableScoreListRecords.filter((record) =>
-      isManualScoreListRecord(record),
-    );
-    const incompleteManualRecord = manualRecordsToSave.find(
+    const changedRecords = scoreListRecords.filter(
       (record) =>
-        !normalizeSchoolValue(record.grade) ||
-        !normalizeSchoolValue(record.class) ||
-        !normalizeSchoolValue(record.number) ||
-        !normalizeStudentName(record.studentName),
+        record.uid &&
+        hasScoreRecordChanged(
+          originalByKey.get(getScoreListRecordKey(record)),
+          record,
+        ),
     );
-    if (incompleteManualRecord) {
-      showToast({
-        tone: "warning",
-        title: "추가 학생 정보를 확인해 주세요.",
-        message:
-          "수동으로 추가한 학생은 학년, 반, 번호, 이름을 모두 입력해야 저장할 수 있습니다.",
-      });
-      return;
-    }
-
-    const unscoredManualRecord = manualRecordsToSave.find(
-      (record) =>
-        isNewManualScoreListRecord(record) &&
-        !isTransferredScoreRecord(record) &&
-        getEnteredTotalScore(record) === null,
-    );
-    if (unscoredManualRecord) {
-      showToast({
-        tone: "warning",
-        title: "추가 학생 점수를 입력해 주세요.",
-        message: `${unscoredManualRecord.class}반 ${unscoredManualRecord.number}번 ${unscoredManualRecord.studentName} 학생의 점수가 비어 있습니다.`,
-      });
-      return;
-    }
-
-    const changedRecords = persistableScoreListRecords.filter((record) =>
-      hasScoreRecordChanged(
-        originalByKey.get(getScoreListRecordKey(record)),
-        record,
-      ),
-    );
-    const changedRecordKeys = new Set(
-      changedRecords.map(getScoreListRecordKey),
-    );
-    const studentDocumentSyncRecords = persistableScoreListRecords.filter(
-      (record) =>
-        needsStudentScoreDocumentSync(record) &&
-        !changedRecordKeys.has(getScoreListRecordKey(record)),
-    );
-    const recordsToWrite = [...changedRecords, ...studentDocumentSyncRecords];
-    const manualIdentityReplacements = getManualScoreIdentityReplacements(
-      persistableScoreListRecords,
-      originalByKey,
-    );
-
-    if (!recordsToWrite.length && !deletedRecords.length) {
-      const cleanRecords = cloneScoreListRecords(persistableScoreListRecords);
-      setScoreListRecords(cleanRecords);
+    if (!changedRecords.length) {
       setScoreEditing(false);
       setScoreEditOriginalRecords([]);
-      setSelectedScoreListRecordKeys(new Set<string>());
+      return;
+    }
+    // Each changed score and confirmation plus the roster must fit one atomic commit.
+    if (changedRecords.length > 249) {
       showToast({
-        tone: "success",
-        title: "수정할 변경 사항이 없습니다.",
-        message: "현재 DB 점수표와 동일합니다.",
+        tone: "warning",
+        title: "한 번에 수정할 수 있는 학생 수를 초과했습니다.",
+        message: "249명 이하로 나누어 점수를 수정·저장해 주세요.",
       });
       return;
     }
-
-    const invalidRecord = scoreListRecords.find(
-      (record) =>
-        !isTransferredScoreRecord(record) &&
-        (getRecordItemsForRoster(record, selectedScoreRoster) || []).some(
-          (item) => {
-            const score = getEnteredItemScore(item);
-            const maxScore = getFiniteNumber(item.maxScore);
-            return (
-              score !== null &&
-              (!Number.isInteger(score) ||
-                score < 0 ||
-                (maxScore !== null && maxScore > 0 && score > maxScore))
-            );
-          },
-        ),
+    const invalidRecord = changedRecords.find((record) =>
+      getRecordItemsForRoster(record, selectedScoreRoster).some((item) => {
+        const score = getEnteredItemScore(item);
+        const maxScore = getFiniteNumber(item.maxScore);
+        return (
+          score !== null &&
+          (!Number.isInteger(score) ||
+            score < 0 ||
+            (maxScore !== null && maxScore > 0 && score > maxScore))
+        );
+      }),
     );
     if (invalidRecord) {
       showToast({
@@ -8594,453 +8421,331 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       });
       return;
     }
-
-    const signedChangedCount = [...changedRecords, ...deletedRecords].filter(
-      (record) => {
-        const original = originalByKey.get(getScoreListRecordKey(record));
-        return Boolean(
-          record.signatureImage ||
-          record.confirmation?.signatureImage ||
-          original?.signatureImage ||
-          original?.confirmation?.signatureImage,
-        );
-      },
-    ).length;
-
-    if (signedChangedCount > 0) {
-      const confirmed = await confirm({
+    const signedChangedCount = changedRecords.filter((record) => {
+      const original = originalByKey.get(getScoreListRecordKey(record));
+      return Boolean(
+        record.signatureImage ||
+        record.confirmation?.signatureImage ||
+        original?.signatureImage ||
+        original?.confirmation?.signatureImage,
+      );
+    }).length;
+    if (
+      signedChangedCount > 0 &&
+      !(await confirm({
         title: "서명 완료 학생의 점수 변경",
-        message: [
-          `이미 점수 확인 서명이 완료된 학생 ${signedChangedCount}명의 점수, 근거 또는 명단 포함 여부가 변경됩니다.`,
-          "변경된 학생의 기존 확인 서명은 자동으로 반려되어 학생이 다시 확인할 수 있게 됩니다.",
-          "",
-          "계속 저장할까요?",
-        ].join("\n"),
-        confirmLabel: "계속 저장",
+        message: `이미 서명한 학생 ${signedChangedCount}명의 점수 또는 근거가 변경됩니다. 기존 서명은 반려되며 학생이 다시 확인하고 서명해야 합니다.`,
+        confirmLabel: "변경 저장",
         tone: "warning",
-      });
-      if (!confirmed) return;
-    }
+      }))
+    )
+      return;
 
     setSavingScoreEdits(true);
+    let scoresSaved = false;
     try {
-      const timestamp = serverTimestamp();
-      const editedBy = currentUser?.uid || "";
-      const editedByEmail = currentUser?.email || "";
-      const recordByUid = new Map(
-        persistableScoreListRecords
-          .filter((record) => record.uid)
-          .map((record) => [record.uid, record]),
-      );
-      const recordByLocalKey = new Map(
-        persistableScoreListRecords
-          .filter((record) => !record.uid && record.localKey)
-          .map((record) => [record.localKey || "", record]),
-      );
-      const deletedUidSet = new Set(
-        deletedRecords.map((record) => record.uid).filter(Boolean),
-      );
-      const deletedLocalKeySet = new Set(
-        deletedRecords
-          .filter((record) => !record.uid)
-          .map((record) => record.localKey || "")
-          .filter(Boolean),
-      );
-      const deletedManualIdentityKeys = new Set(
-        deletedRecords
-          .filter(hasSyncableManualScoreIdentity)
-          .map(getManualScoreStudentIdentityKey)
-          .filter(Boolean),
-      );
-      const shouldDeleteExistingRosterRow = (
-        row: PerformanceScoreRosterRow,
-      ) => {
-        if (row.uid && deletedUidSet.has(row.uid)) return true;
-        const rowLocalKey = getRosterRowLocalKey(selectedScoreRoster.id, row);
-        if (deletedLocalKeySet.has(rowLocalKey)) return true;
-        if (!isManualRosterRow(row)) return false;
-        const manualKey = getManualScoreStudentIdentityKey(row);
-        return Boolean(manualKey && deletedManualIdentityKeys.has(manualKey));
-      };
-      const usedRecordKeys = new Set<string>();
-      const rowNumberByRecordKey = new Map<string, number>();
-      const existingRows = selectedScoreRoster.rows || [];
-      const updatedExistingRows = existingRows.flatMap((row) => {
-        if (shouldDeleteExistingRosterRow(row)) return [];
-        const record = row.uid
-          ? recordByUid.get(row.uid)
-          : recordByLocalKey.get(
-              getRosterRowLocalKey(selectedScoreRoster.id, row),
-            );
-        if (!record) return [row];
-        const recordKey = getScoreListRecordKey(record);
-        usedRecordKeys.add(recordKey);
-        rowNumberByRecordKey.set(recordKey, row.rowNumber);
-        return [
-          buildRosterRowFromScoreRecord(row, record, selectedScoreRoster),
-        ];
-      });
-      let nextRowNumber = existingRows.reduce(
-        (max, row) => Math.max(max, Number(row.rowNumber) || 0),
-        0,
-      );
-      const addedRows = persistableScoreListRecords
-        .filter(
-          (record) =>
-            !record.uid && !usedRecordKeys.has(getScoreListRecordKey(record)),
+      const rosterRef = doc(db, rosterCollectionPath, selectedScoreRoster.id);
+      const savedRoster = await runTransaction(db, async (transaction) => {
+        const rosterSnap = await transaction.get(rosterRef);
+        if (!rosterSnap.exists())
+          throw new Error("점수표가 삭제되었습니다. 다시 조회해 주세요.");
+        const latestRoster = normalizePerformanceScoreRoster(
+          rosterSnap.id,
+          rosterSnap.data() as Omit<PerformanceScoreRoster, "id">,
+        );
+        if (
+          JSON.stringify(latestRoster.items) !==
+          JSON.stringify(selectedScoreRoster.items)
         )
-        .map((record) => {
-          nextRowNumber += 1;
-          const recordKey = getScoreListRecordKey(record);
-          rowNumberByRecordKey.set(recordKey, nextRowNumber);
-          return buildRosterRowFromScoreRecord(
-            {
-              rowNumber: nextRowNumber,
-              uid: "",
-              grade: record.grade,
-              class: record.class,
-              number: record.number,
-              studentName: record.studentName,
-              items: [],
-              totalScore: 0,
-              totalMaxScore: selectedScoreRoster.totalMaxScore,
-              feedback: "",
-              evidence: "",
-              matchStatus: "unmatched",
-              matchMessage: MANUAL_SCORE_ROW_MESSAGE,
-              isManual: true,
-            },
-            record,
-            selectedScoreRoster,
+          throw new Error(
+            "평가 기준이 변경되었습니다. 다시 조회한 뒤 수정해 주세요.",
           );
-        });
-      const updatedRows = [...updatedExistingRows, ...addedRows];
-      const needsCrossRosterManualSync =
-        !isWrittenExamMode &&
-        (manualIdentityReplacements.length > 0 ||
-          persistableScoreListRecords.some(hasSyncableManualScoreIdentity) ||
-          deletedRecords.some(hasSyncableManualScoreIdentity));
-      const latestOtherRosters = needsCrossRosterManualSync
-        ? (
-            await Promise.all(
-              rosters
-                .filter((roster) => roster.id !== selectedScoreRoster.id)
-                .map(async (roster) => {
-                  const snap = await getDoc(
-                    doc(db, rosterCollectionPath, roster.id),
-                  );
-                  if (!snap.exists()) return null;
-                  return normalizePerformanceScoreRoster(
-                    snap.id,
-                    snap.data() as Omit<PerformanceScoreRoster, "id">,
-                  );
-                }),
+        const snapshots = await Promise.all(
+          changedRecords.map(async (record) => {
+            const scoreRef = doc(
+              db,
+              "users",
+              record.uid,
+              PERFORMANCE_SCORE_USER_COLLECTION,
+              latestRoster.id,
+            );
+            const confirmationRef = doc(
+              scoreRef,
+              PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+              record.uid,
+            );
+            const [studentSnap, scoreSnap] = await Promise.all([
+              transaction.get(doc(db, "users", record.uid)),
+              transaction.get(scoreRef),
+              transaction.get(confirmationRef),
+            ]);
+            if (
+              !studentSnap.exists() ||
+              !isActiveRosterStudent(studentSnap.data())
             )
-          ).filter(
-            (roster): roster is PerformanceScoreRoster => roster !== null,
-          )
-        : [];
-      const syncedRosterRowsById = needsCrossRosterManualSync
-        ? syncManualScoreRowsAcrossAssessments(
-            [
-              {
-                ...selectedScoreRoster,
-                rows: updatedRows,
-              },
-              ...latestOtherRosters,
-            ],
-            persistableScoreListRecords,
-            manualIdentityReplacements,
-            deletedRecords,
-          )
-        : new Map<string, PerformanceScoreRosterRow[]>();
-      const finalUpdatedRows = getRosterRowsForStorage(
-        syncedRosterRowsById.get(selectedScoreRoster.id) || updatedRows,
-      );
-      const selectedRowsMeta = buildRosterRowsMeta(
-        selectedScoreRoster,
-        finalUpdatedRows,
-      );
-      assertRosterPayloadFitsFirestore({
-        ...selectedScoreRoster,
-        rows: finalUpdatedRows,
-        classes: selectedRowsMeta.classes,
-        targetClass: selectedRowsMeta.targetClass,
-        rowCount: selectedRowsMeta.rowCount,
-        matchedCount: selectedRowsMeta.matchedCount,
-        unmatchedCount: selectedRowsMeta.unmatchedCount,
-        updatedAt: "",
-      });
-      const batchQueue = createBatchQueue();
-
-      batchQueue.update(doc(db, rosterCollectionPath, selectedScoreRoster.id), {
-        rows: finalUpdatedRows,
-        classes: selectedRowsMeta.classes,
-        targetClass: selectedRowsMeta.targetClass,
-        rowCount: selectedRowsMeta.rowCount,
-        matchedCount: selectedRowsMeta.matchedCount,
-        unmatchedCount: selectedRowsMeta.unmatchedCount,
-        updatedAt: timestamp,
-      });
-
-      syncedRosterRowsById.forEach((rows, rosterId) => {
-        if (rosterId === selectedScoreRoster.id) return;
-        const roster = latestOtherRosters.find((item) => item.id === rosterId);
-        if (!roster) return;
-        const storageRows = getRosterRowsForStorage(rows);
-        const meta = buildRosterRowsMeta(roster, storageRows);
-        assertRosterPayloadFitsFirestore({
-          ...roster,
-          rows: storageRows,
-          classes: meta.classes,
-          targetClass: meta.targetClass,
-          rowCount: meta.rowCount,
-          matchedCount: meta.matchedCount,
-          unmatchedCount: meta.unmatchedCount,
-          updatedAt: "",
-        });
-        batchQueue.update(doc(db, rosterCollectionPath, rosterId), {
-          rows: storageRows,
-          classes: meta.classes,
-          targetClass: meta.targetClass,
-          rowCount: meta.rowCount,
-          matchedCount: meta.matchedCount,
-          unmatchedCount: meta.unmatchedCount,
-          updatedAt: timestamp,
-        });
-      });
-
-      deletedRecords.forEach((record) => {
-        if (!record.uid) return;
-        const scoreId = selectedScoreRoster.id;
-        const scoreRef = doc(
-          db,
-          "users",
-          record.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-        );
-        const confirmationRef = doc(
-          db,
-          "users",
-          record.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-          PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-          record.uid,
-        );
-        batchQueue.delete(confirmationRef);
-        batchQueue.delete(scoreRef);
-      });
-
-      recordsToWrite.forEach((record) => {
-        if (!record.uid) return;
-        const scoreId = selectedScoreRoster.id;
-        const scoreRef = doc(
-          db,
-          "users",
-          record.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-        );
-        const confirmationRef = doc(
-          db,
-          "users",
-          record.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-          PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-          record.uid,
-        );
-        const original = originalByKey.get(getScoreListRecordKey(record));
-        const hadSignature = Boolean(
-          record.signatureImage ||
-          record.confirmation?.signatureImage ||
-          original?.signatureImage ||
-          original?.confirmation?.signatureImage,
-        );
-        const academicStatus = getAcademicStatusLabel(record);
-        const hasAcademicStatus = Boolean(academicStatus);
-        const items = getRecordItemsForRoster(record, selectedScoreRoster).map(
-          (item) =>
-            hasAcademicStatus
-              ? {
-                  ...item,
-                  score: 0,
-                  scoreEntered: false,
-                }
-              : item,
-        );
-        const itemTotalScore = getEnteredItemsTotalScore(items);
-        const totalScore = hasAcademicStatus
-          ? 0
-          : (itemTotalScore ?? getScoreRecordFallbackTotalScore(record));
-        const enteredScoreCount = getScoreRecordEnteredScoreCount(
-          record,
-          items,
-        );
-
-        if (hadSignature) {
-          batchQueue.delete(confirmationRef);
-        }
-
-        if (!hasAcademicStatus && totalScore === null) {
-          batchQueue.delete(scoreRef);
-          return;
-        }
-
-        const payload: PerformanceScoreRecord = {
-          scoreKind: normalizePerformanceScoreKind(
-            selectedScoreRoster.scoreKind,
-          ),
-          ...(selectedScoreRoster.scoreContentKind
-            ? { scoreContentKind: selectedScoreRoster.scoreContentKind }
-            : {}),
-          rosterId: scoreId,
-          title: selectedScoreRoster.title,
-          subject: selectedScoreRoster.subject,
-          ...(selectedScoreRoster.assessmentOrder
-            ? { assessmentOrder: selectedScoreRoster.assessmentOrder }
-            : {}),
-          academicYear: selectedScoreRoster.academicYear || year,
-          semester: selectedScoreRoster.semester || semester,
-          grade: record.grade,
-          class: record.class,
-          number: record.number,
-          studentName: record.studentName,
-          uid: record.uid,
-          items,
-          enteredScoreCount,
-          totalScore: totalScore ?? 0,
-          totalMaxScore:
-            getRecordTotalMaxScore(record) ||
-            selectedScoreRoster.totalMaxScore ||
-            0,
-          feedback: String(record.feedback || "").slice(0, 1000),
-          evidence: String(record.evidence || record.feedback || "").slice(
-            0,
-            1000,
-          ),
-          sourceFileName: selectedScoreRoster.sourceFileName,
-          uploadedBy:
-            record.uploadedBy || selectedScoreRoster.uploadedBy || editedBy,
-          uploadedByEmail:
-            record.uploadedByEmail ||
-            selectedScoreRoster.uploadedByEmail ||
-            editedByEmail,
-          uploadedAt:
-            record.uploadedAt || selectedScoreRoster.createdAt || timestamp,
-          updatedAt: timestamp,
-          ...getAcademicStatusRecordMeta(academicStatus),
-        };
-        batchQueue.set(scoreRef, payload);
-      });
-
-      await batchQueue.commit();
-
-      const persistedRecordKeys = new Set(
-        recordsToWrite.map((record) => getScoreListRecordKey(record)),
-      );
-      const finalSelectedRowNumbers = new Set(
-        finalUpdatedRows.map((row) => Number(row.rowNumber) || 0),
-      );
-      const normalizedRecords: ScoreListRecord[] = persistableScoreListRecords
-        .filter((record) => {
-          if (record.uid) return true;
-          const rowNumber = rowNumberByRecordKey.get(
-            getScoreListRecordKey(record),
-          );
-          return Boolean(rowNumber && finalSelectedRowNumbers.has(rowNumber));
-        })
-        .map((record) => {
-          const recordKey = getScoreListRecordKey(record);
-          const rowNumber = rowNumberByRecordKey.get(recordKey);
-          const keyedRecord =
-            !record.uid && rowNumber
-              ? {
-                  ...record,
-                  localKey: `row:${selectedScoreRoster.id}:${rowNumber}`,
-                  rosterRowNumber: rowNumber,
-                  isManual: true,
-                }
-              : record;
-          if (!persistedRecordKeys.has(recordKey)) return keyedRecord;
-          const hasScore =
-            isTransferredScoreRecord(record) ||
-            getScoreRecordEnteredScoreCount(record) > 0 ||
-            getEnteredTotalScore(record) !== null;
-          const cleared = clearRecordSignature(record) || record;
-          return {
-            ...keyedRecord,
-            ...cleared,
-            localKey: keyedRecord.localKey,
-            rosterRowNumber: keyedRecord.rosterRowNumber,
-            isManual: keyedRecord.isManual,
-            scoreSource:
-              keyedRecord.uid && hasScore ? "student-doc" : "roster-row",
-            scoreDocumentExists: Boolean(keyedRecord.uid && hasScore),
-            updatedAt: new Date(),
-          };
-        });
-
-      const changedRosterIds = new Set<string>([
-        selectedScoreRoster.id,
-        ...syncedRosterRowsById.keys(),
-      ]);
-      invalidateRosterReadCaches(...changedRosterIds);
-      scoreDocumentRecordsByRosterCacheRef.current.set(
-        selectedScoreRoster.id,
-        cloneScoreListRecords(
-          normalizedRecords.filter(
-            (record) => record.uid && record.scoreDocumentExists,
-          ),
-        ),
-      );
-      setScoreListRecords(normalizedRecords);
-      setScoreEditOriginalRecords(cloneScoreListRecords(normalizedRecords));
-      setScoreEditing(false);
-      setSelectedScoreListRecordKeys(new Set<string>());
-      setScoreStatsRecords([]);
-      setScoreStatsLoadedRosterId("");
-      setClassSheetPreviewStudents([]);
-      setClassSheetPreviewLoadedKey("");
-      setRosters((current) =>
-        sortPerformanceScoreRosters(
-          current.map((roster) => {
-            const rows =
-              roster.id === selectedScoreRoster.id
-                ? finalUpdatedRows
-                : syncedRosterRowsById.get(roster.id);
-            if (!rows) return roster;
-            const storageRows = getRosterRowsForStorage(rows);
-            const meta = buildRosterRowsMeta(roster, storageRows);
+              throw new Error(
+                "학생 명단 또는 학적 상태가 변경되었습니다. 다시 조회한 뒤 수정해 주세요.",
+              );
+            const profile = normalizeStudentProfile(
+              studentSnap.id,
+              studentSnap.data(),
+            );
+            if (!isStudentRosterProfile(studentSnap.data()))
+              throw new Error(
+                "학생 명단과 연결되지 않은 점수입니다. 다시 조회해 주세요.",
+              );
+            const original = originalByKey.get(getScoreListRecordKey(record));
+            const latestRow =
+              (latestRoster.rows || []).find((row) => row.uid === record.uid) ||
+              (latestRoster.rows || []).find(
+                (row) =>
+                  !row.uid &&
+                  buildStudentLookupKey(row.grade, row.class, row.number) ===
+                    buildStudentLookupKey(
+                      profile.grade,
+                      profile.class,
+                      profile.number,
+                    ) &&
+                  normalizeStudentName(row.studentName) ===
+                    normalizeStudentName(profile.name),
+              );
+            const latestRecord = scoreSnap.exists()
+              ? clearLegacyScoreEnrollmentForActiveStudent(
+                  buildScoreListRecordFromDocument(
+                    scoreSnap.id,
+                    scoreSnap.data() as PerformanceScoreRecord,
+                  ),
+                )
+              : latestRow
+                ? buildScoreListRecordFromRosterRow(
+                    latestRoster,
+                    clearLegacyScoreEnrollmentForActiveStudent(latestRow),
+                  )
+                : undefined;
+            if (
+              (!latestRecord && original?.scoreDocumentExists) ||
+              (latestRecord &&
+                original &&
+                hasScoreRecordChanged(
+                  {
+                    ...original,
+                    uid: record.uid,
+                    grade: profile.grade,
+                    class: profile.class,
+                    number: profile.number,
+                    studentName: profile.name,
+                  },
+                  {
+                    ...latestRecord,
+                    uid: record.uid,
+                    grade: profile.grade,
+                    class: profile.class,
+                    number: profile.number,
+                    studentName: profile.name,
+                  },
+                ))
+            ) {
+              throw new Error(
+                "다른 화면에서 점수가 변경되었습니다. 다시 조회한 뒤 수정해 주세요.",
+              );
+            }
             return {
-              ...roster,
-              rows: storageRows,
-              classes: meta.classes,
-              targetClass: meta.targetClass,
-              rowCount: meta.rowCount,
-              matchedCount: meta.matchedCount,
-              unmatchedCount: meta.unmatchedCount,
-              updatedAt: new Date(),
+              record: {
+                ...record,
+                grade: profile.grade,
+                class: profile.class,
+                number: profile.number,
+                studentName: profile.name,
+              },
+              scoreRef,
+              confirmationRef,
+              scoreData: scoreSnap.exists() ? scoreSnap.data() : null,
             };
           }),
+        );
+        const recordsByUid = new Map(
+          snapshots.map((entry) => [entry.record.uid, entry.record]),
+        );
+        const usedUids = new Set<string>();
+        // Preserve every untouched row, including students excluded from the active roster.
+        const nextRows = (latestRoster.rows || []).map((row) => {
+          const record =
+            recordsByUid.get(row.uid) ||
+            (!row.uid
+              ? snapshots.find(
+                  ({ record }) =>
+                    buildStudentLookupKey(row.grade, row.class, row.number) ===
+                      buildStudentLookupKey(
+                        record.grade,
+                        record.class,
+                        record.number,
+                      ) &&
+                    normalizeStudentName(row.studentName) ===
+                      normalizeStudentName(record.studentName),
+                )?.record
+              : undefined);
+          if (!record) return row;
+          usedUids.add(record.uid);
+          return buildRosterRowFromScoreRecord(row, record, latestRoster);
+        });
+        let rowNumber = Math.max(
+          0,
+          ...nextRows.map((row) => Number(row.rowNumber) || 0),
+        );
+        snapshots.forEach(({ record }) => {
+          if (usedUids.has(record.uid)) return;
+          nextRows.push(
+            buildRosterRowFromScoreRecord(
+              {
+                rowNumber: ++rowNumber,
+                uid: record.uid,
+                grade: record.grade,
+                class: record.class,
+                number: record.number,
+                studentName: record.studentName,
+                totalScore: 0,
+                totalMaxScore: latestRoster.totalMaxScore,
+                matchStatus: "matched",
+                matchMessage: "학생 명단과 연결된 점수입니다.",
+              },
+              record,
+              latestRoster,
+            ),
+          );
+        });
+        const storageRows = getRosterRowsForStorage(nextRows);
+        const meta = buildRosterRowsMeta(latestRoster, storageRows);
+        const timestamp = serverTimestamp();
+        const rosterPayload = {
+          rows: storageRows,
+          ...meta,
+          updatedAt: timestamp,
+        };
+        assertRosterPayloadFitsFirestore({ ...latestRoster, ...rosterPayload });
+        transaction.update(rosterRef, rosterPayload);
+        snapshots.forEach(
+          ({ record, scoreRef, confirmationRef, scoreData }) => {
+            const items = getRecordItemsForRoster(record, latestRoster);
+            const totalScore =
+              getEnteredItemsTotalScore(items) ??
+              getScoreRecordFallbackTotalScore(record);
+            transaction.delete(confirmationRef);
+            if (totalScore === null && !scoreData?.objectionPending) {
+              transaction.delete(scoreRef);
+              return;
+            }
+            transaction.set(
+              scoreRef,
+              {
+                scoreKind: normalizePerformanceScoreKind(
+                  latestRoster.scoreKind,
+                ),
+                ...(latestRoster.scoreContentKind
+                  ? { scoreContentKind: latestRoster.scoreContentKind }
+                  : {}),
+                rosterId: latestRoster.id,
+                title: latestRoster.title,
+                subject: latestRoster.subject,
+                ...(latestRoster.assessmentOrder
+                  ? { assessmentOrder: latestRoster.assessmentOrder }
+                  : {}),
+                academicYear: latestRoster.academicYear || year,
+                semester: latestRoster.semester || semester,
+                grade: record.grade,
+                class: record.class,
+                number: record.number,
+                studentName: record.studentName,
+                uid: record.uid,
+                items,
+                enteredScoreCount: getScoreRecordEnteredScoreCount(
+                  record,
+                  items,
+                ),
+                totalScore: totalScore ?? 0,
+                totalMaxScore:
+                  getRecordTotalMaxScore(record) ||
+                  latestRoster.totalMaxScore ||
+                  0,
+                feedback: String(record.feedback || "").slice(0, 1000),
+                evidence: String(
+                  record.evidence || record.feedback || "",
+                ).slice(0, 1000),
+                sourceFileName: latestRoster.sourceFileName,
+                uploadedBy:
+                  record.uploadedBy ||
+                  latestRoster.uploadedBy ||
+                  currentUser?.uid ||
+                  "",
+                uploadedByEmail:
+                  record.uploadedByEmail ||
+                  latestRoster.uploadedByEmail ||
+                  currentUser?.email ||
+                  "",
+                uploadedAt:
+                  record.uploadedAt || latestRoster.createdAt || timestamp,
+                updatedAt: timestamp,
+                signatureName: deleteField(),
+                signatureImage: deleteField(),
+                signedAt: deleteField(),
+                confirmation: deleteField(),
+              },
+              { merge: true },
+            );
+          },
+        );
+        return {
+          ...latestRoster,
+          ...meta,
+          rows: storageRows,
+          updatedAt: new Date(),
+        };
+      });
+      scoresSaved = true;
+      invalidateRosterReadCaches(selectedScoreRoster.id);
+      setRosters((current) =>
+        sortPerformanceScoreRosters(
+          current.map((roster) =>
+            roster.id === savedRoster.id ? savedRoster : roster,
+          ),
         ),
       );
+      const freshRecords = await loadScoreRecordsForRoster(savedRoster, {
+        includeStudentDocuments: true,
+      });
+      setScoreListRecords(freshRecords);
+      setScoreEditOriginalRecords([]);
+      setScoreEditing(false);
+      setScoreStatsRecords([]);
+      setScoreStatsLoadedRosterId("");
+      setScoreListSummaryStudents([]);
+      setScoreListSummaryLoadedKey("");
+      setClassSheetPreviewStudents([]);
+      setClassSheetPreviewLoadedKey("");
       showToast({
         tone: "success",
         title: `${managerCopy.scoreKindLabel} 점수표를 수정했습니다.`,
         message:
           signedChangedCount > 0
-            ? "변경된 점수와 근거를 DB에 저장하고 기존 확인 서명을 반려했습니다."
-            : "변경된 점수와 근거를 DB에 저장했습니다.",
+            ? "변경된 점수와 근거를 저장하고 기존 확인 서명을 반려했습니다."
+            : "변경된 점수와 근거를 저장했습니다.",
       });
     } catch (error) {
       console.error("Failed to update performance scores:", error);
+      if (scoresSaved) {
+        setScoreEditing(false);
+        setScoreListLoadedRosterId("");
+        setScoreEditOriginalRecords([]);
+      }
       showToast({
-        tone: "error",
-        title: "점수표 수정에 실패했습니다.",
-        message: getFirestoreWriteErrorMessage(error),
+        tone: scoresSaved ? "warning" : "error",
+        title: scoresSaved
+          ? "점수는 저장되었지만 목록을 새로 불러오지 못했습니다."
+          : "점수표 수정에 실패했습니다.",
+        message: scoresSaved
+          ? "다시 조회하여 저장된 점수를 확인해 주세요."
+          : error instanceof Error && !("code" in error)
+            ? error.message
+            : getFirestoreWriteErrorMessage(error),
       });
     } finally {
       setSavingScoreEdits(false);
@@ -9053,21 +8758,19 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     gradeValue: string,
   ) => {
     if (!roster) return [];
-    const classRows = (roster.rows || []).filter(
+    // Student signatures can arrive after the previous preview was opened.
+    invalidateRosterReadCaches(roster.id);
+    const studentSnapshot = isSemesterArchive
+      ? []
+      : await loadStudents({ force: true, throwOnError: true });
+    const activeRoster = buildActiveStudentRoster(roster, studentSnapshot);
+    const classRows = (activeRoster.rows || []).filter(
       (row) =>
         normalizeSchoolValue(row.class) === normalizeSchoolValue(classValue) &&
         (!gradeValue ||
           normalizeSchoolValue(row.grade) === normalizeSchoolValue(gradeValue)),
     );
-    const activeStudentUids = new Set(
-      isSemesterArchive
-        ? []
-        : students.map((student) => student.uid).filter(Boolean),
-    );
-    const linkedRows = classRows.filter(
-      (row) =>
-        row.uid && (!activeStudentUids.size || activeStudentUids.has(row.uid)),
-    );
+    const linkedRows = classRows.filter((row) => row.uid);
     let documentRecords: ScoreListRecord[] = [];
     try {
       documentRecords = await loadScoreDocumentRecordsForRoster(roster);
@@ -9086,10 +8789,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     );
     const loaded: PerformanceScoreRecord[] = linkedRows.flatMap((row) => {
       const documentRecord = documentRecordsByUid.get(row.uid);
-      if (documentRecord) return [documentRecord];
-      if (rosterRowHasScore(row))
-        return [buildRecordFromRosterRow(roster, row)];
-      return [];
+      if (documentRecord)
+        return [
+          {
+            ...clearLegacyScoreEnrollmentForActiveStudent(documentRecord),
+            grade: row.grade,
+            class: row.class,
+            number: row.number,
+            studentName: row.studentName,
+          },
+        ];
+      return [buildScoreListRecordFromRosterRow(roster, row)];
     });
     classRows
       .filter((row) => !row.uid && shouldShowRosterRowInScoreList(row))
@@ -9112,7 +8822,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           record.uid
             ? ([
                 record.uid,
-                await loadPerformanceScoreConfirmation(record.uid, roster.id),
+                await loadPerformanceScoreConfirmation(record.uid, roster.id, {
+                  throwOnError: true,
+                }),
               ] as const)
             : null,
         ),
@@ -9567,8 +9279,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     setParsing(true);
     try {
-      const studentSnapshot = await loadStudents();
-      const rows = await readWorkbookRows(file);
+      const studentSnapshot = await loadStudents({
+        force: true,
+        throwOnError: true,
+      });
+      const rows = await readScoreWorkbookRows(file);
       const parsedUpload = isWrittenExamMode
         ? buildWrittenExamParsedUpload(rows, {
             fileName: file.name,
@@ -9601,24 +9316,19 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           `${selectedLabel} 업로드를 선택했지만 파일은 ${detectedLabel} 형식으로 인식되었습니다. 업로드 종류를 바꾸거나 파일을 다시 확인해 주세요.`,
         );
       }
-      const detectedPreset = isWrittenExamMode
-        ? "auto"
-        : getDefaultAssessmentPreset(parsedUpload);
-      const selectedPreset = uploadAssessmentPreset;
-      const assessmentConfig = isWrittenExamMode
-        ? {
-            title: parsedUpload.title,
-            subject: parsedUpload.subject || managerCopy.defaultSubject,
-            assessmentOrder: undefined,
-          }
-        : getAssessmentConfig(parsedUpload, selectedPreset);
-      setTitle(assessmentConfig.title || parsedUpload.title);
-      if (assessmentConfig.subject) setSubject(assessmentConfig.subject);
+      const assessmentConfig = {
+        title: parsedUpload.title,
+        subject: parsedUpload.subject || managerCopy.defaultSubject,
+        assessmentOrder: parsedUpload.assessmentOrder,
+      };
+      setTitle(assessmentConfig.title);
+      setSubject(assessmentConfig.subject);
+      if (parsedUpload.rows[0]?.grade)
+        setTargetGrade(parsedUpload.rows[0].grade);
       const matchedRows = matchRowsToStudents(
         parsedUpload.rows,
         studentSnapshot,
       );
-      if (!isWrittenExamMode) setAssessmentPreset(selectedPreset);
       setPreviewClassFilter("all");
       setPreviewPage(1);
       setParsed({
@@ -9630,19 +9340,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       });
       setUploadModalOpen(false);
       showToast({
-        tone:
-          !isWrittenExamMode &&
-          detectedPreset !== "auto" &&
-          detectedPreset !== selectedPreset
-            ? "warning"
-            : "success",
+        tone: "success",
         title: managerCopy.uploadSuccessTitle,
-        message:
-          !isWrittenExamMode &&
-          detectedPreset !== "auto" &&
-          detectedPreset !== selectedPreset
-            ? `${matchedRows.length}개 행을 선택한 수행평가 기준으로 불러왔습니다. 파일명과 선택한 수행평가가 맞는지 확인해 주세요.`
-            : `${matchedRows.length}개 행을 확인했습니다. 저장 전 미연결 학생을 점검해 주세요.`,
+        message: `${matchedRows.length}명 · ${parsedUpload.items.length}개 평가 항목을 확인했습니다.`,
       });
     } catch (error) {
       console.error("Failed to parse performance score workbook:", error);
@@ -9691,255 +9391,349 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     );
   };
 
-  const updateAssessmentPreset = (preset: AssessmentPresetKey) => {
-    setAssessmentPreset(preset);
-    if (!parsed) return;
-    const config = getAssessmentConfig(parsed, preset);
-    if (config.title) setTitle(config.title);
-    if (config.subject) setSubject(config.subject);
-    setParsed({
-      ...parsed,
-      title: config.title || parsed.title,
-      subject: config.subject || parsed.subject,
-      assessmentOrder: config.assessmentOrder,
-    });
-  };
-
   const saveParsedScores = async () => {
     if (!parsed || saving) return;
-    const assessmentConfig = isWrittenExamMode
-      ? {
-          title: parsed.title,
-          subject: parsed.subject || managerCopy.defaultSubject,
-          assessmentOrder: undefined,
-        }
-      : getAssessmentConfig(parsed, assessmentPreset);
-    const safeTitle = title.trim() || assessmentConfig.title;
-    if (!safeTitle) {
-      showToast({
-        tone: "warning",
-        title: "평가명을 입력해 주세요.",
-        message: `학생 화면에 표시될 ${managerCopy.scoreNameLabel} 이름이 필요합니다.`,
-      });
-      return;
-    }
-
-    const linkedRows = parsed.rows.filter((row) => row.uid);
-    if (!linkedRows.length) {
-      showToast({
-        tone: "warning",
-        title: "연결된 학생이 없습니다.",
-        message: "학생 명단과 연결된 행이 있어야 저장할 수 있습니다.",
-      });
-      return;
-    }
-
-    const saveableRows = linkedRows.filter((row) => row.enteredScoreCount > 0);
-    if (!saveableRows.length) {
-      showToast({
-        tone: "warning",
-        title: "점수가 입력된 학생 행이 없습니다.",
-        message: "점수 칸에 입력된 값이 있는 연결 학생만 저장할 수 있습니다.",
-      });
-      return;
-    }
-
-    const connectedBlankScoreCount = linkedRows.length - saveableRows.length;
-    const unmatchedRows = parsed.rows.filter((row) => !row.uid);
-    const warningRows = parsed.rows.filter(
-      (row) => row.matchStatus === "name-mismatch",
-    );
-    const skippedMessages = [
-      parsedSummary.unmatchedCount > 0
-        ? `미연결 학생 ${parsedSummary.unmatchedCount}명`
-        : "",
-      connectedBlankScoreCount > 0
-        ? `점수가 비어 있는 연결 학생 ${connectedBlankScoreCount}명`
-        : "",
-      parsedSummary.warningCount > 0
-        ? `이름 확인이 필요한 연결 학생 ${parsedSummary.warningCount}명`
-        : "",
-    ].filter(Boolean);
-    if (skippedMessages.length > 0) {
-      const confirmed = await confirm({
-        title: "저장 전 확인이 필요합니다.",
-        message: [
-          `확인 사항: ${skippedMessages.join(", ")}`,
-          `점수가 입력된 연결 학생 ${saveableRows.length}명만 저장됩니다.`,
-          unmatchedRows.length > 0 ? "" : "",
-          unmatchedRows.length > 0 ? "미연결 학생 명단:" : "",
-          unmatchedRows.length > 0 ? formatRowsForConfirm(unmatchedRows) : "",
-          warningRows.length > 0 ? "" : "",
-          warningRows.length > 0 ? "이름 확인 필요 학생 명단:" : "",
-          warningRows.length > 0 ? formatRowsForConfirm(warningRows) : "",
-          "",
-          "정말 저장할까요?",
-        ]
-          .filter((line) => line !== "")
-          .join("\n"),
-        confirmLabel: "입력된 학생만 저장",
-        tone: "warning",
-      });
-      if (!confirmed) return;
-    }
-
     setSaving(true);
+    const completed: string[] = [];
     try {
-      const safeSubject = subject.trim() || assessmentConfig.subject;
-      const assessmentOrder = assessmentConfig.assessmentOrder;
-      const rosterRef = doc(collection(db, rosterCollectionPath));
-      const rosterId = rosterRef.id;
-      const timestamp = serverTimestamp();
-      const rosterRows: PerformanceScoreRosterRow[] = parsed.rows.map(
-        ({
-          rowKey: _rowKey,
-          enteredScoreCount: _enteredScoreCount,
-          items: _items,
-          feedback: _feedback,
-          evidence: _evidence,
-          ...row
-        }) => ({
-          rowNumber: row.rowNumber,
-          uid: row.uid,
-          grade: row.grade,
-          class: row.class,
-          number: row.number,
-          studentName: row.studentName,
-          items: getRosterRowItemsForStorage(_items),
-          enteredScoreCount: _enteredScoreCount,
-          totalScore: row.totalScore,
-          totalMaxScore: row.totalMaxScore,
-          feedback: _feedback || "",
-          evidence: _evidence || _feedback || "",
-          matchStatus: row.matchStatus,
-          matchMessage: row.matchMessage,
-        }),
-      );
-      const classList = Array.from(
-        new Set(parsed.rows.map((row) => row.class).filter(Boolean)),
-      ).sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"));
-      const rosterRowsForStorage =
-        parsed.scoreContentKind === "objective"
-          ? getCompactObjectiveRosterRowsForStorage(rosterRows)
-          : rosterRows;
-      const rosterPayload = {
-        scoreKind: activeScoreKind,
-        ...(parsed.scoreContentKind
-          ? { scoreContentKind: parsed.scoreContentKind }
-          : {}),
-        title: safeTitle,
-        subject: safeSubject,
-        ...(assessmentOrder ? { assessmentOrder } : {}),
-        academicYear: year,
-        semester,
-        targetGrade,
-        targetClass:
-          classList.length === 1 ? classList[0] : fallbackClass.trim(),
-        classes: classList,
-        items: parsed.items,
-        totalMaxScore: parsed.totalMaxScore,
-        rowCount: parsed.rows.length,
-        matchedCount: saveableRows.length,
-        unmatchedCount: parsed.rows.length - saveableRows.length,
-        sourceFileName: parsed.sourceFileName,
-        rows: rosterRowsForStorage,
-        uploadedBy: currentUser?.uid || "",
-        uploadedByEmail: currentUser?.email || "",
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      } satisfies Omit<PerformanceScoreRoster, "id">;
-      const localRoster: PerformanceScoreRoster = {
-        ...rosterPayload,
-        id: rosterId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      assertRosterPayloadFitsFirestore(rosterPayload);
-      const batchQueue = createBatchQueue();
-      batchQueue.set(rosterRef, rosterPayload);
-
-      const savedScoreRecords: ScoreListRecord[] = [];
-      saveableRows.forEach((row) => {
-        const userScoreRef = doc(
-          db,
-          "users",
-          row.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          rosterId,
-        );
-        const payload: PerformanceScoreRecord = {
-          scoreKind: activeScoreKind,
-          ...(parsed.scoreContentKind
-            ? { scoreContentKind: parsed.scoreContentKind }
-            : {}),
-          rosterId,
-          title: safeTitle,
-          subject: safeSubject,
-          ...(assessmentOrder ? { assessmentOrder } : {}),
-          academicYear: year,
-          semester,
-          grade: row.grade,
-          class: row.class,
-          number: row.number,
-          studentName: row.studentName,
-          uid: row.uid,
-          items: row.items,
-          enteredScoreCount: row.enteredScoreCount,
-          totalScore: row.totalScore,
-          totalMaxScore: row.totalMaxScore,
-          feedback: row.feedback,
-          evidence: row.evidence || row.feedback,
-          sourceFileName: parsed.sourceFileName,
-          uploadedBy: currentUser?.uid || "",
-          uploadedByEmail: currentUser?.email || "",
-          uploadedAt: timestamp,
-          updatedAt: timestamp,
-        };
-        batchQueue.set(userScoreRef, payload);
-        savedScoreRecords.push({
-          id: rosterId,
-          ...payload,
-          scoreSource: "student-doc",
-          scoreDocumentExists: true,
-        });
+      const freshStudents = await loadStudents({
+        force: true,
+        throwOnError: true,
       });
-
-      await batchQueue.commit();
-      invalidateRosterReadCaches(rosterId);
-      scoreDocumentRecordsByRosterCacheRef.current.set(
-        rosterId,
-        cloneScoreListRecords(savedScoreRecords),
+      const freshRows = matchRowsToStudents(parsed.rows, freshStudents);
+      const unresolved = freshRows.filter(
+        (row) => !row.uid || row.matchStatus !== "matched",
+      );
+      setParsed({ ...parsed, rows: freshRows });
+      if (unresolved.length) {
+        showToast({
+          tone: "warning",
+          title: "학생 명단을 확인해 주세요.",
+          message: `명단과 일치하지 않는 ${unresolved.length}명이 있습니다. 학생 명단 관리에서 등록·학적을 확인하거나 업로드 파일을 수정해 주세요.`,
+        });
+        return;
+      }
+      if (
+        parsed.academicYear &&
+        parsed.semester &&
+        (parsed.academicYear !== year || parsed.semester !== semester)
+      ) {
+        const accepted = await confirm({
+          tone: "warning",
+          title: "파일의 학기가 현재 학기와 다릅니다.",
+          message: `파일: ${parsed.academicYear}학년도 ${parsed.semester}학기\n저장 대상: ${year}학년도 ${semester}학기`,
+          confirmLabel: "현재 학기에 저장",
+        });
+        if (!accepted) return;
+      }
+      const source = {
+        ...parsed,
+        rows: freshRows,
+        subject: subject.trim() || parsed.subject,
+      };
+      const uploads = isWrittenExamMode
+        ? [source]
+        : splitPerformanceScoreUpload(source);
+      if (uploads.length === 1)
+        uploads[0].title = title.trim() || uploads[0].title;
+      if (uploads.some((upload) => !upload.title.trim()))
+        throw new Error("평가명을 입력해 주세요.");
+      if (!freshRows.some((row) => row.enteredScoreCount > 0))
+        throw new Error("입력된 점수가 없습니다.");
+      const localRosters: PerformanceScoreRoster[] = [];
+      for (const upload of uploads) {
+        const enteredRows = upload.rows.filter(
+          (row) => row.enteredScoreCount > 0,
+        );
+        if (!enteredRows.length) continue;
+        const grade = enteredRows[0].grade;
+        if (enteredRows.some((row) => row.grade !== grade))
+          throw new Error("학년별로 파일을 나누어 업로드해 주세요.");
+        const sameAssessment = rosters.filter(
+          (roster) =>
+            roster.title === upload.title &&
+            roster.targetGrade === grade &&
+            roster.subject === upload.subject,
+        );
+        if (sameAssessment.length > 1)
+          throw new Error(
+            `${upload.title}: 같은 평가명의 업로드 기록이 여러 개입니다. 업로드 기록을 먼저 확인해 주세요.`,
+          );
+        const keyBytes = new TextEncoder().encode(
+          `${year}|${semester}|${activeScoreKind}|${grade}|${upload.subject}|${upload.title}`,
+        );
+        const digest = await crypto.subtle.digest("SHA-256", keyBytes);
+        const key = Array.from(new Uint8Array(digest))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+        const rosterId = sameAssessment[0]?.id || `score-${key.slice(0, 40)}`;
+        const rosterRef = doc(db, rosterCollectionPath, rosterId);
+        const saved = await runTransaction(db, async (transaction) => {
+          const rosterSnapshot = await transaction.get(rosterRef);
+          const previous = rosterSnapshot.exists()
+            ? (rosterSnapshot.data() as PerformanceScoreRoster)
+            : null;
+          const assessmentOrder =
+            previous?.assessmentOrder || upload.assessmentOrder;
+          const assessmentItems = upload.items.map((item) => {
+            const priorItem =
+              upload.format === "neis"
+                ? previous?.items?.find((entry) => entry.name === item.name)
+                : undefined;
+            return priorItem
+              ? {
+                  ...item,
+                  ...(priorItem.itemKey ? { itemKey: priorItem.itemKey } : {}),
+                  ...(priorItem.ratio !== undefined
+                    ? { ratio: priorItem.ratio }
+                    : {}),
+                }
+              : item;
+          });
+          const incomingIds = new Set(enteredRows.map((row) => row.uid));
+          const criteriaKey = (items: PerformanceScoreRoster["items"]) =>
+            JSON.stringify(
+              items.map((item) => ({
+                name: item.name,
+                maxScore: item.maxScore,
+              })),
+            );
+          if (
+            previous &&
+            (previous.totalMaxScore !== upload.totalMaxScore ||
+              criteriaKey(previous.items || []) !==
+                criteriaKey(upload.items)) &&
+            (previous.rows || []).some(
+              (row) => !incomingIds.has(row.uid) && rosterRowHasScore(row),
+            )
+          ) {
+            throw new Error(
+              `${upload.title}: 기존 명단과 평가 기준이 다릅니다. 같은 평가 기준의 파일을 사용하거나 전체 학급 점수를 함께 업로드해 주세요.`,
+            );
+          }
+          // A roster change after preview must not route a score to another child.
+          const profiles = await Promise.all(
+            enteredRows.map((row) =>
+              transaction.get(doc(db, "users", row.uid)),
+            ),
+          );
+          const scoreRefs = enteredRows.map((row) =>
+            doc(
+              db,
+              "users",
+              row.uid,
+              PERFORMANCE_SCORE_USER_COLLECTION,
+              rosterId,
+            ),
+          );
+          const previousScores = await Promise.all(
+            scoreRefs.map((ref) => transaction.get(ref)),
+          );
+          enteredRows.forEach((row, index) => {
+            const profile = profiles[index];
+            const current = profile.exists()
+              ? normalizeStudentProfile(profile.id, profile.data())
+              : null;
+            if (
+              !current ||
+              !isActiveRosterStudent(profile.data()) ||
+              current.grade !== row.grade ||
+              current.class !== row.class ||
+              current.number !== row.number ||
+              normalizeStudentName(current.name) !==
+                normalizeStudentName(row.studentName)
+            ) {
+              throw new Error(
+                "학생 명단이 변경되었습니다. 파일을 다시 선택해 명단을 확인해 주세요.",
+              );
+            }
+          });
+          const timestamp = serverTimestamp();
+          const incomingRows: PerformanceScoreRosterRow[] = enteredRows.map(
+            ({ rowKey: _key, ...row }, index) => {
+              // NEIS has no feedback columns. Reimporting its scores must not
+              // erase a teacher's existing explanation or invalidate an
+              // otherwise unchanged signed score.
+              const prior =
+                previousScores[index].data() ||
+                previous?.rows?.find((entry) => entry.uid === row.uid);
+              const identifiedItems = row.items.map((item) => {
+                const definition = assessmentItems.find(
+                  (entry) => entry.name === item.name,
+                );
+                return upload.format === "neis" && definition
+                  ? {
+                      ...item,
+                      ...(definition.itemKey
+                        ? { itemKey: definition.itemKey }
+                        : {}),
+                      ...(definition.ratio !== undefined
+                        ? { ratio: definition.ratio }
+                        : {}),
+                    }
+                  : item;
+              });
+              const retainedItems =
+                upload.format === "neis" && prior
+                  ? identifiedItems.map((item) => {
+                      const priorItem = (prior.items || []).find(
+                        (entry: PerformanceScoreItem) =>
+                          entry.name === item.name,
+                      );
+                      return priorItem?.feedback !== undefined
+                        ? { ...item, feedback: String(priorItem.feedback) }
+                        : item;
+                    })
+                  : identifiedItems;
+              return {
+                ...row,
+                ...(upload.format === "neis" && prior
+                  ? {
+                      feedback: String(prior.feedback || ""),
+                      evidence: String(prior.evidence || prior.feedback || ""),
+                    }
+                  : {}),
+                items: retainedItems,
+                matchStatus: "matched",
+                matchMessage: "학생 명단과 일치합니다.",
+              };
+            },
+          );
+          const incomingUids = new Set(incomingRows.map((row) => row.uid));
+          const mergedRows = [
+            ...(previous?.rows || []).filter(
+              (row) => !incomingUids.has(row.uid),
+            ),
+            ...incomingRows.map((row) => ({
+              ...row,
+              items: getRosterRowItemsForStorage(row.items),
+            })),
+          ];
+          const classes = [...new Set(mergedRows.map((row) => row.class))].sort(
+            (a, b) => Number(a) - Number(b),
+          );
+          const rosterPayload = {
+            scoreKind: activeScoreKind,
+            ...(upload.scoreContentKind
+              ? { scoreContentKind: upload.scoreContentKind }
+              : {}),
+            title: upload.title,
+            subject: upload.subject,
+            ...(assessmentOrder ? { assessmentOrder } : {}),
+            academicYear: year,
+            semester,
+            targetGrade: grade,
+            targetClass: classes.length === 1 ? classes[0] : "",
+            classes,
+            items: assessmentItems,
+            totalMaxScore: upload.totalMaxScore,
+            rows: mergedRows,
+            rowCount: mergedRows.length,
+            matchedCount: mergedRows.filter((row) => row.uid).length,
+            unmatchedCount: mergedRows.filter((row) => !row.uid).length,
+            sourceFileName: upload.sourceFileName,
+            uploadedBy: currentUser?.uid || "",
+            uploadedByEmail: currentUser?.email || "",
+            createdAt: previous?.createdAt || timestamp,
+            updatedAt: timestamp,
+          };
+          assertRosterPayloadFitsFirestore(rosterPayload);
+          transaction.set(rosterRef, rosterPayload);
+          const comparable = (value: unknown) =>
+            JSON.stringify(value, (_key, entry) =>
+              entry && typeof entry === "object" && !Array.isArray(entry)
+                ? Object.fromEntries(
+                    Object.entries(entry).sort(([a], [b]) =>
+                      a.localeCompare(b),
+                    ),
+                  )
+                : entry,
+            );
+          incomingRows.forEach((row, index) => {
+            const content = {
+              scoreKind: activeScoreKind,
+              ...(upload.scoreContentKind
+                ? { scoreContentKind: upload.scoreContentKind }
+                : {}),
+              rosterId,
+              title: upload.title,
+              subject: upload.subject,
+              ...(assessmentOrder ? { assessmentOrder } : {}),
+              academicYear: year,
+              semester,
+              grade: row.grade,
+              class: row.class,
+              number: row.number,
+              studentName: row.studentName,
+              uid: row.uid,
+              items: row.items,
+              enteredScoreCount: row.enteredScoreCount,
+              totalScore: row.totalScore,
+              totalMaxScore: row.totalMaxScore,
+              feedback: row.feedback || "",
+              evidence: row.evidence || row.feedback || "",
+            };
+            const old = previousScores[index].data();
+            const unchanged =
+              old &&
+              Object.entries(content).every(
+                ([field, value]) =>
+                  comparable(old[field]) === comparable(value),
+              );
+            if (!unchanged)
+              transaction.set(
+                scoreRefs[index],
+                {
+                  ...content,
+                  sourceFileName: upload.sourceFileName,
+                  uploadedBy: currentUser?.uid || "",
+                  uploadedByEmail: currentUser?.email || "",
+                  uploadedAt: timestamp,
+                  updatedAt: timestamp,
+                  signatureName: deleteField(),
+                  signatureImage: deleteField(),
+                  signedAt: deleteField(),
+                },
+                { merge: true },
+              );
+          });
+          return { ...rosterPayload, id: rosterId } as PerformanceScoreRoster;
+        });
+        completed.push(upload.title);
+        localRosters.push(saved);
+        invalidateRosterReadCaches(rosterId);
+      }
+      setRosters((current) =>
+        sortPerformanceScoreRosters([
+          ...localRosters,
+          ...current.filter(
+            (roster) => !localRosters.some((saved) => saved.id === roster.id),
+          ),
+        ]),
       );
       setParsed(null);
-      setScoreListRosterId(rosterId);
-      setScoreListLoadedRosterId(rosterId);
+      setScoreListRosterId(
+        localRosters.length > 1
+          ? SCORE_LIST_ALL_ROSTERS_VALUE
+          : localRosters[0]?.id || "",
+      );
+      setScoreListLoadedRosterId("");
+      setScoreListRecords([]);
       setScoreListLoadError("");
       setScoreEditing(false);
       setScoreEditOriginalRecords([]);
-      setScoreListGradeFilter("all");
-      setScoreListClassFilter("all");
-      setScoreListSearch("");
       setScoreListSummaryStudents([]);
       setScoreListSummaryLoadedKey("");
-      setScoreListRecords(sortStudentIdentityRows(savedScoreRecords));
-      setRosters((current) =>
-        sortPerformanceScoreRosters([
-          localRoster,
-          ...current.filter((roster) => roster.id !== rosterId),
-        ]),
-      );
       showToast({
         tone: "success",
-        title: `${managerCopy.scoreKindLabel} 점수를 저장했습니다.`,
-        message: `${saveableRows.length}명의 학생 화면에 본인 점수만 표시됩니다.`,
+        title: "점수를 저장했습니다.",
+        message: `${completed.length}개 평가 · ${freshRows.length}명의 명단을 확인했습니다.`,
       });
     } catch (error) {
-      console.error("Failed to save performance scores:", error);
       showToast({
         tone: "error",
-        title: "점수 저장에 실패했습니다.",
-        message: getFirestoreWriteErrorMessage(error),
+        title: "점수 저장을 완료하지 못했습니다.",
+        message: `${completed.length ? `저장 완료: ${completed.join(", ")}. 다시 저장하면 같은 평가를 갱신합니다. ` : ""}${error instanceof Error ? error.message : getFirestoreWriteErrorMessage(error)}`,
       });
     } finally {
       setSaving(false);
@@ -10385,9 +10179,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       {uploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section
+            ref={uploadDialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="score-upload-modal-title"
+            aria-busy={parsing || saving}
+            onKeyDown={(event) => handleScoreUploadDialogKeyDown(event, false)}
             className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
@@ -10404,8 +10202,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setUploadModalOpen(false)}
-                disabled={parsing}
+                onClick={() => closeScoreUploadDialog(false)}
+                disabled={parsing || saving}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="업로드 창 닫기"
               >
@@ -10526,29 +10324,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     </label>
                   )}
                 </div>
-              ) : (
-                <label className="block">
-                  <span className="text-xs font-black text-slate-600">
-                    {managerCopy.uploadSelectLabel}
-                  </span>
-                  <select
-                    value={uploadAssessmentPreset}
-                    onChange={(event) =>
-                      setUploadAssessmentPreset(
-                        event.target.value as UploadAssessmentPresetKey,
-                      )
-                    }
-                    disabled={parsing}
-                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                  >
-                    {UPLOAD_ASSESSMENT_OPTIONS.map((option) => (
-                      <option key={option.key} value={option.key}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              ) : null}
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="block">
@@ -10623,35 +10399,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {UPLOAD_ASSESSMENT_OPTIONS.map((option) => {
-                    const selected = uploadAssessmentPreset === option.key;
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => setUploadAssessmentPreset(option.key)}
-                        disabled={parsing}
-                        className={`rounded-lg border px-4 py-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                          selected
-                            ? "border-blue-300 bg-blue-50"
-                            : "border-slate-200 bg-white hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="text-sm font-black text-slate-900">
-                          {option.label}
-                        </div>
-                        <div className="mt-1 text-xs font-bold leading-5 text-slate-500">
-                          {option.description}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              ) : null}
 
-              <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50 px-4 py-8 text-center transition hover:bg-blue-100">
+              <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50 px-4 py-8 text-center transition hover:bg-blue-100 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600">
                 <i
                   className="fas fa-file-excel mb-3 text-2xl text-blue-600"
                   aria-hidden="true"
@@ -12749,10 +12499,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
       {parsed && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+          <section
+            ref={uploadPreviewDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="score-upload-preview-title"
+            aria-busy={saving}
+            onKeyDown={(event) => handleScoreUploadDialogKeyDown(event, true)}
+            className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+          >
             <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
-                <h3 className="text-lg font-black text-slate-900">
+                <h3
+                  id="score-upload-preview-title"
+                  className="text-lg font-black text-slate-900"
+                >
                   업로드 미리보기
                 </h3>
                 <p className="mt-1 truncate text-sm font-semibold text-slate-500">
@@ -12789,8 +12551,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 )}
                 <button
                   type="button"
-                  onClick={() => setParsed(null)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                  onClick={() => closeScoreUploadDialog(true)}
+                  disabled={saving}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="미리보기 닫기"
                 >
                   <i className="fas fa-times" aria-hidden="true"></i>
@@ -12806,65 +12569,32 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     : "lg:grid-cols-[1fr_220px_180px]"
                 }`}
               >
-                {isWrittenExamMode ? (
-                  <label className="block">
-                    <span className="text-xs font-black text-slate-600">
-                      평가명
-                    </span>
-                    <input
-                      lang="ko"
-                      inputMode="text"
-                      type="text"
-                      value={title}
-                      onChange={(event) => setTitle(event.target.value)}
-                      className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
-                    />
-                  </label>
-                ) : (
-                  <label className="block">
-                    <span className="text-xs font-black text-slate-600">
-                      {managerCopy.uploadSelectLabel}
-                    </span>
-                    <select
-                      value={assessmentPreset}
-                      onChange={(event) =>
-                        updateAssessmentPreset(
-                          event.target.value as AssessmentPresetKey,
-                        )
-                      }
-                      className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
-                    >
-                      {UPLOAD_ASSESSMENT_OPTIONS.map((option) => (
-                        <option key={option.key} value={option.key}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
                 <label className="block">
                   <span className="text-xs font-black text-slate-600">
-                    {isWrittenExamMode ? "과목" : "평가명"}
+                    평가명
                   </span>
-                  {isWrittenExamMode ? (
-                    <input
-                      lang="ko"
-                      inputMode="text"
-                      type="text"
-                      value={subject}
-                      onChange={(event) => setSubject(event.target.value)}
-                      className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
-                    />
-                  ) : (
-                    <input
-                      lang="ko"
-                      inputMode="text"
-                      type="text"
-                      value={title}
-                      onChange={(event) => setTitle(event.target.value)}
-                      className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
-                    />
-                  )}
+                  <input
+                    lang="ko"
+                    type="text"
+                    value={title}
+                    readOnly={
+                      parsed.format === "neis" && parsed.items.length > 1
+                    }
+                    onChange={(event) => setTitle(event.target.value)}
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-black text-slate-600">
+                    과목
+                  </span>
+                  <input
+                    lang="ko"
+                    type="text"
+                    value={subject}
+                    onChange={(event) => setSubject(event.target.value)}
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
+                  />
                 </label>
                 <label className="block">
                   <span className="text-xs font-black text-slate-600">
@@ -13054,8 +12784,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
-                onClick={() => setParsed(null)}
-                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                onClick={() => closeScoreUploadDialog(true)}
+                disabled={saving}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 취소
               </button>
@@ -13514,33 +13245,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={addScoreListStudent}
-                          disabled={savingScoreEdits}
-                          className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <i className="fas fa-plus" aria-hidden="true"></i>
-                          학생 추가
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void removeSelectedScoreListStudents()}
-                          disabled={
-                            savingScoreEdits ||
-                            selectedScoreListRecordCount === 0
-                          }
-                          className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <i
-                            className="fas fa-trash-can"
-                            aria-hidden="true"
-                          ></i>
-                          학생 삭제
-                          {selectedScoreListRecordCount > 0
-                            ? ` ${selectedScoreListRecordCount}`
-                            : ""}
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => void saveScoreListEdits()}
                           disabled={savingScoreEdits}
                           className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
@@ -13583,35 +13287,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   >
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
-                        {scoreEditing && (
-                          <th className="w-12 px-3 py-3 text-center">
-                            <input
-                              ref={scoreListSelectAllRef}
-                              type="checkbox"
-                              checked={visibleScoreListRecordsSelected}
-                              onChange={(event) =>
-                                toggleVisibleScoreListRecordSelection(
-                                  event.target.checked,
-                                )
-                              }
-                              disabled={
-                                savingScoreEdits ||
-                                visibleScoreListRecordKeys.length === 0
-                              }
-                              aria-checked={
-                                visibleScoreListRecordsPartiallySelected
-                                  ? "mixed"
-                                  : visibleScoreListRecordsSelected
-                              }
-                              aria-label={
-                                visibleScoreListRecordsPartiallySelected
-                                  ? "현재 표시 학생 일부 선택됨"
-                                  : "현재 표시 학생 전체 선택"
-                              }
-                              className="h-4 w-4 rounded border-slate-300 text-blue-600 accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-                            />
-                          </th>
-                        )}
                         {renderScoreListHeader("grade", "학년")}
                         {renderScoreListHeader("class", "반")}
                         {renderScoreListHeader("number", "번호")}
@@ -13637,9 +13312,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         <th className="w-32 whitespace-nowrap px-3 py-3 text-center">
                           사유
                         </th>
-                        <th className="w-48 whitespace-nowrap px-3 py-3 text-center">
-                          학적 변동
-                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -13648,10 +13320,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           <td
                             colSpan={
                               scoreListTableItemEntries.length +
-                              7 +
+                              6 +
                               (scoreListShowsObjectiveSummary ? 1 : 0) +
-                              (scoreListHasObjectiveOmr ? 1 : 0) +
-                              (scoreEditing ? 1 : 0)
+                              (scoreListHasObjectiveOmr ? 1 : 0)
                             }
                             className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                           >
@@ -13661,16 +13332,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       ) : (
                         sortedFilteredScoreListRecords.map((record) => {
                           const recordKey = getScoreListRecordKey(record);
-                          const manualRecord = isManualScoreListRecord(record);
                           const academicStatusLabel =
                             getAcademicStatusLabel(record);
                           const hasAcademicStatus =
                             Boolean(academicStatusLabel);
-                          const academicStatusListed =
-                            !academicStatusLabel ||
-                            ACADEMIC_STATUS_OPTIONS.includes(
-                              academicStatusLabel,
-                            );
                           const evidenceText = String(
                             record.evidence || record.feedback || "",
                           ).trim();
@@ -13694,118 +13359,19 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           );
                           const enteredTotalScore =
                             getEnteredTotalScore(record);
-                          const selected =
-                            selectedScoreListRecordKeys.has(recordKey);
                           return (
                             <tr key={recordKey}>
-                              {scoreEditing && (
-                                <td className="whitespace-nowrap px-3 py-3 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={selected}
-                                    onChange={(event) =>
-                                      toggleScoreListRecordSelection(
-                                        recordKey,
-                                        event.target.checked,
-                                      )
-                                    }
-                                    disabled={savingScoreEdits}
-                                    aria-label={`${record.studentName || "학생"} 선택`}
-                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-                                  />
-                                </td>
-                              )}
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
-                                {scoreEditing && manualRecord ? (
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={record.grade || ""}
-                                    onChange={(event) =>
-                                      updateScoreListIdentity(
-                                        recordKey,
-                                        "grade",
-                                        event.target.value,
-                                      )
-                                    }
-                                    disabled={savingScoreEdits}
-                                    aria-label="수동 추가 학생 학년"
-                                    className="h-9 w-16 rounded-lg border border-slate-200 px-2 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
-                                  />
-                                ) : (
-                                  `${record.grade}학년`
-                                )}
+                                {record.grade}학년
                               </td>
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
-                                {scoreEditing && manualRecord ? (
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={record.class || ""}
-                                    onChange={(event) =>
-                                      updateScoreListIdentity(
-                                        recordKey,
-                                        "class",
-                                        event.target.value,
-                                      )
-                                    }
-                                    disabled={savingScoreEdits}
-                                    aria-label="수동 추가 학생 반"
-                                    className="h-9 w-16 rounded-lg border border-slate-200 px-2 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
-                                  />
-                                ) : (
-                                  `${record.class}반`
-                                )}
+                                {record.class}반
                               </td>
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
-                                {scoreEditing && manualRecord ? (
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={record.number || ""}
-                                    onChange={(event) =>
-                                      updateScoreListIdentity(
-                                        recordKey,
-                                        "number",
-                                        event.target.value,
-                                      )
-                                    }
-                                    disabled={savingScoreEdits}
-                                    aria-label="수동 추가 학생 번호"
-                                    className="h-9 w-16 rounded-lg border border-slate-200 px-2 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
-                                  />
-                                ) : (
-                                  `${record.number}번`
-                                )}
+                                {record.number}번
                               </td>
                               <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
-                                {scoreEditing && manualRecord ? (
-                                  <div className="flex min-w-36 items-center">
-                                    <input
-                                      lang="ko"
-                                      inputMode="text"
-                                      type="text"
-                                      value={record.studentName || ""}
-                                      onChange={(event) =>
-                                        updateScoreListIdentity(
-                                          recordKey,
-                                          "studentName",
-                                          event.target.value,
-                                        )
-                                      }
-                                      disabled={savingScoreEdits}
-                                      aria-label="수동 추가 학생 이름"
-                                      className="h-9 w-32 rounded-lg border border-slate-200 px-2 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
-                                      placeholder="이름"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-1.5">
-                                    <span>
-                                      {record.studentName || "(이름 없음)"}
-                                    </span>
-                                  </div>
-                                )}
+                                {record.studentName || "(이름 없음)"}
                               </td>
                               {scoreListShowsObjectiveSummary && (
                                 <td className="px-3 py-3">
@@ -13979,42 +13545,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                     aria-hidden="true"
                                   ></i>
                                 </button>
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-3 text-center">
-                                {scoreEditing ? (
-                                  <select
-                                    value={academicStatusLabel}
-                                    onChange={(event) =>
-                                      updateScoreListAcademicStatus(
-                                        recordKey,
-                                        event.target.value,
-                                      )
-                                    }
-                                    disabled={savingScoreEdits}
-                                    className="h-9 w-44 rounded-lg border border-slate-200 bg-white px-2 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
-                                    aria-label={`${record.studentName || "학생"} 학적 변동`}
-                                  >
-                                    <option value="">해당 없음</option>
-                                    {!academicStatusListed && (
-                                      <option value={academicStatusLabel}>
-                                        {academicStatusLabel}
-                                      </option>
-                                    )}
-                                    {ACADEMIC_STATUS_OPTIONS.map((status) => (
-                                      <option key={status} value={status}>
-                                        {status}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : academicStatusLabel ? (
-                                  <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
-                                    {academicStatusLabel}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs font-bold text-slate-400">
-                                    -
-                                  </span>
-                                )}
                               </td>
                             </tr>
                           );

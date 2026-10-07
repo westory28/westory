@@ -3,15 +3,24 @@ import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
+import StudentRosterModal from "./components/StudentRosterModal";
 import { buildStudentPagination } from "./components/studentPagination";
 import "./components/teacher-list-controls.css";
 import { useAuth } from "../../contexts/AuthContext";
 import { canEditStudentList } from "../../lib/permissions";
 import {
-  deleteStudentData,
   resetLessonCorePointProgress,
   updateStudentData,
 } from "../../lib/studentData";
+import {
+  getStudentEnrollmentLabel,
+  getStudentEnrollmentStatus,
+  isStudentRosterProfile,
+  isActiveRosterStudent,
+  isStudentRegistrationPending,
+  StudentEnrollmentStatus,
+  STUDENT_ENROLLMENT_OPTIONS,
+} from "../../lib/studentRoster";
 
 interface Student {
   id: string;
@@ -22,6 +31,9 @@ interface Student {
   name: string;
   email: string;
   isTeacherAccount: boolean;
+  enrollmentStatus: StudentEnrollmentStatus;
+  enrollmentReason: string;
+  registrationApprovalStatus?: unknown;
 }
 
 interface SchoolClassOption {
@@ -71,7 +83,7 @@ const ADMIN_EMAIL = "westoria28@gmail.com";
 type StudentDetailInitialTab = "summary" | "profile" | "performance";
 
 const parseGradeValue = (data: any) => {
-  const direct = String(data?.studentGrade ?? data?.grade ?? "").trim();
+  const direct = String(data?.studentGrade || data?.grade || "").trim();
   if (direct) return direct;
   const gradeClass = String(data?.gradeClass ?? "").trim();
   if (!gradeClass) return "";
@@ -80,7 +92,7 @@ const parseGradeValue = (data: any) => {
 };
 
 const parseClassValue = (data: any) => {
-  const raw = String(data?.studentClass ?? data?.class ?? "").trim();
+  const raw = String(data?.studentClass || data?.class || "").trim();
   if (raw) return raw;
   const gradeClass = String(data?.gradeClass ?? "").trim();
   if (!gradeClass) return "";
@@ -89,7 +101,7 @@ const parseClassValue = (data: any) => {
 };
 
 const parseNumberValue = (data: any) => {
-  const raw = String(data?.studentNumber ?? data?.number ?? "").trim();
+  const raw = String(data?.studentNumber || data?.number || "").trim();
   const parsed = parseInt(raw, 10);
   if (!Number.isNaN(parsed)) return parsed;
   const fromGradeClass = String(data?.gradeClass ?? "").match(/(\d+)\s*번/);
@@ -124,20 +136,6 @@ const isBangTestStudent = (
   );
 };
 
-const getStudentDeleteErrorMessage = (error: unknown) => {
-  const code = String((error as { code?: string })?.code || "");
-  if (code.includes("permission-denied")) {
-    return "학생 삭제 권한이 없습니다. 교사 또는 관리자 권한으로 다시 확인해 주세요.";
-  }
-  if (code.includes("not-found")) {
-    return "삭제할 학생 정보를 찾지 못했습니다. 명단을 새로고침해 주세요.";
-  }
-  if (code.includes("unavailable") || code.includes("deadline-exceeded")) {
-    return "삭제 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
-  }
-  return "학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.";
-};
-
 const getCorePointResetErrorMessage = (error: unknown) => {
   const code = String((error as { code?: string })?.code || "");
   if (code.includes("permission-denied")) {
@@ -160,10 +158,13 @@ const StudentList: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [registrationNotice, setRegistrationNotice] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
   const [gradeFilter, setGradeFilter] = useState("all");
   const [classFilter, setClassFilter] = useState("all");
+  const [enrollmentFilter, setEnrollmentFilter] = useState("active");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -186,9 +187,10 @@ const StudentList: React.FC = () => {
     useState<StudentDetailInitialTab>("summary");
   const [moveClassModalOpen, setMoveClassModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [deletingStudentIds, setDeletingStudentIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const [rosterModalMode, setRosterModalMode] = useState<
+    "create" | "enrollment" | "registration" | null
+  >(null);
+  const [enrollmentTargets, setEnrollmentTargets] = useState<Student[]>([]);
   const [resettingCorePointStudentIds, setResettingCorePointStudentIds] =
     useState<Set<string>>(new Set());
   const readOnly = !canEditStudentList(userData, currentUser?.email || "");
@@ -215,7 +217,17 @@ const StudentList: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [normalizedStudents, gradeFilter, classFilter, searchQuery]);
+  }, [
+    normalizedStudents,
+    gradeFilter,
+    classFilter,
+    enrollmentFilter,
+    searchQuery,
+  ]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [gradeFilter, classFilter, enrollmentFilter, searchQuery]);
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -223,6 +235,7 @@ const StudentList: React.FC = () => {
 
   const fetchStudents = async (options: { silent?: boolean } = {}) => {
     if (!options.silent) setLoading(true);
+    setLoadError("");
     try {
       const snap = await getDocs(collection(db, "users"));
       const list: Student[] = [];
@@ -232,18 +245,7 @@ const StudentList: React.FC = () => {
         const email = String(data.email || "").trim();
         const isTeacherAccount =
           data.role === "teacher" || email === ADMIN_EMAIL;
-        const hasStudentProfile =
-          !!String(data.studentName || "").trim() ||
-          !!String(data.studentGrade || "").trim() ||
-          !!String(data.studentClass || "").trim() ||
-          !!String(data.studentNumber || "").trim() ||
-          !!String(data.grade || "").trim() ||
-          !!String(data.class || "").trim() ||
-          !!String(data.number || "").trim();
-        const includeAsStudent =
-          data.role !== "teacher" ||
-          (email === ADMIN_EMAIL && hasStudentProfile);
-        if (!includeAsStudent) return;
+        if (!isStudentRosterProfile(data)) return;
 
         const resolvedName = String(
           data.studentName ||
@@ -263,6 +265,14 @@ const StudentList: React.FC = () => {
           name: resolvedName,
           email,
           isTeacherAccount,
+          enrollmentStatus: getStudentEnrollmentStatus(data),
+          enrollmentReason: String(data.enrollmentReason || "").trim(),
+          ...(Object.prototype.hasOwnProperty.call(
+            data,
+            "registrationApprovalStatus",
+          )
+            ? { registrationApprovalStatus: data.registrationApprovalStatus }
+            : {}),
         });
       });
 
@@ -300,9 +310,9 @@ const StudentList: React.FC = () => {
       });
 
       setStudents(list);
-      setFilteredStudents(list);
     } catch (error) {
       console.error("Error fetching students:", error);
+      setLoadError("학생 명단을 불러오지 못했습니다. 새로고침해 주세요.");
     } finally {
       if (!options.silent) setLoading(false);
     }
@@ -391,6 +401,18 @@ const StudentList: React.FC = () => {
 
   const applyFilters = () => {
     let result = normalizedStudents;
+    if (enrollmentFilter !== "all") {
+      result = result.filter((student) =>
+        enrollmentFilter === "pending"
+          ? isStudentRegistrationPending(student)
+          : enrollmentFilter === "active"
+            ? isActiveRosterStudent(student)
+            : !isStudentRegistrationPending(student) &&
+              (enrollmentFilter === "excluded"
+                ? student.enrollmentStatus !== "active"
+                : student.enrollmentStatus === enrollmentFilter),
+      );
+    }
     if (gradeFilter !== "all")
       result = result.filter(
         (student) => student.canonicalGrade === gradeFilter,
@@ -418,7 +440,13 @@ const StudentList: React.FC = () => {
       setSelectedIds(new Set());
       return;
     }
-    setSelectedIds(new Set(pagedStudents.map((student) => student.id)));
+    setSelectedIds(
+      new Set(
+        pagedStudents
+          .filter((student) => !isStudentRegistrationPending(student))
+          .map((student) => student.id),
+      ),
+    );
   };
 
   const handleSelect = (id: string) => {
@@ -426,82 +454,6 @@ const StudentList: React.FC = () => {
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setSelectedIds(next);
-  };
-
-  const removeStudentsLocally = (ids: Set<string>) => {
-    setStudents((current) => current.filter((student) => !ids.has(student.id)));
-    setFilteredStudents((current) =>
-      current.filter((student) => !ids.has(student.id)),
-    );
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      ids.forEach((id) => next.delete(id));
-      return next;
-    });
-  };
-
-  const handleDelete = async (id: string) => {
-    if (readOnly) return;
-    if (!window.confirm("정말 삭제하시겠습니까? (복구 불가)")) return;
-    const target = students.find((student) => student.id === id);
-    if (!target) return;
-    const previousStudents = students;
-    const previousFilteredStudents = filteredStudents;
-    setDeletingStudentIds((current) => new Set(current).add(id));
-    removeStudentsLocally(new Set([id]));
-    try {
-      const result = await deleteStudentData(config, target.userId);
-      if (result.authUserDeleteError) {
-        console.warn("Student auth account cleanup failed", result);
-      }
-      void fetchStudents({ silent: true });
-    } catch (error) {
-      console.error("Delete failed", error);
-      setStudents(previousStudents);
-      setFilteredStudents(previousFilteredStudents);
-      void fetchStudents({ silent: true });
-      alert(getStudentDeleteErrorMessage(error));
-    } finally {
-      setDeletingStudentIds((current) => {
-        const next = new Set(current);
-        next.delete(id);
-        return next;
-      });
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (readOnly) return;
-    if (
-      !window.confirm(`선택한 ${selectedIds.size}명을 정말 삭제하시겠습니까?`)
-    )
-      return;
-    const targets = Array.from(selectedIds)
-      .map((id) => students.find((student) => student.id === id))
-      .filter((student): student is Student => Boolean(student));
-    if (!targets.length) return;
-    const targetIds = new Set(targets.map((student) => student.id));
-    const previousStudents = students;
-    const previousFilteredStudents = filteredStudents;
-    setDeletingStudentIds(targetIds);
-    removeStudentsLocally(targetIds);
-    try {
-      for (const target of targets) {
-        const result = await deleteStudentData(config, target.userId);
-        if (result.authUserDeleteError) {
-          console.warn("Student auth account cleanup failed", result);
-        }
-      }
-      void fetchStudents({ silent: true });
-    } catch (error) {
-      console.error("Bulk delete failed", error);
-      setStudents(previousStudents);
-      setFilteredStudents(previousFilteredStudents);
-      void fetchStudents({ silent: true });
-      alert(getStudentDeleteErrorMessage(error));
-    } finally {
-      setDeletingStudentIds(new Set());
-    }
   };
 
   const handleBulkPromote = async () => {
@@ -557,6 +509,7 @@ const StudentList: React.FC = () => {
       );
       for (const { student, nextGrade } of targets) {
         await updateStudentData(config, {
+          operation: "PROMOTE_GRADE",
           uid: student.userId,
           grade: nextGrade,
           class: student.class,
@@ -572,7 +525,11 @@ const StudentList: React.FC = () => {
       setStudents(previousStudents);
       setFilteredStudents(previousFilteredStudents);
       void fetchStudents({ silent: true });
-      alert("진급 처리 중 오류가 발생했습니다.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "진급 처리 중 오류가 발생했습니다.",
+      );
     }
   };
 
@@ -609,6 +566,7 @@ const StudentList: React.FC = () => {
   const handleRefreshList = async () => {
     setGradeFilter("all");
     setClassFilter("all");
+    setEnrollmentFilter("active");
     setSearchQuery("");
     setCurrentPage(1);
     setSelectedIds(new Set());
@@ -628,6 +586,19 @@ const StudentList: React.FC = () => {
                 ({filteredStudents.length}명)
               </span>
             </h2>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEnrollmentTargets([]);
+                  setRosterModalMode("create");
+                }}
+                className="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                <i className="fas fa-user-plus mr-2" aria-hidden="true"></i>학생
+                등록
+              </button>
+            )}
           </div>
 
           <div className="student-list-controls flex flex-col items-center gap-3 border-b border-gray-100">
@@ -636,12 +607,32 @@ const StudentList: React.FC = () => {
                 읽기 전용 권한입니다. 학생 명단 조회만 가능합니다.
               </div>
             )}
-            <div className="student-list-toolbar">
+            <div className="student-list-toolbar flex-wrap">
+              <div className="w-full md:w-auto">
+                <select
+                  aria-label="학적 상태 필터"
+                  value={enrollmentFilter}
+                  onChange={(event) => setEnrollmentFilter(event.target.value)}
+                  className="min-h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="active">재학생</option>
+                  <option value="pending">등록 대기</option>
+                  <option value="excluded">제외 명단 전체</option>
+                  {STUDENT_ENROLLMENT_OPTIONS.filter(
+                    (option) => option.value !== "active",
+                  ).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                  <option value="all">전체 학생</option>
+                </select>
+              </div>
               <select
                 aria-label="학년 필터"
                 value={gradeFilter}
                 onChange={(e) => setGradeFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
+                className="min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
               >
                 <option value="all">전체 학년</option>
                 {gradeOptions.map((grade) => (
@@ -654,7 +645,7 @@ const StudentList: React.FC = () => {
                 aria-label="반 필터"
                 value={classFilter}
                 onChange={(e) => setClassFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
+                className="min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
               >
                 <option value="all">전체 반</option>
                 {classOptions.map((cls) => (
@@ -666,7 +657,7 @@ const StudentList: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleRefreshList()}
-                className="student-list-toolbar__action rounded-lg border border-gray-300 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
+                className="student-list-toolbar__action min-h-11 min-w-11 rounded-lg border border-gray-300 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
                 title="명단 새로고침 및 필터 초기화"
                 aria-label="명단 새로고침 및 필터 초기화"
               >
@@ -686,7 +677,7 @@ const StudentList: React.FC = () => {
                 aria-controls="student-list-search"
                 aria-label={searchOpen ? "학생 검색 닫기" : "학생 검색 열기"}
                 title={searchOpen ? "검색 닫기" : "검색"}
-                className="student-list-toolbar__action rounded-lg bg-blue-600 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                className="student-list-toolbar__action min-h-11 min-w-11 rounded-lg border border-gray-300 text-sm font-bold text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
               >
                 <i className="fas fa-search" aria-hidden="true"></i>
               </button>
@@ -723,6 +714,31 @@ const StudentList: React.FC = () => {
             )}
           </div>
 
+          {loadError && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center gap-3 border-b border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            >
+              <span>{loadError}</span>
+              <button
+                type="button"
+                onClick={() => void fetchStudents()}
+                className="min-h-11 rounded-lg border border-red-200 px-3 font-bold"
+              >
+                다시 시도
+              </button>
+            </div>
+          )}
+
+          {registrationNotice && (
+            <p
+              role="status"
+              className="border-b border-blue-100 bg-blue-50 p-4 text-sm text-blue-800"
+            >
+              {registrationNotice}
+            </p>
+          )}
+
           <div className="flex-1 overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
@@ -730,12 +746,23 @@ const StudentList: React.FC = () => {
                   <th className="w-10 p-4 text-center">
                     <input
                       type="checkbox"
+                      aria-label="현재 명단 전체 선택"
+                      disabled={
+                        readOnly ||
+                        !pagedStudents.some(
+                          (student) => !isStudentRegistrationPending(student),
+                        )
+                      }
                       onChange={(e) => handleSelectAll(e.target.checked)}
                       checked={
-                        pagedStudents.length > 0 &&
-                        pagedStudents.every((student) =>
-                          selectedIds.has(student.id),
-                        )
+                        pagedStudents.some(
+                          (student) => !isStudentRegistrationPending(student),
+                        ) &&
+                        pagedStudents
+                          .filter(
+                            (student) => !isStudentRegistrationPending(student),
+                          )
+                          .every((student) => selectedIds.has(student.id))
                       }
                       className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                     />
@@ -744,6 +771,7 @@ const StudentList: React.FC = () => {
                   <th className="w-16 p-4 text-center">반</th>
                   <th className="w-16 p-4 text-center">번호</th>
                   <th className="w-32 p-4">이름</th>
+                  <th className="p-4">학적 상태</th>
                   <th className="hidden w-64 p-4 lg:table-cell">이메일</th>
                   <th className="w-64 p-4 text-center">관리</th>
                 </tr>
@@ -751,13 +779,13 @@ const StudentList: React.FC = () => {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center text-gray-400">
+                    <td colSpan={8} className="p-10 text-center text-gray-400">
                       데이터를 불러오는 중...
                     </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center text-gray-400">
+                    <td colSpan={8} className="p-10 text-center text-gray-400">
                       학생 데이터가 없습니다.
                     </td>
                   </tr>
@@ -770,15 +798,19 @@ const StudentList: React.FC = () => {
                       <td className="p-4 text-center">
                         <input
                           type="checkbox"
+                          aria-label={`${student.name || "학생"} 선택`}
+                          disabled={
+                            readOnly || isStudentRegistrationPending(student)
+                          }
                           checked={selectedIds.has(student.id)}
                           onChange={() => handleSelect(student.id)}
                           className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                         />
                       </td>
-                      <td className="p-4 text-center font-bold text-gray-700">
+                      <td className="whitespace-nowrap p-4 text-center font-bold text-gray-700">
                         {getGradeLabel(student.grade)}
                       </td>
-                      <td className="p-4 text-center font-bold text-gray-600">
+                      <td className="whitespace-nowrap p-4 text-center font-bold text-gray-600">
                         {getClassLabel(student.class)}
                       </td>
                       <td className="p-4 text-center font-bold text-gray-600">
@@ -805,65 +837,94 @@ const StudentList: React.FC = () => {
                           )}
                         </button>
                       </td>
+                      <td className="p-4 text-sm text-gray-600">
+                        <span className="whitespace-nowrap font-bold">
+                          {isStudentRegistrationPending(student)
+                            ? "등록 대기"
+                            : getStudentEnrollmentLabel(
+                                student.enrollmentStatus,
+                              )}
+                        </span>
+                        {student.enrollmentReason && (
+                          <span className="mt-1 block text-xs">
+                            {student.enrollmentReason}
+                          </span>
+                        )}
+                      </td>
                       <td className="hidden p-4 font-mono text-xs text-gray-500 lg:table-cell">
                         {student.email}
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex flex-wrap justify-center gap-1">
-                          {!readOnly && (
-                            <>
+                          {!readOnly &&
+                            (isStudentRegistrationPending(student) ? (
                               <button
                                 onClick={() => {
-                                  setSelectedStudent(student);
-                                  setDetailInitialTab("profile");
-                                  setDetailModalOpen(true);
+                                  setEnrollmentTargets([student]);
+                                  setRosterModalMode("registration");
                                 }}
-                                className="flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
-                                title="수정"
+                                className="min-h-11 rounded-lg bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                                aria-label={`${student.name || "학생"} 등록 승인`}
                               >
-                                <i className="fas fa-edit"></i>
-                                <span className="hidden lg:inline">수정</span>
+                                등록 승인
                               </button>
-                              <button
-                                onClick={() => void handleDelete(student.id)}
-                                disabled={deletingStudentIds.has(student.id)}
-                                className="flex items-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                title={
-                                  student.isTeacherAccount
-                                    ? "학생 정보만 삭제"
-                                    : "삭제"
-                                }
-                              >
-                                <i className="fas fa-trash"></i>
-                                <span className="hidden lg:inline">삭제</span>
-                              </button>
-                              {isBangTestStudent(student) && (
+                            ) : (
+                              <>
                                 <button
-                                  onClick={() =>
-                                    void handleResetCorePoints(student)
-                                  }
-                                  disabled={resettingCorePointStudentIds.has(
-                                    student.id,
-                                  )}
-                                  className="flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                  title="방테스트 핵심포인트 클릭 기록 초기화"
+                                  onClick={() => {
+                                    setSelectedStudent(student);
+                                    setDetailInitialTab("profile");
+                                    setDetailModalOpen(true);
+                                  }}
+                                  className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
+                                  aria-label={`${student.name || "학생"} 정보 수정`}
+                                  title="수정"
+                                >
+                                  <i className="fas fa-edit"></i>
+                                  <span className="hidden lg:inline">수정</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEnrollmentTargets([student]);
+                                    setRosterModalMode("enrollment");
+                                  }}
+                                  className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-200"
+                                  title="학적 상태 변경"
+                                  aria-label={`${student.name || "학생"} 학적 상태 변경`}
                                 >
                                   <i
-                                    className={`fas ${
-                                      resettingCorePointStudentIds.has(
-                                        student.id,
-                                      )
-                                        ? "fa-spinner fa-spin"
-                                        : "fa-undo"
-                                    }`}
+                                    className="fas fa-user-check"
+                                    aria-hidden="true"
                                   ></i>
-                                  <span className="hidden lg:inline">
-                                    핵심초기화
-                                  </span>
+                                  <span className="hidden lg:inline">학적</span>
                                 </button>
-                              )}
-                            </>
-                          )}
+                                {isBangTestStudent(student) && (
+                                  <button
+                                    onClick={() =>
+                                      void handleResetCorePoints(student)
+                                    }
+                                    disabled={resettingCorePointStudentIds.has(
+                                      student.id,
+                                    )}
+                                    className="flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    title="방테스트 핵심포인트 클릭 기록 초기화"
+                                  >
+                                    <i
+                                      className={`fas ${
+                                        resettingCorePointStudentIds.has(
+                                          student.id,
+                                        )
+                                          ? "fa-spinner fa-spin"
+                                          : "fa-undo"
+                                      }`}
+                                    ></i>
+                                    <span className="hidden lg:inline">
+                                      핵심초기화
+                                    </span>
+                                  </button>
+                                )}
+                              </>
+                            ))}
                         </div>
                       </td>
                     </tr>
@@ -943,20 +1004,25 @@ const StudentList: React.FC = () => {
                 </span>
               </button>
               <button
-                onClick={() => void handleBulkDelete()}
-                disabled={deletingStudentIds.size > 0}
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-red-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  setEnrollmentTargets(
+                    students.filter((student) => selectedIds.has(student.id)),
+                  );
+                  setRosterModalMode("enrollment");
+                }}
+                className="flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 text-gray-700 transition hover:bg-gray-100"
               >
-                <i className="fas fa-trash"></i>
+                <i className="fas fa-user-check" aria-hidden="true"></i>
                 <span className="text-[11px] font-bold md:text-xs">
-                  {deletingStudentIds.size > 0 ? "삭제 중" : "삭제"}
+                  학적 변경
                 </span>
               </button>
             </div>
             <div className="hidden h-4 w-px bg-gray-300 md:block"></div>
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="p-1 text-gray-400 transition hover:text-gray-600"
+              aria-label="학생 선택 취소"
+              className="min-h-11 min-w-11 p-1 text-gray-400 transition hover:text-gray-600"
             >
               <i className="fas fa-times"></i>
             </button>
@@ -968,8 +1034,38 @@ const StudentList: React.FC = () => {
           onClose={() => setDetailModalOpen(false)}
           student={selectedStudent}
           onUpdate={fetchStudents}
-          readOnly={readOnly}
+          readOnly={readOnly || isStudentRegistrationPending(selectedStudent)}
           initialTab={detailInitialTab}
+        />
+
+        <StudentRosterModal
+          mode={readOnly ? null : rosterModalMode}
+          targets={enrollmentTargets}
+          students={normalizedStudents.map((student) => ({
+            ...student,
+            grade: student.canonicalGrade,
+            class: student.canonicalClass,
+          }))}
+          gradeOptions={gradeOptions}
+          classOptions={classOptions}
+          defaultGrade={gradeFilter}
+          defaultClass={classFilter}
+          onClose={() => setRosterModalMode(null)}
+          onComplete={(result) => {
+            setRegistrationNotice(
+              result?.registrationPending
+                ? result.requiresFirstSignIn
+                  ? "등록 정보를 저장했습니다. 학생이 학교 계정으로 처음 로그인한 뒤 ‘등록 대기’에서 등록 승인을 진행해 주세요."
+                  : "등록 정보를 저장했습니다. ‘등록 대기’에서 학급·번호·이름을 확인하고 등록 승인을 진행해 주세요."
+                : result?.registrationApproved
+                  ? "학생 등록 승인을 완료했습니다."
+                  : "",
+            );
+            if (result?.registrationPending) setEnrollmentFilter("pending");
+            if (result?.registrationApproved) setEnrollmentFilter("active");
+            setSelectedIds(new Set());
+            void fetchStudents({ silent: true });
+          }}
         />
 
         <MoveClassModal

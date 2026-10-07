@@ -126,6 +126,7 @@ export interface PerformanceScoreConfirmation {
   rosterId: string;
   signatureName: string;
   signatureImage: string;
+  scoreUpdatedAt?: unknown;
   confirmedAt?: unknown;
   updatedAt?: unknown;
 }
@@ -650,6 +651,7 @@ export const loadUserPerformanceScoreRecords = async (
         await loadPerformanceScoreConfirmation(
           uid,
           record.id || record.rosterId,
+          { throwOnError: true },
         ),
       ),
     ),
@@ -660,6 +662,7 @@ export const loadUserPerformanceScoreRecords = async (
 export const loadPerformanceScoreConfirmation = async (
   uid: string,
   scoreId: string,
+  options: { throwOnError?: boolean } = {},
 ) => {
   if (!uid || !scoreId) return null;
   try {
@@ -682,6 +685,7 @@ export const loadPerformanceScoreConfirmation = async (
     };
   } catch (error) {
     console.warn("Failed to load performance score confirmation:", error);
+    if (options.throwOnError) throw error;
     return null;
   }
 };
@@ -689,13 +693,54 @@ export const loadPerformanceScoreConfirmation = async (
 export const applyPerformanceScoreConfirmation = (
   record: PerformanceScoreRecord,
   confirmation: PerformanceScoreConfirmation | null,
-): PerformanceScoreRecord => ({
-  ...record,
-  confirmation,
-  signatureName: confirmation?.signatureName || record.signatureName,
-  signatureImage: confirmation?.signatureImage || record.signatureImage,
-  signedAt: confirmation?.confirmedAt || record.signedAt,
-});
+): PerformanceScoreRecord => {
+  const timestampKey = (value: unknown): string => {
+    if (!value) return "";
+    if (value instanceof Date) return String(value.getTime());
+    const stamp = value as {
+      seconds?: number;
+      nanoseconds?: number;
+      toMillis?: () => number;
+    };
+    if (typeof stamp.seconds === "number")
+      return `${stamp.seconds}:${stamp.nanoseconds || 0}`;
+    if (typeof stamp.toMillis === "function") return String(stamp.toMillis());
+    return "";
+  };
+  const timestampParts = (value: unknown): [number, number] => {
+    if (value instanceof Date)
+      return [
+        Math.floor(value.getTime() / 1000),
+        (value.getTime() % 1000) * 1e6,
+      ];
+    const stamp = value as { seconds?: number; nanoseconds?: number } | null;
+    return typeof stamp?.seconds === "number"
+      ? [stamp.seconds, stamp.nanoseconds || 0]
+      : [NaN, NaN];
+  };
+  const [confirmedSeconds, confirmedNanos] = timestampParts(
+    confirmation?.confirmedAt,
+  );
+  const [updatedSeconds, updatedNanos] = timestampParts(record.updatedAt);
+  const valid =
+    confirmation &&
+    confirmation.uid === record.uid &&
+    confirmation.rosterId === record.rosterId &&
+    (confirmation.scoreUpdatedAt
+      ? timestampKey(confirmation.scoreUpdatedAt) ===
+        timestampKey(record.updatedAt)
+      : !record.updatedAt ||
+        confirmedSeconds > updatedSeconds ||
+        (confirmedSeconds === updatedSeconds &&
+          confirmedNanos >= updatedNanos));
+  return {
+    ...record,
+    confirmation: valid ? confirmation : null,
+    signatureName: valid ? confirmation.signatureName : undefined,
+    signatureImage: valid ? confirmation.signatureImage : undefined,
+    signedAt: valid ? confirmation.confirmedAt : undefined,
+  };
+};
 
 export const buildStudentLookupKey = (
   grade: unknown,

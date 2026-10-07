@@ -43,9 +43,11 @@ const MoveClassModal: React.FC<MoveClassModalProps> = ({
     const targets = students.filter((student) => selectedIds.has(student.id));
     if (!targets.length) return;
     setMoving(true);
+    let movedCount = 0;
     try {
       for (const student of targets) {
         await updateStudentData(config, {
+          operation: "MOVE_CLASS",
           uid: student.userId,
           grade: student.grade,
           class: String(targetClass),
@@ -53,12 +55,16 @@ const MoveClassModal: React.FC<MoveClassModalProps> = ({
           name: student.name,
           email: student.email,
         });
+        movedCount += 1;
       }
       onComplete();
       onClose();
     } catch (e) {
       console.error("Move failed:", e);
-      alert("이동 중 오류가 발생했습니다.");
+      if (movedCount) onComplete();
+      alert(
+        `${movedCount ? `${movedCount}명은 이동되었습니다. ` : ""}${e instanceof Error ? e.message : "이동 중 오류가 발생했습니다."}`,
+      );
     } finally {
       setMoving(false);
     }
@@ -94,6 +100,7 @@ const MoveClassModal: React.FC<MoveClassModalProps> = ({
         <div className="flex gap-2">
           <button
             onClick={onClose}
+            disabled={moving}
             className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-bold hover:bg-gray-200 transition"
           >
             취소

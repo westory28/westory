@@ -33,6 +33,7 @@ import {
   notifyPerformanceScoreObjectionRequested,
 } from "../../../lib/notifications";
 import { getYearSemester } from "../../../lib/semesterScope";
+import { isActiveRosterStudent } from "../../../lib/studentRoster";
 import {
   PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
   PERFORMANCE_SCORE_KIND,
@@ -73,7 +74,10 @@ const getTimestampMillis = (value: unknown) => {
     typeof (value as { seconds?: unknown }).seconds === "number"
       ? (value as { seconds: number }).seconds
       : null;
-  return seconds ? seconds * 1000 : 0;
+  return seconds !== null
+    ? seconds * 1000 +
+        Number((value as { nanoseconds?: number }).nanoseconds || 0) / 1000000
+    : 0;
 };
 
 const formatDateTime = (value: unknown) => {
@@ -307,7 +311,7 @@ const getSignatureSaveErrorMessage = (error: unknown) => {
       ? (error as { code: string }).code
       : "";
   if (code === "permission-denied") {
-    return "서명 저장 권한이 거부되었습니다. 이미 제출된 서명이 있거나 담당 교사의 반려 처리가 필요한 상태일 수 있습니다.";
+    return "점수 또는 확인 상태가 변경되었습니다. 새로고침한 뒤 점수를 확인하고 다시 서명해 주세요.";
   }
   if (code === "unavailable" || code === "deadline-exceeded") {
     return "서명 저장 서버 연결이 불안정합니다. 잠시 후 다시 시도해 주세요.";
@@ -498,6 +502,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     ...copy,
   };
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [records, setRecords] = useState<PerformanceScoreRecord[]>([]);
   const [scoreSettings, setScoreSettings] = useState<PerformanceScoreSettings>(
     () => normalizePerformanceScoreSettings(),
@@ -560,11 +565,27 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       return;
     }
     void loadScores();
-  }, [currentUser?.uid, scoreKind, year, semester]);
+  }, [
+    currentUser?.uid,
+    userData?.enrollmentStatus,
+    userData?.registrationApprovalStatus,
+    scoreKind,
+    year,
+    semester,
+  ]);
 
   const loadScores = async () => {
     if (!currentUser?.uid) return;
+    if (!isActiveRosterStudent(userData)) {
+      setRecords([]);
+      setLoading(false);
+      setLoadError(
+        "현재 점수 확인 대상이 아닙니다. 담당 선생님께 문의해 주세요.",
+      );
+      return;
+    }
     setLoading(true);
+    setLoadError("");
     try {
       const [
         loaded,
@@ -626,6 +647,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       });
     } catch (error) {
       console.error("Failed to load performance scores:", error);
+      setRecords([]);
+      setLoadError("점수를 불러오지 못했습니다. 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }
@@ -1945,12 +1968,56 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
             currentUser.uid,
           );
-          const snap = await getDocFromServer(ref);
+          const [snap, latestScore] = await Promise.all([
+            getDocFromServer(ref),
+            getDocFromServer(
+              doc(
+                db,
+                "users",
+                currentUser.uid,
+                PERFORMANCE_SCORE_USER_COLLECTION,
+                scoreId,
+              ),
+            ),
+          ]);
+          const currentData = latestScore.data();
+          const sameVersion = (left: unknown, right: unknown) => {
+            const a = left as
+              | { seconds?: number; nanoseconds?: number }
+              | undefined;
+            const b = right as
+              | { seconds?: number; nanoseconds?: number }
+              | undefined;
+            return Boolean(
+              a &&
+              b &&
+              a.seconds === b.seconds &&
+              a.nanoseconds === b.nanoseconds,
+            );
+          };
+          if (
+            !latestScore.exists() ||
+            currentData?.uid !== currentUser.uid ||
+            currentData?.rosterId !== scoreId ||
+            currentData?.academicYear !== year ||
+            currentData?.semester !== semester ||
+            !sameVersion(currentData?.updatedAt, record.updatedAt) ||
+            currentData?.objectionPending === true
+          ) {
+            throw { code: "permission-denied" };
+          }
+          const stored = snap.data();
           return {
             record,
             scoreId,
             ref,
-            alreadyConfirmed: snap.exists() && hasStoredSignature(snap.data()),
+            alreadyConfirmed:
+              snap.exists() &&
+              hasStoredSignature(stored) &&
+              (stored?.scoreUpdatedAt
+                ? sameVersion(stored.scoreUpdatedAt, record.updatedAt)
+                : getTimestampMillis(stored?.confirmedAt) >=
+                  getTimestampMillis(record.updatedAt)),
           };
         }),
       );
@@ -1966,6 +2033,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             rosterId: record.rosterId,
             signatureName,
             signatureImage,
+            scoreUpdatedAt: record.updatedAt,
             confirmedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
@@ -1977,15 +2045,37 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       // server, including a prior submission recovered after a connection loss.
       const verifiedConfirmations = new Map(
         await Promise.all(
-          saveTargets.map(async ({ ref, scoreId }) => {
-            const snapshot = await getDocFromServer(ref);
+          saveTargets.map(async ({ ref, scoreId, record }) => {
+            const [snapshot, currentScore] = await Promise.all([
+              getDocFromServer(ref),
+              getDocFromServer(
+                doc(
+                  db,
+                  "users",
+                  currentUser.uid,
+                  PERFORMANCE_SCORE_USER_COLLECTION,
+                  scoreId,
+                ),
+              ),
+            ]);
             const data = snapshot.data();
+            const latest = currentScore.data();
+            const verified =
+              latest && data
+                ? applyPerformanceScoreConfirmation(
+                    { ...latest, id: scoreId } as PerformanceScoreRecord,
+                    data as PerformanceScoreConfirmation,
+                  )
+                : null;
             if (
               !snapshot.exists() ||
               !hasStoredSignature(data) ||
               data?.uid !== currentUser.uid ||
               data?.rosterId !== scoreId ||
-              !data?.confirmedAt
+              !data?.confirmedAt ||
+              !verified?.signatureImage ||
+              getTimestampMillis(latest?.updatedAt) !==
+                getTimestampMillis(record.updatedAt)
             ) {
               throw new Error(
                 "The saved score signature could not be verified.",
@@ -2230,6 +2320,21 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
 
   if (loading) {
     return <PageLoading message={resolvedCopy.loadingMessage} />;
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-6" role="alert">
+        <p className="text-sm font-bold text-rose-700">{loadError}</p>
+        <button
+          type="button"
+          onClick={() => void loadScores()}
+          className="mt-4 min-h-11 rounded-lg bg-blue-600 px-5 py-2 font-bold text-white"
+        >
+          다시 시도
+        </button>
+      </div>
+    );
   }
 
   if (!warningConsentCurrent) {

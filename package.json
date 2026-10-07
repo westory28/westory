@@ -28,6 +28,7 @@
     "chart.js": "^4.5.1",
     "exceljs": "^4.4.0",
     "firebase": "^12.9.0",
+    "jszip": "^3.10.2",
     "korean-lunar-calendar": "^0.3.6",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.3.1",

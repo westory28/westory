@@ -1,5 +1,10 @@
-import { getHttpsCallable } from "./firebase";
+import { auth, getHttpsCallable } from "./firebase";
 import { getYearSemester } from "./semesterScope";
+import {
+  callStudentDataService,
+  updateCanonicalStudentProfile,
+  type StudentProfileOperation,
+} from "./studentProfileCommands";
 
 type ConfigLike = Parameters<typeof getYearSemester>[0];
 
@@ -23,6 +28,7 @@ export interface StudentDataUpdateInput {
   number: string | number;
   name: string;
   email: string;
+  operation?: StudentProfileOperation;
 }
 
 export interface StudentDataUpdateResult {
@@ -81,15 +87,21 @@ export const updateStudentData = async (
   config: ConfigLike,
   input: StudentDataUpdateInput,
 ): Promise<StudentDataUpdateResult> => {
+  const ownerUid = auth.currentUser?.uid || "";
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
+  if (await updateCanonicalStudentProfile(config, input)) {
+    return {
+      uid: input.uid,
+      year,
+      semester,
+      updatedRelatedDocCount: 0,
+      updatedRosterCount: 0,
+      updatedRosterRowCount: 0,
+    };
+  }
+  const { operation: _operation, ...profile } = input;
+  return callStudentDataService<
     StudentDataUpdateInput & { year: string; semester: string },
     StudentDataUpdateResult
-  >("updateStudentData");
-  const result = await callable({
-    ...input,
-    year,
-    semester,
-  });
-  return result.data;
+  >("updateStudentData", { ...profile, year, semester }, ownerUid);
 };

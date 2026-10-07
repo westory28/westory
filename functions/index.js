@@ -1893,6 +1893,7 @@ const assertQuizManager = async (request) => {
 };
 
 const assertPerformanceScoreManager = async (request) => {
+  await require('./scoreWorkflowGuard').assertScoreWorkflowSession(request, { recentAuth: true, highRisk: true });
   const { uid, email } = assertAllowedWestoryUser(request);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
@@ -1909,6 +1910,7 @@ const assertPerformanceScoreManager = async (request) => {
 };
 
 const assertStudentDataManager = async (request) => {
+  await require('./scoreWorkflowGuard').assertScoreWorkflowSession(request, { recentAuth: true, highRisk: true });
   const { uid, email } = assertAllowedWestoryUser(request);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
@@ -1923,6 +1925,15 @@ const assertStudentDataManager = async (request) => {
   }
   return { uid, email, profile };
 };
+
+const studentRosterHandlers = require('./studentRoster').createStudentRosterHandlers({
+  db,
+  auth: getAuth(),
+  assertManager: assertStudentDataManager,
+  assertScope: assertYearSemester,
+});
+exports.createStudentData = onCall({ region: REGION }, studentRosterHandlers.createStudentData);
+exports.updateStudentEnrollment = onCall({ region: REGION }, studentRosterHandlers.updateStudentEnrollment);
 
 const assertNotificationManager = async (request) => {
   const { uid, email } = assertAllowedWestoryUser(request);
@@ -2134,6 +2145,15 @@ const hasCompletePerformanceScoreSignatureData = (data) =>
   && typeof data?.signatureName === 'string'
   && data.signatureName.trim().length > 0;
 
+const isCurrentScoreConfirmation = (confirmation, score) => {
+  if (confirmation?.scoreUpdatedAt) return confirmation.scoreUpdatedAt.isEqual?.(score.updatedAt) === true;
+  if (!score?.updatedAt) return Boolean(confirmation?.confirmedAt);
+  const confirmed = confirmation?.confirmedAt;
+  return typeof confirmed?.seconds === 'number'
+    && (confirmed.seconds > score.updatedAt.seconds
+      || (confirmed.seconds === score.updatedAt.seconds && confirmed.nanoseconds >= score.updatedAt.nanoseconds));
+};
+
 const normalizePerformanceScoreKind = (value) =>
   String(value || '').trim() === WRITTEN_EXAM_SCORE_KIND
     ? WRITTEN_EXAM_SCORE_KIND
@@ -2152,6 +2172,9 @@ const loadStudentPerformanceScoreForNotification = async (uid, year, semester, s
   }
 
   const scoreData = scoreSnap.data() || {};
+  if (!require('./studentRoster').isActiveStudent(scoreData)) {
+    throw new HttpsError('failed-precondition', '현재 점수 확인 대상 학생이 아닙니다.');
+  }
   if (String(scoreData.uid || '').trim() !== uid) {
     throw new HttpsError('permission-denied', 'Performance score belongs to another user.');
   }
@@ -2177,7 +2200,9 @@ const loadStudentPerformanceScoreForNotification = async (uid, year, semester, s
   const confirmationSnap = await db
     .doc(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}/${PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION}/${uid}`)
     .get();
-  if (!options.allowConfirmed && confirmationSnap.exists && hasCompletePerformanceScoreSignatureData(confirmationSnap.data() || {})) {
+  const confirmationData = confirmationSnap.data() || {};
+  const confirmationIsCurrent = isCurrentScoreConfirmation(confirmationData, scoreData);
+  if (!options.allowConfirmed && confirmationSnap.exists && confirmationIsCurrent && hasCompletePerformanceScoreSignatureData(confirmationData)) {
     throw new HttpsError('failed-precondition', 'Performance score confirmation already exists.');
   }
 
@@ -2250,89 +2275,105 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
       ref: db.doc(getPerformanceScoreObjectionPath(year, semester, objectionId)),
     };
   });
-  const existingSnaps = await Promise.all(refs.map((item) => item.ref.get()));
-  const batch = db.batch();
-  const savedItems = [];
-  let skippedProcessedCount = 0;
-
-  refs.forEach((item, index) => {
-    const data = item.record?.data || {};
-    const existing = existingSnaps[index];
-    const existingStatus = sanitizeNotificationText(existing.data()?.status, 40);
-    if (existing.exists && existingStatus && existingStatus !== 'pending') {
-      skippedProcessedCount += 1;
-      return;
+  return db.runTransaction(async (batch) => {
+    await require('./scoreWorkflowGuard').assertLegacyScoreWritable({ db, transaction: batch, uid: actorUid, year, semester });
+    const [existingSnaps, scoreSnaps, confirmationSnaps, profileSnap] = await Promise.all([
+      Promise.all(refs.map((item) => batch.get(item.ref))),
+      Promise.all(refs.map((item) => batch.get(db.doc(`users/${actorUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${item.scoreId}`)))),
+      Promise.all(refs.map((item) => batch.get(db.doc(`users/${actorUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${item.scoreId}/${PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION}/${actorUid}`)))),
+      batch.get(db.doc(`users/${actorUid}`)),
+    ]);
+    if (!profileSnap.exists || profileSnap.data().role !== 'student' || !require('./studentRoster').isActiveStudent(profileSnap.data())) {
+      throw new HttpsError('failed-precondition', '현재 점수 확인 대상 학생이 아닙니다.');
     }
-    const studentName = sanitizeNotificationText(
-      profile.studentName || profile.name || profile.displayName || data.studentName,
-      40,
-      '학생',
-    );
-    const grade = sanitizeNotificationText(
-      profile.studentGrade || profile.grade || data.grade,
-      12,
-    );
-    const className = sanitizeNotificationText(
-      profile.studentClass || profile.class || data.class,
-      12,
-    );
-    const number = sanitizeNotificationText(
-      profile.studentNumber || profile.number || data.number,
-      12,
-    );
-    const totalScore = toNullablePerformanceScoreNumber(data.totalScore);
-    const totalMaxScore = toNullablePerformanceScoreNumber(data.totalMaxScore);
-    const scoreKind = normalizePerformanceScoreKind(data.scoreKind);
-    const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
-    const payload = {
-      scoreKind,
-      uid: actorUid,
-      studentName,
-      grade,
-      class: className,
-      number,
-      scoreId: sanitizeNotificationText(item.record?.id, 160),
-      rosterId: sanitizeNotificationText(data.rosterId || item.record?.id, 160),
-      scoreTitle: sanitizeNotificationText(data.title, 120, scoreKindLabel),
-      subject: sanitizeNotificationText(data.subject, 80),
-      assessmentOrder: Number.isFinite(Number(data.assessmentOrder))
-        ? Number(data.assessmentOrder)
-        : null,
-      academicYear: year,
-      semester,
-      totalScore,
-      totalMaxScore,
-      scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
-      targetDetails,
-      items: buildPerformanceScoreObjectionItems(data.items),
-      reason: objectionReason,
-      status: 'pending',
-      reviewedAt: null,
-      reviewedBy: '',
-      reviewedByName: '',
-      reviewMemo: '',
-      changedTotalScore: null,
-      changedScoreLabel: '',
-      uploadedBy: sanitizeNotificationText(data.uploadedBy, 160),
-      uploadedByEmail: sanitizeNotificationText(data.uploadedByEmail, 160),
-      updatedAt: FieldValue.serverTimestamp(),
-      requestedAt: FieldValue.serverTimestamp(),
+    const savedItems = [];
+    let skippedProcessedCount = 0;
+
+    refs.forEach((item, index) => {
+      const data = scoreSnaps[index].data() || {};
+      const confirmation = confirmationSnaps[index].data() || {};
+      const currentConfirmation = isCurrentScoreConfirmation(confirmation, data);
+      if (!scoreSnaps[index].exists || data.uid !== actorUid || data.rosterId !== item.scoreId
+        || String(data.academicYear) !== year || String(data.semester) !== semester
+        || (currentConfirmation && hasCompletePerformanceScoreSignatureData(confirmation))
+        || hasCompletePerformanceScoreSignatureData(data)) {
+        throw new HttpsError('failed-precondition', '점수 또는 서명 상태가 변경되었습니다. 다시 확인해 주세요.');
+      }
+      const existing = existingSnaps[index];
+      const existingStatus = sanitizeNotificationText(existing.data()?.status, 40);
+      if (existing.exists && existingStatus && existingStatus !== 'pending') {
+        skippedProcessedCount += 1;
+        return;
+      }
+      const studentName = sanitizeNotificationText(
+        profile.studentName || profile.name || profile.displayName || data.studentName,
+        40,
+        '학생',
+      );
+      const grade = sanitizeNotificationText(
+        profile.studentGrade || profile.grade || data.grade,
+        12,
+      );
+      const className = sanitizeNotificationText(
+        profile.studentClass || profile.class || data.class,
+        12,
+      );
+      const number = sanitizeNotificationText(
+        profile.studentNumber || profile.number || data.number,
+        12,
+      );
+      const totalScore = toNullablePerformanceScoreNumber(data.totalScore);
+      const totalMaxScore = toNullablePerformanceScoreNumber(data.totalMaxScore);
+      const scoreKind = normalizePerformanceScoreKind(data.scoreKind);
+      const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
+      const payload = {
+        scoreKind,
+        uid: actorUid,
+        studentName,
+        grade,
+        class: className,
+        number,
+        scoreId: sanitizeNotificationText(item.record?.id, 160),
+        rosterId: sanitizeNotificationText(data.rosterId || item.record?.id, 160),
+        scoreTitle: sanitizeNotificationText(data.title, 120, scoreKindLabel),
+        subject: sanitizeNotificationText(data.subject, 80),
+        assessmentOrder: Number.isFinite(Number(data.assessmentOrder))
+          ? Number(data.assessmentOrder)
+          : null,
+        academicYear: year,
+        semester,
+        totalScore,
+        totalMaxScore,
+        scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
+        targetDetails,
+        items: buildPerformanceScoreObjectionItems(data.items),
+        reason: objectionReason,
+        status: 'pending',
+        reviewedAt: null,
+        reviewedBy: '',
+        reviewedByName: '',
+        reviewMemo: '',
+        changedTotalScore: null,
+        changedScoreLabel: '',
+        uploadedBy: sanitizeNotificationText(data.uploadedBy, 160),
+        uploadedByEmail: sanitizeNotificationText(data.uploadedByEmail, 160),
+        updatedAt: FieldValue.serverTimestamp(),
+        requestedAt: FieldValue.serverTimestamp(),
+      };
+      if (!existing.exists) {
+        payload.createdAt = FieldValue.serverTimestamp();
+      }
+      batch.set(item.ref, payload, { merge: true });
+      batch.update(scoreSnaps[index].ref, { objectionPending: true });
+      savedItems.push(item);
+    });
+
+    return {
+      objectionIds: savedItems.map((item) => item.objectionId),
+      scoreIds: savedItems.map((item) => item.scoreId).filter(Boolean),
+      skippedProcessedCount,
     };
-    if (!existing.exists) {
-      payload.createdAt = FieldValue.serverTimestamp();
-    }
-    batch.set(item.ref, payload, { merge: true });
-    savedItems.push(item);
   });
-
-  if (savedItems.length > 0) {
-    await batch.commit();
-  }
-  return {
-    objectionIds: savedItems.map((item) => item.objectionId),
-    scoreIds: savedItems.map((item) => item.scoreId).filter(Boolean),
-    skippedProcessedCount,
-  };
 };
 
 const createPerformanceScoreObjectionRequestedNotifications = async (year, semester, input) => {
@@ -3088,7 +3129,6 @@ const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) =>
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const requestReason = sanitizeNotificationText(input.reason, 300);
   const targetDetails = sanitizeNotificationText(input.targetDetails, 240);
-  const profile = input.profile || {};
   const records = Array.isArray(input.records) ? input.records : [];
   if (!actorUid || !requestReason || records.length === 0) {
     return { requestIds: [], scoreIds: [] };
@@ -3104,83 +3144,95 @@ const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) =>
       ref: db.doc(getPerformanceScoreAnswerSheetRequestPath(year, semester, requestId)),
     };
   });
-  const existingSnaps = await Promise.all(refs.map((item) => item.ref.get()));
-  const batch = db.batch();
-  const savedItems = [];
-  let skippedPendingCount = 0;
-
-  refs.forEach((item, index) => {
-    const data = item.record?.data || {};
-    const existing = existingSnaps[index];
-    const existingStatus = sanitizeNotificationText(existing.data()?.status, 40);
-    if (existing.exists && existingStatus === 'pending') {
-      skippedPendingCount += 1;
-      return;
+  return db.runTransaction(async (batch) => {
+    await require('./scoreWorkflowGuard').assertLegacyScoreWritable({ db, transaction: batch, uid: actorUid, year, semester });
+    const [profileSnap, existingSnaps, scoreSnaps] = await Promise.all([
+      batch.get(db.doc(`users/${actorUid}`)),
+      Promise.all(refs.map((item) => batch.get(item.ref))),
+      Promise.all(refs.map((item) => batch.get(db.doc(`users/${actorUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${item.scoreId}`)))),
+    ]);
+    if (!profileSnap.exists || profileSnap.data().role !== 'student' || !require('./studentRoster').isActiveStudent(profileSnap.data())) {
+      throw new HttpsError('failed-precondition', '현재 점수 확인 대상 학생이 아닙니다.');
     }
-    const scoreKind = normalizePerformanceScoreKind(data.scoreKind);
-    const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
-    const studentName = sanitizeNotificationText(
-      profile.studentName || profile.name || profile.displayName || data.studentName,
-      40,
-      '학생',
-    );
-    const grade = sanitizeNotificationText(
-      profile.studentGrade || profile.grade || data.grade,
-      12,
-    );
-    const className = sanitizeNotificationText(
-      profile.studentClass || profile.class || data.class,
-      12,
-    );
-    const number = sanitizeNotificationText(
-      profile.studentNumber || profile.number || data.number,
-      12,
-    );
-    const totalScore = toNullablePerformanceScoreNumber(data.totalScore);
-    const totalMaxScore = toNullablePerformanceScoreNumber(data.totalMaxScore);
-    const payload = {
-      scoreKind,
-      uid: actorUid,
-      studentName,
-      grade,
-      class: className,
-      number,
-      scoreId: sanitizeNotificationText(item.record?.id, 160),
-      rosterId: sanitizeNotificationText(data.rosterId || item.record?.id, 160),
-      scoreTitle: sanitizeNotificationText(data.title, 120, scoreKindLabel),
-      subject: sanitizeNotificationText(data.subject, 80),
-      academicYear: year,
-      semester,
-      totalScore,
-      totalMaxScore,
-      scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
-      targetDetails,
-      reason: requestReason,
-      status: 'pending',
-      reviewedAt: null,
-      reviewedBy: '',
-      reviewMemo: '',
-      requestBatchId: sanitizeNotificationText(input.requestBatchId, 80),
-      uploadedBy: sanitizeNotificationText(data.uploadedBy, 160),
-      uploadedByEmail: sanitizeNotificationText(data.uploadedByEmail, 160),
-      updatedAt: FieldValue.serverTimestamp(),
-      requestedAt: FieldValue.serverTimestamp(),
+    const currentProfile = profileSnap.data();
+    const savedItems = [];
+    let skippedPendingCount = 0;
+
+    refs.forEach((item, index) => {
+      const data = scoreSnaps[index].data() || {};
+      if (!scoreSnaps[index].exists || data.uid !== actorUid || (data.rosterId || item.scoreId) !== item.scoreId
+        || String(data.academicYear) !== year || String(data.semester) !== semester
+        || normalizePerformanceScoreKind(data.scoreKind) !== normalizePerformanceScoreKind(item.record?.data?.scoreKind)) {
+        throw new HttpsError('failed-precondition', '점수 정보가 바뀌었습니다. 새로고침 후 다시 요청해 주세요.');
+      }
+      const existing = existingSnaps[index];
+      const existingStatus = sanitizeNotificationText(existing.data()?.status, 40);
+      if (existing.exists && existingStatus === 'pending') {
+        skippedPendingCount += 1;
+        return;
+      }
+      const scoreKind = normalizePerformanceScoreKind(data.scoreKind);
+      const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
+      const studentName = sanitizeNotificationText(
+        currentProfile.studentName || currentProfile.name || currentProfile.displayName || data.studentName,
+        40,
+        '학생',
+      );
+      const grade = sanitizeNotificationText(
+        currentProfile.studentGrade || currentProfile.grade || data.grade,
+        12,
+      );
+      const className = sanitizeNotificationText(
+        currentProfile.studentClass || currentProfile.class || data.class,
+        12,
+      );
+      const number = sanitizeNotificationText(
+        currentProfile.studentNumber || currentProfile.number || data.number,
+        12,
+      );
+      const totalScore = toNullablePerformanceScoreNumber(data.totalScore);
+      const totalMaxScore = toNullablePerformanceScoreNumber(data.totalMaxScore);
+      const payload = {
+        scoreKind,
+        uid: actorUid,
+        studentName,
+        grade,
+        class: className,
+        number,
+        scoreId: sanitizeNotificationText(item.record?.id, 160),
+        rosterId: sanitizeNotificationText(data.rosterId || item.record?.id, 160),
+        scoreTitle: sanitizeNotificationText(data.title, 120, scoreKindLabel),
+        subject: sanitizeNotificationText(data.subject, 80),
+        academicYear: year,
+        semester,
+        totalScore,
+        totalMaxScore,
+        scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
+        targetDetails,
+        reason: requestReason,
+        status: 'pending',
+        reviewedAt: null,
+        reviewedBy: '',
+        reviewMemo: '',
+        requestBatchId: sanitizeNotificationText(input.requestBatchId, 80),
+        uploadedBy: sanitizeNotificationText(data.uploadedBy, 160),
+        uploadedByEmail: sanitizeNotificationText(data.uploadedByEmail, 160),
+        updatedAt: FieldValue.serverTimestamp(),
+        requestedAt: FieldValue.serverTimestamp(),
+      };
+      if (!existing.exists) {
+        payload.createdAt = FieldValue.serverTimestamp();
+      }
+      batch.set(item.ref, payload, { merge: true });
+      savedItems.push(item);
+    });
+
+    return {
+      requestIds: savedItems.map((item) => item.requestId),
+      scoreIds: savedItems.map((item) => item.scoreId).filter(Boolean),
+      skippedPendingCount,
     };
-    if (!existing.exists) {
-      payload.createdAt = FieldValue.serverTimestamp();
-    }
-    batch.set(item.ref, payload, { merge: true });
-    savedItems.push(item);
   });
-
-  if (savedItems.length > 0) {
-    await batch.commit();
-  }
-  return {
-    requestIds: savedItems.map((item) => item.requestId),
-    scoreIds: savedItems.map((item) => item.scoreId).filter(Boolean),
-    skippedPendingCount,
-  };
 };
 
 const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, semester, input) => {
@@ -3697,79 +3749,7 @@ exports.resetLessonCorePointProgress = onCall({ region: REGION, timeoutSeconds: 
   };
 });
 
-exports.updateStudentData = onCall({ region: REGION, timeoutSeconds: 180, memory: '512MiB' }, async (request) => {
-  const manager = await assertStudentDataManager(request);
-  const { year, semester } = assertYearSemester(request.data || {});
-  const targetUid = String(
-    request.data?.uid
-    || request.data?.studentUid
-    || request.data?.targetUid
-    || '',
-  ).trim();
-  if (!targetUid) {
-    throw new HttpsError('invalid-argument', 'Student uid is required.');
-  }
-
-  const userRef = db.doc(`users/${targetUid}`);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) {
-    throw new HttpsError('not-found', 'Student user document does not exist.');
-  }
-
-  const targetProfile = userSnap.data() || {};
-  const targetEmail = String(targetProfile.email || '').trim().toLowerCase();
-  const preserveTeacherRole = String(targetProfile.role || '').trim() === 'teacher'
-    || targetEmail === ADMIN_EMAIL;
-  const profilePatch = buildStudentProfileUpdatePatches({
-    ...request.data,
-    uid: targetUid,
-    email: request.data?.email ?? targetProfile.email,
-  });
-
-  const [snapshotRefs, rosterSync] = await Promise.all([
-    collectStudentProfileSnapshotRefs(year, semester, targetUid),
-    updateStudentInPerformanceScoreRosters(
-      year,
-      semester,
-      targetUid,
-      profilePatch,
-    ),
-  ]);
-
-  const updateEntries = [
-    {
-      ref: userRef,
-      data: {
-        ...profilePatch.userPatch,
-        ...(preserveTeacherRole ? { role: targetProfile.role || 'teacher' } : {}),
-      },
-    },
-    ...snapshotRefs.map((ref) => ({
-      ref,
-      data: ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION
-        ? profilePatch.scorePatch
-        : profilePatch.genericPatch,
-    })),
-  ];
-  const updatedRelatedDocCount = await commitSetEntriesInChunks(updateEntries);
-
-  console.info('Student data updated.', {
-    actorUid: manager.uid,
-    targetUid,
-    year,
-    semester,
-    updatedRelatedDocCount,
-    ...rosterSync,
-  });
-
-  return {
-    uid: targetUid,
-    year,
-    semester,
-    updatedRelatedDocCount,
-    ...rosterSync,
-  };
-});
+exports.updateStudentData = onCall({ region: REGION, timeoutSeconds: 180, memory: '512MiB' }, studentRosterHandlers.updateStudentData);
 
 const normalizeMockExamRound = (value) => {
   const raw = String(value || '').trim().toLowerCase();
@@ -6022,6 +6002,7 @@ exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (requ
 });
 
 exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, async (request) => {
+  await require('./scoreWorkflowGuard').assertScoreWorkflowSession(request);
   const { uid } = assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
@@ -6040,6 +6021,9 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
   const { profile } = await getUserProfile(uid);
   if (String(profile?.role || '').trim() !== 'student') {
     throw new HttpsError('permission-denied', 'Only students can request performance score objections.');
+  }
+  if (!require('./studentRoster').isActiveStudent(profile)) {
+    throw new HttpsError('failed-precondition', '현재 점수 확인 대상 학생이 아닙니다.');
   }
 
   const records = await Promise.all(
@@ -6088,6 +6072,7 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
 });
 
 exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, async (request) => {
+  await require('./scoreWorkflowGuard').assertScoreWorkflowSession(request);
   const { uid } = assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
@@ -6106,6 +6091,9 @@ exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, 
   const { profile } = await getUserProfile(uid);
   if (String(profile?.role || '').trim() !== 'student') {
     throw new HttpsError('permission-denied', 'Only students can request answer sheet checks.');
+  }
+  if (!require('./studentRoster').isActiveStudent(profile)) {
+    throw new HttpsError('failed-precondition', '현재 점수 확인 대상 학생이 아닙니다.');
   }
 
   const records = await Promise.all(
@@ -6195,6 +6183,7 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
     if (!scoreId) {
       throw new HttpsError('failed-precondition', 'Objection score id is missing.');
     }
+    await require('./scoreWorkflowGuard').assertLegacyScoreWritable({ db, transaction, uid: recipientUid, year, semester });
 
     if (currentStatus !== 'pending') {
       if (currentStatus === action) {
@@ -6211,6 +6200,8 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
       throw new HttpsError('failed-precondition', 'Performance score objection has already been reviewed.');
     }
 
+    const reviewedScoreRef = db.doc(`users/${recipientUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
+    const reviewedScoreSnap = await transaction.get(reviewedScoreRef);
     let changedTotalScore = null;
     let changedScoreLabel = '';
     if (action === 'accepted') {
@@ -6218,8 +6209,7 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
       if (changedTotalScore === null) {
         throw new HttpsError('invalid-argument', 'changedTotalScore is required when accepting an objection.');
       }
-      const scoreRef = db.doc(`users/${recipientUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
-      const scoreSnap = await transaction.get(scoreRef);
+      const scoreSnap = reviewedScoreSnap;
       if (!scoreSnap.exists) {
         throw new HttpsError('failed-precondition', 'Accepted score must be saved before reviewing an objection.');
       }
@@ -6243,6 +6233,7 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
       changedScoreLabel = formatPerformanceScoreLabel(savedTotalScore, maxScore);
     }
 
+    if (reviewedScoreSnap.exists) transaction.update(reviewedScoreRef, { objectionPending: false });
     transaction.set(objectionRef, {
       status: action,
       reviewedAt: FieldValue.serverTimestamp(),

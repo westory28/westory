@@ -9,6 +9,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db, getHttpsCallable } from "./firebase";
+import { callStudentDataService } from "./studentProfileCommands";
 import { getSemesterCollectionPath, getYearSemester } from "./semesterScope";
 import type {
   SystemConfig,
@@ -19,6 +20,12 @@ import type {
 } from "../types";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
+
+const getScoreWorkflowCallable =
+  async <Request extends object, Response>(name: string) =>
+  async (input: Request) => ({
+    data: await callStudentDataService<Request, Response>(name, input),
+  });
 
 export interface ManagedNotificationInput {
   recipientUids?: string[];
@@ -255,7 +262,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
   skippedCount?: number;
 }> => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
+  const callable = await getScoreWorkflowCallable<
     {
       year: string;
       semester: string;
@@ -312,7 +319,7 @@ export const notifyPerformanceScoreAnswerSheetRequested = async (
   skippedCount?: number;
 }> => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
+  const callable = await getScoreWorkflowCallable<
     {
       year: string;
       semester: string;
@@ -366,7 +373,7 @@ export const reviewPerformanceScoreObjection = async (
   recipientUid: string;
 }> => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
+  const callable = await getScoreWorkflowCallable<
     {
       year: string;
       semester: string;

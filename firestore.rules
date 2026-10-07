@@ -392,16 +392,22 @@ service cloud.firestore {
     function isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId) {
       return canUseWestory()
         && isOwnUser(userId)
+        && isStudentRole()
+        && userProfile().get('enrollmentStatus', 'active') in ['active', '', null]
+        && userProfile().get('registrationApprovalStatus', 'APPROVED') == 'APPROVED'
         && confirmationId == request.auth.uid
         && exists(performanceScorePath(userId, scoreId))
         && get(performanceScorePath(userId, scoreId)).data.uid == request.auth.uid
         && get(performanceScorePath(userId, scoreId)).data.rosterId == scoreId
+        && get(performanceScorePath(userId, scoreId)).data.get('objectionPending', false) == false
+        && request.resource.data.scoreUpdatedAt == get(performanceScorePath(userId, scoreId)).data.updatedAt
         && hasCurrentPerformanceScoreConsent(userId, scoreId)
         && request.resource.data.keys().hasOnly([
           'uid',
           'rosterId',
           'signatureName',
           'signatureImage',
+          'scoreUpdatedAt',
           'confirmedAt',
           'updatedAt'
         ])
@@ -434,7 +440,9 @@ service cloud.firestore {
       return isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId)
         && resource.data.uid == request.auth.uid
         && resource.data.rosterId == scoreId
-        && !hasCompletePerformanceScoreSignature(resource.data);
+        && (!hasCompletePerformanceScoreSignature(resource.data)
+          || resource.data.get('scoreUpdatedAt', resource.data.get('confirmedAt', request.time))
+            < get(performanceScorePath(userId, scoreId)).data.updatedAt);
     }
 
     function changedUserKeys() {

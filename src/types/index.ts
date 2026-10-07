@@ -68,6 +68,10 @@ export interface HallOfFameInterfaceConfig {
 }
 
 export interface UserData {
+  registrationApprovalStatus?: string;
+  enrollmentStatus?: "active" | "transferred" | "outside_quota" | "other";
+  enrollmentReason?: string;
+  enrollmentUpdatedAt?: unknown;
   uid: string;
   email: string;
   photoURL?: string;

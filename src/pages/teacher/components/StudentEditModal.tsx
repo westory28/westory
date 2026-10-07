@@ -64,7 +64,11 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
       onClose();
     } catch (error) {
       console.error("Failed to update student:", error);
-      alert("학생 정보 저장 중 오류가 발생했습니다.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "학생 정보 저장 중 오류가 발생했습니다.",
+      );
     } finally {
       setSaving(false);
     }
@@ -139,6 +143,7 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
               type="text"
               name="email"
               value={formData.email}
+              readOnly
               onChange={handleChange}
               className="w-full rounded border bg-gray-50 p-2 text-sm focus:border-blue-500 focus:outline-none"
             />
