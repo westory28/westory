@@ -93,6 +93,82 @@ for (const invalid of [-1, 31, "총점 없음"]) {
 const allBlank = structuredClone(declared); allBlank.splice(4, 2);
 assert.equal(parser.parsePerformanceScoreWorkbook(allBlank, params).items.length, 6);
 assert.equal(parser.parsePerformanceScoreWorkbook(allBlank, params).totalMaxScore, 30);
+const blankCriteria = [
+  "가상 사림의 성장 과정 파악하기\n\n(6점)",
+  "가상 붕당 정치의 전개 나타내기\n\n(6점)",
+  "가상 관심사와 붕당 정치 연결하기\n\n(4점)",
+  "가상 정치 흐름 전개도 구성하기\n\n(4점)",
+];
+const blankFixture = [
+  ["3-1반 채점 결과"],
+  ["평가: 가상 미채점 두 번째 평가"],
+  [],
+  [
+    "학년",
+    "반",
+    "번호",
+    "이름",
+    "총점",
+    ...blankCriteria,
+    "AI 채점 수준",
+    "선생님 작성 피드백",
+  ],
+  ...Array.from({ length: 32 }, (_, index) => [
+    3,
+    1,
+    index + 1,
+    `가상학생${index + 1}`,
+    ...Array.from({ length: 5 }, (_, column) =>
+      (index + column) % 2 ? "-" : null,
+    ),
+    "-",
+    "",
+  ]),
+];
+const blankParsed = parser.parsePerformanceScoreWorkbook(blankFixture, params);
+assert.equal(blankParsed.title, "가상 미채점 두 번째 평가");
+assert.equal(blankParsed.subject, "역사");
+assert.equal(blankParsed.rows.length, 32);
+assert.equal(blankParsed.items.length, 4);
+assert.equal(blankParsed.totalMaxScore, 20);
+assert.deepEqual(
+  Array.from(blankParsed.items, (item) => item.maxScore),
+  [6, 6, 4, 4],
+);
+assert.ok(
+  blankParsed.rows.every(
+    (row) =>
+      row.enteredScoreCount === 0 &&
+      row.items.every((item) => item.scoreEntered === false),
+  ),
+);
+assert.equal(parser.splitPerformanceScoreUpload(blankParsed).length, 1);
+const blankWithZero = structuredClone(blankFixture);
+blankWithZero[4].splice(4, 5, 0, 0, 0, 0, 0);
+const blankZeroParsed = parser.parsePerformanceScoreWorkbook(
+  blankWithZero,
+  params,
+);
+assert.equal(blankZeroParsed.rows[0].totalScore, 0);
+assert.equal(blankZeroParsed.rows[0].enteredScoreCount, 5);
+assert.ok(
+  blankZeroParsed.rows[0].items.every(
+    (item) => item.scoreEntered === true && item.score === 0,
+  ),
+);
+assert.ok(
+  blankZeroParsed.rows.slice(1).every((row) => row.enteredScoreCount === 0),
+);
+for (const invalid of ["결시", "6점", "--", "NaN"]) {
+  for (const column of [4, 5]) {
+    const rows = structuredClone(blankFixture);
+    rows[4][column] = invalid;
+    assert.throws(
+      () => parser.parsePerformanceScoreWorkbook(rows, params),
+      /범위|숫자/,
+    );
+  }
+}
 assert.throws(() => parser.parsePerformanceScoreWorkbook([...fixture, fixture[4]], params), /중복/);
 const inconsistent = structuredClone(fixture); inconsistent[4][4] = 29;
 assert.throws(() => parser.parsePerformanceScoreWorkbook(inconsistent, params), /합계/);
@@ -151,5 +227,41 @@ if (process.argv[2]) {
   }
   assert.ok(success, "Attached workbook aggregate contract failed; personal data omitted.");
   console.log("Attached workbook: 32 students, one assessment, six criteria, 30-point maximum and feedback normalization verified; personal data omitted.");
+}
+if (process.argv[3] || process.env.SCORE_QA_BLANK_REFERENCE_XLSX) {
+  let success = false;
+  try {
+    const raw = await readXlsxFile(
+      process.argv[3] || process.env.SCORE_QA_BLANK_REFERENCE_XLSX,
+    );
+    const real = parser.parsePerformanceScoreWorkbook(
+      raw[0]?.data || raw,
+      params,
+    );
+    success =
+      real.rows.length === 32 &&
+      real.items.length === 4 &&
+      real.totalMaxScore === 20 &&
+      real.subject === "역사" &&
+      Boolean(real.title) &&
+      real.items.every(
+        (item, index) => item.maxScore === [6, 6, 4, 4][index],
+      ) &&
+      real.rows.every(
+        (row) =>
+          row.enteredScoreCount === 0 &&
+          row.items.every((item) => item.scoreEntered === false),
+      ) &&
+      parser.splitPerformanceScoreUpload(real).length === 1;
+  } catch {
+    // Do not expose real workbook rows or their contents in failure output.
+  }
+  assert.ok(
+    success,
+    "Attached blank workbook aggregate contract failed; personal data omitted.",
+  );
+  console.log(
+    "Attached blank workbook: 32 students, one assessment, four declared criteria, 20-point maximum and no entered scores verified; personal data omitted.",
+  );
 }
 console.log("Grading workbook metadata, one-assessment criteria, fixed subject, zero/blank/range handling, feedback and NEIS compatibility passed.");

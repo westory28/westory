@@ -85,6 +85,88 @@ try {
   // This does not exercise or claim an end-to-end production registration.
   await admin.doc(`users/${uid}`).update({ registrationApprovalStatus: 'APPROVED' });
   check('preregistration remains PENDING, does not verify Auth email, and cannot self-approve/sign/request before approval');
+  const blankScoreId = "unentered-second-assessment";
+  const blankScorePath = `users/${uid}/performance_scores/${blankScoreId}`;
+  const blankConfirmationPath = `${blankScorePath}/confirmations/${uid}`;
+  await assertSucceeds(
+    setDoc(doc(teacherDb, blankScorePath), {
+      ...score,
+      rosterId: blankScoreId,
+      title: "2차 미등록 평가",
+      enteredScoreCount: 0,
+      items: [
+        { name: "2차 기준", score: 0, maxScore: 20, scoreEntered: false },
+      ],
+      totalScore: 0,
+    }),
+  );
+  await assertSucceeds(getDoc(doc(studentDb, blankScorePath)));
+  await assertFails(
+    setDoc(doc(studentDb, blankConfirmationPath), {
+      ...signature(),
+      rosterId: blankScoreId,
+    }),
+  );
+  const zeroScoreId = "entered-real-zero";
+  const zeroScorePath = `users/${uid}/performance_scores/${zeroScoreId}`;
+  const zeroConfirmationPath = `${zeroScorePath}/confirmations/${uid}`;
+  await assertSucceeds(
+    setDoc(doc(teacherDb, zeroScorePath), {
+      ...score,
+      rosterId: zeroScoreId,
+      title: "실제 0점 평가",
+      enteredScoreCount: 1,
+      items: [{ name: "0점 기준", score: 0, maxScore: 20, scoreEntered: true }],
+      totalScore: 0,
+    }),
+  );
+  await assertSucceeds(
+    setDoc(doc(studentDb, zeroConfirmationPath), {
+      ...signature(),
+      rosterId: zeroScoreId,
+    }),
+  );
+  assert.equal(
+    (await getDoc(doc(teacherDb, zeroConfirmationPath))).data().signatureName,
+    creation.name,
+  );
+  await assertSucceeds(deleteDoc(doc(teacherDb, zeroConfirmationPath)));
+  await assertSucceeds(
+    updateDoc(doc(teacherDb, zeroScorePath), {
+      enteredScoreCount: 0,
+      items: [
+        { name: "0점 기준", score: 0, maxScore: 20, scoreEntered: false },
+      ],
+    }),
+  );
+  await assertFails(
+    setDoc(doc(studentDb, zeroConfirmationPath), {
+      ...signature(),
+      rosterId: zeroScoreId,
+    }),
+  );
+  const legacyZeroId = "legacy-without-entered-count";
+  await assertSucceeds(
+    setDoc(doc(teacherDb, `users/${uid}/performance_scores/${legacyZeroId}`), {
+      ...score,
+      rosterId: legacyZeroId,
+      totalScore: 0,
+      items: [{ name: "이전 기준", score: 0, maxScore: 20 }],
+    }),
+  );
+  await assertSucceeds(
+    setDoc(
+      doc(
+        studentDb,
+        `users/${uid}/performance_scores/${legacyZeroId}/confirmations/${uid}`,
+      ),
+      { ...signature(), rosterId: legacyZeroId },
+    ),
+  );
+  check(
+    "unentered title remains readable but cannot be signed; entered real zero and legacy count-less scores can sign; same-version transition to unentered is denied",
+  );
+
   await assertFails(setDoc(doc(studentDb, confirmationPath), signature(Timestamp.fromMillis(1))));
   await assertSucceeds(setDoc(doc(studentDb, confirmationPath), signature()));
   assert.equal((await getDoc(doc(teacherDb, confirmationPath))).data().signatureName, creation.name);

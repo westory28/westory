@@ -60,6 +60,7 @@ import {
   buildStudentNameLookupKey,
   formatPerformanceScore,
   getPerformanceScorePercent,
+  hasEnteredPerformanceScore,
   loadPerformanceScoreSettings,
   loadPerformanceScoreConfirmation,
   normalizePerformanceScoreSettings,
@@ -1907,6 +1908,10 @@ const getEnteredItemScore = (
 };
 
 const getEnteredTotalScore = (record: PerformanceScoreRecord) => {
+  if (record.enteredScoreCount === 0) return null;
+  const totalScore = getFiniteNumber(record.totalScore);
+  if (Number(record.enteredScoreCount) > 0 && totalScore !== null)
+    return roundScore(totalScore);
   const items = Array.isArray(record.items) ? record.items : [];
   const enteredItemScores = items
     .map((item) => getEnteredItemScore(item))
@@ -1914,7 +1919,6 @@ const getEnteredTotalScore = (record: PerformanceScoreRecord) => {
 
   if (items.length > 0 && enteredItemScores.length === 0) return null;
 
-  const totalScore = getFiniteNumber(record.totalScore);
   if (totalScore !== null) return roundScore(totalScore);
   if (enteredItemScores.length > 0) {
     return roundScore(enteredItemScores.reduce((sum, score) => sum + score, 0));
@@ -3547,13 +3551,13 @@ const buildRosterRowsMeta = (
   const classes = Array.from(
     new Set(rows.map((row) => normalizeSchoolValue(row.class)).filter(Boolean)),
   ).sort(compareSchoolValue);
-  const savedRowCount = rows.filter((row) => rosterRowHasScore(row)).length;
+  const matchedCount = rows.filter((row) => row.uid).length;
   return {
     classes,
     targetClass: classes.length === 1 ? classes[0] : roster.targetClass || "",
     rowCount: rows.length,
-    matchedCount: savedRowCount,
-    unmatchedCount: Math.max(0, rows.length - savedRowCount),
+    matchedCount,
+    unmatchedCount: Math.max(0, rows.length - matchedCount),
   };
 };
 
@@ -3785,7 +3789,12 @@ const saveBlobAsFile = (blob: Blob, fileName: string) => {
 };
 
 const getScoreNumber = (record?: PerformanceScoreRecord) => {
-  if (!record || isTransferredScoreRecord(record)) return null;
+  if (
+    !record ||
+    isTransferredScoreRecord(record) ||
+    !hasEnteredPerformanceScore(record)
+  )
+    return null;
   const score = Number(record.totalScore);
   return Number.isFinite(score) ? roundScore(score) : null;
 };
@@ -3989,14 +3998,22 @@ const getConfirmedSignatureRecord = (
   const requiredRecords: PerformanceScoreRecord[] = [];
   if (expected.requireFirst) {
     if (!student.firstRecord) return null;
-    requiredRecords.push(student.firstRecord);
-  } else if (student.firstRecord) {
+    if (hasEnteredPerformanceScore(student.firstRecord))
+      requiredRecords.push(student.firstRecord);
+  } else if (
+    student.firstRecord &&
+    hasEnteredPerformanceScore(student.firstRecord)
+  ) {
     requiredRecords.push(student.firstRecord);
   }
   if (expected.requireSecond) {
     if (!student.secondRecord) return null;
-    requiredRecords.push(student.secondRecord);
-  } else if (student.secondRecord) {
+    if (hasEnteredPerformanceScore(student.secondRecord))
+      requiredRecords.push(student.secondRecord);
+  } else if (
+    student.secondRecord &&
+    hasEnteredPerformanceScore(student.secondRecord)
+  ) {
     requiredRecords.push(student.secondRecord);
   }
   if (!requiredRecords.length) return null;
@@ -5303,8 +5320,8 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       row,
       getClassSheetStudentName(student),
     );
-    setWorksheetCellValue(worksheet, row, 5, firstScore ?? "");
-    setWorksheetCellValue(worksheet, row, 7, secondScore ?? "");
+    setWorksheetCellValue(worksheet, row, 5, firstScore ?? null);
+    setWorksheetCellValue(worksheet, row, 7, secondScore ?? null);
     setWorksheetCellValue(worksheet, row, 8, totalScore);
 
     const signatureRecord = getConfirmedSignatureRecord(student, {
@@ -5350,8 +5367,18 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   const summaryRow = summaryStartRow;
   setWorksheetCellValue(worksheet, summaryRow, 5, `${firstScores.length} 명`);
   setWorksheetCellValue(worksheet, summaryRow, 7, `${secondScores.length} 명`);
-  setWorksheetCellValue(worksheet, summaryRow + 1, 5, firstSum);
-  setWorksheetCellValue(worksheet, summaryRow + 1, 7, secondSum);
+  setWorksheetCellValue(
+    worksheet,
+    summaryRow + 1,
+    5,
+    firstScores.length ? firstSum : null,
+  );
+  setWorksheetCellValue(
+    worksheet,
+    summaryRow + 1,
+    7,
+    secondScores.length ? secondSum : null,
+  );
   setWorksheetCellValue(
     worksheet,
     summaryRow + 1,
@@ -5972,7 +5999,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     const matchedCount = rows.filter((row) => row.uid).length;
     const scoredCount = rows.filter((row) => row.enteredScoreCount > 0).length;
     const saveableCount = rows.filter(
-      (row) => row.uid && row.enteredScoreCount > 0,
+      (row) => row.uid && (!isWrittenExamMode || row.enteredScoreCount > 0),
     ).length;
     const blankScoreCount = rows.filter(
       (row) => row.enteredScoreCount === 0,
@@ -5989,7 +6016,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       unmatchedCount: rows.length - matchedCount,
       warningCount,
     };
-  }, [parsed]);
+  }, [parsed, isWrittenExamMode]);
 
   const previewGradeOptions = useMemo(
     () =>
@@ -9073,7 +9100,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               getEnteredItemsTotalScore(items) ??
               getScoreRecordFallbackTotalScore(record);
             transaction.delete(confirmationRef);
-            if (totalScore === null && !scoreData?.objectionPending) {
+            if (
+              isWrittenExamMode &&
+              totalScore === null &&
+              !scoreData?.objectionPending
+            ) {
               transaction.delete(scoreRef);
               return;
             }
@@ -9980,16 +10011,19 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       if (uploads.length === 1) uploads[0].title = title.trim();
       if (uploads.some((upload) => !upload.title.trim()))
         throw new Error("평가명을 입력해 주세요.");
-      if (!freshRows.some((row) => row.enteredScoreCount > 0))
+      if (
+        isWrittenExamMode &&
+        !freshRows.some((row) => row.enteredScoreCount > 0)
+      )
         throw new Error("입력된 점수가 없습니다.");
       const localRosters: PerformanceScoreRoster[] = [];
       for (const upload of uploads) {
-        const enteredRows = upload.rows.filter(
-          (row) => row.enteredScoreCount > 0,
+        const uploadRows = upload.rows.filter(
+          (row) => !isWrittenExamMode || row.enteredScoreCount > 0,
         );
-        if (!enteredRows.length) continue;
-        const grade = enteredRows[0].grade;
-        if (enteredRows.some((row) => row.grade !== grade))
+        if (!uploadRows.length) continue;
+        const grade = uploadRows[0].grade;
+        if (uploadRows.some((row) => row.grade !== grade))
           throw new Error("학년별로 파일을 나누어 업로드해 주세요.");
         const sameAssessment = rosters.filter(
           (roster) =>
@@ -10023,6 +10057,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           const effectiveEnteredRows = effectiveUpload.rows.filter(
             (row) => row.enteredScoreCount > 0,
           );
+          const effectiveRows = isWrittenExamMode
+            ? effectiveEnteredRows
+            : effectiveUpload.rows;
           if (isSinglePerformanceUpload) {
             const error = getPerformanceMaximumError(
               effectiveUpload,
@@ -10072,11 +10109,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           }
           // A roster change after preview must not route a score to another child.
           const profiles = await Promise.all(
-            effectiveEnteredRows.map((row) =>
+            effectiveRows.map((row) =>
               transaction.get(doc(db, "users", row.uid)),
             ),
           );
-          const scoreRefs = effectiveEnteredRows.map((row) =>
+          const scoreRefs = effectiveRows.map((row) =>
             doc(
               db,
               "users",
@@ -10088,7 +10125,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           const previousScores = await Promise.all(
             scoreRefs.map((ref) => transaction.get(ref)),
           );
-          effectiveEnteredRows.forEach((row, index) => {
+          effectiveRows.forEach((row, index) => {
             const profile = profiles[index];
             const current = profile.exists()
               ? normalizeStudentProfile(profile.id, profile.data())
@@ -10108,14 +10145,36 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             }
           });
           const timestamp = serverTimestamp();
-          const incomingRows: PerformanceScoreRosterRow[] =
-            effectiveEnteredRows.map(({ rowKey: _key, ...row }, index) => {
+          const preservedScoreUids = new Set<string>();
+          const incomingRows: PerformanceScoreRosterRow[] = effectiveRows.map(
+            ({ rowKey: _key, ...row }, index) => {
               // NEIS has no feedback columns. Reimporting its scores must not
               // erase a teacher's existing explanation or invalidate an
               // otherwise unchanged signed score.
               const prior =
                 previousScores[index].data() ||
                 previous?.rows?.find((entry) => entry.uid === row.uid);
+              // Blank reuploads register pending assessments; they never erase
+              // an existing grade or invalidate the student's confirmation.
+              if (
+                row.enteredScoreCount === 0 &&
+                prior &&
+                hasEnteredPerformanceScore(prior as PerformanceScoreRecord)
+              ) {
+                if (previousScores[index].exists())
+                  preservedScoreUids.add(row.uid);
+                return {
+                  ...row,
+                  items: prior.items || [],
+                  enteredScoreCount: getScoreRecordEnteredScoreCount(
+                    prior as PerformanceScoreRecord,
+                  ),
+                  totalScore: prior.totalScore,
+                  totalMaxScore: prior.totalMaxScore,
+                  feedback: String(prior.feedback || ""),
+                  evidence: String(prior.evidence || prior.feedback || ""),
+                };
+              }
               const identifiedItems = row.items.map((item) => {
                 const definition = assessmentItems.find(
                   (entry) => entry.name === item.name,
@@ -10156,7 +10215,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 matchStatus: "matched",
                 matchMessage: "학생 명단과 일치합니다.",
               };
-            });
+            },
+          );
           const incomingUids = new Set(incomingRows.map((row) => row.uid));
           const mergedRows = [
             ...(previous?.rows || []).filter(
@@ -10208,6 +10268,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 : entry,
             );
           incomingRows.forEach((row, index) => {
+            if (preservedScoreUids.has(row.uid)) return;
             const content = {
               scoreKind: activeScoreKind,
               ...(effectiveUpload.scoreContentKind
@@ -13387,8 +13448,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           </td>
                         ))}
                         <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
-                          {formatPerformanceScore(row.totalScore)} /{" "}
-                          {formatPerformanceScore(row.totalMaxScore)}
+                          {row.enteredScoreCount > 0
+                            ? formatPerformanceScore(row.totalScore)
+                            : "-"}{" "}
+                          / {formatPerformanceScore(row.totalMaxScore)}
                         </td>
                         {parsedHasObjectiveOmr && (
                           <td className="whitespace-nowrap px-3 py-3 text-center">

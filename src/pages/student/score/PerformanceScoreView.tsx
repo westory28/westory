@@ -39,6 +39,7 @@ import {
   WRITTEN_EXAM_SCORE_KIND,
   WRITTEN_EXAM_SECTION_OBJECTIVE,
   formatPerformanceScore,
+  hasEnteredPerformanceScore,
   isPerformanceScoreWarningConsentCurrent,
   loadPerformanceScoreSettings,
   loadUserPerformanceScoreAnswerSheetRequests,
@@ -694,6 +695,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       records.find((record) => record.id === selectedId) || records[0] || null,
     [records, selectedId],
   );
+  const selectedRecordHasScore = hasEnteredPerformanceScore(selectedRecord);
 
   const selectedItems = Array.isArray(selectedRecord?.items)
     ? selectedRecord.items
@@ -903,10 +905,15 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const hasConfirmation = selectedRecord
     ? isRecordConfirmed(selectedRecord)
     : false;
-  const confirmedRecordCount = records.filter(isRecordConfirmed).length;
+  const registeredRecords = records.filter(hasEnteredPerformanceScore);
+  const confirmedRecordCount =
+    registeredRecords.filter(isRecordConfirmed).length;
   const allScoresConfirmed =
-    records.length > 0 && confirmedRecordCount === records.length;
-  const pendingRecords = records.filter((record) => !isRecordConfirmed(record));
+    registeredRecords.length > 0 &&
+    confirmedRecordCount === registeredRecords.length;
+  const pendingRecords = registeredRecords.filter(
+    (record) => !isRecordConfirmed(record),
+  );
   const signatureScoreSections = useMemo<SignatureScoreSection[]>(() => {
     if (pendingRecords.length === 0) return [];
 
@@ -1064,9 +1071,12 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       });
     return scoreIds;
   }, [pendingObjections]);
-  const hasPendingObjection = pendingObjectionScoreIds.size > 0;
-  const hasPendingAnswerSheetRequest =
-    pendingAnswerSheetRequestScoreIds.size > 0;
+  const hasPendingObjection = pendingRecords.some((record) =>
+    pendingObjectionScoreIds.has(getRecordScoreId(record)),
+  );
+  const hasPendingAnswerSheetRequest = pendingRecords.some((record) =>
+    pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)),
+  );
   const selectedRecordHasPendingObjection = selectedRecord
     ? pendingObjectionScoreIds.has(getRecordScoreId(selectedRecord))
     : false;
@@ -1083,11 +1093,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const signatureBlockedByPendingRequest =
     signatureBlockedByPendingObjection ||
     signatureBlockedByPendingAnswerSheetRequest;
-  const pendingObjectionTitles = records
+  const pendingObjectionTitles = pendingRecords
     .filter((record) => pendingObjectionScoreIds.has(getRecordScoreId(record)))
     .map((record) => record.title)
     .filter(Boolean);
-  const pendingAnswerSheetRequestTitles = records
+  const pendingAnswerSheetRequestTitles = pendingRecords
     .filter((record) =>
       pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)),
     )
@@ -1095,6 +1105,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     .filter(Boolean);
   const signatureButtonDisabled =
     !warningConsentCurrent ||
+    pendingRecords.length === 0 ||
     signatureBlockedByPendingRequest ||
     signatureActionPending;
   const signatureBlockedReasons = [
@@ -1288,6 +1299,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       );
       return;
     }
+    if (!pendingRecords.length) return;
     setSignatureConsent(false);
     signatureDrawnRef.current = false;
     setSignatureImageDraft("");
@@ -1323,6 +1335,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     if (
       selectedScoreId &&
       selectedRecord &&
+      hasEnteredPerformanceScore(selectedRecord) &&
       !isRecordConfirmed(selectedRecord)
     ) {
       return [selectedScoreId];
@@ -1337,6 +1350,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     if (!hasDetailedWrittenExamItems) return [];
     if (
       selectedRecord &&
+      hasEnteredPerformanceScore(selectedRecord) &&
       !isRecordConfirmed(selectedRecord) &&
       activeWrittenExamGroup
     ) {
@@ -1756,9 +1770,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       setSignatureError("최종 확인 내용을 다시 확인해 주세요.");
       return;
     }
-    const recordsToConfirm = records.filter(
-      (record) => !isRecordConfirmed(record),
-    );
+    const recordsToConfirm = pendingRecords;
     if (!recordsToConfirm.length) {
       setSignatureError(
         "이미 점수 확인과 서명이 완료되었습니다. 담당 교사가 반려한 경우에만 다시 서명할 수 있습니다.",
@@ -1835,6 +1847,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             currentData?.rosterId !== scoreId ||
             currentData?.academicYear !== year ||
             currentData?.semester !== semester ||
+            !hasEnteredPerformanceScore(currentData) ||
             !sameVersion(currentData?.updatedAt, record.updatedAt) ||
             currentData?.objectionPending === true
           ) {
@@ -2258,7 +2271,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                     aria-disabled="true"
                     className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black leading-5 text-blue-800 opacity-80"
                   >
-                    점수 확인 완료 {confirmedRecordCount}/{records.length}
+                    점수 확인 완료 {confirmedRecordCount}/
+                    {registeredRecords.length}
                   </button>
                 </>
               ) : (
@@ -2266,7 +2280,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   <button
                     type="button"
                     onClick={openObjectionModal}
-                    disabled={signatureActionPending}
+                    disabled={signatureActionPending || !canRequestObjection}
                     className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     이의 신청
@@ -2494,8 +2508,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                           }`}
                         >
                           <span>
-                            획득 {formatPerformanceScore(record.totalScore)} /{" "}
-                            {formatPerformanceScore(record.totalMaxScore)}
+                            {hasEnteredPerformanceScore(record)
+                              ? `획득 ${formatPerformanceScore(record.totalScore)} / ${formatPerformanceScore(record.totalMaxScore)}`
+                              : "점수 미등록"}
                           </span>
                           {record.signatureName && (
                             <span className="text-blue-700">확인 완료</span>
@@ -2550,14 +2565,20 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   획득 점수 / 만점
                 </div>
                 <div className="mt-1 text-4xl font-black text-blue-600">
-                  {formatPerformanceScore(visibleTotalScore)}
+                  {selectedRecordHasScore
+                    ? formatPerformanceScore(visibleTotalScore)
+                    : "-"}
                   <span className="text-xl text-slate-300">
                     {" "}
                     / {formatPerformanceScore(visibleTotalMaxScore)}
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
-                  {selectedRecordHasPendingObjection ? (
+                  {!selectedRecordHasScore ? (
+                    <span className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
+                      점수 미등록
+                    </span>
+                  ) : selectedRecordHasPendingObjection ? (
                     <span className="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
                       {pendingObjectionAnswerSheetScoreIds.has(
                         getRecordScoreId(selectedRecord),
@@ -2584,62 +2605,65 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               </div>
             </div>
 
-            <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
-              <div className="flex flex-col justify-center rounded-xl border border-blue-100 bg-blue-50 p-5">
-                <div className="text-sm font-black text-blue-800">
-                  내 획득 점수
+            {selectedRecordHasScore && (
+              <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
+                <div className="flex flex-col justify-center rounded-xl border border-blue-100 bg-blue-50 p-5">
+                  <div className="text-sm font-black text-blue-800">
+                    내 획득 점수
+                  </div>
+                  <div className="mt-3 text-5xl font-black text-blue-700">
+                    {formatPerformanceScore(visibleTotalScore)}
+                    <span className="ml-1 text-2xl text-blue-300">
+                      / {formatPerformanceScore(visibleTotalMaxScore)}
+                    </span>
+                  </div>
+                  <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
+                    {activeWrittenExamGroupIsObjective
+                      ? "서답형 정오답을 확인해 주세요."
+                      : `점수와 ${resolvedCopy.evidenceTitle}을 함께 확인해 주세요.`}
+                  </p>
                 </div>
-                <div className="mt-3 text-5xl font-black text-blue-700">
-                  {formatPerformanceScore(visibleTotalScore)}
-                  <span className="ml-1 text-2xl text-blue-300">
-                    / {formatPerformanceScore(visibleTotalMaxScore)}
-                  </span>
-                </div>
-                <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
-                  {activeWrittenExamGroupIsObjective
-                    ? "서답형 정오답을 확인해 주세요."
-                    : `점수와 ${resolvedCopy.evidenceTitle}을 함께 확인해 주세요.`}
-                </p>
-              </div>
 
-              <div
-                className={`relative min-w-0 overflow-hidden rounded-xl border border-slate-200 ${
-                  activeWrittenExamGroupIsObjective ? "p-0" : "h-72 p-4"
-                }`}
-              >
-                {activeWrittenExamGroupIsObjective ? (
-                  <ExamOmrCard
-                    title="서답형 OMR"
-                    items={activeObjectiveOmrItems}
-                    mode="student"
-                    showScore
-                    scoreLabel={`${formatPerformanceScore(
-                      visibleTotalScore,
-                    )} / ${formatPerformanceScore(visibleTotalMaxScore)}점`}
-                    className="border-0 shadow-none"
-                  />
-                ) : visibleChartItems.length > 0 ? (
-                  <div
-                    ref={scoreChartContainerRef}
-                    className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
-                  >
-                    <Bar
-                      ref={scoreChartRef}
-                      data={chartData}
-                      options={chartOptions}
-                      style={{ maxWidth: "100%" }}
+                <div
+                  className={`relative min-w-0 overflow-hidden rounded-xl border border-slate-200 ${
+                    activeWrittenExamGroupIsObjective ? "p-0" : "h-72 p-4"
+                  }`}
+                >
+                  {activeWrittenExamGroupIsObjective ? (
+                    <ExamOmrCard
+                      title="서답형 OMR"
+                      items={activeObjectiveOmrItems}
+                      mode="student"
+                      showScore
+                      scoreLabel={`${formatPerformanceScore(
+                        visibleTotalScore,
+                      )} / ${formatPerformanceScore(visibleTotalMaxScore)}점`}
+                      className="border-0 shadow-none"
                     />
-                  </div>
-                ) : (
-                  <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold leading-6 text-slate-400">
-                    {resolvedCopy.scoreItemsLabel}는 제공되지 않았습니다. 점수와{" "}
-                    {resolvedCopy.evidenceTitle}을 확인해 주세요.
-                  </div>
-                )}
+                  ) : visibleChartItems.length > 0 ? (
+                    <div
+                      ref={scoreChartContainerRef}
+                      className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
+                    >
+                      <Bar
+                        ref={scoreChartRef}
+                        data={chartData}
+                        options={chartOptions}
+                        style={{ maxWidth: "100%" }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold leading-6 text-slate-400">
+                      {resolvedCopy.scoreItemsLabel}는 제공되지 않았습니다.
+                      점수와 {resolvedCopy.evidenceTitle}을 확인해 주세요.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
-            {hasDetailedWrittenExamItems &&
+            {selectedRecordHasScore &&
+              hasDetailedWrittenExamItems &&
               !activeWrittenExamGroupIsObjective && (
                 <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4">
                   <h3 className="text-base font-black text-slate-900">
@@ -2680,7 +2704,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 </div>
               )}
 
-            {!activeWrittenExamGroupIsObjective &&
+            {selectedRecordHasScore &&
+              !activeWrittenExamGroupIsObjective &&
               (!hasDetailedWrittenExamItems || evidenceBlockText) && (
                 <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
                   <h3 className="text-base font-black text-blue-900">

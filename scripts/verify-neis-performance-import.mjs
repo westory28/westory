@@ -65,9 +65,11 @@ if (process.argv[2]) {
 }
 
 const stamp = (seconds, nanoseconds = 0) => ({ seconds, nanoseconds });
-const record = { uid: "qa", rosterId: "r1", updatedAt: stamp(100, 2) };
+const record = { uid: "qa", rosterId: "r1", totalScore: 0, updatedAt: stamp(100, 2) };
 const signature = { uid: "qa", rosterId: "r1", signatureName: "검증", signatureImage: "data:image/png;base64,qa", scoreUpdatedAt: stamp(100, 2), confirmedAt: stamp(101) };
 assert.ok(scores.applyPerformanceScoreConfirmation(record, signature).signatureImage);
+assert.equal(scores.applyPerformanceScoreConfirmation({ ...record, enteredScoreCount: 0 }, signature).signatureImage, undefined, "Unregistered scores cannot reuse a confirmation");
+assert.ok(scores.applyPerformanceScoreConfirmation({ ...record, enteredScoreCount: 1 }, signature).signatureImage, "An entered zero remains signable");
 assert.equal(scores.applyPerformanceScoreConfirmation({ ...record, updatedAt: stamp(100, 3) }, signature).signatureImage, undefined);
 assert.equal(scores.applyPerformanceScoreConfirmation(record, { ...signature, uid: "other" }).signatureImage, undefined);
 assert.equal(scores.applyPerformanceScoreConfirmation(record, { ...signature, scoreUpdatedAt: undefined, confirmedAt: stamp(99) }).signatureImage, undefined);

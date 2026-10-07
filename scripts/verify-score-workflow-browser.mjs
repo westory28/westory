@@ -135,6 +135,57 @@ const secondDetailedFile = {
   name: "가상_두번째_채점결과.xlsx",
   buffer: Buffer.from(await secondDetailedWorkbook.xlsx.writeBuffer()),
 };
+const blankTitle = "가상 미채점 두 번째 평가";
+const blankCriteria = [
+  "가상 사림의 성장 과정 파악하기\n\n(6점)",
+  "가상 붕당 정치의 전개 나타내기\n\n(6점)",
+  "가상 관심사와 붕당 정치 연결하기\n\n(4점)",
+  "가상 정치 흐름 전개도 구성하기\n\n(4점)",
+];
+const blankWorkbook = new ExcelJS.Workbook();
+const blankSheet = blankWorkbook.addWorksheet("채점 결과");
+blankSheet.mergeCells("A1:K1");
+blankSheet.getCell("A1").value = "3-1반 채점 결과";
+blankSheet.mergeCells("A2:K2");
+blankSheet.getCell("A2").value = "평가: " + blankTitle;
+blankSheet.getRow(4).values = [
+  "학년",
+  "반",
+  "번호",
+  "이름",
+  "총점",
+  ...blankCriteria,
+  "AI 채점 수준",
+  "선생님 작성 피드백",
+];
+for (let index = 1; index <= 32; index += 1)
+  blankSheet.getRow(index + 4).values = [
+    3,
+    1,
+    index,
+    `가상학생${String(index).padStart(2, "0")}`,
+    ...Array.from({ length: 5 }, (_, column) =>
+      (index + column) % 2 ? "-" : null,
+    ),
+    "-",
+    "",
+  ];
+const blankFile = {
+  ...detailedFile,
+  name: "가상_미채점_두번째.xlsx",
+  buffer: Buffer.from(await blankWorkbook.xlsx.writeBuffer()),
+};
+const blankReuploadWorkbook = new ExcelJS.Workbook();
+await blankReuploadWorkbook.xlsx.load(detailedFile.buffer);
+for (let row = 5; row <= 36; row += 1)
+  for (let column = 5; column <= 13; column += 1)
+    blankReuploadWorkbook.worksheets[0].getRow(row).getCell(column).value =
+      column <= 11 ? (row % 2 ? "-" : null) : "";
+const blankReuploadFile = {
+  ...detailedFile,
+  name: "가상_기존평가_빈점수.xlsx",
+  buffer: Buffer.from(await blankReuploadWorkbook.xlsx.writeBuffer()),
+};
 const assertDetailedHairBorders = async (buffer) => {
   const zip = await JSZip.loadAsync(buffer);
   const styles = await zip.file("xl/styles.xml").async("string");
@@ -991,8 +1042,22 @@ try {
       );
       assert.deepEqual(mergedCounts, [
         { title: "지역사 자료 해석", count: 34, firstClass: 32 },
-        { title: "역사적 판단 글쓰기", count: 33, firstClass: 32 },
+        { title: "역사적 판단 글쓰기", count: 34, firstClass: 32 },
       ]);
+      const newlyUnentered = await page.evaluate(
+        () =>
+          [...window.scoreQa.docs].find(
+            ([key, score]) =>
+              key.includes("/performance_scores/") &&
+              !key.includes("/confirmations/") &&
+              score.uid === "qa-34" &&
+              score.title === "역사적 판단 글쓰기",
+          )?.[1],
+      );
+      assert.equal(newlyUnentered.enteredScoreCount, 0);
+      assert.ok(
+        newlyUnentered.items.every((item) => item.scoreEntered === false),
+      );
       await uploadFixture(partialBlankFile);
       const blankZero = await page.evaluate(() =>
         [...window.scoreQa.docs]
@@ -1917,6 +1982,326 @@ try {
     "Stale-cache race: preview/cache stays at inferred 6/30 while server snapshots change to 7/31. Save uses transaction-current criteria, retains all 32 rows at 7/31, performs no student score writes and preserves the latest score-bound signature. Feedback textarea remains at least 200px wide at every tested viewport.",
   );
   await racePage.close();
+  for (const width of [390, 768, 1280]) {
+    const page = await browser.newPage({
+      viewport: { width, height: 900 },
+      acceptDownloads: true,
+    });
+    page.on("pageerror", (error) => report.pageErrors.push(error.message));
+    await page.route("**/*", (route) =>
+      route.request().url().startsWith(origin)
+        ? route.continue()
+        : route.abort(),
+    );
+    await page.goto(origin);
+    const openPreview = async (file) => {
+      await page.getByRole("button", { name: "업로드", exact: true }).click();
+      await page.locator("input[type=file]").setInputFiles(file);
+      const preview = page.getByRole("dialog", {
+        name: "업로드 미리보기",
+        exact: true,
+      });
+      await preview.getByText("연결 32명", { exact: true }).waitFor();
+      return preview;
+    };
+    const savePreview = async (preview) => {
+      const save = preview.getByRole("button", {
+        name: "학생별 점수 저장",
+        exact: true,
+      });
+      assert.equal(await save.isEnabled(), true);
+      await save.click();
+      await preview.waitFor({ state: "hidden" });
+    };
+    await savePreview(await openPreview(detailedFile));
+    await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 160;
+      canvas.height = 60;
+      const context = canvas.getContext("2d");
+      context.lineWidth = 4;
+      context.beginPath();
+      context.moveTo(10, 20);
+      context.lineTo(30, 45);
+      context.lineTo(100, 10);
+      context.stroke();
+      for (const [key, score] of [...window.scoreQa.docs]) {
+        if (
+          !key.includes("/performance_scores/") ||
+          key.includes("/confirmations/")
+        )
+          continue;
+        window.scoreQa.docs.set(key + "/confirmations/" + score.uid, {
+          uid: score.uid,
+          rosterId: score.rosterId,
+          signatureName: score.studentName,
+          signatureImage: canvas.toDataURL("image/png"),
+          scoreUpdatedAt: score.updatedAt,
+          confirmedAt: { seconds: 1801850460 },
+        });
+      }
+    });
+    let preview = await openPreview(blankFile);
+    assert.equal(
+      await preview.getByLabel("평가명", { exact: true }).inputValue(),
+      blankTitle,
+    );
+    assert.equal(
+      await preview
+        .getByRole("list", { name: "평가 항목", exact: true })
+        .getByRole("listitem")
+        .count(),
+      4,
+    );
+    assert.equal(await preview.locator("tbody tr").count(), 32);
+    await preview.getByText("총점 20점", { exact: true }).waitFor();
+    await preview.getByLabel("평가 순서", { exact: true }).selectOption("2");
+    assert.equal(
+      await preview
+        .getByRole("button", { name: "학생별 점수 저장", exact: true })
+        .isEnabled(),
+      true,
+    );
+    await page.screenshot({
+      path: out + `/blank-preview-${width}.png`,
+      fullPage: false,
+    });
+    report.screenshots.push(`blank-preview-${width}.png`);
+    await savePreview(preview);
+    const snapshot = await page.evaluate(() => ({
+      rosters: [...window.scoreQa.docs]
+        .filter(([key]) => key.includes("/performance_score_rosters/"))
+        .map(([, value]) => value),
+      scores: [...window.scoreQa.docs]
+        .filter(
+          ([key]) =>
+            key.includes("/performance_scores/") &&
+            !key.includes("/confirmations/"),
+        )
+        .map(([, value]) => value),
+      confirmations: [...window.scoreQa.docs]
+        .filter(([key]) => key.includes("/confirmations/"))
+        .map(([, value]) => value),
+    }));
+    assert.equal(snapshot.rosters.length, 2);
+    assert.equal(snapshot.scores.length, 64);
+    assert.equal(snapshot.confirmations.length, 32);
+    const second = snapshot.rosters.find(
+      (roster) => roster.title === blankTitle,
+    );
+    assert.equal(second.assessmentOrder, 2);
+    assert.equal(second.totalMaxScore, 20);
+    assert.equal(second.items.length, 4);
+    assert.equal(second.rows.length, 32);
+    const blankScores = snapshot.scores.filter(
+      (score) => score.title === blankTitle,
+    );
+    assert.equal(blankScores.length, 32);
+    assert.ok(
+      blankScores.every(
+        (score) =>
+          score.enteredScoreCount === 0 &&
+          score.totalScore === 0 &&
+          score.totalMaxScore === 20 &&
+          score.items.every((item) => item.scoreEntered === false),
+      ),
+    );
+    const actualZero = snapshot.scores.find(
+      (score) => score.title === detailedTitle && score.uid === "qa-32",
+    );
+    assert.equal(actualZero.totalScore, 0);
+    assert.ok(actualZero.enteredScoreCount > 0);
+    assert.ok(actualZero.items.every((item) => item.scoreEntered === true));
+    if (width === 1280) {
+      await page
+        .getByRole("combobox")
+        .filter({
+          has: page.getByRole("option", { name: blankTitle, exact: true }),
+        })
+        .selectOption({ label: blankTitle });
+      await page.getByRole("button", { name: "조회", exact: true }).click();
+      const scoreList = page.locator(".score-list-compact");
+      await scoreList.locator("tbody tr").last().waitFor();
+      await page
+        .getByRole("button", { name: "점수 수정", exact: true })
+        .click();
+      await scoreList
+        .locator("tbody tr")
+        .filter({ hasText: "가상학생01" })
+        .getByRole("button", { name: "사유 작성", exact: true })
+        .click();
+      const evidence = page.getByRole("dialog", {
+        name: "사유 작성",
+        exact: true,
+      });
+      await evidence
+        .getByRole("textbox", { name: "사유", exact: true })
+        .fill("가상 미채점 평가의 안내 근거");
+      await evidence
+        .getByRole("button", { name: "사유 저장", exact: true })
+        .click();
+      await evidence.waitFor({ state: "hidden" });
+      await page
+        .getByRole("button", { name: "변경 저장", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "점수 수정", exact: true })
+        .waitFor();
+      const editedBlank = await page.evaluate(
+        (title) => ({
+          scores: [...window.scoreQa.docs]
+            .filter(
+              ([key, score]) =>
+                key.includes("/performance_scores/") &&
+                !key.includes("/confirmations/") &&
+                score.title === title,
+            )
+            .map(([, score]) => score),
+          roster: [...window.scoreQa.docs].find(
+            ([key, roster]) =>
+              key.includes("/performance_score_rosters/") &&
+              roster.title === title,
+          )?.[1],
+          confirmations: [...window.scoreQa.docs].filter(([key]) =>
+            key.includes("/confirmations/"),
+          ).length,
+        }),
+        blankTitle,
+      );
+      assert.equal(editedBlank.scores.length, 32);
+      assert.equal(editedBlank.roster.rows.length, 32);
+      assert.equal(editedBlank.roster.matchedCount, 32);
+      assert.equal(editedBlank.confirmations, 32);
+      const editedStudent = editedBlank.scores.find(
+        (score) => score.uid === "qa-1",
+      );
+      assert.equal(editedStudent.evidence, "가상 미채점 평가의 안내 근거");
+      assert.equal(editedStudent.enteredScoreCount, 0);
+      assert.ok(
+        editedStudent.items.every((item) => item.scoreEntered === false),
+      );
+      report.checks.push(
+        "Editing only evidence in an unentered second assessment retains all 32 student metadata documents and roster matches at count zero, preserves first-assessment signatures, and does not turn the assessment into a scored/signable record.",
+      );
+    }
+    const beforeBlankReupload = await page.evaluate(() => ({
+      scores: [...window.scoreQa.docs].filter(([key]) =>
+        key.includes("/performance_scores/"),
+      ),
+      events: window.scoreQa.events.length,
+    }));
+    preview = await openPreview(blankReuploadFile);
+    await preview.getByText("총점 30점", { exact: true }).waitFor();
+    await savePreview(preview);
+    const afterBlankReupload = await page.evaluate(
+      (start) => ({
+        scores: [...window.scoreQa.docs].filter(([key]) =>
+          key.includes("/performance_scores/"),
+        ),
+        scoreWrites: window.scoreQa.events
+          .slice(start)
+          .filter((event) => event.path?.includes("/performance_scores/")),
+      }),
+      beforeBlankReupload.events,
+    );
+    assert.deepEqual(afterBlankReupload.scores, beforeBlankReupload.scores);
+    assert.equal(afterBlankReupload.scoreWrites.length, 0);
+    if (width === 1280) {
+      await page.getByRole("button", { name: "일람표", exact: true }).click();
+      await page
+        .getByRole("button", { name: "현황 조회", exact: true })
+        .click();
+      await page.getByText("학급 인원", { exact: true }).waitFor();
+      await page.screenshot({
+        path: out + "/blank-second-class-sheet-1280.png",
+        fullPage: false,
+      });
+      report.screenshots.push("blank-second-class-sheet-1280.png");
+      const downloadWait = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "일람표 다운로드", exact: true })
+        .click();
+      const download = await downloadWait;
+      assert.equal(
+        await page.getByRole("alertdialog").count(),
+        0,
+        "A blank second assessment must not require signatures or an unsigned-student warning.",
+      );
+      const savedPath = out + "/synthetic-scored-first-blank-second.xlsx";
+      await download.saveAs(savedPath);
+      const generated = new ExcelJS.Workbook();
+      await generated.xlsx.readFile(savedPath);
+      const worksheet = generated.worksheets[0];
+      assert.ok(worksheet.getCell("E6").text.includes(detailedTitle));
+      assert.ok(worksheet.getCell("E6").text.includes("30.00"));
+      assert.ok(worksheet.getCell("G6").text.includes(blankTitle));
+      assert.ok(worksheet.getCell("G6").text.includes("20.00"));
+      for (let row = 7; row <= 38; row += 1) {
+        assert.equal(worksheet.getCell(`E${row}`).value, row === 38 ? 0 : 30);
+        assert.equal(
+          worksheet.getCell(`G${row}`).value,
+          null,
+          `Second assessment G${row} must be a real blank, not zero or a dash.`,
+        );
+      }
+      assert.equal(worksheet.getImages().length, 32);
+      assert.deepEqual(
+        worksheet
+          .getImages()
+          .map((image) => image.range.tl.nativeRow)
+          .sort((a, b) => a - b),
+        Array.from({ length: 32 }, (_, index) => index + 6),
+      );
+      assert.ok(
+        worksheet.getImages().every((image) => image.range.tl.nativeCol >= 9),
+      );
+      await assertDetailedHairBorders(await fs.readFile(savedPath));
+    }
+    await page.close();
+  }
+  report.checks.push(
+    "Blank second assessment at 390/768/1280: all 32 dash/empty rows remain saveable and create one four-criterion/20-point roster plus 32 explicitly unentered student records. First-assessment zero remains entered and signed. Blank reupload preserves prior points, score revisions and all signatures without score writes. XLSX includes both titles, G7:G38 true blanks, all 32 first-assessment signatures (including zero) without a missing-second-signature warning, and unchanged hair borders.",
+  );
+  if (process.env.SCORE_QA_BLANK_REFERENCE_XLSX) {
+    const page = await browser.newPage({
+      viewport: { width: 1280, height: 900 },
+    });
+    page.on("pageerror", (error) => report.pageErrors.push(error.message));
+    await page.route("**/*", (route) =>
+      route.request().url().startsWith(origin)
+        ? route.continue()
+        : route.abort(),
+    );
+    await page.goto(origin);
+    await page.getByRole("button", { name: "업로드", exact: true }).click();
+    await page
+      .locator("input[type=file]")
+      .setInputFiles(process.env.SCORE_QA_BLANK_REFERENCE_XLSX);
+    const preview = page.getByRole("dialog", {
+      name: "업로드 미리보기",
+      exact: true,
+    });
+    await preview.getByText("총 32명", { exact: true }).waitFor();
+    await preview.getByText("총점 20점", { exact: true }).waitFor();
+    assert.equal(
+      await preview
+        .getByRole("list", { name: "평가 항목", exact: true })
+        .getByRole("listitem")
+        .count(),
+      4,
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.scoreQa.events.filter((event) => event.op === "set").length,
+      ),
+      0,
+    );
+    report.checks.push(
+      "Actual blank workbook read through browser File only: 32 students, four declared criteria and 20-point maximum detected; no real-data save, screenshots, copies or personal values logged.",
+    );
+    await page.close();
+  }
   if (process.env.SCORE_QA_DETAILED_REFERENCE_XLSX) {
     const page = await browser.newPage({
       viewport: { width: 1280, height: 900 },

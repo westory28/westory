@@ -81,6 +81,11 @@ const getCell = (row: unknown[], index: number) =>
 const getCellText = (row: unknown[], index: number) =>
   toText(getCell(row, index));
 
+// A dash in the grading export means the assessment has not been graded.
+// Keep it distinct from an explicitly entered numeric zero.
+const isBlankScoreCell = (value: unknown) =>
+  toText(value) === "" || toText(value) === "-";
+
 const findColumnIndex = (
   headers: string[],
   predicate: (header: string) => boolean,
@@ -383,22 +388,23 @@ export const parsePerformanceScoreWorkbook = (
       seenStudents.add(identity);
       const parsedTotal = toFiniteScore(getCell(row, indexes.totalIndex));
       if (
-        (getCellText(row, indexes.totalIndex) && parsedTotal === null) ||
+        (!isBlankScoreCell(getCell(row, indexes.totalIndex)) &&
+          parsedTotal === null) ||
         (parsedTotal !== null &&
           (parsedTotal < 0 || parsedTotal > totalMaxScore))
       )
         throw new Error(
-          `${rowIndex + 1}행 총점은 0~${totalMaxScore}점 범위의 숫자 또는 빈칸이어야 합니다.`,
+          `${rowIndex + 1}행 총점은 0~${totalMaxScore}점 범위의 숫자, 빈칸 또는 -여야 합니다.`,
         );
       const rowItems = scoreColumns.map((column, itemIndex) => {
         const score = toFiniteScore(getCell(row, column.index));
         const item = items[itemIndex];
         if (
-          (getCellText(row, column.index) && score === null) ||
+          (!isBlankScoreCell(getCell(row, column.index)) && score === null) ||
           (score !== null && (score < 0 || score > item.maxScore))
         )
           throw new Error(
-            `${rowIndex + 1}행 ${item.name}: 점수는 0~${item.maxScore}점 범위의 숫자 또는 빈칸이어야 합니다.`,
+            `${rowIndex + 1}행 ${item.name}: 점수는 0~${item.maxScore}점 범위의 숫자, 빈칸 또는 -여야 합니다.`,
           );
         return {
           name: item.name,
@@ -559,9 +565,9 @@ const parseNeisPerformanceScoreWorkbook = (
     const items = columns.map((column, index) => {
       const raw = row[column.index];
       const score = toFiniteScore(raw);
-      if (toText(raw) && score === null)
+      if (!isBlankScoreCell(raw) && score === null)
         throw new Error(
-          `${rowNumber}행 ${column.name}: 숫자 점수 또는 빈칸만 입력해 주세요.`,
+          `${rowNumber}행 ${column.name}: 숫자 점수, 빈칸 또는 -만 입력해 주세요.`,
         );
       if (score !== null && (score < 0 || score > column.maxScore))
         throw new Error(

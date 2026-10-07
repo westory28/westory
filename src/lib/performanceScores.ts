@@ -131,6 +131,39 @@ export interface PerformanceScoreConfirmation {
   updatedAt?: unknown;
 }
 
+export const hasEnteredPerformanceScore = (
+  record:
+    | Partial<
+        Pick<
+          PerformanceScoreRecord,
+          "enteredScoreCount" | "items" | "totalScore"
+        >
+      >
+    | null
+    | undefined,
+) => {
+  if (!record) return false;
+  // An explicit zero distinguishes an unregistered score from an earned zero.
+  if (record.enteredScoreCount !== undefined)
+    return (
+      typeof record.enteredScoreCount === "number" &&
+      Number.isFinite(record.enteredScoreCount) &&
+      record.enteredScoreCount > 0
+    );
+  const isScore = (value: unknown) =>
+    (typeof value === "number" ||
+      (typeof value === "string" && value.trim() !== "")) &&
+    Number.isFinite(Number(value));
+  const items = Array.isArray(record.items) ? record.items : [];
+  if (items.some((item) => item.scoreEntered !== false && isScore(item.score)))
+    return true;
+  // Older total-only records have no entered-count field, including real zeros.
+  return (
+    isScore(record.totalScore) &&
+    (items.length === 0 || Number(record.totalScore) > 0)
+  );
+};
+
 export interface PerformanceScoreSettings {
   warningText: string;
   warningVersion: string;
@@ -726,6 +759,7 @@ export const applyPerformanceScoreConfirmation = (
   const [updatedSeconds, updatedNanos] = timestampParts(record.updatedAt);
   const valid =
     confirmation &&
+    hasEnteredPerformanceScore(record) &&
     confirmation.uid === record.uid &&
     confirmation.rosterId === record.rosterId &&
     (confirmation.scoreUpdatedAt
