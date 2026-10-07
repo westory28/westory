@@ -16,7 +16,6 @@ export function getWeplayWordPool(
       text: string;
       sources: string[];
       public: boolean;
-      custom: boolean;
     }
   >();
   for (const lesson of lessons) {
@@ -32,7 +31,6 @@ export function getWeplayWordPool(
         text,
         sources: [],
         public: false,
-        custom: false,
       };
       item.sources.push(
         `${lesson.title || "제목 없는 수업 자료"} · ${lesson.isVisibleToStudents ? "공개" : "비공개"}`,
@@ -40,19 +38,6 @@ export function getWeplayWordPool(
       item.public ||= lesson.isVisibleToStudents;
       pool.set(key, item);
     }
-  }
-  for (const text of settings.customWords) {
-    const key = normalizeWeplayAnswer(text);
-    const item = pool.get(key) || {
-      key,
-      text,
-      sources: [],
-      public: false,
-      custom: false,
-    };
-    item.custom = true;
-    item.public = true;
-    pool.set(key, item);
   }
   return [...pool.values()];
 }
@@ -69,7 +54,6 @@ export default function WeplayWordPool({
   update: (next: Partial<WeplayGameSettings>) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [manual, setManual] = useState("");
   const [message, setMessage] = useState("");
   const words = useMemo(
     () => getWeplayWordPool(lessons, settings),
@@ -83,50 +67,6 @@ export default function WeplayWordPool({
       word.key.includes(query) ||
       normalizeWeplayAnswer(word.sources.join(" ")).includes(query),
   );
-  const add = () => {
-    if (disabled) return;
-    const text = manual.normalize("NFKC").trim().replace(/\s+/g, " ");
-    const key = normalizeWeplayAnswer(text);
-    if (
-      !key ||
-      Array.from(text).length > 40 ||
-      !/[\p{L}\p{N}]/u.test(text) ||
-      /[<>\u0000-\u001f\u007f]/.test(manual) ||
-      /[<>]/.test(text) ||
-      text.startsWith("fn:")
-    ) {
-      setMessage(
-        "단어는 글자나 숫자를 포함해 1~40자로 입력해 주세요. <, >, 제어 문자 및 fn:으로 시작하는 단어는 사용할 수 없습니다.",
-      );
-      return;
-    }
-    if (
-      settings.customWords.some((word) => normalizeWeplayAnswer(word) === key)
-    ) {
-      setMessage("이미 직접 추가한 단어입니다.");
-      return;
-    }
-    if (words.some((word) => word.key === key && word.public)) {
-      if (excluded.has(key)) {
-        update({
-          excludedWords: settings.excludedWords.filter((word) => word !== key),
-        });
-        setManual("");
-        setMessage("기존 단어를 다시 포함했습니다.");
-      } else setMessage("이미 단어 모음에 포함되어 있습니다.");
-      return;
-    }
-    if (settings.customWords.length >= 1000) {
-      setMessage("직접 추가할 수 있는 단어는 최대 1,000개입니다.");
-      return;
-    }
-    update({
-      customWords: [...settings.customWords, text],
-      excludedWords: settings.excludedWords.filter((word) => word !== key),
-    });
-    setManual("");
-    setMessage("단어를 추가했습니다. 게임 설정을 저장하면 적용됩니다.");
-  };
   return (
     <details className="teacher-weplay-pool">
       <summary>
@@ -196,8 +136,7 @@ export default function WeplayWordPool({
           </div>
         )}
         <p className="teacher-weplay-note">
-          비공개 자료의 단어는 교사 체험에만 사용됩니다. 직접 추가한 단어는
-          학생에게도 출제됩니다.
+          비공개 자료의 빈칸 정답은 교사 체험에만 사용됩니다.
         </p>
         <div className="teacher-weplay-word-tools">
           <label>
@@ -211,34 +150,6 @@ export default function WeplayWordPool({
               }}
             />
           </label>
-          <div className="teacher-weplay-word-add">
-            <label>
-              단어 직접 추가
-              <input
-                type="text"
-                value={manual}
-                disabled={disabled}
-                onChange={(event) => {
-                  setManual(event.target.value);
-                  setMessage("");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                    event.preventDefault();
-                    add();
-                  }
-                }}
-              />
-            </label>
-            <button
-              type="button"
-              className="teacher-weplay-button"
-              disabled={disabled || !manual.trim()}
-              onClick={add}
-            >
-              추가
-            </button>
-          </div>
         </div>
         {message && (
           <p role="status" className="teacher-weplay-note">
@@ -281,33 +192,11 @@ export default function WeplayWordPool({
                 <span>
                   <strong>{word.text}</strong>
                   <small>
-                    {word.custom && "직접 추가"}
-                    {word.custom && word.sources.length > 0 && " · "}
                     {word.sources.join(" / ")}
                     {excluded.has(word.key) && " · 제외됨"}
                   </small>
                 </span>
               </label>
-              {word.custom && (
-                <button
-                  type="button"
-                  className="teacher-weplay-button is-danger"
-                  disabled={disabled}
-                  aria-label={`${word.text} 직접 추가 삭제`}
-                  onClick={() =>
-                    update({
-                      customWords: settings.customWords.filter(
-                        (text) => normalizeWeplayAnswer(text) !== word.key,
-                      ),
-                      excludedWords: settings.excludedWords.filter(
-                        (key) => key !== word.key,
-                      ),
-                    })
-                  }
-                >
-                  삭제
-                </button>
-              )}
             </li>
           ))}
         </ul>
@@ -315,7 +204,7 @@ export default function WeplayWordPool({
           <p>
             {query
               ? "검색 결과가 없습니다."
-              : "연결한 자료에서 인식한 단어가 없습니다. 단어를 직접 추가할 수 있습니다."}
+              : "연결한 수업 자료에 빈칸 정답이 없습니다."}
           </p>
         )}
       </div>

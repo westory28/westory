@@ -408,6 +408,7 @@ export default function NavalBattleGame({
     };
     const cannonEffects = next.filter((effect) => effect.kind === "cannon");
     const enemyEffects = next.filter((effect) => effect.kind === "enemy");
+    if (cannonEffects.length && !hasSpecial) setFeedback("화포 발사!");
     const cannonDelay = Math.max(0, impactDelay - 420);
     if (cannonDelay) later(() => show(cannonEffects), cannonDelay);
     else show(cannonEffects);
@@ -578,6 +579,18 @@ export default function NavalBattleGame({
       const next = [...merged.values()].sort(
         (a, b) => a.elapsedMs - b.elapsedMs,
       );
+      // An accepted event uses the server's clock, which can be ahead of the
+      // initial session snapshot. Apply that acknowledgement immediately rather
+      // than hiding the word now and waiting for the local clock to catch up.
+      const local = performance.now();
+      const acknowledgedNow = Math.max(
+        clock.current.server + local - clock.current.local,
+        Number.isFinite(response.serverNowMs)
+          ? response.serverNowMs
+          : clock.current.server,
+      );
+      clock.current = { server: acknowledgedNow, local };
+      setNow((current) => Math.max(current, acknowledgedNow));
       eventsRef.current = next;
       setEvents(next);
       retryData.current.delete(data.wordId);
@@ -895,6 +908,9 @@ export default function NavalBattleGame({
               >
                 {(effect.kind === "cannon" || effect.kind === "enemy") && (
                   <>
+                    {effect.kind === "cannon" && (
+                      <span className="naval-muzzle-flash" />
+                    )}
                     <Sprite
                       className="naval-cannonball"
                       rect={[1038, 641, 86, 88]}

@@ -1,0 +1,120 @@
+.header-student-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.header-student-wis {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.header-student-wis-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md, 8px);
+  background: transparent;
+  cursor: pointer;
+}
+
+.header-student-wis-trigger:hover,
+.header-student-wis-trigger[aria-expanded="true"] {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.header-student-wis-trigger:focus-visible,
+.header-student-wis-retry:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+
+.header-student-wis-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 240px;
+  max-width: calc(100vw - 24px);
+  padding: 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text-strong, #111827);
+  box-shadow: var(--shadow-lg, 0 18px 40px rgba(15, 23, 42, 0.14));
+}
+
+.header-student-wis-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.header-student-wis-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ws-primary, #2563eb);
+  border-radius: var(--radius-full, 9999px);
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.header-student-wis-balance {
+  margin: 12px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.header-student-wis-balance span {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.header-student-wis-status {
+  margin: 12px 0 0;
+  font-size: 14px;
+}
+
+.header-student-wis-retry {
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface, #fff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 1023px) {
+  :is(.teacher-mobile-account, .mobile-account-block) .header-student-profile {
+    width: 100%;
+    padding-inline: 12px;
+  }
+
+  :is(.teacher-mobile-account, .mobile-account-block)
+    .header-student-profile
+    .header-user-link {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    padding-inline: 0;
+  }
+}

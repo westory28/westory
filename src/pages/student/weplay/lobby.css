@@ -10,11 +10,33 @@
   overflow: hidden;
 }
 .weplay-launch-art {
+  position: relative;
   display: grid;
   align-content: center;
   min-width: 0;
   overflow: hidden;
   background: var(--launch-sea);
+}
+.weplay-launch-art::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 1px solid transparent;
+  pointer-events: none;
+  transition:
+    border-color 240ms ease,
+    background 240ms ease;
+}
+.is-challenge .weplay-launch-art::after {
+  border-color: var(--launch-gold);
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--launch-ink) 40%, transparent),
+    transparent 48%
+  );
+}
+.is-challenge .weplay-launch-art img {
+  filter: brightness(0.8) contrast(1.12) saturate(0.8);
 }
 .weplay-launch-art img {
   display: block;
@@ -22,6 +44,7 @@
   height: auto;
   aspect-ratio: 4 / 3;
   object-fit: contain;
+  transition: filter 240ms ease;
 }
 .weplay-launch-controls {
   min-width: 0;
@@ -61,6 +84,28 @@
 .weplay-choice-note {
   font-size: 14px;
   white-space: nowrap;
+}
+.weplay-page .weplay-mode-choice .weplay-challenge-choice {
+  position: relative;
+  border-color: var(--launch-gold);
+  border-radius: 4px;
+}
+.weplay-challenge-choice::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid var(--launch-gold);
+  pointer-events: none;
+}
+.weplay-launch-feedback {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  font-size: 14px;
+  line-height: 24px;
+}
+.weplay-page .weplay-launch-feedback p {
+  margin: 0;
 }
 .weplay-page .is-practice .weplay-mode-choice button[aria-pressed="true"] {
   color: var(--launch-text);
@@ -152,7 +197,7 @@
     transform: translateX(110%);
   }
 }
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .weplay-page .weplay-launch {
     grid-template-columns: minmax(0, 1fr);
     padding: 0;
@@ -174,6 +219,10 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .weplay-launch-art::after,
+  .weplay-launch-art img {
+    transition: none;
+  }
   .weplay-page .weplay-launch .weplay-start {
     transition: none;
   }
@@ -250,11 +299,28 @@
   gap: 8px;
   margin: 0 0 16px;
 }
-.weplay-lobby-actions button {
+.weplay-page .weplay-lobby-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  border-radius: 999px;
+  padding: 8px 16px 8px 12px;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--launch-sea) 8%, white);
+  color: var(--launch-sea);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.weplay-lobby-actions button svg {
+  box-sizing: content-box;
+  width: 16px;
+  height: 16px;
+  padding: 4px;
+  border-radius: 50%;
+  background: var(--launch-sea);
+  color: var(--launch-parchment);
 }
 .weplay-page .weplay-lobby-actions button:hover {
   border-color: var(--launch-sea);
@@ -616,6 +682,16 @@
   margin-left: auto;
 }
 @media (max-width: 389px) {
+  .weplay-heading-actions {
+    gap: 8px;
+  }
+  .weplay-wis-badge > span:nth-child(2) {
+    display: none;
+  }
+  .weplay-page .weplay-lobby-actions button {
+    padding-inline: 8px;
+    gap: 4px;
+  }
   .weplay-records-header {
     gap: 8px;
   }

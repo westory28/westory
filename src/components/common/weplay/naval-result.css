@@ -42,9 +42,10 @@
 .naval-result-missed li { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; overflow-wrap: anywhere; }
 .naval-result-missed li strong { font-size: 16px; }
 .naval-result-missed li span { font-size: 14px; color: var(--naval-wood); }
-.naval-result-actions { margin-top: 16px; display: flex; justify-content: center; }
+.naval-result-actions { margin-top: 16px; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 .naval-result .naval-result-actions button { min-height: 44px; min-width: 160px; padding: 12px 24px; border: 2px solid var(--naval-gold); border-radius: 8px; background: var(--naval-ink); color: var(--naval-text); box-shadow: inset 0 0 0 2px var(--naval-wood); font-size: 16px; font-weight: 800; cursor: pointer; }
 .naval-result .naval-result-actions button:disabled { opacity: .6; cursor: wait; }
+.naval-result .naval-result-actions .naval-result-lobby { background: transparent; color: var(--naval-ink); border-color: var(--naval-wood); box-shadow: none; }
 .naval-result :is(button, summary, h2):focus-visible { outline: 3px solid var(--ws-primary, #2563eb); outline-offset: 4px; }
 .naval-result--defeat .naval-result-banner > img { filter: saturate(.45) drop-shadow(0 12px 8px rgba(23, 30, 36, .7)); }
 @container (max-width: 600px) {

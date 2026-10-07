@@ -82,7 +82,7 @@ qa.exports=weplay;
 qa.simulate=simulateWeplayBattle;
 qa.completeGuide=completeWeplayGuide;qa.guideStatus=getWeplayGuideStatus;
 qa.makeTransport=session=>{
-  const real=createWeplayPreviewTransport(session);qa.realTransport=real;
+  const real=createWeplayPreviewTransport({...session,serverNowMs:session.serverNowMs+(qa.ackOffset||0)});qa.realTransport=real;
   return {...real,answer:async data=>{const result=await real.answer(data);qa.answers.push({data:structuredClone(data),result:structuredClone(result)});if(qa.holdAnswer===qa.answers.length)await new Promise(resolve=>{qa.releaseAnswer=resolve});return result;},finish:async options=>{qa.finishAttempts.push({options:structuredClone(options),at:Date.now(),answerCount:qa.answers.length});if(qa.holdFinish)await new Promise(resolve=>{qa.releaseFinish=resolve});if(qa.failFinish){qa.failFinish--;throw new Error('QA 정산 연결 오류');}let result=await real.finish(options);if(view==='lobby'){const cost=session.mode==='challenge'?session.policy.challengeCost:0;result={...result,mode:session.mode,cost,reward:0,netWis:-cost,balance:qa.balance-cost};}qa.completions.push(result);return result;}};
 };
 async function setup(){
@@ -186,6 +186,58 @@ async function advanceTo(page, elapsed) {
 }
 let failure = null;
 try {
+  if (process.env.WEPLAY_QA_GUIDE_ONLY !== '1') {
+    for (const mode of ['practice', 'challenge']) {
+      const cannon = await open('lobby', mode === 'practice' ? 390 : 1280, 'seen=1');
+      if (mode === 'challenge') await cannon.locator('.weplay-mode-choice button').last().click();
+      await cannon.evaluate(() => { window.navalQa.ackOffset = 2000; });
+      await cannon.locator('.weplay-start').click();
+      await cannon.locator('.naval-game').waitFor();
+      await advanceTo(cannon, 2200);
+      assert.equal((await answerVisible(cannon)).accepted, true);
+      await cannon.waitForFunction(() => document.querySelector('.naval-ammo').getAttribute('aria-label') === '포탄 장전 1 / 2', null, { timeout: 2000 });
+      assert.equal(await cannon.locator('.naval-effect--cannon').count(), 0);
+      await cannon.evaluate(() => { window.navalQa.holdAnswer = 2; });
+      assert.equal((await answerVisible(cannon)).accepted, true);
+      assert.equal(await cannon.locator('.naval-effect--cannon').count(), 0, 'Pending answer cannot fire an unconfirmed shot');
+      await cannon.evaluate(() => window.navalQa.releaseAnswer());
+      await cannon.locator('.naval-effect--cannon').waitFor({ timeout: 2000 });
+      assert.equal(await cannon.locator('.naval-effect--cannon').count(), 1, 'Second accepted normal word fires exactly once without another clock tick');
+      assert.equal(await cannon.locator('.naval-ammo').getAttribute('aria-label'), '포탄 장전 0 / 2');
+      await cannon.locator('.naval-effect--cannon').evaluate(element => { for (const animation of element.getAnimations({subtree:true})) { animation.pause(); animation.currentTime = 160; } });
+      await capture(cannon, `normal-cannon-${mode}-second-word`);
+      await cannon.clock.runFor(500);
+      assert.equal(await cannon.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 88');
+      await cannon.clock.runFor(1200);
+      assert.equal((await answerVisible(cannon)).accepted, true);
+      assert.equal(await cannon.locator('.naval-effect--cannon').count(), 0);
+      assert.equal((await answerVisible(cannon)).accepted, true);
+      await cannon.locator('.naval-effect--cannon').waitFor({ timeout: 2000 });
+      assert.equal(await cannon.locator('.naval-effect--cannon').count(), 1, 'Fourth accepted normal word fires the next cannon');
+      await cannon.clock.runFor(500);
+      assert.equal(await cannon.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 76');
+      assert.equal(await cannon.locator('.naval-special-attack').count(), 0);
+      await cannon.close();
+    }
+    checks.push('Practice/challenge: server clock 2000ms ahead, first normal loads, pending second never fires, acknowledged second/fourth immediately fire one cannon each and damage at420ms');
+    const reordered = await open('lobby', 768, 'seen=1');
+    await reordered.evaluate(() => { window.navalQa.ackOffset = 2000; window.navalQa.holdAnswer = 1; });
+    await reordered.locator('.weplay-start').click();
+    await reordered.locator('.naval-game').waitFor(); await advanceTo(reordered, 2200);
+    await answerVisible(reordered);
+    assert.equal(await reordered.locator('.naval-effect--cannon').count(), 0);
+    await answerVisible(reordered);
+    await reordered.locator('.naval-effect--cannon').waitFor({ timeout: 2000 });
+    const reorderedBefore = await reordered.locator('.naval-hud-time').textContent();
+    await reordered.evaluate(() => window.navalQa.releaseAnswer());
+    await reordered.waitForTimeout(50);
+    assert.equal(await reordered.locator('.naval-hud-time').textContent(), reorderedBefore, 'Older acknowledgement cannot turn the synchronized clock backward');
+    assert.equal(await reordered.locator('.naval-ammo').getAttribute('aria-label'), '포탄 장전 0 / 2');
+    assert.equal(await reordered.locator('.naval-effect--cannon').count(), 1, 'Out-of-order acknowledgements never double-fire the same pair');
+    await reordered.close();
+    checks.push('Out-of-order normal acknowledgements preserve the current clock, accepted pair, and exactly one cannon effect');
+  }
+  if (process.env.WEPLAY_QA_CANNON_ONLY !== '1') {
   if (process.env.WEPLAY_QA_GUIDE_ONLY !== '1') {
   for (const width of [320, 390, 768, 1280]) {
     const battle = await open('battle', width, 'seen=1');
@@ -413,6 +465,7 @@ try {
   const ids=await resumed.locator('input[id]').evaluateAll(elements=>elements.map(element=>element.id));assert.equal(new Set(ids).size,ids.length,'Live battle and frozen demo must not duplicate input IDs');
   await capture(resumed,'guide-live-game-manual-390');await resumed.close();
   checks.push('Completed teacher account opens manual guide without another write; active restored student battle is not auto-interrupted, manual guide clearly keeps live clock running, and demo/live input IDs differ');
+  }
   assert.deepEqual(errors, []); assert.deepEqual(requests, []);
 } catch (error) { failure = error.stack; process.exitCode = 1; }
 finally {

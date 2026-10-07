@@ -5,8 +5,6 @@ import {
   startWeplayGame,
   weplayErrorMessage,
   WEPLAY_DIFFICULTY_LABELS,
-  DEFAULT_WEPLAY_DIFFICULTIES,
-  getWeplayNormalWordCount,
   type WeplayDifficulty,
   type WeplayLobby,
   type WeplayResult,
@@ -19,6 +17,7 @@ import useWeplayGuide from "../../components/common/weplay/useWeplayGuide";
 import useWeplayMusic from "../../components/common/weplay/useWeplayMusic";
 import WeplayMusicButton from "../../components/common/weplay/WeplayMusicButton";
 import { getWeplayGameTitle } from "../../lib/weplayTitle";
+import { notifyPointsUpdated } from "../../lib/appEvents";
 import WeplayLobbyIcon from "./weplay/WeplayLobbyIcon";
 import WeplayRecordsDialog, {
   type WeplayRecordsView,
@@ -116,6 +115,7 @@ export default function Weplay() {
         requestKey: requestKey.current,
       });
       if (scopeRef.current !== startedScope) return;
+      if (next.mode === "challenge") notifyPointsUpdated();
       if (next.status === "finished" && next.result) setResult(next.result);
       else setSession(next);
       requestKey.current = "";
@@ -141,6 +141,7 @@ export default function Weplay() {
     }
   };
   const complete = (next: WeplayResult) => {
+    if (next.mode === "challenge") notifyPointsUpdated();
     setMode(next.mode);
     setDifficulty(next.difficulty);
     setRankingDifficulty(next.difficulty);
@@ -153,27 +154,40 @@ export default function Weplay() {
     (!lobby.policy.enabled ||
       lobby.dailyRemaining <= 0 ||
       lobby.balance < lobby.policy.challengeCost);
-  const maxReward = lobby
-    ? Math.max(0, ...lobby.policy.resultRewards.map((row) => row.amount))
-    : 0;
-  const maxLoss = lobby
-    ? Math.max(
-        0,
-        lobby.policy.challengeCost -
-          Math.min(...lobby.policy.resultRewards.map((row) => row.amount)),
-      )
-    : 0;
-  const difficultySettings =
-    (mode === "challenge"
-      ? lobby?.challengeDifficulties
-      : lobby?.difficulties)?.[difficulty] ||
-    DEFAULT_WEPLAY_DIFFICULTIES[difficulty];
+  const returnToLobby = () => {
+    setResult(null);
+    setRecordsView(null);
+    setError("");
+    requestKey.current = "";
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLButtonElement>(
+          ".weplay-mode-choice button[aria-pressed='true']",
+        )
+        ?.focus();
+    });
+  };
   const availableCount =
     (mode === "challenge"
       ? lobby?.challengeWordCountsByDifficulty?.[difficulty]
       : lobby?.wordCountsByDifficulty?.[difficulty]) ??
     lobby?.wordCount ??
     0;
+  const launchIssue = !lobby
+    ? ""
+    : lobby.gameEnabled === false
+      ? "지금은 게임을 쉬고 있습니다."
+      : availableCount < 3
+        ? "출제할 빈칸 정답이 3개 이상 필요합니다."
+        : mode !== "challenge"
+          ? ""
+          : !lobby.policy.enabled
+            ? "지금은 연습 게임을 이용할 수 있습니다."
+            : lobby.dailyRemaining <= 0
+              ? "오늘의 도전을 모두 마쳤습니다."
+              : lobby.balance < lobby.policy.challengeCost
+                ? "도전에 필요한 위스가 부족합니다."
+                : "";
   return (
     <main className="weplay-page">
       <header className="weplay-heading">
@@ -182,13 +196,13 @@ export default function Weplay() {
           <h1>{gameTitle}</h1>
         </div>
         <div className="weplay-heading-actions">
-          {lobby && (
+          {lobby && !session && (
             <div
               className="weplay-wis-badge"
               aria-label={`내 위스 ${lobby.balance.toLocaleString()}`}
             >
               <span className="weplay-wis-coin" aria-hidden="true">
-                W
+                Ws
               </span>
               <span>내 위스</span>
               <strong>{lobby.balance.toLocaleString()}</strong>
@@ -232,10 +246,8 @@ export default function Weplay() {
             <NavalBattleResult
               result={result}
               gameTitle={gameTitle}
-              onReplay={() => {
-                setResult(null);
-                requestKey.current = "";
-              }}
+              onReplay={returnToLobby}
+              onLobby={returnToLobby}
             />
           ) : (
             result && (
@@ -288,13 +300,10 @@ export default function Weplay() {
                 )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setResult(null);
-                    requestKey.current = "";
-                  }}
+                  onClick={returnToLobby}
                   className="weplay-primary"
                 >
-                  다시 하기
+                  게임 메인으로
                 </button>
               </section>
             )
@@ -359,6 +368,7 @@ export default function Weplay() {
                   <button
                     type="button"
                     aria-pressed={mode === "challenge"}
+                    className="weplay-challenge-choice"
                     disabled={starting}
                     onClick={() => {
                       setMode("challenge");
@@ -374,9 +384,7 @@ export default function Weplay() {
                     <span className="weplay-choice-note">위스 획득·차감</span>
                   </button>
                 </div>
-                <h2 className="weplay-selected-mode" aria-live="polite">
-                  {mode === "practice" ? "연습 모드" : "위스 도전 모드"}
-                </h2>
+                <h2 className="weplay-selected-mode">난이도</h2>
                 <div
                   className="weplay-mode weplay-difficulty"
                   role="group"
@@ -400,81 +408,9 @@ export default function Weplay() {
                     </button>
                   ))}
                 </div>
-                <p className="weplay-rule">
-                  {difficultySettings.durationSeconds}초 ·{" "}
-                  {difficulty === "mild" ? 2 : difficulty === "medium" ? 3 : 4}
-                  단어마다 화포 발사
-                </p>
-                {mode === "challenge" && (
-                  <>
-                    <div className="weplay-stakes">
-                      <strong>
-                        도전 비용 {lobby.policy.challengeCost}위스
-                      </strong>
-                      <span>
-                        최대 손실 {maxLoss}위스 · 최대 순이익{" "}
-                        {Math.max(0, maxReward - lobby.policy.challengeCost)}
-                        위스
-                      </span>
-                      <span>
-                        오늘 남은 도전 {lobby.dailyRemaining}회 · 난이도 공통
-                      </span>
-                    </div>
-                    <details>
-                      <summary>결과별 지급 위스</summary>
-                      <ul className="weplay-rewards">
-                        {lobby.policy.resultRewards.map((row, index, rows) => (
-                          <li key={row.minCorrect}>
-                            <span>
-                              성공률 {row.minCorrect * 5}% 이상
-                              {rows[index + 1]
-                                ? ` ${rows[index + 1].minCorrect * 5}% 미만`
-                                : ""}
-                            </span>
-                            <strong>{row.amount}위스</strong>
-                          </li>
-                        ))}
-                      </ul>
-                      <p>
-                        일반 단어{" "}
-                        {getWeplayNormalWordCount(
-                          difficultySettings.durationSeconds,
-                        )}
-                        개 기준 · 필살기는 전투 점수에 반영
-                      </p>
-                    </details>
-                    {!lobby.policy.enabled && (
-                      <p>지금은 연습 게임을 이용할 수 있습니다.</p>
-                    )}
-                    {lobby.policy.enabled && lobby.dailyRemaining <= 0 && (
-                      <p>오늘의 도전을 모두 마쳤습니다.</p>
-                    )}
-                    {lobby.policy.enabled &&
-                      lobby.balance < lobby.policy.challengeCost && (
-                        <p>도전에 필요한 위스가 부족합니다.</p>
-                      )}
-                    <p>
-                      중간에 종료해도 참가 비용은 반환되지 않으며, 처리한 단어만
-                      정산됩니다.
-                    </p>
-                  </>
-                )}
-                {lobby.gameEnabled === false && (
-                  <p role="status">
-                    지금은 게임을 쉬고 있습니다. 나중에 다시 이용해 주세요.
-                  </p>
-                )}
-                {availableCount === 0 && lobby.gameEnabled !== false && (
-                  <p role="status">
-                    이 난이도에 출제할 단어가 없습니다. 다른 난이도를 선택해
-                    주세요.
-                  </p>
-                )}
-                {availableCount > 0 && availableCount < 3 && (
-                  <p role="status">
-                    출제할 단어가 3개 이상인 난이도를 선택해 주세요.
-                  </p>
-                )}
+                <div className="weplay-launch-feedback" aria-live="polite">
+                  {launchIssue && <p>{launchIssue}</p>}
+                </div>
                 <button
                   type="button"
                   className="weplay-primary weplay-start"
@@ -515,6 +451,7 @@ export default function Weplay() {
         saving={guide.saving}
         error={guide.error}
         gameRunning={!!session}
+        rules={lobby}
         onFinish={() => void guide.finishGuide()}
         onCloseForNow={guide.closeForNow}
       />

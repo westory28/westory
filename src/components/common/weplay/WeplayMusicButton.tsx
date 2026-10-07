@@ -42,7 +42,6 @@ export default function WeplayMusicButton({
           <path d="m16 9 6 6m0-6-6 6" />
         )}
       </svg>
-      <span>{label}</span>
     </button>
   );
 }

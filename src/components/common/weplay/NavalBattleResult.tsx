@@ -12,6 +12,7 @@ interface Props {
   preview?: boolean;
   replaying?: boolean;
   onReplay: () => void;
+  onLobby?: () => void;
 }
 
 export default function NavalBattleResult({
@@ -20,6 +21,7 @@ export default function NavalBattleResult({
   preview = false,
   replaying = false,
   onReplay,
+  onLobby,
 }: Props) {
   const titleId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -139,6 +141,16 @@ export default function NavalBattleResult({
           </details>
         )}
         <div className="naval-result-actions">
+          {onLobby && (
+            <button
+              type="button"
+              className="naval-result-lobby"
+              disabled={replaying}
+              onClick={onLobby}
+            >
+              게임 메인으로
+            </button>
+          )}
           <button type="button" disabled={replaying} onClick={onReplay}>
             {replaying ? "준비 중…" : preview ? "다시 체험" : "다시 하기"}
           </button>

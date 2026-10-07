@@ -1,7 +1,7 @@
 import { isSemesterArchive } from "../../lib/semesterArchive";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import PointRankBadge from "./PointRankBadge";
+import HeaderStudentWis from "./HeaderStudentWis";
 import { useAppToast } from "./AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -157,6 +157,15 @@ const Header: React.FC<{
     SESSION_DURATION_SECONDS,
   );
   const [studentRank, setStudentRank] = useState<PointRankDisplay | null>(null);
+  const [studentWis, setStudentWis] = useState<{
+    key: string;
+    balance: number | null;
+    status: "loading" | "ready" | "error";
+  }>({ key: "", balance: null, status: "loading" });
+  const [studentRankRefresh, setStudentRankRefresh] = useState(0);
+  const refreshStudentRank = useCallback(() => {
+    setStudentRankRefresh((previous) => previous + 1);
+  }, []);
   const [profileFallbackIcon, setProfileFallbackIcon] = useState(
     getDefaultProfileEmojiValue(),
   );
@@ -235,6 +244,7 @@ const Header: React.FC<{
     : "/student/mypage";
   const profileLabel = `${displayName} ${isTeacherPortal ? "교사" : "학생"}`;
   const studentProfileIcon = userData?.profileIcon || profileFallbackIcon;
+  const studentWisKey = `${config?.year}:${config?.semester}:${currentUser?.uid}`;
   const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
   const mobileUnreadLabel =
     mobileUnreadCount > 99 ? "99+" : String(mobileUnreadCount);
@@ -665,25 +675,35 @@ const Header: React.FC<{
 
   useEffect(() => {
     let cancelled = false;
+    const key = `${config?.year}:${config?.semester}:${currentUser?.uid}`;
 
     const loadStudentHeaderRank = async () => {
       if (!currentUser || !config || isTeacherPortal) {
         if (!cancelled) {
           setStudentRank(null);
+          setStudentWis({ key, balance: null, status: "loading" });
           setProfileFallbackIcon(getDefaultProfileEmojiValue());
         }
         return;
       }
 
+      if (studentWis.key !== key) setStudentRank(null);
+      setStudentWis({ key, balance: null, status: "loading" });
       try {
         const [
-          { loadStudentRankPromotionSnapshot },
+          {
+            loadStudentRankPromotionSnapshot,
+            invalidateStudentRankPromotionSnapshotCache,
+          },
           { getPointRankDefaultEmojiValue },
         ] = await Promise.all([
           import("../../lib/pointRankPromotion"),
           import("../../lib/pointRanks"),
         ]);
         if (cancelled) return;
+        if (studentRankRefresh > 0) {
+          invalidateStudentRankPromotionSnapshotCache(config, currentUser.uid);
+        }
         const snapshot = await loadStudentRankPromotionSnapshot(
           config,
           currentUser.uid,
@@ -691,6 +711,12 @@ const Header: React.FC<{
         if (cancelled) return;
 
         setStudentRank(snapshot.rank);
+        const balance = Number(snapshot.wallet?.balance ?? 0);
+        setStudentWis({
+          key,
+          balance: Number.isFinite(balance) ? balance : null,
+          status: Number.isFinite(balance) ? "ready" : "error",
+        });
         setProfileFallbackIcon(
           getPointRankDefaultEmojiValue(snapshot.policy.rankPolicy) ||
             getDefaultProfileEmojiValue(),
@@ -699,32 +725,44 @@ const Header: React.FC<{
         console.error("Failed to load student header rank:", error);
         if (!cancelled) {
           setStudentRank(null);
+          setStudentWis({ key, balance: null, status: "error" });
           setProfileFallbackIcon(getDefaultProfileEmojiValue());
         }
       }
     };
 
-    const triggerRankLoad = () => {
-      void import("../../lib/pointRankPromotion")
-        .then(({ invalidateStudentRankPromotionSnapshotCache }) => {
-          invalidateStudentRankPromotionSnapshotCache(config, currentUser?.uid);
-          void loadStudentHeaderRank();
-        })
-        .catch((error) => {
-          console.error("Failed to refresh student header rank:", error);
-        });
-    };
-
     const cancelInitialLoad = runAfterNextPaint(() => {
       void loadStudentHeaderRank();
     });
-    window.addEventListener("westory:points-updated", triggerRankLoad);
+    window.addEventListener("westory:points-updated", refreshStudentRank);
     return () => {
       cancelled = true;
       cancelInitialLoad();
-      window.removeEventListener("westory:points-updated", triggerRankLoad);
+      window.removeEventListener("westory:points-updated", refreshStudentRank);
     };
-  }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal]);
+  }, [
+    config?.year,
+    config?.semester,
+    currentUser?.uid,
+    isTeacherPortal,
+    refreshStudentRank,
+    studentRankRefresh,
+  ]);
+
+  const profileLink = (
+    <Link
+      to={profileTarget}
+      className="user-greeting header-user-link inline-flex items-center gap-1.5 hover:text-blue-600 transition cursor-pointer"
+      title={isTeacherPortal ? "관리자 페이지" : "마이페이지"}
+    >
+      {!isTeacherPortal && (
+        <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">
+          {studentProfileIcon}
+        </span>
+      )}
+      <span className="header-user-name">{profileLabel}</span>
+    </Link>
+  );
 
   const accountControls = (mobile = false) => (
     <>
@@ -740,21 +778,24 @@ const Header: React.FC<{
           </Link>
         )}
 
-      <Link
-        to={profileTarget}
-        className="user-greeting header-user-link inline-flex items-center gap-1.5 hover:text-blue-600 transition cursor-pointer"
-        title={isTeacherPortal ? "관리자 페이지" : "마이페이지"}
-      >
-        {!isTeacherPortal && (
-          <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">
-            {studentProfileIcon}
-          </span>
-        )}
-        <span className="header-user-name">{profileLabel}</span>
-        {!isTeacherPortal && studentRank && (
-          <PointRankBadge rank={studentRank} size="sm" className="shrink-0" />
-        )}
-      </Link>
+      {isTeacherPortal ? (
+        profileLink
+      ) : (
+        <div className="header-student-profile">
+          {profileLink}
+          <HeaderStudentWis
+            rank={studentWis.key === studentWisKey ? studentRank : null}
+            balance={
+              studentWis.key === studentWisKey ? studentWis.balance : null
+            }
+            status={
+              studentWis.key === studentWisKey ? studentWis.status : "loading"
+            }
+            routeKey={`${studentWisKey}:${location.pathname}:${location.search}:${mobileMenuOpen}`}
+            onRefresh={refreshStudentRank}
+          />
+        </div>
+      )}
 
       <div
         className={

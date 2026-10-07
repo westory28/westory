@@ -161,7 +161,7 @@ test('stored 30/60-second settings migrate without mutation while new writes enf
     assert.equal(stored.difficulties.mild.durationSeconds, durationSeconds);
     assert.throws(() => core.validateGameSettings(stored), /90~180/);
   }
-  const excluded = core.SPECIAL_FALLBACK_WORDS;
+  const excluded = catalog.slice(0, 3).map(word => word.text);
   const words = core.buildWords(catalog.slice(0, 3), 'excluded', 'mild', core.DEFAULT_DIFFICULTY_SETTINGS.mild, { excludedWords: excluded });
   assert.equal(words.filter((word) => word.kind === 'special').length, 0);
 });

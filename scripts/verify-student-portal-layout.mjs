@@ -21,6 +21,7 @@ const stubs = {
   "AuthContext": { useAuth: () => auth },
   "AppToastProvider": { useAppToast: () => ({ showToast() {} }) },
   "PointRankBadge": { default: () => null },
+  "HeaderStudentWis": { default: () => null },
   "semesterArchive": { isSemesterArchive: false },
   "lazyWithRetry": { lazyWithRetry: () => () => null },
   "profileEmojis": { getDefaultProfileEmojiValue: () => "😀" },

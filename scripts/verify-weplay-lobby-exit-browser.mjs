@@ -251,7 +251,7 @@ try {
     const practice = lobby.getByRole('button', { name: '연습하기 위스 변동 없음', exact: true });
     const challenge = lobby.getByRole('button', { name: '도전하기 위스 획득·차감', exact: true });
     assert.equal(await practice.getAttribute('aria-pressed'), 'true');
-    assert.equal(await lobby.locator('.weplay-selected-mode').textContent(), '연습 모드');
+    assert.equal(await lobby.locator('.weplay-selected-mode').textContent(), '난이도');
     assert.equal(await lobby.getByLabel('수업 범위').count(), 0);
     assert.equal(await lobby.getByRole('combobox').count(), 0);
     assert.match(await lobby.locator('.weplay-wis-badge').textContent(), /내 위스\s*34/);
@@ -265,7 +265,7 @@ try {
     assert.equal(await lobby.locator('.weplay-launch-art img').evaluate(image => image.complete && image.naturalWidth === 1200 && image.naturalHeight === 900 && image.src.includes('lobby-turtle-ship.webp')), true);
     const geometry = await lobby.locator('.weplay-launch').evaluate(element => ({ columns: getComputedStyle(element).gridTemplateColumns.split(' ').length, controls: [...element.querySelectorAll('button,select')].map(control => { const r = control.getBoundingClientRect(); return { width: r.width, height: r.height }; }), textFits: [...element.querySelectorAll('h2,.weplay-choice-top strong,.weplay-choice-note')].every(text => text.scrollWidth <= text.clientWidth) }));
     assert.ok(geometry.textFits && geometry.controls.every(control => control.width >= 44 && control.height >= 44), JSON.stringify(geometry));
-    assert.equal(geometry.columns, width < 768 ? 1 : 2);
+    assert.equal(geometry.columns, width < 1024 ? 1 : 2);
     layoutMeasurements.push({ width, ...geometry });
     await capture(lobby, `lobby-practice-${width}`);
     if (width === 320) {
@@ -275,11 +275,20 @@ try {
       await emptyHistory.getByRole('button', { name: '닫기', exact: true }).click();
     }
     await lobby.getByRole('group', { name: '난이도', exact: true }).getByRole('button', { name: '매운맛', exact: true }).click();
+    const beforeMode = await lobby.locator('.weplay-launch').boundingBox();
+    const beforeStart = await lobby.locator('.weplay-start').boundingBox();
     await challenge.click();
+    const afterMode = await lobby.locator('.weplay-launch').boundingBox();
+    const afterStart = await lobby.locator('.weplay-start').boundingBox();
+    assert.equal(afterMode.height, beforeMode.height, 'Mode must not resize launch panel');
+    assert.equal(afterStart.y, beforeStart.y, 'Mode must not move start button');
+    assert.equal(await lobby.locator('.weplay-wis-coin').textContent().then(t=>t.trim()), 'Ws');
+    assert.equal(await lobby.locator('.weplay-music-button').textContent(), '');
+
     assert.equal(await challenge.getAttribute('aria-pressed'), 'true');
     assert.equal(await practice.getAttribute('aria-pressed'), 'false');
-    assert.equal(await lobby.locator('.weplay-selected-mode').textContent(), '위스 도전 모드');
-    assert.match(await lobby.locator('.weplay-stakes').textContent(), /도전 비용 7위스/);
+    assert.equal(await lobby.locator('.weplay-selected-mode').textContent(), '난이도');
+    assert.equal(await lobby.locator('.weplay-stakes,.weplay-rule,.weplay-rewards').count(), 0);
     assert.equal(await lobby.locator('.weplay-start').textContent(), '위스 도전 시작 · 7위스');
     await capture(lobby, `lobby-challenge-${width}`);
     await practice.click();
@@ -360,6 +369,12 @@ try {
     await page.getByRole('button', { name: '게임 안내', exact: true }).click();
     await page.locator('.weplay-guide[open]').waitFor();
     await capture(page, `lobby-guide-${width}`);
+    await page.getByText('난이도·위스 규칙', {exact:true}).click();
+    const rules = page.locator('.weplay-guide-rules');
+    assert.match(await rules.textContent(), /2단어마다 화포 1회/);
+    assert.match(await rules.textContent(), /최대 손실 7위스/);
+    assert.match(await rules.textContent(), /반환되지 않으며/);
+    await capture(page, `lobby-guide-rules-${width}`);
     await page.keyboard.press('Escape');
     await page.locator('.weplay-guide[open]').waitFor({ state: 'hidden' });
     await page.close();
@@ -460,8 +475,8 @@ try {
   await pending.clock.runFor(5000); assert.equal(await pending.evaluate(() => window.navalQa.completions.length), 1);
   assert.match(await pending.locator('.naval-result-settlement').textContent(), /도전 비용 7위스/);
   await capture(pending, 'exit-challenge-result-768');
-  await pending.getByRole('button', { name: '다시 하기', exact: true }).click();
-  assert.equal(await pending.locator('.weplay-selected-mode').textContent(), '위스 도전 모드');
+  await pending.getByRole('button', { name: '게임 메인으로', exact: true }).click();
+  assert.equal(await pending.locator('.weplay-selected-mode').textContent(), '난이도');
   await pending.close();
   checks.push('Challenge exit waits pending answer, locks input, ignores duplicate confirm/Escape, focuses failed-settlement retry, retries exitEarly once and keeps correctCount1 plus challenge receipt/mode');
 
@@ -553,8 +568,8 @@ try {
   dialog = await exitDialog(resumed); assert.match(await dialog.textContent(), /참가비는 반환되지 않으며/);
   await dialog.getByRole('button', { name: '현재 기록으로 종료', exact: true }).click(); await resumed.clock.runFor(300);
   await resumed.locator('.naval-result').waitFor();
-  await resumed.getByRole('button', { name: '다시 하기', exact: true }).click();
-  assert.equal(await resumed.locator('.weplay-selected-mode').textContent(), '위스 도전 모드');
+  await resumed.getByRole('button', { name: '게임 메인으로', exact: true }).click();
+  assert.equal(await resumed.locator('.weplay-selected-mode').textContent(), '난이도');
   assert.equal(await resumed.getByRole('button', { name: '도전하기 위스 획득·차감', exact: true }).getAttribute('aria-pressed'), 'true');
   await capture(resumed, 'lobby-restored-challenge-replay-390'); await resumed.close();
   checks.push('Restored challenge session keeps challenge mode after early result and Replay returns to lobby');

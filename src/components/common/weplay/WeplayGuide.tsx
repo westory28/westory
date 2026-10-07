@@ -3,9 +3,11 @@ import NavalBattleGame from "./NavalBattleGame";
 import {
   DEFAULT_WEPLAY_DIFFICULTIES,
   type WeplaySession,
+  type WeplayLobby,
 } from "../../../lib/weplay";
 import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 import "./weplay-guide.css";
+import WeplayGuideRules from "./WeplayGuideRules";
 
 const STEPS = [
   {
@@ -79,6 +81,7 @@ interface Props {
   saving: boolean;
   error: string;
   gameRunning?: boolean;
+  rules?: WeplayLobby | null;
   onFinish: () => void;
   onCloseForNow: () => void;
 }
@@ -89,6 +92,7 @@ export default function WeplayGuide({
   saving,
   error,
   gameRunning = false,
+  rules,
   onFinish,
   onCloseForNow,
 }: Props) {
@@ -225,7 +229,7 @@ export default function WeplayGuide({
         if (event.key !== "Tab") return;
         const controls = Array.from(
           event.currentTarget.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), input:not(:disabled), [href], [tabindex="0"]',
+            'button:not(:disabled), input:not(:disabled), summary, [href], [tabindex="0"]',
           ),
         ).filter((element) => element.getClientRects().length > 0);
         const first = controls[0],
@@ -268,6 +272,7 @@ export default function WeplayGuide({
               ))}
             </ol>
           </header>
+          {rules && <WeplayGuideRules lobby={rules} />}
           {gameRunning && (
             <p className="weplay-guide-live" role="status">
               진행 중인 전투의 시간은 계속 흐릅니다.
