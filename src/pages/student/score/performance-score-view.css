@@ -1,0 +1,23 @@
+.performance-score-navigation .teacher-settings-section {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--ws-border-soft);
+}
+
+.performance-score-navigation .performance-score-navigation-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+.performance-score-workspace:not(:has(> .teacher-sub-navigation)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.performance-score-workspace:not(:has(> .teacher-sub-navigation))
+  > .teacher-sub-content,
+.performance-score-workspace:not(:has(> .teacher-sub-navigation))
+  > .teacher-sub-workspace-footer {
+  grid-column: 1;
+}

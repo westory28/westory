@@ -289,6 +289,7 @@ await (async () => {
     selectedScoreRoster: fixtureRoster,
     scoreListReady: true,
     scoreEditing: true,
+    isWrittenExamMode: false,
     savingScoreEdits: false,
     scoreEditOriginalRecords: [original],
     scoreListRecords: [updated],

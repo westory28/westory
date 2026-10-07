@@ -18,6 +18,8 @@ import {
 } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
+import PortalWorkspace from "../../../components/common/PortalWorkspace";
+import "./performance-score-view.css";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import ExamOmrCard, {
   ExamOmrAnswerStrip,
@@ -634,6 +636,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           year,
           semester,
           scoreKind,
+          fromServer: scoreKind === PERFORMANCE_SCORE_KIND,
         }),
         loadPerformanceScoreSettings(config),
         loadPerformanceScoreWarningConsent(currentUser.uid),
@@ -1935,20 +1938,45 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           }),
         ),
       );
-      setRecords((current) =>
-        current.map((record) => {
-          const confirmation = verifiedConfirmations.get(
-            getRecordScoreId(record),
+      let refreshedRecords = records.map((record) => {
+        const confirmation = verifiedConfirmations.get(
+          getRecordScoreId(record),
+        );
+        return confirmation
+          ? applyPerformanceScoreConfirmation(record, confirmation)
+          : record;
+      });
+      if (scoreKind === PERFORMANCE_SCORE_KIND) {
+        try {
+          // A teacher may publish another assessment while the student signs.
+          // Refresh the full set, without signing any newly discovered score.
+          refreshedRecords = await loadUserPerformanceScoreRecords(
+            currentUser.uid,
+            { year, semester, scoreKind, fromServer: true },
           );
-          return confirmation
-            ? applyPerformanceScoreConfirmation(record, confirmation)
-            : record;
-        }),
-      );
+        } catch (error) {
+          console.error("Failed to refresh scores after signing:", error);
+          setRecords([]);
+          setSignatureModalOpen(false);
+          setSignatureImageDraft("");
+          setLoadError(
+            "서명은 저장되었지만 최신 점수를 확인하지 못했습니다. 다시 시도해 주세요.",
+          );
+          return;
+        }
+      }
+      setRecords(refreshedRecords);
       setSignatureModalOpen(false);
       setSignatureImageDraft("");
       window.setTimeout(() => {
-        window.alert("서명이 완료되었습니다.");
+        window.alert(
+          refreshedRecords.some(
+            (record) =>
+              hasEnteredPerformanceScore(record) && !isRecordConfirmed(record),
+          )
+            ? "서명을 저장했습니다. 추가되거나 변경된 점수를 확인하고 다시 서명해 주세요."
+            : "서명이 완료되었습니다.",
+        );
       }, 0);
     } catch (error) {
       console.error("Failed to confirm performance score:", error);
@@ -2230,7 +2258,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             type="button"
             onClick={() => void saveWarningConsent()}
             disabled={!warningConsentChecked || warningConsentSaving}
-            className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
+            className={
+              scoreKind === PERFORMANCE_SCORE_KIND
+                ? "performance-score-consent-action mx-auto mt-5 flex min-h-14 w-full max-w-sm items-center justify-center rounded-lg bg-blue-600 px-5 py-3 text-lg font-black leading-6 text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                : "mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
+            }
           >
             {warningConsentSaving ? "저장 중..." : "동의 저장하고 점수 확인"}
           </button>
@@ -2239,486 +2271,506 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     );
   }
 
-  return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-10">
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 break-keep">
-            <h1 className="text-2xl font-black text-slate-900">
-              {resolvedCopy.pageTitle}
-            </h1>
-            <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-              {year}학년도 {semester}학기 기준으로 교사가 입력한 내 총점과{" "}
-              {resolvedCopy.pageDescription}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-            {selectedRecord &&
-              (allScoresConfirmed ? (
-                <>
-                  {hasObjectionHistory && (
-                    <button
-                      type="button"
-                      onClick={openObjectionResultModal}
-                      className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-black leading-5 text-slate-700 transition hover:bg-slate-50"
-                    >
-                      이의 결과
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled
-                    aria-disabled="true"
-                    className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black leading-5 text-blue-800 opacity-80"
-                  >
-                    점수 확인 완료 {confirmedRecordCount}/
-                    {registeredRecords.length}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={openObjectionModal}
-                    disabled={signatureActionPending || !canRequestObjection}
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    이의 신청
-                  </button>
-                  {hasObjectionHistory && (
-                    <button
-                      type="button"
-                      onClick={openObjectionResultModal}
-                      disabled={signatureActionPending}
-                      className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-black leading-5 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      이의 결과
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={openSignatureModal}
-                    disabled={signatureButtonDisabled}
-                    title={signatureBlockedMessage || undefined}
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    점수 확인 및 서명하기
-                  </button>
-                </>
-              ))}
-          </div>
-        </div>
-        {signatureBlockedByPendingRequest && (
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
-            {signatureBlockedMessage}
-          </div>
-        )}
-      </div>
-
-      {!selectedRecord ? (
-        <div className="break-keep rounded-xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center shadow-sm">
-          <div className="text-lg font-black text-slate-700">
-            {resolvedCopy.emptyTitle}
-          </div>
-          <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
-            {resolvedCopy.emptyDescription}
-          </p>
-        </div>
-      ) : (
-        <div className="teacher-sub-workspace gap-6">
-          <PortalSubNavigation
-            title="점수 목록"
-            activeLabel={
-              activeWrittenExamGroup
-                ? `${selectedRecord.title} · ${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)}`
-                : selectedRecord.title
-            }
-            open={scoreMenuOpen}
-            onOpenChange={setScoreMenuOpen}
-          >
-            {hasWrittenExamSidebarGroups
-              ? [
-                  writtenExamObjectiveEntry ? (
-                    <button
-                      key={`written-objective-${writtenExamObjectiveEntry.scoreId}`}
-                      type="button"
-                      onClick={() => {
-                        setSelectedId(
-                          writtenExamObjectiveEntry.record.id || "",
-                        );
-                        setSelectedWrittenExamGroupKey(
-                          writtenExamObjectiveEntry.group.key,
-                        );
-                        setScoreMenuOpen(false);
-                      }}
-                      aria-current={
-                        activeWrittenExamGroupIsObjective ? "true" : undefined
-                      }
-                      className={`teacher-settings-section${activeWrittenExamGroupIsObjective ? " is-active" : ""}`}
-                    >
-                      <div className="w-6 shrink-0 text-center">
-                        <i
-                          className="fas fa-clipboard-check text-sm"
-                          aria-hidden="true"
-                        ></i>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                          서답형
-                        </div>
-                        <div
-                          className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                            activeWrittenExamGroupIsObjective
-                              ? "text-blue-500"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          <span>
-                            획득{" "}
-                            {formatPerformanceScore(
-                              getWrittenExamGroupScore(
-                                writtenExamObjectiveEntry.group,
-                              ),
-                            )}{" "}
-                            /{" "}
-                            {formatPerformanceScore(
-                              getWrittenExamGroupMaxScore(
-                                writtenExamObjectiveEntry.group,
-                              ),
-                            )}
-                          </span>
-                          {writtenExamObjectiveEntry.record.signatureName && (
-                            <span className="text-blue-700">확인 완료</span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  ) : null,
-                  writtenExamEssayEntries.length > 0 ? (
-                    <div key="written-essay-menu" className="min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const firstEssayEntry = writtenExamEssayEntries[0];
-                          if (!firstEssayEntry) return;
-                          setSelectedId(firstEssayEntry.record.id || "");
-                          setSelectedWrittenExamGroupKey(
-                            firstEssayEntry.group.key,
-                          );
-                          setScoreMenuOpen(false);
-                        }}
-                        aria-current={
-                          writtenExamEssayActive ? "true" : undefined
-                        }
-                        className={`teacher-settings-section${writtenExamEssayActive ? " is-active" : ""}`}
-                      >
-                        <div className="w-6 shrink-0 text-center">
-                          <i
-                            className="fas fa-clipboard-check text-sm"
-                            aria-hidden="true"
-                          ></i>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                            논술형
-                          </div>
-                          <div className="mt-1 text-xs font-bold text-slate-500">
-                            {writtenExamEssayEntries.length}개 문항
-                          </div>
-                        </div>
-                      </button>
-                      <div className="border-t border-slate-100 px-3 pb-3 lg:px-4">
-                        <div className="grid gap-2 pt-2">
-                          {writtenExamEssayEntries.map(
-                            ({ record, scoreId, group }) => {
-                              const groupActive =
-                                record.id === selectedRecord.id &&
-                                activeWrittenExamGroup?.key === group.key;
-                              return (
-                                <button
-                                  key={`written-essay-${scoreId}-${group.key}`}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedId(record.id || "");
-                                    setSelectedWrittenExamGroupKey(group.key);
-                                    setScoreMenuOpen(false);
-                                  }}
-                                  aria-current={
-                                    groupActive ? "true" : undefined
-                                  }
-                                  className={`teacher-settings-section${groupActive ? " is-active" : ""}`}
-                                >
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block">
-                                      {getWrittenExamGroupDisplayTitle(group)}
-                                    </span>
-                                    <span
-                                      className={`mt-1 block font-bold ${
-                                        groupActive
-                                          ? "text-blue-700"
-                                          : "text-slate-400"
-                                      }`}
-                                    >
-                                      {formatPerformanceScore(
-                                        getWrittenExamGroupScore(group),
-                                      )}{" "}
-                                      /{" "}
-                                      {formatPerformanceScore(
-                                        getWrittenExamGroupMaxScore(group),
-                                      )}
-                                    </span>
-                                  </span>
-                                </button>
-                              );
-                            },
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null,
-                ].filter(Boolean)
-              : records.map((record) => {
-                  const active =
-                    record.id === selectedRecord.id ||
-                    (!selectedRecord.id && record.id === records[0]?.id);
-                  return (
-                    <button
-                      key={record.id || record.rosterId}
-                      type="button"
-                      onClick={() => {
-                        setSelectedId(record.id || "");
-                        setScoreMenuOpen(false);
-                      }}
-                      aria-current={active ? "true" : undefined}
-                      className={`teacher-settings-section${active ? " is-active" : ""}`}
-                    >
-                      <div className="w-6 shrink-0 text-center">
-                        <i
-                          className="fas fa-clipboard-check text-sm"
-                          aria-hidden="true"
-                        ></i>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                          {record.title}
-                        </div>
-                        <div
-                          className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                            active ? "text-blue-500" : "text-slate-500"
-                          }`}
-                        >
-                          <span>
-                            {hasEnteredPerformanceScore(record)
-                              ? `획득 ${formatPerformanceScore(record.totalScore)} / ${formatPerformanceScore(record.totalMaxScore)}`
-                              : "점수 미등록"}
-                          </span>
-                          {record.signatureName && (
-                            <span className="text-blue-700">확인 완료</span>
-                          )}
-                          {pendingObjectionScoreIds.has(
-                            getRecordScoreId(record),
-                          ) && (
-                            <span className="text-amber-700">
-                              {pendingObjectionAnswerSheetScoreIds.has(
-                                getRecordScoreId(record),
-                              )
-                                ? "이의·답안지 확인 처리 대기"
-                                : "이의 처리 대기"}
-                            </span>
-                          )}
-                          {pendingAnswerSheetRequestScoreIds.has(
-                            getRecordScoreId(record),
-                          ) && (
-                            <span className="text-blue-700">
-                              답안지 확인 요청 중
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
+  const scoreNavigation = selectedRecord ? (
+    <PortalSubNavigation
+      title={
+        scoreKind === PERFORMANCE_SCORE_KIND ? "수행평가 목록" : "점수 목록"
+      }
+      className={
+        scoreKind === PERFORMANCE_SCORE_KIND
+          ? "performance-score-navigation"
+          : undefined
+      }
+      activeLabel={
+        activeWrittenExamGroup
+          ? `${selectedRecord.title} · ${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)}`
+          : selectedRecord.title
+      }
+      open={scoreMenuOpen}
+      onOpenChange={setScoreMenuOpen}
+    >
+      {hasWrittenExamSidebarGroups
+        ? [
+            writtenExamObjectiveEntry ? (
+              <button
+                key={`written-objective-${writtenExamObjectiveEntry.scoreId}`}
+                type="button"
+                onClick={() => {
+                  setSelectedId(writtenExamObjectiveEntry.record.id || "");
+                  setSelectedWrittenExamGroupKey(
+                    writtenExamObjectiveEntry.group.key,
                   );
-                })}
-          </PortalSubNavigation>
-
-          <section className="mt-6 min-w-0 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:mt-0">
-            <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="text-sm font-black text-blue-700">
-                  {selectedRecord.subject || resolvedCopy.scoreSubjectFallback}
+                  setScoreMenuOpen(false);
+                }}
+                aria-current={
+                  activeWrittenExamGroupIsObjective ? "true" : undefined
+                }
+                className={`teacher-settings-section${activeWrittenExamGroupIsObjective ? " is-active" : ""}`}
+              >
+                <div className="w-6 shrink-0 text-center">
+                  <i
+                    className="fas fa-clipboard-check text-sm"
+                    aria-hidden="true"
+                  ></i>
                 </div>
-                <h2 className="mt-1 whitespace-normal break-keep text-2xl font-black leading-tight text-slate-900">
-                  {selectedRecord.title}
-                </h2>
-                {activeWrittenExamGroup && (
-                  <div className="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-800">
-                    {getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)}
+                <div className="min-w-0 flex-1">
+                  <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                    서답형
                   </div>
-                )}
-                {getRecordDate(selectedRecord) && (
-                  <p className="mt-2 text-xs font-bold text-slate-400">
-                    최종 반영일: {getRecordDate(selectedRecord)}
-                  </p>
-                )}
-              </div>
-              <div className="text-left lg:text-right">
-                <div className="text-sm font-black text-slate-500">
-                  획득 점수 / 만점
-                </div>
-                <div className="mt-1 text-4xl font-black text-blue-600">
-                  {selectedRecordHasScore
-                    ? formatPerformanceScore(visibleTotalScore)
-                    : "-"}
-                  <span className="text-xl text-slate-300">
-                    {" "}
-                    / {formatPerformanceScore(visibleTotalMaxScore)}
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
-                  {!selectedRecordHasScore ? (
-                    <span className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
-                      점수 미등록
+                  <div
+                    className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                      activeWrittenExamGroupIsObjective
+                        ? "text-blue-500"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    <span>
+                      획득{" "}
+                      {formatPerformanceScore(
+                        getWrittenExamGroupScore(
+                          writtenExamObjectiveEntry.group,
+                        ),
+                      )}{" "}
+                      /{" "}
+                      {formatPerformanceScore(
+                        getWrittenExamGroupMaxScore(
+                          writtenExamObjectiveEntry.group,
+                        ),
+                      )}
                     </span>
-                  ) : selectedRecordHasPendingObjection ? (
-                    <span className="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
-                      {pendingObjectionAnswerSheetScoreIds.has(
-                        getRecordScoreId(selectedRecord),
-                      )
-                        ? "이의·답안지 확인 처리 대기"
-                        : "이의 제기 처리 대기"}
-                    </span>
-                  ) : hasConfirmation ? (
-                    <span className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
-                      확인 완료
-                      {confirmedAt ? ` · ${formatDateTime(confirmedAt)}` : ""}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
-                      상단에서 전체 점수 확인 필요
-                    </span>
-                  )}
-                  {selectedRecordHasPendingAnswerSheetRequest && (
-                    <span className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
-                      답안지 확인 요청 중
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {selectedRecordHasScore && (
-              <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
-                <div className="flex flex-col justify-center rounded-xl border border-blue-100 bg-blue-50 p-5">
-                  <div className="text-sm font-black text-blue-800">
-                    내 획득 점수
-                  </div>
-                  <div className="mt-3 text-5xl font-black text-blue-700">
-                    {formatPerformanceScore(visibleTotalScore)}
-                    <span className="ml-1 text-2xl text-blue-300">
-                      / {formatPerformanceScore(visibleTotalMaxScore)}
-                    </span>
-                  </div>
-                  <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
-                    {activeWrittenExamGroupIsObjective
-                      ? "서답형 정오답을 확인해 주세요."
-                      : `점수와 ${resolvedCopy.evidenceTitle}을 함께 확인해 주세요.`}
-                  </p>
-                </div>
-
-                <div
-                  className={`relative min-w-0 overflow-hidden rounded-xl border border-slate-200 ${
-                    activeWrittenExamGroupIsObjective ? "p-0" : "h-72 p-4"
-                  }`}
-                >
-                  {activeWrittenExamGroupIsObjective ? (
-                    <ExamOmrCard
-                      title="서답형 OMR"
-                      items={activeObjectiveOmrItems}
-                      mode="student"
-                      showScore
-                      scoreLabel={`${formatPerformanceScore(
-                        visibleTotalScore,
-                      )} / ${formatPerformanceScore(visibleTotalMaxScore)}점`}
-                      className="border-0 shadow-none"
-                    />
-                  ) : visibleChartItems.length > 0 ? (
-                    <div
-                      ref={scoreChartContainerRef}
-                      className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
-                    >
-                      <Bar
-                        ref={scoreChartRef}
-                        data={chartData}
-                        options={chartOptions}
-                        style={{ maxWidth: "100%" }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold leading-6 text-slate-400">
-                      {resolvedCopy.scoreItemsLabel}는 제공되지 않았습니다.
-                      점수와 {resolvedCopy.evidenceTitle}을 확인해 주세요.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {selectedRecordHasScore &&
-              hasDetailedWrittenExamItems &&
-              !activeWrittenExamGroupIsObjective && (
-                <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4">
-                  <h3 className="text-base font-black text-slate-900">
-                    {activeWrittenExamGroup
-                      ? `${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)} 문항별 점수와 피드백`
-                      : "문항별 점수와 피드백"}
-                  </h3>
-                  <div className="mt-4 grid gap-2">
-                    {activeWrittenExamGroup?.items.map(
-                      ({ key, label, item, index }) => (
-                        <div
-                          key={`${key}-${index}`}
-                          className="grid gap-2 rounded-lg bg-slate-50 px-3 py-3 sm:grid-cols-[4rem_minmax(0,1fr)_auto] sm:items-start"
-                        >
-                          <span className="text-sm font-black text-slate-800">
-                            {label}
-                          </span>
-                          <div className="min-w-0">
-                            {item.feedback && (
-                              <p className="whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
-                                {item.feedback}
-                              </p>
-                            )}
-                          </div>
-                          <span className="shrink-0 text-sm font-black text-blue-700">
-                            {item.scoreEntered === false
-                              ? "-"
-                              : formatPerformanceScore(item.score)}
-                            <span className="text-slate-400">
-                              {" "}
-                              / {formatPerformanceScore(item.maxScore)}점
-                            </span>
-                          </span>
-                        </div>
-                      ),
+                    {writtenExamObjectiveEntry.record.signatureName && (
+                      <span className="text-blue-700">확인 완료</span>
                     )}
                   </div>
                 </div>
-              )}
-
-            {selectedRecordHasScore &&
-              !activeWrittenExamGroupIsObjective &&
-              (!hasDetailedWrittenExamItems || evidenceBlockText) && (
-                <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
-                  <h3 className="text-base font-black text-blue-900">
-                    {hasDetailedWrittenExamItems
-                      ? "전체 피드백"
-                      : resolvedCopy.evidenceTitle}
-                  </h3>
-                  <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
-                    {evidenceBlockText || resolvedCopy.evidenceEmptyText}
-                  </p>
+              </button>
+            ) : null,
+            writtenExamEssayEntries.length > 0 ? (
+              <div key="written-essay-menu" className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const firstEssayEntry = writtenExamEssayEntries[0];
+                    if (!firstEssayEntry) return;
+                    setSelectedId(firstEssayEntry.record.id || "");
+                    setSelectedWrittenExamGroupKey(firstEssayEntry.group.key);
+                    setScoreMenuOpen(false);
+                  }}
+                  aria-current={writtenExamEssayActive ? "true" : undefined}
+                  className={`teacher-settings-section${writtenExamEssayActive ? " is-active" : ""}`}
+                >
+                  <div className="w-6 shrink-0 text-center">
+                    <i
+                      className="fas fa-clipboard-check text-sm"
+                      aria-hidden="true"
+                    ></i>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                      논술형
+                    </div>
+                    <div className="mt-1 text-xs font-bold text-slate-500">
+                      {writtenExamEssayEntries.length}개 문항
+                    </div>
+                  </div>
+                </button>
+                <div className="border-t border-slate-100 px-3 pb-3 lg:px-4">
+                  <div className="grid gap-2 pt-2">
+                    {writtenExamEssayEntries.map(
+                      ({ record, scoreId, group }) => {
+                        const groupActive =
+                          record.id === selectedRecord.id &&
+                          activeWrittenExamGroup?.key === group.key;
+                        return (
+                          <button
+                            key={`written-essay-${scoreId}-${group.key}`}
+                            type="button"
+                            onClick={() => {
+                              setSelectedId(record.id || "");
+                              setSelectedWrittenExamGroupKey(group.key);
+                              setScoreMenuOpen(false);
+                            }}
+                            aria-current={groupActive ? "true" : undefined}
+                            className={`teacher-settings-section${groupActive ? " is-active" : ""}`}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block">
+                                {getWrittenExamGroupDisplayTitle(group)}
+                              </span>
+                              <span
+                                className={`mt-1 block font-bold ${
+                                  groupActive
+                                    ? "text-blue-700"
+                                    : "text-slate-400"
+                                }`}
+                              >
+                                {formatPerformanceScore(
+                                  getWrittenExamGroupScore(group),
+                                )}{" "}
+                                /{" "}
+                                {formatPerformanceScore(
+                                  getWrittenExamGroupMaxScore(group),
+                                )}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
                 </div>
+              </div>
+            ) : null,
+          ].filter(Boolean)
+        : records.map((record) => {
+            const active =
+              record.id === selectedRecord.id ||
+              (!selectedRecord.id && record.id === records[0]?.id);
+            return (
+              <button
+                key={record.id || record.rosterId}
+                type="button"
+                onClick={() => {
+                  setSelectedId(record.id || "");
+                  setScoreMenuOpen(false);
+                }}
+                aria-current={active ? "true" : undefined}
+                className={`teacher-settings-section${active ? " is-active" : ""}`}
+              >
+                <div className="w-6 shrink-0 text-center">
+                  <i
+                    className="fas fa-clipboard-check text-sm"
+                    aria-hidden="true"
+                  ></i>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div
+                    title={record.title}
+                    className="performance-score-navigation-title whitespace-normal break-keep text-sm font-bold leading-5"
+                  >
+                    {record.title}
+                  </div>
+                  <div
+                    className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                      active ? "text-blue-500" : "text-slate-500"
+                    }`}
+                  >
+                    <span>
+                      {hasEnteredPerformanceScore(record)
+                        ? `획득 ${formatPerformanceScore(record.totalScore)} / ${formatPerformanceScore(record.totalMaxScore)}`
+                        : "점수 미등록"}
+                    </span>
+                    {record.signatureName && (
+                      <span className="text-blue-700">확인 완료</span>
+                    )}
+                    {pendingObjectionScoreIds.has(getRecordScoreId(record)) && (
+                      <span className="text-amber-700">
+                        {pendingObjectionAnswerSheetScoreIds.has(
+                          getRecordScoreId(record),
+                        )
+                          ? "이의·답안지 확인 처리 대기"
+                          : "이의 처리 대기"}
+                      </span>
+                    )}
+                    {pendingAnswerSheetRequestScoreIds.has(
+                      getRecordScoreId(record),
+                    ) && (
+                      <span className="text-blue-700">답안지 확인 요청 중</span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+    </PortalSubNavigation>
+  ) : null;
+  const scoreHeader = (
+    <div className="mb-5 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 break-keep">
+          <h1 className="text-2xl font-black text-slate-900">
+            {resolvedCopy.pageTitle}
+          </h1>
+          <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
+            {year}학년도 {semester}학기 기준으로 교사가 입력한 내 총점과{" "}
+            {resolvedCopy.pageDescription}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+          {selectedRecord &&
+            (allScoresConfirmed ? (
+              <>
+                {hasObjectionHistory && (
+                  <button
+                    type="button"
+                    onClick={openObjectionResultModal}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-black leading-5 text-slate-700 transition hover:bg-slate-50"
+                  >
+                    이의 결과
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black leading-5 text-blue-800 opacity-80"
+                >
+                  점수 확인 완료 {confirmedRecordCount}/
+                  {registeredRecords.length}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={openObjectionModal}
+                  disabled={signatureActionPending || !canRequestObjection}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  이의 신청
+                </button>
+                {hasObjectionHistory && (
+                  <button
+                    type="button"
+                    onClick={openObjectionResultModal}
+                    disabled={signatureActionPending}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-black leading-5 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    이의 결과
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={openSignatureModal}
+                  disabled={signatureButtonDisabled}
+                  title={signatureBlockedMessage || undefined}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  점수 확인 및 서명하기
+                </button>
+              </>
+            ))}
+        </div>
+      </div>
+      {signatureBlockedByPendingRequest && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
+          {signatureBlockedMessage}
+        </div>
+      )}
+    </div>
+  );
+  const scoreBody = !selectedRecord ? (
+    <div className="break-keep rounded-xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center shadow-sm">
+      <div className="text-lg font-black text-slate-700">
+        {resolvedCopy.emptyTitle}
+      </div>
+      <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+        {resolvedCopy.emptyDescription}
+      </p>
+    </div>
+  ) : (
+    <section
+      className={`min-w-0 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${scoreKind === PERFORMANCE_SCORE_KIND ? "" : "mt-6 md:mt-0"}`}
+    >
+      <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-sm font-black text-blue-700">
+            {selectedRecord.subject || resolvedCopy.scoreSubjectFallback}
+          </div>
+          <h2 className="mt-1 whitespace-normal break-keep text-2xl font-black leading-tight text-slate-900">
+            {selectedRecord.title}
+          </h2>
+          {activeWrittenExamGroup && (
+            <div className="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-800">
+              {getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)}
+            </div>
+          )}
+          {getRecordDate(selectedRecord) && (
+            <p className="mt-2 text-xs font-bold text-slate-400">
+              최종 반영일: {getRecordDate(selectedRecord)}
+            </p>
+          )}
+        </div>
+        <div className="text-left lg:text-right">
+          <div className="text-sm font-black text-slate-500">
+            획득 점수 / 만점
+          </div>
+          <div className="mt-1 text-4xl font-black text-blue-600">
+            {selectedRecordHasScore
+              ? formatPerformanceScore(visibleTotalScore)
+              : "-"}
+            <span className="text-xl text-slate-300">
+              {" "}
+              / {formatPerformanceScore(visibleTotalMaxScore)}
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
+            {!selectedRecordHasScore ? (
+              <span className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
+                점수 미등록
+              </span>
+            ) : selectedRecordHasPendingObjection ? (
+              <span className="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
+                {pendingObjectionAnswerSheetScoreIds.has(
+                  getRecordScoreId(selectedRecord),
+                )
+                  ? "이의·답안지 확인 처리 대기"
+                  : "이의 제기 처리 대기"}
+              </span>
+            ) : hasConfirmation ? (
+              <span className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
+                확인 완료
+                {confirmedAt ? ` · ${formatDateTime(confirmedAt)}` : ""}
+              </span>
+            ) : (
+              <span className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
+                상단에서 전체 점수 확인 필요
+              </span>
+            )}
+            {selectedRecordHasPendingAnswerSheetRequest && (
+              <span className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
+                답안지 확인 요청 중
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {selectedRecordHasScore && (
+        <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
+          <div className="flex flex-col justify-center rounded-xl border border-blue-100 bg-blue-50 p-5">
+            <div className="text-sm font-black text-blue-800">내 획득 점수</div>
+            <div className="mt-3 text-5xl font-black text-blue-700">
+              {formatPerformanceScore(visibleTotalScore)}
+              <span className="ml-1 text-2xl text-blue-300">
+                / {formatPerformanceScore(visibleTotalMaxScore)}
+              </span>
+            </div>
+            <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
+              {activeWrittenExamGroupIsObjective
+                ? "서답형 정오답을 확인해 주세요."
+                : `점수와 ${resolvedCopy.evidenceTitle}을 함께 확인해 주세요.`}
+            </p>
+          </div>
+
+          <div
+            className={`relative min-w-0 overflow-hidden rounded-xl border border-slate-200 ${
+              activeWrittenExamGroupIsObjective ? "p-0" : "h-72 p-4"
+            }`}
+          >
+            {activeWrittenExamGroupIsObjective ? (
+              <ExamOmrCard
+                title="서답형 OMR"
+                items={activeObjectiveOmrItems}
+                mode="student"
+                showScore
+                scoreLabel={`${formatPerformanceScore(
+                  visibleTotalScore,
+                )} / ${formatPerformanceScore(visibleTotalMaxScore)}점`}
+                className="border-0 shadow-none"
+              />
+            ) : visibleChartItems.length > 0 ? (
+              <div
+                ref={scoreChartContainerRef}
+                className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
+              >
+                <Bar
+                  ref={scoreChartRef}
+                  data={chartData}
+                  options={chartOptions}
+                  style={{ maxWidth: "100%" }}
+                />
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold leading-6 text-slate-400">
+                {resolvedCopy.scoreItemsLabel}는 제공되지 않았습니다. 점수와{" "}
+                {resolvedCopy.evidenceTitle}을 확인해 주세요.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {selectedRecordHasScore &&
+        hasDetailedWrittenExamItems &&
+        !activeWrittenExamGroupIsObjective && (
+          <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4">
+            <h3 className="text-base font-black text-slate-900">
+              {activeWrittenExamGroup
+                ? `${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)} 문항별 점수와 피드백`
+                : "문항별 점수와 피드백"}
+            </h3>
+            <div className="mt-4 grid gap-2">
+              {activeWrittenExamGroup?.items.map(
+                ({ key, label, item, index }) => (
+                  <div
+                    key={`${key}-${index}`}
+                    className="grid gap-2 rounded-lg bg-slate-50 px-3 py-3 sm:grid-cols-[4rem_minmax(0,1fr)_auto] sm:items-start"
+                  >
+                    <span className="text-sm font-black text-slate-800">
+                      {label}
+                    </span>
+                    <div className="min-w-0">
+                      {item.feedback && (
+                        <p className="whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
+                          {item.feedback}
+                        </p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-sm font-black text-blue-700">
+                      {item.scoreEntered === false
+                        ? "-"
+                        : formatPerformanceScore(item.score)}
+                      <span className="text-slate-400">
+                        {" "}
+                        / {formatPerformanceScore(item.maxScore)}점
+                      </span>
+                    </span>
+                  </div>
+                ),
               )}
-          </section>
+            </div>
+          </div>
+        )}
+
+      {selectedRecordHasScore &&
+        !activeWrittenExamGroupIsObjective &&
+        (!hasDetailedWrittenExamItems || evidenceBlockText) && (
+          <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
+            <h3 className="text-base font-black text-blue-900">
+              {hasDetailedWrittenExamItems
+                ? "전체 피드백"
+                : resolvedCopy.evidenceTitle}
+            </h3>
+            <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
+              {evidenceBlockText || resolvedCopy.evidenceEmptyText}
+            </p>
+          </div>
+        )}
+    </section>
+  );
+
+  return (
+    <>
+      {scoreKind === PERFORMANCE_SCORE_KIND ? (
+        <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page performance-score-workspace">
+          {scoreNavigation}
+          <div className="teacher-sub-content">
+            {scoreHeader}
+            {scoreBody}
+          </div>
+        </PortalWorkspace>
+      ) : (
+        <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-10">
+          {scoreHeader}
+          {selectedRecord ? (
+            <div className="teacher-sub-workspace gap-6">
+              {scoreNavigation}
+              {scoreBody}
+            </div>
+          ) : (
+            scoreBody
+          )}
         </div>
       )}
 
@@ -3460,7 +3512,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           </section>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
