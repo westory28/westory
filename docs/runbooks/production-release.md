@@ -34,6 +34,36 @@ Vercel 로컬 연결이 없으면 `vercel link --yes --project westory --scope b
 
 커밋·push 후 Git 연동 배포의 Source commit과 Ready를 확인한다. Staged이면 `vercel promote <검증한 deployment ID 또는 URL> --yes --scope bbbs-projects-44f9da30`으로 승격한다. `vercel inspect www.westory.kr`와 실제 HTTPS 화면 확인까지 완료해야 운영 반영으로 보고한다. [공식 승격 명령](https://vercel.com/docs/cli/promote)을 참고하며, 자동 도메인 할당 설정은 바꾸지 않는다.
 
-## 현재 백엔드 배포 제한
+## 로그인 함수 소스 동기화
 
-2026-10-07 동기화한 `7b1107a8`의 `functions/`에는 운영 로그인 함수 `openApplicationSession` 구현이 없다. [10월 3일 로그인 패치 기록](../reviews/login-acquisition-20261003.md)에도 같은 소스 불일치가 기록돼 있다. PC 환경을 맞추기 위한 Functions/rules 일괄 배포는 하지 않는다. 백엔드 패치를 시작할 때는 먼저 해당 운영 함수의 소스를 복원·대조하고, 변경 대상만 검증·배포한다. 인증 조회 성공이나 `functions run check` 통과는 운영 소스 일치를 보장하지 않는다.
+2026-10-07 회사 PC에서 확인한 `7b1107a8`에는 운영 로그인 함수의 소스가 없었다. 이후 `76cb10f`에서 `sessionAuthority.js`, `studentMaintenance.js`, `studentRegistrationAccess.js`가 운영 원본으로 복원됐지만, `index.js`의 배포 export 연결은 빠져 있었다. 로그인 소스 동기화 패치에서 이 연결과 실제 export 검사, 배포 전 검사를 추가했다. [소스 대조 및 검증 기록](../reviews/login-source-sync-20261007.md)을 참고한다.
+
+회사와 집 PC는 아래 절차로 같은 원격 main을 받아 같은 함수를 검증한다. 미커밋 작업이 있거나 브랜치가 갈라졌으면 파일을 덮어쓰거나 reset하지 말고 별도 작업 공간에서 병합한다.
+
+```powershell
+git fetch origin --prune
+git status --short --branch
+git rev-list --left-right --count origin/main...HEAD
+# 미커밋 변경이 없고 현재 HEAD가 origin/main의 조상인 경우
+git merge --ff-only origin/main
+. .\scripts\use-westory-node.ps1
+npm ci
+npm --prefix functions ci
+npm run verify:login-functions
+# Java 21 이상 필요. 전용 로컬 demo Firestore에서만 실행한다.
+npm run test:login-session
+```
+
+`verify:login-functions`는 실제 Firebase 진입점을 읽고 로그인 시작·재인증·연장·종료 함수 4개의 callable export와 리전, 학생 가입 승인 경계를 검사한다. `firebase.json`의 predeploy에도 같은 검사가 연결돼 있으므로 소스가 있어도 배포 목록에서 빠진 상태를 배포 전에 발견한다. 이 검사는 로컬 배포 계약을 확인하며, 운영 소스 전체가 같음을 보장하지는 않는다.
+
+로그인 함수를 수정할 때는 운영 원본과 변경 내용을 대조하고 위 검증 후 아래 4개만 배포한다. 단순히 다른 PC에서 pull했다는 이유로 다시 배포할 필요는 없다.
+
+```powershell
+$env:FUNCTIONS_DISCOVERY_TIMEOUT = '60'
+firebase deploy --only "functions:openApplicationSession,functions:beginApplicationSessionReauthentication,functions:touchApplicationSession,functions:closeApplicationSession" --project history-quiz-yongsin
+firebase functions:list --project history-quiz-yongsin
+```
+
+PC에는 코드와 개발 도구가 있고 실제 로그인 처리는 공통 Firebase 프로젝트에서 실행된다. GitHub/Vercel/Firebase CLI 인증 정보는 각 PC에서 별도로 관리하며 Git으로 복사하지 않는다. 운영 함수의 원본이 필요하면 권한 있는 PC에서 `gcloud functions describe <함수명> --gen2 --region asia-northeast3 --project history-quiz-yongsin`의 `buildConfig.source.storageSource`에 나온 bucket/object/generation을 사용해 보관 소스를 대조한다. Windows 줄바꿈 차이는 LF로 정규화해 비교한다.
+
+로그인 함수 4개의 복구가 다른 모든 운영 Functions의 소스 복구를 뜻하지는 않는다. PC 환경을 맞추기 위한 Functions/rules 일괄 배포는 하지 않고, 다른 백엔드 패치는 대상 운영 소스부터 대조한다.

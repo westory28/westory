@@ -6,6 +6,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 
 initializeApp();
+Object.assign(exports, require('./sessionAuthority').callableExports);
 exports.manageAcademicCalendar = require('./academicCalendar').manageAcademicCalendar;
 Object.assign(exports, require('./sourceArchiveBeta'));
 Object.assign(exports, require('./lessonPdfBeta'));
