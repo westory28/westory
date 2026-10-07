@@ -14,6 +14,8 @@ const MAX_CATALOG_WORD_LENGTH = 40;
 const SPECIAL_FALLBACK_WORDS = ['혼일강리역대국도지도', '천상열차분야지도', '훈민정음해례본', '조선왕조실록', '직지심체요절', '고려대장경판', '무구정광대다라니경', '백제금동대향로'];
 const OCR_STOP_WORDS = new Set(['은', '는', '이', '가', '을', '를', '의', '와', '과', '에', '에서', '에게', '으로', '로', '부터', '까지', '그리고', '그러나', '또는', '및', '등']);
 const OCR_PARTICLES = ['에서는', '으로는', '에게는', '에서', '에게', '으로', '부터', '까지', '에는', '은', '는', '이', '가', '을', '를', '의', '와', '과', '에', '로', '도', '만'];
+const OCR_HEADER_WORDS = new Set(['학년', '반', '번', '번호', '이름', '성명']);
+const OCR_BRAND_SLOGAN = new Set(['우리가', '써', '내려가는', '이야기']);
 const DEFAULT_DIFFICULTY_SETTINGS = Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, {
   durationSeconds: 90, fallSeconds: FALL_DURATIONS[difficulty].map((ms) => ms / 1000), minWordLength: 1, maxWordLength: 12,
 }]));
@@ -187,6 +189,58 @@ function effectiveLessons(scoped, legacy, options = {}) {
     .filter((lesson) => (options.includeHidden === true || lesson.isVisibleToStudents !== false) && !lesson.deletedAt);
 }
 
+function worksheetOcrWords(lesson, visiblePages) {
+  const pageHeights = new Map((Array.isArray(lesson.worksheetPageImages) ? lesson.worksheetPageImages : [])
+    .map((page) => [Math.max(1, Number(page?.page) || 1), Number(page?.height) || 0]));
+  const regions = (Array.isArray(lesson.worksheetTextRegions) ? lesson.worksheetTextRegions : [])
+    .filter((region) => visiblePages.has(Math.max(1, Number(region?.page) || 1)) && Number(region?.width) > 0 && Number(region?.height) > 0)
+    .map((region) => ({ ...region, page: Math.max(1, Number(region.page) || 1), label: decodeText(region.label).normalize('NFKC').replace(/\[fn:[^\]]*\]/gi, '') }));
+  // Some PDF fonts decode their spaces as 堺. Require several different Korean
+  // fragments in this document; a lone real Hanja term must remain unchanged.
+  const brokenSpace = new Set(regions.flatMap(({ label }) => [...label.replace(/\[[^\]]*\]/g, '').matchAll(/[가-힣]+堺/gu)].map((match) => match[0]))).size >= 3;
+  const footerStarts = new Map();
+  const brandedPages = new Set();
+  const isSmallLine = (region) => pageHeights.get(region.page) > 0 && Number(region.height) <= pageHeights.get(region.page) * 0.08;
+  for (const region of regions) {
+    const pageHeight = pageHeights.get(region.page);
+    if (!isSmallLine(region) || !Number.isFinite(Number(region.top))) continue;
+    if (Number(region.top) < pageHeight * 0.18 && /westory/i.test(region.label)) brandedPages.add(region.page);
+    if (Number(region.top) >= pageHeight * 0.9 && /(?:©|\bcopyright\b).*\b(?:19|20)\d{2}\b/i.test(region.label)) {
+      footerStarts.set(region.page, Math.min(footerStarts.get(region.page) ?? Infinity, Number(region.top)));
+    }
+  }
+  const words = [];
+  for (const region of regions) {
+    // Crop only small lines below a confirmed footer. A region covering the
+    // whole page can contain both body text and a footer, so never drop it.
+    if (isSmallLine(region) && Number(region.top) >= (footerStarts.get(region.page) ?? Infinity)) continue;
+    const isHeader = isSmallLine(region) && Number(region.top) >= 0 && Number(region.top) < pageHeights.get(region.page) * 0.18;
+    for (const part of region.label.split(/(\[[^\]\r\n]+\])/g)) {
+      const explicit = /^\[([^\]\r\n]+)\]$/.exec(part);
+      if (explicit) {
+        if (/[\p{L}]/u.test(explicit[1]) && !OCR_STOP_WORDS.has(normalizeAnswer(explicit[1]))) words.push({ text: explicit[1], context: region.label });
+        continue;
+      }
+      const label = (brokenSpace ? part.replace(/(?<=[가-힣])堺/gu, ' ') : part)
+        // Remove an inline attribution without discarding surrounding body.
+        .replace(/[\p{L}]{2,20}\s*©\s*(?:19|20)\d{2}/gu, ' ')
+        .replace(/(?<!\d)\.|\.(?!\d)/g, ' ')
+        .replace(/(?<=[가-힣])(?=[A-Za-z])|(?<=[A-Za-z])(?=[가-힣])/g, ' ');
+      for (const match of label.matchAll(/[\p{L}\p{N}]+(?:[·‧.‐‑-][\p{L}\p{N}]+)*/gu)) {
+        // PDF text order can glue the next list/heading number onto a word.
+        // Leading numbers in historical terms (6두품, 3·1운동) are kept.
+        const text = match[0].replace(/(?<=[가-힣])\d+$/u, '');
+        const key = normalizeAnswer(text);
+        if (!/[\p{L}]/u.test(text) || /^[〇零一二三四五六七八九十百千萬万億亿兆]+$/u.test(text) || OCR_STOP_WORDS.has(key) || /^(?:p{1,2}|vs|westory|[ivxlcdm]+)$/i.test(text)) continue;
+        if ((isHeader || text !== match[0]) && OCR_HEADER_WORDS.has(key)) continue;
+        if (isHeader && brandedPages.has(region.page) && OCR_BRAND_SLOGAN.has(key)) continue;
+        words.push({ text, context: label });
+      }
+    }
+  }
+  return words;
+}
+
 function extractLessonWords(lessons) {
   const words = [];
   for (const lesson of lessons) {
@@ -210,15 +264,7 @@ function extractLessonWords(lessons) {
     }
     // Saved OCR/PDF text regions cover recognizable worksheet words even when
     // the teacher has not made them into blanks. Removed pages stay excluded.
-    const recognized = [];
-    for (const region of Array.isArray(lesson.worksheetTextRegions) ? lesson.worksheetTextRegions : []) {
-      if (!visiblePages.has(Math.max(1, Number(region?.page) || 1)) || !(Number(region?.width) > 0) || !(Number(region?.height) > 0)) continue;
-      const label = decodeText(region.label).normalize('NFKC').replace(/\[fn:[^\]]*\]/gi, '');
-      for (const token of label.matchAll(/\[([^\]\r\n]+)\]|[\p{L}\p{N}]+(?:[·‧.‐‑-][\p{L}\p{N}]+)*/gu)) {
-        const text = token[1] || token[0];
-        if (/[\p{L}]/u.test(text) && !OCR_STOP_WORDS.has(normalizeAnswer(text))) recognized.push({ text, context: label });
-      }
-    }
+    const recognized = worksheetOcrWords(lesson, visiblePages);
     const knownTerms = new Set([...seen, ...recognized.map((word) => normalizeAnswer(word.text)), ...SPECIAL_FALLBACK_WORDS.map(normalizeAnswer)]);
     for (const word of recognized) {
       // Strip an attached particle only when the remaining term is actually
