@@ -86,6 +86,10 @@
 - 템플릿 파일만 보고 판정하지 않는다. 행 복제·병합·서명 삽입을 마친 최종 XLSX의 `styles.xml`과 `sheet1.xml`을 검사한다. `scripts/verify-neis-performance-import.mjs`는 이 계약을 검사하며 `npm run build`의 필수 단계다. 관련 검사나 빌드 연결을 제거·우회하지 않는다.
 - 새 기능 추가보다 기존 구조 정리와 일관성 정리를 먼저 본다.
 
+## 수행평가 최종 서명
+- [점수 확인 서명 정책](../../../docs/runbooks/performance-score-signatures.md)을 따른다. 미등록 평가는 서명 대상에서 제외하고, 일람표에 포함된 현재 등록 평가의 유효 서명이 모두 있어야 비고란에 최종 서명을 출력한다.
+- 최종 서명은 평가 차수와 무관하게 `confirmedAt`(없으면 `signedAt`)이 가장 최근인 서명이다. 추가 평가의 미서명, 점수 변경에 따른 버전 불일치, 반려 상태를 기존 서명으로 대신 완료 처리하지 않는다.
+
 ## 학생 경험 파급 확인
 - lesson, quiz, history classroom, schedule, notice, points 변경은 학생 화면에 바로 반영될 수 있다.
 - 학생이 읽는 데이터 구조를 바꿀 때는 학생 페이지를 함께 확인한다.

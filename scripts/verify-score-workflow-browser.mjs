@@ -240,7 +240,7 @@ window.scoreQa={docs,events,toasts,timestampTick:0};
 const mocks = {
   "qa-state": state,
   "qa-auth": `export const useAuth=()=>({userData:{role:'teacher'},currentUser:{uid:'qa-teacher',displayName:'가상교사',email:'qa-teacher@example.test'},config:{year:'2026',semester:'2'}});`,
-  "qa-firestore": `import{docs,ref,snap,apply,events}from'qa-state';export const collection=(db,...parts)=>ref(parts.join('/'));export const collectionGroup=(db,name)=>({group:name});export const doc=(db,...parts)=>ref(parts.join('/'));export const getDoc=async(r)=>{if(window.scoreQa.rejectConfirmationReads&&r.path.includes("/confirmations/"))throw new Error("confirmation read denied");return snap(r)};export const getDocFromServer=getDoc;export const query=(base,...filters)=>({...base,filters});export const where=(field,op,value)=>({field,op,value});export const orderBy=(...args)=>({order:args});export const limit=n=>({limit:n});export const serverTimestamp=()=>({seconds:1801850400+window.scoreQa.timestampTick++,nanoseconds:0});export const deleteField=()=>({__delete:true});export const getDocs=async(r)=>{if(window.scoreQa.rejectLegacyRequestReads&&r.path?.endsWith("/performance_score_answer_sheet_requests"))throw new Error("legacy request read denied");if(window.scoreQa.rejectConfirmationReads&&r.group==="confirmations")throw new Error("confirmation query denied");let entries=[...docs].filter(([key])=>r.group?key.split('/').at(-2)===r.group:key.startsWith(r.path+'/')&&key.slice(r.path.length+1).indexOf('/')<0);for(const filter of r.filters||[])if(filter.field)entries=entries.filter(([,value])=>filter.op==='=='?value[filter.field]===filter.value:true);const result=entries.map(([key])=>snap(ref(key)));return{docs:result,empty:!result.length,size:result.length,forEach:fn=>result.forEach(fn)};};export const setDoc=async(r,data,options)=>apply(r,data,options);export const updateDoc=async(r,data)=>{if(window.scoreQa.pauseLegacyReview&&r.path.includes("/performance_score_answer_sheet_requests/"))await new Promise(resolve=>window.scoreQa.resumeLegacyReview=resolve);return setDoc(r,data,{merge:true});};export const runTransaction=async(db,callback)=>{if(window.scoreQa.pauseTransactions)await new Promise(resolve=>{window.scoreQa.resumeTransaction=resolve});const pending=[];const value=await callback({get:getDoc,set:(...args)=>pending.push(['set',args]),update:(r,data)=>pending.push(['set',[r,data,{merge:true}]]),delete:r=>pending.push(['delete',[r]])});pending.forEach(([op,args])=>op==='delete'?docs.delete(args[0].path):apply(...args));return value;};export const writeBatch=()=>{const pending=[];return{set:(...args)=>pending.push(args),update:(r,data)=>pending.push([r,data,{merge:true}]),delete:r=>docs.delete(r.path),commit:async()=>pending.forEach(args=>apply(...args))}};`,
+  "qa-firestore": `import{docs,ref,snap,apply,events}from'qa-state';export const collection=(db,...parts)=>ref(parts.join('/'));export const collectionGroup=(db,name)=>({group:name});export const doc=(db,...parts)=>ref(parts.join('/'));export const getDoc=async(r)=>{if(window.scoreQa.rejectConfirmationReads&&r.path.includes("/confirmations/"))throw new Error("confirmation read denied");return snap(r)};export const getDocFromServer=getDoc;export const query=(base,...filters)=>({...base,filters});export const where=(field,op,value)=>({field,op,value});export const orderBy=(...args)=>({order:args});export const limit=n=>({limit:n});export const serverTimestamp=()=>({seconds:1801850400+window.scoreQa.timestampTick++,nanoseconds:0});export const deleteField=()=>({__delete:true});export const getDocs=async(r)=>{if(window.scoreQa.rejectLegacyRequestReads&&r.path?.endsWith("/performance_score_answer_sheet_requests"))throw new Error("legacy request read denied");if(window.scoreQa.rejectConfirmationReads&&r.group==="confirmations")throw new Error("confirmation query denied");let entries=[...docs].filter(([key])=>r.group?key.split('/').at(-2)===r.group:key.startsWith(r.path+'/')&&key.slice(r.path.length+1).indexOf('/')<0);for(const filter of r.filters||[])if(filter.field)entries=entries.filter(([,value])=>filter.op==='=='?value[filter.field]===filter.value:true);const result=entries.map(([key])=>snap(ref(key)));return{docs:result,empty:!result.length,size:result.length,forEach:fn=>result.forEach(fn)};};export const getDocsFromServer=getDocs;export const setDoc=async(r,data,options)=>apply(r,data,options);export const updateDoc=async(r,data)=>{if(window.scoreQa.pauseLegacyReview&&r.path.includes("/performance_score_answer_sheet_requests/"))await new Promise(resolve=>window.scoreQa.resumeLegacyReview=resolve);return setDoc(r,data,{merge:true});};export const runTransaction=async(db,callback)=>{if(window.scoreQa.pauseTransactions)await new Promise(resolve=>{window.scoreQa.resumeTransaction=resolve});const pending=[];const value=await callback({get:getDoc,set:(...args)=>pending.push(['set',args]),update:(r,data)=>pending.push(['set',[r,data,{merge:true}]]),delete:r=>pending.push(['delete',[r]])});pending.forEach(([op,args])=>op==='delete'?docs.delete(args[0].path):apply(...args));return value;};export const writeBatch=()=>{const pending=[];return{set:(...args)=>pending.push(args),update:(r,data)=>pending.push([r,data,{merge:true}]),delete:r=>docs.delete(r.path),commit:async()=>pending.forEach(args=>apply(...args))}};`,
   "qa-firebase": `export const db={};export const auth={currentUser:{uid:"qa-teacher",getIdTokenResult:async()=>({claims:{auth_time:1801850400}})}};export const getHttpsCallable=async(name)=>async(input)=>({data:name==='getPrintClientInfo'?{maskedIp:'192.0.2.*'}:{}});`,
   "qa-student-profile-commands": `export const callStudentDataService=async(name)=>name==='getPrintClientInfo'?{maskedIp:'192.0.2.*'}:{};`,
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
@@ -2261,6 +2261,226 @@ try {
   }
   report.checks.push(
     "Blank second assessment at 390/768/1280: all 32 dash/empty rows remain saveable and create one four-criterion/20-point roster plus 32 explicitly unentered student records. First-assessment zero remains entered and signed. Blank reupload preserves prior points, score revisions and all signatures without score writes. XLSX includes both titles, G7:G38 true blanks, all 32 first-assessment signatures (including zero) without a missing-second-signature warning, and unchanged hair borders.",
+  );
+  const signaturePage = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+    acceptDownloads: true,
+  });
+  signaturePage.on("pageerror", (error) =>
+    report.pageErrors.push(error.message),
+  );
+  await signaturePage.route("**/*", (route) =>
+    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+  );
+  await signaturePage.goto(origin);
+  for (const file of [detailedFile, blankFile]) {
+    await signaturePage
+      .getByRole("button", { name: "업로드", exact: true })
+      .click();
+    await signaturePage.locator("input[type=file]").setInputFiles(file);
+    const preview = signaturePage.getByRole("dialog", {
+      name: "업로드 미리보기",
+      exact: true,
+    });
+    await preview.getByText("연결 32명", { exact: true }).waitFor();
+    await preview
+      .getByRole("button", { name: "학생별 점수 저장", exact: true })
+      .click();
+    await preview.waitFor({ state: "hidden" });
+  }
+  await signaturePage.evaluate(
+    ({ firstTitle, secondTitle }) => {
+      window.scoreQa.finalSignatureImages = [
+        "#c80000",
+        "#0000c8",
+        "#00a000",
+      ].map((color) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 160;
+        canvas.height = 60;
+        const context = canvas.getContext("2d");
+        context.strokeStyle = color;
+        context.lineWidth = 4;
+        context.beginPath();
+        context.moveTo(10, 20);
+        context.lineTo(30, 45);
+        context.lineTo(100, 10);
+        context.stroke();
+        return canvas.toDataURL("image/png");
+      });
+      window.scoreQa.finalSignatureBases = [firstTitle, secondTitle].map(
+        (title) =>
+          [...window.scoreQa.docs].find(
+            ([key, score]) =>
+              key.includes("/performance_scores/") &&
+              !key.includes("/confirmations/") &&
+              score.uid === "qa-1" &&
+              score.title === title,
+          ),
+      );
+    },
+    { firstTitle: detailedTitle, secondTitle: blankTitle },
+  );
+  await signaturePage
+    .getByRole("button", { name: "일람표", exact: true })
+    .click();
+  const signatureStages = [
+    { key: "first-only", stage: 0, color: "red" },
+    { key: "second-unsigned", stage: 1, color: null },
+    { key: "second-signed", stage: 2, color: "blue" },
+    { key: "first-changed", stage: 3, color: null },
+    { key: "first-resigned", stage: 4, color: "green" },
+  ];
+  report.finalSignatureExports = [];
+  for (const { key, stage, color } of signatureStages) {
+    await signaturePage.evaluate((stage) => {
+      const [firstBase, secondBase] = window.scoreQa.finalSignatureBases;
+      const first = structuredClone(firstBase[1]);
+      const second = structuredClone(secondBase[1]);
+      if (stage >= 1) {
+        second.items = second.items.map((item) => ({
+          ...item,
+          score: item.maxScore,
+          scoreEntered: true,
+        }));
+        second.enteredScoreCount = 5;
+        second.totalScore = 20;
+        second.updatedAt = { seconds: 1801851100, nanoseconds: 0 };
+      }
+      if (stage >= 3) {
+        first.items[0].score = 5;
+        first.totalScore = 29;
+        first.updatedAt = { seconds: 1801851300, nanoseconds: 0 };
+      }
+      window.scoreQa.docs.set(firstBase[0], first);
+      window.scoreQa.docs.set(secondBase[0], second);
+      const confirmation = (
+        record,
+        image,
+        time,
+        version = record.updatedAt,
+      ) => ({
+        uid: record.uid,
+        rosterId: record.rosterId,
+        signatureName: record.studentName,
+        signatureImage: window.scoreQa.finalSignatureImages[image],
+        scoreUpdatedAt: version,
+        confirmedAt: { seconds: time, nanoseconds: 0 },
+      });
+      window.scoreQa.docs.set(
+        firstBase[0] + "/confirmations/qa-1",
+        stage >= 4
+          ? confirmation(first, 2, 1801851400)
+          : confirmation(first, 0, 1801851000, firstBase[1].updatedAt),
+      );
+      window.scoreQa.docs.delete(secondBase[0] + "/confirmations/qa-1");
+      if (stage >= 2)
+        window.scoreQa.docs.set(
+          secondBase[0] + "/confirmations/qa-1",
+          confirmation(second, 1, 1801851200),
+        );
+    }, stage);
+    await signaturePage
+      .getByRole("button", { name: "현황 조회", exact: true })
+      .click();
+    const student = signaturePage
+      .getByRole("row")
+      .filter({ hasText: "가상학생01" });
+    await student
+      .getByText(color ? "확인 완료" : "서명 필요", { exact: true })
+      .waitFor();
+    if (color === null) {
+      assert.equal(
+        await student.getByRole("img").count(),
+        0,
+        `${key}: incomplete final signature must not show a previous image`,
+      );
+    } else {
+      const imageIndex = { red: 0, blue: 1, green: 2 }[color];
+      const expected = await signaturePage.evaluate(
+        (index) => window.scoreQa.finalSignatureImages[index],
+        imageIndex,
+      );
+      assert.equal(
+        await student
+          .getByRole("img", { name: "가상학생01 서명", exact: true })
+          .getAttribute("src"),
+        expected,
+      );
+    }
+    await signaturePage.screenshot({
+      path: out + `/final-signature-${key}-1280.png`,
+      fullPage: false,
+    });
+    report.screenshots.push(`final-signature-${key}-1280.png`);
+    const downloadWait = signaturePage.waitForEvent("download");
+    await signaturePage
+      .getByRole("button", { name: "일람표 다운로드", exact: true })
+      .click();
+    await signaturePage
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "그래도 다운로드", exact: true })
+      .click();
+    const download = await downloadWait;
+    const savedPath = out + `/synthetic-final-signature-${key}.xlsx`;
+    await download.saveAs(savedPath);
+    const generated = new ExcelJS.Workbook();
+    await generated.xlsx.readFile(savedPath);
+    const worksheet = generated.worksheets[0];
+    const images = worksheet.getImages();
+    assert.equal(
+      images.length,
+      color === null ? 0 : 1,
+      `${key}: final exported image count`,
+    );
+    assert.equal(worksheet.getCell("E7").value, stage >= 3 ? 29 : 30);
+    assert.equal(worksheet.getCell("G7").value, stage >= 1 ? 20 : null);
+    if (color) {
+      assert.equal(images[0].range.tl.nativeRow, 6);
+      assert.ok(images[0].range.tl.nativeCol >= 9);
+      const dataUrl =
+        "data:image/png;base64," +
+        Buffer.from(generated.getImage(images[0].imageId).buffer).toString(
+          "base64",
+        );
+      const actualColor = await signaturePage.evaluate(async (src) => {
+        const image = new Image();
+        image.src = src;
+        await image.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        ).data;
+        const sums = [0, 0, 0];
+        for (let index = 0; index < pixels.length; index += 4)
+          if (pixels[index + 3] > 20)
+            for (let channel = 0; channel < 3; channel++)
+              sums[channel] += pixels[index + channel];
+        return ["red", "green", "blue"][sums.indexOf(Math.max(...sums))];
+      }, dataUrl);
+      assert.equal(
+        actualColor,
+        color,
+        `${key}: actual exported PNG contains the latest signature color after canvas normalization`,
+      );
+    }
+    await assertDetailedHairBorders(await fs.readFile(savedPath));
+    report.finalSignatureExports.push({
+      stage: key,
+      signatureCount: images.length,
+      signatureColor: color,
+    });
+  }
+  await signaturePage.close();
+  report.checks.push(
+    "Final-signature teacher UI and real XLSX transitions: first signed + blank second exports first; scored unsigned second removes the final image; signing second exports its newer image; changing first invalidates the final image; re-signing first exports the newest first image regardless of assessment order. Incomplete states show no historical image. Actual normalized PNG pixels, score revisions and reference hair borders are verified at each transition.",
   );
   if (process.env.SCORE_QA_BLANK_REFERENCE_XLSX) {
     const page = await browser.newPage({

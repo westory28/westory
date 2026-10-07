@@ -26,7 +26,7 @@ const { chromium } = require(
 const mocks = {
   "qa-state": `
 const scenario=new URLSearchParams(location.search);
-export const state={scenario,events:[],toasts:[],objections:[],legacy:[],hold:false,fail:false,consented:!scenario.has('noconsent')};
+export const state={scenario,events:[],toasts:[],objections:[],legacy:[],hold:false,fail:false,clock:1801850500,consented:!scenario.has('noconsent')};
 const written=scenario.has('written');
 export const records=[{id:'qa-score',rosterId:'qa-score',uid:'qa-student',scoreKind:written?'written_exam_essay':'performance',title:written?'가상 정기시험':'사료 해석과 역사적 판단을 설명하는 수행평가',subject:'역사',academicYear:'2026',semester:'2',grade:'3',class:'1',number:'1',studentName:'가상학생',items:written?[{name:'1-(1)',itemKey:'1-(1)',score:7,maxScore:10},{name:'1-(2)',itemKey:'1-(2)',score:8,maxScore:10}]:[{name:'자료 해석',score:15,maxScore:20}],totalScore:15,totalMaxScore:20,feedback:'자료를 읽고 근거를 잘 정리했습니다.',evidence:'가상 채점 근거',updatedAt:{seconds:1801850400},...(scenario.has('signed')?{signatureName:'가상학생',signatureImage:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=='}:{})}];
 if(scenario.has('legacy'))state.legacy.push({id:'qa-legacy',uid:'qa-student',scoreId:'qa-score',status:'pending',reason:'기존 답안지 확인 요청'});
@@ -41,20 +41,30 @@ if(scenario.has('blank-pending')||scenario.has('stale-pending')){
  state.objections.push({id:'qa-blank-objection',uid:'qa-student',scoreId,scoreTitle:'2차 이전 이의',status:'pending',reason:'기존 요청'});
  state.legacy.push({id:'qa-blank-request',uid:'qa-student',scoreId,status:'pending',reason:'기존 확인 요청'});
 }
+if(scenario.has('layout')){
+ records[0].title='하여가와 단심가 다시 쓰기(논술형)';
+ records[0].assessmentOrder=1;
+ if(records[1])records[1].title='조선 시대 신분 질서와 변화의 모습을 설명하기';
+ records.reverse();
+}
 state.records=records;state.serverRecords=new Map(records.map(record=>[record.id,structuredClone(record)]));state.confirmations=new Map();
+if(scenario.has('signed'))for(const record of records)state.confirmations.set('users/qa-student/performance_scores/'+record.id+'/confirmations/qa-student',{uid:record.uid,rosterId:record.rosterId,signatureName:record.signatureName,signatureImage:record.signatureImage,scoreUpdatedAt:record.updatedAt,confirmedAt:{seconds:1801850450}});
 window.studentScoreQa=state;
 `,
-  "qa-auth": `import{state}from'qa-state';export const useAuth=()=>({currentUser:{uid:'qa-student',email:'qa-student@example.test'},userData:{role:'student',name:'가상학생',grade:'3',class:'1',number:'1',enrollmentStatus:state.scenario.has('excluded')?'transferred':'active'},config:{year:'2026',semester:'2'}});`,
+  "qa-auth": `import{state}from'qa-state';import{MENUS}from'${root}/src/constants/menus.ts';const noop=async()=>{};const auth={currentUser:{uid:'qa-student',email:'qa-student@example.test'},userData:{uid:'qa-student',role:'student',name:'가상학생',grade:'3',class:'1',number:'1',enrollmentStatus:state.scenario.has('excluded')?'transferred':'active'},config:{year:'2026',semester:'2',showScore:true},loading:false,authPhase:'ready',authError:null,retryAuth:noop,logout:noop,configReady:true,menuConfig:MENUS,menuConfigReady:true,settingsLoadedAt:Date.now(),refreshConfig:noop,refreshMenuConfig:noop};export const useAuth=()=>auth;`,
   "qa-firebase": `export const db={};export const auth={currentUser:{uid:'qa-student'}};export const getHttpsCallable=async()=>{throw new Error('Unexpected live callable')};`,
   "qa-firestore": `import{state}from'qa-state';
-export const collection=()=>({});export const doc=(db,...parts)=>({path:parts.join('/'),id:parts.at(-1)});export const query=()=>({});export const orderBy=()=>({});export const where=()=>({});export const getDocs=async()=>({docs:[]});
+export const collection=(db,...parts)=>({path:parts.join('/')});export const doc=(db,...parts)=>({path:parts.join('/'),id:parts.at(-1)});export const query=(ref)=>ref;export const orderBy=()=>({});export const where=()=>({});
+const readScores=async(ref,fromServer)=>{if(ref.path!=='users/qa-student/performance_scores')throw new Error('Unexpected score collection '+ref.path);state.events.push({name:'scoreListRead',fromServer});if(state.scenario.has('loaderror')||state.failNextScoreListRead){state.failNextScoreListRead=false;throw new Error('Synthetic read failure');}return{docs:[...state.serverRecords.values()].map(record=>({id:record.id,data:()=>structuredClone(record)}))};};
+export const getDocs=(ref)=>readScores(ref,false);export const getDocsFromServer=(ref)=>readScores(ref,true);
 export const getDoc=async(ref)=>{state.events.push({name:'serverRead',path:ref.path});const value=ref.path.includes('/confirmations/')?state.confirmations.get(ref.path):state.serverRecords.get(ref.id);return{id:ref.id,exists:()=>Boolean(value),data:()=>value};};export const getDocFromServer=getDoc;
-export const serverTimestamp=()=>({seconds:1801850500,nanoseconds:0});export const setDoc=async()=>{throw new Error('Unexpected direct write')};
-export const writeBatch=()=>{const pending=[];return{set:(ref,value)=>pending.push({ref,value}),commit:async()=>{for(const{ref,value}of pending){if(!ref.path.includes('/confirmations/'))throw new Error('Unexpected non-signature write');state.confirmations.set(ref.path,value);state.events.push({name:'signature',path:ref.path,rosterId:value.rosterId});}}};};`,
-  "qa-scores": `export * from '${root}/src/lib/performanceScores.ts';import{normalizePerformanceScoreSettings}from'${root}/src/lib/performanceScores.ts';import{state,records}from'qa-state';
+export const serverTimestamp=()=>({seconds:++state.clock,nanoseconds:0});export const setDoc=async()=>{throw new Error('Unexpected direct write')};
+export const writeBatch=()=>{const pending=[];return{set:(ref,value)=>pending.push({ref,value}),commit:async()=>{for(const{ref,value}of pending){if(!ref.path.includes('/confirmations/'))throw new Error('Unexpected non-signature write');state.confirmations.set(ref.path,value);state.events.push({name:'signature',path:ref.path,rosterId:value.rosterId});}state.afterSignatureCommit?.();}};};`,
+  "qa-scores": `export * from '${root}/src/lib/performanceScores.ts';import{normalizePerformanceScoreSettings,applyPerformanceScoreConfirmation,sortPerformanceScoreRecords,getLatestPerformanceScoreSignatureRecord}from'${root}/src/lib/performanceScores.ts';import{state}from'qa-state';
 const settings=normalizePerformanceScoreSettings();
 const consent=()=>state.consented?{uid:'qa-student',academicYear:'2026',semester:'2',acknowledged:true,warningVersion:settings.warningVersion,warningTextHash:settings.warningTextHash}:null;
-export const loadUserPerformanceScoreRecords=async()=>{if(state.scenario.has('loaderror'))throw new Error('Synthetic read failure');return records;};
+const resolvedRecords=()=>sortPerformanceScoreRecords([...state.serverRecords.values()].map(record=>applyPerformanceScoreConfirmation(structuredClone(record),state.confirmations.get('users/qa-student/performance_scores/'+record.id+'/confirmations/qa-student')||null)));
+state.latestSignature=()=>getLatestPerformanceScoreSignatureRecord(resolvedRecords());
 export const loadPerformanceScoreSettings=async()=>settings;
 export const loadPerformanceScoreWarningConsent=async()=>consent();
 export const savePerformanceScoreWarningConsent=async()=>{state.consented=true;return consent();};
@@ -68,8 +78,12 @@ if(state.scenario.has('processed'))return{objectionSavedCount:0,objectionSkipped
 state.objections=[{id:'qa-objection',uid:'qa-student',scoreId:'qa-score',scoreTitle:'가상 평가',status:'pending',requestedAt:{seconds:1801850460},...input}];
 return{objectionSavedCount:1,objectionSkippedProcessedCount:0,recipientCount:1,createdCount:1,skippedCount:0};
 };`,
-  "qa-toast": `import{state}from'qa-state';const showToast=payload=>state.toasts.push(payload);export const useAppToast=()=>({showToast});`,
+  "qa-toast": `import{state}from'qa-state';const showToast=payload=>state.toasts.push(payload);export const useAppToast=()=>({showToast});export const inferToastFromAlertMessage=message=>({message:String(message)});`,
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
+  "qa-archive-boundary": `export const SemesterArchiveBanner=()=>null;export const SemesterArchiveUnavailable=()=>null;export const isArchiveUnavailableRoute=()=>false;`,
+  "qa-null-component": `export default ()=>null;`,
+  "qa-rank-promotion": `export const loadStudentRankPromotionSnapshot=async()=>({rank:null,wallet:{balance:0},policy:{rankPolicy:{}}});export const invalidateStudentRankPromotionSnapshotCache=()=>{};`,
+  "qa-point-ranks": `export const getPointRankDefaultEmojiValue=()=>'';`,
 };
 const moduleFor = (request) => {
   const value = request.replaceAll("\\", "/");
@@ -81,10 +95,19 @@ const moduleFor = (request) => {
   if (/lib\/notifications$/.test(value)) return "qa-notifications";
   if (/AppToastProvider$/.test(value)) return "qa-toast";
   if (/lib\/semesterArchive$/.test(value)) return "qa-archive";
+  if (/SemesterArchiveBoundary$/.test(value)) return "qa-archive-boundary";
+  if (
+    /(StudentHistoryDictionaryController|StudentRankPromotionController|TeacherPatchMemoController|NotificationBell)$/.test(
+      value,
+    )
+  )
+    return "qa-null-component";
+  if (/lib\/pointRankPromotion$/.test(value)) return "qa-rank-promotion";
+  if (/lib\/pointRanks$/.test(value)) return "qa-point-ranks";
 };
 const bundle = await build({
   stdin: {
-    contents: `import React from'react';import{createRoot}from'react-dom/client';import{ScoreConfirmationView}from'${root}/src/pages/student/score/PerformanceScoreView';createRoot(document.getElementById('root')).render(<ScoreConfirmationView scoreKind={new URLSearchParams(location.search).has('written')?'written_exam_essay':'performance'}/>);`,
+    contents: `import React from'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';import MainLayout from'${root}/src/components/layout/MainLayout';import{ScoreConfirmationView}from'${root}/src/pages/student/score/PerformanceScoreView';import{state}from'qa-state';const root=createRoot(document.getElementById('root'));let revision=0;state.remount=()=>{const score=<ScoreConfirmationView key={++revision} scoreKind={state.scenario.has('written')?'written_exam_essay':'performance'}/>;root.render(<MemoryRouter initialEntries={['/student/score/performance']}>{state.scenario.has('layout')?<MainLayout>{score}</MainLayout>:score}</MemoryRouter>);};state.remount();`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -131,6 +154,11 @@ const css = (
       "assets/css/style.css",
       "src/assets/index.css",
       "src/components/common/portalSubNavigation.css",
+      "src/components/common/headerStudentWis.css",
+      "src/components/common/Footer.css",
+      "src/components/layout/teacherLayout.css",
+      "src/components/layout/studentLayout.css",
+      "src/pages/student/score/performance-score-view.css",
     ].map((file) => fs.readFile(root + "/" + file, "utf8")),
   )
 )
@@ -163,11 +191,13 @@ const report = {
   kind: "synthetic-student-unified-objection",
   checks: [],
   viewports: [],
+  layoutMetrics: [],
   screenshots: [],
   pageErrors: [],
   limitations: [
-    "Actual student React and score/consent helpers; memory service responses. No real Firebase, student records, signatures or notifications were written.",
+    "Actual student React, MainLayout/Header/sidebar components and score/consent/confirmation helpers; memory service responses. No real Firebase, student records, signatures or notifications were written. Header rank/notification/dictionary overlays are disabled.",
     "First school login and production caller authorization are outside this UI test.",
+    "Teacher updates are injected into the memory server and followed by a component remount to exercise the actual load/confirmation-version path; this does not claim live subscription behavior.",
   ],
 };
 let browser;
@@ -232,17 +262,465 @@ try {
       .waitFor();
     return signing;
   };
-  const selectBlankAssessment = async (page) => {
-    const toggle = page.getByRole("button", { name: /점수 목록 메뉴 펼치기/ });
+  const selectAssessment = async (page, title) => {
+    const toggle = page.getByRole("button", {
+      name: /수행평가 목록 메뉴 펼치기/,
+    });
     if (await toggle.isVisible()) await toggle.click();
     await page
-      .getByRole("navigation", { name: "점수 목록 메뉴", exact: true })
-      .getByRole("button", { name: /2차 역사적 판단 글쓰기/ })
+      .getByRole("navigation", { name: "수행평가 목록 메뉴", exact: true })
+      .getByRole("button", {
+        name: new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      })
+      .click();
+    await page.getByRole("heading", { name: title, exact: true }).waitFor();
+  };
+  const selectBlankAssessment = (page) =>
+    selectAssessment(page, "2차 역사적 판단 글쓰기");
+  const firstTitle = "하여가와 단심가 다시 쓰기(논술형)";
+  const secondTitle = "조선 시대 신분 질서와 변화의 모습을 설명하기";
+  for (const width of [390, 768, 1280]) {
+    const page = await createPage(width, "?layout&blank-pair&noconsent");
+    const consentAction = page.getByRole("button", {
+      name: "동의 저장하고 점수 확인",
+      exact: true,
+    });
+    await consentAction.waitFor();
+    assert.equal(await consentAction.isDisabled(), true);
+    const consentGeometry = await consentAction.evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      const parent = button.parentElement.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height,
+        centeredBy: Math.abs(
+          rect.x + rect.width / 2 - parent.x - parent.width / 2,
+        ),
+        fontSize: parseFloat(getComputedStyle(button).fontSize),
+      };
+    });
+    assert.ok(consentGeometry.height >= 56, JSON.stringify(consentGeometry));
+    assert.ok(consentGeometry.fontSize >= 18, JSON.stringify(consentGeometry));
+    assert.ok(consentGeometry.centeredBy <= 2, JSON.stringify(consentGeometry));
+    assert.ok(consentGeometry.width >= 270 && consentGeometry.width <= 384);
+    await page.screenshot({
+      path: `${out}/consent-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`consent-${width}.png`);
+    await page.getByRole("checkbox").check();
+    await page.getByRole("checkbox").focus();
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await consentAction.evaluate(
+        (button) => button === document.activeElement,
+      ),
+      true,
+    );
+    await page.keyboard.press("Enter");
+    await page
+      .getByRole("heading", { name: firstTitle, exact: true })
+      .waitFor();
+    assert.equal(
+      await page.evaluate(() => window.studentScoreQa.consented),
+      true,
+    );
+    const subNavigation = page.getByRole("complementary", {
+      name: "수행평가 목록",
+      exact: true,
+    });
+    const titles = subNavigation.locator(".performance-score-navigation-title");
+    const navItems = subNavigation
+      .getByRole("navigation", {
+        name: "수행평가 목록 메뉴",
+        exact: true,
+        includeHidden: true,
+      })
+      .getByRole("button", { includeHidden: true });
+    if (width < 768) {
+      const toggle = subNavigation.locator(".teacher-settings-menu-toggle");
+      await toggle.focus();
+      await page.keyboard.press("Enter");
+      assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+    }
+    assert.deepEqual(await titles.allTextContents(), [firstTitle, secondTitle]);
+    assert.equal(await navItems.nth(0).getAttribute("aria-current"), "true");
+    const titleGeometry = await titles.evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        title: node.title,
+        height: node.getBoundingClientRect().height,
+        lineHeight: parseFloat(getComputedStyle(node).lineHeight),
+        lineClamp: getComputedStyle(node).webkitLineClamp,
+        border: parseFloat(
+          getComputedStyle(node.closest("button")).borderBottomWidth,
+        ),
+      })),
+    );
+    for (const [index, item] of titleGeometry.entries()) {
+      assert.equal(item.title, [firstTitle, secondTitle][index]);
+      assert.equal(item.lineClamp, "2");
+      assert.ok(item.height <= item.lineHeight * 2 + 1, JSON.stringify(item));
+      assert.ok(item.border >= 1, JSON.stringify(item));
+    }
+    let sidebarGeometry = null;
+    if (width === 1280) {
+      sidebarGeometry = await page.evaluate(() => {
+        const main = document
+          .querySelector('[aria-label="학생 메뉴"]')
+          .getBoundingClientRect();
+        const sub = document
+          .querySelector('[aria-label="수행평가 목록"]')
+          .getBoundingClientRect();
+        const content = document
+          .querySelector(".performance-score-workspace > .teacher-sub-content")
+          .getBoundingClientRect();
+        return {
+          main: { x: main.x, right: main.right },
+          sub: { x: sub.x, right: sub.right, width: sub.width },
+          content: { x: content.x },
+        };
+      });
+      assert.equal(sidebarGeometry.main.x, 0);
+      assert.ok(
+        Math.abs(sidebarGeometry.sub.x - sidebarGeometry.main.right) <= 1,
+        JSON.stringify(sidebarGeometry),
+      );
+      assert.ok(
+        sidebarGeometry.content.x >= sidebarGeometry.sub.right - 1,
+        JSON.stringify(sidebarGeometry),
+      );
+      assert.ok(
+        titleGeometry.some((item) => item.height >= item.lineHeight * 2 - 1),
+      );
+    }
+    await navItems.nth(1).focus();
+    await page.keyboard.press("Enter");
+    await page
+      .getByRole("heading", { name: secondTitle, exact: true })
+      .waitFor();
+    assert.equal(await navItems.nth(1).getAttribute("aria-current"), "true");
+    assert.equal(await navItems.nth(0).getAttribute("aria-current"), null);
+    if (width < 768) {
+      const toggle = subNavigation.getByRole("button", {
+        name: /수행평가 목록 메뉴 펼치기/,
+      });
+      await toggle.click();
+      await page.keyboard.press("Escape");
+      assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+      assert.equal(
+        await toggle.evaluate((button) => button === document.activeElement),
+        true,
+      );
+    }
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      true,
+    );
+    await page.screenshot({
+      path: `${out}/student-sidebar-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`student-sidebar-${width}.png`);
+    report.layoutMetrics.push({
+      width,
+      consentGeometry,
+      titleGeometry,
+      sidebarGeometry,
+    });
+    const initialReview = await openSignatureReview(page);
+    assert.equal(
+      await initialReview.getByText(secondTitle, { exact: true }).count(),
+      0,
+    );
+    await initialReview.getByText(firstTitle, { exact: true }).waitFor();
+    await initialReview
+      .getByRole("button", { name: "제출하기", exact: true })
       .click();
     await page
-      .getByRole("heading", { name: "2차 역사적 판단 글쓰기", exact: true })
+      .getByRole("button", { name: "점수 확인 완료 1/1", exact: true })
       .waitFor();
-  };
+    const firstConfirmation = await page.evaluate(() =>
+      structuredClone([...window.studentScoreQa.confirmations.values()][0]),
+    );
+    assert.equal(
+      await page.evaluate(
+        () => window.studentScoreQa.latestSignature()?.rosterId,
+      ),
+      "qa-score",
+    );
+    await page.evaluate(() => {
+      const state = window.studentScoreQa;
+      const second = state.serverRecords.get("qa-blank");
+      state.serverRecords.set("qa-blank", {
+        ...second,
+        totalScore: 17,
+        enteredScoreCount: 1,
+        items: second.items.map((item) => ({
+          ...item,
+          score: 17,
+          scoreEntered: true,
+        })),
+        updatedAt: { seconds: ++state.clock },
+      });
+      state.remount();
+    });
+    await page
+      .getByRole("button", { name: "점수 확인 및 서명하기", exact: true })
+      .waitFor();
+    assert.equal(
+      await page.evaluate(() => window.studentScoreQa.latestSignature()),
+      null,
+    );
+    const secondReview = await openSignatureReview(page);
+    assert.equal(
+      await secondReview.getByText(firstTitle, { exact: true }).count(),
+      0,
+    );
+    await secondReview.getByText(secondTitle, { exact: true }).waitFor();
+    await secondReview
+      .getByRole("button", { name: "제출하기", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "점수 확인 완료 2/2", exact: true })
+      .waitFor();
+    assert.deepEqual(
+      await page.evaluate(() =>
+        window.studentScoreQa.confirmations.get(
+          "users/qa-student/performance_scores/qa-score/confirmations/qa-student",
+        ),
+      ),
+      firstConfirmation,
+    );
+    assert.equal(
+      await page.evaluate(
+        () => window.studentScoreQa.latestSignature()?.rosterId,
+      ),
+      "qa-blank",
+    );
+    const secondConfirmation = await page.evaluate(() =>
+      structuredClone(
+        window.studentScoreQa.confirmations.get(
+          "users/qa-student/performance_scores/qa-blank/confirmations/qa-student",
+        ),
+      ),
+    );
+    await page.screenshot({
+      path: `${out}/second-assessment-signed-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`second-assessment-signed-${width}.png`);
+    await page.evaluate(() => {
+      const state = window.studentScoreQa;
+      const first = state.serverRecords.get("qa-score");
+      state.serverRecords.set("qa-score", {
+        ...first,
+        totalScore: 16,
+        items: first.items.map((item) => ({ ...item, score: 16 })),
+        updatedAt: { seconds: ++state.clock },
+      });
+      state.remount();
+    });
+    await page
+      .getByRole("button", { name: "점수 확인 및 서명하기", exact: true })
+      .waitFor();
+    assert.equal(
+      await page.evaluate(() => window.studentScoreQa.latestSignature()),
+      null,
+    );
+    const revisedReview = await openSignatureReview(page);
+    await revisedReview.getByText(firstTitle, { exact: true }).waitFor();
+    assert.equal(
+      await revisedReview.getByText(secondTitle, { exact: true }).count(),
+      0,
+    );
+    await revisedReview
+      .getByRole("button", { name: "제출하기", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "점수 확인 완료 2/2", exact: true })
+      .waitFor();
+    const finalState = await page.evaluate(() => ({
+      writes: window.studentScoreQa.events
+        .filter((event) => event.name === "signature")
+        .map((event) => event.rosterId),
+      first: window.studentScoreQa.confirmations.get(
+        "users/qa-student/performance_scores/qa-score/confirmations/qa-student",
+      ),
+      second: window.studentScoreQa.confirmations.get(
+        "users/qa-student/performance_scores/qa-blank/confirmations/qa-student",
+      ),
+      latest: window.studentScoreQa.latestSignature()?.rosterId,
+    }));
+    assert.deepEqual(finalState.writes, ["qa-score", "qa-blank", "qa-score"]);
+    assert.deepEqual(finalState.second, secondConfirmation);
+    assert.equal(finalState.latest, "qa-score");
+    assert.ok(
+      finalState.first.confirmedAt.seconds >
+        finalState.second.confirmedAt.seconds,
+    );
+    await page.evaluate(() => window.studentScoreQa.remount());
+    await page
+      .getByRole("button", { name: "점수 확인 완료 2/2", exact: true })
+      .waitFor();
+    await page.screenshot({
+      path: `${out}/first-assessment-resigned-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`first-assessment-resigned-${width}.png`);
+    await page.close();
+    console.log(`PASS final-signature layout/lifecycle ${width}`);
+  }
+  report.checks.push(
+    "390/768/1280 actual MainLayout/Header: consent CTA is centered, at least 56px high with 18px text, capped at 384px and keyboard operable; performance list shows assessment-order-sorted two-line titles, divider borders, full title tooltips and selected-state changes. Desktop secondary sidebar adjoins the main rail; mobile disclosure supports Enter/Escape and returns focus; page does not overflow.",
+    "390/768/1280 actual load/signature path: sign A with B blank (1/1), register B and reload (only B pending), sign B (2/2/latest B, original A confirmation unchanged), change A and reload (only A pending; final signature withheld), re-sign A (2/2/latest A, B confirmation unchanged), reload completion preserved. Exactly A/B/A confirmation writes; no product or production data writes.",
+  );
+  const concurrent = await createPage(1280, "?layout");
+  const concurrentReview = await openSignatureReview(concurrent);
+  await concurrent.evaluate((title) => {
+    const state = window.studentScoreQa;
+    state.afterSignatureCommit = () => {
+      state.afterSignatureCommit = undefined;
+      const first = state.serverRecords.get("qa-score");
+      state.serverRecords.set("qa-blank", {
+        ...first,
+        id: "qa-blank",
+        rosterId: "qa-blank",
+        title,
+        assessmentOrder: 2,
+        enteredScoreCount: 1,
+        totalScore: 17,
+        items: [
+          { name: "판단 글쓰기", score: 17, maxScore: 20, scoreEntered: true },
+        ],
+        updatedAt: { seconds: ++state.clock },
+      });
+    };
+  }, secondTitle);
+  await concurrentReview
+    .getByRole("button", { name: "제출하기", exact: true })
+    .click();
+  await concurrentReview.waitFor({ state: "hidden" });
+  await concurrent
+    .getByRole("button", { name: "점수 확인 및 서명하기", exact: true })
+    .waitFor();
+  assert.equal(
+    await concurrent.getByRole("button", { name: /점수 확인 완료/ }).count(),
+    0,
+  );
+  await concurrent.waitForFunction(() =>
+    window.studentScoreQa.toasts.some((toast) =>
+      toast.message.includes("추가되거나 변경된 점수"),
+    ),
+  );
+  const concurrentState = await concurrent.evaluate(() => ({
+    writes: window.studentScoreQa.events
+      .filter((event) => event.name === "signature")
+      .map((event) => event.rosterId),
+    reads: window.studentScoreQa.events.filter(
+      (event) => event.name === "scoreListRead",
+    ),
+    latest: window.studentScoreQa.latestSignature(),
+    first: window.studentScoreQa.confirmations.get(
+      "users/qa-student/performance_scores/qa-score/confirmations/qa-student",
+    ),
+  }));
+  assert.deepEqual(concurrentState.writes, ["qa-score"]);
+  assert.ok(
+    concurrentState.reads.length >= 2 &&
+      concurrentState.reads.every((event) => event.fromServer === true),
+  );
+  assert.equal(concurrentState.latest, null);
+  await selectAssessment(concurrent, secondTitle);
+  await concurrent.screenshot({
+    path: `${out}/concurrent-new-assessment-pending.png`,
+    fullPage: true,
+  });
+  report.screenshots.push("concurrent-new-assessment-pending.png");
+  const discoveredReview = await openSignatureReview(concurrent);
+  assert.equal(
+    await discoveredReview.getByText(firstTitle, { exact: true }).count(),
+    0,
+  );
+  await discoveredReview.getByText(secondTitle, { exact: true }).waitFor();
+  await discoveredReview
+    .getByRole("button", { name: "제출하기", exact: true })
+    .click();
+  await concurrent
+    .getByRole("button", { name: "점수 확인 완료 2/2", exact: true })
+    .waitFor();
+  assert.deepEqual(
+    await concurrent.evaluate(() =>
+      window.studentScoreQa.confirmations.get(
+        "users/qa-student/performance_scores/qa-score/confirmations/qa-student",
+      ),
+    ),
+    concurrentState.first,
+  );
+  await concurrent.close();
+  const failedRefresh = await createPage(1280, "?layout&blank-pair");
+  const failureReview = await openSignatureReview(failedRefresh);
+  await failedRefresh.evaluate(() => {
+    const state = window.studentScoreQa;
+    state.afterSignatureCommit = () => {
+      state.afterSignatureCommit = undefined;
+      state.failNextScoreListRead = true;
+    };
+  });
+  await failureReview
+    .getByRole("button", { name: "제출하기", exact: true })
+    .click();
+  await failedRefresh
+    .getByRole("alert")
+    .filter({
+      hasText:
+        "서명은 저장되었지만 최신 점수를 확인하지 못했습니다. 다시 시도해 주세요.",
+    })
+    .waitFor();
+  assert.equal(
+    await failedRefresh.getByRole("button", { name: /점수 확인 완료/ }).count(),
+    0,
+  );
+  assert.equal(
+    await failedRefresh
+      .getByRole("button", { name: "점수 확인 및 서명하기", exact: true })
+      .count(),
+    0,
+  );
+  assert.equal(
+    await failedRefresh.evaluate(
+      () => window.studentScoreQa.confirmations.size,
+    ),
+    1,
+  );
+  await failedRefresh.screenshot({
+    path: `${out}/post-signature-refresh-error.png`,
+    fullPage: true,
+  });
+  report.screenshots.push("post-signature-refresh-error.png");
+  await failedRefresh
+    .getByRole("button", { name: "다시 시도", exact: true })
+    .click();
+  await failedRefresh
+    .getByRole("button", { name: "점수 확인 완료 1/1", exact: true })
+    .waitFor();
+  assert.deepEqual(
+    await failedRefresh.evaluate(() =>
+      window.studentScoreQa.events
+        .filter((event) => event.name === "signature")
+        .map((event) => event.rosterId),
+    ),
+    ["qa-score"],
+  );
+  await failedRefresh.close();
+  report.checks.push(
+    "A new B record published during A's signature commit is discovered by the actual fromServer full-list reload and remains unsigned; completion is withheld, additional-confirmation feedback is shown, and the next review signs only B while preserving A's confirmation.",
+    "When the post-signature server list read fails, A's persisted confirmation remains, neither completion nor signing is falsely displayed, an actionable load error appears, and retry recovers 1/1 without writing another signature.",
+  );
+  console.log(
+    "PASS concurrent assessment publication and post-signature reload failure",
+  );
   for (const width of [390, 768, 1280]) {
     const page = await createPage(width, "?blank-pair");
     await page
@@ -525,7 +1003,10 @@ try {
     await result.getByText("답안지 확인 요청 포함", { exact: true }).waitFor();
     assert.equal(
       await page.evaluate(
-        () => window.studentScoreQa.events[0].input.answerSheetRequested,
+        () =>
+          window.studentScoreQa.events.find(
+            (event) => event.name === "objection",
+          ).input.answerSheetRequested,
       ),
       true,
     );
@@ -682,7 +1163,9 @@ try {
     .getByRole("dialog", { name: "정기시험 이의 결과", exact: true })
     .waitFor();
   const written = await page.evaluate(
-    () => window.studentScoreQa.events[0].input,
+    () =>
+      window.studentScoreQa.events.find((event) => event.name === "objection")
+        .input,
   );
   assert.equal(written.scoreKind, "written_exam_essay");
   assert.equal(written.answerSheetRequested, true);
@@ -709,6 +1192,24 @@ try {
     JSON.stringify(report, null, 2),
   );
   console.log(JSON.stringify(report, null, 2));
+} catch (error) {
+  report.failure = String(error?.stack || error);
+  for (const [index, page] of (
+    browser?.contexts().flatMap((context) => context.pages()) || []
+  ).entries()) {
+    await page
+      .screenshot({ path: `${out}/failure-${index}.png`, fullPage: true })
+      .catch(() => {});
+    await fs.writeFile(
+      `${out}/failure-${index}.html`,
+      await page.content().catch(() => ""),
+    );
+  }
+  await fs.writeFile(
+    out + "/student-objection-report.json",
+    JSON.stringify(report, null, 2),
+  );
+  throw error;
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));

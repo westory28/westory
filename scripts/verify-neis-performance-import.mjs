@@ -5,6 +5,7 @@ import ts from "typescript";
 import ExcelJS from "exceljs";
 import readXlsxFile from "read-excel-file/node";
 import JSZip from "jszip";
+import { deflateSync } from "node:zlib";
 
 const load = (source, dependencies, globals = {}) => {
   const exports = {};
@@ -95,6 +96,58 @@ dependencies["exceljs"] = ExcelJS;
 const manager = load((source + "\nexport { buildClassSummaryWorkbookFromTemplate };\n").replaceAll("import.meta.env.BASE_URL", '"/"'), dependencies, {
   fetch: async () => new Response(await fs.readFile("public/templates/performance-score-class-sheet-template.xlsx")),
 });
+// Distinct synthetic PNG bytes make the final exported image selection testable.
+const makeSignaturePng = (rgb) => {
+  const chunk = (type, data) => {
+    const contents = Buffer.concat([Buffer.from(type), data]);
+    let crc = 0xffffffff;
+    for (const byte of contents) {
+      crc ^= byte;
+      for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+    }
+    const result = Buffer.alloc(data.length + 12);
+    result.writeUInt32BE(data.length); contents.copy(result, 4);
+    result.writeUInt32BE((crc ^ 0xffffffff) >>> 0, result.length - 4);
+    return result;
+  };
+  const header = Buffer.alloc(13); header.writeUInt32BE(2, 0); header.writeUInt32BE(2, 4); header[8] = 8; header[9] = 6;
+  const scanline = Buffer.from([0, ...rgb, 255, ...rgb, 255]);
+  return Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"), chunk("IHDR", header), chunk("IDAT", deflateSync(Buffer.concat([scanline, scanline]))), chunk("IEND", Buffer.alloc(0))]);
+};
+const signaturePngs = [makeSignaturePng([200, 0, 0]), makeSignaturePng([0, 0, 200]), makeSignaturePng([0, 160, 0])];
+const scoreRecord = (rosterId, totalScore, enteredScoreCount, updatedAt) => ({ uid: "final-qa", rosterId, totalScore, totalMaxScore: 35, enteredScoreCount, updatedAt, items: [{ score: totalScore, maxScore: 35, scoreEntered: enteredScoreCount > 0 }] });
+const signedRecord = (record, imageIndex, confirmedAt) => scores.applyPerformanceScoreConfirmation(record, {
+  uid: record.uid, rosterId: record.rosterId, signatureName: "가상최종서명", signatureImage: `data:image/png;base64,${signaturePngs[imageIndex].toString("base64")}`,
+  scoreUpdatedAt: record.updatedAt, confirmedAt,
+});
+const signedFirst = signedRecord(scoreRecord("first", 0, 1, stamp(100)), 0, stamp(110));
+const blankSecond = scoreRecord("second", 0, 0, stamp(100));
+const unsignedSecond = scoreRecord("second", 29, 1, stamp(120));
+const signedSecond = signedRecord(unsignedSecond, 1, stamp(130));
+const changedFirst = scoreRecord("first", 1, 1, stamp(140));
+const resignedFirst = signedRecord(changedFirst, 2, stamp(150));
+const finalSignatureCases = [
+  { label: "first signed and second blank", first: signedFirst, second: blankSecond, expected: 0 },
+  { label: "newly scored second is unsigned", first: signedFirst, second: unsignedSecond, expected: null },
+  { label: "second signed later", first: signedFirst, second: signedSecond, expected: 1 },
+  { label: "changed first invalidates old signature", first: { ...changedFirst, confirmation: signedFirst.confirmation, signatureImage: signedFirst.signatureImage, signatureName: signedFirst.signatureName }, second: signedSecond, expected: null },
+  { label: "first resigned most recently", first: resignedFirst, second: signedSecond, expected: 2 },
+  { label: "later second timestamp does not excuse stale score revision", first: resignedFirst, second: { ...signedSecond, updatedAt: stamp(160), confirmation: { ...signedSecond.confirmation, confirmedAt: stamp(170) } }, expected: null },
+];
+for (const test of finalSignatureCases) {
+  const final = scores.getLatestPerformanceScoreSignatureRecord([test.first, test.second]);
+  assert.equal(final?.signatureImage || null, test.expected === null ? null : `data:image/png;base64,${signaturePngs[test.expected].toString("base64")}`, test.label);
+  assert.equal(scores.getLatestPerformanceScoreSignatureRecord([test.second, test.first])?.signatureImage || null, final?.signatureImage || null, `${test.label}: input order is irrelevant`);
+}
+const nanosFirst = signedRecord(scoreRecord("first", 0, 1, stamp(100)), 0, stamp(200, 2));
+const nanosSecond = signedRecord(unsignedSecond, 1, stamp(200, 3));
+assert.equal(scores.getLatestPerformanceScoreSignatureRecord([nanosFirst, nanosSecond]).rosterId, "second", "Nanosecond precision is preserved");
+const tiedSecond = signedRecord(unsignedSecond, 1, stamp(200, 2));
+assert.equal(scores.getLatestPerformanceScoreSignatureRecord([tiedSecond, nanosFirst]).rosterId, "first", "Equal timestamps use stable roster id order");
+const legacyFirst = { ...scoreRecord("first", 0, 1, stamp(100)), signatureName: "가상최종서명", signatureImage: signedFirst.signatureImage, signedAt: new Date(250000) };
+assert.equal(scores.getLatestPerformanceScoreSignatureRecord([signedSecond, legacyFirst]).rosterId, "first", "Legacy signedAt is supported");
+assert.equal(scores.getLatestPerformanceScoreSignatureRecord([{ ...legacyFirst, signedAt: undefined }, signedSecond]).rosterId, "second", "Missing times sort before known times");
+assert.equal(scores.getLatestPerformanceScoreSignatureRecord([signedFirst, { ...signedSecond, confirmation: { ...signedSecond.confirmation, signatureName: "" } }]), null, "Unnamed signatures are incomplete");
 const firstRoster = { title: "새 학기 역사 탐구", totalMaxScore: 25, items: [{ ratio: 25 }], id: "first" };
 const secondRoster = { title: "역사 자료 해석", totalMaxScore: 35, items: [{ ratio: 35 }], id: "second" };
 const students = Array.from({ length: 32 }, (_, i) => ({
@@ -168,6 +221,22 @@ const assertReferenceBorders = async (buffer, studentCount, label) => {
   }
 };
 await assertReferenceBorders(await blob.arrayBuffer(), 32, "32 students");
+for (const test of finalSignatureCases) {
+  const finalBlob = await manager.buildClassSummaryWorkbookFromTemplate({
+    ...exportParams,
+    students: [{ uid: "final-qa", grade: "3", class: "2", number: "1", studentName: "가상최종서명", firstRecord: test.first, secondRecord: test.second }],
+  });
+  const finalWorkbook = new ExcelJS.Workbook();
+  await finalWorkbook.xlsx.load(await finalBlob.arrayBuffer());
+  const images = finalWorkbook.worksheets[0].getImages();
+  assert.equal(images.length, test.expected === null ? 0 : 1, `${test.label}: exported final image count`);
+  if (test.expected !== null) {
+    assert.deepEqual(Buffer.from(finalWorkbook.getImage(images[0].imageId).buffer), signaturePngs[test.expected], `${test.label}: actual XLSX PNG is the latest valid signature`);
+    assert.equal(images[0].range.tl.nativeRow, 6);
+    assert.ok(images[0].range.tl.nativeCol >= 9);
+  }
+  await assertReferenceBorders(await finalBlob.arrayBuffer(), 1, `Final signature: ${test.label}`);
+}
 const solidRegression = await JSZip.loadAsync(await blob.arrayBuffer());
 solidRegression.file("xl/styles.xml", (await solidRegression.file("xl/styles.xml").async("string")).replaceAll('style="hair"', 'style="thin"'));
 await assert.rejects(
@@ -187,4 +256,4 @@ if (process.env.SCORE_QA_BORDER_REFERENCE) {
   await assertReferenceBorders(reference, 32, "Original reference (no personal values read)");
 }
 if (process.env.SCORE_QA_OUTPUT) await fs.writeFile(process.env.SCORE_QA_OUTPUT, Buffer.from(await blob.arrayBuffer()));
-console.log("NEIS import, zero/blank/range validation, versioned signatures and template cell/layout contracts passed. Reference hair separators and solid outer/header boundaries preserved for 1/31/32/33/40 students.");
+console.log("NEIS import, zero/blank/range validation, versioned signatures and template cell/layout contracts passed. Final signatures follow timestamp order across blank/scored/unsigned/re-signed states and actual exported PNG bytes match; invalid revisions block export signatures. Reference hair separators and solid outer/header boundaries preserved for 1/31/32/33/40 students.");

@@ -4,6 +4,7 @@ import {
   getDoc,
   getDocFromServer,
   getDocs,
+  getDocsFromServer,
   orderBy,
   query,
   serverTimestamp,
@@ -649,11 +650,12 @@ export const loadUserPerformanceScoreRecords = async (
     year?: string;
     semester?: string;
     scoreKind?: PerformanceScoreKind | "all";
+    fromServer?: boolean;
   },
 ) => {
   if (!uid) return [];
   const targetScoreKind = scope?.scoreKind ?? PERFORMANCE_SCORE_KIND;
-  const snap = await getDocs(
+  const snap = await (scope?.fromServer ? getDocsFromServer : getDocs)(
     query(
       collection(db, "users", uid, PERFORMANCE_SCORE_USER_COLLECTION),
       orderBy("updatedAt", "desc"),
@@ -686,7 +688,7 @@ export const loadUserPerformanceScoreRecords = async (
         await loadPerformanceScoreConfirmation(
           uid,
           record.id || record.rosterId,
-          { throwOnError: true },
+          { throwOnError: true, fromServer: scope?.fromServer },
         ),
       ),
     ),
@@ -697,11 +699,11 @@ export const loadUserPerformanceScoreRecords = async (
 export const loadPerformanceScoreConfirmation = async (
   uid: string,
   scoreId: string,
-  options: { throwOnError?: boolean } = {},
+  options: { throwOnError?: boolean; fromServer?: boolean } = {},
 ) => {
   if (!uid || !scoreId) return null;
   try {
-    const snap = await getDoc(
+    const snap = await (options.fromServer ? getDocFromServer : getDoc)(
       doc(
         db,
         "users",
@@ -776,6 +778,69 @@ export const applyPerformanceScoreConfirmation = (
     signatureImage: valid ? confirmation.signatureImage : undefined,
     signedAt: valid ? confirmation.confirmedAt : undefined,
   };
+};
+
+// Callers provide one student's assessment records in the selected semester.
+// A latest image represents completion only after every entered score is signed.
+export const getLatestPerformanceScoreSignatureRecord = (
+  records: PerformanceScoreRecord[],
+): PerformanceScoreRecord | null => {
+  const required = records.filter(hasEnteredPerformanceScore).map((record) => {
+    if (record.confirmation === undefined) return record;
+    const verified = applyPerformanceScoreConfirmation(
+      record,
+      record.confirmation,
+    );
+    return { ...verified, signedAt: verified.signedAt || record.signedAt };
+  });
+  if (
+    !required.length ||
+    required.some(
+      (record) =>
+        typeof record.signatureImage !== "string" ||
+        !record.signatureImage.trim() ||
+        typeof record.signatureName !== "string" ||
+        !record.signatureName.trim(),
+    )
+  )
+    return null;
+
+  const timestampParts = (value: unknown): [number, number] => {
+    const stamp = value as {
+      seconds?: number;
+      nanoseconds?: number;
+      toMillis?: () => number;
+      toDate?: () => Date;
+    } | null;
+    if (typeof stamp?.seconds === "number" && Number.isFinite(stamp.seconds))
+      return [stamp.seconds, Number(stamp.nanoseconds) || 0];
+    const millis =
+      value instanceof Date
+        ? value.getTime()
+        : typeof stamp?.toMillis === "function"
+          ? stamp.toMillis()
+          : typeof stamp?.toDate === "function"
+            ? stamp.toDate().getTime()
+            : 0;
+    return Number.isFinite(millis)
+      ? [Math.floor(millis / 1000), Math.round((millis % 1000) * 1e6)]
+      : [0, 0];
+  };
+  return required.sort((left, right) => {
+    const [leftSeconds, leftNanos] = timestampParts(
+      left.confirmation?.confirmedAt || left.signedAt,
+    );
+    const [rightSeconds, rightNanos] = timestampParts(
+      right.confirmation?.confirmedAt || right.signedAt,
+    );
+    return (
+      rightSeconds - leftSeconds ||
+      rightNanos - leftNanos ||
+      String(left.rosterId || left.id || "").localeCompare(
+        String(right.rosterId || right.id || ""),
+      )
+    );
+  })[0];
 };
 
 export const buildStudentLookupKey = (

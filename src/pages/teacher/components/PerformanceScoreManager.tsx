@@ -60,6 +60,7 @@ import {
   buildStudentNameLookupKey,
   formatPerformanceScore,
   getPerformanceScorePercent,
+  getLatestPerformanceScoreSignatureRecord,
   hasEnteredPerformanceScore,
   loadPerformanceScoreSettings,
   loadPerformanceScoreConfirmation,
@@ -4016,19 +4017,7 @@ const getConfirmedSignatureRecord = (
   ) {
     requiredRecords.push(student.secondRecord);
   }
-  if (!requiredRecords.length) return null;
-  const allConfirmed = requiredRecords.every(
-    (record) => record.signatureImage || record.confirmation?.signatureImage,
-  );
-  if (!allConfirmed) return null;
-  return (
-    [...requiredRecords]
-      .reverse()
-      .find(
-        (record) =>
-          record.signatureImage || record.confirmation?.signatureImage,
-      ) || null
-  );
+  return getLatestPerformanceScoreSignatureRecord(requiredRecords);
 };
 
 const getClassSheetStudentKey = (student: ClassSheetStudent) =>
@@ -12815,14 +12804,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                               student,
                               classSheetSignatureRequirements,
                             );
-                            const signatureDisplayRecord =
-                              signatureRecord ||
-                              [student.secondRecord, student.firstRecord].find(
-                                (record) =>
-                                  record?.signatureImage ||
-                                  record?.confirmation?.signatureImage,
-                              ) ||
-                              null;
+                            const signatureDisplayRecord = signatureRecord;
                             const signatureImage =
                               signatureDisplayRecord?.signatureImage ||
                               signatureDisplayRecord?.confirmation
