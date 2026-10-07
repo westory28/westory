@@ -180,13 +180,17 @@
 .weplay-guide-launch > span {
   display: inline-grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
   border: 1px solid currentColor;
   border-radius: 50%;
   font-size: 12px;
   font-weight: 700;
+  font-family: sans-serif;
+  line-height: 1;
 }
+.weplay-guide-header > strong { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 600px) {
   .weplay-guide {
     width: calc(100vw - 16px);

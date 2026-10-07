@@ -13,6 +13,7 @@
 .naval-vignette { position: absolute; inset: 0; z-index: 1; background: linear-gradient(to bottom, rgba(23,30,36,.75), transparent 34%, transparent 60%, rgba(23,30,36,.85)); pointer-events: none; }
 .naval-topbar { position: relative; z-index: 8; display: flex; justify-content: space-between; align-items: start; gap: 12px; padding: 12px; }
 .naval-title-art { display: block; width: 40%; flex: 0 0 40%; }
+.naval-title-custom { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--naval-text); font-size: clamp(16px, 2.4cqw, 24px); line-height: 1.4; font-weight: 800; }
 .naval-hud { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; width: 52%; }
 .naval-hud > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border: 1px solid var(--naval-gold); border-radius: var(--radius-md, 8px); background: var(--naval-ink); box-shadow: inset 0 0 0 2px var(--naval-wood); font-variant-numeric: tabular-nums; }
 .naval-hud span { font-size: 12px; font-weight: 700; }

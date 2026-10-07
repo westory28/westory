@@ -16,7 +16,7 @@
   box-shadow: inset 0 0 0 4px var(--naval-wood);
 }
 .naval-result-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--naval-gold); background: rgba(23, 30, 36, .75); }
-.naval-result-heading > span { font-size: 20px; font-weight: 900; }
+.naval-result-heading > span { min-width: 0; overflow-wrap: anywhere; font-size: 20px; font-weight: 900; }
 .naval-result-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 14px; }
 .naval-result-tags strong { padding: 4px 12px; border: 1px solid var(--naval-gold); border-radius: 4px; color: var(--naval-gold); }
 .naval-result-banner { min-height: 280px; padding: 32px 24px; display: flex; align-items: center; justify-content: center; gap: 24px; text-align: center; text-shadow: 0 2px 4px var(--naval-ink); }

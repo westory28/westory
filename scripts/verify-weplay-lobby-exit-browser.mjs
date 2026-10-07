@@ -21,21 +21,35 @@ await fs.mkdir(evidence, { recursive: true });
 const modulePath = relative => JSON.stringify(path.join(root, relative).replaceAll('\\', '/'));
 const lessons = [{ unitId: 'naval-qa', title: '임진왜란과 수군', isVisibleToStudents: true, words: ['이순신', '거북선', '한산도', '판옥선', '명량해전', '학익진'], wordCount: 6 }];
 const catalog = lessons.flatMap(lesson => lesson.words.map(text => ({ text, unitId: lesson.unitId, lessonTitle: lesson.title, context: '수업 자료에 등록한 빈칸 정답입니다.' })));
+const rankingFixtures = [
+  { rank: 1, studentLabel: '1반 1번 검증학생', score: 12500, correctCount: 60, isMe: false },
+  { rank: 2, studentLabel: '1반 2번 아주아주긴이름의검증학생입니다', score: 9999, correctCount: 54, isMe: true },
+  { rank: 3, studentLabel: '1반 3번 검증학생', score: 8000, correctCount: 46, isMe: false },
+  { rank: 4, studentLabel: '1반 4번 긴이름도빠짐없이표시하는검증학생', score: 7500, correctCount: 40, isMe: false },
+];
+const recordFixtures = [
+  { sessionId: 'record-practice', difficulty: 'mild', mode: 'practice', correctCount: 29, totalWords: 60, score: 6000, reward: 0, cost: 0, netWis: 0, balance: 34, finishedAtMs: 1790650800000, missedWords: [] },
+  { sessionId: 'record-challenge', difficulty: 'spicy', mode: 'challenge', correctCount: 60, totalWords: 60, score: 12345, reward: 10, cost: 7, netWis: 3, balance: 34, finishedAtMs: 1790737200000, missedWords: [] },
+];
 const service = `
 const params=new URLSearchParams(location.search);
 export const view=params.get('view')||'battle';
 export const config={year:'2026',semester:'2'};
+export const menuConfig=params.has('customTitle')||params.has('legacyTitle')?{student:[{name:'위플레이',url:'/student/weplay',icon:'',children:[{name:params.has('customTitle')?'선생님이 정한 해전':'역사가 내려와',url:'/student/weplay',gameTitleCustomized:params.has('customTitle')}]}],teacher:[]}:null;
 const readonly=view==='readonly';
 export const userData={uid:'naval-qa',role:view==='lobby'||readonly?'student':'teacher',teacherPortalEnabled:true,staffPermissions:readonly?['lesson_read']:[],email:'qa@example.invalid',name:'검증 교사',weplayGuideCompleted:true};
 export const auth={currentUser:{uid:'naval-qa',email:'qa@example.invalid'}};
-export const useAuth=()=>({config,currentUser:auth.currentUser,userData});
+export const useAuth=()=>({config,currentUser:auth.currentUser,userData,menuConfig});
 export const qa=window.navalQa={calls:[],writes:[],answers:[],completions:[],finishAttempts:[],settings:${JSON.stringify(core.DEFAULT_GAME_SETTINGS)},lessons:${JSON.stringify(lessons)},policy:{...${JSON.stringify(core.DEFAULT_POLICY)},challengeCost:7},balance:params.get('poor')==='1'?0:34,failFinish:0,fail:{},hold:{}};
+qa.ranking=params.get('ranking')==='full'?${JSON.stringify(rankingFixtures)}:params.get('ranking')==='single'?${JSON.stringify(rankingFixtures.slice(0, 1))}:[];
+qa.records=params.get('records')==='full'?${JSON.stringify(recordFixtures)}:[];
+qa.period={id:'qa-week',startsAtMs:1791126000000,endsAtMs:1791730800000,rankingPeriod:'weekly',rankingRewards:{mild:{first:10,second:5,third:3},medium:{first:20,second:10,third:6},spicy:{first:30,second:15,third:9}},status:'open'};
 const management=()=>({settings:structuredClone(qa.settings),lessons:structuredClone(qa.lessons),availableWordCount:6,previewWordCount:6});
 export const getHttpsCallable=async name=>async data=>{
   qa.calls.push({name,data:structuredClone(data)});
   if(qa.fail[name]){qa.fail[name]--;throw new Error('QA 연결 오류');}
   if(qa.hold[name])await new Promise(resolve=>{qa.releaseCall=resolve});
-  if(name==='getWeplayLobby')return {data:{gameEnabled:params.get('disabled')!=='1',policy:structuredClone(qa.policy),balance:qa.balance,dailyUsed:1,dailyRemaining:2,lessons:qa.lessons,wordCount:6,difficulties:qa.settings.difficulties,challengeDifficulties:qa.settings.difficulties,wordCountsByDifficulty:{mild:6,medium:6,spicy:6},challengeWordCountsByDifficulty:{mild:6,medium:6,spicy:6},activeSession:params.has('resume')&&!qa.completions.length?qa.session:null,records:qa.completions,period:null,rankingByDifficulty:{mild:[],medium:[],spicy:[]},serverNowMs:Date.now()}};
+  if(name==='getWeplayLobby')return {data:{gameEnabled:params.get('disabled')!=='1',policy:structuredClone(qa.policy),balance:qa.balance,dailyUsed:1,dailyRemaining:2,lessons:qa.lessons,wordCount:6,difficulties:qa.settings.difficulties,challengeDifficulties:qa.settings.difficulties,wordCountsByDifficulty:{mild:6,medium:6,spicy:6},challengeWordCountsByDifficulty:{mild:6,medium:6,spicy:6},activeSession:params.has('resume')&&!qa.completions.length?qa.session:null,records:[...qa.completions,...qa.records],period:qa.period,rankingByDifficulty:{mild:qa.ranking,medium:[],spicy:qa.ranking.slice(0,1)},serverNowMs:Date.now()}};
   if(name==='startWeplayGame'){const response=await fetch('/session',{method:'POST',body:JSON.stringify({...data,now:Date.now(),legacy:params.get('legacy')==='1'})});qa.session=await response.json();qa.session.policy=structuredClone(qa.policy);qa.transport=qa.makeTransport(qa.session);return {data:qa.session};}
   if(name==='submitWeplayAnswer')return {data:await qa.transport.answer(data)};
   if(name==='finishWeplayGame')return {data:await qa.transport.finish({exitEarly:data.exitEarly===true})};
@@ -174,7 +188,46 @@ async function startStudent(page, mode = 'practice') {
   if (mode === 'challenge') await page.getByRole('button', { name: '도전하기 위스 획득·차감', exact: true }).click();
   await page.locator('.weplay-start').click();
   await page.getByRole('textbox', { name: '단어 입력' }).waitFor();
+  assert.equal(await page.evaluate(() => window.navalQa.calls.filter(call => call.name === 'startWeplayGame').every(call => !Object.hasOwn(call.data, 'unitIds'))), true, 'Students always start with the full game word pool');
   await advanceTo(page, 200);
+}
+async function checkLobbyDialog(page, title) {
+  const trigger = page.getByRole('button', { name: title, exact: true });
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: title, exact: true });
+  await dialog.waitFor();
+  const geometry = await dialog.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return { title: element.getAttribute('aria-labelledby'), left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: innerWidth, height: innerHeight, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, controls: [...element.querySelectorAll('button')].map(button => { const r = button.getBoundingClientRect(); return { label: button.textContent || button.getAttribute('aria-label'), width: r.width, height: r.height }; }), focusInside: element.contains(document.activeElement) };
+  });
+  assert.ok(geometry.focusInside, `${title}: focus enters dialog`);
+  assert.ok(geometry.left >= 0 && geometry.right <= geometry.width && geometry.top >= 0 && geometry.bottom <= geometry.height + 1, JSON.stringify(geometry));
+  assert.ok(geometry.scrollWidth <= geometry.clientWidth, `${title}: no horizontal dialog overflow`);
+  assert.ok(geometry.controls.every(control => control.width >= 44 && control.height >= 44), JSON.stringify(geometry));
+  const heading = await dialog.getByRole('heading', { name: title, exact: true }).evaluate(element => ({ height: element.getBoundingClientRect().height, lineHeight: parseFloat(getComputedStyle(element).lineHeight) || parseFloat(getComputedStyle(element).fontSize) * 1.5 }));
+  assert.ok(heading.height <= heading.lineHeight + 1, `${title}: short dialog heading stays on one line (${JSON.stringify(heading)})`);
+  for (let index = 0; index < geometry.controls.length + 2; index++) {
+    await page.keyboard.press('Tab');
+    assert.equal(await dialog.evaluate(element => element.contains(document.activeElement)), true, `${title}: forward focus remains inside`);
+  }
+  for (let index = 0; index < geometry.controls.length + 2; index++) {
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await dialog.evaluate(element => element.contains(document.activeElement)), true, `${title}: reverse focus remains inside`);
+  }
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await page.clock.runFor(30);
+  assert.equal(await trigger.evaluate(element => document.activeElement === element), true, `${title}: Escape restores trigger focus`);
+  await trigger.click();
+  await dialog.waitFor();
+  await page.mouse.click(2, 2);
+  await dialog.waitFor({ state: 'hidden' });
+  await page.clock.runFor(30);
+  assert.equal(await trigger.evaluate(element => document.activeElement === element), true, `${title}: backdrop restores trigger focus`);
+  await trigger.click();
+  await dialog.waitFor();
+  return dialog;
 }
 async function exitDialog(page) {
   await page.getByRole('button', { name: '나가기', exact: true }).click();
@@ -191,13 +244,21 @@ async function exitDialog(page) {
 }
 let failure = null;
 try {
-  for (const width of [390, 768, 1280]) {
+  for (const width of [320, 390, 768, 1280]) {
     const lobby = await open('lobby', width);
     await lobby.locator('.weplay-launch').waitFor();
+    assert.equal(await lobby.getByRole('heading', { level: 1 }).textContent(), '내가 충무공이라고?!');
     const practice = lobby.getByRole('button', { name: '연습하기 위스 변동 없음', exact: true });
     const challenge = lobby.getByRole('button', { name: '도전하기 위스 획득·차감', exact: true });
     assert.equal(await practice.getAttribute('aria-pressed'), 'true');
     assert.equal(await lobby.locator('.weplay-selected-mode').textContent(), '연습 모드');
+    assert.equal(await lobby.getByLabel('수업 범위').count(), 0);
+    assert.equal(await lobby.getByRole('combobox').count(), 0);
+    assert.match(await lobby.locator('.weplay-wis-badge').textContent(), /내 위스\s*34/);
+    assert.equal(await lobby.getByRole('dialog', { name: '우리 반 랭킹', exact: true }).count(), 0);
+    assert.equal(await lobby.getByRole('dialog', { name: '내 기록', exact: true }).count(), 0);
+    const help = lobby.getByRole('button', { name: '게임 안내', exact: true });
+    assert.equal(await help.locator('svg').count(), 1, 'Guide icon uses a scalable, spaced SVG');
     assert.equal(await lobby.locator('.weplay-start').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(22, 60, 78)');
     assert.equal(await lobby.locator('.weplay-launch').evaluate(element => getComputedStyle(element).paddingTop), '0px');
     await lobby.locator('.weplay-launch-art img').waitFor();
@@ -207,8 +268,13 @@ try {
     assert.equal(geometry.columns, width < 768 ? 1 : 2);
     layoutMeasurements.push({ width, ...geometry });
     await capture(lobby, `lobby-practice-${width}`);
+    if (width === 320) {
+      const emptyHistory = await checkLobbyDialog(lobby, '내 기록');
+      assert.match(await emptyHistory.textContent(), /아직 게임 기록이 없습니다/);
+      await capture(lobby, 'lobby-records-empty-320');
+      await emptyHistory.getByRole('button', { name: '닫기', exact: true }).click();
+    }
     await lobby.getByRole('group', { name: '난이도', exact: true }).getByRole('button', { name: '매운맛', exact: true }).click();
-    await lobby.getByLabel('수업 범위').selectOption('naval-qa');
     await challenge.click();
     assert.equal(await challenge.getAttribute('aria-pressed'), 'true');
     assert.equal(await practice.getAttribute('aria-pressed'), 'false');
@@ -217,22 +283,100 @@ try {
     assert.equal(await lobby.locator('.weplay-start').textContent(), '위스 도전 시작 · 7위스');
     await capture(lobby, `lobby-challenge-${width}`);
     await practice.click();
-    assert.equal(await lobby.getByLabel('수업 범위').inputValue(), 'naval-qa');
+    assert.equal(await lobby.getByRole('combobox').count(), 0);
     assert.equal(await lobby.getByRole('group', { name: '난이도', exact: true }).getByRole('button', { name: '매운맛', exact: true }).getAttribute('aria-pressed'), 'true');
     await lobby.evaluate(() => { window.navalQa.fail.startWeplayGame = 1; });
     await lobby.locator('.weplay-start').click();
     await lobby.getByRole('alert').waitFor();
-    assert.equal(await lobby.getByLabel('수업 범위').inputValue(), 'naval-qa');
+    assert.equal(await lobby.getByRole('combobox').count(), 0);
     await lobby.locator('.weplay-start').click();
     await lobby.getByRole('textbox', { name: '단어 입력' }).waitFor();
     const started = await lobby.evaluate(() => window.navalQa.calls.filter(call => call.name === 'startWeplayGame'));
     assert.equal(started.length, 2); assert.equal(started[1].data.mode, 'practice'); assert.equal(started[1].data.difficulty, 'spicy');
-    assert.deepEqual(started[1].data.unitIds, ['naval-qa']);
+    assert.equal(started.every(call => !Object.hasOwn(call.data, 'unitIds')), true);
     assert.equal(started[0].data.requestKey, started[1].data.requestKey, 'Failed start retries the same idempotency key');
     await lobby.close();
   }
-  checks.push('390/768/1280 lobby: explicit practice/challenge cards and current heading, dynamic 7-Wis cost, real 1200x900 turtle ship, responsive columns, 44px controls, retained difficulty/lesson and same-key failed-start retry');
+  checks.push('320/390/768/1280 lobby: full word pool without a student scope selector, no unitIds in start/retry payloads, Wis badge, spaced SVG help, closed secondary dialogs, mode cards, real turtle ship, responsive columns, 44px controls, retained difficulty and same-key failed-start retry');
 
+  for (const width of [320, 390, 768, 1280]) {
+    const page = await open('lobby', width, 'ranking=full&records=full');
+    await page.locator('.weplay-launch').waitFor();
+    let dialog = await checkLobbyDialog(page, '우리 반 랭킹');
+    const rankingHelp = dialog.getByRole('button', { name: '랭킹 기준 안내', exact: true });
+    await rankingHelp.hover();
+    await dialog.getByRole('tooltip').waitFor();
+    assert.match(await dialog.getByRole('tooltip').textContent(), /같은 점수는 먼저/);
+    await page.mouse.move(2, 2);
+    await dialog.getByRole('tooltip').waitFor({ state: 'hidden' });
+    await rankingHelp.focus();
+    await dialog.getByRole('tooltip').waitFor();
+    await page.keyboard.press('Escape');
+    await dialog.getByRole('tooltip').waitFor({ state: 'hidden' });
+    assert.equal(await dialog.isVisible(), true, 'Escape dismisses ranking help before the dialog');
+    await rankingHelp.click();
+    await dialog.getByRole('tooltip').waitFor();
+    await dialog.getByRole('heading', { name: '우리 반 랭킹', exact: true }).click();
+    await dialog.getByRole('tooltip').waitFor({ state: 'hidden' });
+    const podium = dialog.locator('.weplay-podium');
+    await podium.waitFor();
+    const positions = await podium.locator(':scope > *').evaluateAll(elements => elements.map(element => ({ text: element.textContent, left: element.getBoundingClientRect().left, width: element.getBoundingClientRect().width, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth })));
+    assert.equal(positions.length, 3);
+    assert.match(positions[0].text, /1위/); assert.match(positions[1].text, /2위/); assert.match(positions[2].text, /3위/);
+    assert.ok(positions[1].left < positions[0].left && positions[0].left < positions[2].left, 'Podium visual order is 2-1-3 with semantic 1-2-3 reading order');
+    assert.ok(positions.every(position => position.scrollWidth <= position.clientWidth), JSON.stringify(positions));
+    assert.match(positions[1].text, /아주아주긴이름의검증학생입니다/);
+    assert.match(positions[0].text, /10\s*위스/); assert.match(positions[1].text, /5\s*위스/); assert.match(positions[2].text, /3\s*위스/);
+    assert.match(await dialog.textContent(), /1반 4번 긴이름도빠짐없이표시하는검증학생/);
+    await capture(page, `lobby-ranking-full-${width}`);
+    const rankingModes = dialog.getByRole('group', { name: '난이도별 랭킹', exact: true });
+    await rankingModes.getByRole('button', { name: '중간맛', exact: true }).click();
+    assert.equal(await rankingModes.getByRole('button', { name: '중간맛', exact: true }).getAttribute('aria-pressed'), 'true');
+    assert.match(await podium.textContent(), /20\s*위스/);
+    assert.equal(await podium.getByText('1반 1번 검증학생', { exact: true }).count(), 0);
+    await capture(page, `lobby-ranking-empty-${width}`);
+    await rankingModes.getByRole('button', { name: '매운맛', exact: true }).click();
+    assert.match(await podium.textContent(), /30\s*위스/);
+    assert.equal(await podium.getByText('1반 1번 검증학생', { exact: true }).count(), 1);
+    assert.equal(await podium.getByText('1반 2번 아주아주긴이름의검증학생입니다', { exact: true }).count(), 0);
+    await capture(page, `lobby-ranking-single-${width}`);
+    await dialog.getByRole('button', { name: /닫기/ }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    await page.clock.runFor(30);
+    assert.equal(await page.getByRole('button', { name: '우리 반 랭킹', exact: true }).evaluate(element => document.activeElement === element), true);
+    assert.equal(await page.getByRole('group', { name: '난이도', exact: true }).getByRole('button', { name: '착한맛', exact: true }).getAttribute('aria-pressed'), 'true', 'Ranking difficulty does not change the chosen game difficulty');
+    dialog = await checkLobbyDialog(page, '내 기록');
+    assert.match(await dialog.textContent(), /29\s*\/\s*60/);
+    assert.match(await dialog.textContent(), /연습/);
+    assert.match(await dialog.textContent(), /도전/);
+    assert.match(await dialog.textContent(), /위스 변동 없음/);
+    assert.match(await dialog.textContent(), /\+3\s*위스/);
+    await capture(page, `lobby-records-${width}`);
+    await dialog.getByRole('button', { name: /닫기/ }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    await page.clock.runFor(30);
+    assert.equal(await page.getByRole('button', { name: '내 기록', exact: true }).evaluate(element => document.activeElement === element), true);
+    assert.equal(await page.evaluate(() => window.navalQa.calls.length), 1, 'Opening and switching record views adds no backend calls');
+    await page.getByRole('button', { name: '게임 안내', exact: true }).click();
+    await page.locator('.weplay-guide[open]').waitFor();
+    await capture(page, `lobby-guide-${width}`);
+    await page.keyboard.press('Escape');
+    await page.locator('.weplay-guide[open]').waitFor({ state: 'hidden' });
+    await page.close();
+  }
+  checks.push('320/390/768/1280 ranking and record dialogs: keyboard activation, focus containment/return, Escape/backdrop/close, 44px controls, optional ranking help hover/focus/click/Escape, 2-1-3 naval podium, empty/single/full rankings, long names, difficulty-specific rewards, private history and working help without extra RPCs');
+
+  for (const [query, expected] of [['customTitle=1', '선생님이 정한 해전'], ['legacyTitle=1', '내가 충무공이라고?!']]) {
+    const titlePage = await open('lobby', 320, query);
+    await titlePage.locator('.weplay-launch').waitFor();
+    assert.equal(await titlePage.getByRole('heading', { level: 1 }).textContent(), expected);
+    await capture(titlePage, `lobby-title-${query.split('=')[0]}-320`);
+    await titlePage.close();
+  }
+  checks.push('Student title uses the teacher-defined menu title; missing or legacy default names resolve to 내가 충무공이라고?!');
+
+  // Set WEPLAY_QA_LOBBY_ONLY=1 for a focused repeat after a lobby-only visual fix.
+  if (process.env.WEPLAY_QA_LOBBY_ONLY !== '1') {
   const shimmer = await open('lobby', 1280);
   const start = shimmer.locator('.weplay-start'); await start.waitFor();
   assert.equal(await start.evaluate(element => getComputedStyle(element, '::before').animationName), 'none');
@@ -414,6 +558,7 @@ try {
   assert.equal(await resumed.getByRole('button', { name: '도전하기 위스 획득·차감', exact: true }).getAttribute('aria-pressed'), 'true');
   await capture(resumed, 'lobby-restored-challenge-replay-390'); await resumed.close();
   checks.push('Restored challenge session keeps challenge mode after early result and Replay returns to lobby');
+  }
   assert.deepEqual(errors, []); assert.deepEqual(requests, []);
 } catch (error) { failure = error.stack; process.exitCode = 1; }
 finally {

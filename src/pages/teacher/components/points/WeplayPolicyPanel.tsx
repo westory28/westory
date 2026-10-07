@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import NumericInput from "../../../../components/common/NumericInput";
+import { useAuth } from "../../../../contexts/AuthContext";
+import { getWeplayGameTitle } from "../../../../lib/weplayTitle";
 import { getYearSemester } from "../../../../lib/semesterScope";
 import {
   getWeplayPolicy,
@@ -130,6 +132,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
   canManage,
   active,
 }) => {
+  const { menuConfig } = useAuth();
   const scope = useMemo(
     () => getYearSemester(config),
     [config?.year, config?.semester],
@@ -337,7 +340,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
       }}
     >
       <header className="weplay-policy__header">
-        <h3 id="weplay-policy-title">내가 충무공이라고?!</h3>
+        <h3 id="weplay-policy-title">{getWeplayGameTitle(menuConfig)}</h3>
         {ready && (
           <span
             className={

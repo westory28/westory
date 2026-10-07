@@ -4,8 +4,10 @@ import {
   type WeplayResult,
 } from "../../../lib/weplay";
 import "./naval-result.css";
+import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 
 interface Props {
+  gameTitle?: string;
   result: WeplayResult;
   preview?: boolean;
   replaying?: boolean;
@@ -13,6 +15,7 @@ interface Props {
 }
 
 export default function NavalBattleResult({
+  gameTitle = DEFAULT_WEPLAY_GAME_TITLE,
   result,
   preview = false,
   replaying = false,
@@ -41,7 +44,7 @@ export default function NavalBattleResult({
       }
     >
       <header className="naval-result-heading">
-        <span>내가 충무공이라고?!</span>
+        <span>{gameTitle}</span>
         <div className="naval-result-tags">
           <strong>{WEPLAY_DIFFICULTY_LABELS[result.difficulty]}</strong>
           <span>

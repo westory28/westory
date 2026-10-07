@@ -21,6 +21,7 @@ import {
 } from "../../../lib/weplayBattle";
 import type { HistoryRainGameProps } from "./HistoryRainGame";
 import WeplayExitDialog from "./WeplayExitDialog";
+import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 import "./naval-battle.css";
 
 const ART = `${import.meta.env?.BASE_URL || "/"}assets/weplay/naval/`;
@@ -60,6 +61,7 @@ function Sprite({
 }
 
 export default function NavalBattleGame({
+  gameTitle = DEFAULT_WEPLAY_GAME_TITLE,
   session,
   config,
   onComplete,
@@ -622,7 +624,7 @@ export default function NavalBattleGame({
             : `${Math.max(340, Math.min(400, viewportHeight - 8))}px`,
         } as React.CSSProperties
       }
-      aria-label="내가 충무공이라고?! 해전 게임"
+      aria-label={`${gameTitle} 해전 게임`}
     >
       <div
         className={`naval-scene${effects.some((effect) => effect.kind === "sunk") ? " has-sinking" : ""}`}
@@ -668,11 +670,20 @@ export default function NavalBattleGame({
           </div>
         </div>
         <div className="naval-topbar">
-          <Sprite
-            className="naval-title-art"
-            rect={[0, 0, 750, 148]}
-            label="내가 충무공이라고?!"
-          />
+          {gameTitle === DEFAULT_WEPLAY_GAME_TITLE ? (
+            <Sprite
+              className="naval-title-art"
+              rect={[0, 0, 750, 148]}
+              label={gameTitle}
+            />
+          ) : (
+            <strong
+              className="naval-title-art naval-title-custom"
+              title={gameTitle}
+            >
+              {gameTitle}
+            </strong>
+          )}
           <div className="naval-hud">
             <div className="naval-hud-score">
               <span>점수</span>

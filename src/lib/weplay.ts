@@ -1,6 +1,7 @@
 import { getHttpsCallable } from "./firebase";
 import { getYearSemester } from "./semesterScope";
 import type { SystemConfig } from "../types";
+import { DEFAULT_WEPLAY_GAME_TITLE } from "./weplayTitle";
 
 export type WeplayConfig =
   | Pick<SystemConfig, "year" | "semester">
@@ -186,7 +187,7 @@ export const finishWeplayGame = (
 ) => call<WeplayResult>("finishWeplayGame", config, { sessionId, ...options });
 
 export const WEPLAY_GAMES = [
-  { id: "history-rain", name: "내가 충무공이라고?!" },
+  { id: "history-rain", name: DEFAULT_WEPLAY_GAME_TITLE },
 ] as const;
 export const getWeplayNormalWordCount = (durationSeconds: number) =>
   Math.round((durationSeconds * 2) / 3);

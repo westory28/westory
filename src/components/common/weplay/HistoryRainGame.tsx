@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import NavalBattleGame from "./NavalBattleGame";
 import WeplayExitDialog from "./WeplayExitDialog";
+import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 import {
   finishWeplayGame,
   normalizeWeplayAnswer,
@@ -25,6 +26,7 @@ export interface HistoryRainTransport {
 }
 
 export interface HistoryRainGameProps {
+  gameTitle?: string;
   session: WeplaySession;
   config: WeplayConfig;
   onComplete: (result: WeplayResult) => void;
@@ -43,6 +45,7 @@ export default function HistoryRainGame({ ...props }: HistoryRainGameProps) {
 }
 
 function LegacyHistoryRainGame({
+  gameTitle = DEFAULT_WEPLAY_GAME_TITLE,
   session,
   config,
   onComplete,
@@ -256,7 +259,7 @@ function LegacyHistoryRainGame({
       input.current?.focus();
   };
   return (
-    <section className="weplay-game" aria-label="역사가 내려와 게임">
+    <section className="weplay-game" aria-label={`${gameTitle} 게임`}>
       <div className="weplay-game-meta">
         <strong>
           {preview

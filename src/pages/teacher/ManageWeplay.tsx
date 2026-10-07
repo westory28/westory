@@ -36,9 +36,12 @@ import "../../components/common/weplay/weplay.css";
 import "./ManageWeplay.css";
 import WeplayWordPool, { getWeplayWordPool } from "./components/WeplayWordPool";
 import WeplayDifficultyEditor from "./components/WeplayDifficultyEditor";
+import WeplayTitleEditor from "./components/WeplayTitleEditor";
+import { getWeplayGameTitle } from "../../lib/weplayTitle";
 
 export default function ManageWeplay() {
-  const { config, currentUser, userData } = useAuth();
+  const { config, currentUser, userData, menuConfig } = useAuth();
+  const gameTitle = getWeplayGameTitle(menuConfig);
   const [params] = useSearchParams();
   const game =
     WEPLAY_GAMES.find((item) => item.id === params.get("game")) ||
@@ -239,7 +242,7 @@ export default function ManageWeplay() {
     <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-weplay-workspace">
       <TeacherSubNavigation
         title="위플레이 관리"
-        activeLabel={game.name}
+        activeLabel={gameTitle}
         open={menuOpen}
         onOpenChange={setMenuOpen}
       >
@@ -250,16 +253,16 @@ export default function ManageWeplay() {
             className={`teacher-settings-section${item.id === game.id ? " is-active" : ""}`}
             aria-current={item.id === game.id ? "page" : undefined}
             onClick={() => setMenuOpen(false)}
-            title={item.name}
+            title={gameTitle}
           >
             <TeacherNavigationIcon name="game" />
-            <span>{item.name}</span>
+            <span>{gameTitle}</span>
           </Link>
         ))}
       </TeacherSubNavigation>
       <main className="teacher-sub-content teacher-weplay-content">
         <div className="teacher-weplay-title">
-          <h1>{game.name}</h1>
+          <h1>{gameTitle}</h1>
           <button
             type="button"
             className="weplay-guide-launch"
@@ -277,6 +280,7 @@ export default function ManageWeplay() {
             </Link>
           )}
         </div>
+        {!preview && <WeplayTitleEditor title={gameTitle} />}
         {loading ? (
           <p role="status">게임 정보를 불러오는 중입니다.</p>
         ) : !data || !draft ? (
@@ -324,6 +328,7 @@ export default function ManageWeplay() {
                 <div className="weplay-page">
                   {result?.battle ? (
                     <NavalBattleResult
+                      gameTitle={gameTitle}
                       result={result}
                       preview
                       replaying={starting}
@@ -373,6 +378,7 @@ export default function ManageWeplay() {
                     </div>
                   ) : (
                     <HistoryRainGame
+                      gameTitle={gameTitle}
                       onShowGuide={guide.openGuide}
                       key={preview.session.id}
                       session={preview.session}
@@ -521,6 +527,7 @@ export default function ManageWeplay() {
           </>
         )}
         <WeplayGuide
+          gameTitle={gameTitle}
           open={guide.open}
           saving={guide.saving}
           error={guide.error}

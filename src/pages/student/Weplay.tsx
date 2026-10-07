@@ -16,19 +16,18 @@ import HistoryRainGame from "./weplay/HistoryRainGame";
 import NavalBattleResult from "../../components/common/weplay/NavalBattleResult";
 import WeplayGuide from "../../components/common/weplay/WeplayGuide";
 import useWeplayGuide from "../../components/common/weplay/useWeplayGuide";
+import { getWeplayGameTitle } from "../../lib/weplayTitle";
+import WeplayLobbyIcon from "./weplay/WeplayLobbyIcon";
+import WeplayRecordsDialog, {
+  type WeplayRecordsView,
+} from "./weplay/WeplayRecordsDialog";
 import "./weplay/weplay.css";
 import "./weplay/lobby.css";
 
 const signed = (value: number) => `${value > 0 ? "+" : ""}${value}`;
-const date = (value: number) =>
-  new Date(value).toLocaleDateString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "numeric",
-    day: "numeric",
-  });
-
 export default function Weplay() {
-  const { config, currentUser, userData } = useAuth();
+  const { config, currentUser, userData, menuConfig } = useAuth();
+  const gameTitle = getWeplayGameTitle(menuConfig);
   const [lobby, setLobby] = useState<WeplayLobby | null>(null);
   const [session, setSession] = useState<WeplaySession | null>(null);
   const [result, setResult] = useState<WeplayResult | null>(null);
@@ -39,7 +38,9 @@ export default function Weplay() {
   const [difficulty, setDifficulty] = useState<WeplayDifficulty>("mild");
   const [rankingDifficulty, setRankingDifficulty] =
     useState<WeplayDifficulty>("mild");
-  const [lesson, setLesson] = useState("");
+  const [recordsView, setRecordsView] = useState<WeplayRecordsView | null>(
+    null,
+  );
   const requestKey = useRef("");
   const generation = useRef(0);
   const scope = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`;
@@ -90,7 +91,7 @@ export default function Weplay() {
     setSession(null);
     setResult(null);
     setLobby(null);
-    setLesson("");
+    setRecordsView(null);
     setStarting(false);
     requestKey.current = "";
     if (config && currentUser) void load();
@@ -109,7 +110,6 @@ export default function Weplay() {
         mode,
         difficulty,
         requestKey: requestKey.current,
-        ...(mode === "practice" && lesson ? { unitIds: [lesson] } : {}),
       });
       if (scopeRef.current !== startedScope) return;
       if (next.status === "finished" && next.result) setResult(next.result);
@@ -159,40 +159,47 @@ export default function Weplay() {
           Math.min(...lobby.policy.resultRewards.map((row) => row.amount)),
       )
     : 0;
-  const ranking = lobby?.rankingByDifficulty[rankingDifficulty] || [];
-  const rankRewards = lobby?.period?.rankingRewards[rankingDifficulty];
   const difficultySettings =
     (mode === "challenge"
       ? lobby?.challengeDifficulties
       : lobby?.difficulties)?.[difficulty] ||
     DEFAULT_WEPLAY_DIFFICULTIES[difficulty];
-  const selectedLesson = lobby?.lessons.find((item) => item.unitId === lesson);
   const availableCount =
-    mode === "practice" && lesson
-      ? (selectedLesson?.wordCountsByDifficulty?.[difficulty] ??
-        selectedLesson?.wordCount ??
-        0)
-      : ((mode === "challenge"
-          ? lobby?.challengeWordCountsByDifficulty?.[difficulty]
-          : lobby?.wordCountsByDifficulty?.[difficulty]) ??
-        lobby?.wordCount ??
-        0);
+    (mode === "challenge"
+      ? lobby?.challengeWordCountsByDifficulty?.[difficulty]
+      : lobby?.wordCountsByDifficulty?.[difficulty]) ??
+    lobby?.wordCount ??
+    0;
   return (
     <main className="weplay-page">
       <header className="weplay-heading">
         <div>
           <span>위플레이</span>
-          <h1>내가 충무공이라고?!</h1>
+          <h1>{gameTitle}</h1>
         </div>
-        {lobby && <strong>내 위스 {lobby.balance.toLocaleString()}</strong>}
-        <button
-          type="button"
-          className="weplay-guide-launch"
-          onClick={guide.openGuide}
-          disabled={!currentUser || starting}
-        >
-          <span aria-hidden="true">i</span>게임 안내
-        </button>
+        <div className="weplay-heading-actions">
+          {lobby && (
+            <div
+              className="weplay-wis-badge"
+              aria-label={`내 위스 ${lobby.balance.toLocaleString()}`}
+            >
+              <span className="weplay-wis-coin" aria-hidden="true">
+                W
+              </span>
+              <span>내 위스</span>
+              <strong>{lobby.balance.toLocaleString()}</strong>
+            </div>
+          )}
+          <button
+            type="button"
+            className="weplay-guide-launch"
+            onClick={guide.openGuide}
+            disabled={!currentUser || starting}
+          >
+            <WeplayLobbyIcon name="info" />
+            게임 안내
+          </button>
+        </div>
       </header>
       {session ? (
         <HistoryRainGame
@@ -201,6 +208,7 @@ export default function Weplay() {
           config={config}
           onComplete={complete}
           onShowGuide={guide.openGuide}
+          gameTitle={gameTitle}
         />
       ) : (
         <>
@@ -218,6 +226,7 @@ export default function Weplay() {
           {result?.battle ? (
             <NavalBattleResult
               result={result}
+              gameTitle={gameTitle}
               onReplay={() => {
                 setResult(null);
                 requestKey.current = "";
@@ -284,6 +293,27 @@ export default function Weplay() {
                 </button>
               </section>
             )
+          )}
+          {lobby && (
+            <nav className="weplay-lobby-actions" aria-label="게임 기록">
+              <button
+                type="button"
+                disabled={starting}
+                aria-haspopup="dialog"
+                onClick={() => setRecordsView("ranking")}
+              >
+                <WeplayLobbyIcon name="ranking" />
+                우리 반 랭킹
+              </button>
+              <button
+                type="button"
+                disabled={starting}
+                aria-haspopup="dialog"
+                onClick={() => setRecordsView("history")}
+              >
+                <WeplayLobbyIcon name="history" />내 기록
+              </button>
+            </nav>
           )}
           {lobby && !result && (
             <section
@@ -370,31 +400,7 @@ export default function Weplay() {
                   {difficulty === "mild" ? 2 : difficulty === "medium" ? 3 : 4}
                   단어마다 화포 발사
                 </p>
-                {mode === "practice" ? (
-                  <>
-                    <label className="weplay-select">
-                      수업 범위
-                      <select
-                        value={lesson}
-                        disabled={starting}
-                        onChange={(event) => {
-                          setLesson(event.target.value);
-                          requestKey.current = "";
-                        }}
-                      >
-                        <option value="">전체 단어</option>
-                        {lobby.lessons.map((item) => (
-                          <option key={item.unitId} value={item.unitId}>
-                            {item.title} (
-                            {item.wordCountsByDifficulty?.[difficulty] ??
-                              item.wordCount}
-                            개)
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </>
-                ) : (
+                {mode === "challenge" && (
                   <>
                     <div className="weplay-stakes">
                       <strong>
@@ -455,12 +461,13 @@ export default function Weplay() {
                 )}
                 {availableCount === 0 && lobby.gameEnabled !== false && (
                   <p role="status">
-                    선택한 난이도와 범위에 출제할 단어가 없습니다.
+                    이 난이도에 출제할 단어가 없습니다. 다른 난이도를 선택해
+                    주세요.
                   </p>
                 )}
                 {availableCount > 0 && availableCount < 3 && (
                   <p role="status">
-                    서로 다른 단어가 3개 이상인 난이도와 범위를 선택해 주세요.
+                    출제할 단어가 3개 이상인 난이도를 선택해 주세요.
                   </p>
                 )}
                 <button
@@ -486,93 +493,19 @@ export default function Weplay() {
               </div>
             </section>
           )}
-          {lobby && (
-            <div className="weplay-records-grid">
-              <section className="weplay-panel" aria-label="학급 랭킹">
-                <h2>우리 반 랭킹</h2>
-                <label className="weplay-select">
-                  난이도별 랭킹
-                  <select
-                    value={rankingDifficulty}
-                    onChange={(event) =>
-                      setRankingDifficulty(
-                        event.target.value as WeplayDifficulty,
-                      )
-                    }
-                  >
-                    {(
-                      Object.keys(
-                        WEPLAY_DIFFICULTY_LABELS,
-                      ) as WeplayDifficulty[]
-                    ).map((value) => (
-                      <option key={value} value={value}>
-                        {WEPLAY_DIFFICULTY_LABELS[value]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {lobby.period && (
-                  <>
-                    <p>
-                      {date(lobby.period.startsAtMs)}~
-                      {date(lobby.period.endsAtMs - 1)} · 한 판 최고 기록
-                    </p>
-                    <p>
-                      1위 {rankRewards?.first} · 2위 {rankRewards?.second} · 3위{" "}
-                      {rankRewards?.third}위스
-                    </p>
-                    <small>같은 점수는 먼저 달성한 기록이 앞섭니다.</small>
-                  </>
-                )}
-                {ranking.length ? (
-                  <ol className="weplay-ranking">
-                    {ranking.map((row) => (
-                      <li key={row.rank}>
-                        <span>
-                          <strong>{row.rank}위</strong> {row.studentLabel}
-                          {row.isMe ? " (나)" : ""}
-                        </span>
-                        <strong>{row.score.toLocaleString()}점</strong>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p>아직 도전 기록이 없습니다.</p>
-                )}
-              </section>
-              <section className="weplay-panel" aria-label="개인 기록">
-                <h2>내 기록</h2>
-                {lobby.records.length ? (
-                  <ul className="weplay-history">
-                    {lobby.records.map((record) => (
-                      <li key={record.sessionId}>
-                        <span>
-                          {date(record.finishedAtMs)} ·{" "}
-                          {record.mode === "practice" ? "연습" : "도전"}
-                          {" · "}
-                          {WEPLAY_DIFFICULTY_LABELS[record.difficulty]}
-                        </span>
-                        <span>
-                          {record.correctCount}/{record.totalWords}개 ·{" "}
-                          {record.score}점
-                        </span>
-                        <strong>
-                          {record.mode === "practice"
-                            ? "위스 변동 없음"
-                            : `${signed(record.netWis)}위스`}
-                        </strong>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>첫 게임을 시작해 보세요.</p>
-                )}
-              </section>
-            </div>
+          {lobby && recordsView && (
+            <WeplayRecordsDialog
+              view={recordsView}
+              lobby={lobby}
+              difficulty={rankingDifficulty}
+              onDifficultyChange={setRankingDifficulty}
+              onClose={() => setRecordsView(null)}
+            />
           )}
         </>
       )}
       <WeplayGuide
+        gameTitle={gameTitle}
         open={guide.open}
         saving={guide.saving}
         error={guide.error}

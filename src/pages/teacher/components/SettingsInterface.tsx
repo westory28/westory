@@ -1,5 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  doc,
+  getDoc,
+  runTransaction,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
@@ -13,6 +19,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { notifyMenuConfigUpdated } from "../../../lib/appEvents";
 import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
 import { normalizeInstagramUrl } from "../../../lib/socialLinks";
+import { WEPLAY_STUDENT_URL } from "../../../lib/weplayTitle";
 import "../settingsPanels.css";
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS,
@@ -78,6 +85,7 @@ const SettingsInterface: React.FC = () => {
   const [menuConfig, setMenuConfig] = useState<MenuConfig>(() =>
     cloneDefaultMenus(),
   );
+  const loadedMenus = useRef<MenuConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingInterface, setSavingInterface] = useState(false);
   const [savingMenu, setSavingMenu] = useState(false);
@@ -136,11 +144,9 @@ const SettingsInterface: React.FC = () => {
           setConfig(createDefaultInterfaceConfig());
         }
 
-        if (menuSnap.exists()) {
-          setMenuConfig(sanitizeMenuConfig(menuSnap.data()));
-        } else {
-          setMenuConfig(cloneDefaultMenus());
-        }
+        const loaded = sanitizeMenuConfig(menuSnap.data());
+        loadedMenus.current = loaded;
+        setMenuConfig(loaded);
       } catch (error) {
         console.error("Failed to load interface settings:", error);
         setMenuConfig(cloneDefaultMenus());
@@ -204,7 +210,15 @@ const SettingsInterface: React.FC = () => {
         return {
           ...item,
           children: item.children.map((child, cIdx) =>
-            cIdx === childIndex ? { ...child, name } : child,
+            cIdx === childIndex
+              ? {
+                  ...child,
+                  name,
+                  ...(child.url === WEPLAY_STUDENT_URL
+                    ? { gameTitleCustomized: true }
+                    : {}),
+                }
+              : child,
           ),
         };
       }),
@@ -347,7 +361,17 @@ const SettingsInterface: React.FC = () => {
         if (idx !== parentIndex) return item;
         return {
           ...item,
-          children: [...(item.children || []), { name, url, hidden: false }],
+          children: [
+            ...(item.children || []),
+            {
+              name,
+              url,
+              hidden: false,
+              ...(url === WEPLAY_STUDENT_URL
+                ? { gameTitleCustomized: true }
+                : {}),
+            },
+          ],
         };
       }),
     );
@@ -418,13 +442,30 @@ const SettingsInterface: React.FC = () => {
   };
 
   const saveMenuConfig = async () => {
+    if (savingMenu) return;
     setSavingMenu(true);
     try {
       const normalized = sanitizeMenuConfig(menuConfig);
-      await setDoc(doc(db, "site_settings", "menu_config"), {
-        ...normalized,
-        updatedAt: serverTimestamp(),
+      const baseline = loadedMenus.current;
+      await runTransaction(db, async (transaction) => {
+        const reference = doc(db, "site_settings", "menu_config");
+        const snapshot = await transaction.get(reference);
+        if (
+          !baseline ||
+          JSON.stringify(sanitizeMenuConfig(snapshot.data())) !==
+            JSON.stringify(baseline)
+        ) {
+          throw new Error(
+            "다른 곳에서 메뉴 설정이 바뀌었습니다. 새로고침 후 다시 수정해 주세요.",
+          );
+        }
+        transaction.set(
+          reference,
+          { ...normalized, updatedAt: serverTimestamp() },
+          { merge: true },
+        );
       });
+      loadedMenus.current = normalized;
       setMenuConfig(normalized);
       invalidateSiteSettingDocCache("menu_config");
       notifyMenuConfigUpdated();

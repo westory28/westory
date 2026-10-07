@@ -5,6 +5,7 @@ import {
   type WeplaySession,
 } from "../../../lib/weplay";
 import "./weplay-guide.css";
+import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 
 const ART = `${import.meta.env?.BASE_URL || "/"}assets/weplay/naval/`;
 const STEPS = [
@@ -79,6 +80,7 @@ const DEMO: WeplaySession = {
 };
 
 interface Props {
+  gameTitle?: string;
   open: boolean;
   saving: boolean;
   error: string;
@@ -88,6 +90,7 @@ interface Props {
 }
 
 export default function WeplayGuide({
+  gameTitle = DEFAULT_WEPLAY_GAME_TITLE,
   open,
   saving,
   error,
@@ -150,7 +153,7 @@ export default function WeplayGuide({
       {open && (
         <>
           <div className="weplay-guide-header">
-            <strong>내가 충무공이라고?! · 게임 안내</strong>
+            <strong>{gameTitle} · 게임 안내</strong>
             <span>
               {step + 1} / {STEPS.length}
             </span>
@@ -166,6 +169,7 @@ export default function WeplayGuide({
             aria-label="시간이 흐르지 않는 안내 화면"
           >
             <NavalBattleGame
+              gameTitle={gameTitle}
               session={DEMO}
               config={null}
               onComplete={() => undefined}

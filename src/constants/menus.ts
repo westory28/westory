@@ -1,7 +1,14 @@
+import {
+  DEFAULT_WEPLAY_GAME_TITLE,
+  normalizeWeplayGameTitle,
+  WEPLAY_STUDENT_URL,
+} from "../lib/weplayTitle";
+
 export interface MenuChild {
   name: string;
   url: string;
   hidden?: boolean;
+  gameTitleCustomized?: boolean;
 }
 
 export interface MenuItem {
@@ -71,7 +78,7 @@ export const MENUS: MenuConfig = {
       name: "위플레이",
       url: "/student/weplay",
       icon: "M6 8h12l3 10-3 2-4-4h-4l-4 4-3-2L6 8zm1 3v4m-2-2h4m7-1h.01M18 14h.01",
-      children: [{ name: "내가 충무공이라고?!", url: "/student/weplay" }],
+      children: [{ name: DEFAULT_WEPLAY_GAME_TITLE, url: WEPLAY_STUDENT_URL }],
     },
   ],
   teacher: [
@@ -210,11 +217,21 @@ const isLegacyRemovedUrl = (value: unknown) => {
 const sanitizeChildren = (children: unknown): MenuChild[] => {
   if (!Array.isArray(children)) return [];
   return children
-    .map((child) => ({
-      name: toSafeText((child as MenuChild)?.name),
-      url: normalizeMenuUrl((child as MenuChild)?.url),
-      hidden: (child as MenuChild)?.hidden === true,
-    }))
+    .map((child) => {
+      const url = normalizeMenuUrl((child as MenuChild)?.url);
+      const name = toSafeText((child as MenuChild)?.name);
+      const gameTitleCustomized =
+        (child as MenuChild)?.gameTitleCustomized === true;
+      return {
+        name:
+          url === WEPLAY_STUDENT_URL
+            ? normalizeWeplayGameTitle(name, gameTitleCustomized)
+            : name,
+        url,
+        hidden: (child as MenuChild)?.hidden === true,
+        ...(url === WEPLAY_STUDENT_URL ? { gameTitleCustomized } : {}),
+      };
+    })
     .filter(
       (child) => child.name && child.url && !isLegacyRemovedUrl(child.url),
     );
