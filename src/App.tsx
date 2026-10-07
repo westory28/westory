@@ -16,12 +16,10 @@ import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { AppDialogProvider } from "./components/common/AppDialogProvider";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
+import { loadStudentWeplay } from "./lib/weplayPreload";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
-const StudentWeplay = lazyWithRetry(
-  () => import("./pages/student/Weplay"),
-  "student-weplay",
-);
+const StudentWeplay = lazyWithRetry(loadStudentWeplay, "student-weplay");
 
 const StudentDashboard = lazyWithRetry(
   () => import("./pages/student/Dashboard"),

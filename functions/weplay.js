@@ -99,8 +99,12 @@ function createWeplayFunctions(deps) {
   });
 
   async function readLessons(scope, includeHidden = false) {
+    // OCR, PDF source data and presentation assets can dominate lesson documents.
+    // Keep the authored blanks and every field used to resolve visibility and
+    // scoped/legacy precedence; always read fresh data for a new game.
+    const fields = ['unitId', 'title', 'isVisibleToStudents', 'deletedAt', 'updatedAt', 'createdAt', 'worksheetPageImages', 'worksheetBlanks', 'contentHtml'];
     const [scoped, legacy] = await Promise.all([
-      db.collection(path(scope, 'lessons')).get(), db.collection('lessons').get(),
+      db.collection(path(scope, 'lessons')).select(...fields).get(), db.collection('lessons').select(...fields).get(),
     ]);
     return effectiveLessons(scoped.docs.map((doc) => doc.data()), legacy.docs.map((doc) => doc.data()), { includeHidden });
   }
@@ -198,9 +202,10 @@ function createWeplayFunctions(deps) {
 
   async function ensurePeriod(scope) {
     return db.runTransaction(async (transaction) => {
-      const policy = policyFromSnap(await transaction.get(ref(scope, 'weplay_policies', 'current')));
       const metaRef = ref(scope, 'weplay_meta', 'current');
-      const meta = (await transaction.get(metaRef)).data() || {};
+      const [policySnap, metaSnap] = await transaction.getAll(ref(scope, 'weplay_policies', 'current'), metaRef);
+      const policy = policyFromSnap(policySnap);
+      const meta = metaSnap.data() || {};
       const current = meta.periodId ? (await transaction.get(ref(scope, 'weplay_periods', meta.periodId))).data() : null;
       const now = Date.now();
       if (current && current.endsAtMs > now && current.status === 'open' && current.battleVersion === 1) return { ...current, difficulties: readDifficulties(current.difficulties) };
@@ -307,14 +312,14 @@ function createWeplayFunctions(deps) {
 
   async function recoverActive(scope, uid) {
     const player = (await ref(scope, 'weplay_players', uid).get()).data() || {};
-    if (!player.activeSessionId) return null;
+    if (!player.activeSessionId) return { active: null, player };
     const session = (await ref(scope, 'weplay_sessions', player.activeSessionId).get()).data();
-    if (!session || session.status !== 'active') return null;
+    if (!session || session.status !== 'active') return { active: null, player };
     if (Date.now() >= session.endsAtMs + 5000 || (session.battleVersion === 1 && simulateWeplayBattle(session, Date.now() - session.startsAtMs).outcome === 'defeat')) {
       await settleSession(scope, session.id, uid);
-      return null;
+      return { active: null, player: (await ref(scope, 'weplay_players', uid).get()).data() || {} };
     }
-    return session;
+    return { active: session, player };
   }
 
   const getWeplayPolicy = onCall({ region: REGION }, async (request) => {
@@ -348,25 +353,38 @@ function createWeplayFunctions(deps) {
     const { uid, profile } = await student(request);
     const scope = scopeFrom(request.data);
     await assertCurrentScope(scope);
-    const active = await recoverActive(scope, uid);
-    const [policySnap, walletSnap, playerSnap, catalogResult, period, recordsSnap] = await Promise.all([
-      ref(scope, 'weplay_policies', 'current').get(), ref(scope, 'point_wallets', uid).get(),
-      ref(scope, 'weplay_players', uid).get(), readCatalog(scope), ensurePeriod(scope),
-      ref(scope, 'weplay_players', uid).collection('records').orderBy('finishedAtMs', 'desc').limit(10).get(),
+    const key = classKey(profile);
+    const recovery = recoverActive(scope, uid);
+    const [policySnap, playerState, catalogResult, periodState] = await Promise.all([
+      ref(scope, 'weplay_policies', 'current').get(),
+      (async () => {
+        const recovered = await recovery;
+        // An expired game may credit the wallet and create a record. Read both
+        // after recovery so a faster lobby never returns pre-settlement state.
+        const [walletSnap, recordsSnap] = await Promise.all([
+          ref(scope, 'point_wallets', uid).get(),
+          ref(scope, 'weplay_players', uid).collection('records').orderBy('finishedAtMs', 'desc').limit(10).get(),
+        ]);
+        return { ...recovered, walletSnap, recordsSnap };
+      })(),
+      readCatalog(scope),
+      (async () => {
+        const [period] = await Promise.all([ensurePeriod(scope), recovery]);
+        const rankingSnap = key ? await ref(scope, 'weplay_periods', period.id).collection('entries').where('classKey', '==', key).get() : null;
+        return { period, entries: (rankingSnap?.docs || []).map((doc) => doc.data()) };
+      })(),
     ]);
+    const { active, player, walletSnap, recordsSnap } = playerState;
+    const { period, entries } = periodState;
     const { settings, catalog } = catalogResult;
     const challengeDifficulties = readDifficulties(period.difficulties);
     const counts = (words, difficulties) => Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, uniqueWordCount(filterDifficultyWords(words, difficulties[difficulty]))]));
     const policy = policyFromSnap(policySnap);
-    const player = playerSnap.data() || {};
     const dailyUsed = player.dateKey === dayKey() ? Number(player.challengeUsed || 0) : 0;
     const lessons = [...new Set(catalog.map((word) => word.unitId))].map((unitId) => {
       const words = catalog.filter((word) => word.unitId === unitId);
       return { unitId, title: words[0].lessonTitle, wordCount: words.length, wordCountsByDifficulty: counts(words, settings.difficulties) };
     });
-    const key = classKey(profile);
-    const rankingSnap = key ? await ref(scope, 'weplay_periods', period.id).collection('entries').where('classKey', '==', key).get() : null;
-    const entries = (rankingSnap?.docs || []).map((doc) => doc.data());
     const rankingByDifficulty = Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, entries.filter((entry) => entry.difficulty === difficulty).sort(compareEntries).slice(0, 50).map((entry, index) => ({ rank: index + 1, studentLabel: entry.studentLabel, score: entry.score, correctCount: entry.correctCount, isMe: entry.uid === uid }))]));
     return { policy, gameEnabled: settings.enabled, difficulties: settings.difficulties, challengeDifficulties, wordCountsByDifficulty: counts(catalog, settings.difficulties), challengeWordCountsByDifficulty: counts(catalog, challengeDifficulties), balance: Number(walletSnap.data()?.balance || 0), dailyUsed, dailyRemaining: Math.max(0, policy.dailyChallengeLimit - dailyUsed), lessons, wordCount: uniqueWordCount(catalog), activeSession: active ? publicSession(active) : null, records: recordsSnap.docs.map((doc) => doc.data()), period: publicPeriod(period), rankingByDifficulty, serverNowMs: Date.now() };
   });
@@ -383,10 +401,11 @@ function createWeplayFunctions(deps) {
     const sessionId = hash(`${scope.year}:${scope.semester}:${uid}:${requestKey}`);
     const existing = await ref(scope, 'weplay_sessions', sessionId).get();
     if (existing.exists) return publicSession(existing.data());
-    await recoverActive(scope, uid);
-    const { settings: catalogSettings, catalog: allWords } = await readCatalog(scope);
+    const [, catalogResult, period] = await Promise.all([
+      recoverActive(scope, uid), readCatalog(scope), mode === 'challenge' ? ensurePeriod(scope) : null,
+    ]);
+    const { settings: catalogSettings, catalog: allWords } = catalogResult;
     if (!catalogSettings.enabled) throw new HttpsError('failed-precondition', '현재 학생 게임 이용을 허용하지 않습니다.');
-    const period = mode === 'challenge' ? await ensurePeriod(scope) : null;
     const difficultySettings = (mode === 'challenge' ? readDifficulties(period.difficulties) : catalogSettings.difficulties)[difficulty];
     const unitIds = request.data?.unitIds;
     if (unitIds !== undefined && (!Array.isArray(unitIds) || unitIds.length > 200 || unitIds.some((id) => typeof id !== 'string' || id.length > 128))) invalid('출제 범위를 확인해 주세요.');
@@ -398,30 +417,35 @@ function createWeplayFunctions(deps) {
     catch (error) { throw new HttpsError('failed-precondition', error.message); }
     const output = await db.runTransaction(async (transaction) => {
       const sessionRef = ref(scope, 'weplay_sessions', sessionId);
-      const repeated = await transaction.get(sessionRef);
+      const playerRef = ref(scope, 'weplay_players', uid);
+      const [repeated, gameSettingsSnap, profileSnap, policySnap, playerSnap] = await transaction.getAll(
+        sessionRef, ref(scope, 'weplay_games', GAME_ID), db.doc(`users/${uid}`), ref(scope, 'weplay_policies', 'current'), playerRef,
+      );
       if (repeated.exists) return { session: repeated.data(), charged: false };
-      const gameSettings = settingsFromSnap(await transaction.get(ref(scope, 'weplay_games', GAME_ID)));
+      const gameSettings = settingsFromSnap(gameSettingsSnap);
       if (!gameSettings.enabled) throw new HttpsError('failed-precondition', '현재 학생 게임 이용을 허용하지 않습니다.');
       if (JSON.stringify(gameSettings) !== JSON.stringify(catalogSettings)) {
         throw new HttpsError('aborted', '출제 자료 설정이 변경되었습니다. 다시 시작해 주세요.');
       }
-      const currentProfile = (await transaction.get(db.doc(`users/${uid}`))).data();
+      const currentProfile = profileSnap.data();
       if (!currentProfile || currentProfile.role !== 'student' || currentProfile.weplayDeletionPending === true || currentProfile.deletedAt || currentProfile.isDeleted === true) {
         throw new HttpsError('permission-denied', '학생 계정 상태를 확인해 주세요.');
       }
-      const policy = policyFromSnap(await transaction.get(ref(scope, 'weplay_policies', 'current')));
-      const playerRef = ref(scope, 'weplay_players', uid);
-      const player = (await transaction.get(playerRef)).data() || {};
+      const policy = policyFromSnap(policySnap);
+      const player = playerSnap.data() || {};
       if (player.activeSessionId) {
         const active = (await transaction.get(ref(scope, 'weplay_sessions', player.activeSessionId))).data();
         if (active?.status === 'active') throw new HttpsError('already-exists', '진행 중인 게임을 먼저 마쳐 주세요.');
       }
-      const loaded = mode === 'challenge' && policy.challengeCost > 0
-        ? await loadWallet(transaction, scope, uid, profile)
-        : { wallet: (await transaction.get(ref(scope, 'point_wallets', uid))).data() || {} };
-      const costSnap = await transaction.get(ref(scope, 'point_transactions', `weplay_cost_${sessionId}`));
+      const [loaded, costSnap, currentPeriodSnap] = await Promise.all([
+        mode === 'challenge' && policy.challengeCost > 0
+          ? loadWallet(transaction, scope, uid, profile)
+          : transaction.get(ref(scope, 'point_wallets', uid)).then((snapshot) => ({ wallet: snapshot.data() || {} })),
+        transaction.get(ref(scope, 'point_transactions', `weplay_cost_${sessionId}`)),
+        period ? transaction.get(ref(scope, 'weplay_periods', period.id)) : null,
+      ]);
       if (costSnap.exists) throw new HttpsError('failed-precondition', '도전 비용 기록을 확인해 주세요.');
-      const currentPeriod = period ? (await transaction.get(ref(scope, 'weplay_periods', period.id))).data() : null;
+      const currentPeriod = currentPeriodSnap?.data() || null;
       const now = Date.now();
       const today = dayKey(now);
       const used = player.dateKey === today ? Number(player.challengeUsed || 0) : 0;

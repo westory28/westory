@@ -23,6 +23,9 @@ import type { HistoryRainGameProps } from "./HistoryRainGame";
 import WeplayExitDialog from "./WeplayExitDialog";
 import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 import NavalSpecialAttack, { NAVAL_SPECIAL_TIMING } from "./NavalSpecialAttack";
+import NavalCannonShot from "./NavalCannonShot";
+import { createBattleFeedback } from "./battleFeedback";
+import useWeplaySoundEffects from "./useWeplaySoundEffects";
 import "./naval-battle.css";
 
 const ART = `${import.meta.env?.BASE_URL || "/"}assets/weplay/naval/`;
@@ -85,6 +88,12 @@ export default function NavalBattleGame({
     session.acceptedEvents || [],
   );
   const eventsRef = useRef(events);
+  const [feedbackLedger] = useState(() =>
+    createBattleFeedback(session.acceptedEvents),
+  );
+  const feedbackRevision = useRef(0);
+  const displayedFeedbackRevision = useRef(0);
+  const sound = useWeplaySoundEffects();
   const accepted = useMemo(
     () =>
       new Set([
@@ -169,7 +178,6 @@ export default function NavalBattleGame({
   const effectSequence = useRef(0);
   const effectTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const effectFinishAt = useRef(0);
-  const enemyImpactAt = useRef(0);
   const enemySinkingUntil = useRef(0);
   const elapsed = Math.max(0, now - session.startsAtMs);
   const duration = session.endsAtMs - session.startsAtMs;
@@ -189,7 +197,9 @@ export default function NavalBattleGame({
     enemyHp: battle.enemyHp,
     sunkShips: battle.sunkShips,
   });
-  const ended = now >= session.endsAtMs || battle.outcome === "defeat";
+  const ended =
+    now >= session.endsAtMs ||
+    (battle.outcome === "defeat" && pending.current.size === 0);
   const remaining = Math.max(
     0,
     Math.ceil((session.endsAtMs - Math.max(now, session.startsAtMs)) / 1000),
@@ -321,6 +331,33 @@ export default function NavalBattleGame({
   useEffect(() => {
     if (guideDemo && !guideInteractive) return;
     const previous = previousBattle.current;
+    if (
+      displayedFeedbackRevision.current !== feedbackRevision.current ||
+      battle.cannonShots < previous.cannonShots ||
+      battle.specialCount < previous.specialCount ||
+      battle.sunkShips < previous.sunkShips
+    ) {
+      // A rejected/failed prediction must not leave a delayed impact behind.
+      effectTimers.current.forEach(clearTimeout);
+      effectTimers.current = [];
+      effectFinishAt.current = 0;
+      enemySinkingUntil.current = 0;
+      setEffects([]);
+      setImpacts([]);
+      arrivedEnemy.current = {
+        enemyHp: battle.enemyHp,
+        sunkShips: battle.sunkShips,
+      };
+      setDisplayBattle({ playerHp: battle.playerHp, ...arrivedEnemy.current });
+      previousBattle.current = {
+        cannonShots: battle.cannonShots,
+        enemyShots: battle.enemyShots,
+        specialCount: battle.specialCount,
+        sunkShips: battle.sunkShips,
+      };
+      displayedFeedbackRevision.current = feedbackRevision.current;
+      return;
+    }
     if (battle.enemyShots < previous.enemyShots)
       setDisplayBattle((current) => ({
         ...current,
@@ -364,24 +401,13 @@ export default function NavalBattleGame({
     };
     if (!next.length && !sunk) return;
     const hasSpecial = next.some((effect) => effect.kind === "special");
-    const enemyHit = next.some((effect) => effect.kind !== "enemy");
-    const impactDelay = enemyHit
-      ? Math.max(
-          hasSpecial ? NAVAL_SPECIAL_TIMING.finalImpactMs : 420,
-          enemyImpactAt.current - performance.now() + 16,
-        )
-      : 420;
-    // Keep confirmed hits in order when a regular shot follows the longer barrage.
-    if (enemyHit) enemyImpactAt.current = performance.now() + impactDelay;
     effectFinishAt.current = Math.max(
       effectFinishAt.current,
       performance.now() +
         Math.max(
           hasSpecial ? NAVAL_SPECIAL_TIMING.durationMs : 1600,
-          next.some((effect) => effect.kind === "cannon")
-            ? Math.max(0, impactDelay - 420) + 1600
-            : 0,
-          impactDelay + (sunk ? 1100 : 900),
+          (hasSpecial ? NAVAL_SPECIAL_TIMING.finalImpactMs : 420) +
+            (sunk ? 1100 : 900),
         ),
     );
     const later = (callback: () => void, delay: number) => {
@@ -408,10 +434,12 @@ export default function NavalBattleGame({
     };
     const cannonEffects = next.filter((effect) => effect.kind === "cannon");
     const enemyEffects = next.filter((effect) => effect.kind === "enemy");
-    if (cannonEffects.length && !hasSpecial) setFeedback("화포 발사!");
-    const cannonDelay = Math.max(0, impactDelay - 420);
-    if (cannonDelay) later(() => show(cannonEffects), cannonDelay);
-    else show(cannonEffects);
+    if (cannonEffects.length) {
+      sound.play("cannon");
+      if (!hasSpecial) setFeedback("화포 발사!");
+    }
+    if (hasSpecial) sound.play("special");
+    show(cannonEffects);
     show(enemyEffects);
     show(
       next.filter((effect) => effect.kind === "special"),
@@ -444,27 +472,29 @@ export default function NavalBattleGame({
           }));
         flashDamage(enemyEffects, "allied");
       }, 420);
-    if (!enemyHit && !sunk) return;
-    later(() => {
-      if (enemyHit || sunk)
-        arrivedEnemy.current = {
-          enemyHp: battle.enemyHp,
-          sunkShips: battle.sunkShips,
-        };
-      if (sunk) enemySinkingUntil.current = performance.now() + 1100;
+    const hitEnemy = (hits: Effect[]) => {
+      if (!hits.length) return;
+      let enemyHp =
+        arrivedEnemy.current.enemyHp -
+        hits.reduce((damage, hit) => damage + (hit.damage || 0), 0);
+      let sunkShips = arrivedEnemy.current.sunkShips;
+      while (enemyHp <= 0) {
+        enemyHp += WEPLAY_BATTLE_MAX_HP;
+        sunkShips++;
+      }
+      const newlySunk = sunkShips > arrivedEnemy.current.sunkShips;
+      arrivedEnemy.current = { enemyHp, sunkShips };
+      if (newlySunk) enemySinkingUntil.current = performance.now() + 1100;
       setDisplayBattle((current) => ({
         ...current,
-        ...(sunk
+        ...(newlySunk
           ? { enemyHp: 0 }
-          : enemyHit && performance.now() >= enemySinkingUntil.current
+          : performance.now() >= enemySinkingUntil.current
             ? arrivedEnemy.current
             : {}),
       }));
-      flashDamage(
-        next.filter((effect) => effect.kind !== "enemy"),
-        "enemy",
-      );
-      if (sunk) {
+      flashDamage(hits, "enemy");
+      if (newlySunk) {
         show([{ id: ++effectSequence.current, kind: "sunk" }], 1100);
         later(() => {
           if (performance.now() >= enemySinkingUntil.current)
@@ -474,7 +504,14 @@ export default function NavalBattleGame({
             }));
         }, 1100);
       }
-    }, impactDelay);
+    };
+    // Each volley lands when its own animation arrives. Applying damage to the
+    // arrived state prevents a later normal hit from waiting on a long special,
+    // and prevents the special's old snapshot from overwriting that normal hit.
+    if (cannonEffects.length) later(() => hitEnemy(cannonEffects), 420);
+    const specialEffects = next.filter((effect) => effect.kind === "special");
+    if (specialEffects.length)
+      later(() => hitEnemy(specialEffects), NAVAL_SPECIAL_TIMING.finalImpactMs);
   }, [
     battle.cannonShots,
     battle.enemyShots,
@@ -554,31 +591,62 @@ export default function NavalBattleGame({
       void finish({ exitEarly: true });
   };
 
+  const refreshFeedback = () => {
+    const next = feedbackLedger.snapshot();
+    eventsRef.current = next;
+    acceptedRef.current = new Set([
+      ...session.acceptedWordIds,
+      ...next.map((event) => event.wordId),
+    ]);
+    setEvents(next);
+  };
+
   const send = async (data: {
     sessionId: string;
     eventId: string;
     wordId: string;
     answer: string;
   }) => {
-    if (pending.current.has(data.wordId) || guideDemo) return;
+    if (
+      pending.current.has(data.wordId) ||
+      feedbackLedger.hasConfirmed(data.wordId) ||
+      guideDemo
+    )
+      return;
     pending.current.add(data.wordId);
     setAnswer("");
-    setFeedback("");
-    setError("");
-    setRetryWord(null);
+    const word = session.words.find((item) => item.id === data.wordId);
+    const submittedAt =
+      clock.current.server + performance.now() - clock.current.local;
+    const submittedElapsed = submittedAt - session.startsAtMs;
+    if (
+      word &&
+      submittedAt < session.endsAtMs &&
+      submittedElapsed >= word.spawnAtMs &&
+      submittedElapsed < word.spawnAtMs + word.fallDurationMs &&
+      normalizeWeplayAnswer(data.answer) === normalizeWeplayAnswer(word.text) &&
+      feedbackLedger.predict(data.wordId, submittedElapsed)
+    ) {
+      // Give the typing gesture immediate feedback; only this display snapshot
+      // changes here. The RPC and its eventual result still settle the game.
+      setNow((current) => Math.max(current, submittedAt));
+      refreshFeedback();
+      setFeedback(
+        word.kind === "special" ? "특수 전술 발동!" : "정답! 장전했습니다.",
+      );
+      sound.play("word");
+    }
     try {
       const response = await (transport
         ? transport.answer(data)
         : submitWeplayAnswer(config, data));
       if (!alive.current) return;
-      const merged = new Map(
-        eventsRef.current.map((event) => [event.wordId, event]),
-      );
-      for (const event of response.acceptedEvents || [])
-        if (!merged.has(event.wordId)) merged.set(event.wordId, event);
-      const next = [...merged.values()].sort(
-        (a, b) => a.elapsedMs - b.elapsedMs,
-      );
+      feedbackLedger.acknowledge(response.acceptedEvents || []);
+      const confirmed = feedbackLedger.hasConfirmed(data.wordId);
+      if (!response.accepted && !confirmed) {
+        if (feedbackLedger.reject(data.wordId)) feedbackRevision.current++;
+        setFeedback("입력 시간이 지났습니다.");
+      }
       // An accepted event uses the server's clock, which can be ahead of the
       // initial session snapshot. Apply that acknowledgement immediately rather
       // than hiding the word now and waiting for the local clock to catch up.
@@ -591,21 +659,18 @@ export default function NavalBattleGame({
       );
       clock.current = { server: acknowledgedNow, local };
       setNow((current) => Math.max(current, acknowledgedNow));
-      eventsRef.current = next;
-      setEvents(next);
+      refreshFeedback();
       retryData.current.delete(data.wordId);
-      if (!response.accepted) setFeedback("입력 시간이 지났습니다.");
-      else
-        setFeedback(
-          session.words.find((word) => word.id === data.wordId)?.kind ===
-            "special"
-            ? "특수 전술 발동!"
-            : "정답! 장전했습니다.",
-        );
+      for (const wordId of retryData.current.keys())
+        if (feedbackLedger.hasConfirmed(wordId))
+          retryData.current.delete(wordId);
+      if (!retryData.current.size) setError("");
     } catch (caught) {
-      if (alive.current) {
+      if (alive.current && !feedbackLedger.hasConfirmed(data.wordId)) {
+        if (feedbackLedger.reject(data.wordId)) feedbackRevision.current++;
+        refreshFeedback();
         retryData.current.set(data.wordId, data);
-        setRetryWord(data.wordId);
+        setFeedback("");
         setError(
           weplayErrorMessage(
             caught,
@@ -615,12 +680,19 @@ export default function NavalBattleGame({
       }
     } finally {
       pending.current.delete(data.wordId);
+      if (alive.current)
+        setRetryWord(
+          [...retryData.current.keys()].find(
+            (wordId) => !pending.current.has(wordId),
+          ) || null,
+        );
     }
     if (!exitOpenRef.current && !exitRequestedRef.current)
       input.current?.focus({ preventScroll: true });
   };
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    sound.unlock();
     if (
       composing.current ||
       !started ||
@@ -660,6 +732,7 @@ export default function NavalBattleGame({
       setFeedback(
         word.kind === "special" ? "학익진 발동!" : "정답! 장전했습니다.",
       );
+      sound.play("word");
       guideInteractive?.onAttempt(true);
       return;
     }
@@ -739,7 +812,7 @@ export default function NavalBattleGame({
           {gameTitle === DEFAULT_WEPLAY_GAME_TITLE ? (
             <Sprite
               className="naval-title-art"
-              rect={[0, 0, 750, 148]}
+              rect={[0, 0, 700, 182]}
               label={gameTitle}
             />
           ) : (
@@ -880,7 +953,7 @@ export default function NavalBattleGame({
           alt="적 기함"
           draggable={false}
         />
-        <Sprite className="naval-commander" rect={[0, 175, 430, 452]} />
+        <Sprite className="naval-commander" rect={[0, 180, 485, 456]} />
         <div className="naval-effects" aria-hidden="true">
           {impacts.map((impact) => (
             <strong
@@ -906,11 +979,18 @@ export default function NavalBattleGame({
                 key={effect.id}
                 className={`naval-effect naval-effect--${effect.kind}${effect.tactic ? ` naval-effect--${effect.tactic}` : ""}`}
               >
-                {(effect.kind === "cannon" || effect.kind === "enemy") && (
+                {effect.kind === "cannon" && (
+                  <NavalCannonShot>
+                    <span className="naval-muzzle-flash" />
+                    <Sprite
+                      className="naval-cannonball"
+                      rect={[1038, 641, 86, 88]}
+                    />
+                    <span className="naval-impact" />
+                  </NavalCannonShot>
+                )}
+                {effect.kind === "enemy" && (
                   <>
-                    {effect.kind === "cannon" && (
-                      <span className="naval-muzzle-flash" />
-                    )}
                     <Sprite
                       className="naval-cannonball"
                       rect={[1038, 641, 86, 88]}
@@ -1034,7 +1114,6 @@ export default function NavalBattleGame({
             data-weplay-guide="charge"
             aria-label={`포탄 장전 ${battle.ammo} / ${rules.ammoRequired}`}
           >
-            <Sprite className="naval-cannon-icon" rect={[1091, 95, 107, 77]} />
             <div className="naval-ammo-slots">
               {Array.from({ length: rules.ammoRequired }, (_, index) => (
                 <span

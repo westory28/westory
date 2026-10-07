@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
-const PREFERENCE = "westory.weplay.musicMuted";
+import {
+  isWeplayAudioMuted,
+  onWeplayAudioMutedChange,
+  setWeplayAudioMuted,
+} from "./weplayAudioPreference";
 
 export default function useWeplayMusic() {
-  const [muted, setMuted] = useState(() => {
-    try {
-      return localStorage.getItem(PREFERENCE) === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [muted, setMuted] = useState(isWeplayAudioMuted);
   const [started, setStarted] = useState(false);
   const [failed, setFailed] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -46,16 +43,19 @@ export default function useWeplayMusic() {
     muteRef.current = nextMuted;
     setMuted(nextMuted);
     setFailed(false);
-    try {
-      localStorage.setItem(PREFERENCE, String(nextMuted));
-    } catch {
-      // Playback remains available when storage is disabled.
-    }
+    setWeplayAudioMuted(nextMuted);
     if (nextMuted) audio.current?.pause();
     else start();
   };
   useEffect(() => {
     alive.current = true;
+    const unsubscribe = onWeplayAudioMutedChange((nextMuted) => {
+      if (muteRef.current === nextMuted) return;
+      muteRef.current = nextMuted;
+      setMuted(nextMuted);
+      if (nextMuted) audio.current?.pause();
+      else play();
+    });
     const visibility = () => {
       if (document.hidden) audio.current?.pause();
       else play();
@@ -63,6 +63,7 @@ export default function useWeplayMusic() {
     document.addEventListener("visibilitychange", visibility);
     return () => {
       alive.current = false;
+      unsubscribe();
       document.removeEventListener("visibilitychange", visibility);
       audio.current?.pause();
       audio.current?.removeAttribute("src");

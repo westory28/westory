@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { preloadStudentWeplay } from "../../lib/weplayPreload";
 import TeacherNavigationIcon, {
   type TeacherIconName,
 } from "./TeacherNavigationIcon";
@@ -243,6 +244,21 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
               <div
                 key={group.id}
                 className={`teacher-sidebar-group ${divider ? "has-divider" : ""}`}
+                onPointerEnter={
+                  portal === "student" && group.id === "weplay"
+                    ? preloadStudentWeplay
+                    : undefined
+                }
+                onFocus={
+                  portal === "student" && group.id === "weplay"
+                    ? preloadStudentWeplay
+                    : undefined
+                }
+                onPointerDown={
+                  portal === "student" && group.id === "weplay"
+                    ? preloadStudentWeplay
+                    : undefined
+                }
               >
                 {group.directUrl ? (
                   <Link
