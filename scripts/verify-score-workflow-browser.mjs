@@ -16,6 +16,7 @@ await fs.mkdir(out, { recursive: true });
 const require = createRequire(root + "/package.json");
 const { build } = require("esbuild");
 const ExcelJS = require("exceljs");
+const JSZip = require("jszip");
 const { chromium } = require(
   process.env.PLAYWRIGHT_MODULE_PATH ||
     path.join(
@@ -79,6 +80,98 @@ const changedCriteriaFile = await makeFixtureFile(
   [16, 35],
   [[1, 1, "가상학생01", 12, 30]],
 );
+const detailedTitle = "하여가와 단심가 다시 쓰기(논술형)";
+const detailedCriteria = [
+  "고려 말 조선 초의 역사적 맥락 이해하기",
+  "정몽주와 이방원의 입장과 가치관 비교하기",
+  "선택한 입장을 유교적 통치 이념과 국가 운영 사례로 논증하기",
+  "선택한 입장을 새로운 시조로 표현하기",
+  "시조의 3장 구조와 4음보 적용하기",
+  "시조의 표현 의도와 역사적 의미 설명하기",
+];
+const detailedMaxima = [6, 6, 6, 4, 4, 4];
+const detailedFeedback =
+  "1. 사료 해석이 정확합니다.\n2. 두 인물의 입장을 비교했습니다.\n3. 근거를 보완해 주세요.";
+const detailedWorkbook = new ExcelJS.Workbook();
+const detailedSheet = detailedWorkbook.addWorksheet("채점 결과");
+detailedSheet.mergeCells("A1:M1");
+detailedSheet.getCell("A1").value = "3-1반 채점 결과";
+detailedSheet.mergeCells("A2:M2");
+detailedSheet.getCell("A2").value = "평가: " + detailedTitle;
+detailedSheet.getRow(4).values = [
+  "학년",
+  "반",
+  "번호",
+  "이름",
+  "총점",
+  ...detailedCriteria,
+  "AI 채점 수준",
+  "선생님 작성 피드백",
+];
+for (let index = 1; index <= 32; index += 1) {
+  const scores = detailedMaxima.map((max) => (index === 32 ? 0 : max));
+  detailedSheet.getRow(index + 4).values = [
+    3,
+    1,
+    index,
+    `가상학생${String(index).padStart(2, "0")}`,
+    scores.reduce((sum, score) => sum + score, 0),
+    ...scores,
+    "가상 수준",
+    detailedFeedback.replace(/^(\d+)\./gm, "$1\\.").replaceAll("\n", "\\n"),
+  ];
+}
+const detailedFile = {
+  name: "채점결과_20261007.xlsx",
+  mimeType: syntheticFile.mimeType,
+  buffer: Buffer.from(await detailedWorkbook.xlsx.writeBuffer()),
+};
+const secondDetailedWorkbook = new ExcelJS.Workbook();
+await secondDetailedWorkbook.xlsx.load(detailedFile.buffer);
+secondDetailedWorkbook.worksheets[0].getCell("A2").value =
+  "평가: 가상 두 번째 평가";
+const secondDetailedFile = {
+  ...detailedFile,
+  name: "가상_두번째_채점결과.xlsx",
+  buffer: Buffer.from(await secondDetailedWorkbook.xlsx.writeBuffer()),
+};
+const assertDetailedHairBorders = async (buffer) => {
+  const zip = await JSZip.loadAsync(buffer);
+  const styles = await zip.file("xl/styles.xml").async("string");
+  const xml = await zip.file("xl/worksheets/sheet1.xml").async("string");
+  const borders = [
+    ...styles.matchAll(/<border\b[^>]*(?:\/>|>[\s\S]*?<\/border>)/g),
+  ].map((match) => match[0]);
+  const xfs = [
+    ...styles
+      .match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)[1]
+      .matchAll(/<xf\b[^>]*>/g),
+  ].map((match) => Number(match[0].match(/\bborderId="(\d+)"/)?.[1] || 0));
+  const cells = new Map(
+    [...xml.matchAll(/<c\b[^>]*>/g)].map((match) => [
+      match[0].match(/\br="([A-Z]+\d+)"/)?.[1],
+      Number(match[0].match(/\bs="(\d+)"/)?.[1] || 0),
+    ]),
+  );
+  const edge = (address, side, expected) => {
+    const border = borders[xfs[cells.get(address)]];
+    const actual = border?.match(
+      new RegExp(`<${side}\\b[^>]*\\bstyle="([^"]+)"`),
+    )?.[1];
+    assert.equal(actual, expected, `detailed XLSX ${address}.${side}`);
+  };
+  for (let row = 7; row < 38; row += 1)
+    for (const column of "BCDEFGHIJKLM") {
+      edge(`${column}${row}`, "bottom", "hair");
+      edge(`${column}${row + 1}`, "top", "hair");
+    }
+  for (let row = 6; row <= 41; row += 1) {
+    edge(`F${row}`, "right", "hair");
+    edge(`G${row}`, "left", "hair");
+    edge(`B${row}`, "left", "thin");
+    edge(`M${row}`, "right", "thin");
+  }
+};
 const state = `
 export const docs=new Map(),events=[],toasts=[];
 for(let i=1;i<=32;i++)docs.set('users/qa-'+i,{role:'student',grade:'3',class:'1',number:String(i),studentName:'가상학생'+String(i).padStart(2,'0'),email:'qa-'+i+'@example.test',enrollmentStatus:'active'});
@@ -210,7 +303,8 @@ const report = {
   pageErrors: [],
   limitations: [
     "Auth/Firestore/callables are in-memory stubs; no production student data or writes.",
-    "Synthetic NEIS workbook uses 32 fictitious names and new assessment names/maxima; real attached workbook checked separately without screenshot/save.",
+    "Synthetic NEIS and detailed grading workbooks use 32 fictitious names; optional reference workbooks are read separately without screenshot/save.",
+    "Class-sheet exports retain the existing requirement for two assessments; detailed import is first proven to save one assessment, then a separate synthetic second assessment is added only for export checks.",
   ],
 };
 let browser;
@@ -312,6 +406,7 @@ try {
         exact: true,
       });
       await memo.waitFor();
+      await memo.getByRole("textbox", { name: "처리 메모" }).focus();
       await page.keyboard.press("Escape");
       await memo.waitFor({ state: "hidden" });
       assert.equal(await dialog.isVisible(), true);
@@ -595,8 +690,22 @@ try {
       .getByRole("heading", { name: "업로드 미리보기", exact: true })
       .waitFor();
     await page.getByText("연결 32명", { exact: true }).waitFor();
-    await page.getByText("15점 만점", { exact: true }).waitFor();
-    await page.getByText("35점 만점", { exact: true }).waitFor();
+    const neisCriteria = page.getByRole("list", {
+      name: "평가 항목",
+      exact: true,
+    });
+    await neisCriteria.waitFor();
+    assert.equal(await neisCriteria.getByRole("listitem").count(), 2);
+    assert.ok(
+      (await neisCriteria.getByRole("listitem").nth(0).textContent()).includes(
+        "15점",
+      ),
+    );
+    assert.ok(
+      (await neisCriteria.getByRole("listitem").nth(1).textContent()).includes(
+        "35점",
+      ),
+    );
     const preview = page.getByRole("dialog", {
       name: "업로드 미리보기",
       exact: true,
@@ -1000,6 +1109,588 @@ try {
     }
     await page.close();
   }
+  for (const width of [390, 768, 1280]) {
+    const page = await browser.newPage({
+      viewport: { width, height: 900 },
+      acceptDownloads: true,
+    });
+    page.on("pageerror", (error) => report.pageErrors.push(error.message));
+    await page.route("**/*", (route) =>
+      route.request().url().startsWith(origin)
+        ? route.continue()
+        : route.abort(),
+    );
+    await page.goto(origin);
+    const openDetailedPreview = async (file = detailedFile) => {
+      await page.getByRole("button", { name: "업로드", exact: true }).click();
+      await page.locator("input[type=file]").setInputFiles(file);
+      const preview = page.getByRole("dialog", {
+        name: "업로드 미리보기",
+        exact: true,
+      });
+      await preview.waitFor();
+      await preview.getByText("연결 32명", { exact: true }).waitFor();
+      return preview;
+    };
+    let preview = await openDetailedPreview();
+    assert.equal(
+      await preview.getByLabel("평가명", { exact: true }).inputValue(),
+      detailedTitle,
+    );
+    assert.equal(
+      await preview.getByLabel("과목", { exact: true }).inputValue(),
+      "역사",
+    );
+    assert.equal(
+      await preview
+        .getByLabel("과목", { exact: true })
+        .getAttribute("readonly"),
+      "",
+    );
+    const criteria = preview.getByRole("list", {
+      name: "평가 항목",
+      exact: true,
+    });
+    assert.equal(await criteria.getByRole("listitem").count(), 6);
+    for (let index = 0; index < 6; index += 1) {
+      const item = criteria.getByRole("listitem").nth(index);
+      assert.ok((await item.textContent()).includes(detailedCriteria[index]));
+      assert.ok(
+        (await item.textContent()).includes(String(detailedMaxima[index])),
+      );
+    }
+    assert.equal(
+      await preview.locator("tbody textarea").first().inputValue(),
+      detailedFeedback,
+    );
+    assert.equal(
+      await preview
+        .getByRole("columnheader", { name: "학년", exact: true })
+        .count(),
+      1,
+    );
+    assert.equal(
+      await preview
+        .getByRole("columnheader", { name: "반", exact: true })
+        .count(),
+      1,
+    );
+    assert.equal(
+      await preview
+        .getByRole("columnheader", { name: "번호", exact: true })
+        .count(),
+      1,
+    );
+    await preview.getByLabel("학년", { exact: true }).selectOption("3");
+    await preview.getByLabel("반", { exact: true }).selectOption("1");
+    await preview.getByLabel("번호", { exact: true }).selectOption("1");
+    assert.equal(await preview.locator("tbody tr").count(), 1);
+    const firstIdentity = await preview
+      .locator("tbody tr")
+      .first()
+      .locator("td")
+      .allTextContents();
+    assert.equal(firstIdentity[1].trim(), "3");
+    assert.equal(firstIdentity[2].trim(), "1");
+    assert.equal(firstIdentity[3].trim(), "1");
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      true,
+    );
+    await page.screenshot({
+      path: out + `/detailed-preview-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`detailed-preview-${width}.png`);
+    await preview.locator("tbody textarea").first().scrollIntoViewIfNeeded();
+    assert.ok(
+      (await preview.locator("tbody textarea").first().boundingBox()).width >=
+        200,
+    );
+    await page.screenshot({
+      path: out + `/detailed-feedback-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`detailed-feedback-${width}.png`);
+    await preview
+      .getByRole("button", { name: "학생별 점수 저장", exact: true })
+      .click();
+    await preview.waitFor({ state: "hidden" });
+    const snapshot = await page.evaluate(() => ({
+      rosters: [...window.scoreQa.docs]
+        .filter(([key]) => key.includes("/performance_score_rosters/"))
+        .map(([key, value]) => ({ key, ...value })),
+      scores: [...window.scoreQa.docs]
+        .filter(
+          ([key]) =>
+            key.includes("/performance_scores/") &&
+            !key.includes("/confirmations/"),
+        )
+        .map(([key, value]) => ({ key, ...value })),
+    }));
+    assert.equal(snapshot.rosters.length, 1);
+    const roster = snapshot.rosters[0];
+    assert.equal(roster.title, detailedTitle);
+    assert.equal(roster.subject, "역사");
+    assert.equal(roster.items.length, 6);
+    assert.equal(roster.rows.length, 32);
+    assert.deepEqual(
+      roster.items.map((item) => item.maxScore),
+      detailedMaxima,
+    );
+    assert.equal(roster.totalMaxScore, 30);
+    assert.equal(roster.assessmentOrder, 1);
+    assert.equal(snapshot.scores.length, 32);
+    for (const score of snapshot.scores) {
+      assert.equal(score.title, detailedTitle);
+      assert.equal(score.subject, "역사");
+      assert.equal(score.items.length, 6);
+      assert.equal(score.totalMaxScore, 30);
+      assert.equal(score.feedback, detailedFeedback);
+      assert.equal(score.totalScore, score.uid === "qa-32" ? 0 : 30);
+    }
+    if (width === 1280) {
+      await page.evaluate(() => {
+        const [key, score] = [...window.scoreQa.docs].find(
+          ([key, score]) =>
+            key.includes("/performance_scores/") && score.uid === "qa-1",
+        );
+        const canvas = document.createElement("canvas");
+        canvas.width = 160;
+        canvas.height = 60;
+        const context = canvas.getContext("2d");
+        context.lineWidth = 4;
+        context.beginPath();
+        context.moveTo(10, 20);
+        context.lineTo(30, 45);
+        context.lineTo(100, 10);
+        context.stroke();
+        window.scoreQa.docs.set(key + "/confirmations/" + score.uid, {
+          uid: score.uid,
+          rosterId: score.rosterId,
+          signatureName: score.studentName,
+          signatureImage: canvas.toDataURL("image/png"),
+          scoreUpdatedAt: score.updatedAt,
+          confirmedAt: { seconds: 1801850460 },
+        });
+      });
+      const before = await page.evaluate(() => ({
+        scores: [...window.scoreQa.docs].filter(
+          ([key]) =>
+            key.includes("/performance_scores/") &&
+            !key.includes("/confirmations/"),
+        ),
+        events: window.scoreQa.events.length,
+      }));
+      preview = await openDetailedPreview();
+      await preview
+        .getByRole("button", { name: "학생별 점수 저장", exact: true })
+        .click();
+      await preview.waitFor({ state: "hidden" });
+      const after = await page.evaluate(
+        (eventStart) => ({
+          scores: [...window.scoreQa.docs].filter(
+            ([key]) =>
+              key.includes("/performance_scores/") &&
+              !key.includes("/confirmations/"),
+          ),
+          writes: window.scoreQa.events
+            .slice(eventStart)
+            .filter((event) => event.path?.includes("/performance_scores/")),
+        }),
+        before.events,
+      );
+      assert.deepEqual(after.scores, before.scores);
+      assert.equal(after.writes.length, 0);
+      // The unchanged class-sheet workflow requires both assessments. Verify
+      // single-assessment storage above, then add a separate synthetic second.
+      preview = await openDetailedPreview(secondDetailedFile);
+      await preview.getByLabel("평가 순서", { exact: true }).selectOption("2");
+      await preview
+        .getByRole("button", { name: "학생별 점수 저장", exact: true })
+        .click();
+      await preview.waitFor({ state: "hidden" });
+      await page.evaluate(() => {
+        const first = [...window.scoreQa.docs].find(([key]) =>
+          key.includes("/confirmations/"),
+        )[1];
+        const [key, score] = [...window.scoreQa.docs].find(
+          ([key, score]) =>
+            key.includes("/performance_scores/") &&
+            !key.includes("/confirmations/") &&
+            score.uid === "qa-1" &&
+            score.title === "가상 두 번째 평가",
+        );
+        window.scoreQa.docs.set(key + "/confirmations/" + score.uid, {
+          ...first,
+          rosterId: score.rosterId,
+          scoreUpdatedAt: score.updatedAt,
+        });
+      });
+      await page.getByRole("button", { name: "일람표", exact: true }).click();
+      await page
+        .getByRole("button", { name: "현황 조회", exact: true })
+        .click();
+      await page.getByText("학급 인원", { exact: true }).waitFor();
+      const downloadWait = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: "일람표 다운로드", exact: true })
+        .click();
+      await page
+        .getByRole("alertdialog")
+        .getByRole("button", { name: "그래도 다운로드" })
+        .click();
+      const download = await downloadWait;
+      const savedPath = out + "/synthetic-detailed-class-sheet.xlsx";
+      await download.saveAs(savedPath);
+      const generated = new ExcelJS.Workbook();
+      await generated.xlsx.readFile(savedPath);
+      const worksheet = generated.worksheets[0];
+      assert.ok(worksheet.getCell("E6").text.includes(detailedTitle));
+      assert.ok(worksheet.getCell("E6").text.includes("30.00"));
+      assert.equal(worksheet.getCell("E7").value, 30);
+      assert.equal(worksheet.getCell("E38").value, 0);
+      assert.equal(worksheet.getImages().length, 1);
+      assert.equal(worksheet.getImages()[0].range.tl.nativeRow, 6);
+      assert.ok(worksheet.getImages()[0].range.tl.nativeCol >= 9);
+      await assertDetailedHairBorders(await fs.readFile(savedPath));
+      report.checks.push(
+        "Detailed grading: unchanged reupload writes no student score document and preserves the score revision/signature; downloaded E6 has the single assessment title and 30.00 max, E7/E38 include full/zero totals, one valid signature remains in remarks, serialized hair student/assessment separators and thin outer edges survive.",
+      );
+    }
+    await page.close();
+  }
+  report.checks.push(
+    "Detailed grading 390/768/1280: metadata title and fixed history subject, six compact list items, grade/class/number columns and filters, literal backslash feedback normalized into line breaks, one roster with six criteria and 32 student scores saved despite filtering preview to one student.",
+  );
+  const maximaPage = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+    acceptDownloads: true,
+  });
+  maximaPage.on("pageerror", (error) => report.pageErrors.push(error.message));
+  await maximaPage.route("**/*", (route) =>
+    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+  );
+  await maximaPage.goto(origin);
+  const openMaximaPreview = async (file) => {
+    await maximaPage
+      .getByRole("button", { name: "업로드", exact: true })
+      .click();
+    await maximaPage.locator("input[type=file]").setInputFiles(file);
+    const preview = maximaPage.getByRole("dialog", {
+      name: "업로드 미리보기",
+      exact: true,
+    });
+    await preview.getByText("연결 32명", { exact: true }).waitFor();
+    return preview;
+  };
+  let maximaPreview = await openMaximaPreview(detailedFile);
+  const maximumHelp = maximaPreview.getByRole("button", {
+    name: "평가 배점 도움말",
+    exact: true,
+  });
+  await maximumHelp.click();
+  await maximaPreview.getByRole("tooltip").waitFor();
+  await maximaPage.keyboard.press("Escape");
+  await maximaPreview.getByRole("tooltip").waitFor({ state: "hidden" });
+  assert.equal(await maximaPreview.isVisible(), true);
+  const maxLabel = detailedCriteria[0] + " 배점";
+  await maximaPreview.getByLabel("평가명", { exact: true }).fill("");
+  assert.equal(
+    await maximaPreview
+      .getByRole("button", { name: "학생별 점수 저장", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await maximaPreview.getByLabel("평가명", { exact: true }).fill(detailedTitle);
+  await maximaPreview
+    .getByRole("button", { name: "배점 수정", exact: true })
+    .click();
+  await maximaPreview.getByLabel(maxLabel, { exact: true }).fill("5");
+  await maximaPreview
+    .getByRole("button", { name: "배점 적용", exact: true })
+    .click();
+  assert.equal(
+    await maximaPreview.getByLabel(maxLabel, { exact: true }).isVisible(),
+    true,
+  );
+  assert.equal(
+    await maximaPreview
+      .getByRole("button", { name: "학생별 점수 저장", exact: true })
+      .isDisabled(),
+    true,
+  );
+  assert.equal(
+    await maximaPage.evaluate(
+      () => window.scoreQa.events.filter((event) => event.op === "set").length,
+    ),
+    0,
+  );
+  await maximaPreview.getByLabel(maxLabel, { exact: true }).fill("7");
+  await maximaPage.screenshot({
+    path: out + "/detailed-maxima-editor-1280.png",
+    fullPage: true,
+  });
+  report.screenshots.push("detailed-maxima-editor-1280.png");
+  await maximaPreview
+    .getByRole("button", { name: "배점 적용", exact: true })
+    .click();
+  await maximaPreview.getByText("총점 31점", { exact: true }).waitFor();
+  assert.equal(
+    await maximaPreview
+      .getByRole("list", { name: "평가 항목", exact: true })
+      .getByRole("listitem")
+      .count(),
+    6,
+  );
+  await maximaPage.screenshot({
+    path: out + "/detailed-corrected-maxima-1280.png",
+    fullPage: true,
+  });
+  report.screenshots.push("detailed-corrected-maxima-1280.png");
+  await maximaPreview
+    .getByRole("button", { name: "학생별 점수 저장", exact: true })
+    .click();
+  await maximaPreview.waitFor({ state: "hidden" });
+  const corrected = await maximaPage.evaluate(() => ({
+    rosters: [...window.scoreQa.docs]
+      .filter(([key]) => key.includes("/performance_score_rosters/"))
+      .map(([, value]) => value),
+    scores: [...window.scoreQa.docs]
+      .filter(
+        ([key]) =>
+          key.includes("/performance_scores/") &&
+          !key.includes("/confirmations/"),
+      )
+      .map(([, value]) => value),
+    events: window.scoreQa.events.length,
+  }));
+  assert.equal(corrected.rosters.length, 1);
+  assert.equal(corrected.rosters[0].totalMaxScore, 31);
+  assert.equal(corrected.rosters[0].items[0].maxScore, 7);
+  assert.equal(corrected.scores.length, 32);
+  for (const score of corrected.scores) {
+    assert.equal(score.totalMaxScore, 31);
+    assert.equal(score.items[0].maxScore, 7);
+    assert.equal(score.totalScore, score.uid === "qa-32" ? 0 : 30);
+  }
+  maximaPreview = await openMaximaPreview(detailedFile);
+  await maximaPreview.getByText("총점 31점", { exact: true }).waitFor();
+  assert.ok(
+    (
+      await maximaPreview
+        .getByRole("list", { name: "평가 항목", exact: true })
+        .getByRole("listitem")
+        .first()
+        .textContent()
+    ).includes("7점"),
+  );
+  await maximaPreview
+    .getByRole("button", { name: "학생별 점수 저장", exact: true })
+    .click();
+  await maximaPreview.waitFor({ state: "hidden" });
+  assert.equal(
+    await maximaPage.evaluate(
+      (eventStart) =>
+        window.scoreQa.events
+          .slice(eventStart)
+          .filter((event) => event.path?.includes("/performance_scores/"))
+          .length,
+      corrected.events,
+    ),
+    0,
+  );
+  maximaPreview = await openMaximaPreview(secondDetailedFile);
+  await maximaPreview
+    .getByLabel("평가 순서", { exact: true })
+    .selectOption("2");
+  await maximaPreview
+    .getByRole("button", { name: "학생별 점수 저장", exact: true })
+    .click();
+  await maximaPreview.waitFor({ state: "hidden" });
+  await maximaPage.getByRole("button", { name: "일람표", exact: true }).click();
+  await maximaPage
+    .getByRole("button", { name: "현황 조회", exact: true })
+    .click();
+  await maximaPage.getByText("학급 인원", { exact: true }).waitFor();
+  const maximaDownloadWait = maximaPage.waitForEvent("download");
+  await maximaPage
+    .getByRole("button", { name: "일람표 다운로드", exact: true })
+    .click();
+  await maximaPage
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "그래도 다운로드" })
+    .click();
+  const maximaDownload = await maximaDownloadWait;
+  const maximaPath = out + "/synthetic-corrected-maxima-class-sheet.xlsx";
+  await maximaDownload.saveAs(maximaPath);
+  const maximaBook = new ExcelJS.Workbook();
+  await maximaBook.xlsx.readFile(maximaPath);
+  assert.ok(maximaBook.worksheets[0].getCell("E6").text.includes("31.00"));
+  assert.ok(
+    maximaBook.worksheets[0].getCell("E6").text.includes(detailedTitle),
+  );
+  assert.equal(maximaBook.worksheets[0].getCell("E7").value, 30);
+  await assertDetailedHairBorders(await fs.readFile(maximaPath));
+  report.checks.push(
+    "Manual criterion maximum 6→7 updates the single assessment maximum to 31 without changing student points; 5 below the observed 6 blocks applying/saving. Same-file reupload preserves the teacher's 7/31 maxima without score writes; XLSX E6 shows 31.00 and reference hair borders remain. Empty title cannot save.",
+  );
+  await maximaPage.close();
+  const racePage = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+  });
+  racePage.on("pageerror", (error) => report.pageErrors.push(error.message));
+  await racePage.route("**/*", (route) =>
+    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+  );
+  await racePage.goto(origin);
+  const openRacePreview = async () => {
+    await racePage.getByRole("button", { name: "업로드", exact: true }).click();
+    await racePage.locator("input[type=file]").setInputFiles(detailedFile);
+    const preview = racePage.getByRole("dialog", {
+      name: "업로드 미리보기",
+      exact: true,
+    });
+    await preview.getByText("연결 32명", { exact: true }).waitFor();
+    return preview;
+  };
+  let racePreview = await openRacePreview();
+  await racePreview
+    .getByRole("button", { name: "학생별 점수 저장", exact: true })
+    .click();
+  await racePreview.waitFor({ state: "hidden" });
+  racePreview = await openRacePreview();
+  await racePreview.getByText("총점 30점", { exact: true }).waitFor();
+  const beforeRace = await racePage.evaluate(() => {
+    const reviseItems = (items) =>
+      items.map((item, index) => ({
+        ...item,
+        ...(index === 0 ? { maxScore: 7 } : {}),
+      }));
+    for (const [key, value] of window.scoreQa.docs) {
+      if (key.includes("/performance_score_rosters/")) {
+        // Replace server snapshots, never mutate arrays held by the React cache.
+        window.scoreQa.docs.set(key, {
+          ...value,
+          items: reviseItems(value.items),
+          totalMaxScore: 31,
+          rows: value.rows.map((row) => ({
+            ...row,
+            items: reviseItems(row.items),
+            totalMaxScore: 31,
+          })),
+        });
+      } else if (
+        key.includes("/performance_scores/") &&
+        !key.includes("/confirmations/")
+      ) {
+        const current = {
+          ...value,
+          items: reviseItems(value.items),
+          totalMaxScore: 31,
+          updatedAt: { seconds: 1801850500, nanoseconds: 0 },
+        };
+        window.scoreQa.docs.set(key, current);
+        if (value.uid === "qa-1")
+          window.scoreQa.docs.set(key + "/confirmations/qa-1", {
+            uid: "qa-1",
+            rosterId: value.rosterId,
+            signatureName: "가상학생01",
+            signatureImage: "synthetic-versioned-signature",
+            scoreUpdatedAt: current.updatedAt,
+          });
+      }
+    }
+    return {
+      scores: [...window.scoreQa.docs].filter(([key]) =>
+        key.includes("/performance_scores/"),
+      ),
+      events: window.scoreQa.events.length,
+    };
+  });
+  await racePreview.getByText("총점 30점", { exact: true }).waitFor();
+  await racePreview
+    .getByRole("button", { name: "학생별 점수 저장", exact: true })
+    .click();
+  await racePreview.waitFor({ state: "hidden" });
+  const afterRace = await racePage.evaluate(
+    (start) => ({
+      scores: [...window.scoreQa.docs].filter(([key]) =>
+        key.includes("/performance_scores/"),
+      ),
+      rosters: [...window.scoreQa.docs]
+        .filter(([key]) => key.includes("/performance_score_rosters/"))
+        .map(([, value]) => value),
+      writes: window.scoreQa.events
+        .slice(start)
+        .filter((event) => event.path?.includes("/performance_scores/")),
+    }),
+    beforeRace.events,
+  );
+  assert.deepEqual(afterRace.scores, beforeRace.scores);
+  assert.equal(afterRace.writes.length, 0);
+  assert.equal(afterRace.rosters[0].items[0].maxScore, 7);
+  assert.equal(afterRace.rosters[0].totalMaxScore, 31);
+  assert.ok(
+    afterRace.rosters[0].rows.every(
+      (row) => row.items[0].maxScore === 7 && row.totalMaxScore === 31,
+    ),
+  );
+  report.checks.push(
+    "Stale-cache race: preview/cache stays at inferred 6/30 while server snapshots change to 7/31. Save uses transaction-current criteria, retains all 32 rows at 7/31, performs no student score writes and preserves the latest score-bound signature. Feedback textarea remains at least 200px wide at every tested viewport.",
+  );
+  await racePage.close();
+  if (process.env.SCORE_QA_DETAILED_REFERENCE_XLSX) {
+    const page = await browser.newPage({
+      viewport: { width: 1280, height: 900 },
+    });
+    page.on("pageerror", (error) => report.pageErrors.push(error.message));
+    await page.route("**/*", (route) =>
+      route.request().url().startsWith(origin)
+        ? route.continue()
+        : route.abort(),
+    );
+    await page.goto(origin);
+    await page.getByRole("button", { name: "업로드", exact: true }).click();
+    await page
+      .locator("input[type=file]")
+      .setInputFiles(process.env.SCORE_QA_DETAILED_REFERENCE_XLSX);
+    const preview = page.getByRole("dialog", {
+      name: "업로드 미리보기",
+      exact: true,
+    });
+    await preview.waitFor();
+    await preview.getByText("총 32명", { exact: true }).waitFor();
+    await preview.getByText("총점 30점", { exact: true }).waitFor();
+    assert.equal(
+      await preview
+        .getByRole("list", { name: "평가 항목", exact: true })
+        .getByRole("listitem")
+        .count(),
+      6,
+    );
+    assert.equal(
+      await preview.getByLabel("평가명", { exact: true }).inputValue(),
+      detailedTitle,
+    );
+    assert.equal(
+      await preview.getByLabel("과목", { exact: true }).inputValue(),
+      "역사",
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.scoreQa.events.filter((event) => event.op === "set").length,
+      ),
+      0,
+    );
+    report.checks.push(
+      "Actual detailed grading workbook read via browser File only: metadata title/history subject, 32 rows, six criteria and total maximum 30 detected; no real-data save, screenshots, copies or cell-value logs.",
+    );
+    await page.close();
+  }
   const nestedPage = await browser.newPage({
     viewport: { width: 1280, height: 900 },
   });
@@ -1102,7 +1793,13 @@ try {
       .getByRole("heading", { name: "업로드 미리보기", exact: true })
       .waitFor();
     await realPage.getByText("총 32명", { exact: true }).waitFor();
-    assert.equal(await realPage.getByText(/점 만점$/).count(), 2);
+    assert.equal(
+      await realPage
+        .getByRole("list", { name: "평가 항목", exact: true })
+        .getByRole("listitem")
+        .count(),
+      2,
+    );
     report.checks.push(
       "Actual attached Hancom/NEIS XLSX accepted by browser File reader: preview detects 32 students and 2 maxima; no personal preview screenshots or file copies retained.",
     );

@@ -17,6 +17,7 @@ export interface ParsedPerformanceScoreRow extends PerformanceScoreRosterRow {
 
 export interface ParsedPerformanceScoreUpload {
   format?: "neis" | "legacy";
+  inferredMaxScoreItemIndexes?: number[];
   academicYear?: string;
   semester?: string;
   sourceFileName: string;
@@ -93,6 +94,83 @@ const isFeedbackHeader = (header: string) =>
     header,
   );
 
+const isScoreMetadataHeader = (header: string) =>
+  isFeedbackHeader(header) ||
+  /^(?:ai|자동)?(?:채점|평가|성취)?(?:수준|등급|상태|신뢰도)$/.test(header) ||
+  /^(비고|메모|총평|확인여부|서명)$/.test(header);
+
+const isTotalScoreHeader = (header: string) =>
+  /^(총점|합계|총합|계)(?:[（(].*[)）])?$/.test(header);
+
+const declaredMaximum = (header: string): number | null => {
+  const match =
+    /(?:만점|배점)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*점?/.exec(header) ||
+    /[（(]\s*(\d+(?:\.\d+)?)\s*점\s*[)）]/.exec(header);
+  return match ? Number(match[1]) : null;
+};
+
+export const normalizePerformanceScoreFeedback = (value: unknown): string => {
+  const raw = String(value ?? "").replace(/\r\n?/g, "\n");
+  // Preserve literal backslashes in Windows paths while decoding exported text.
+  const paths = [...raw.matchAll(/(?:[A-Za-z]:\\|\\\\)[^\s]+/g)].map(
+    (match) => [match.index, match.index + match[0].length],
+  );
+  let text = raw
+    .replace(/\\r\\n|\\n|\\r/g, (match, offset: number) =>
+      paths.some(([start, end]) => offset >= start && offset < end)
+        ? match
+        : "\n",
+    )
+    .replace(/(^|\s)(\d{1,2})[\\₩￦]+([.)])(?=\s|[가-힣A-Za-z])/g, "$1$2$3");
+  let expected = 1;
+  text = text.replace(
+    /(^|\s)(\d{1,2})\.[ \t]+(?=\S)/g,
+    (match, space: string, number: string, offset: number, input: string) => {
+      if (Number(number) !== expected) return match;
+      // A date such as 2026. 1. 2. is not a numbered feedback list.
+      if (
+        expected === 1 &&
+        (/\d{2,4}\.\s*$/.test(input.slice(0, offset)) ||
+          /^\d{1,2}\.[ \t]/.test(input.slice(offset + match.length)))
+      )
+        return match;
+      expected += 1;
+      return `${space ? "\n" : ""}${number}. `;
+    },
+  );
+  return text
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
+const readAssessmentTitle = (
+  rows: unknown[][],
+  headerRowIndex: number,
+): string => {
+  const isLabel = (value: string) =>
+    /^(평가|평가명|수행평가|수행평가명|평가제목|수행평가제목|assessment|assessmentname|title)$/.test(
+      toHeaderKey(value),
+    );
+  for (const row of rows.slice(0, headerRowIndex)) {
+    for (let index = 0; index < row.length; index += 1) {
+      const cell = toText(row[index]);
+      const inline = /^([^:：]+)\s*[:：]\s*(.+)$/.exec(cell);
+      if (inline && isLabel(inline[1])) return inline[2].trim();
+      if (isLabel(cell.replace(/[:：]$/, ""))) {
+        const next = row
+          .slice(index + 1)
+          .map(toText)
+          .find(Boolean);
+        if (next) return next;
+      }
+    }
+  }
+  return "";
+};
+
 const findFinalScoreHeaderRow = (rows: unknown[][]) => {
   const scanLimit = Math.min(rows.length, 20);
   for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
@@ -114,9 +192,7 @@ const findFinalScoreHeaderRow = (rows: unknown[][]) => {
       (header) =>
         /^(이름|성명|학생명|학생이름)$/.test(header) || header.includes("성명"),
     );
-    const totalIndex = findColumnIndex(headers, (header) =>
-      /^(총점|합계|총합|계)$/.test(header),
-    );
+    const totalIndex = findColumnIndex(headers, isTotalScoreHeader);
 
     if (
       gradeIndex >= 0 &&
@@ -151,9 +227,7 @@ const resolveFinalScoreColumns = (
     (header) =>
       /^(이름|성명|학생명|학생이름)$/.test(header) || header.includes("성명"),
   );
-  const totalIndex = findColumnIndex(headers, (header) =>
-    /^(총점|합계|총합|계)$/.test(header),
-  );
+  const totalIndex = findColumnIndex(headers, isTotalScoreHeader);
   let feedbackIndex = -1;
   for (let index = headers.length - 1; index >= 0; index -= 1) {
     if (isFeedbackHeader(headers[index])) {
@@ -172,46 +246,10 @@ const resolveFinalScoreColumns = (
   };
 };
 
-const cleanAssessmentTitle = (fileName: string) => {
-  const withoutExtension = fileName.replace(/\.[^.]+$/, "").trim();
-  return (
-    withoutExtension
-      .replace(/^\d{4}학년도\s*\d+\s*학기\s*/g, "")
-      .replace(/^\d+\s*학년\s*/g, "")
-      .replace(/^(주간|전체)\s*/g, "")
-      .trim() || withoutExtension
-  );
-};
-
-const inferAssessmentOrder = (title: string) => {
-  const normalized = toHeaderKey(title);
-  if (/고조선|8조법|4컷/.test(normalized)) return 1;
-  if (/삼국|무덤|평점/.test(normalized)) return 2;
-  return undefined;
-};
-
-const inferSubject = (title: string) =>
-  /고조선|8조법|삼국|역사/.test(title) ? "역사" : "";
-
 export const getPerformanceScoreItemShortName = (
   name: unknown,
   fallbackIndex = 0,
-) => {
-  const normalized = toHeaderKey(name);
-  if (/범죄행위|형벌결과|만화서사/.test(normalized)) return "법 조항 서사";
-  if (/유물|생활모습|배경/.test(normalized)) return "당대 생활상";
-  if (/사건발생|갈등|재판|판결|인과관계|4컷/.test(normalized))
-    return "서사 표현";
-  if (/심리|계급적입장|말풍선/.test(normalized)) return "말풍선 표현";
-  if (/비유적|평점제목|제목/.test(normalized)) return "비유 제목";
-  if (/업적|과오|객관적사실/.test(normalized)) return "업적·과오";
-  if (/별점|평점.*근거|역사적맥락/.test(normalized)) return "평점 근거";
-  if (/대중매체|이미지|주체적인역사적평가/.test(normalized)) return "매체 비교";
-  if (/정치적선택|사회와타인의삶|비판적으로성찰/.test(normalized))
-    return "비판적 성찰";
-  if (/온라인지도|리뷰|정제된언어|형식/.test(normalized)) return "리뷰 형식";
-  return toText(name) || `요소 ${fallbackIndex + 1}`;
-};
+) => toText(name) || `요소 ${fallbackIndex + 1}`;
 
 const sortSchoolValues = (values: string[]) =>
   values.sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"));
@@ -228,10 +266,11 @@ export const parsePerformanceScoreWorkbook = (
     throw new Error("첫 번째 시트를 찾을 수 없습니다.");
   }
 
-  const neis = parseNeisPerformanceScoreWorkbook(rows, params);
+  const headerRowIndex = findFinalScoreHeaderRow(rows);
+  const neis =
+    headerRowIndex < 0 ? parseNeisPerformanceScoreWorkbook(rows, params) : null;
   if (neis) return neis;
 
-  const headerRowIndex = findFinalScoreHeaderRow(rows);
   if (headerRowIndex < 0) {
     throw new Error(
       "학년, 반, 번호, 이름, 총점이 포함된 최종 점수표 헤더 행을 찾지 못했습니다.",
@@ -256,7 +295,6 @@ export const parsePerformanceScoreWorkbook = (
   const candidateRows = rows
     .map((row, rowIndex) => ({ row, rowIndex }))
     .slice(headerRowIndex + 1)
-    .slice(0, MAX_UPLOAD_ROWS)
     .filter(({ row }) =>
       row.some((cell) => String(cell ?? "").trim().length > 0),
     );
@@ -267,6 +305,8 @@ export const parsePerformanceScoreWorkbook = (
   if (!scoreRows.length) {
     throw new Error("등록할 학생 점수 행을 찾지 못했습니다.");
   }
+  if (scoreRows.length > MAX_UPLOAD_ROWS)
+    throw new Error(`한 파일에는 ${MAX_UPLOAD_ROWS}명까지 등록할 수 있습니다.`);
 
   const identityIndexes = new Set([
     indexes.gradeIndex,
@@ -283,9 +323,7 @@ export const parsePerformanceScoreWorkbook = (
         header &&
         index > indexes.totalIndex &&
         !identityIndexes.has(index) &&
-        scoreRows.some(
-          ({ row }) => toFiniteScore(getCell(row, index)) !== null,
-        ),
+        !isScoreMetadataHeader(headers[index]),
     );
 
   if (!scoreColumnCandidates.length) {
@@ -301,7 +339,7 @@ export const parsePerformanceScoreWorkbook = (
       return {
         header,
         index,
-        maxScore: roundScore(observedMax),
+        maxScore: roundScore(declaredMaximum(header) ?? observedMax),
       };
     },
   );
@@ -319,10 +357,13 @@ export const parsePerformanceScoreWorkbook = (
     (sum, item) => sum + Number(item.maxScore || 0),
     0,
   );
-  const totalMaxScore = roundScore(Math.max(observedTotalMax, criteriaMaxSum));
-  const title = cleanAssessmentTitle(params.fileName);
-  const subject = inferSubject(title);
-  const assessmentOrder = inferAssessmentOrder(title);
+  const totalMaxScore = roundScore(
+    declaredMaximum(displayHeaders[indexes.totalIndex]) ??
+      Math.max(observedTotalMax, criteriaMaxSum),
+  );
+  const title = readAssessmentTitle(rows, headerRowIndex);
+  const subject = "역사";
+  const seenStudents = new Set<string>();
 
   const rowsWithScores: ParsedPerformanceScoreRow[] = scoreRows.map(
     ({ row, rowIndex }) => {
@@ -332,10 +373,33 @@ export const parsePerformanceScoreWorkbook = (
         getCellText(row, indexes.classIndex) || params.fallbackClass.trim();
       const rowNumber = getCellText(row, indexes.numberIndex);
       const studentName = getCellText(row, indexes.nameIndex);
+      const identity = [rowGrade, rowClass, rowNumber]
+        .map(normalizeSchoolValue)
+        .join("|");
+      if (seenStudents.has(identity))
+        throw new Error(
+          `${rowIndex + 1}행: 같은 학년·반·번호가 중복되었습니다.`,
+        );
+      seenStudents.add(identity);
       const parsedTotal = toFiniteScore(getCell(row, indexes.totalIndex));
+      if (
+        (getCellText(row, indexes.totalIndex) && parsedTotal === null) ||
+        (parsedTotal !== null &&
+          (parsedTotal < 0 || parsedTotal > totalMaxScore))
+      )
+        throw new Error(
+          `${rowIndex + 1}행 총점은 0~${totalMaxScore}점 범위의 숫자 또는 빈칸이어야 합니다.`,
+        );
       const rowItems = scoreColumns.map((column, itemIndex) => {
         const score = toFiniteScore(getCell(row, column.index));
         const item = items[itemIndex];
+        if (
+          (getCellText(row, column.index) && score === null) ||
+          (score !== null && (score < 0 || score > item.maxScore))
+        )
+          throw new Error(
+            `${rowIndex + 1}행 ${item.name}: 점수는 0~${item.maxScore}점 범위의 숫자 또는 빈칸이어야 합니다.`,
+          );
         return {
           name: item.name,
           shortName: item.shortName,
@@ -350,10 +414,27 @@ export const parsePerformanceScoreWorkbook = (
         0,
       );
       const hasCriteriaScores = rowItems.some((item) => item.scoreEntered);
+      if (
+        parsedTotal !== null &&
+        rowItems.every((item) => item.scoreEntered) &&
+        roundScore(parsedTotal) !== roundScore(calculatedTotal)
+      )
+        throw new Error(
+          `${rowIndex + 1}행의 총점과 평가요소 점수 합계가 일치하지 않습니다.`,
+        );
       const enteredScoreCount =
         (parsedTotal !== null ? 1 : 0) +
         rowItems.filter((item) => item.scoreEntered).length;
-      const evidence = getCellText(row, indexes.feedbackIndex).slice(0, 1000);
+      const totalScore = roundScore(
+        parsedTotal ?? (hasCriteriaScores ? calculatedTotal : 0),
+      );
+      if (totalScore > totalMaxScore)
+        throw new Error(
+          `${rowIndex + 1}행 총점은 0~${totalMaxScore}점 범위의 숫자 또는 빈칸이어야 합니다.`,
+        );
+      const evidence = normalizePerformanceScoreFeedback(
+        getCell(row, indexes.feedbackIndex),
+      ).slice(0, 1000);
 
       return {
         rowKey: `row-${rowIndex + 1}-${studentName}-${rowNumber}`,
@@ -365,9 +446,7 @@ export const parsePerformanceScoreWorkbook = (
         number: normalizeSchoolValue(rowNumber),
         studentName,
         items: rowItems,
-        totalScore: roundScore(
-          parsedTotal ?? (hasCriteriaScores ? calculatedTotal : 0),
-        ),
+        totalScore,
         totalMaxScore,
         feedback: evidence,
         evidence,
@@ -379,11 +458,13 @@ export const parsePerformanceScoreWorkbook = (
 
   return {
     format: "legacy",
+    inferredMaxScoreItemIndexes: scoreColumns.flatMap((column, index) =>
+      declaredMaximum(column.header) === null ? [index] : [],
+    ),
     sourceFileName: params.fileName,
     headerRowNumber: headerRowIndex + 1,
     title,
     subject,
-    assessmentOrder,
     items,
     rows: rowsWithScores,
     totalMaxScore,
@@ -444,10 +525,7 @@ const parseNeisPerformanceScoreWorkbook = (
   const fileGrade = /(?:^|\s)([1-6])\s*학년(?:\s|_)/.exec(params.fileName)?.[1];
   const year = /(\d{4})\s*학년도/.exec(params.fileName)?.[1];
   const semester = /(\d+)\s*학기/.exec(params.fileName)?.[1];
-  const subject =
-    /학년\s+(.+?)(?:_전체|_\d+강의실|\.xlsx$)/
-      .exec(params.fileName)?.[1]
-      ?.trim() || "";
+  const subject = "역사";
   const totalMaxScore = roundScore(
     columns.reduce((sum, column) => sum + column.maxScore, 0),
   );

@@ -489,6 +489,147 @@ const normalizePerformanceScoreRoster = (
 const getItemLabel = (item: { name: string; shortName?: string }) =>
   item.shortName || item.name;
 
+const withPerformanceScoreMaximums = (
+  upload: ParsedUpload,
+  maximums: number[],
+): ParsedUpload => {
+  const totalMaxScore = roundScore(
+    maximums.reduce((sum, value) => sum + value, 0),
+  );
+  return {
+    ...upload,
+    items: upload.items.map((item, index) => ({
+      ...item,
+      maxScore: maximums[index],
+    })),
+    totalMaxScore,
+    rows: upload.rows.map((row) => ({
+      ...row,
+      items: row.items.map((item, index) => ({
+        ...item,
+        maxScore: maximums[index],
+      })),
+      totalMaxScore,
+    })),
+  };
+};
+
+const retainStoredPerformanceMaximums = (
+  upload: ParsedUpload,
+  previous?: PerformanceScoreRoster,
+): ParsedUpload => {
+  if (upload.format === "neis" || !previous) return upload;
+  const inferredIndexes = new Set(upload.inferredMaxScoreItemIndexes || []);
+  const maximums = upload.items.map((item, index) => {
+    if (!inferredIndexes.has(index)) return item.maxScore;
+    const observedMaximum = roundScore(
+      Math.max(
+        0,
+        ...upload.rows.map((row) =>
+          row.items[index]?.scoreEntered === false
+            ? 0
+            : Number(row.items[index]?.score || 0),
+        ),
+      ),
+    );
+    const prior = previous.items?.find((entry) => entry.name === item.name);
+    return prior && Number.isFinite(prior.maxScore)
+      ? Math.max(observedMaximum, prior.maxScore)
+      : observedMaximum;
+  });
+  return maximums.some(
+    (maximum, index) => maximum !== upload.items[index].maxScore,
+  )
+    ? withPerformanceScoreMaximums(upload, maximums)
+    : upload;
+};
+
+const getPerformanceMaximumError = (
+  upload: ParsedUpload,
+  maximums: number[],
+) => {
+  for (const [index, maximum] of maximums.entries()) {
+    const name = upload.items[index]?.name || `평가 항목 ${index + 1}`;
+    if (!Number.isFinite(maximum) || maximum <= 0)
+      return `${name}: 배점은 0보다 큰 숫자로 입력해 주세요.`;
+    if (
+      upload.rows.some(
+        (row) =>
+          row.items[index]?.scoreEntered !== false &&
+          Number(row.items[index]?.score || 0) > maximum,
+      )
+    )
+      return `${name}: 입력된 학생 점수보다 배점을 낮출 수 없습니다.`;
+  }
+  const total = roundScore(maximums.reduce((sum, maximum) => sum + maximum, 0));
+  if (upload.rows.some((row) => row.totalScore > total))
+    return "입력된 학생 총점보다 총배점을 낮출 수 없습니다.";
+  return "";
+};
+
+function ScoreUploadMaximumHelp() {
+  const root = useRef<HTMLSpanElement | null>(null);
+  const pinned = useRef(false);
+  const [open, setOpen] = useState(false);
+  const close = () => {
+    pinned.current = false;
+    setOpen(false);
+  };
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) close();
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [open]);
+  return (
+    <span
+      ref={root}
+      className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => {
+        if (!pinned.current) setOpen(false);
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) close();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          event.stopPropagation();
+          close();
+        }
+      }}
+    >
+      <button
+        type="button"
+        aria-label="평가 배점 도움말"
+        aria-expanded={open}
+        aria-describedby={open ? "score-upload-maximum-help" : undefined}
+        onFocus={() => setOpen(true)}
+        onClick={() => {
+          pinned.current = !pinned.current;
+          setOpen(pinned.current);
+        }}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-black text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+      >
+        <span aria-hidden="true">i</span>
+      </button>
+      {open && (
+        <span
+          id="score-upload-maximum-help"
+          role="tooltip"
+          className="absolute left-0 top-full z-20 mt-2 w-56 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold leading-5 text-white shadow-lg"
+        >
+          배점이 없는 파일은 최고점을 기준으로 읽습니다. 실제 배점과 다르면
+          수정해 주세요.
+        </span>
+      )}
+    </span>
+  );
+}
+
 const getWrittenExamItemMeta = (
   item: Pick<
     PerformanceScoreItem,
@@ -5332,7 +5473,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [scoreWarningLoading, setScoreWarningLoading] = useState(true);
   const [scoreWarningSaving, setScoreWarningSaving] = useState(false);
   const [scoreWarningModalOpen, setScoreWarningModalOpen] = useState(false);
+  const [previewGradeFilter, setPreviewGradeFilter] = useState("all");
   const [previewClassFilter, setPreviewClassFilter] = useState("all");
+  const [previewNumberFilter, setPreviewNumberFilter] = useState("all");
+  const [uploadAssessmentOrder, setUploadAssessmentOrder] = useState("");
+  const [editingUploadMaximums, setEditingUploadMaximums] = useState(false);
+  const [uploadMaximumDrafts, setUploadMaximumDrafts] = useState<string[]>([]);
+  const [uploadMaximumError, setUploadMaximumError] = useState("");
   const [previewPage, setPreviewPage] = useState(1);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const uploadDialogRef = useRef<HTMLElement | null>(null);
@@ -5565,7 +5712,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   useEffect(() => {
     setPreviewPage(1);
-  }, [previewClassFilter, parsed?.sourceFileName]);
+  }, [
+    previewGradeFilter,
+    previewClassFilter,
+    previewNumberFilter,
+    parsed?.sourceFileName,
+  ]);
 
   useEffect(() => {
     setScoreListClassPage(1);
@@ -5697,45 +5849,125 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     };
   }, [parsed]);
 
-  const filteredPreviewRows = useMemo(() => {
-    const rows = parsed?.rows || [];
-    return previewClassFilter === "all"
-      ? rows
-      : rows.filter((row) => row.class === previewClassFilter);
-  }, [parsed, previewClassFilter]);
-
-  const previewClassFiltered = previewClassFilter !== "all";
-  const previewTotalPages = previewClassFiltered
-    ? 1
-    : Math.max(1, Math.ceil(filteredPreviewRows.length / PREVIEW_PAGE_SIZE));
-  const safePreviewPage = previewClassFiltered
-    ? 1
-    : Math.min(Math.max(1, previewPage), previewTotalPages);
-  const previewStartIndex = previewClassFiltered
-    ? 0
-    : (safePreviewPage - 1) * PREVIEW_PAGE_SIZE;
-  const previewRows = previewClassFiltered
-    ? filteredPreviewRows
-    : filteredPreviewRows.slice(
-        previewStartIndex,
-        previewStartIndex + PREVIEW_PAGE_SIZE,
-      );
+  const previewGradeOptions = useMemo(
+    () =>
+      [...new Set((parsed?.rows || []).map((row) => row.grade))]
+        .filter(Boolean)
+        .sort((a, b) => Number(a) - Number(b)),
+    [parsed],
+  );
+  const previewClassOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          (parsed?.rows || [])
+            .filter(
+              (row) =>
+                previewGradeFilter === "all" ||
+                row.grade === previewGradeFilter,
+            )
+            .map((row) => row.class),
+        ),
+      ]
+        .filter(Boolean)
+        .sort((a, b) => Number(a) - Number(b)),
+    [parsed, previewGradeFilter],
+  );
+  const previewNumberOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          (parsed?.rows || [])
+            .filter(
+              (row) =>
+                (previewGradeFilter === "all" ||
+                  row.grade === previewGradeFilter) &&
+                (previewClassFilter === "all" ||
+                  row.class === previewClassFilter),
+            )
+            .map((row) => row.number),
+        ),
+      ]
+        .filter(Boolean)
+        .sort((a, b) => Number(a) - Number(b)),
+    [parsed, previewGradeFilter, previewClassFilter],
+  );
+  const previewStudentScope = useMemo(() => {
+    const groups = new Map<
+      string,
+      { grade: string; class: string; numbers: number[] }
+    >();
+    (parsed?.rows || []).forEach((row) => {
+      const key = `${row.grade}:${row.class}`;
+      const group = groups.get(key) || {
+        grade: row.grade,
+        class: row.class,
+        numbers: [],
+      };
+      group.numbers.push(Number(row.number));
+      groups.set(key, group);
+    });
+    return [...groups.values()]
+      .sort(
+        (a, b) =>
+          Number(a.grade) - Number(b.grade) ||
+          Number(a.class) - Number(b.class),
+      )
+      .map((group) => {
+        const numbers = group.numbers.filter(
+          (number) => Number.isFinite(number) && number > 0,
+        );
+        const first = Math.min(...numbers);
+        const last = Math.max(...numbers);
+        const range = numbers.length
+          ? `${first === last ? first : `${first}~${last}`}번`
+          : "번호 없음";
+        return `${group.grade || "-"}학년 ${group.class || "-"}반 ${range} (${group.numbers.length}명)`;
+      });
+  }, [parsed]);
+  const filteredPreviewRows = useMemo(
+    () =>
+      (parsed?.rows || []).filter(
+        (row) =>
+          (previewGradeFilter === "all" || row.grade === previewGradeFilter) &&
+          (previewClassFilter === "all" || row.class === previewClassFilter) &&
+          (previewNumberFilter === "all" || row.number === previewNumberFilter),
+      ),
+    [parsed, previewGradeFilter, previewClassFilter, previewNumberFilter],
+  );
+  const previewTotalPages = Math.max(
+    1,
+    Math.ceil(filteredPreviewRows.length / PREVIEW_PAGE_SIZE),
+  );
+  const safePreviewPage = Math.min(Math.max(1, previewPage), previewTotalPages);
+  const previewStartIndex = (safePreviewPage - 1) * PREVIEW_PAGE_SIZE;
+  const previewRows = filteredPreviewRows.slice(
+    previewStartIndex,
+    previewStartIndex + PREVIEW_PAGE_SIZE,
+  );
   const parsedHasObjectiveOmr = hasObjectiveOmrItems(parsed?.items || []);
   const previewRangeLabel = filteredPreviewRows.length
-    ? previewClassFiltered
-      ? `1-${filteredPreviewRows.length}`
-      : `${previewStartIndex + 1}-${Math.min(
-          previewStartIndex + PREVIEW_PAGE_SIZE,
-          filteredPreviewRows.length,
-        )}`
+    ? `${previewStartIndex + 1}-${Math.min(previewStartIndex + PREVIEW_PAGE_SIZE, filteredPreviewRows.length)}`
     : "0";
   const previewPageItems = useMemo(
-    () =>
-      previewClassFiltered
-        ? []
-        : getPreviewPageItems(safePreviewPage, previewTotalPages),
-    [previewClassFiltered, safePreviewPage, previewTotalPages],
+    () => getPreviewPageItems(safePreviewPage, previewTotalPages),
+    [safePreviewPage, previewTotalPages],
   );
+  const isSinglePerformanceUpload =
+    !isWrittenExamMode && parsed?.format !== "neis";
+  const existingUploadAssessmentOrder = useMemo(() => {
+    if (!isSinglePerformanceUpload) return "";
+    const existing = rosters.find(
+      (roster) =>
+        roster.title === title.trim() &&
+        roster.subject === "역사" &&
+        roster.targetGrade === parsed?.rows[0]?.grade,
+    );
+    const order = existing ? getRosterAssessmentOrder(existing) : 0;
+    return order === 1 || order === 2 ? String(order) : "";
+  }, [isSinglePerformanceUpload, rosters, title, parsed]);
+  const selectedUploadAssessmentOrder =
+    existingUploadAssessmentOrder || uploadAssessmentOrder;
 
   const selectedScoreRoster = useMemo(
     () => rosters.find((roster) => roster.id === scoreListRosterId) || null,
@@ -9347,7 +9579,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         throwOnError: true,
       });
       const rows = await readScoreWorkbookRows(file);
-      const parsedUpload = isWrittenExamMode
+      let parsedUpload = isWrittenExamMode
         ? buildWrittenExamParsedUpload(rows, {
             fileName: file.name,
             targetGrade,
@@ -9381,19 +9613,58 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       }
       const assessmentConfig = {
         title: parsedUpload.title,
-        subject: parsedUpload.subject || managerCopy.defaultSubject,
+        subject: isWrittenExamMode
+          ? parsedUpload.subject || managerCopy.defaultSubject
+          : "역사",
         assessmentOrder: parsedUpload.assessmentOrder,
       };
       setTitle(assessmentConfig.title);
       setSubject(assessmentConfig.subject);
       if (parsedUpload.rows[0]?.grade)
         setTargetGrade(parsedUpload.rows[0].grade);
+      const existingAssessment = rosters.find(
+        (roster) =>
+          roster.title === assessmentConfig.title &&
+          roster.subject === assessmentConfig.subject &&
+          roster.targetGrade === parsedUpload.rows[0]?.grade,
+      );
+      if (!isWrittenExamMode)
+        parsedUpload = retainStoredPerformanceMaximums(
+          parsedUpload,
+          existingAssessment,
+        );
       const matchedRows = matchRowsToStudents(
         parsedUpload.rows,
         studentSnapshot,
       );
-      setPreviewClassFilter("all");
+      const existingOrder = existingAssessment
+        ? getRosterAssessmentOrder(existingAssessment)
+        : parsedUpload.assessmentOrder;
+      const availableOrder = [1, 2].find(
+        (order) =>
+          !rosters.some(
+            (roster) =>
+              roster.targetGrade === parsedUpload.rows[0]?.grade &&
+              getRosterAssessmentOrder(roster) === order,
+          ),
+      );
+      setUploadAssessmentOrder(
+        existingOrder === 1 || existingOrder === 2
+          ? String(existingOrder)
+          : availableOrder
+            ? String(availableOrder)
+            : "",
+      );
+      const fileGrades = [...new Set(matchedRows.map((row) => row.grade))];
+      const fileClasses = [...new Set(matchedRows.map((row) => row.class))];
+      setPreviewGradeFilter(fileGrades.length === 1 ? fileGrades[0] : "all");
+      setPreviewClassFilter(fileClasses.length === 1 ? fileClasses[0] : "all");
+      setPreviewNumberFilter("all");
       setPreviewPage(1);
+      setEditingUploadMaximums(false);
+      setUploadMaximumDrafts([]);
+      setUploadMaximumError("");
+
       setParsed({
         ...parsedUpload,
         title: assessmentConfig.title || parsedUpload.title,
@@ -9454,8 +9725,33 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     );
   };
 
+  const toggleUploadMaximums = () => {
+    if (!parsed || !isSinglePerformanceUpload || saving) return;
+    if (!editingUploadMaximums) {
+      setUploadMaximumDrafts(parsed.items.map((item) => String(item.maxScore)));
+      setUploadMaximumError("");
+      setEditingUploadMaximums(true);
+      return;
+    }
+    const maximums = uploadMaximumDrafts.map((value) =>
+      value.trim() ? roundScore(Number(value)) : NaN,
+    );
+    const error = getPerformanceMaximumError(parsed, maximums);
+    if (error) {
+      setUploadMaximumError(error);
+      return;
+    }
+    setParsed({
+      ...withPerformanceScoreMaximums(parsed, maximums),
+      // Applying the editor makes these maxima an explicit teacher choice.
+      inferredMaxScoreItemIndexes: [],
+    });
+    setUploadMaximumError("");
+    setEditingUploadMaximums(false);
+  };
+
   const saveParsedScores = async () => {
-    if (!parsed || saving) return;
+    if (!parsed || saving || editingUploadMaximums) return;
     setSaving(true);
     const completed: string[] = [];
     try {
@@ -9489,16 +9785,51 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         });
         if (!accepted) return;
       }
-      const source = {
+      let source = {
         ...parsed,
+        title: title.trim(),
         rows: freshRows,
-        subject: subject.trim() || parsed.subject,
+        subject: isWrittenExamMode ? subject.trim() || parsed.subject : "역사",
+        ...(isSinglePerformanceUpload
+          ? { assessmentOrder: Number(selectedUploadAssessmentOrder) }
+          : {}),
       };
-      const uploads = isWrittenExamMode
-        ? [source]
-        : splitPerformanceScoreUpload(source);
-      if (uploads.length === 1)
-        uploads[0].title = title.trim() || uploads[0].title;
+      if (
+        isSinglePerformanceUpload &&
+        ![1, 2].includes(Number(selectedUploadAssessmentOrder))
+      )
+        throw new Error("일람표에 등록할 평가 순서를 선택해 주세요.");
+      if (isSinglePerformanceUpload) {
+        source = retainStoredPerformanceMaximums(
+          source,
+          rosters.find(
+            (roster) =>
+              roster.title === source.title &&
+              roster.subject === source.subject &&
+              roster.targetGrade === source.rows[0]?.grade,
+          ),
+        );
+        const error = getPerformanceMaximumError(
+          source,
+          source.items.map((item) => item.maxScore),
+        );
+        if (error) {
+          setParsed(source);
+          setUploadMaximumDrafts(
+            source.items.map((item) => String(item.maxScore)),
+          );
+          setEditingUploadMaximums(true);
+          setUploadMaximumError(error);
+          return;
+        }
+      }
+      // NEIS columns are separate assessments; grading-result columns are
+      // criteria belonging to one assessment, stored in a single roster.
+      const uploads =
+        !isWrittenExamMode && source.format === "neis"
+          ? splitPerformanceScoreUpload(source)
+          : [source];
+      if (uploads.length === 1) uploads[0].title = title.trim();
       if (uploads.some((upload) => !upload.title.trim()))
         throw new Error("평가명을 입력해 주세요.");
       if (!freshRows.some((row) => row.enteredScoreCount > 0))
@@ -9536,11 +9867,26 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           const previous = rosterSnapshot.exists()
             ? (rosterSnapshot.data() as PerformanceScoreRoster)
             : null;
+          // Re-read criteria in the transaction so another teacher's latest
+          // maxima cannot be replaced by a stale inferred preview.
+          const effectiveUpload = isSinglePerformanceUpload
+            ? retainStoredPerformanceMaximums(upload, previous || undefined)
+            : upload;
+          const effectiveEnteredRows = effectiveUpload.rows.filter(
+            (row) => row.enteredScoreCount > 0,
+          );
+          if (isSinglePerformanceUpload) {
+            const error = getPerformanceMaximumError(
+              effectiveUpload,
+              effectiveUpload.items.map((item) => item.maxScore),
+            );
+            if (error) throw new Error(error);
+          }
           const assessmentOrder =
-            previous?.assessmentOrder || upload.assessmentOrder;
-          const assessmentItems = upload.items.map((item) => {
+            previous?.assessmentOrder || effectiveUpload.assessmentOrder;
+          const assessmentItems = effectiveUpload.items.map((item) => {
             const priorItem =
-              upload.format === "neis"
+              effectiveUpload.format === "neis"
                 ? previous?.items?.find((entry) => entry.name === item.name)
                 : undefined;
             return priorItem
@@ -9553,7 +9899,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 }
               : item;
           });
-          const incomingIds = new Set(enteredRows.map((row) => row.uid));
+          const incomingIds = new Set(
+            effectiveEnteredRows.map((row) => row.uid),
+          );
           const criteriaKey = (items: PerformanceScoreRoster["items"]) =>
             JSON.stringify(
               items.map((item) => ({
@@ -9563,24 +9911,24 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             );
           if (
             previous &&
-            (previous.totalMaxScore !== upload.totalMaxScore ||
+            (previous.totalMaxScore !== effectiveUpload.totalMaxScore ||
               criteriaKey(previous.items || []) !==
-                criteriaKey(upload.items)) &&
+                criteriaKey(effectiveUpload.items)) &&
             (previous.rows || []).some(
               (row) => !incomingIds.has(row.uid) && rosterRowHasScore(row),
             )
           ) {
             throw new Error(
-              `${upload.title}: 기존 명단과 평가 기준이 다릅니다. 같은 평가 기준의 파일을 사용하거나 전체 학급 점수를 함께 업로드해 주세요.`,
+              `${effectiveUpload.title}: 기존 명단과 평가 기준이 다릅니다. 같은 평가 기준의 파일을 사용하거나 전체 학급 점수를 함께 업로드해 주세요.`,
             );
           }
           // A roster change after preview must not route a score to another child.
           const profiles = await Promise.all(
-            enteredRows.map((row) =>
+            effectiveEnteredRows.map((row) =>
               transaction.get(doc(db, "users", row.uid)),
             ),
           );
-          const scoreRefs = enteredRows.map((row) =>
+          const scoreRefs = effectiveEnteredRows.map((row) =>
             doc(
               db,
               "users",
@@ -9592,7 +9940,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           const previousScores = await Promise.all(
             scoreRefs.map((ref) => transaction.get(ref)),
           );
-          enteredRows.forEach((row, index) => {
+          effectiveEnteredRows.forEach((row, index) => {
             const profile = profiles[index];
             const current = profile.exists()
               ? normalizeStudentProfile(profile.id, profile.data())
@@ -9612,8 +9960,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             }
           });
           const timestamp = serverTimestamp();
-          const incomingRows: PerformanceScoreRosterRow[] = enteredRows.map(
-            ({ rowKey: _key, ...row }, index) => {
+          const incomingRows: PerformanceScoreRosterRow[] =
+            effectiveEnteredRows.map(({ rowKey: _key, ...row }, index) => {
               // NEIS has no feedback columns. Reimporting its scores must not
               // erase a teacher's existing explanation or invalidate an
               // otherwise unchanged signed score.
@@ -9624,7 +9972,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 const definition = assessmentItems.find(
                   (entry) => entry.name === item.name,
                 );
-                return upload.format === "neis" && definition
+                return effectiveUpload.format === "neis" && definition
                   ? {
                       ...item,
                       ...(definition.itemKey
@@ -9637,7 +9985,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   : item;
               });
               const retainedItems =
-                upload.format === "neis" && prior
+                effectiveUpload.format === "neis" && prior
                   ? identifiedItems.map((item) => {
                       const priorItem = (prior.items || []).find(
                         (entry: PerformanceScoreItem) =>
@@ -9650,7 +9998,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   : identifiedItems;
               return {
                 ...row,
-                ...(upload.format === "neis" && prior
+                ...(effectiveUpload.format === "neis" && prior
                   ? {
                       feedback: String(prior.feedback || ""),
                       evidence: String(prior.evidence || prior.feedback || ""),
@@ -9660,8 +10008,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 matchStatus: "matched",
                 matchMessage: "학생 명단과 일치합니다.",
               };
-            },
-          );
+            });
           const incomingUids = new Set(incomingRows.map((row) => row.uid));
           const mergedRows = [
             ...(previous?.rows || []).filter(
@@ -9677,11 +10024,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           );
           const rosterPayload = {
             scoreKind: activeScoreKind,
-            ...(upload.scoreContentKind
-              ? { scoreContentKind: upload.scoreContentKind }
+            ...(effectiveUpload.scoreContentKind
+              ? { scoreContentKind: effectiveUpload.scoreContentKind }
               : {}),
-            title: upload.title,
-            subject: upload.subject,
+            title: effectiveUpload.title,
+            subject: effectiveUpload.subject,
             ...(assessmentOrder ? { assessmentOrder } : {}),
             academicYear: year,
             semester,
@@ -9689,12 +10036,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             targetClass: classes.length === 1 ? classes[0] : "",
             classes,
             items: assessmentItems,
-            totalMaxScore: upload.totalMaxScore,
+            totalMaxScore: effectiveUpload.totalMaxScore,
             rows: mergedRows,
             rowCount: mergedRows.length,
             matchedCount: mergedRows.filter((row) => row.uid).length,
             unmatchedCount: mergedRows.filter((row) => !row.uid).length,
-            sourceFileName: upload.sourceFileName,
+            sourceFileName: effectiveUpload.sourceFileName,
             uploadedBy: currentUser?.uid || "",
             uploadedByEmail: currentUser?.email || "",
             createdAt: previous?.createdAt || timestamp,
@@ -9715,12 +10062,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           incomingRows.forEach((row, index) => {
             const content = {
               scoreKind: activeScoreKind,
-              ...(upload.scoreContentKind
-                ? { scoreContentKind: upload.scoreContentKind }
+              ...(effectiveUpload.scoreContentKind
+                ? { scoreContentKind: effectiveUpload.scoreContentKind }
                 : {}),
               rosterId,
-              title: upload.title,
-              subject: upload.subject,
+              title: effectiveUpload.title,
+              subject: effectiveUpload.subject,
               ...(assessmentOrder ? { assessmentOrder } : {}),
               academicYear: year,
               semester,
@@ -9748,7 +10095,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 scoreRefs[index],
                 {
                   ...content,
-                  sourceFileName: upload.sourceFileName,
+                  sourceFileName: effectiveUpload.sourceFileName,
                   uploadedBy: currentUser?.uid || "",
                   uploadedByEmail: currentUser?.email || "",
                   uploadedAt: timestamp,
@@ -12509,11 +12856,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 >
                   업로드 미리보기
                 </h3>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-500">
-                  {parsed.sourceFileName} · 헤더 {parsed.headerRowNumber}행 ·{" "}
-                  {parsed.detectedClasses.length
-                    ? `${parsed.detectedClasses.join(", ")}반`
-                    : "반 정보 없음"}
+                <p className="mt-1 break-keep text-base font-black text-slate-800">
+                  {title.trim() || "평가명을 입력해 주세요."}
+                </p>
+                <p className="mt-1 max-h-16 overflow-y-auto text-xs font-semibold leading-5 text-slate-500">
+                  {previewStudentScope.join(" · ")}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -12555,11 +12902,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
             <div className="overflow-y-auto px-5 py-4">
               <div
-                className={`grid gap-3 ${
-                  isWrittenExamMode
-                    ? "lg:grid-cols-[1fr_180px_180px]"
-                    : "lg:grid-cols-[1fr_220px_180px]"
-                }`}
+                className={`grid gap-3 ${isSinglePerformanceUpload ? "lg:grid-cols-[minmax(0,1fr)_100px_140px]" : "lg:grid-cols-[minmax(0,1fr)_180px]"}`}
               >
                 <label className="block">
                   <span className="text-xs font-black text-slate-600">
@@ -12568,13 +12911,28 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   <input
                     lang="ko"
                     type="text"
+                    aria-label="평가명"
                     value={title}
+                    required
                     readOnly={
                       parsed.format === "neis" && parsed.items.length > 1
                     }
+                    disabled={saving}
                     onChange={(event) => setTitle(event.target.value)}
-                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
+                    aria-invalid={!title.trim()}
+                    aria-describedby={
+                      !title.trim() ? "score-upload-title-required" : undefined
+                    }
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 disabled:bg-slate-100"
                   />
+                  {!title.trim() && (
+                    <span
+                      id="score-upload-title-required"
+                      className="mt-1 block text-xs font-semibold text-rose-600"
+                    >
+                      파일에서 평가명을 찾지 못했습니다. 평가명을 입력해 주세요.
+                    </span>
+                  )}
                 </label>
                 <label className="block">
                   <span className="text-xs font-black text-slate-600">
@@ -12583,61 +12941,194 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   <input
                     lang="ko"
                     type="text"
-                    value={subject}
+                    value={isWrittenExamMode ? subject : "역사"}
+                    readOnly={!isWrittenExamMode}
+                    disabled={saving}
                     onChange={(event) => setSubject(event.target.value)}
-                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 read-only:bg-slate-50 disabled:bg-slate-100"
                   />
                 </label>
-                <label className="block">
+                {isSinglePerformanceUpload && (
+                  <label className="block">
+                    <span className="text-xs font-black text-slate-600">
+                      평가 순서
+                    </span>
+                    <select
+                      aria-label="평가 순서"
+                      value={selectedUploadAssessmentOrder}
+                      onChange={(event) =>
+                        setUploadAssessmentOrder(event.target.value)
+                      }
+                      required
+                      disabled={
+                        saving || Boolean(existingUploadAssessmentOrder)
+                      }
+                      className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 disabled:bg-slate-100"
+                    >
+                      <option value="">선택</option>
+                      <option value="1">1차</option>
+                      <option value="2">2차</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+
+              <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+                {isSinglePerformanceUpload && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-black text-slate-600">
+                      평가 항목
+                    </span>
+                    <ScoreUploadMaximumHelp />
+                    <button
+                      type="button"
+                      onClick={toggleUploadMaximums}
+                      disabled={saving}
+                      className="ml-auto rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      {editingUploadMaximums ? "배점 적용" : "배점 수정"}
+                    </button>
+                    {editingUploadMaximums && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingUploadMaximums(false);
+                          setUploadMaximumError("");
+                        }}
+                        className="rounded-lg px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100"
+                        aria-label="배점 수정 취소"
+                      >
+                        취소
+                      </button>
+                    )}
+                  </div>
+                )}
+                <ul
+                  aria-label="평가 항목"
+                  className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold leading-5 text-slate-600"
+                >
+                  {parsed.items.map((item, index) => (
+                    <li key={`${item.name}-${index}`} className="break-keep">
+                      {item.name}(
+                      {editingUploadMaximums ? (
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0.01"
+                          aria-label={`${item.name} 배점`}
+                          aria-invalid={Boolean(uploadMaximumError)}
+                          aria-describedby={
+                            uploadMaximumError
+                              ? "score-upload-maximum-error"
+                              : undefined
+                          }
+                          value={uploadMaximumDrafts[index] ?? ""}
+                          onChange={(event) => {
+                            setUploadMaximumDrafts((current) =>
+                              current.map((value, itemIndex) =>
+                                itemIndex === index
+                                  ? event.target.value
+                                  : value,
+                              ),
+                            );
+                            setUploadMaximumError("");
+                          }}
+                          className="mx-1 h-8 w-16 rounded border border-slate-300 bg-white px-2 text-right text-xs outline-none focus:border-blue-500"
+                        />
+                      ) : (
+                        formatPerformanceScore(item.maxScore)
+                      )}
+                      점)
+                      {item.ratio
+                        ? ` · ${formatPerformanceScore(item.ratio)}%`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+                {uploadMaximumError && (
+                  <p
+                    id="score-upload-maximum-error"
+                    role="alert"
+                    className="mt-2 text-xs font-semibold text-rose-600"
+                  >
+                    {uploadMaximumError}
+                  </p>
+                )}
+                <div className="mt-1 text-xs font-black text-slate-700">
+                  총점 {formatPerformanceScore(parsed.totalMaxScore)}점
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-end gap-3">
+                <label className="block min-w-24 flex-1 sm:max-w-36">
                   <span className="text-xs font-black text-slate-600">
-                    반 필터
+                    학년
                   </span>
                   <select
+                    aria-label="학년"
+                    value={previewGradeFilter}
+                    onChange={(event) => {
+                      setPreviewGradeFilter(event.target.value);
+                      setPreviewClassFilter("all");
+                      setPreviewNumberFilter("all");
+                    }}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
+                  >
+                    <option value="all">전체 학년</option>
+                    {previewGradeOptions.map((grade) => (
+                      <option key={grade} value={grade}>
+                        {grade}학년
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block min-w-24 flex-1 sm:max-w-36">
+                  <span className="text-xs font-black text-slate-600">반</span>
+                  <select
+                    aria-label="반"
                     value={previewClassFilter}
-                    onChange={(event) =>
-                      setPreviewClassFilter(event.target.value)
-                    }
-                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
+                    onChange={(event) => {
+                      setPreviewClassFilter(event.target.value);
+                      setPreviewNumberFilter("all");
+                    }}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
                   >
                     <option value="all">전체 반</option>
-                    {parsed.detectedClasses.map((classValue) => (
+                    {previewClassOptions.map((classValue) => (
                       <option key={classValue} value={classValue}>
                         {classValue}반
                       </option>
                     ))}
                   </select>
                 </label>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {parsed.items.map((item, index) => (
-                  <div
-                    key={`${item.name}-${index}`}
-                    className="rounded-lg border border-slate-200 px-3 py-3"
+                <label className="block min-w-24 flex-1 sm:max-w-36">
+                  <span className="text-xs font-black text-slate-600">
+                    번호
+                  </span>
+                  <select
+                    aria-label="번호"
+                    value={previewNumberFilter}
+                    onChange={(event) =>
+                      setPreviewNumberFilter(event.target.value)
+                    }
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
                   >
-                    <div
-                      className="truncate text-sm font-black text-slate-800"
-                      title={item.name}
-                    >
-                      {getItemLabel(item)}
-                    </div>
-                    <div className="mt-1 text-xs font-bold text-slate-500">
-                      {formatPerformanceScore(item.maxScore)}점 만점
-                      {item.ratio
-                        ? ` · ${formatPerformanceScore(item.ratio)}%`
-                        : ""}
-                    </div>
-                  </div>
-                ))}
+                    <option value="all">전체 번호</option>
+                    {previewNumberOptions.map((number) => (
+                      <option key={number} value={number}>
+                        {number}번
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm font-bold text-slate-500">
-                  {previewClassFiltered
-                    ? `${previewRangeLabel} / ${filteredPreviewRows.length}명 전체 표시`
-                    : `${previewRangeLabel} / ${filteredPreviewRows.length}명 표시 · ${safePreviewPage} / ${previewTotalPages}쪽`}
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs font-bold text-slate-500">
+                  {previewRangeLabel} / {filteredPreviewRows.length}명 표시 ·{" "}
+                  {safePreviewPage} / {previewTotalPages}쪽
                 </div>
-                {!previewClassFiltered && (
+                {previewTotalPages > 1 && (
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     {previewPageItems.map((item) =>
                       typeof item === "number" ? (
@@ -12645,11 +13136,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           key={item}
                           type="button"
                           onClick={() => setPreviewPage(item)}
-                          className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${
-                            item === safePreviewPage
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                          }`}
+                          className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${item === safePreviewPage ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
                           aria-current={
                             item === safePreviewPage ? "page" : undefined
                           }
@@ -12672,19 +13159,32 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
                 <table
                   className={`w-full text-left text-sm ${
-                    parsedHasObjectiveOmr ? "min-w-[1200px]" : "min-w-[1120px]"
+                    isSinglePerformanceUpload && parsed.items.length >= 4
+                      ? "min-w-[1480px]"
+                      : parsedHasObjectiveOmr
+                        ? "min-w-[1200px]"
+                        : "min-w-[1120px]"
                   }`}
                 >
                   <thead className="bg-slate-50 text-xs font-black text-slate-500">
                     <tr>
-                      <th className="px-3 py-3 text-center">상태</th>
-                      <th className="px-3 py-3 text-center">반</th>
-                      <th className="px-3 py-3 text-center">번호</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center">
+                        상태
+                      </th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center">
+                        학년
+                      </th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center">
+                        반
+                      </th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center">
+                        번호
+                      </th>
                       <th className="px-3 py-3">이름</th>
                       {parsed.items.map((item, index) => (
                         <th
                           key={`${item.name}-${index}-head`}
-                          className="px-3 py-3 text-right"
+                          className="min-w-28 max-w-40 break-keep px-3 py-3 text-right"
                           title={item.name}
                         >
                           {getItemLabel(item)}
@@ -12694,24 +13194,29 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       {parsedHasObjectiveOmr && (
                         <th className="w-24 px-3 py-3 text-center">OMR</th>
                       )}
-                      <th className="w-80 px-3 py-3">감점 요인 및 평가 근거</th>
+                      <th className="w-80 min-w-72 px-3 py-3">
+                        감점 요인 및 평가 근거
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {previewRows.map((row) => (
                       <tr key={row.rowKey} className="align-top">
-                        <td className="px-3 py-3 text-center">
+                        <td className="whitespace-nowrap px-3 py-3 text-center">
                           <span
                             title={row.matchMessage}
-                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${getMatchBadgeClass(row.matchStatus)}`}
+                            className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black ${getMatchBadgeClass(row.matchStatus)}`}
                           >
                             {getMatchLabel(row.matchStatus)}
                           </span>
                         </td>
-                        <td className="px-3 py-3 text-center font-bold text-slate-700">
+                        <td className="whitespace-nowrap px-3 py-3 text-center font-bold text-slate-700">
+                          {row.grade || "-"}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center font-bold text-slate-700">
                           {row.class || "-"}
                         </td>
-                        <td className="px-3 py-3 text-center font-bold text-slate-700">
+                        <td className="whitespace-nowrap px-3 py-3 text-center font-bold text-slate-700">
                           {row.number || "-"}
                         </td>
                         <td className="px-3 py-3">
@@ -12753,16 +13258,18 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             </button>
                           </td>
                         )}
-                        <td className="px-3 py-2">
+                        <td className="w-80 min-w-72 px-3 py-2">
                           <textarea
                             lang="ko"
                             inputMode="text"
+                            aria-label={`${row.grade}학년 ${row.class}반 ${row.number}번 ${row.studentName} 감점 요인 및 평가 근거`}
                             value={row.feedback}
+                            disabled={saving}
                             onChange={(event) =>
                               updateFeedback(row.rowKey, event.target.value)
                             }
                             rows={2}
-                            className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                            className="min-w-64 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
                             placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
                           />
                         </td>
@@ -12785,7 +13292,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               <button
                 type="button"
                 onClick={() => void saveParsedScores()}
-                disabled={saving || parsedSummary.saveableCount === 0}
+                disabled={
+                  saving ||
+                  editingUploadMaximums ||
+                  parsedSummary.saveableCount === 0 ||
+                  !title.trim() ||
+                  (isSinglePerformanceUpload && !selectedUploadAssessmentOrder)
+                }
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 <i className="fas fa-save text-xs" aria-hidden="true"></i>
