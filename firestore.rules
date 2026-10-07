@@ -846,6 +846,12 @@ service cloud.firestore {
       }
     }
 
+    // Upload deletion needs to find scores left under previous student links.
+    // Collection-group queries require an explicit recursive list rule.
+    match /{path=**}/performance_scores/{scoreId} {
+      allow list: if canManagePerformanceScores();
+    }
+
     match /{path=**}/history_dictionary_words/{wordId} {
       allow read: if canUseWestory()
         && (

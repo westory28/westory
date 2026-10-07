@@ -10362,7 +10362,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     setDeletingRosterId(roster.id);
     try {
       const batchQueue = createBatchQueue();
-      batchQueue.delete(doc(db, rosterCollectionPath, roster.id));
+      const deletedPaths = new Set<string>();
+      const queueDelete = (ref: DocumentReference<DocumentData>) => {
+        if (deletedPaths.has(ref.path)) return;
+        deletedPaths.add(ref.path);
+        batchQueue.delete(ref);
+      };
       const staleScoreDocs = await getDocs(
         query(
           collectionGroup(db, PERFORMANCE_SCORE_USER_COLLECTION),
@@ -10374,7 +10379,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           scoreDoc.ref.parent.parent?.id ||
           String((scoreDoc.data() as PerformanceScoreRecord).uid || "");
         if (ownerUid) {
-          batchQueue.delete(
+          queueDelete(
             doc(
               scoreDoc.ref,
               PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
@@ -10382,12 +10387,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             ),
           );
         }
-        batchQueue.delete(scoreDoc.ref);
+        queueDelete(scoreDoc.ref);
       });
       (roster.rows || [])
         .filter((row) => row.uid)
         .forEach((row) => {
-          batchQueue.delete(
+          queueDelete(
             doc(
               db,
               "users",
@@ -10398,7 +10403,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               row.uid,
             ),
           );
-          batchQueue.delete(
+          queueDelete(
             doc(
               db,
               "users",
@@ -10408,6 +10413,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             ),
           );
         });
+      // Keep the upload record available for retry until all score batches pass.
+      batchQueue.delete(doc(db, rosterCollectionPath, roster.id));
       await batchQueue.commit();
       invalidateRosterReadCaches(roster.id);
       if (scoreListRosterId === roster.id || scoreListAllSelected) {
@@ -10442,7 +10449,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       showToast({
         tone: "error",
         title: "삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: getFirestoreWriteErrorMessage(error),
       });
     } finally {
       setDeletingRosterId("");
