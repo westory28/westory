@@ -1,5 +1,5 @@
 import React from "react";
-import lessonReal from "../../assets/public-entry/lesson-real.webp";
+import heroLesson from "../../assets/public-entry/hero-lesson-real.webp";
 import "./entry-hero-laptop.css";
 
 interface EntryHeroLaptopProps {
@@ -10,8 +10,8 @@ interface EntryHeroLaptopProps {
 
 /** The lid and keyboard share one hinge; inherited --open controls only the lid. */
 export default function EntryHeroLaptop({
-  src = lessonReal,
-  alt = "실제 위스토리 빈칸 학습지 화면",
+  src = heroLesson,
+  alt = "실제 위스토리 빈칸 학습지: 조선 건국, 500년 역사의 시작",
   className = "",
 }: EntryHeroLaptopProps) {
   return (

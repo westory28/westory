@@ -6,24 +6,29 @@
 
 The three images total 106,060 bytes, load lazily, and slide inside a CSS tablet. The homepage reuses the game's existing `yi-sunsin-cutin.webp` (206,926 bytes) and `impact-lines.webp` (440,682 bytes) for the commander entrance without importing game logic, playing video or making game requests.
 
-## Current homepage: actual teaching materials (2026-10-01)
+## Current homepage: distinct teaching materials (2026-10-07)
 
-The white-background homepage replaces the synthetic lesson and dashboard crops below with user-authorized teaching materials. These four optimized, content-hashed WebP imports total **574,580 bytes** (about 561 KiB). Images outside the hero load lazily. The homepage does not fetch lessons, maps, student records, or cloud responses from Firebase.
+The white-background homepage uses user-authorized teaching materials. The hero and three lesson slides each show a different published lesson. These five optimized, content-hashed WebP imports total **650,714 bytes** (about 635 KiB), including the unchanged map. Images outside the hero load lazily. The homepage does not fetch lessons, maps, student records, or cloud responses from Firebase.
 
 | File | Bytes | Source |
 | --- | ---: | --- |
-| `worksheet-real.webp` | 143,042 | First page of the published 2026-2 lesson **② 500년 국가의 기틀 확립** |
+| `hero-lesson-real.webp` | 119,848 | Hero: actual `LessonWorksheetStage` in `student-solve` mode with **① 조선 건국, 500년 역사의 시작**, 28 blank definitions |
+| `worksheet-real.webp` | 107,824 | 한눈에 연결: first page of the published 2026-2 lesson **① 훈구와 사림의 대립** |
 | `heritage-real.webp` | 205,924 | First page of the published 2026-2 lesson **② 조선 전기의 문화 유산** |
 | `map-real.webp` | 100,968 | Existing **한반도 역사 지리** map resource |
-| `lesson-real.webp` | 124,646 | Actual `LessonWorksheetStage` in `student-solve` preview with the first lesson's 47 blank definitions; local capture shell |
+| `lesson-real.webp` | 116,150 | 직접 채우기: actual `LessonWorksheetStage` in `student-solve` mode with **③ 조선 전기 지방 행정과 대외 관계**, 43 blank definitions |
 
-The worksheet images retain their original author attribution. The lesson screen is a capture of the real worksheet renderer with persistence disabled, not a claim that its minimal capture-only shell matches the entire authenticated portal. No student account, answer, score, or identifier appears in these assets.
+The worksheet images retain their original author attribution. The two lesson screens are 1340×1050 captures of the real worksheet renderer with no persistence or annotation callbacks, not a claim that their minimal capture-only shell matches the entire authenticated portal. The overview is 1500×1060. No student account, answer, score, or identifier appears in these assets.
+
+The 2026-10-07 refresh checked `site_settings/semester_active` (2026-2) and `isVisibleToStudents=true` before reading the selected lesson images and blank definitions. Source documents under `years/2026/semesters/2/lessons` are `unit-u-1789561583911` (hero), `unit-u-1789646074545` (overview), `unit-u-1789561708924` (fill), and `unit-u-1789646373378` (unchanged heritage). The former repeated **② 500년 국가의 기틀 확립** is no longer used. Keep these four lesson identities distinct when refreshing previews.
+
+Read-only retrieval and capture scripts, local-only fixtures, original images, and capture checks are in ignored `.superloopy/entry-worksheets/` in the task worktree. Source URLs were immediately replaced with local image paths in those fixtures; neither Storage download tokens nor credentials are published. The real renderer displayed all 28/43 blank inputs, with zero external requests and zero rendering errors during capture. Production lesson documents and student work were not changed.
 
 `entryMaterial.ts` contains the existing question 133 about Pericles and its original choices/explanation, plus 22 anonymous word/count aggregates from the actual **한국사라고 하면 떠오르는 것은?** activity. The first-semester activity was used because the current semester's activities had no responses. Only normalized response text was requested; submitter identities were not loaded. Irrelevant words were excluded. `WordCloudView` renders those aggregates locally, with `showSubmitters={false}`. The homepage's word additions and quiz choices are temporary local demonstrations.
 
 The score calculator and growth line graph use explicitly labeled fictional values. The calculator reuses `getGradeBand` and its rounding convention; its 60/40 weights are a demonstration, not a fetched grading plan. Game art still comes from the existing naval-game assets without starting gameplay. CSS builds the device mockups; no video, 3D engine, remote rendering, or animation package is added.
 
-Read-only source retrieval, original files, capture harness, and visual verification evidence are kept in ignored `.superloopy/sessions/2026-10-01-public-entry-v2/`. Raw server metadata and token-bearing source URLs are not published or committed.
+The original 2026-10-01 source retrieval and capture evidence were kept in ignored `.superloopy/sessions/2026-10-01-public-entry-v2/`. The 2026-10-07 browser checks in `.superloopy/entry-worksheets/` cover 1280×900, 768×1024, 390×844, 320×568, and 1280×650: four distinct image sources, all three slides by keyboard, no horizontal page overflow, no failed images or runtime errors, and desktop scroll-driven slide changes. Build (including type and semester-archive checks) and full source formatting checks passed. Raw server metadata and token-bearing source URLs are not published or committed.
 
 ## Previous previews (retained, not used by the current homepage)
 
