@@ -1,32 +1,13 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-} from "firebase/firestore";
-import { db } from "./firebase";
-import { getSemesterCollectionPath, getSemesterDocPath } from "./semesterScope";
+import { auth } from "./firebase";
+import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 
 export type SemesterReadinessStatus = "ready" | "partial" | "danger";
 
-type ReadinessItemKey =
-  | "curriculumTree"
-  | "assessmentSettings"
-  | "finalExam"
-  | "gradingPlans"
-  | "calendar"
-  | "notices"
-  | "pointProducts"
-  | "quizQuestions"
-  | "historyClassrooms"
-  | "mapResources";
-
 export interface SemesterReadinessItem {
-  key: ReadinessItemKey;
+  key: "semesterCore";
   label: string;
   ready: boolean;
+  detail?: string;
   advisory?: boolean;
 }
 
@@ -37,177 +18,79 @@ export interface SemesterReadinessResult {
   missingRequiredCount: number;
 }
 
-const hasKeys = (value: unknown) =>
-  !!value &&
-  typeof value === "object" &&
-  Object.keys(value as Record<string, unknown>).length > 0;
+interface SemesterCoreState {
+  requested: { semesterId: string; revision: number; status: string } | null;
+  error: string | null;
+  readiness: { current: boolean; reason: string | null };
+}
 
-const hasShellReadyFlag = (value: unknown) =>
-  !!value &&
-  typeof value === "object" &&
-  (value as { shellReady?: unknown }).shellReady === true;
-
-const hasCollectionContent = async (path: string) => {
-  const snap = await getDocs(query(collection(db, path), limit(1)));
-  return !snap.empty;
-};
-
-const hasFinalExamContent = (value: unknown) => {
-  if (!value || typeof value !== "object") return false;
-
-  const data = value as {
-    objective?: unknown;
-    subjective?: unknown;
-  };
-
-  const hasObjective =
-    Array.isArray(data.objective) && data.objective.length > 0;
-  const hasSubjective =
-    Array.isArray(data.subjective) &&
-    data.subjective.some(
-      (item) =>
-        item &&
-        typeof item === "object" &&
-        Array.isArray((item as { subItems?: unknown[] }).subItems) &&
-        ((item as { subItems?: unknown[] }).subItems?.length || 0) > 0,
-    );
-
-  return hasObjective || hasSubjective;
+const readinessMessages: Record<string, string> = {
+  CONFLICTING_ACTIVE_SEMESTER: "운영 학기 연결이 일치하지 않습니다.",
+  SEMESTER_ACTIVE_CONFLICT: "운영 학기 연결이 일치하지 않습니다.",
+  SEMESTER_NOT_FOUND: "등록된 학기가 아닙니다.",
+  NO_ACTIVE_SEMESTER: "운영 중인 학기가 없습니다.",
+  SEMESTER_READINESS_NOT_FOUND: "학기 준비도 검증 기록이 없습니다.",
+  SEMESTER_READINESS_STALE: "학기 변경 후 준비도 재검증이 필요합니다.",
+  SEMESTER_READINESS_DEPENDENCY_CHANGED:
+    "운영 자료가 바뀌어 준비도 재검증이 필요합니다.",
+  SEMESTER_POLICY_VERSION_MISMATCH:
+    "현재 준비도 기준으로 다시 검증해야 합니다.",
+  SEMESTER_READINESS_NOT_PASS: "필수 운영 항목의 검증을 완료해 주세요.",
 };
 
 export const loadSemesterReadiness = async (
   year: string,
   semester: string,
 ): Promise<SemesterReadinessResult> => {
-  const config = { year, semester };
-
-  const [
-    curriculumSnap,
-    assessmentSnap,
-    finalExamSnap,
-    gradingPlansMetaSnap,
-    calendarMetaSnap,
-    noticesMetaSnap,
-    gradingPlansReady,
-    calendarReady,
-    noticesReady,
-    pointProductsReady,
-    quizQuestionsReady,
-    historyClassroomsReady,
-    mapResourcesReady,
-  ] = await Promise.all([
-    getDoc(doc(db, getSemesterDocPath(config, "curriculum", "tree"))),
-    getDoc(
-      doc(db, getSemesterDocPath(config, "assessment_config", "settings")),
-    ),
-    getDoc(doc(db, getSemesterDocPath(config, "exam_config", "final_exam"))),
-    getDoc(
-      doc(db, getSemesterDocPath(config, "grading_plans_meta", "current")),
-    ),
-    getDoc(doc(db, getSemesterDocPath(config, "calendar_meta", "current"))),
-    getDoc(doc(db, getSemesterDocPath(config, "notices_meta", "current"))),
-    hasCollectionContent(getSemesterCollectionPath(config, "grading_plans")),
-    hasCollectionContent(getSemesterCollectionPath(config, "calendar")),
-    hasCollectionContent(getSemesterCollectionPath(config, "notices")),
-    hasCollectionContent(getSemesterCollectionPath(config, "point_products")),
-    hasCollectionContent(getSemesterCollectionPath(config, "quiz_questions")),
-    hasCollectionContent(
-      getSemesterCollectionPath(config, "history_classrooms"),
-    ),
-    hasCollectionContent(getSemesterCollectionPath(config, "map_resources")),
-  ]);
-
-  const requiredItems: SemesterReadinessItem[] = [
-    {
-      key: "curriculumTree",
-      label: "\uad50\uc721\uacfc\uc815 \ud2b8\ub9ac",
-      ready:
-        curriculumSnap.exists() &&
-        Array.isArray(curriculumSnap.data().tree) &&
-        curriculumSnap.data().tree.length > 0,
-    },
-    {
-      key: "assessmentSettings",
-      label: "\ud3c9\uac00 \uc124\uc815",
-      ready: assessmentSnap.exists() && hasKeys(assessmentSnap.data()),
-    },
-    {
-      key: "finalExam",
-      label: "\uc2dc\ud5d8 \uad6c\uc131",
-      ready:
-        finalExamSnap.exists() &&
-        (hasFinalExamContent(finalExamSnap.data()) ||
-          hasShellReadyFlag(finalExamSnap.data())),
-    },
-    {
-      key: "gradingPlans",
-      label: "\ucc44\uc810 \uacc4\ud68d",
-      ready: gradingPlansReady || gradingPlansMetaSnap.exists(),
-    },
-    {
-      key: "calendar",
-      label: "\ud559\uc0ac \uc77c\uc815",
-      ready: calendarReady || calendarMetaSnap.exists(),
-    },
-    {
-      key: "notices",
-      label: "\uacf5\uc9c0",
-      ready: noticesReady || noticesMetaSnap.exists(),
-    },
-    {
-      key: "pointProducts",
-      label: "\ud3ec\uc778\ud2b8 \uc0c1\ud488",
-      ready: pointProductsReady,
-    },
-  ];
-
-  const advisoryItems: SemesterReadinessItem[] = [
-    {
-      key: "quizQuestions",
-      label: "\ubb38\uc81c\uc740\ud589",
-      ready: quizQuestionsReady,
-      advisory: true,
-    },
-    {
-      key: "historyClassrooms",
-      label: "\ud788\uc2a4\ud1a0\ub9ac \ud074\ub798\uc2a4\ub8f8",
-      ready: historyClassroomsReady,
-      advisory: true,
-    },
-    {
-      key: "mapResources",
-      label: "\uc9c0\ub3c4 \uc790\ub8cc",
-      ready: mapResourcesReady,
-      advisory: true,
-    },
-  ];
-
-  const criticalAcademicMissing = requiredItems.some(
-    (item) =>
-      (
-        [
-          "curriculumTree",
-          "assessmentSettings",
-          "finalExam",
-        ] as ReadinessItemKey[]
-      ).includes(item.key) && !item.ready,
+  const semesterId = `${year}-${semester}`;
+  if (!/^\d{4}-[12]$/.test(semesterId))
+    throw new Error("학년도를 확인해 주세요.");
+  const owner = auth.currentUser;
+  if (!owner) throw new Error("로그인 후 다시 확인해 주세요.");
+  const call = await getHistoryDictionaryCallable<
+    { semesterId: string },
+    SemesterCoreState
+  >("getSemesterCoreState");
+  const { data } = await call({ semesterId });
+  if (auth.currentUser !== owner)
+    throw new Error("로그인 계정이 바뀌었습니다.");
+  if (
+    !data ||
+    !data.readiness ||
+    typeof data.readiness.current !== "boolean" ||
+    !(data.error === null || typeof data.error === "string") ||
+    !(
+      data.readiness.reason === null ||
+      typeof data.readiness.reason === "string"
+    ) ||
+    (data.requested !== null && data.requested?.semesterId !== semesterId)
+  )
+    throw new Error("학기 준비도 응답을 확인하지 못했습니다.");
+  const ready = Boolean(
+    data.requested &&
+    !data.error &&
+    data.readiness.current &&
+    !data.readiness.reason,
   );
-  const missingRequiredCount = requiredItems.filter(
-    (item) => !item.ready,
-  ).length;
-  const allRequiredReady = missingRequiredCount === 0;
-
-  let status: SemesterReadinessStatus = "partial";
-  if (allRequiredReady) {
-    status = "ready";
-  } else if (criticalAcademicMissing || missingRequiredCount >= 3) {
-    status = "danger";
-  }
-
+  const reason = data.error || data.readiness.reason;
   return {
-    status,
-    requiredItems,
-    advisoryItems,
-    missingRequiredCount,
+    status: ready
+      ? "ready"
+      : data.error || !data.requested
+        ? "danger"
+        : "partial",
+    requiredItems: [
+      {
+        key: "semesterCore",
+        label: "학기 준비도 검증",
+        ready,
+        detail: ready
+          ? "현재 학기의 필수 운영 항목 검증이 완료되었습니다."
+          : readinessMessages[reason || ""] ||
+            "학기 준비도 검증을 확인해 주세요.",
+      },
+    ],
+    advisoryItems: [],
+    missingRequiredCount: ready ? 0 : 1,
   };
 };

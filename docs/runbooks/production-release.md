@@ -80,3 +80,19 @@ PC에는 코드와 개발 도구가 있고 실제 로그인 처리는 공통 Fir
 현재 공개 설정에 해당하는 평가를 준비한다. 가입 승인·세션·학급 권한, 서버 저장/보상,
 운영 프론트엔드와 Firebase 반영을 확인한 뒤 접속을 연다. 개방/제한 설정은 관리자
 재인증과 서버 revision 비교를 사용한다. [점검 및 배포 기록](../reviews/student-opening-20261008.md)을 참고한다.
+
+이번 패치의 Functions 대상은 아래 16개다. 후속 수정에서는 실제 변경한 함수만 선택한다.
+학생 접속 제한을 유지한 채 배포하고, 실패한 대상은 개별 재시도한다.
+
+```powershell
+. .\scripts\use-westory-node.ps1
+firebase deploy --only "functions:executeCommand,functions:executeLessonCorePointCommand,functions:updateStudentMaintenanceConfig,functions:claimStudentLearningReward,functions:getStudentVisibleLessons,functions:completeWeplayGuide,functions:getWeplayManagement,functions:saveWeplayGameSettings,functions:previewWeplayGame,functions:getWeplayPolicy,functions:saveWeplayPolicy,functions:getWeplayLobby,functions:startWeplayGame,functions:submitWeplayAnswer,functions:finishWeplayGame,functions:settleWeplayOnSchedule" --project history-quiz-yongsin
+firebase deploy --only firestore:rules --project history-quiz-yongsin
+firebase deploy --only storage --project history-quiz-yongsin
+firebase functions:list --project history-quiz-yongsin
+```
+
+`applyPointActivityReward`, `createPointPurchaseRequest`, `submitHistoryClassroomResult`는
+폐기된 과거 진입점이다. 로컬의 과거 구현을 이 이름으로 다시 배포해 활성화하지 않는다.
+접속 설정은 관리자 화면의 명령을 사용하고 Firestore 직접 수정으로 revision·학기·감사
+검사를 우회하지 않는다.

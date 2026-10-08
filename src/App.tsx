@@ -15,6 +15,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { AppDialogProvider } from "./components/common/AppDialogProvider";
+import { SensitiveOperationController } from "./components/common/SensitiveOperationController";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 import { loadStudentWeplay } from "./lib/weplayPreload";
 
@@ -171,6 +172,7 @@ const RouteContentFallback: React.FC = () => (
 
 const renderWithLayout = (children: React.ReactNode, _message?: string) => (
   <AppDialogProvider>
+    <SensitiveOperationController />
     <MainLayout>
       <Suspense fallback={<RouteContentFallback />}>{children}</Suspense>
     </MainLayout>

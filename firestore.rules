@@ -354,7 +354,9 @@ service cloud.firestore {
     }
 
     function isTeacherPatchNoteOwner(teacherId) {
-      return canUseWestory()
+      // Both role predicates include the full access fence. Evaluate it once
+      // so a valid maintenance document does not exhaust the rules budget.
+      return isSignedIn()
         && request.auth.uid == teacherId
         && (isAdmin() || isTeacherRole());
     }

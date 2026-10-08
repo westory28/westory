@@ -17,6 +17,8 @@ export interface AppConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   tone?: AppDialogTone;
+  // Runs in the confirm click itself for browser APIs requiring user activation.
+  onConfirm?: () => void;
 }
 
 export interface AppPromptOptions {
@@ -379,7 +381,10 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                 onClick={() =>
                   dialog.kind === "prompt"
                     ? handlePromptConfirm()
-                    : closeDialog(true)
+                    : (() => {
+                        dialog.onConfirm?.();
+                        closeDialog(true);
+                      })()
                 }
                 className={`inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-black shadow-sm transition ${toneMeta.confirmClassName}`}
               >

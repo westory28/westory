@@ -2,14 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import './verify-sensitive-operation.mjs';
 const compile=name=>ts.transpileModule(fs.readFileSync(`src/lib/${name}.ts`,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const load=(source,mocks)=>{const exports={};vm.runInNewContext(source,{exports,require:name=>{if(!mocks[name])throw Error(name);return mocks[name];},Date});return exports;};
-{
- const events=[], user={uid:'admin',email:'westoria28@gmail.com',getIdTokenResult:async()=>({claims:{auth_time:1}}),getIdToken:async()=>events.push('refresh-token')},auth={currentUser:user};
- const api=load(compile('sensitiveOperation'),{'firebase/auth':{GoogleAuthProvider:class{setCustomParameters(){}},reauthenticateWithPopup:async()=>{events.push('reauthenticate');return {user};}},'./firebase':{auth},'./appCheck':{ensureWestoryAppCheck:async()=>events.push('app-check')},'./historyDictionarySession':{getHistoryDictionaryCallable:async name=>async()=>events.push(name),ensureHistoryDictionarySession:async()=>events.push('new-session')}});
- await api.ensureSensitiveOperation();
- assert.deepEqual(events,['app-check','beginApplicationSessionReauthentication','reauthenticate','refresh-token','new-session']);
-}
 const create=()=>{
  const user={uid:'admin',email:'westoria28@gmail.com'},auth={currentUser:user};
  let state={enabled:true,blockedRoles:['student'],bypassUids:['synthetic-bypass'],title:'학생 접속 안내',message:'제한 중',revision:8,updatedBy:'admin'},handler;
