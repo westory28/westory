@@ -1,6 +1,7 @@
 import { auth } from "./firebase";
 import { getYearSemester } from "./semesterScope";
 import { callStudentDataService } from "./studentProfileCommands";
+import { ensureSensitiveOperation } from "./sensitiveOperation";
 
 type Profile = {
   uid: string;
@@ -74,6 +75,7 @@ export const approveStudentRegistration = (
   const existing = flights.get(key);
   if (existing) return existing;
   const flight = (async () => {
+    await ensureSensitiveOperation();
     for (let stage = 0; stage < 4; stage += 1) {
       let envelope = pending.get(key);
       if (!envelope) {

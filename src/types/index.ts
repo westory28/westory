@@ -175,6 +175,7 @@ export interface PointTransaction {
   sourceLabel: string;
   policyId: string;
   createdBy: string;
+  canReverse?: boolean;
   targetMonth?: string;
   targetDate?: string;
   reclaimed?: boolean;

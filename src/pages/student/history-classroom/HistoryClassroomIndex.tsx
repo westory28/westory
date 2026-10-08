@@ -37,6 +37,7 @@ import {
   getYearSemester,
 } from "../../../lib/semesterScope";
 import { readHistoryClassroomPendingSubmission } from "../../../lib/historyClassroomAttemptRecovery";
+import { readCanonicalHistoryResults } from "../../../lib/studentAssessmentResults";
 
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
 const HISTORY_CLASSROOM_ATTEMPT_PREFIX = "westoryHistoryClassroomAttempt";
@@ -473,6 +474,11 @@ const HistoryClassroomIndex: React.FC = () => {
         ]);
 
         const grouped: Record<string, HistoryClassroomResult[]> = {};
+        const canonicalResults = await readCanonicalHistoryResults(
+          config,
+          studentUid,
+          loadedAssignments,
+        );
         resultDocs.forEach((docSnap) => {
           const item = normalizeHistoryClassroomResult(
             docSnap.id,
@@ -483,6 +489,14 @@ const HistoryClassroomIndex: React.FC = () => {
             item,
           ];
         });
+        canonicalResults
+          .filter((item) => item.sourceAvailable)
+          .forEach((item) => {
+            grouped[item.assignmentId] = [
+              ...(grouped[item.assignmentId] || []),
+              item,
+            ];
+          });
         Object.keys(grouped).forEach((key) => {
           grouped[key].sort(compareResultCreatedAt);
         });

@@ -31,6 +31,7 @@ import { InlineLoading, PageLoading } from "../components/common/LoadingState";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
 import { isSemesterArchive } from "../lib/semesterArchive";
 import AuthRecoveryState from "../components/common/AuthRecoveryState";
+import { isStudentRegistrationPending } from "../lib/studentRegistrationStatus";
 import { readSiteSettingDoc } from "../lib/siteSettings";
 import {
   readLocalOnly,
@@ -1343,6 +1344,12 @@ const Login: React.FC = () => {
     const isTeacherEmail = user.email === TEACHER_EMAIL;
     const userRef = doc(db, "users", user.uid);
     const existing = bootstrap.profile;
+    if (isStudentRegistrationPending(existing)) {
+      clearPendingLoginMode();
+      clearRedirectAttempt();
+      clearRoleCache();
+      return;
+    }
     markLoginPerf("westory-login-user-doc-read", {
       exists: !!existing,
       source: "shared-bootstrap",
@@ -1441,6 +1448,9 @@ const Login: React.FC = () => {
     if (!existing || nextRole !== "student") {
       basePayload.teacherPortalEnabled = nextTeacherPortalEnabled;
     }
+    if (!existing && nextRole === "student") {
+      basePayload.registrationApprovalStatus = "PENDING";
+    }
 
     if (
       resolvedName &&
@@ -1525,6 +1535,12 @@ const Login: React.FC = () => {
         }),
       );
       await assertLive();
+    }
+    if (!existing && nextRole === "student") {
+      clearPendingLoginMode();
+      clearRedirectAttempt();
+      clearRoleCache();
+      return;
     }
     const nextPortalMode: LoginMode =
       nextRole === "student" ? "student" : "teacher";
@@ -1692,7 +1708,13 @@ const Login: React.FC = () => {
       autoResumeUidRef.current = null;
       return;
     }
-    if (loading || authBusy || redirectRecoveryPending || authPhase === "error")
+    if (
+      loading ||
+      authBusy ||
+      redirectRecoveryPending ||
+      authPhase === "error" ||
+      authPhase === "registration-pending"
+    )
       return;
     const key = `${authGeneration}:${currentUser.uid}`;
     if (autoResumeUidRef.current === key) return;
@@ -1944,9 +1966,10 @@ const Login: React.FC = () => {
     }
   };
 
-  if (authPhase === "error") {
+  if (authPhase === "error" || authPhase === "registration-pending") {
     return (
       <AuthRecoveryState
+        registrationPending={authPhase === "registration-pending"}
         error={authError}
         onRetry={retryAuth}
         onRestart={() => handleSwitchAccount()}

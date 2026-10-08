@@ -5,9 +5,10 @@ import {
   getDocs,
   orderBy,
   query,
-  where,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
+import { getHistoryDictionaryCallable } from "./historyDictionarySession";
+import { isSemesterArchive } from "./semesterArchive";
 import type { LessonData } from "./lessonData";
 import {
   mergeMapResources,
@@ -68,7 +69,7 @@ const mapResourcesCache = new Map<string, CacheEntry<MapResource[]>>();
 
 const getScopeKey = (config: ConfigLike) => {
   const { year, semester } = getYearSemester(config);
-  return `${year}:${semester}`;
+  return `${auth.currentUser?.uid || ""}:${year}:${semester}`;
 };
 
 const getTreeCacheKey = (tree: StudentCurriculumTreeItem[]) =>
@@ -100,11 +101,6 @@ const isStudentVisibleLesson = (lesson: Partial<LessonData>) =>
 
 const pickStudentLesson = (lessons: Partial<LessonData>[]) =>
   sortLessonsByRecency(lessons)[0] || null;
-
-const readLessonCollection = async (collectionPath: string) => {
-  const snap = await getDocs(collection(db, collectionPath));
-  return snap.docs.map((docSnap) => docSnap.data() as Partial<LessonData>);
-};
 
 const filterTreeByVisibleLessons = (
   tree: StudentCurriculumTreeItem[],
@@ -139,8 +135,11 @@ const readCached = <T>(
   if (cached?.promise) return cached.promise;
 
   const entry: CacheEntry<T> = {};
+  const owner = auth.currentUser;
   entry.promise = loader()
     .then((value) => {
+      if (auth.currentUser !== owner)
+        throw new Error("로그인 계정이 바뀌었습니다.");
       entry.value = value;
       entry.expiresAt = Date.now() + STUDENT_READ_CACHE_TTL_MS;
       entry.promise = undefined;
@@ -173,12 +172,32 @@ export const readStudentCurriculumTree = (config: ConfigLike) =>
 
 const readEffectiveStudentLessons = (config: ConfigLike) =>
   readCached(effectiveLessonsCache, getScopeKey(config), async () => {
-    const scopedLatestLessons = getLatestLessonsByUnitId(
-      await readLessonCollection(getSemesterCollectionPath(config, "lessons")),
-    );
+    const data = await (async () => {
+      if (isSemesterArchive) {
+        // Teacher archives remain read-only and never open a callable session.
+        const snapshot = await getDocs(
+          collection(db, getSemesterCollectionPath(config, "lessons")),
+        );
+        return {
+          scopedLessons: snapshot.docs.map(
+            (item) => item.data() as Partial<LessonData>,
+          ),
+          legacyLessons: [] as Partial<LessonData>[],
+        };
+      }
+      const read = await getHistoryDictionaryCallable<
+        { year: string; semester: string },
+        {
+          scopedLessons: Partial<LessonData>[];
+          legacyLessons: Partial<LessonData>[];
+        }
+      >("getStudentVisibleLessons");
+      return (await read(getYearSemester(config))).data;
+    })();
+    const scopedLatestLessons = getLatestLessonsByUnitId(data.scopedLessons);
     const scopedUnitIds = getLessonUnitIds(scopedLatestLessons);
     const legacyLatestLessons = getLatestLessonsByUnitId(
-      await readLessonCollection("lessons"),
+      data.legacyLessons,
     ).filter(
       (lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()),
     );
@@ -241,22 +260,10 @@ export const readStudentLatestLessonSelection = (
 
 export const readStudentLesson = (config: ConfigLike, unitId: string) =>
   readCached(lessonCache, `${getScopeKey(config)}:${unitId}`, async () => {
-    const semesterQuery = query(
-      collection(db, getSemesterCollectionPath(config, "lessons")),
-      where("unitId", "==", unitId),
+    const { visibleLessons } = await readEffectiveStudentLessons(config);
+    return pickStudentLesson(
+      visibleLessons.filter((lesson) => lesson.unitId === unitId),
     );
-    let snap = await getDocs(semesterQuery);
-    if (snap.empty) {
-      snap = await getDocs(
-        query(collection(db, "lessons"), where("unitId", "==", unitId)),
-      );
-    }
-
-    return snap.empty
-      ? null
-      : pickStudentLesson(
-          snap.docs.map((docSnap) => docSnap.data() as Partial<LessonData>),
-        );
   });
 
 export const readStudentMapResources = (config: ConfigLike) =>

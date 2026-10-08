@@ -12,20 +12,20 @@ import {
   createSecurePurchaseRequest,
   getPointPolicy,
   getPointRankManualAdjustEarnedPointsByUid,
-  getPointWalletByUid,
-  listPointOrders,
-  listPointProducts,
-  listPointTransactionsByUid,
   POINT_POLICY_FALLBACK,
 } from "../../lib/points";
+import {
+  getStudentPointWallet as getPointWalletByUid,
+  listStudentPointOrders as listPointOrders,
+  listStudentPointProducts as listPointProducts,
+  listStudentPointTransactions as listPointTransactionsByUid,
+  getStudentPointHallOfFame as getWisHallOfFameSnapshot,
+} from "../../lib/studentWis";
 import {
   getPointRankDisplay,
   needsPointRankLegacyFallback,
 } from "../../lib/pointRanks";
-import {
-  findWisHallOfFameEntryByUid,
-  getWisHallOfFameSnapshot,
-} from "../../lib/wisHallOfFame";
+import { findWisHallOfFameEntryByUid } from "../../lib/wisHallOfFame";
 import type {
   PointOrder,
   PointOrderStatus,
@@ -413,9 +413,11 @@ const Points: React.FC = () => {
       const requestKey =
         purchaseRequestKey ||
         `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      setPurchaseRequestKey(requestKey);
       await createSecurePurchaseRequest({
         config,
         productId: selectedProduct.id,
+        expectedPrice: selectedProduct.price,
         memo: purchaseMemo,
         requestKey,
       });

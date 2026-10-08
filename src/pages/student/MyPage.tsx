@@ -21,10 +21,10 @@ import { useAuth } from "../../contexts/AuthContext";
 import { subscribePointsUpdated } from "../../lib/appEvents";
 import { db } from "../../lib/firebase";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
+import { getStudentPointWallet as getPointWalletByUid } from "../../lib/studentWis";
 import {
   getPointPolicy,
   getPointRankManualAdjustEarnedPointsByUid,
-  getPointWalletByUid,
   POINT_POLICY_FALLBACK,
   updateStudentProfileIcon,
 } from "../../lib/points";

@@ -20,38 +20,42 @@ service firebase.storage {
     }
 
     function hasActiveApplicationSession() {
+      let path = applicationSessionPath();
+      let session = firestore.get(path).data;
       return isSignedIn()
         && request.auth.token.auth_time is int
-        && firestore.exists(applicationSessionPath())
-        && firestore.get(applicationSessionPath()).data.status == 'active'
-        && firestore.get(applicationSessionPath()).data.authTime == request.auth.token.auth_time
-        && firestore.get(applicationSessionPath()).data.schemaVersion == 2
-        && firestore.get(applicationSessionPath()).data.authorityGeneration == 'w1r2-2026-08-09'
-        && firestore.get(applicationSessionPath()).data.protocolVersion is int
-        && firestore.get(applicationSessionPath()).data.protocolVersion >= 2
-        && firestore.get(applicationSessionPath()).data.sessionRevision is string
-        && firestore.get(applicationSessionPath()).data.sessionRevision.matches('^[a-f0-9]{64}$')
-        && firestore.get(applicationSessionPath()).data.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
-        && firestore.get(applicationSessionPath()).data.generalExpiresAt is timestamp
+        && firestore.exists(path)
+        && session.status == 'active'
+        && session.authTime == request.auth.token.auth_time
+        && session.schemaVersion == 2
+        && session.authorityGeneration == 'w1r2-2026-08-09'
+        && session.protocolVersion is int
+        && session.protocolVersion >= 2
+        && session.sessionRevision is string
+        && session.sessionRevision.matches('^[a-f0-9]{64}$')
+        && session.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
+        && session.generalExpiresAt is timestamp
         && (
-          firestore.get(applicationSessionPath()).data.authorityModeAtOpen != 'ENFORCE'
-          || firestore.get(applicationSessionPath()).data.generalExpiresAt > request.time
+          session.authorityModeAtOpen != 'ENFORCE'
+          || session.generalExpiresAt > request.time
         );
     }
 
     function hasActiveReauthTransition() {
+      let path = applicationSessionTransitionPath();
+      let transition = firestore.get(path).data;
       return isSignedIn()
         && request.auth.token.auth_time is int
-        && firestore.exists(applicationSessionTransitionPath())
-        && firestore.get(applicationSessionTransitionPath()).data.status == 'pending'
-        && firestore.get(applicationSessionTransitionPath()).data.schemaVersion == 1
-        && firestore.get(applicationSessionTransitionPath()).data.authorityGeneration == 'w1r2-2026-08-09'
-        && firestore.get(applicationSessionTransitionPath()).data.protocolVersion is int
-        && firestore.get(applicationSessionTransitionPath()).data.protocolVersion >= 2
-        && firestore.get(applicationSessionTransitionPath()).data.fromAuthTime is int
-        && firestore.get(applicationSessionTransitionPath()).data.fromAuthTime < request.auth.token.auth_time
-        && firestore.get(applicationSessionTransitionPath()).data.expiresAt is timestamp
-        && firestore.get(applicationSessionTransitionPath()).data.expiresAt > request.time;
+        && firestore.exists(path)
+        && transition.status == 'pending'
+        && transition.schemaVersion == 1
+        && transition.authorityGeneration == 'w1r2-2026-08-09'
+        && transition.protocolVersion is int
+        && transition.protocolVersion >= 2
+        && transition.fromAuthTime is int
+        && transition.fromAuthTime < request.auth.token.auth_time
+        && transition.expiresAt is timestamp
+        && transition.expiresAt > request.time;
     }
 
     function hasWestoryIdentity() {
@@ -65,7 +69,7 @@ service firebase.storage {
         'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x',
         'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'
       ]);
-      return padded[0] is string && padded[0].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+      return uids.size() == 0 || (padded[0] is string && padded[0].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
         && padded[1] is string && padded[1].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
         && padded[2] is string && padded[2].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
         && padded[3] is string && padded[3].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
@@ -84,7 +88,7 @@ service firebase.storage {
         && padded[16] is string && padded[16].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
         && padded[17] is string && padded[17].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
         && padded[18] is string && padded[18].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
-        && padded[19] is string && padded[19].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$');
+        && padded[19] is string && padded[19].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$'));
     }
 
     function isValidStudentMaintenanceConfig(config) {
@@ -196,6 +200,38 @@ service firebase.storage {
       return isAdmin();
     }
 
+    function hasRecentHighRiskSession() {
+      let session = firestore.get(applicationSessionPath()).data;
+      return hasActiveApplicationSession()
+        && session.generalExpiresAt > request.time
+        && session.highRiskExpiresAt is timestamp
+        && session.highRiskExpiresAt > request.time
+        && request.time.toMillis() - request.auth.token.auth_time * 1000 >= -60000
+        && request.time.toMillis() - request.auth.token.auth_time * 1000 <= 300000;
+    }
+
+    function canManageWisImages() {
+      return canUseWestory()
+        && hasRecentHighRiskSession()
+        && (request.auth.token.email == "westoria28@gmail.com"
+          || (hasUserProfile()
+            && (userProfile().role == 'teacher' || userProfile().get('teacherPortalEnabled', false) == true)
+            && userProfile().staffPermissions is list
+            && 'point_manage' in userProfile().staffPermissions));
+    }
+
+    function isWisImageUpload() {
+      return request.resource != null
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp']
+        && request.resource.size > 0
+        && request.resource.size <= 4 * 1024 * 1024;
+    }
+
+    function isCurrentWisScope(year, semester) {
+      return year.matches('^\\d{4}$') && semester in ['1', '2']
+        && firestore.get(/databases/(default)/documents/site_settings/semester_active).data.semesterId == year + '-' + semester;
+    }
+
     function isNoticeImageUpload() {
       return request.resource != null
         && request.resource.contentType is string
@@ -271,17 +307,28 @@ service firebase.storage {
 
     match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if false;
+    }
+
+    match /years/{year}/semesters/{semester}/point_products/{productId}/{fileName} {
+      allow create, update: if canManageWisImages()
+        && isCurrentWisScope(year, semester)
+        && fileName.matches('^(image|preview)\\.(jpg|webp)$')
+        && isWisImageUpload();
     }
 
     match /site-settings/interface/hall-of-fame/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if false;
     }
 
-    match /site-settings/interface/{allPaths=**} {
+    match /site-settings/interface/hall-of-fame/{fileName} {
+      allow create, update: if canManageWisImages()
+        && fileName.matches('^podium-[0-9]+\\.jpg$')
+        && isWisImageUpload();
+    }
+
+    match /site-settings/interface/{folder}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if folder != 'hall-of-fame' && isAdmin();
     }
 
     match /source-archive/{assetId}/incoming/{fileName} {

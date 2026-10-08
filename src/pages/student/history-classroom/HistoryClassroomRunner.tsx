@@ -5,46 +5,38 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-  type DocumentData,
-  type DocumentSnapshot,
-} from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import HistoryClassroomAssignmentView from "../../../components/common/HistoryClassroomAssignmentView";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
-import { db, getHttpsCallable } from "../../../lib/firebase";
+import { db } from "../../../lib/firebase";
+import {
+  buildAssessmentDefinitionId,
+  getAssessmentState,
+  saveAssessmentProgress,
+  startAssessmentAttempt,
+  submitAssessmentAttempt,
+  isAssessmentRevisionConflict,
+  type AssessmentAttemptState,
+  type AssessmentSubmissionResult,
+} from "../../../lib/assessmentLifecycle";
 import {
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomRemainingMs,
   getHistoryClassroomStudentRetryResetMs,
-  getHistoryClassroomTimestampMs,
   isHistoryClassroomDeleted,
   isHistoryClassroomPastDue,
   mergeHistoryClassroomMapSnapshot,
   normalizeHistoryClassroomAssignment,
-  normalizeHistoryClassroomResult,
   summarizeHistoryClassroomAnswers,
   type HistoryClassroomAnswerCheck,
   type HistoryClassroomAssignment,
 } from "../../../lib/historyClassroom";
 import { normalizeMapResource } from "../../../lib/mapResources";
-import { notifyHistoryClassroomSubmitted } from "../../../lib/notifications";
-import {
-  buildHistoryClassroomRewardSourceId,
-  claimPointActivityReward,
-} from "../../../lib/points";
+
 import {
   readLocalOnly,
   removeStorage,
@@ -53,12 +45,10 @@ import {
 import { emitSessionActivity } from "../../../lib/sessionActivity";
 import {
   getYearSemester,
-  getSemesterCollectionPath,
   getSemesterDocPath,
 } from "../../../lib/semesterScope";
 
 import {
-  canUseHistoryClassroomLegacySave,
   HISTORY_CLASSROOM_HINT_LIMIT,
   getHistoryClassroomRetryDelay,
   isHistoryClassroomTransientSaveError,
@@ -115,27 +105,6 @@ const readJsonObject = (raw: string | null): Record<string, unknown> | null => {
   }
 };
 
-const readCooldownLockUntil = (
-  assignmentId: string,
-  uid: string,
-  resetAtMs: number | null = null,
-): number => {
-  const key = getCooldownLockKey(assignmentId, uid);
-  const parsed = readJsonObject(readLocalOnly(key));
-  if (!parsed) return 0;
-
-  const savedAt = Number(parsed.savedAt) || 0;
-  if (resetAtMs && savedAt && savedAt <= resetAtMs) {
-    removeStorage(key);
-    return 0;
-  }
-  const blockedUntil = Number(parsed.blockedUntil) || 0;
-  if (blockedUntil > Date.now()) return blockedUntil;
-
-  removeStorage(key);
-  return 0;
-};
-
 const writeCooldownLock = (
   assignmentId: string,
   uid: string,
@@ -149,31 +118,6 @@ const writeCooldownLock = (
       reason,
       savedAt: Date.now(),
     }),
-  );
-};
-
-const getExitCooldownMinutes = (
-  assignment: Pick<HistoryClassroomAssignment, "cooldownMinutes"> | null,
-) => Math.max(0, Number(assignment?.cooldownMinutes || 0));
-
-const getExitCooldownUntil = (
-  assignment: Pick<HistoryClassroomAssignment, "cooldownMinutes">,
-) => Date.now() + getExitCooldownMinutes(assignment) * 60 * 1000;
-
-const writeExitCooldownLock = (
-  assignment: HistoryClassroomAssignment,
-  uid: string,
-  reason: string,
-) => {
-  if (getExitCooldownMinutes(assignment) <= 0) {
-    clearCooldownLock(assignment.id, uid);
-    return;
-  }
-  writeCooldownLock(
-    assignment.id,
-    uid,
-    getExitCooldownUntil(assignment),
-    reason,
   );
 };
 
@@ -234,7 +178,6 @@ type HistoryClassroomExitRequestOptions = Omit<
   "reason"
 >;
 
-const LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION = "history_classroom_results";
 const HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS = 20000;
 
 const withTimeout = async <T,>(
@@ -258,23 +201,6 @@ const withTimeout = async <T,>(
   }
 };
 
-const isRecoverableResultSaveError = (error: unknown) => {
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? String((error as { code?: unknown }).code || "")
-      : "";
-  const message = error instanceof Error ? error.message : String(error || "");
-
-  return (
-    code === "permission-denied" ||
-    code === "unavailable" ||
-    code === "deadline-exceeded" ||
-    message.includes("Missing or insufficient permissions") ||
-    message.includes("timed out") ||
-    message.includes("network")
-  );
-};
-
 const sanitizeHistoryClassroomAnswersForWrite = (
   rawAnswers: Record<string, string>,
 ) =>
@@ -283,44 +209,6 @@ const sanitizeHistoryClassroomAnswersForWrite = (
       .map(([key, value]) => [String(key || "").trim(), String(value ?? "")])
       .filter(([key]) => key),
   );
-
-const sanitizeHistoryClassroomAnswerChecksForWrite = (
-  checks: HistoryClassroomAnswerCheck[],
-) =>
-  checks
-    .map((check, index) => ({
-      blankId: String(check.blankId || "").trim(),
-      blankNumber: Math.max(1, Number(check.blankNumber) || index + 1),
-      page: Math.max(1, Number(check.page) || 1),
-      studentAnswer: String(check.studentAnswer ?? ""),
-      correctAnswer: String(check.correctAnswer ?? ""),
-      correct: check.correct === true,
-    }))
-    .filter((check) => check.blankId);
-
-const submitHistoryClassroomResultViaFunction = async (input: {
-  year: string;
-  semester: string;
-  resultId: string;
-  assignmentId: string;
-  answers: Record<string, string>;
-  status: "passed" | "failed" | "cancelled";
-  cancellationReason: string;
-}) => {
-  const callable = await getHttpsCallable("submitHistoryClassroomResult");
-  const response = await callable(input);
-  return response.data as {
-    resultId: string;
-    score: number;
-    total: number;
-    percent: number;
-    status: "passed" | "failed" | "cancelled";
-    passed: boolean;
-    passThresholdPercent?: number;
-    answerChecks: HistoryClassroomAnswerCheck[];
-    resultCollectionPath?: string;
-  };
-};
 
 const buildHistoryClassroomResultSummary = (
   assignment: HistoryClassroomAssignment,
@@ -401,6 +289,14 @@ const HistoryClassroomRunner: React.FC = () => {
   const [pointNotice, setPointNotice] = useState("");
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [remainingDueMs, setRemainingDueMs] = useState<number | null>(null);
+  const [attemptStarted, setAttemptStarted] = useState(false);
+  const [startingAttempt, setStartingAttempt] = useState(false);
+  const canonicalAttemptRef = useRef<AssessmentAttemptState | null>(null);
+  const confirmedSubmissionRef = useRef<AssessmentSubmissionResult | null>(
+    null,
+  );
+  const serverTimeOffsetMsRef = useRef(0);
+  const progressSaveTailRef = useRef<Promise<unknown>>(Promise.resolve());
   const cancellationInFlightRef = useRef(false);
   const exitNavigationAllowedRef = useRef(false);
   const backGuardRearmRef = useRef<(() => void) | null>(null);
@@ -429,6 +325,7 @@ const HistoryClassroomRunner: React.FC = () => {
         JSON.stringify({
           ...getYearSemester(config),
           resultId: attemptResultIdRef.current,
+          attemptId: canonicalAttemptRef.current?.attemptId || "",
           retryResetAtMs: loadedRetryResetAtRef.current,
           deadlineMs: attemptDeadlineMsRef.current,
           offlineStartedAt: networkOfflineStartedAtRef.current,
@@ -448,125 +345,37 @@ const HistoryClassroomRunner: React.FC = () => {
       if (!assignmentId || !userData?.uid) return;
       setLoading(true);
       setError("");
+      setAssignment(null);
+      setAttemptStarted(false);
+      canonicalAttemptRef.current = null;
+      setPendingSubmitAfterOnline(false);
+      setNextSubmitRetryAt(null);
 
       try {
-        const storedAttempt = readJsonObject(
-          readLocalOnly(getAttemptProgressKey(assignmentId, userData.uid)),
-        );
         const scope = getYearSemester(config);
-        // Read the reset marker when available, without making source access a
-        // prerequisite for recovering a student's already committed result.
+        const definitionId = buildAssessmentDefinitionId(
+          `${scope.year}-${scope.semester}`,
+          "HISTORY_CLASSROOM",
+          assignmentId,
+        );
+        const state = await getAssessmentState({ definitionId });
+        if (!state.definition)
+          throw new Error("현재 응시할 수 없는 역사교실입니다.");
+        if (!["READY", "RECOVERABLE", "SUBMITTED"].includes(state.status)) {
+          throw new Error(
+            state.status === "PERMISSION"
+              ? "이 과제는 현재 계정에 배정되지 않았습니다."
+              : "현재 응시할 수 없는 역사교실입니다.",
+          );
+        }
         assignmentReadPathRef.current = getSemesterDocPath(
           config,
           "history_classrooms",
           assignmentId,
         );
-        let snap: DocumentSnapshot<DocumentData> | null = null;
-        let assignmentReadError: unknown = null;
-        try {
-          snap = await getDoc(doc(db, assignmentReadPathRef.current));
-          if (!snap.exists()) {
-            assignmentReadPathRef.current = `history_classrooms/${assignmentId}`;
-            snap = await getDoc(doc(db, assignmentReadPathRef.current));
-          }
-        } catch (readError) {
-          assignmentReadError = readError;
-        }
-        const resetAtMs = snap?.exists()
-          ? getHistoryClassroomStudentRetryResetMs(
-              normalizeHistoryClassroomAssignment(snap.id, snap.data()),
-              userData.uid,
-            ) || 0
-          : 0;
-        loadedRetryResetAtRef.current = resetAtMs;
-        const isResetDraft =
-          !!storedAttempt &&
-          resetAtMs > 0 &&
-          (typeof storedAttempt.retryResetAtMs === "number" &&
-          Number.isFinite(storedAttempt.retryResetAtMs) &&
-          storedAttempt.retryResetAtMs >= 0
-            ? storedAttempt.retryResetAtMs < resetAtMs
-            : Number(storedAttempt.savedAt) <= resetAtMs);
-        const scopedStoredAttempt =
-          storedAttempt &&
-          !isResetDraft &&
-          (!storedAttempt.year ||
-            (storedAttempt.year === scope.year &&
-              storedAttempt.semester === scope.semester))
-            ? storedAttempt
-            : null;
-        if (isResetDraft) clearAttemptProgress(assignmentId, userData.uid);
-        hintUseCountRef.current = normalizeHistoryClassroomHintUseCount(
-          scopedStoredAttempt?.hintUseCount,
-        );
-        setHintUseCount(hintUseCountRef.current);
-        const queuedSubmission = readHistoryClassroomPendingSubmission(
-          scopedStoredAttempt?.pendingSubmission,
-        );
-        // A committed result belongs to the student even if the teacher later
-        // hides, unassigns or removes the source. Recover only that known result;
-        // do not use this path to read an assignment the student cannot access.
-        if (queuedSubmission && scopedStoredAttempt?.resultId) {
-          let ownResult = null;
-          for (const collectionPath of [
-            getSemesterCollectionPath(config, "history_classroom_results"),
-            LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION,
-          ]) {
-            try {
-              const resultSnap = await getDoc(
-                doc(db, collectionPath, String(scopedStoredAttempt.resultId)),
-              );
-              if (!resultSnap.exists()) continue;
-              const raw = resultSnap.data();
-              if (raw.uid !== userData.uid || raw.assignmentId !== assignmentId)
-                continue;
-              ownResult = normalizeHistoryClassroomResult(resultSnap.id, raw);
-              break;
-            } catch {
-              // An absent/unreadable result must still pass normal assignment
-              // access checks below before any further attempt can start.
-            }
-          }
-          if (ownResult) {
-            const resultOnlyAssignment = normalizeHistoryClassroomAssignment(
-              assignmentId,
-              {
-                title: ownResult.assignmentTitle || "역사교실 제출 결과",
-                passThresholdPercent: ownResult.passThresholdPercent,
-              },
-            );
-            setAssignment(resultOnlyAssignment);
-            setAnswers(queuedSubmission.answers);
-            setCompleted(true);
-            completedRef.current = true;
-            if (ownResult.status === "cancelled") {
-              setResultText(
-                "응시가 취소되었습니다. 목록에서 다시 응시할 수 있는 시간을 확인해 주세요.",
-              );
-            } else {
-              setResultSummary(
-                buildHistoryClassroomResultSummary(
-                  resultOnlyAssignment,
-                  ownResult,
-                ),
-              );
-              setResultDialogOpen(true);
-              void applyHistoryClassroomPointReward(
-                ownResult.id,
-                ownResult.percent,
-              );
-            }
-            resultSummaryShownRef.current = true;
-            clearAttemptProgress(assignmentId, userData.uid);
-            clearCooldownLock(assignmentId, userData.uid);
-            return;
-          }
-        }
-        if (assignmentReadError) throw assignmentReadError;
-        if (!snap?.exists()) {
+        const snap = await getDoc(doc(db, assignmentReadPathRef.current));
+        if (!snap.exists())
           throw new Error("역사교실 자료를 찾을 수 없습니다.");
-        }
-
         let loaded = normalizeHistoryClassroomAssignment(snap.id, snap.data());
         if (
           loaded.sourceType !== "lesson" &&
@@ -580,181 +389,151 @@ const HistoryClassroomRunner: React.FC = () => {
               getSemesterDocPath(config, "map_resources", loaded.mapResourceId),
             ),
           );
-          if (!mapSnap.exists()) {
+          if (!mapSnap.exists())
             mapSnap = await getDoc(
               doc(db, `map_resources/${loaded.mapResourceId}`),
             );
-          }
-          if (mapSnap.exists()) {
+          if (mapSnap.exists())
             loaded = mergeHistoryClassroomMapSnapshot(
               loaded,
               normalizeMapResource(mapSnap.id, mapSnap.data()),
             );
-          }
         }
-
-        if (isHistoryClassroomDeleted(loaded)) {
-          throw new Error("삭제된 역사교실입니다.");
-        }
-
-        const assignedStudentUids =
-          getHistoryClassroomAssignedStudentUids(loaded);
-
-        if (!assignedStudentUids.includes(userData.uid)) {
+        if (isHistoryClassroomDeleted(loaded) || !loaded.isPublished)
+          throw new Error("현재 공개된 과제가 아닙니다.");
+        if (
+          !getHistoryClassroomAssignedStudentUids(loaded).includes(userData.uid)
+        )
           throw new Error("이 과제는 현재 계정에 배정되지 않았습니다.");
-        }
-        if (!loaded.isPublished) {
-          throw new Error("아직 공개되지 않은 과제입니다.");
-        }
-
-        let resultSnap = await getDocs(
-          query(
-            collection(
-              db,
-              getSemesterCollectionPath(config, "history_classroom_results"),
-            ),
-            where("uid", "==", userData.uid),
-            where("assignmentId", "==", loaded.id),
-          ),
-        );
-        if (resultSnap.empty) {
-          resultSnap = await getDocs(
-            query(
-              collection(db, "history_classroom_results"),
-              where("uid", "==", userData.uid),
-              where("assignmentId", "==", loaded.id),
-            ),
-          );
-        }
-
-        const attempts = resultSnap.docs
-          .map((docSnap) =>
-            normalizeHistoryClassroomResult(docSnap.id, docSnap.data()),
+        loadedRetryResetAtRef.current =
+          getHistoryClassroomStudentRetryResetMs(loaded, userData.uid) || 0;
+        if (state.attempt?.status === "SUBMITTED") {
+          const saved = await getDoc(doc(db, state.attempt.resultRef));
+          const result = saved.data();
+          if (
+            !result ||
+            result.studentUid !== userData.uid ||
+            result.attemptId !== state.attempt.attemptId ||
+            result.semesterId !== `${scope.year}-${scope.semester}`
           )
-          .sort(
-            (left, right) =>
-              (getHistoryClassroomTimestampMs(right.createdAt) || 0) -
-              (getHistoryClassroomTimestampMs(left.createdAt) || 0),
-          );
-        const savedAttempt = scopedStoredAttempt;
-        const pendingSubmission = readHistoryClassroomPendingSubmission(
-          savedAttempt?.pendingSubmission,
-        );
-        const latest = attempts[0];
-        const passedAttempt = attempts.find(
-          (attempt) => attempt.status === "passed" || attempt.passed,
-        );
-
-        if (passedAttempt) {
-          throw new Error(
-            "이미 통과한 역사교실입니다. 목록에서 결과를 확인할 수 있습니다.",
-          );
-        }
-
-        const lastAttemptMs = getHistoryClassroomTimestampMs(latest?.createdAt);
-        const retryCooldownMinutes = loaded.cooldownMinutes;
-        const shouldSkipServerCooldown =
-          !!resetAtMs && !!lastAttemptMs && lastAttemptMs <= resetAtMs;
-        if (
-          !pendingSubmission &&
-          lastAttemptMs &&
-          retryCooldownMinutes > 0 &&
-          !shouldSkipServerCooldown
-        ) {
-          const availableAt = lastAttemptMs + retryCooldownMinutes * 60 * 1000;
-          if (availableAt > Date.now()) {
-            const remain = Math.ceil((availableAt - Date.now()) / 60000);
-            throw new Error(`${remain}분 후 다시 응시할 수 있습니다.`);
+            throw new Error("제출 결과를 확인할 수 없습니다.");
+          const previous = {
+            ...result,
+            attemptId: state.attempt.attemptId,
+            revision: state.attempt.revision,
+            status: "SUBMITTED",
+            resultRef: state.attempt.resultRef,
+            replayedSubmission: true,
+          } as AssessmentSubmissionResult;
+          if (previous.percent >= loaded.passThresholdPercent) {
+            canonicalAttemptRef.current = state.attempt;
+            confirmedSubmissionRef.current = previous;
+            const checks = summarizeHistoryClassroomAnswers(
+              loaded,
+              state.attempt.answers,
+            ).checks.map((check) => ({
+              ...check,
+              correct:
+                previous.answerChecks.find((item) => item.id === check.blankId)
+                  ?.correct === true,
+            }));
+            setAssignment(loaded);
+            setAnswers(state.attempt.answers);
+            setCompleted(true);
+            completedRef.current = true;
+            setResultSummary(
+              buildHistoryClassroomResultSummary(loaded, {
+                ...previous,
+                passed: true,
+                answerChecks: checks,
+              }),
+            );
+            setResultDialogOpen(true);
+            resultSummaryShownRef.current = true;
+            clearAttemptProgress(assignmentId, userData.uid);
+            applyHistoryClassroomPointReward(
+              previous.attemptId,
+              previous.percent,
+            );
+            return;
           }
         }
-
-        const localAvailableAt =
-          loaded.cooldownMinutes > 0
-            ? readCooldownLockUntil(loaded.id, userData.uid, resetAtMs)
-            : 0;
-        if (loaded.cooldownMinutes <= 0) {
-          clearCooldownLock(loaded.id, userData.uid);
-        }
-        const rotationGraceUntil = readRotationGraceUntil(
-          loaded.id,
-          userData.uid,
-        );
-        const isRotationResume = rotationGraceUntil > Date.now();
-        if (
-          localAvailableAt > Date.now() &&
-          !isRotationResume &&
-          !savedAttempt
-        ) {
-          const remain = Math.ceil((localAvailableAt - Date.now()) / 60000);
-          throw new Error(`${remain}분 후 다시 응시할 수 있습니다.`);
-        }
-        if (localAvailableAt) {
-          clearCooldownLock(loaded.id, userData.uid);
-        }
-
-        if (isHistoryClassroomPastDue(loaded) && !savedAttempt) {
+        if (isHistoryClassroomPastDue(loaded) && !state.attempt)
           throw new Error("응시 기간이 마감된 역사교실입니다.");
+        if (!state.attempt || state.attempt.status === "SUBMITTED") {
+          canonicalAttemptRef.current = null;
+          confirmedSubmissionRef.current = null;
+          pendingSubmissionRef.current = null;
+          setAssignment(loaded);
+          setAnswers({});
+          setCurrentPage(loaded.pdfPageImages?.[0]?.page || 1);
+          setAttemptStarted(false);
+          setCompleted(false);
+          completedRef.current = false;
+          setRemainingSeconds(null);
+          setRemainingDueMs(getHistoryClassroomRemainingMs(loaded));
+          return;
         }
-
-        const offlineStartedAt = Number(savedAttempt?.offlineStartedAt) || 0;
-        const pausedMs = offlineStartedAt
-          ? Math.max(0, Date.now() - offlineStartedAt)
-          : 0;
-        const savedDeadlineMs =
-          (Number(savedAttempt?.deadlineMs) || 0) +
-          (loaded.timeLimitMinutes > 0 ? pausedMs : 0);
-        networkOfflineStartedAtRef.current = networkOfflineRef.current
-          ? Date.now()
-          : null;
-        const hasSavedDeadline = savedDeadlineMs > 0;
+        const latest = state;
+        const attempt = latest.attempt;
+        if (
+          !attempt ||
+          !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status)
+        ) {
+          throw new Error(
+            "응시 상태가 바뀌었습니다. 목록에서 다시 열어 주세요.",
+          );
+        }
+        canonicalAttemptRef.current = attempt;
+        setAttemptStarted(true);
+        clearCooldownLock(assignmentId, userData.uid);
+        confirmedSubmissionRef.current = null;
+        serverTimeOffsetMsRef.current =
+          Date.parse(latest.serverNowIso) - Date.now();
+        const stored = readJsonObject(
+          readLocalOnly(getAttemptProgressKey(assignmentId, userData.uid)),
+        );
+        // Local recovery belongs to this server attempt only; old attempts and
+        // another semester never extend its deadline or replace its identity.
+        const saved =
+          stored?.attemptId === attempt.attemptId &&
+          stored.year === scope.year &&
+          stored.semester === scope.semester &&
+          Number(stored.savedAt) >= Date.parse(attempt.lastSavedAtIso)
+            ? stored
+            : null;
+        const queued = readHistoryClassroomPendingSubmission(
+          saved?.pendingSubmission,
+        );
+        const pendingSubmission =
+          queued?.status === "cancelled" ? null : queued;
         const savedAnswers =
-          savedAttempt?.answers && typeof savedAttempt.answers === "object"
+          saved?.answers && typeof saved.answers === "object"
             ? Object.fromEntries(
-                Object.entries(savedAttempt.answers).map(([key, value]) => [
+                Object.entries(saved.answers).map(([key, value]) => [
                   key,
                   String(value ?? ""),
                 ]),
               )
-            : {};
-        const savedPageNumber = Number(savedAttempt?.currentPage) || 0;
-        const savedPage = loaded.pdfPageImages?.some(
-          (page) => page.page === savedPageNumber,
-        )
-          ? savedPageNumber
-          : 0;
-        const nextDeadlineMs =
-          loaded.timeLimitMinutes > 0
-            ? hasSavedDeadline
-              ? savedDeadlineMs
-              : Date.now() + loaded.timeLimitMinutes * 60 * 1000
-            : 0;
-        const initialRemainingSeconds =
-          loaded.timeLimitMinutes > 0
-            ? Math.max(0, Math.ceil((nextDeadlineMs - Date.now()) / 1000))
-            : null;
-
-        writeExitCooldownLock(loaded, userData.uid, "attempt-started");
-        attemptResultIdRef.current = String(
-          savedAttempt?.resultId ||
-            doc(
-              collection(
-                db,
-                getSemesterCollectionPath(config, "history_classroom_results"),
-              ),
-            ).id,
+            : attempt.answers;
+        hintUseCountRef.current = normalizeHistoryClassroomHintUseCount(
+          saved?.hintUseCount,
         );
+        setHintUseCount(hintUseCountRef.current);
+        const savedPage =
+          Number(saved?.currentPage || attempt.currentItemId) ||
+          loaded.pdfPageImages?.[0]?.page ||
+          1;
+        attemptResultIdRef.current = attempt.attemptId;
         pendingSubmissionRef.current = pendingSubmission;
         answersRef.current = pendingSubmission?.answers || savedAnswers;
-        currentPageRef.current =
-          savedPage || loaded.pdfPageImages?.[0]?.page || 1;
-        attemptDeadlineMsRef.current = nextDeadlineMs;
+        currentPageRef.current = savedPage;
+        attemptDeadlineMsRef.current = Date.parse(attempt.deadlineAtIso);
         completedRef.current = false;
-        persistAttemptProgress(loaded);
         setAssignment(loaded);
-        setCurrentPage(savedPage || loaded.pdfPageImages?.[0]?.page || 1);
+        setCurrentPage(savedPage);
         setAnswers(answersRef.current);
         setCompleted(false);
-        completedRef.current = false;
         submittingRef.current = false;
         setResultText("");
         setResultSummary(null);
@@ -765,13 +544,26 @@ const HistoryClassroomRunner: React.FC = () => {
         setNextSubmitRetryAt(pendingSubmission ? Date.now() : null);
         resultSummaryShownRef.current = false;
         setPointNotice("");
-        setRemainingSeconds(initialRemainingSeconds);
-        setRemainingDueMs(getHistoryClassroomRemainingMs(loaded));
+        setRemainingSeconds(
+          Math.max(
+            0,
+            Math.ceil(
+              (attemptDeadlineMsRef.current - Date.parse(latest.serverNowIso)) /
+                1000,
+            ),
+          ),
+        );
+        setRemainingDueMs(
+          getHistoryClassroomRemainingMs(
+            loaded,
+            Date.parse(latest.serverNowIso),
+          ),
+        );
         cancellationInFlightRef.current = false;
         exitNavigationAllowedRef.current = false;
         autoSubmitHandledRef.current = !!pendingSubmission;
-        attemptDeadlineMsRef.current = nextDeadlineMs;
-        screenRotationGraceUntilRef.current = rotationGraceUntil;
+        screenRotationGraceUntilRef.current = 0;
+        persistAttemptProgress(loaded);
       } catch (loadError) {
         console.error(loadError);
         setError(
@@ -811,192 +603,177 @@ const HistoryClassroomRunner: React.FC = () => {
     );
   }, [error, loading, assignmentId, config, userData?.uid]);
 
-  const saveResult = async (options: {
+  const beginCanonicalAttempt = async () => {
+    if (!assignment || startingAttempt) return;
+    setStartingAttempt(true);
+    try {
+      const { year, semester } = getYearSemester(config);
+      await startAssessmentAttempt({
+        definitionId: buildAssessmentDefinitionId(
+          `${year}-${semester}`,
+          "HISTORY_CLASSROOM",
+          assignment.id,
+        ),
+      });
+      setAssignmentReloadRevision((revision) => revision + 1);
+    } catch (error) {
+      setResultText(
+        error instanceof Error
+          ? error.message
+          : "응시를 시작하지 못했습니다. 다시 시도해 주세요.",
+      );
+    } finally {
+      setStartingAttempt(false);
+    }
+  };
+
+  const persistCanonicalProgress = () => {
+    const target = canonicalAttemptRef.current?.attemptId;
+    const snapshot = {
+      answers: { ...answersRef.current },
+      currentPage: currentPageRef.current,
+    };
+    const task = progressSaveTailRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const active = canonicalAttemptRef.current;
+        if (
+          !active ||
+          active.attemptId !== target ||
+          !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(active.status)
+        )
+          return;
+        const saved = await saveAssessmentProgress({
+          attemptId: active.attemptId,
+          expectedRevision: active.revision,
+          answers: sanitizeHistoryClassroomAnswersForWrite(snapshot.answers),
+          currentItemId: String(snapshot.currentPage),
+        });
+        const current = canonicalAttemptRef.current;
+        if (
+          current?.attemptId === target &&
+          current.status !== "SUBMITTED" &&
+          current.revision <= saved.revision
+        ) {
+          canonicalAttemptRef.current = {
+            ...current,
+            status: "IN_PROGRESS",
+            revision: saved.revision,
+            answers: snapshot.answers,
+            currentItemId: String(snapshot.currentPage),
+            lastSavedAtIso: saved.savedAtIso,
+          };
+        }
+        return saved;
+      });
+    progressSaveTailRef.current = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    return task;
+  };
+
+  useEffect(() => {
+    if (
+      !assignment ||
+      completed ||
+      submitting ||
+      isNetworkOffline ||
+      pendingSubmissionRef.current
+    )
+      return;
+    const timer = window.setTimeout(() => {
+      void persistCanonicalProgress().catch(() =>
+        setResultText(
+          "답안을 자동 저장하지 못했습니다. 입력 내용은 이 기기에 보관했습니다.",
+        ),
+      );
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [
+    answers,
+    currentPage,
+    assignment,
+    completed,
+    submitting,
+    isNetworkOffline,
+  ]);
+
+  const saveResult = async (_options: {
     status: "passed" | "failed" | "cancelled";
     cancellationReason?: string;
   }) => {
-    if (!assignment || !userData) return null;
-
+    await progressSaveTailRef.current;
+    const active = canonicalAttemptRef.current;
+    if (!assignment || !userData || !active) return null;
     const sanitizedAnswers = sanitizeHistoryClassroomAnswersForWrite(
       pendingSubmissionRef.current?.answers || answersRef.current,
     );
-    const answerSummary = summarizeHistoryClassroomAnswers(
+    const expired =
+      Date.now() + serverTimeOffsetMsRef.current >=
+      Date.parse(active.deadlineAtIso);
+    const reason = pendingSubmissionRef.current?.reason;
+    const submitted = await withTimeout(
+      submitAssessmentAttempt({
+        attemptId: active.attemptId,
+        expectedRevision: active.revision,
+        answers: sanitizedAnswers,
+        submitReason:
+          expired || (reason && reason !== "manual") ? "TIMEOUT" : "STUDENT",
+      }),
+      HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS,
+      "history classroom submission",
+    );
+    canonicalAttemptRef.current = {
+      ...active,
+      status: "SUBMITTED",
+      revision: submitted.revision || active.revision,
+      answers: sanitizedAnswers,
+      resultRef: submitted.resultRef,
+    };
+    confirmedSubmissionRef.current = submitted;
+    const checks = summarizeHistoryClassroomAnswers(
       assignment,
       sanitizedAnswers,
-    );
-    const { checks: answerChecks, score, total, percent } = answerSummary;
-    const sanitizedAnswerChecks =
-      sanitizeHistoryClassroomAnswerChecksForWrite(answerChecks);
-    const passed =
-      options.status === "cancelled"
-        ? false
-        : percent >= assignment.passThresholdPercent;
-    const status =
-      options.status === "cancelled"
-        ? "cancelled"
-        : passed
-          ? "passed"
-          : "failed";
-    const resultCollectionPath = getSemesterCollectionPath(
-      config,
-      "history_classroom_results",
-    );
-    const resultRef = doc(db, resultCollectionPath, attemptResultIdRef.current);
-
-    console.info("[HistoryClassroomRunner] Saving result", {
-      resultCollectionPath,
-      resultId: resultRef.id,
-      assignmentId: assignment.id,
-      uid: userData.uid,
-      score,
-      total,
-      percent,
-      status,
-    });
-
-    try {
-      const { year, semester } = getYearSemester(config);
-      const serverResult = await withTimeout(
-        submitHistoryClassroomResultViaFunction({
-          year,
-          semester,
-          resultId: resultRef.id,
-          assignmentId: assignment.id,
-          answers: sanitizedAnswers,
-          status,
-          cancellationReason: options.cancellationReason || "",
-        }),
-        HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS,
-        "history classroom callable result save",
-      );
-
-      clearAttemptProgress(assignment.id, userData.uid);
-      attemptDeadlineMsRef.current = 0;
-
-      return {
-        score: Number.isFinite(serverResult.score)
-          ? Number(serverResult.score)
-          : score,
-        total: Number.isFinite(serverResult.total)
-          ? Number(serverResult.total)
-          : total,
-        percent: Number.isFinite(serverResult.percent)
-          ? Number(serverResult.percent)
-          : percent,
-        status: serverResult.status || status,
-        passed: serverResult.passed === true,
-        passThresholdPercent: Number.isFinite(serverResult.passThresholdPercent)
-          ? Number(serverResult.passThresholdPercent)
-          : assignment.passThresholdPercent,
-        answerChecks: Array.isArray(serverResult.answerChecks)
-          ? sanitizeHistoryClassroomAnswerChecksForWrite(
-              serverResult.answerChecks,
-            )
-          : sanitizedAnswerChecks,
-        resultId: String(serverResult.resultId || resultRef.id),
-        resultCollectionPath:
-          serverResult.resultCollectionPath || resultCollectionPath,
-        usedLegacyResultFallback: false,
-      };
-    } catch (callableError) {
-      if (!canUseHistoryClassroomLegacySave(callableError)) throw callableError;
-      console.warn(
-        "[HistoryClassroomRunner] Callable result save failed; falling back to direct Firestore result save.",
-        callableError,
-      );
-    }
-
-    const resultPayload = {
-      assignmentId: assignment.id,
-      assignmentTitle: assignment.title,
-      uid: userData.uid,
-      studentName: userData.name || "",
-      studentGrade: String(userData.grade || ""),
-      studentClass: String(userData.class || ""),
-      studentNumber: String(userData.number || ""),
-      answers: sanitizedAnswers,
-      score,
-      total,
-      percent,
-      passThresholdPercent: assignment.passThresholdPercent,
-      passed,
-      status,
-      answerChecks: sanitizedAnswerChecks,
-      cancellationReason: options.cancellationReason || "",
-      createdAt: serverTimestamp(),
-    };
-    let savedResultCollectionPath = resultCollectionPath;
-    let usedLegacyResultFallback = false;
-
-    try {
-      await withTimeout(
-        setDoc(resultRef, resultPayload),
-        HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS,
-        "history classroom semester result save",
-      );
-    } catch (saveError) {
-      if (!isRecoverableResultSaveError(saveError)) {
-        throw saveError;
-      }
-
-      console.warn(
-        "[HistoryClassroomRunner] Semester result write did not complete; falling back to legacy result collection.",
-        saveError,
-      );
-      savedResultCollectionPath = LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION;
-      usedLegacyResultFallback = true;
-      await withTimeout(
-        setDoc(
-          doc(db, LEGACY_HISTORY_CLASSROOM_RESULTS_COLLECTION, resultRef.id),
-          resultPayload,
-        ),
-        HISTORY_CLASSROOM_RESULT_SAVE_TIMEOUT_MS,
-        "history classroom legacy result save",
-      );
-    }
-
-    if (passed) {
-      void notifyHistoryClassroomSubmitted(config, {
-        assignmentId: assignment.id,
-        assignmentTitle: assignment.title,
-        resultId: resultRef.id,
-        percent,
-      }).catch((notificationError) => {
-        console.error(
-          "Failed to create history classroom passed notification:",
-          notificationError,
-        );
-      });
-    }
-
+    ).checks.map((check) => ({
+      ...check,
+      correct:
+        submitted.answerChecks.find((item) => item.id === check.blankId)
+          ?.correct === true,
+    }));
     clearAttemptProgress(assignment.id, userData.uid);
     attemptDeadlineMsRef.current = 0;
-
+    const passed = submitted.percent >= assignment.passThresholdPercent;
     return {
-      score,
-      total,
-      percent,
-      status,
+      score: submitted.score,
+      total: submitted.total,
+      percent: submitted.percent,
+      status: passed ? ("passed" as const) : ("failed" as const),
       passed,
-      answerChecks: sanitizedAnswerChecks,
-      resultId: resultRef.id,
-      resultCollectionPath: savedResultCollectionPath,
-      usedLegacyResultFallback,
+      passThresholdPercent: assignment.passThresholdPercent,
+      answerChecks: checks,
+      resultId: submitted.attemptId,
+      resultCollectionPath: submitted.resultRef,
+      usedLegacyResultFallback: false,
     };
   };
-
   const applyHistoryClassroomPointReward = async (
     resultId: string,
     percent: number,
   ) => {
     try {
-      const pointResult = await claimPointActivityReward({
-        config,
-        activityType: "history_classroom",
-        sourceId: buildHistoryClassroomRewardSourceId(resultId),
-        score: percent,
-        sourceLabel: assignment?.title || "역사교실 제출 완료",
-      });
+      const confirmed = confirmedSubmissionRef.current;
+      const pointResult = confirmed?.reward;
+      if (!confirmed || confirmed.attemptId !== resultId || !pointResult)
+        return;
+      if (confirmed.replayedSubmission) {
+        setPointNotice(
+          pointResult.totalAwarded
+            ? "이 제출의 위스는 이미 반영되었습니다."
+            : pointResult.blockedMessage || "",
+        );
+        return;
+      }
 
       if (
         pointResult.awarded &&
@@ -1066,11 +843,6 @@ const HistoryClassroomRunner: React.FC = () => {
     }
   };
 
-  const getExitCooldownDurationLabel = useCallback(() => {
-    const cooldownMs = getExitCooldownMinutes(assignment) * 60000;
-    return formatRemainingDuration(cooldownMs);
-  }, [assignment]);
-
   const markScreenRotationGrace = useCallback(() => {
     if (!assignment || !userData?.uid) return;
     const until = Date.now() + SCREEN_ROTATION_GRACE_MS;
@@ -1091,76 +863,49 @@ const HistoryClassroomRunner: React.FC = () => {
     reason: string,
     options: { redirectTo?: string | null; replace?: boolean } = {},
   ): Promise<boolean> => {
-    if (pendingSubmissionRef.current) {
-      persistAttemptProgress();
-      const redirectTo =
-        "redirectTo" in options
-          ? options.redirectTo
-          : "/student/history-classroom";
-      if (redirectTo) {
-        exitNavigationAllowedRef.current = true;
-        navigate(redirectTo, { replace: options.replace ?? true });
-      }
-      return true;
-    }
-    if (networkOfflineRef.current) {
-      if (assignment && userData) {
-        writeExitCooldownLock(assignment, userData.uid, reason);
-        clearAttemptProgress(assignment.id, userData.uid);
-      }
-      setCompleted(true);
-      completedRef.current = true;
-      const redirectTo =
-        "redirectTo" in options
-          ? options.redirectTo
-          : "/student/history-classroom";
-      if (redirectTo) {
-        exitNavigationAllowedRef.current = true;
-        navigate(redirectTo, { replace: options.replace ?? true });
-      }
-      return true;
-    }
-
     if (
       !assignment ||
       !userData ||
-      completedRef.current ||
       submittingRef.current ||
       cancellationInFlightRef.current
-    ) {
+    )
       return false;
-    }
-
     cancellationInFlightRef.current = true;
-    pendingSubmissionRef.current = {
-      status: "cancelled",
-      reason: "manual",
-      cancellationReason: reason,
-      answers: { ...answersRef.current },
-    };
-    persistAttemptProgress();
-    writeExitCooldownLock(assignment, userData.uid, reason);
-
-    void saveResult({ status: "cancelled", cancellationReason: reason }).catch(
-      (cancelError) => {
-        console.error("Failed to save cancelled attempt:", cancelError);
-      },
-    );
-    setCompleted(true);
-    completedRef.current = true;
-    setResultSummary(null);
-    setResultText(
-      "화면 이탈로 응시가 자동 취소되었습니다. 재응시 제한이 시작됩니다.",
-    );
-    const redirectTo =
-      "redirectTo" in options
-        ? options.redirectTo
-        : "/student/history-classroom";
-    if (redirectTo) {
-      exitNavigationAllowedRef.current = true;
-      navigate(redirectTo, { replace: options.replace ?? true });
+    try {
+      persistAttemptProgress();
+      if (!completedRef.current && !pendingSubmissionRef.current) {
+        if (networkOfflineRef.current)
+          throw new Error("인터넷 연결 후 답안을 저장하고 나갈 수 있습니다.");
+        // Canonical assessments preserve one server attempt when leaving.
+        // A client must never fabricate a cancelled result or restart its clock.
+        if (
+          Date.now() + serverTimeOffsetMsRef.current <
+          attemptDeadlineMsRef.current
+        )
+          await persistCanonicalProgress();
+      }
+      const redirectTo =
+        "redirectTo" in options
+          ? options.redirectTo
+          : "/student/history-classroom";
+      if (redirectTo) {
+        exitNavigationAllowedRef.current = true;
+        navigate(redirectTo, { replace: options.replace ?? true });
+      }
+      return true;
+    } catch (error) {
+      showToast({
+        tone: "warning",
+        title: "답안을 저장하지 못했습니다.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "연결을 확인한 뒤 다시 시도해 주세요.",
+      });
+      return false;
+    } finally {
+      cancellationInFlightRef.current = false;
     }
-    return true;
   };
 
   const requestExit = useCallback(
@@ -1169,7 +914,7 @@ const HistoryClassroomRunner: React.FC = () => {
         return;
       }
 
-      if (!assignment || completedRef.current) {
+      if (!assignment || !canonicalAttemptRef.current || completedRef.current) {
         if (options.mode === "reload") {
           window.location.reload();
           return;
@@ -1249,27 +994,15 @@ const HistoryClassroomRunner: React.FC = () => {
       setResultText(
         pendingSubmissionRef.current
           ? "답안을 보관했습니다. 인터넷이 연결되면 자동으로 제출합니다."
-          : "인터넷 연결이 끊겨 응시 시간이 멈췄습니다. 답안은 이 기기에 보관됩니다.",
+          : "인터넷 연결이 끊겼습니다. 제한 시간은 계속 진행되며 답안은 이 기기에 보관됩니다.",
       );
       persistAttemptProgress();
     };
 
     const markOnline = () => {
-      const offlineStartedAt = networkOfflineStartedAtRef.current;
       networkOfflineRef.current = false;
       setIsNetworkOffline(false);
       networkOfflineStartedAtRef.current = null;
-
-      if (offlineStartedAt && assignment?.timeLimitMinutes) {
-        const pausedMs = Math.max(0, Date.now() - offlineStartedAt);
-        attemptDeadlineMsRef.current += pausedMs;
-        setRemainingSeconds(
-          Math.max(
-            0,
-            Math.ceil((attemptDeadlineMsRef.current - Date.now()) / 1000),
-          ),
-        );
-      }
 
       if (assignment && userData?.uid) {
         persistAttemptProgress();
@@ -1363,7 +1096,8 @@ const HistoryClassroomRunner: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!assignment || completed || submitting) return undefined;
+    if (!assignment || !attemptStarted || completed || submitting)
+      return undefined;
 
     const guardState =
       window.history.state && typeof window.history.state === "object"
@@ -1396,10 +1130,11 @@ const HistoryClassroomRunner: React.FC = () => {
       backGuardRearmRef.current = null;
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [assignment, completed, requestExit, submitting]);
+  }, [assignment, attemptStarted, completed, requestExit, submitting]);
 
   useEffect(() => {
-    if (!assignment || completed || submitting) return undefined;
+    if (!assignment || !attemptStarted || completed || submitting)
+      return undefined;
 
     const getNavigationRoute = (anchor: HTMLAnchorElement) => {
       const rawHref = anchor.getAttribute("href") || "";
@@ -1455,10 +1190,11 @@ const HistoryClassroomRunner: React.FC = () => {
 
     document.addEventListener("click", handleLinkClick, true);
     return () => document.removeEventListener("click", handleLinkClick, true);
-  }, [assignment, completed, requestExit, submitting]);
+  }, [assignment, attemptStarted, completed, requestExit, submitting]);
 
   useEffect(() => {
-    if (!assignment || completed || submitting) return undefined;
+    if (!assignment || !attemptStarted || completed || submitting)
+      return undefined;
 
     const handleRefreshShortcut = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
@@ -1484,10 +1220,10 @@ const HistoryClassroomRunner: React.FC = () => {
       window.removeEventListener("keydown", handleRefreshShortcut, true);
       document.removeEventListener("keydown", handleRefreshShortcut, true);
     };
-  }, [assignment, completed, requestExit, submitting]);
+  }, [assignment, attemptStarted, completed, requestExit, submitting]);
 
   useEffect(() => {
-    if (!assignment || completed) return undefined;
+    if (!assignment || !attemptStarted || completed) return undefined;
 
     const clearVisibilityCancelTimer = () => {
       if (visibilityCancelTimerRef.current != null) {
@@ -1545,6 +1281,7 @@ const HistoryClassroomRunner: React.FC = () => {
     };
   }, [
     assignment,
+    attemptStarted,
     completed,
     isScreenRotationGraceActive,
     navigate,
@@ -1557,33 +1294,14 @@ const HistoryClassroomRunner: React.FC = () => {
       return undefined;
     }
 
-    const refreshExitCooldown = (reason: string) => {
-      if (
-        networkOfflineRef.current ||
-        completedRef.current ||
-        pendingSubmissionRef.current
-      )
-        return;
-      writeExitCooldownLock(assignment, userData.uid, reason);
-    };
-
-    refreshExitCooldown("attempt-active");
     emitSessionActivity();
     const activityTimerId = window.setInterval(emitSessionActivity, 60 * 1000);
-    const cooldownTimerId = window.setInterval(
-      () => refreshExitCooldown("attempt-active"),
-      15000,
-    );
-
     return () => {
       window.clearInterval(activityTimerId);
-      window.clearInterval(cooldownTimerId);
-      if (!isScreenRotationGraceActive() && !networkOfflineRef.current) {
-        refreshExitCooldown("attempt-left");
-      }
     };
   }, [
     assignment,
+    attemptStarted,
     completed,
     isScreenRotationGraceActive,
     submitting,
@@ -1592,7 +1310,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
   useEffect(() => {
     if (
-      !assignment?.timeLimitMinutes ||
+      !canonicalAttemptRef.current ||
       completed ||
       submitting ||
       isNetworkOffline
@@ -1600,15 +1318,14 @@ const HistoryClassroomRunner: React.FC = () => {
       return undefined;
     }
 
-    if (!attemptDeadlineMsRef.current) {
-      attemptDeadlineMsRef.current =
-        Date.now() + assignment.timeLimitMinutes * 60 * 1000;
-    }
-
     const updateRemainingTime = () => {
       const nextRemainingSeconds = Math.max(
         0,
-        Math.ceil((attemptDeadlineMsRef.current - Date.now()) / 1000),
+        Math.ceil(
+          (attemptDeadlineMsRef.current -
+            (Date.now() + serverTimeOffsetMsRef.current)) /
+            1000,
+        ),
       );
       setRemainingSeconds(nextRemainingSeconds);
       if (nextRemainingSeconds <= 0) {
@@ -1620,7 +1337,13 @@ const HistoryClassroomRunner: React.FC = () => {
     const timerId = window.setInterval(updateRemainingTime, 1000);
 
     return () => window.clearInterval(timerId);
-  }, [assignment?.timeLimitMinutes, completed, isNetworkOffline, submitting]);
+  }, [
+    assignment?.timeLimitMinutes,
+    attemptStarted,
+    completed,
+    isNetworkOffline,
+    submitting,
+  ]);
 
   useEffect(() => {
     if (!assignment || completed || submitting || isNetworkOffline) {
@@ -1646,8 +1369,13 @@ const HistoryClassroomRunner: React.FC = () => {
     return () => window.clearInterval(timerId);
   }, [assignment, completed, isNetworkOffline, submitting]);
 
-  const totalTimeSeconds = assignment?.timeLimitMinutes
-    ? assignment.timeLimitMinutes * 60
+  const totalTimeSeconds = canonicalAttemptRef.current
+    ? Math.max(
+        0,
+        (Date.parse(canonicalAttemptRef.current.deadlineAtIso) -
+          Date.parse(canonicalAttemptRef.current.startedAtIso)) /
+          1000,
+      )
     : 0;
   const timeProgressPercent =
     totalTimeSeconds > 0 && remainingSeconds != null
@@ -1675,6 +1403,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
   const handleAnswerChange = (blankId: string, value: string) => {
     if (
+      !attemptStarted ||
       completedRef.current ||
       submittingRef.current ||
       pendingSubmissionRef.current
@@ -1696,6 +1425,7 @@ const HistoryClassroomRunner: React.FC = () => {
   const handleUseHint = () => {
     if (
       !assignmentRef.current ||
+      !attemptStarted ||
       completedRef.current ||
       submittingRef.current ||
       pendingSubmissionRef.current ||
@@ -1760,7 +1490,7 @@ const HistoryClassroomRunner: React.FC = () => {
         );
       }
 
-      if (!resultSummaryShownRef.current && result.status !== "cancelled") {
+      if (!resultSummaryShownRef.current) {
         resultSummaryShownRef.current = true;
         setResultSummary(
           buildHistoryClassroomResultSummary(assignment, result),
@@ -1771,21 +1501,18 @@ const HistoryClassroomRunner: React.FC = () => {
       retryFailureCountRef.current = 0;
       setPendingSubmitAfterOnline(false);
       setNextSubmitRetryAt(null);
-      setResultText(
-        result.status === "cancelled"
-          ? "응시가 취소되었습니다. 목록에서 다시 응시할 수 있는 시간을 확인해 주세요."
-          : "",
-      );
+      setResultText("");
       submittingRef.current = false;
       setSubmitting(false);
-      if (result.status !== "cancelled")
-        void applyHistoryClassroomPointReward(result.resultId, result.percent);
+      void applyHistoryClassroomPointReward(result.resultId, result.percent);
     } catch (submitError) {
       console.error(submitError);
       retryFailureCountRef.current += 1;
+      const revisionConflict = isAssessmentRevisionConflict(submitError);
       const retryable =
-        networkOfflineRef.current ||
-        isHistoryClassroomTransientSaveError(submitError);
+        !revisionConflict &&
+        (networkOfflineRef.current ||
+          isHistoryClassroomTransientSaveError(submitError));
       setPendingSubmitAfterOnline(true);
       setNextSubmitRetryAt(
         retryable
@@ -1794,9 +1521,11 @@ const HistoryClassroomRunner: React.FC = () => {
           : null,
       );
       setResultText(
-        retryable
-          ? "답안을 보관했습니다. 연결을 확인하고 자동으로 다시 제출합니다."
-          : "답안을 보관했지만 제출하지 못했습니다. 다시 제출해 주세요.",
+        revisionConflict
+          ? "다른 창에서 답안이 변경되었습니다. 현재 답안은 보관했습니다. 새로고침하여 저장 상태를 확인해 주세요."
+          : retryable
+            ? "답안을 보관했습니다. 연결을 확인하고 자동으로 다시 제출합니다."
+            : "답안을 보관했지만 제출하지 못했습니다. 다시 제출해 주세요.",
       );
       persistAttemptProgress();
     } finally {
@@ -1857,10 +1586,18 @@ const HistoryClassroomRunner: React.FC = () => {
         onAnswerChange={handleAnswerChange}
         hintUseCount={hintUseCount}
         onUseHint={handleUseHint}
-        onSubmit={() => void submitAnswers()}
-        submitting={submitting}
-        answersLocked={pendingSubmitAfterOnline}
-        submitLabel={pendingSubmitAfterOnline ? "다시 제출" : undefined}
+        onSubmit={() =>
+          void (attemptStarted ? submitAnswers() : beginCanonicalAttempt())
+        }
+        submitting={submitting || startingAttempt}
+        answersLocked={!attemptStarted || pendingSubmitAfterOnline}
+        submitLabel={
+          !attemptStarted
+            ? "응시 시작"
+            : pendingSubmitAfterOnline
+              ? "다시 제출"
+              : undefined
+        }
         completed={completed}
         resultText={resultSummary ? "" : resultText}
         pointNotice={pointNotice}
@@ -1892,9 +1629,8 @@ const HistoryClassroomRunner: React.FC = () => {
                 id="history-classroom-exit-description"
                 className="mt-3 text-sm leading-6 text-slate-600"
               >
-                {getExitCooldownMinutes(assignment) > 0
-                  ? `지금 나가면 현재 응시는 종료되고 재응시까지 ${getExitCooldownDurationLabel()}을 기다려야 합니다. 계속 풀려면 취소를 눌러 주세요.`
-                  : "지금 나가면 현재 응시는 종료됩니다. 재응시 제한이 0분이라 바로 다시 응시할 수 있습니다. 계속 풀려면 취소를 눌러 주세요."}
+                답안을 저장한 뒤 나갑니다. 제한 시간은 계속 진행되며 다시 열면
+                이어서 풀 수 있습니다.
               </p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">

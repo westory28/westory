@@ -12,6 +12,21 @@ import {
   where,
 } from "firebase/firestore";
 import { db, getHttpsCallable } from "./firebase";
+import { getHistoryDictionaryCallable } from "./historyDictionarySession";
+import {
+  getCanonicalPointWallet,
+  listCanonicalPointWallets,
+  listCanonicalPointStudentTargets,
+  listCanonicalPointTransactions,
+  listCanonicalPointProducts,
+  listCanonicalPointOrders,
+  adjustCanonicalPoints,
+  upsertCanonicalPointProduct,
+  archiveCanonicalPointProduct,
+  reviewCanonicalPointOrder,
+  updateCanonicalPointAdjustment,
+  createCanonicalPurchase,
+} from "./pointEconomyAdapter";
 import {
   buildPointRankPolicySavePayload,
   buildPointRankEarnedPointsByUid,
@@ -136,6 +151,7 @@ export interface ResolvedPointActivityReward {
 interface SecurePurchaseRequestInput {
   config: ConfigLike;
   productId: string;
+  expectedPrice?: number;
   memo?: string;
   requestKey: string;
 }
@@ -815,29 +831,9 @@ export const resolveActivityReward = ({
 };
 
 // Read helpers
-export const getPointWalletByUid = async (config: ConfigLike, uid: string) => {
-  const snap = await getDoc(doc(db, getPointWalletDocPath(config, uid)));
-  if (!snap.exists()) return null;
-  return snap.data() as PointWallet;
-};
+export const getPointWalletByUid = getCanonicalPointWallet;
 
-export const listPointWallets = async (config: ConfigLike) => {
-  const snapshot = await getDocs(
-    collection(db, getPointCollectionPath(config, "point_wallets")),
-  );
-  const items: PointWallet[] = [];
-  snapshot.forEach((item) => {
-    items.push(item.data() as PointWallet);
-  });
-  return [...items].sort((a, b) => {
-    const balanceGap = Number(b.balance || 0) - Number(a.balance || 0);
-    if (balanceGap !== 0) return balanceGap;
-    return String(a.studentName || "").localeCompare(
-      String(b.studentName || ""),
-      "ko",
-    );
-  });
-};
+export const listPointWallets = listCanonicalPointWallets;
 
 export const getPointSchoolOptions = async () => {
   const snap = await getDoc(doc(db, "site_settings", "school_config"));
@@ -890,128 +886,17 @@ const resolveStudentField = (data: Record<string, any>, keys: string[]) => {
   return "";
 };
 
-export const listPointStudentTargets = async () => {
-  const snapshot = await getDocs(collection(db, "users"));
-  const items: PointStudentTarget[] = [];
-
-  snapshot.forEach((item) => {
-    const data = item.data() as Record<string, any>;
-    const email = String(data.email || "").trim();
-    const role = String(data.role || "").trim();
-    if (role === "teacher") return;
-
-    const studentName = resolveStudentField(data, [
-      "studentName",
-      "name",
-      "displayName",
-      "nickname",
-      "customName",
-    ]);
-    const grade = resolveStudentField(data, ["studentGrade", "grade"]);
-    const className = resolveStudentField(data, ["studentClass", "class"]);
-    const number = resolveStudentField(data, ["studentNumber", "number"]);
-
-    if (!studentName || (!grade && !className && !number)) return;
-
-    items.push({
-      uid: item.id,
-      studentName,
-      grade,
-      class: className,
-      number,
-      email,
-    });
-  });
-
-  return items.sort((a, b) => {
-    const gradeGap = Number(a.grade || 0) - Number(b.grade || 0);
-    if (gradeGap !== 0) return gradeGap;
-    const classGap = Number(a.class || 0) - Number(b.class || 0);
-    if (classGap !== 0) return classGap;
-    const numberGap = Number(a.number || 0) - Number(b.number || 0);
-    if (numberGap !== 0) return numberGap;
-    return String(a.studentName || "").localeCompare(
-      String(b.studentName || ""),
-      "ko",
-    );
-  });
-};
+export const listPointStudentTargets = (config: ConfigLike) =>
+  listCanonicalPointStudentTargets(config);
 
 export const listPointStudentTargetsByClass = async (
   grade: string,
   className: string,
-) => {
-  const normalizedGrade = String(grade || "").trim();
-  const normalizedClass = String(className || "").trim();
-  if (!normalizedGrade || !normalizedClass) return [];
-
-  const queryCombos: Array<[string, string]> = [
-    ["studentGrade", "studentClass"],
-    ["studentGrade", "class"],
-    ["grade", "studentClass"],
-    ["grade", "class"],
-  ];
-  const seen = new Set<string>();
-  const items: PointStudentTarget[] = [];
-
-  const snapshots = await Promise.all(
-    queryCombos.map(([gradeField, classField]) =>
-      getDocs(
-        query(
-          collection(db, "users"),
-          where(gradeField, "==", normalizedGrade),
-          where(classField, "==", normalizedClass),
-        ),
-      ),
-    ),
+  config: ConfigLike,
+) =>
+  (await listCanonicalPointStudentTargets(config)).filter(
+    (student) => student.grade === grade && student.class === className,
   );
-
-  snapshots.forEach((snapshot) => {
-    snapshot.forEach((item) => {
-      if (seen.has(item.id)) return;
-      const data = item.data() as Record<string, any>;
-      const role = String(data.role || "").trim();
-      if (role === "teacher") return;
-
-      const studentName = resolveStudentField(data, [
-        "studentName",
-        "name",
-        "displayName",
-        "nickname",
-        "customName",
-      ]);
-      const resolvedGrade = resolveStudentField(data, [
-        "studentGrade",
-        "grade",
-      ]);
-      const resolvedClass = resolveStudentField(data, [
-        "studentClass",
-        "class",
-      ]);
-      const number = resolveStudentField(data, ["studentNumber", "number"]);
-      if (!studentName) return;
-
-      seen.add(item.id);
-      items.push({
-        uid: item.id,
-        studentName,
-        grade: resolvedGrade,
-        class: resolvedClass,
-        number,
-        email: String(data.email || "").trim(),
-      });
-    });
-  });
-
-  return items.sort((a, b) => {
-    const numberGap = Number(a.number || 0) - Number(b.number || 0);
-    if (numberGap !== 0) return numberGap;
-    return String(a.studentName || "").localeCompare(
-      String(b.studentName || ""),
-      "ko",
-    );
-  });
-};
 
 export const getPointPolicy = async (config: ConfigLike) => {
   const snap = await getDoc(doc(db, getPointPolicyDocPath(config)));
@@ -1019,56 +904,7 @@ export const getPointPolicy = async (config: ConfigLike) => {
   return normalizePointPolicy(snap.data() as Partial<PointPolicy>);
 };
 
-export const listPointTransactions = async (
-  config: ConfigLike,
-  options?: { uid?: string; type?: PointTransactionType; limitCount?: number },
-) => {
-  const constraints = [];
-  if (options?.uid) constraints.push(where("uid", "==", options.uid));
-  if (options?.type) constraints.push(where("type", "==", options.type));
-  const safeLimit =
-    typeof options?.limitCount === "number" && options.limitCount > 0
-      ? Math.floor(options.limitCount)
-      : 0;
-
-  let snapshot;
-  const baseRef = collection(
-    db,
-    getPointCollectionPath(config, "point_transactions"),
-  );
-  if (safeLimit > 0) {
-    try {
-      snapshot = await getDocs(
-        query(
-          baseRef,
-          ...constraints,
-          orderBy("createdAt", "desc"),
-          queryLimit(safeLimit),
-        ),
-      );
-    } catch (error) {
-      console.warn("Falling back to unordered point transaction query:", error);
-      snapshot =
-        constraints.length > 0
-          ? await getDocs(query(baseRef, ...constraints))
-          : await getDocs(baseRef);
-    }
-  } else {
-    snapshot =
-      constraints.length > 0
-        ? await getDocs(query(baseRef, ...constraints))
-        : await getDocs(baseRef);
-  }
-  const items: PointTransaction[] = [];
-  snapshot.forEach((item) => {
-    items.push({
-      id: item.id,
-      ...(item.data() as Omit<PointTransaction, "id">),
-    });
-  });
-  const sorted = sortByTimestampDesc(items, "createdAt");
-  return safeLimit > 0 ? sorted.slice(0, safeLimit) : sorted;
-};
+export const listPointTransactions = listCanonicalPointTransactions;
 
 export const listPointTransactionsByUid = async (
   config: ConfigLike,
@@ -1114,97 +950,17 @@ export const getPointActivityTransaction = async (
   } as PointTransaction;
 };
 
-export const listPointProducts = async (
-  config: ConfigLike,
-  activeOnly = false,
-) => {
-  const snapshot = await getDocs(
-    query(
-      collection(db, getPointCollectionPath(config, "point_products")),
-      orderBy("sortOrder", "asc"),
-    ),
-  );
-  const items: PointProduct[] = [];
-  snapshot.forEach((item) => {
-    items.push({ id: item.id, ...(item.data() as Omit<PointProduct, "id">) });
-  });
-  return activeOnly ? items.filter((item) => item.isActive) : items;
-};
+export const listPointProducts = listCanonicalPointProducts;
 
-export const listPointOrders = async (
-  config: ConfigLike,
-  options?: { uid?: string; limitCount?: number },
-) => {
-  const baseRef = collection(
-    db,
-    getPointCollectionPath(config, "point_orders"),
-  );
-  const safeLimit =
-    typeof options?.limitCount === "number" && options.limitCount > 0
-      ? Math.floor(options.limitCount)
-      : 0;
-  let snapshot;
-  try {
-    const constraints = [
-      ...(options?.uid ? [where("uid", "==", options.uid)] : []),
-      orderBy("requestedAt", "desc"),
-      ...(safeLimit > 0 ? [queryLimit(safeLimit)] : []),
-    ];
-    snapshot = await getDocs(query(baseRef, ...constraints));
-  } catch (error) {
-    console.warn("Falling back to broad point order query:", error);
-    snapshot = options?.uid
-      ? await getDocs(query(baseRef, where("uid", "==", options.uid)))
-      : await getDocs(query(baseRef, orderBy("requestedAt", "desc")));
-  }
-  const items: PointOrder[] = [];
-  snapshot.forEach((item) => {
-    items.push({ id: item.id, ...(item.data() as Omit<PointOrder, "id">) });
-  });
-  const sorted = sortByTimestampDesc(items, "requestedAt");
-  return typeof options?.limitCount === "number"
-    ? sorted.slice(0, options.limitCount)
-    : sorted;
-};
+export const listPointOrders = listCanonicalPointOrders;
 
 // Admin write helpers
 // Important:
 // Admin mutations now also use trusted Callable Functions so clients never write wallet/order/ledger
 // state directly. Policy/product management remains direct for now because those documents are
 // teacher-only and do not mutate student balances.
-export const adjustPoints = async ({
-  config,
-  uid,
-  delta,
-  sourceId,
-  sourceLabel,
-  policyId,
-  mode,
-  actor,
-}: AdjustPointsInput) => {
-  if (!Number.isFinite(delta) || delta === 0) {
-    throw new Error("Point delta must be a non-zero finite number.");
-  }
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("adjustTeacherPoints");
-  const result = await callable({
-    year,
-    semester,
-    uid,
-    delta,
-    sourceId: String(sourceId || "").trim(),
-    sourceLabel: String(sourceLabel || "").trim(),
-    policyId: String(policyId || "").trim(),
-    mode: mode || (delta > 0 ? "grant" : "reclaim"),
-    actorUid: actor.uid,
-  });
-  return result.data as {
-    walletId: string;
-    transactionId: string;
-    balance: number;
-    type: Extract<PointTransactionType, "manual_adjust" | "manual_reclaim">;
-  };
-};
+export const adjustPoints = (input: AdjustPointsInput) =>
+  adjustCanonicalPoints(input);
 
 export const buildPointPolicyPayload = (
   policy: Partial<PointPolicy>,
@@ -1267,102 +1023,15 @@ export const upsertPointPolicy = async (
   return payload as PointPolicy;
 };
 
-export const upsertPointProduct = async (
-  config: ConfigLike,
-  product: Partial<PointProduct> & Pick<PointProduct, "name" | "price">,
-  actor: ActorInfo,
-) => {
-  const productRef = product.id
-    ? doc(db, getPointCollectionPath(config, "point_products"), product.id)
-    : doc(collection(db, getPointCollectionPath(config, "point_products")));
-  const payload = {
-    name: String(product.name || "").trim(),
-    description: String(product.description || "").trim(),
-    price: Number(product.price || 0),
-    stock: Number(product.stock || 0),
-    isActive: product.isActive !== false,
-    sortOrder: Number(product.sortOrder || 0),
-    imageUrl: String(product.imageUrl || "").trim(),
-    previewImageUrl: String(product.previewImageUrl || "").trim(),
-    imageStoragePath: String(product.imageStoragePath || "").trim(),
-    previewStoragePath: String(product.previewStoragePath || "").trim(),
-    updatedAt: serverTimestamp(),
-    updatedBy: actor.uid,
-    ...(product.id ? {} : { createdAt: serverTimestamp() }),
-  };
-  await setDoc(productRef, payload, { merge: true });
-  return {
-    id: productRef.id,
-    ...payload,
-  };
-};
+export const upsertPointProduct = upsertCanonicalPointProduct;
 
-export const deletePointProduct = async (
-  config: ConfigLike,
-  productId: string,
-) => {
-  const normalizedProductId = String(productId || "").trim();
-  if (!normalizedProductId) {
-    throw new Error("삭제할 상품 정보가 올바르지 않습니다.");
-  }
+export const deletePointProduct = archiveCanonicalPointProduct;
 
-  await deleteDoc(
-    doc(
-      db,
-      getPointCollectionPath(config, "point_products"),
-      normalizedProductId,
-    ),
-  );
-};
+export const reviewPointOrder = (input: ReviewPointOrderInput) =>
+  reviewCanonicalPointOrder(input);
 
-export const reviewPointOrder = async ({
-  config,
-  orderId,
-  nextStatus,
-  actor,
-  memo,
-}: ReviewPointOrderInput) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("reviewTeacherPointOrder");
-  const result = await callable({
-    year,
-    semester,
-    orderId,
-    nextStatus,
-    memo: String(memo || "").trim(),
-    actorUid: actor.uid,
-  });
-  return result.data as {
-    orderId: string;
-    transactionId: string;
-    status: PointOrderStatus;
-    duplicate?: boolean;
-  };
-};
-
-export const updatePointAdjustment = async ({
-  config,
-  transactionId,
-  action,
-  nextDelta,
-}: UpdatePointAdjustmentInput) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("updateTeacherPointAdjustment");
-  const result = await callable({
-    year,
-    semester,
-    transactionId,
-    action,
-    nextDelta: action === "update" ? Number(nextDelta || 0) : undefined,
-  });
-  return result.data as {
-    walletId: string;
-    transactionId: string;
-    balance: number;
-    delta: number;
-    cancelled: boolean;
-  };
-};
+export const updatePointAdjustment = (input: UpdatePointAdjustmentInput) =>
+  updateCanonicalPointAdjustment(input);
 
 export const updateStudentProfileIcon = async ({
   config,
@@ -1400,18 +1069,18 @@ export const claimPointActivityReward = async ({
   config,
   activityType,
   sourceId,
-  sourceLabel,
-  score,
 }: ClaimPointActivityInput) => {
+  if (activityType !== "lesson" && activityType !== "think_cloud")
+    throw new Error("활동 완료 결과는 해당 학습 화면에서 확인해 주세요.");
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("applyPointActivityReward");
+  const callable = await getHistoryDictionaryCallable(
+    "claimStudentLearningReward",
+  );
   const result = await callable({
     year,
     semester,
     activityType,
     sourceId,
-    sourceLabel: String(sourceLabel || "").trim(),
-    score: score === null || score === undefined ? undefined : Number(score),
   });
   return result.data as PointActivityRewardResult;
 };
@@ -1483,29 +1152,9 @@ export const buildPointRewardFeedback = ({
   return null;
 };
 
-export const createSecurePurchaseRequest = async ({
-  config,
-  productId,
-  memo,
-  requestKey,
-}: SecurePurchaseRequestInput) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("createPointPurchaseRequest");
-  const result = await callable({
-    year,
-    semester,
-    productId,
-    memo: String(memo || "").trim(),
-    requestKey,
-  });
-  return result.data as {
-    created: boolean;
-    duplicate: boolean;
-    orderId: string;
-    transactionId: string;
-    balance: number;
-  };
-};
+export const createSecurePurchaseRequest = (
+  input: SecurePurchaseRequestInput,
+) => createCanonicalPurchase(input);
 
 export {
   buildWisHallOfFameClassKey,

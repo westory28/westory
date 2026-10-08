@@ -26,6 +26,7 @@ export interface HistoryClassroomBlank {
 }
 
 export interface HistoryClassroomAssignment {
+  contentRevision?: number;
   id: string;
   title: string;
   description: string;
@@ -254,6 +255,7 @@ export const normalizeHistoryClassroomAssignment = (
 
   return {
     id,
+    contentRevision: Math.max(0, Number(raw.contentRevision) || 0),
     title: String(raw.title || "").trim() || "역사교실",
     description: String(raw.description || "").trim(),
     ...normalizeHistoryClassroomSource(raw),

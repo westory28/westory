@@ -1,41 +1,29 @@
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  addDoc,
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  where,
-} from "firebase/firestore";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import WordCloudView from "../../../components/common/WordCloudView";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
-import { db } from "../../../lib/firebase";
 import {
   buildThinkCloudRewardSourceId,
   claimPointActivityReward,
 } from "../../../lib/points";
 import {
-  buildThinkCloudResponsesCollectionPath,
-  buildThinkCloudSessionCollectionPath,
-  buildThinkCloudStateDocPath,
   DEFAULT_THINK_CLOUD_OPTIONS,
   formatClassLabel,
   formatGradeLabel,
   getInputValidationError,
   normalizeResponseText,
-  normalizeSchoolField,
-  normalizeThinkCloudOptions,
   type ThinkCloudOptions,
   type ThinkCloudResponse,
-  type ThinkCloudSession,
 } from "../../../lib/thinkCloud";
 
-type SessionWithId = ThinkCloudSession & { id: string };
+import {
+  subscribeThinkCloudState,
+  submitThinkCloudResponse,
+  type CanonicalThinkCloudSession as SessionWithId,
+} from "../../../lib/thinkCloudLifecycle";
 
 const BANNED_WORDS = ["욕설", "비속어"];
 
@@ -43,7 +31,7 @@ const ThinkCloud: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
   const { showToast } = useAppToast();
   const [activeSessionId, setActiveSessionId] = useState("");
-  const activeSessionIdRef = useRef("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const [sessions, setSessions] = useState<SessionWithId[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [responses, setResponses] = useState<
@@ -67,121 +55,39 @@ const ThinkCloud: React.FC = () => {
     !!selectedSession && selectedSession.status === "paused";
   const options: ThinkCloudOptions =
     selectedSession?.options || DEFAULT_THINK_CLOUD_OPTIONS;
-  const studentGrade = normalizeSchoolField(userData?.grade);
-  const studentClass = normalizeSchoolField(userData?.class);
-  const stateDocPath = useMemo(
-    () => buildThinkCloudStateDocPath(config),
-    [config],
-  );
-  const sessionCollectionPath = useMemo(
-    () => buildThinkCloudSessionCollectionPath(config),
-    [config],
-  );
-  const responseSessionId = selectedSession?.id || "";
-  const responsesCollectionPath = useMemo(
-    () =>
-      responseSessionId
-        ? buildThinkCloudResponsesCollectionPath(config, responseSessionId)
-        : "",
-    [config, responseSessionId],
-  );
-
   useEffect(() => {
-    const stateRef = doc(db, stateDocPath);
-    const unsubscribe = onSnapshot(stateRef, (snap) => {
-      if (!snap.exists()) {
-        activeSessionIdRef.current = "";
+    if (!currentUser) return;
+    return subscribeThinkCloudState(
+      config,
+      "student",
+      selectedSessionId,
+      (state) => {
+        setSessions(state.thinkCloudSessions);
+        setResponses(state.thinkCloudResponses);
+        setActiveSessionId(
+          state.thinkCloudManagedClasses[0]?.activeSessionId || "",
+        );
+        setSelectedSessionId((selected) =>
+          state.thinkCloudSessions.some((session) => session.id === selected)
+            ? selected
+            : state.thinkCloudManagedClasses[0]?.activeSessionId ||
+              state.thinkCloudSessions[0]?.id ||
+              "",
+        );
+      },
+      (error) => {
+        setSessions([]);
+        setResponses([]);
         setActiveSessionId("");
-        return;
-      }
-      const nextActiveSessionId = String(
-        snap.data().activeSessionId || "",
-      ).trim();
-      activeSessionIdRef.current = nextActiveSessionId;
-      setActiveSessionId(nextActiveSessionId);
-    });
-    return () => unsubscribe();
-  }, [stateDocPath]);
-
-  useEffect(() => {
-    if (!studentGrade || !studentClass) {
-      setSessions([]);
-      setSelectedSessionId("");
-      return;
-    }
-
-    const sessionsRef = collection(db, sessionCollectionPath);
-    const q = query(
-      sessionsRef,
-      where("targetGrade", "==", studentGrade),
-      where("targetClass", "==", studentClass),
+        setSelectedSessionId("");
+        setSubmitError(
+          error instanceof Error
+            ? error.message
+            : "생각모아를 불러오지 못했습니다.",
+        );
+      },
     );
-
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const loaded = snap.docs.map((item) => {
-        const raw = item.data() as ThinkCloudSession;
-        return {
-          ...raw,
-          id: item.id,
-          options: normalizeThinkCloudOptions(raw.options),
-        };
-      });
-      loaded.sort((a, b) => {
-        const ta = Number(
-          (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        const tb = Number(
-          (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        return tb - ta;
-      });
-      setSessions(loaded);
-      setSelectedSessionId((currentSelectedSessionId) => {
-        if (
-          currentSelectedSessionId &&
-          loaded.some((item) => item.id === currentSelectedSessionId)
-        ) {
-          return currentSelectedSessionId;
-        }
-        if (loaded.length === 0) {
-          return "";
-        }
-        const defaultId =
-          loaded.find((item) => item.id === activeSessionIdRef.current)?.id ||
-          loaded[0].id;
-        return defaultId;
-      });
-    });
-
-    return () => unsubscribe();
-  }, [sessionCollectionPath, studentClass, studentGrade]);
-
-  useEffect(() => {
-    if (!responsesCollectionPath) {
-      setResponses([]);
-      return;
-    }
-
-    const responsesRef = collection(db, responsesCollectionPath);
-    const unsubscribe = onSnapshot(responsesRef, (snap) => {
-      const loaded = snap.docs.map((item) => ({
-        id: item.id,
-        ...(item.data() as ThinkCloudResponse),
-      }));
-      loaded.sort((a, b) => {
-        const ta = Number(
-          (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        const tb = Number(
-          (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        return tb - ta;
-      });
-      setResponses(loaded);
-    });
-
-    return () => unsubscribe();
-  }, [responsesCollectionPath]);
+  }, [config, currentUser, selectedSessionId, refreshKey]);
 
   const cloudEntries = useMemo(() => {
     const buckets = new Map<
@@ -242,11 +148,6 @@ const ThinkCloud: React.FC = () => {
     setSubmitLoading(true);
     setSubmitError("");
     try {
-      const responsesPath = buildThinkCloudResponsesCollectionPath(
-        config,
-        selectedSessionId,
-      );
-
       if (!options.allowDuplicateByStudent) {
         const hasSubmittedByCurrentUser = responses.some(
           (item) => String(item.uid || "").trim() === currentUser.uid,
@@ -269,15 +170,13 @@ const ThinkCloud: React.FC = () => {
         }
       }
 
-      const payload: ThinkCloudResponse = {
-        uid: currentUser.uid,
-        displayName: (userData?.name || "학생").trim() || "학생",
-        textRaw: rawText,
-        textNormalized: normalizedText,
-        createdAt: serverTimestamp(),
-      };
-
-      const responseRef = await addDoc(collection(db, responsesPath), payload);
+      const responseRef = await submitThinkCloudResponse(
+        config,
+        selectedSession,
+        rawText,
+        normalizedText,
+      );
+      setRefreshKey((key) => key + 1);
       setDraftInput("");
 
       try {
@@ -286,7 +185,7 @@ const ThinkCloud: React.FC = () => {
           activityType: "think_cloud",
           sourceId: buildThinkCloudRewardSourceId(
             selectedSessionId,
-            responseRef.id,
+            responseRef.responseId,
           ),
           sourceLabel: selectedSession.title || "생각모아 참여",
         });

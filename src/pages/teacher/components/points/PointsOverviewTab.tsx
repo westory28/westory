@@ -422,6 +422,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                     POINT_TRANSACTION_TYPE_LABELS[labelKey] || transaction.type;
                   const isEditable =
                     canManage &&
+                    transaction.canReverse === true &&
                     ["manual_adjust", "manual_reclaim"].includes(
                       transaction.type,
                     ) &&

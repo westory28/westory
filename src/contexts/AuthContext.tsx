@@ -113,6 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
   const startupControllerRef = useRef<AuthStartupController | null>(null);
   const authGenerationRef = useRef(0);
+  const authPhaseRef = useRef<AuthPhase>("resolving");
   const perfPhasesRef = useRef(new Set<string>());
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [configReady, setConfigReady] = useState(false);
@@ -147,6 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
+      if (authPhaseRef.current !== "ready") return;
       if (systemConfigLoadRef.current) {
         return systemConfigLoadRef.current;
       }
@@ -156,7 +158,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           const data = await readFreshSiteSettingDoc<SystemConfig>("config");
           if (
             auth.currentUser !== user ||
-            authGenerationRef.current !== generation
+            authGenerationRef.current !== generation ||
+            authPhaseRef.current !== "ready"
           )
             return;
           setConfig(normalizeSystemConfig(data));
@@ -166,7 +169,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         } catch (e) {
           if (
             auth.currentUser !== user ||
-            authGenerationRef.current !== generation
+            authGenerationRef.current !== generation ||
+            authPhaseRef.current !== "ready"
           )
             return;
           console.error("Failed to load system config");
@@ -197,6 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
+      if (authPhaseRef.current !== "ready") return;
       if (menuConfigLoadRef.current) {
         return menuConfigLoadRef.current;
       }
@@ -206,7 +211,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           const data = await readFreshSiteSettingDoc<MenuConfig>("menu_config");
           if (
             auth.currentUser !== user ||
-            authGenerationRef.current !== generation
+            authGenerationRef.current !== generation ||
+            authPhaseRef.current !== "ready"
           )
             return;
           setMenuConfig(data ? sanitizeMenuConfig(data) : cloneDefaultMenus());
@@ -215,7 +221,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         } catch (e) {
           if (
             auth.currentUser !== user ||
-            authGenerationRef.current !== generation
+            authGenerationRef.current !== generation ||
+            authPhaseRef.current !== "ready"
           )
             return;
           console.error("Failed to load menu config");
@@ -260,7 +267,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             error,
           ),
         change: (state) => {
-          if (authGenerationRef.current !== state.generation) {
+          const lostReadyProfile =
+            authPhaseRef.current === "ready" && state.phase !== "ready";
+          authPhaseRef.current = state.phase;
+          if (
+            authGenerationRef.current !== state.generation ||
+            lostReadyProfile
+          ) {
             authGenerationRef.current = state.generation;
             perfPhasesRef.current.clear();
             systemConfigLoadRef.current = null;

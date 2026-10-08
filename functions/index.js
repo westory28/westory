@@ -7,6 +7,9 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 
 initializeApp();
 Object.assign(exports, require('./sessionAuthority').callableExports);
+exports.updateStudentMaintenanceConfig = require('./studentMaintenance').createUpdateStudentMaintenanceConfigCallable({
+  assertActiveApplicationSession: require('./sessionAuthority').assertActiveApplicationSession,
+});
 exports.manageAcademicCalendar = require('./academicCalendar').manageAcademicCalendar;
 Object.assign(exports, require('./sourceArchiveBeta'));
 Object.assign(exports, require('./lessonPdfBeta'));
@@ -16,6 +19,10 @@ const REGION = 'asia-northeast3';
 exports.checkStudentAttendance = onCall(
   { region: REGION },
   require('./studentAttendance').createStudentAttendanceHandler({ db }),
+);
+exports.getStudentVisibleLessons = onCall(
+  { region: REGION },
+  require('./studentLessonAccess').createStudentLessonAccessHandler({ db }),
 );
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
@@ -5701,10 +5708,16 @@ exports.createHistoryClassroomExemptionRequest = onCall({ region: REGION }, asyn
 });
 
 Object.assign(exports, require('./weplay').createWeplayFunctions({
-  db, onCall, onSchedule, HttpsError, FieldValue, REGION,
+  db,
+  onCall: (options, handler) => onCall(options, async (request) => {
+    await require('./scoreWorkflowGuard').assertScoreWorkflowSession(request);
+    return handler(request);
+  }),
+  onSchedule, HttpsError, FieldValue, REGION,
   assertAllowedWestoryUser, assertPointManager, assertPointReader, getUserProfile,
   assertWeplayReader: assertHistoryDictionaryManager,
   assertWeplayManager: assertHistoryDictionaryWriteManager,
+  canonicalWallet: require('./studentWisWallet').createStudentWisWallet({ db }),
   ensureWallet, loadPolicy, getCurrentRankEarnedTotal, buildWalletBase,
   buildWalletRankState, createTransactionPayload, markWisHallOfFameDirtySafely,
 }));
@@ -8450,3 +8463,10 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
 // Notice images use the guarded server transport; direct Storage writes stay closed.
 exports.uploadNoticeImageContent = require('./noticeImages').uploadNoticeImageContent;
 exports.deleteNoticeImageContent = require('./noticeImages').deleteNoticeImageContent;
+
+// Preserve the deployed canonical command closure. Never replace this gateway
+// with an older local implementation or export its unrelated nested callables.
+exports.executeCommand = require('./productionGateway/productionSource').executeCommand;
+exports.executeLessonCorePointCommand = require('./productionGateway/productionSource').executeLessonCorePointCommand;
+
+exports.claimStudentLearningReward = onCall({ region: REGION }, require("./studentLearningReward").createStudentLearningRewardHandler({ db, loadPolicy }));

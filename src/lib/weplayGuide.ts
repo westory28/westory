@@ -1,4 +1,5 @@
-import { auth, getHttpsCallable } from "./firebase";
+import { auth } from "./firebase";
+import { getHistoryDictionaryCallable as getHttpsCallable } from "./historyDictionarySession";
 
 export interface WeplayGuideCompletion {
   uid: string;
@@ -40,7 +41,7 @@ export function completeWeplayGuide(
     const call = await getHttpsCallable<
       { accountUid: string },
       WeplayGuideCompletion
-    >("completeWeplayGuide");
+    >("completeWeplayGuide", { reuseSessionProof: true });
     assertCurrentAccount(expectedUid);
     const result = (await call({ accountUid: expectedUid })).data;
     assertCurrentAccount(expectedUid);

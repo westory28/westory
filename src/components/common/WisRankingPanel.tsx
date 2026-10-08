@@ -2,11 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "./LoadingState";
 import PointRankBadge from "./PointRankBadge";
-import {
-  getWisHallOfFameGradeLeaderboard,
-  getWisHallOfFameSnapshot,
-} from "../../lib/wisHallOfFame";
+import { getWisHallOfFameGradeLeaderboard } from "../../lib/wisHallOfFame";
 import { getPointPolicy } from "../../lib/points";
+import { getStudentPointHallOfFame } from "../../lib/studentWis";
+import { getCanonicalWisHallOfFame } from "../../lib/pointEconomyAdapter";
 import {
   getPointRankDefaultEmojiValue,
   getPointRankDisplay,
@@ -79,7 +78,9 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
     void (async () => {
       try {
         const [snapshot, pointPolicy] = await Promise.all([
-          getWisHallOfFameSnapshot(config),
+          hallOfFamePath?.startsWith("/student")
+            ? getStudentPointHallOfFame(config)
+            : getCanonicalWisHallOfFame(config),
           getPointPolicy(config).catch((error) => {
             console.warn("Failed to load wis ranking policy:", error);
             return null;

@@ -16,7 +16,7 @@ function fixture(){
     if(state.hold)await state.hold;
     if(state.fail)throw state.fail;
     return {data:{status:'active',authTime:epoch,authorityGeneration:'w1r2-2026-08-09',protocolVersion:2,revision:state.revision}};
-   }return {data:{ok:true}};
+   }if(state.commandHold)await state.commandHold;if(state.commandFail)throw state.commandFail;return {data:{ok:true}};
   }};
   throw Error(name);
  },Map,Promise,Date,Number,Error,Object,RegExp});
@@ -45,4 +45,27 @@ for(const change of ['identity','epoch','invalid','closed']){
  f.auth.currentUser=f.user;f.state.fail=new Error('network');await assert.rejects(f.api.ensureHistoryDictionarySession());f.state.fail=null;await f.api.ensureHistoryDictionarySession();
  assert.equal(f.calls.length,2);
 }
-console.log('PASS: session handshake, single flight, proof injection, identity/auth epoch isolation, invalid/closed-session rejection, failed-flight recovery; no command replay.');
+{
+ const f=fixture();
+ const call=await f.api.getHistoryDictionaryCallable('submitWeplayAnswer',{reuseSessionProof:true});
+ await call({eventId:'one'});await call({eventId:'two'});
+ assert.equal(f.calls.filter(c=>c.name==='openApplicationSession').length,1);
+ assert.equal(f.calls.filter(c=>c.name==='submitWeplayAnswer').length,2);
+ f.state.commandFail=Object.assign(new Error('revoked'),{code:'functions/unauthenticated'});
+ await assert.rejects(call({eventId:'three'}));
+ assert.equal(f.calls.filter(c=>c.name==='submitWeplayAnswer').length,3,'Denied command is never replayed');
+ f.state.commandFail=null;await call({eventId:'manual-retry'});
+ assert.equal(f.calls.filter(c=>c.name==='openApplicationSession').length,2,'A later explicit retry refreshes proof');
+ f.auth.currentUser={uid:f.user.uid};await call({eventId:'new-login'});
+ assert.equal(f.calls.filter(c=>c.name==='openApplicationSession').length,3,'A new auth object never reuses another login proof');
+}
+for (const change of ['identity','same-uid-identity','epoch']) {
+ const f=fixture();let release;f.state.commandHold=new Promise(r=>release=r);
+ const call=await f.api.getHistoryDictionaryCallable('executeCommand');const pending=call({commandId:'in-flight'});
+ await new Promise(r=>setImmediate(r));assert.equal(f.calls.filter(c=>c.name==='executeCommand').length,1);
+ if(change==='epoch')f.state.epoch++;
+ else f.auth.currentUser={uid:change==='identity'?'other':f.user.uid};
+ release();await assert.rejects(pending, /로그인 상태가 변경/);
+ assert.equal(f.calls.filter(c=>c.name==='executeCommand').length,1,'Discard stale response without replaying the command');
+}
+console.log('PASS: session handshake, single flight, proof injection, identity/auth epoch isolation before and after responses, invalid/closed-session rejection, failed-flight recovery; no command replay.');

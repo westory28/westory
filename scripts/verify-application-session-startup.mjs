@@ -78,6 +78,10 @@ const user = (uid, epoch = 1234) => ({
 const permissions = load(compile("../src/lib/permissions.ts"), {});
 const startup = load(compile("../src/lib/authStartup.ts"), {
   "./permissions": permissions,
+  "./studentRegistrationStatus": load(
+    compile("../src/lib/studentRegistrationStatus.ts"),
+    {},
+  ),
 });
 const sessionCode = compile("../src/lib/applicationSession.ts");
 const authCode = compile("../src/contexts/AuthContext.tsx");
@@ -307,8 +311,8 @@ for (const role of ["teacher", "student", "staff", "unexpected"])
       await h.finishSession();
       assert.equal(
         h.settings.length,
-        1,
-        "Settings wait for the verified session",
+        0,
+        "Settings wait for the verified session and approved profile",
       );
       assert.equal(h.state.phase, "loading-profile");
       h.profile({ role }, { fromCache: true });
@@ -321,6 +325,7 @@ for (const role of ["teacher", "student", "staff", "unexpected"])
         staffPermissions: ["lesson_read", "lesson_read", "invented_permission"],
       });
       assert.equal(h.state.phase, "ready");
+      assert.equal(h.settings.length, 1);
       assert.equal(h.state.currentUser, account);
       assert.equal(h.state.userData.uid, account.uid);
       assert.equal(
@@ -384,9 +389,56 @@ for (const role of ["teacher", "student", "staff", null])
       const result = await claim;
       assert.equal(result.profile?.role ?? null, role);
       assert.equal(h.state.phase, role ? "ready" : "onboarding");
-      assert.equal(h.settings.length, 1);
+      assert.equal(h.settings.length, role ? 1 : 0);
       assert.equal(h.snapshots.length, 1, "Use the existing live listener");
       assert.equal(h.timer.size, 0);
+      h.controller.dispose();
+    },
+  );
+for (const status of [
+  "PENDING",
+  "APPROVED_PENDING_ACCOUNT",
+  "",
+  null,
+  false,
+  undefined,
+])
+  await check(
+    `Unapproved registration ${String(status)} stays outside the portal`,
+    async () => {
+      const h = startupHarness(),
+        account = user("synthetic-pending-student");
+      await h.observe(account);
+      await h.finishSession();
+      h.profile({ role: "student", registrationApprovalStatus: status });
+      assert.equal(h.state.phase, "registration-pending");
+      assert.equal(h.state.currentUser, null);
+      assert.equal(h.state.onboardingUser, account);
+      assert.equal(h.settings.length, 0);
+      assert.equal(h.timer.size, 0);
+      await h.controller.waitForProfile(
+        h.state.generation,
+        account,
+        (profile) => profile.registrationApprovalStatus === status,
+      );
+      for (const metadata of [
+        { fromCache: true },
+        { hasPendingWrites: true },
+      ]) {
+        h.profile(
+          { role: "student", registrationApprovalStatus: "APPROVED" },
+          metadata,
+        );
+        assert.equal(h.state.currentUser, null);
+        assert.equal(h.settings.length, 0);
+      }
+      h.profile({ role: "student", registrationApprovalStatus: "APPROVED" });
+      assert.equal(h.state.phase, "ready");
+      assert.equal(h.state.currentUser, account);
+      assert.equal(h.settings.length, 1);
+      h.profile({ role: "student", registrationApprovalStatus: "PENDING" });
+      assert.equal(h.state.phase, "registration-pending");
+      assert.equal(h.state.currentUser, null);
       h.controller.dispose();
     },
   );
@@ -1366,15 +1418,16 @@ for (const role of ["teacher", "student"])
       assert.equal(h.value.currentUser, null);
       h.sessions[0].gate.resolve();
       await h.render();
-      assert.deepEqual(
-        h.reads.slice().sort(),
-        ["config", "menu_config", `users/${account.uid}`].sort(),
-      );
+      assert.deepEqual(h.reads.slice().sort(), [`users/${account.uid}`]);
       h.profile({ role }, 0, { fromCache: true });
       await h.render();
       assert.equal(h.value.currentUser, null);
       h.profile({ role });
       await h.render();
+      assert.deepEqual(
+        h.reads.slice().sort(),
+        ["config", "menu_config", `users/${account.uid}`].sort(),
+      );
       assert.equal(h.value.authPhase, "ready");
       assert.equal(h.value.currentUser, account);
       assert.equal(h.value.userData.uid, account.uid);
@@ -1390,6 +1443,32 @@ for (const role of ["teacher", "student"])
     },
   );
 await check(
+  "Provider withholds settings until registration approval and clears them on revocation",
+  async () => {
+    const h = providerHarness();
+    await h.render();
+    await h.observe(user("synthetic-provider-pending"));
+    h.sessions[0].gate.resolve();
+    h.profile({ role: "student", registrationApprovalStatus: "PENDING" });
+    await h.render();
+    assert.equal(h.value.authPhase, "registration-pending");
+    assert.equal(h.value.currentUser, null);
+    assert.equal(h.reads.includes("config"), false);
+    assert.equal(h.reads.includes("menu_config"), false);
+    h.profile({ role: "student", registrationApprovalStatus: "APPROVED" });
+    await h.render();
+    assert.equal(h.value.authPhase, "ready");
+    assert.equal(h.value.configReady, true);
+    assert.equal(h.value.menuConfigReady, true);
+    h.profile({ role: "student", registrationApprovalStatus: "PENDING" });
+    await h.render();
+    assert.equal(h.value.currentUser, null);
+    assert.equal(h.value.config, null);
+    assert.equal(h.value.menuConfig, null);
+    h.unmount();
+  },
+);
+await check(
   "Provider settings/stopped snapshots cannot cross account boundaries",
   async () => {
     const settings = [],
@@ -1403,6 +1482,7 @@ await check(
     await h.render();
     await h.observe(user("synthetic-provider-old"));
     h.sessions[0].gate.resolve();
+    h.profile({ role: "teacher" }, 0);
     await h.render();
     await h.observe(user("synthetic-provider-new"));
     h.sessions[1].gate.resolve();
@@ -1415,6 +1495,8 @@ await check(
     assert.equal(h.value.userData, null);
     assert.equal(h.value.configReady, false);
     assert.equal(h.value.menuConfigReady, false);
+    h.profile({ role: "teacher" });
+    await h.render();
     settings[2].gate.resolve({ year: "2026", semester: "2" });
     settings[3].gate.resolve({ student: [] });
     await h.render();
@@ -1439,6 +1521,7 @@ await check(
     const account = user("synthetic-strict-mode");
     await h.observe(account);
     h.sessions[0].gate.resolve();
+    h.profile({ role: "teacher" }, 0);
     await h.render();
     const generation = h.value.authGeneration;
     h.replayEffects();
@@ -1453,6 +1536,8 @@ await check(
     await h.render();
     assert.equal(h.value.config, null);
     assert.equal(h.value.userData, null);
+    h.profile({ role: "teacher" });
+    await h.render();
     settings[2].gate.resolve({ year: "2026", semester: "2" });
     settings[3].gate.resolve({ student: [] });
     await h.render();

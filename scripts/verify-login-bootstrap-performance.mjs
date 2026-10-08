@@ -101,6 +101,10 @@ async function scenario(version, { sessionMs, profileMs, loginStartsAtMs }) {
   const permission = load(source("src/lib/permissions.ts"), {});
   const { AuthStartupController } = load(source("src/lib/authStartup.ts"), {
     "./permissions": permission,
+    "./studentRegistrationStatus": load(
+      newSource("src/lib/studentRegistrationStatus.ts"),
+      {},
+    ),
   });
   const controller = new AuthStartupController({
     currentUser: () => auth.currentUser,

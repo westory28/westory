@@ -12,20 +12,161 @@ service cloud.firestore {
         && request.auth.token.email.matches('.*@yongshin-ms\\.ms\\.kr$');
     }
 
+    function applicationSessionPath() {
+      return /databases/$(database)/documents/application_sessions/$(request.auth.uid)/sessions/$(request.auth.token.auth_time);
+    }
+
+    function applicationSessionTransitionPath() {
+      return /databases/$(database)/documents/application_session_transitions/$(request.auth.uid);
+    }
+
+    function hasActiveApplicationSession() {
+      let path = applicationSessionPath();
+      let session = get(path).data;
+      return isSignedIn()
+        && request.auth.token.auth_time is int
+        && exists(path)
+        && session.status == 'active'
+        && session.authTime == request.auth.token.auth_time
+        && session.schemaVersion == 2
+        && session.authorityGeneration == 'w1r2-2026-08-09'
+        && session.protocolVersion is int
+        && session.protocolVersion >= 2
+        && session.sessionRevision is string
+        && session.sessionRevision.matches('^[a-f0-9]{64}$')
+        && session.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
+        && session.generalExpiresAt is timestamp
+        && (
+          session.authorityModeAtOpen != 'ENFORCE'
+          || session.generalExpiresAt > request.time
+        );
+    }
+
+    function hasActiveReauthTransition() {
+      let path = applicationSessionTransitionPath();
+      let transition = get(path).data;
+      return isSignedIn()
+        && request.auth.token.auth_time is int
+        && exists(path)
+        && transition.status == 'pending'
+        && transition.schemaVersion == 1
+        && transition.authorityGeneration == 'w1r2-2026-08-09'
+        && transition.protocolVersion is int
+        && transition.protocolVersion >= 2
+        && transition.fromAuthTime is int
+        && transition.fromAuthTime < request.auth.token.auth_time
+        && transition.expiresAt is timestamp
+        && transition.expiresAt > request.time;
+    }
+
+    function hasWestoryIdentity() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
+    }
+
+    function hasValidMaintenanceBypassUids(uids) {
+      return uids.size() == 0 || ((uids.size() <= 0 || (uids[0] is string && uids[0].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 1 || (uids[1] is string && uids[1].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 2 || (uids[2] is string && uids[2].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 3 || (uids[3] is string && uids[3].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 4 || (uids[4] is string && uids[4].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 5 || (uids[5] is string && uids[5].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 6 || (uids[6] is string && uids[6].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 7 || (uids[7] is string && uids[7].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 8 || (uids[8] is string && uids[8].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 9 || (uids[9] is string && uids[9].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 10 || (uids[10] is string && uids[10].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 11 || (uids[11] is string && uids[11].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 12 || (uids[12] is string && uids[12].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 13 || (uids[13] is string && uids[13].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 14 || (uids[14] is string && uids[14].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 15 || (uids[15] is string && uids[15].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 16 || (uids[16] is string && uids[16].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 17 || (uids[17] is string && uids[17].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 18 || (uids[18] is string && uids[18].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')))
+        && (uids.size() <= 19 || (uids[19] is string && uids[19].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$'))));
+    }
+
+    function isValidStudentMaintenanceConfig(config) {
+      return config.keys().hasAll([
+          'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
+          'startedAt', 'updatedAt', 'updatedBy', 'revision'
+        ])
+        && config.keys().hasOnly([
+          'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
+          'startedAt', 'updatedAt', 'updatedBy', 'revision'
+        ])
+        && config.enabled is bool
+        && config.blockedRoles == ['student']
+        && config.bypassUids is list
+        && config.bypassUids.size() <= 20
+        && config.bypassUids.toSet().size() == config.bypassUids.size()
+        && hasValidMaintenanceBypassUids(config.bypassUids)
+        && config.title is string
+        && config.title.matches('^\\S(?:[\\s\\S]{0,78}\\S)?$')
+        && config.message is string
+        && config.message.matches('^\\S(?:[\\s\\S]{0,498}\\S)?$')
+        && ((config.enabled == true && config.startedAt is timestamp)
+          || (config.enabled == false && config.startedAt == null))
+        && config.updatedAt is timestamp
+        && config.updatedBy is string
+        && config.updatedBy.matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && config.revision is int
+        && config.revision >= 0;
+    }
+
+    function canUseWestoryWithMaintenanceConfig(config) {
+      return isValidStudentMaintenanceConfig(config)
+        && (
+          config.enabled == false
+          || request.auth.token.email == "westoria28@gmail.com"
+          || request.auth.uid in config.bypassUids
+          || (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role is string
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['student', 'teacher', 'staff']
+            && !(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in config.blockedRoles)
+          )
+        );
+    }
+
+    function passesStudentMaintenanceFence() {
+      return !exists(/databases/$(database)/documents/site_settings/student_maintenance)
+        || canUseWestoryWithMaintenanceConfig(
+          get(/databases/$(database)/documents/site_settings/student_maintenance).data
+        );
+    }
+
     function canUseWestory() {
-      return isSignedIn() && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
+      return hasWestoryIdentity()
+        && (hasActiveApplicationSession() || hasActiveReauthTransition())
+        && passesStudentMaintenanceFence()
+        && passesStudentRegistrationFence();
+    }
+
+    function passesStudentRegistrationFence() {
+      return request.auth.token.email == "westoria28@gmail.com"
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && approvedRegistrationProfile(get(/databases/$(database)/documents/users/$(request.auth.uid)).data));
+    }
+
+    function approvedRegistrationProfile(profile) {
+      return profile.role in ['student', 'teacher', 'staff']
+        && profile.get('registrationApprovalStatus', 'APPROVED') == 'APPROVED';
     }
 
     function isAdmin() {
-      return canUseWestory() && request.auth.token.email == "westoria28@gmail.com";
+      return hasWestoryIdentity() && request.auth.token.email == "westoria28@gmail.com" && canUseWestory();
     }
 
     function isOwnUser(userId) {
-      return canUseWestory() && request.auth.uid == userId;
+      // Callers enforce canUseWestory once around their complete operation.
+      return hasWestoryIdentity() && request.auth.uid == userId;
     }
 
     function hasUserProfile() {
-      return canUseWestory() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      return hasWestoryIdentity() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function userProfile() {
@@ -36,7 +177,8 @@ service cloud.firestore {
       return hasUserProfile()
         && userProfile().teacherPortalEnabled == true
         && userProfile().staffPermissions is list
-        && permission in userProfile().staffPermissions;
+        && permission in userProfile().staffPermissions
+        && canUseWestory();
     }
 
     function userGrade() {
@@ -64,10 +206,11 @@ service cloud.firestore {
     }
 
     function isTeacherRole() {
-      return hasUserProfile() && userProfile().role == 'teacher';
+      return hasUserProfile() && userProfile().role == 'teacher' && canUseWestory();
     }
 
     function isStudentRole() {
+      // All student-role callers already enforce the application access fence.
       return hasUserProfile() && userProfile().role == 'student';
     }
 
@@ -358,15 +501,16 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
-    function hasCurrentPerformanceScoreConsent(userId, scoreId) {
+    function hasCurrentPerformanceScoreConsent(userId, scoreData) {
       return exists(performanceScoreConsentPath(userId))
-        && hasMatchingPerformanceScoreConsent(userId, scoreId);
+        && hasMatchingPerformanceScoreConsent(userId, scoreData);
     }
 
-    function hasMatchingPerformanceScoreConsent(userId, scoreId) {
-      let scoreData = get(performanceScorePath(userId, scoreId)).data;
+    function hasMatchingPerformanceScoreConsent(userId, scoreData) {
       let consentData = get(performanceScoreConsentPath(userId)).data;
       let settingsPath = performanceScoreSettingsPath(scoreData.academicYear, scoreData.semester);
+      let hasSettings = exists(settingsPath);
+      let settingsData = hasSettings ? get(settingsPath).data : {};
       return consentData.uid == request.auth.uid
         && consentData.acknowledged == true
         && consentData.academicYear == scoreData.academicYear
@@ -375,35 +519,38 @@ service cloud.firestore {
         && consentData.warningTextHash is string
         && (
           (
-            exists(settingsPath)
-            && consentData.warningVersion == get(settingsPath).data.warningVersion
+            hasSettings
+            && consentData.warningVersion == settingsData.warningVersion
             && (
-              !get(settingsPath).data.keys().hasAny(['warningTextHash'])
-              || consentData.warningTextHash == get(settingsPath).data.warningTextHash
+              !settingsData.keys().hasAny(['warningTextHash'])
+              || consentData.warningTextHash == settingsData.warningTextHash
             )
           )
           || (
-            !exists(settingsPath)
+            !hasSettings
             && consentData.warningVersion == 'default-20260609'
           )
         );
     }
 
     function isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId) {
+      let profile = userProfile();
+      let scorePath = performanceScorePath(userId, scoreId);
+      let scoreData = get(scorePath).data;
       return canUseWestory()
         && isOwnUser(userId)
-        && isStudentRole()
-        && userProfile().get('enrollmentStatus', 'active') in ['active', '', null]
-        && userProfile().get('registrationApprovalStatus', 'APPROVED') == 'APPROVED'
+        && profile.role == 'student'
+        && profile.get('enrollmentStatus', 'active') in ['active', '', null]
+        && profile.get('registrationApprovalStatus', 'APPROVED') == 'APPROVED'
         && confirmationId == request.auth.uid
-        && exists(performanceScorePath(userId, scoreId))
-        && get(performanceScorePath(userId, scoreId)).data.uid == request.auth.uid
-        && get(performanceScorePath(userId, scoreId)).data.rosterId == scoreId
-        && get(performanceScorePath(userId, scoreId)).data.get('enteredScoreCount', 1) is number
-        && get(performanceScorePath(userId, scoreId)).data.get('enteredScoreCount', 1) > 0
-        && get(performanceScorePath(userId, scoreId)).data.get('objectionPending', false) == false
-        && request.resource.data.scoreUpdatedAt == get(performanceScorePath(userId, scoreId)).data.updatedAt
-        && hasCurrentPerformanceScoreConsent(userId, scoreId)
+        && exists(scorePath)
+        && scoreData.uid == request.auth.uid
+        && scoreData.rosterId == scoreId
+        && scoreData.get('enteredScoreCount', 1) is number
+        && scoreData.get('enteredScoreCount', 1) > 0
+        && scoreData.get('objectionPending', false) == false
+        && request.resource.data.scoreUpdatedAt == scoreData.updatedAt
+        && hasCurrentPerformanceScoreConsent(userId, scoreData)
         && request.resource.data.keys().hasOnly([
           'uid',
           'rosterId',
@@ -457,6 +604,7 @@ service cloud.firestore {
         'email',
         'photoURL',
         'role',
+        'registrationApprovalStatus',
         'staffPermissions',
         'teacherPortalEnabled',
         'name',
@@ -480,39 +628,42 @@ service cloud.firestore {
     }
 
     function hasValidOwnUserFieldTypes() {
-      return (!request.resource.data.keys().hasAny(['uid']) || (request.resource.data.uid is string && request.resource.data.uid == request.auth.uid))
-        && (!request.resource.data.keys().hasAny(['email']) || (request.resource.data.email is string && request.resource.data.email == request.auth.token.email))
-        && (!request.resource.data.keys().hasAny(['photoURL']) || request.resource.data.photoURL is string)
-        && (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role in ['student', 'staff', 'teacher'])
-        && (!request.resource.data.keys().hasAny(['teacherPortalEnabled']) || request.resource.data.teacherPortalEnabled is bool)
-        && (!request.resource.data.keys().hasAny(['staffPermissions']) || request.resource.data.staffPermissions is list)
-        && (!request.resource.data.keys().hasAny(['name']) || (request.resource.data.name is string && request.resource.data.name.size() <= 20))
-        && (!request.resource.data.keys().hasAny(['customNameConfirmed']) || request.resource.data.customNameConfirmed is bool)
-        && (!request.resource.data.keys().hasAny(['grade']) || (request.resource.data.grade is string && request.resource.data.grade.size() <= 8))
-        && (!request.resource.data.keys().hasAny(['class']) || (request.resource.data.class is string && request.resource.data.class.size() <= 8))
-        && (!request.resource.data.keys().hasAny(['number']) || (request.resource.data.number is string && request.resource.data.number.size() <= 8))
-        && (!request.resource.data.keys().hasAny(['privacyAgreed']) || request.resource.data.privacyAgreed is bool)
-        && (!request.resource.data.keys().hasAny(['consentAgreedItems']) || (
-          request.resource.data.consentAgreedItems is list
-          && request.resource.data.consentAgreedItems.size() <= 50
+      let data = request.resource.data;
+      let keys = data.keys();
+      return (!keys.hasAny(['uid']) || (data.uid is string && data.uid == request.auth.uid))
+        && (!keys.hasAny(['email']) || (data.email is string && data.email == request.auth.token.email))
+        && (!keys.hasAny(['photoURL']) || data.photoURL is string)
+        && (!keys.hasAny(['role']) || data.role in ['student', 'staff', 'teacher'])
+        && (!keys.hasAny(['teacherPortalEnabled']) || data.teacherPortalEnabled is bool)
+        && (!keys.hasAny(['staffPermissions']) || data.staffPermissions is list)
+        && (!keys.hasAny(['name']) || (data.name is string && data.name.size() <= 20))
+        && (!keys.hasAny(['customNameConfirmed']) || data.customNameConfirmed is bool)
+        && (!keys.hasAny(['grade']) || (data.grade is string && data.grade.size() <= 8))
+        && (!keys.hasAny(['class']) || (data.class is string && data.class.size() <= 8))
+        && (!keys.hasAny(['number']) || (data.number is string && data.number.size() <= 8))
+        && (!keys.hasAny(['privacyAgreed']) || data.privacyAgreed is bool)
+        && (!keys.hasAny(['consentAgreedItems']) || (
+          data.consentAgreedItems is list
+          && data.consentAgreedItems.size() <= 50
         ))
-        && (!request.resource.data.keys().hasAny(['profileIcon']) || (request.resource.data.profileIcon is string && request.resource.data.profileIcon.size() <= 16))
-        && (!request.resource.data.keys().hasAny(['profileEmojiId']) || (request.resource.data.profileEmojiId is string && request.resource.data.profileEmojiId.size() <= 64))
-        && (!request.resource.data.keys().hasAny(['myPageGoalScore']) || (request.resource.data.myPageGoalScore is string && request.resource.data.myPageGoalScore.size() <= 120))
-        && (!request.resource.data.keys().hasAny(['myPageSubjectGoals']) || (
-          request.resource.data.myPageSubjectGoals is map
-          && request.resource.data.myPageSubjectGoals.keys().size() <= 30
+        && (!keys.hasAny(['profileIcon']) || (data.profileIcon is string && data.profileIcon.size() <= 16))
+        && (!keys.hasAny(['profileEmojiId']) || (data.profileEmojiId is string && data.profileEmojiId.size() <= 64))
+        && (!keys.hasAny(['myPageGoalScore']) || (data.myPageGoalScore is string && data.myPageGoalScore.size() <= 120))
+        && (!keys.hasAny(['myPageSubjectGoals']) || (
+          data.myPageSubjectGoals is map
+          && data.myPageSubjectGoals.keys().size() <= 30
         ))
-        && (!request.resource.data.keys().hasAny(['scoreWarningAcknowledged']) || request.resource.data.scoreWarningAcknowledged is bool);
+        && (!keys.hasAny(['scoreWarningAcknowledged']) || data.scoreWarningAcknowledged is bool);
     }
 
     function isValidOwnStudentCreate(userId) {
-      return isOwnUser(userId)
+      return hasWestoryIdentity() && request.auth.uid == userId
         && hasOnlyUserDocKeys()
         && hasValidOwnUserFieldTypes()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.role == 'student'
+        && request.resource.data.registrationApprovalStatus == 'PENDING'
         && (!request.resource.data.keys().hasAny(['teacherPortalEnabled']) || request.resource.data.teacherPortalEnabled == false)
         && (!request.resource.data.keys().hasAny(['staffPermissions']) || request.resource.data.staffPermissions.size() == 0);
     }
@@ -573,42 +724,7 @@ service cloud.firestore {
               'customNameConfirmed'
             ])
           )
-        );
-    }
-
-    function isValidQuizResultCreate() {
-      return canUseWestory()
-        && request.resource.data.keys().hasOnly([
-          'uid',
-          'name',
-          'email',
-          'class',
-          'number',
-          'gradeClass',
-          'unitId',
-          'category',
-          'examRound',
-          'score',
-          'details',
-          'status',
-          'timestamp',
-          'timeString'
-        ])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.email is string
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.class is string
-        && request.resource.data.number is string
-        && request.resource.data.gradeClass is string
-        && request.resource.data.unitId is string
-        && request.resource.data.category is string
-        && (!request.resource.data.keys().hasAny(['examRound']) || request.resource.data.examRound is string)
-        && request.resource.data.score is number
-        && request.resource.data.details is list
-        && request.resource.data.details.size() <= 200
-        && request.resource.data.status is string
-        && request.resource.data.timeString is string;
+        ) && canUseWestory();
     }
 
     function hasOnlyQuizSubmissionKeys() {
@@ -674,7 +790,10 @@ service cloud.firestore {
 
     function isValidQuizSubmissionCreate() {
       return canUseWestory()
-        && isValidQuizSubmissionPayload();
+        && isValidQuizSubmissionPayload()
+        && request.resource.data.status == 'in_progress'
+        && request.resource.data.resultId == ''
+        && request.resource.data.startedAt == request.time;
     }
 
     function isValidQuizSubmissionUpdate() {
@@ -695,48 +814,17 @@ service cloud.firestore {
           !resource.data.keys().hasAny(['examRound'])
           || request.resource.data.examRound == resource.data.examRound
         )
-        && isValidQuizSubmissionPayload();
-    }
-
-    function isValidHistoryClassroomResultCreate() {
-      return canUseWestory()
-        && request.resource.data.keys().hasOnly([
-          'assignmentId',
-          'assignmentTitle',
-          'uid',
-          'studentName',
-          'studentGrade',
-          'studentClass',
-          'studentNumber',
-          'answers',
-          'score',
-          'total',
-          'percent',
-          'passThresholdPercent',
-          'passed',
-          'status',
-          'answerChecks',
-          'cancellationReason',
-          'createdAt'
-        ])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.assignmentId is string
-        && request.resource.data.assignmentTitle is string
-        && request.resource.data.studentName is string
-        && request.resource.data.studentGrade is string
-        && request.resource.data.studentClass is string
-        && request.resource.data.studentNumber is string
-        && request.resource.data.answers is map
-        && request.resource.data.answers.keys().size() <= 200
-        && request.resource.data.score is number
-        && request.resource.data.total is number
-        && request.resource.data.percent is number
-        && request.resource.data.passThresholdPercent is number
-        && request.resource.data.passed is bool
-        && request.resource.data.status is string
-        && request.resource.data.answerChecks is list
-        && request.resource.data.answerChecks.size() <= 200
-        && request.resource.data.cancellationReason is string;
+        && isValidQuizSubmissionPayload()
+        && request.resource.data.status == 'in_progress'
+        && request.resource.data.resultId == ''
+        && (
+          (resource.data.status == 'in_progress'
+            && request.resource.data.startedAt == resource.data.startedAt
+            && request.resource.data.questionIds == resource.data.questionIds
+            && request.resource.data.timeLimitSeconds == resource.data.timeLimitSeconds)
+          || (resource.data.status in ['submitted', 'timed_out']
+            && request.resource.data.startedAt == request.time)
+        );
     }
 
     function isValidRootThinkCloudResponseCreate(sessionId) {
@@ -786,8 +874,14 @@ service cloud.firestore {
     }
 
     // 사용자 기본 문서 권한
+    match /semester_assessment_definitions/{definitionId} {
+      allow read: if isAdmin() || isTeacherRole();
+      allow write: if false;
+    }
+
     match /users/{userId} {
-      allow get: if canUseWestory() && (isOwnUser(userId) || isAdmin() || isTeacherRole() || hasPermission('student_list_read'));
+      allow get: if (hasWestoryIdentity() && request.auth.uid == userId)
+        || isAdmin() || isTeacherRole() || hasPermission('student_list_read');
       allow list: if isAdmin() || isTeacherRole() || hasPermission('student_list_read');
       allow create: if isAdmin() || isValidOwnStudentCreate(userId);
       allow update: if isAdmin() || isValidOwnStudentUpdate(userId);
@@ -804,17 +898,17 @@ service cloud.firestore {
       }
 
       match /performance_score_consents/{consentId} {
-        allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
+        allow read: if (isOwnUser(userId) && canUseWestory()) || canManagePerformanceScores();
         allow create, update: if isValidPerformanceScoreConsent(userId, consentId);
         allow delete: if isAdmin();
       }
 
       match /performance_scores/{scoreId} {
-        allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
+        allow read: if (isOwnUser(userId) && canUseWestory()) || canManagePerformanceScores();
         allow create, update, delete: if canManagePerformanceScores();
 
         match /confirmations/{confirmationId} {
-          allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
+          allow read: if (isOwnUser(userId) && canUseWestory()) || canManagePerformanceScores();
           allow create: if canCreatePerformanceScoreConfirmation(userId, scoreId, confirmationId);
           allow update: if canRepairPerformanceScoreConfirmation(userId, scoreId, confirmationId);
           allow delete: if canManagePerformanceScores();
@@ -864,11 +958,14 @@ service cloud.firestore {
     }
 
     match /site_settings/{docId} {
-      allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || canUseWestory();
+      allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config']
+        || (hasWestoryIdentity() && docId in ['config', 'menu_config'])
+        || canUseWestory();
       allow write: if isAdmin();
 
       match /items/{itemId} {
-        allow read: if canUseWestory();
+        allow read: if (docId == 'consent' && hasWestoryIdentity() && resource.data.enabled == true)
+          || canUseWestory();
         allow create, delete: if isAdmin();
         allow update: if isAdmin()
           || (
@@ -935,7 +1032,7 @@ service cloud.firestore {
     }
 
     match /lessons/{docId} {
-      allow read: if canUseWestory();
+      allow read: if canReadSourceArchive();
       allow write: if isAdmin();
     }
 
@@ -988,7 +1085,7 @@ service cloud.firestore {
 
     match /history_classroom_results/{docId} {
       allow read: if canReadHistoryClassroomResult(resource.data);
-      allow create: if isValidHistoryClassroomResultCreate();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
@@ -1021,9 +1118,23 @@ service cloud.firestore {
       allow read, write: if canManagePerformanceScores();
     }
 
+    match /semester_assessment_results/{resultId} {
+      allow read: if (isSignedIn() && resource.data.studentUid == request.auth.uid
+        && resource.data.semesterId == get(/databases/$(database)/documents/site_settings/semester_active).data.semesterId
+        && canUseWestory()) || isAdmin() || isTeacherRole();
+      allow write: if false;
+    }
+
+    match /semester_assessment_submissions/{submissionId} {
+      allow read: if (isSignedIn() && resource.data.studentUid == request.auth.uid
+        && resource.data.semesterId == get(/databases/$(database)/documents/site_settings/semester_active).data.semesterId
+        && canUseWestory()) || isAdmin() || isTeacherRole();
+      allow write: if false;
+    }
+
     match /quiz_results/{resultId} {
       allow read: if canReadQuizResult(resource.data);
-      allow create: if isValidQuizResultCreate();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
@@ -1036,28 +1147,26 @@ service cloud.firestore {
 
     match /think_cloud_state/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /lesson_progress/{userId} {
-      allow read, write: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+      allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+      allow write: if false;
 
       match /units/{unitId} {
-        allow read, write: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow write: if false;
       }
     }
 
     match /think_cloud_sessions/{sessionId} {
       allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass) || hasPermission('lesson_read');
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if false;
 
       match /responses/{responseId} {
-        allow read: if canAccessThinkCloudTarget(
-          get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetGrade,
-          get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetClass
-        );
-        allow create: if isValidRootThinkCloudResponseCreate(sessionId);
-        allow update, delete: if isAdmin();
+        allow read: if isAdmin() || isTeacherRole() || hasPermission('lesson_read');
+        allow create, update, delete: if false;
       }
     }
 
@@ -1124,7 +1233,7 @@ service cloud.firestore {
       }
 
       match /lessons/{docId} {
-        allow read: if canUseWestory();
+        allow read: if canReadSourceArchive();
         allow write: if isAdmin();
       }
 
@@ -1145,7 +1254,7 @@ service cloud.firestore {
 
       match /history_classroom_results/{docId} {
         allow read: if canReadHistoryClassroomResult(resource.data);
-        allow create: if isValidHistoryClassroomResultCreate();
+        allow create: if false;
         allow update, delete: if isAdmin();
       }
 
@@ -1191,7 +1300,7 @@ service cloud.firestore {
 
       match /quiz_results/{resultId} {
         allow read: if canReadQuizResult(resource.data);
-        allow create: if isValidQuizResultCreate();
+        allow create: if false;
         allow update, delete: if isAdmin();
       }
 
@@ -1204,14 +1313,16 @@ service cloud.firestore {
 
       match /think_cloud_state/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow write: if false;
       }
 
       match /lesson_progress/{userId} {
-        allow read, write: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow write: if false;
 
         match /units/{unitId} {
-          allow read, write: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+          allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+          allow write: if false;
         }
       }
 
@@ -1225,15 +1336,11 @@ service cloud.firestore {
 
       match /think_cloud_sessions/{sessionId} {
         allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
-        allow create, update, delete: if isAdmin();
+        allow create, update, delete: if false;
 
         match /responses/{responseId} {
-          allow read: if canAccessThinkCloudTarget(
-            get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetGrade,
-            get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetClass
-          );
-          allow create: if isValidSemesterThinkCloudResponseCreate(year, semester, sessionId);
-          allow update, delete: if isAdmin();
+          allow read: if isAdmin() || isTeacherRole() || hasPermission('lesson_read');
+          allow create, update, delete: if false;
         }
       }
     }

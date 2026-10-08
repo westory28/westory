@@ -9,19 +9,15 @@ import WisHallOfFameStudentPreview, {
 } from "../../../../components/common/WisHallOfFameStudentPreview";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import { getFirebaseStorage } from "../../../../lib/firebase";
+import { ensureSensitiveOperation } from "../../../../lib/sensitiveOperation";
 import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
 import { invalidateSiteSettingDocCache } from "../../../../lib/siteSettings";
 import {
   resolveWisHallOfFamePodiumImageUrl,
   WIS_HALL_OF_FAME_GRADE_KEY,
-  WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS,
-  ensureWisHallOfFameSnapshot,
   getDefaultHallOfFameLeaderboardPanelPosition,
   getDefaultHallOfFamePositions,
-  getWisHallOfFameSnapshot,
-  isWisHallOfFameSnapshotStale,
   resolveHallOfFameInterfaceConfig,
-  saveWisHallOfFameConfig,
 } from "../../../../lib/wisHallOfFame";
 import type {
   HallOfFameInterfaceConfig,
@@ -29,6 +25,11 @@ import type {
   SystemConfig,
   WisHallOfFameSnapshot,
 } from "../../../../types";
+
+import {
+  getCanonicalWisHallOfFame as getWisHallOfFameSnapshot,
+  saveCanonicalWisHallOfFameConfig as saveWisHallOfFameConfig,
+} from "../../../../lib/pointEconomyAdapter";
 
 interface HallOfFameManagementTabProps {
   config: SystemConfig | null;
@@ -189,33 +190,6 @@ const buildResizedImageBlob = async (
   });
 };
 
-const formatAdminDateTime = (ms: number) =>
-  new Date(ms).toLocaleString("ko-KR", {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-const getNextHallOfFameAutoSyncMs = (fromMs = Date.now()) => {
-  const next = new Date(fromMs);
-  const currentHour = next.getHours();
-  const currentBlock = Math.floor(
-    currentHour / WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS,
-  );
-  const nextHour = (currentBlock + 1) * WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS;
-
-  next.setMinutes(0, 0, 0);
-  if (nextHour >= 24) {
-    next.setDate(next.getDate() + 1);
-    next.setHours(0, 0, 0, 0);
-  } else {
-    next.setHours(nextHour, 0, 0, 0);
-  }
-  return next.getTime();
-};
-
 const isStorageUnauthorizedError = (error: any) =>
   String(error?.code || "").trim() === "storage/unauthorized";
 
@@ -302,7 +276,7 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
       return getHallOfFameRefreshStageMessage(errorStage, errorDetail);
     }
     return {
-      title: "학생 화면 설정은 저장됐지만 최신 랭킹 반영에 실패했습니다.",
+      title: "학생 화면 설정은 저장됐지만 최신 랭킹 조회에 실패했습니다.",
       message:
         "저장은 완료됐지만 최신 랭킹을 반영하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     };
@@ -343,7 +317,7 @@ const getHallOfFameConfigSaveFailureText = (error: any) => {
 
   if (errorStage === "snapshot_write") {
     return {
-      title: "공개 랭킹 반영 중 문제가 발생했습니다.",
+      title: "공개 랭킹 조회 중 문제가 발생했습니다.",
       message:
         "학생 위스 현황은 확인했지만 공개 랭킹에 반영하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     };
@@ -500,13 +474,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     setSnapshot(nextSnapshot);
     if (!nextSnapshot) {
       setSnapshotError(
-        "현재 학기 공개 랭킹을 아직 불러오지 못했습니다. 지금 반영하거나 다음 자동 갱신 이후 다시 확인해 주세요.",
-      );
-      return;
-    }
-    if (isWisHallOfFameSnapshotStale(nextSnapshot)) {
-      setSnapshotError(
-        "공개 랭킹이 최신 위스 현황보다 오래되었습니다. 지금 반영하거나 다음 자동 갱신 이후 다시 확인해 주세요.",
+        "현재 학기 공개 랭킹을 불러오지 못했습니다. 다시 조회해 주세요.",
       );
       return;
     }
@@ -669,9 +637,6 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const snapshotUpdatedAtLabel = snapshot?.updatedAt
     ? formatPointDateShortTime(snapshot.updatedAt)
     : "아직 없음";
-  const nextAutomaticRefreshLabel = formatAdminDateTime(
-    getNextHallOfFameAutoSyncMs(),
-  );
   const clearImageSelection = () => {
     setImageFile(null);
     setImagePreviewUrl((previousValue) => {
@@ -712,13 +677,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
     setRefreshing(true);
     try {
-      await ensureWisHallOfFameSnapshot(config, { force: true });
       const nextSnapshot = await getWisHallOfFameSnapshot(config);
       applySnapshotState(nextSnapshot);
       showToast({
         tone: "success",
-        title: "최신 위스 현황을 명예의 전당에 반영했습니다.",
-        message: "현재 학기 학생 위스 현황이 공개 랭킹에 반영됐습니다.",
+        title: "최신 위스 현황을 불러왔습니다.",
       });
     } catch (error: any) {
       const failure = getHallOfFameSnapshotRefreshFailureText(error);
@@ -781,6 +744,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
     try {
       if (imageFile) {
+        await ensureSensitiveOperation();
         const layoutOnlyDraft: ViewDraft = {
           ...nextViewDraft,
           podiumImageUrl: savedViewDraft.podiumImageUrl,
@@ -813,6 +777,8 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             podiumImageUrl: await getDownloadURL(imageRef),
             podiumStoragePath: imageRef.fullPath,
           };
+          setViewDraft(nextViewDraft);
+          clearImageSelection();
         } catch (imageError: any) {
           const uploadFailure = getHallOfFameImageUploadFailureText(imageError);
 
@@ -925,7 +891,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             disabled={!canManage || refreshing}
             className="inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-amber-300 bg-white px-4 text-sm font-black text-slate-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {refreshing ? "반영 중..." : "지금 반영"}
+            {refreshing ? "조회 중..." : "새로고침"}
           </button>
         </div>
       )}
@@ -949,7 +915,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     학생 화면 미리보기
                   </h3>
                   <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-                    최근 반영 {snapshotUpdatedAtLabel}
+                    최근 조회 {snapshotUpdatedAtLabel}
                   </span>
                 </div>
                 <p className="mt-1 text-sm font-semibold text-slate-500 break-keep">
@@ -1193,19 +1159,16 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     aria-hidden="true"
                   ></i>
                   <h4 className="text-sm font-black text-slate-950">
-                    랭킹 반영
+                    랭킹 조회
                   </h4>
                 </div>
                 <div className="grid grid-cols-[1fr_auto] items-center gap-4 rounded-xl bg-slate-50 px-4 py-4">
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-slate-500">
-                      최근 반영 시각
+                      최근 조회 시각
                     </p>
                     <p className="mt-1 text-sm font-black text-slate-950">
                       {snapshotUpdatedAtLabel}
-                    </p>
-                    <p className="mt-2 text-xs font-semibold text-slate-500 break-keep">
-                      다음 자동 갱신 {nextAutomaticRefreshLabel}
                     </p>
                   </div>
                   <button
@@ -1214,7 +1177,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                     disabled={!canManage || refreshing}
                     className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
-                    {refreshing ? "반영 중..." : "지금 반영"}
+                    {refreshing ? "조회 중..." : "새로고침"}
                   </button>
                 </div>
               </section>

@@ -14,6 +14,10 @@ interface SessionSnapshot extends SessionProof {
   authTime: number;
 }
 const flights = new Map<string, Promise<SessionProof>>();
+const reusableProofs = new WeakMap<
+  User,
+  { epoch: number; proof: SessionProof }
+>();
 const sessionError = (message: string) =>
   Object.assign(new Error(message), { code: "functions/unauthenticated" });
 
@@ -81,6 +85,7 @@ export const getHistoryDictionaryCallable = async <
   ResponseData = unknown,
 >(
   name: string,
+  options: { reuseSessionProof?: boolean } = {},
 ) => {
   const callable = await getHttpsCallable<
     Record<string, unknown>,
@@ -92,15 +97,33 @@ export const getHistoryDictionaryCallable = async <
     const user = auth.currentUser;
     if (!user) throw sessionError("다시 로그인한 뒤 사전을 열어 주세요.");
     const epoch = await authEpoch(user);
-    const proof = await ensureHistoryDictionarySession();
+    const cached = options.reuseSessionProof ? reusableProofs.get(user) : null;
+    const proof =
+      cached?.epoch === epoch
+        ? cached.proof
+        : await ensureHistoryDictionarySession();
     if ((await authEpoch(user)) !== epoch) {
       throw sessionError("로그인 상태가 변경되었습니다. 다시 로그인해 주세요.");
     }
-    // Attach only to this dictionary invocation; do not replay mutations.
-    return callable({
-      ...((data || {}) as Record<string, unknown>),
-      _session: proof,
-    });
+    // Games reuse proof within this auth epoch to avoid an extra network call
+    // for every typed word. The server still verifies revocation and expiry.
+    if (options.reuseSessionProof) reusableProofs.set(user, { epoch, proof });
+    try {
+      const response = await callable({
+        ...((data || {}) as Record<string, unknown>),
+        _session: proof,
+      });
+      if ((await authEpoch(user)) !== epoch) {
+        throw sessionError(
+          "로그인 상태가 변경되었습니다. 다시 로그인해 주세요.",
+        );
+      }
+      return response;
+    } catch (error) {
+      reusableProofs.delete(user);
+      // Never replay a mutation automatically, including after a lost response.
+      throw error;
+    }
   };
 };
 

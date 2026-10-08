@@ -1,5 +1,7 @@
 import { getYearSemester } from "./semesterScope";
 import { callStudentDataService } from "./studentProfileCommands";
+import { isStudentRegistrationPending } from "./studentRegistrationStatus";
+export { isStudentRegistrationPending } from "./studentRegistrationStatus";
 
 export type StudentEnrollmentStatus =
   | "active"
@@ -22,19 +24,6 @@ export interface StudentEnrollmentProfile {
   enrollmentReason?: unknown;
   registrationApprovalStatus?: unknown;
 }
-
-export const isStudentRegistrationPending = (
-  profile: StudentEnrollmentProfile | null | undefined,
-) => {
-  return (
-    !!profile &&
-    Object.prototype.hasOwnProperty.call(
-      profile,
-      "registrationApprovalStatus",
-    ) &&
-    profile.registrationApprovalStatus !== "APPROVED"
-  );
-};
 
 export const isStudentRosterProfile = (profile: Record<string, unknown>) => {
   const role = String(profile.role || "").trim();

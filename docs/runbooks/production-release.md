@@ -67,3 +67,16 @@ firebase functions:list --project history-quiz-yongsin
 PC에는 코드와 개발 도구가 있고 실제 로그인 처리는 공통 Firebase 프로젝트에서 실행된다. GitHub/Vercel/Firebase CLI 인증 정보는 각 PC에서 별도로 관리하며 Git으로 복사하지 않는다. 운영 함수의 원본이 필요하면 권한 있는 PC에서 `gcloud functions describe <함수명> --gen2 --region asia-northeast3 --project history-quiz-yongsin`의 `buildConfig.source.storageSource`에 나온 bucket/object/generation을 사용해 보관 소스를 대조한다. Windows 줄바꿈 차이는 LF로 정규화해 비교한다.
 
 로그인 함수 4개의 복구가 다른 모든 운영 Functions의 소스 복구를 뜻하지는 않는다. PC 환경을 맞추기 위한 Functions/rules 일괄 배포는 하지 않고, 다른 백엔드 패치는 대상 운영 소스부터 대조한다.
+
+## 학생 개방 및 canonical 명령
+
+2026-10-08 학생 개방 패치는 `functions/productionGateway`에 현재 운영 `executeCommand`
+의 의존 소스를 별도로 보존한다. 원본과 변경 해시는 `source-manifest.json`으로 확인하며
+다른 PC에서도 `npm --prefix functions run check`를 통과해야 한다. 루트에서 연결한
+`executeCommand`, `executeLessonCorePointCommand`만 이 복구 소스의 배포 대상이다.
+디렉터리의 나머지 callable을 일괄 export하거나 모든 Functions를 배포하지 않는다.
+
+학생 개방 전에는 교사 설정의 학생 접속 항목에서 현재 학기 평가 공개 상태를 점검하고,
+현재 공개 설정에 해당하는 평가를 준비한다. 가입 승인·세션·학급 권한, 서버 저장/보상,
+운영 프론트엔드와 Firebase 반영을 확인한 뒤 접속을 연다. 개방/제한 설정은 관리자
+재인증과 서버 revision 비교를 사용한다. [점검 및 배포 기록](../reviews/student-opening-20261008.md)을 참고한다.

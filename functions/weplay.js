@@ -17,6 +17,7 @@ function createWeplayFunctions(deps) {
     assertWeplayReader, assertWeplayManager,
     ensureWallet, loadPolicy, getCurrentRankEarnedTotal, buildWalletBase,
     buildWalletRankState, createTransactionPayload, markWisHallOfFameDirtySafely,
+    canonicalWallet,
   } = deps;
   const path = (scope, collection, id) => `years/${scope.year}/semesters/${scope.semester}/${collection}${id ? `/${id}` : ''}`;
   const ref = (scope, collection, id) => db.doc(path(scope, collection, id));
@@ -230,6 +231,18 @@ function createWeplayFunctions(deps) {
 
   async function writePointChange(transaction, scope, uid, profile, delta, type, sourceId, sourceLabel, policyVersion, loaded) {
     // All callers finish their transaction reads before invoking this helper.
+    if (canonicalWallet) {
+      const receiptRef = ref(scope, 'point_transactions', `${type}_${sourceId}`);
+      const balance = canonicalWallet.write(transaction, scope, uid, delta, type, sourceId, sourceLabel, loaded, receiptRef.path);
+      // Keep the existing game receipt as its idempotency marker. The balance
+      // and complete accounting entry live only in the canonical economy.
+      transaction.create(receiptRef, {
+        ...createTransactionPayload({ uid, type, delta, balanceAfter: balance, sourceId, sourceLabel,
+          policyId: `weplay:${policyVersion}`, createdBy: 'system:weplay', targetDate: dayKey(), targetMonth: dayKey().slice(0, 7) }),
+        canonical: true,
+      });
+      return balance;
+    }
     const { walletRef, wallet, pointPolicy, rankTotal } = loaded;
     const balance = Number(wallet.balance || 0) + delta;
     if (!Number.isFinite(balance) || balance < 0) throw new HttpsError('failed-precondition', '보유 위스가 부족합니다.');
@@ -249,6 +262,7 @@ function createWeplayFunctions(deps) {
   }
 
   async function loadWallet(transaction, scope, uid, profile) {
+    if (canonicalWallet) return canonicalWallet.read(transaction, scope, uid);
     const { ref: walletRef, wallet } = await ensureWallet(transaction, scope.year, scope.semester, uid, profile);
     const pointPolicy = await loadPolicy(transaction, scope.year, scope.semester);
     const rankTotal = await getCurrentRankEarnedTotal(transaction, scope.year, scope.semester, uid, wallet);
@@ -277,7 +291,8 @@ function createWeplayFunctions(deps) {
       const reward = session.mode === 'challenge' && eligible ? gameReward(session.policy, rewardCorrectCount) : 0;
       const loaded = reward > 0
         ? await loadWallet(transaction, scope, session.uid, currentProfile)
-        : { wallet: (await transaction.get(ref(scope, 'point_wallets', session.uid))).data() || {} };
+        : canonicalWallet && eligible ? await canonicalWallet.read(transaction, scope, session.uid)
+          : { wallet: (await transaction.get(ref(scope, 'point_wallets', session.uid))).data() || {} };
       const rewardRef = ref(scope, 'point_transactions', `weplay_reward_${sessionId}`);
       const rewardSnap = await transaction.get(rewardRef);
       const periodRef = session.periodId ? ref(scope, 'weplay_periods', session.periodId) : null;
@@ -362,7 +377,8 @@ function createWeplayFunctions(deps) {
         // An expired game may credit the wallet and create a record. Read both
         // after recovery so a faster lobby never returns pre-settlement state.
         const [walletSnap, recordsSnap] = await Promise.all([
-          ref(scope, 'point_wallets', uid).get(),
+          canonicalWallet ? canonicalWallet.get(scope, uid).then(({ wallet }) => ({ data: () => wallet }))
+            : ref(scope, 'point_wallets', uid).get(),
           ref(scope, 'weplay_players', uid).collection('records').orderBy('finishedAtMs', 'desc').limit(10).get(),
         ]);
         return { ...recovered, walletSnap, recordsSnap };
@@ -438,7 +454,7 @@ function createWeplayFunctions(deps) {
         if (active?.status === 'active') throw new HttpsError('already-exists', '진행 중인 게임을 먼저 마쳐 주세요.');
       }
       const [loaded, costSnap, currentPeriodSnap] = await Promise.all([
-        mode === 'challenge' && policy.challengeCost > 0
+        canonicalWallet || (mode === 'challenge' && policy.challengeCost > 0)
           ? loadWallet(transaction, scope, uid, profile)
           : transaction.get(ref(scope, 'point_wallets', uid)).then((snapshot) => ({ wallet: snapshot.data() || {} })),
         transaction.get(ref(scope, 'point_transactions', `weplay_cost_${sessionId}`)),

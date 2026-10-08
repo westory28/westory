@@ -1,3 +1,5 @@
 /.gitattributes text eol=lf
 *.ts text eol=lf
 *.tsx text eol=lf
+/functions/productionGateway/*.js text eol=lf
+/functions/productionGateway/*.json text eol=lf

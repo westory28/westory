@@ -57,7 +57,7 @@ export const events = [];
 let state = {...empty};
 const publish = (next) => {state={...state,...next};listeners.forEach(fn=>fn());profileWaiters.forEach(fn=>fn());};
 export const phase = (name, extra={}) => {
-  const ready=name==="ready", onboarding=name==="onboarding";
+  const ready=name==="ready", onboarding=name==="onboarding" || name==="registration-pending";
   auth.currentUser=name==="signed-out" ? null : user;
   publish({...empty,authPhase:name,loading:["resolving","opening-session","loading-profile"].includes(name),authGeneration:++generation,currentUser:ready?user:null,userData:ready?profile:null,onboardingUser:onboarding?user:null,...extra});
 };
@@ -68,7 +68,8 @@ const logout = async () => {events.push("logout");const previous=pending;pending
 export const serverProfile = () => {events.push("server-profile");phase("ready");const previous=pending;pending=null;previous?.resolve();};
 export const offline = () => {events.push("offline-failure");timeout();const previous=pending;pending=null;previous?.reject(new Error("synthetic offline"));};
 export const profileWritten = (payload) => {events.push("synthetic-write");profilePayload=payload;};
-export const ackProfile = () => {if(!profilePayload)throw new Error("No synthetic write to acknowledge");events.push("server-profile-ack");publish({authPhase:"ready",loading:false,currentUser:user,onboardingUser:null,userData:{...profile,...profilePayload,uid:user.uid},authError:null});profilePayload=null;};
+export const writtenProfile = () => profilePayload;
+export const ackProfile = () => {if(!profilePayload)throw new Error("No synthetic write to acknowledge");events.push("server-profile-ack");const awaiting=profilePayload.registrationApprovalStatus==="PENDING";publish({authPhase:awaiting?"registration-pending":"ready",loading:false,currentUser:awaiting?null:user,onboardingUser:awaiting?user:null,userData:{...profile,...profilePayload,uid:user.uid},authError:null});profilePayload=null;};
 const config={showLesson:true,showQuiz:true,showScore:true};
 const refresh = async () => {};
 export const useAuth = () => {
@@ -80,7 +81,7 @@ export const useAuth = () => {
     discardStaleLoginUser:async(loginUser,attempt)=>{if(attempt!==flow && auth.currentUser===loginUser){events.push("stale-user-discarded");phase("signed-out");}},
     failLoginFlow:(attempt,error)=>{if(attempt!==flow)return;events.push("login-flow-failed");if(!auth.currentUser)phase("signed-out");else timeout();},
     claimLoginBootstrap:async(loginUser)=>({generation:state.authGeneration,user:loginUser,authTime:"fixture-epoch",profile:state.userData}),
-    waitForAuthProfile:async(attempt,loginUser,matches)=>new Promise((resolve,reject)=>{const check=()=>{if(attempt!==state.authGeneration || loginUser!==auth.currentUser){profileWaiters.delete(check);reject(Object.assign(new Error("synthetic stale"),{code:"auth/stale-attempt"}));}else if(state.authPhase==="ready" && state.userData && matches(state.userData)){events.push("profile-ack-accepted");profileWaiters.delete(check);resolve();}};profileWaiters.add(check);check();}),
+    waitForAuthProfile:async(attempt,loginUser,matches)=>new Promise((resolve,reject)=>{const check=()=>{if(attempt!==state.authGeneration || loginUser!==auth.currentUser){profileWaiters.delete(check);reject(Object.assign(new Error("synthetic stale"),{code:"auth/stale-attempt"}));}else if(["ready","registration-pending"].includes(state.authPhase) && state.userData && matches(state.userData)){events.push("profile-ack-accepted");profileWaiters.delete(check);resolve();}};profileWaiters.add(check);check();}),
     isAuthAttemptCurrent:(attempt,loginUser)=>attempt===state.authGeneration && loginUser===auth.currentUser && state.authPhase!=="error",
     assertAuthAttemptCurrent:async(attempt,loginUser)=>{if(attempt!==state.authGeneration || loginUser!==auth.currentUser || state.authPhase==="error")throw Object.assign(new Error("synthetic stale"),{code:"auth/stale-attempt"});}
   };
@@ -128,11 +129,11 @@ import {createRoot} from "react-dom/client";
 import {HashRouter,Routes,Route} from "react-router-dom";
 import Login from ${source("pages/Login.tsx")};
 import MainLayout from ${source("components/layout/MainLayout.tsx")};
-import {phase,timeout,forced,serverProfile,offline,events,ackProfile} from "qa-auth";
-window.authQa={phase,timeout,forced,serverProfile,offline,events,ackProfile};
+import {phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile,profile} from "qa-auth";
+window.authQa={phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile};
 const scenario=new URLSearchParams(location.search).get("scenario") || "loading";
 if(scenario==="redirect-timeout")localStorage.setItem("westoryRedirectAttempt",JSON.stringify({mode:"student",startedAt:Date.now()}));
-if(scenario==="timeout")timeout();else if(scenario==="forced")forced();else if(scenario==="onboarding-complete")phase("ready",{userData:{uid:"synthetic-student",role:"student",privacyAgreed:true}});else if(scenario==="onboarding")phase("onboarding");else if(scenario==="signed-out" || scenario.startsWith("popup") || scenario==="redirect-timeout")phase("signed-out");else phase("opening-session");
+if(scenario==="timeout")timeout();else if(scenario==="forced")forced();else if(scenario==="registration-pending")phase("registration-pending",{userData:{...profile,registrationApprovalStatus:"PENDING"}});else if(scenario==="onboarding-complete")phase("ready",{userData:{uid:"synthetic-student",role:"student",privacyAgreed:true}});else if(scenario==="onboarding")phase("onboarding");else if(scenario==="signed-out" || scenario.startsWith("popup") || scenario==="redirect-timeout")phase("signed-out");else phase("opening-session");
 function Protected(){return <MainLayout><section data-testid="protected-child" className="p-6"><h1 className="text-2xl font-bold">합성 학생 포털</h1><button className="mt-4 rounded-lg bg-blue-600 px-4 py-3 text-white">합성 학습 시작</button></section></MainLayout>}
 createRoot(document.getElementById("root")).render(<HashRouter><Routes><Route path="/" element={<Login/>}/><Route path="/student/*" element={<Protected/>}/><Route path="/teacher/*" element={<Protected/>}/></Routes></HashRouter>);
 `;
@@ -382,6 +383,43 @@ try {
   });
   report.browser = browser.version();
   for (const width of report.viewports) {
+    for (const route of ["/", "/student/dashboard", "/teacher/settings"]) {
+      const pending = await newPage(
+        width,
+        "registration-pending",
+        route,
+        width === 390,
+      );
+      await pending
+        .getByRole("heading", { name: "등록 승인 대기", exact: true })
+        .waitFor();
+      await pending.getByRole("status").waitFor();
+      await noProtected(pending);
+      await noOverflow(pending, "registration-pending", width);
+      assert.equal(
+        (await pending.evaluate(() => window.authQa.events)).includes(
+          "synthetic-write",
+        ),
+        false,
+      );
+      if (route === "/student/dashboard") {
+        await capture(pending, "registration-pending", width);
+        await pending.evaluate(() => window.authQa.serverProfile());
+        await pending.getByTestId("protected-child").waitFor();
+        check("pending-opens-only-after-server-approval", { width });
+      } else {
+        await pending
+          .getByRole("button", { name: "로그아웃", exact: true })
+          .click();
+        await pending.locator(".public-entry").waitFor();
+        await noProtected(pending);
+      }
+      check("pending-registration-blocks-route-without-profile-write", {
+        width,
+        route,
+      });
+      await pending.close();
+    }
     const loading = await newPage(width, "loading");
     await loading.getByRole("status").waitFor();
     await noProtected(loading);
@@ -632,6 +670,53 @@ try {
     });
     await capture(complete, "onboarding-completed", width);
     await complete.close();
+    const registration = await newPage(width, "onboarding");
+    await registration
+      .getByRole("button", { name: "입력 완료", exact: true })
+      .waitFor();
+    await registration.getByRole("combobox").nth(0).focus();
+    await registration.keyboard.press("Home");
+    await registration.keyboard.press("Tab");
+    await registration.keyboard.press("ArrowDown");
+    await registration.keyboard.press("Tab");
+    await registration.keyboard.press("ArrowDown");
+    await registration
+      .getByRole("textbox", { name: "이름", exact: true })
+      .fill("가나다");
+    await registration
+      .getByRole("button", { name: "입력 완료", exact: true })
+      .click();
+    await registration
+      .getByRole("button", { name: "필수 동의", exact: true })
+      .click();
+    await registration
+      .getByRole("button", { name: "동의하고 시작하기", exact: true })
+      .click();
+    await registration.waitForFunction(() =>
+      window.authQa.events.includes("synthetic-write"),
+    );
+    assert.equal(
+      await registration.evaluate(
+        () => window.authQa.writtenProfile().registrationApprovalStatus,
+      ),
+      "PENDING",
+    );
+    await noProtected(registration);
+    await registration.evaluate(() => window.authQa.ackProfile());
+    await registration
+      .getByRole("heading", { name: "등록 승인 대기", exact: true })
+      .waitFor();
+    await noProtected(registration);
+    assert.ok(
+      (await registration.evaluate(() => window.authQa.events)).includes(
+        "profile-ack-accepted",
+      ),
+    );
+    check("new-student-create-requires-pending-and-remains-outside-portal", {
+      width,
+    });
+    await capture(registration, "new-registration-pending", width);
+    await registration.close();
     const popup = await newPage(width, "popup-cancel");
     await popup
       .getByRole("button", { name: /학생 로그인/ })
@@ -641,6 +726,7 @@ try {
     await popup.waitForFunction(() =>
       window.authQa.events.includes("login-flow-failed"),
     );
+    await popup.getByRole("status").first().waitFor({ state: "hidden" });
     assert.equal(await popup.getByRole("status").count(), 0);
     assert.equal(
       await popup

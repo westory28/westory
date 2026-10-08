@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { getFirebaseStorage } from "../../lib/firebase";
+import { ensureSensitiveOperation } from "../../lib/sensitiveOperation";
+import { getPendingCanonicalPointAdjustment } from "../../lib/pointEconomyAdapter";
 import { useSearchParams } from "react-router-dom";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import { useAppToast } from "../../components/common/AppToastProvider";
@@ -472,6 +474,7 @@ const ManagePoints: React.FC = () => {
   const [grantSelectedUid, setGrantSelectedUid] = useState("");
   const [grantAmount, setGrantAmount] = useState("");
   const [grantReason, setGrantReason] = useState("");
+  const grantIntentRef = useRef<{ key: string; sourceId: string } | null>(null);
   const [grantFeedback, setGrantFeedback] = useState("");
   const [grantSubmittingMode, setGrantSubmittingMode] =
     useState<GrantMode | null>(null);
@@ -520,6 +523,12 @@ const ManagePoints: React.FC = () => {
     () => resolvePointRankPolicyDraft(savedPolicy.rankPolicy),
     [savedPolicy.rankPolicy],
   );
+  const [pendingAdjustment, setPendingAdjustment] = useState(() =>
+    getPendingCanonicalPointAdjustment(config),
+  );
+  useEffect(() => {
+    setPendingAdjustment(getPendingCanonicalPointAdjustment(config));
+  }, [actor.uid, config?.year, config?.semester]);
 
   const syncRankEmojiUnlockTierCodes = (
     tiers: PointRankPolicyTier[],
@@ -1000,10 +1009,11 @@ const ManagePoints: React.FC = () => {
       setGrantLoading(true);
       try {
         const nextStudents = isGlobalGrantSearch
-          ? await listPointStudentTargets()
+          ? await listPointStudentTargets(config)
           : await listPointStudentTargetsByClass(
               grantGradeFilter,
               grantClassFilter,
+              config,
             );
         if (cancelled) return;
         setStudents(nextStudents);
@@ -1021,7 +1031,13 @@ const ManagePoints: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [grantClassFilter, grantGradeFilter, isGlobalGrantSearch]);
+  }, [
+    grantClassFilter,
+    grantGradeFilter,
+    isGlobalGrantSearch,
+    config?.year,
+    config?.semester,
+  ]);
 
   useEffect(() => {
     setOrderMemo(selectedOrder?.memo || "");
@@ -1268,15 +1284,30 @@ const ManagePoints: React.FC = () => {
     setGrantSubmittingMode(mode);
     setGrantFeedback("");
     try {
+      const intentKey = JSON.stringify([
+        actor.uid,
+        config?.year,
+        config?.semester,
+        selectedGrantStudent.uid,
+        mode,
+        numericAmount,
+        grantReason.trim(),
+      ]);
+      if (grantIntentRef.current?.key !== intentKey)
+        grantIntentRef.current = {
+          key: intentKey,
+          sourceId: `manual_${crypto.randomUUID()}`,
+        };
       await adjustPoints({
         config,
         uid: selectedGrantStudent.uid,
         delta: mode === "reclaim" ? -numericAmount : numericAmount,
-        sourceId: `manual_${Date.now()}`,
+        sourceId: grantIntentRef.current.sourceId,
         sourceLabel: grantReason.trim(),
         mode,
         actor,
       });
+      grantIntentRef.current = null;
       setGrantAmount("");
       setGrantReason("");
       setGrantFeedback(
@@ -1512,7 +1543,7 @@ const ManagePoints: React.FC = () => {
         sortOrder,
         isActive: productForm.isActive,
       };
-      await upsertPointProduct(
+      const canonicalProduct = await upsertPointProduct(
         config,
         {
           ...savedProduct,
@@ -1522,7 +1553,7 @@ const ManagePoints: React.FC = () => {
       );
       setProductForm(createEmptyProductForm());
       setProductFeedback("상품 정보를 저장했습니다.");
-      setProducts((prev) => mergePointProductIntoList(prev, savedProduct));
+      setProducts((prev) => mergePointProductIntoList(prev, canonicalProduct));
     } catch (error: any) {
       console.error("Failed to save point product:", error);
       setProductFeedback(error?.message || "상품 저장에 실패했습니다.");
@@ -1552,6 +1583,7 @@ const ManagePoints: React.FC = () => {
 
       if (productImageFile) {
         setProductImageUploading(true);
+        await ensureSensitiveOperation();
         const { year, semester } = getYearSemester(config);
         const basePath = `years/${year}/semesters/${semester}/point_products/${productId}`;
         const compressedBlob = await buildOptimizedImageBlob(productImageFile, {
@@ -1591,12 +1623,14 @@ const ManagePoints: React.FC = () => {
           imageStoragePath: imageRef.fullPath,
           previewStoragePath: previewRef.fullPath,
         };
+        setProductForm((previous) => ({ ...previous, ...imagePayload }));
+        setProductImageFile(null);
       }
 
-      await upsertPointProduct(
+      const savedProduct = await upsertPointProduct(
         config,
         {
-          id: productId,
+          id: productForm.id || undefined,
           name: productForm.name.trim(),
           description: productForm.description.trim(),
           price: Number(productForm.price || 0),
@@ -1614,21 +1648,7 @@ const ManagePoints: React.FC = () => {
       setProductImageFile(null);
       setProductImagePreviewUrl("");
       setProductFeedback("상품 정보를 저장했습니다.");
-      setProducts((prev) =>
-        mergePointProductIntoList(prev, {
-          id: productId,
-          name: productForm.name.trim(),
-          description: productForm.description.trim(),
-          price: Number(productForm.price || 0),
-          stock: Number(productForm.stock || 0),
-          imageUrl: imagePayload.imageUrl,
-          previewImageUrl: imagePayload.previewImageUrl,
-          imageStoragePath: imagePayload.imageStoragePath,
-          previewStoragePath: imagePayload.previewStoragePath,
-          sortOrder,
-          isActive: productForm.isActive,
-        }),
-      );
+      setProducts((prev) => mergePointProductIntoList(prev, savedProduct));
     } catch (error: any) {
       console.error("Failed to save point product with upload:", error);
       setProductFeedback(error?.message || "상품 저장에 실패했습니다.");
@@ -1675,13 +1695,13 @@ const ManagePoints: React.FC = () => {
 
     const stock = Math.max(0, Math.floor(Number(product.stock || 0)));
     if (stock > 0) {
-      setProductFeedback("재고가 0개인 상품만 삭제할 수 있습니다.");
+      setProductFeedback("재고가 0개인 상품만 보관할 수 있습니다.");
       return;
     }
 
     if (
       !window.confirm(
-        `"${product.name}" 상품을 삭제할까요?\n삭제한 상품은 학생 상점과 상품 관리 목록에서 사라집니다.`,
+        `"${product.name}" 상품을 보관할까요?\n학생 상점에서 숨겨집니다.`,
       )
     ) {
       return;
@@ -1689,13 +1709,17 @@ const ManagePoints: React.FC = () => {
 
     try {
       await deletePointProduct(config, product.id);
-      setProducts((prev) => prev.filter((item) => item.id !== product.id));
+      setProducts((prev) =>
+        prev.map((item) =>
+          item.id === product.id ? { ...item, isActive: false } : item,
+        ),
+      );
       if (productForm.id === product.id) {
         setProductForm(createEmptyProductForm());
         setProductImageFile(null);
         setProductImagePreviewUrl("");
       }
-      setProductFeedback("재고가 없는 상품을 삭제했습니다.");
+      setProductFeedback("재고가 없는 상품을 보관했습니다.");
     } catch (error: any) {
       console.error("Failed to delete point product:", error);
       setProductFeedback(error?.message || "상품 삭제에 실패했습니다.");
@@ -1794,6 +1818,7 @@ const ManagePoints: React.FC = () => {
       );
     } finally {
       setAdjustmentSaving(false);
+      setPendingAdjustment(getPendingCanonicalPointAdjustment(config));
     }
   };
 
@@ -1817,6 +1842,24 @@ const ManagePoints: React.FC = () => {
       setAdjustmentFeedback(error?.message || "직접 조정 취소에 실패했습니다.");
     } finally {
       setAdjustmentSaving(false);
+      setPendingAdjustment(getPendingCanonicalPointAdjustment(config));
+    }
+  };
+
+  const resumePendingAdjustment = async () => {
+    if (!canManage || !pendingAdjustment || adjustmentSaving) return;
+    setAdjustmentSaving(true);
+    try {
+      await updatePointAdjustment({ config, ...pendingAdjustment });
+      await refreshOverviewData();
+      setAdjustmentFeedback("이전 조정 처리를 완료했습니다.");
+    } catch (error: any) {
+      setAdjustmentFeedback(
+        error?.message || "조정 결과를 확인하지 못했습니다.",
+      );
+    } finally {
+      setAdjustmentSaving(false);
+      setPendingAdjustment(getPendingCanonicalPointAdjustment(config));
     }
   };
 
@@ -1871,6 +1914,24 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
+          {!loading && canManage && pendingAdjustment && (
+            <div
+              role="status"
+              className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"
+            >
+              <span>
+                {adjustmentFeedback || "완료되지 않은 위스 조정이 있습니다."}
+              </span>
+              <button
+                type="button"
+                disabled={adjustmentSaving}
+                onClick={() => void resumePendingAdjustment()}
+                className="min-h-11 rounded-lg border border-amber-300 bg-white px-4 font-bold disabled:opacity-50"
+              >
+                {adjustmentSaving ? "확인 중..." : "이전 조정 이어서 처리"}
+              </button>
+            </div>
+          )}
           {!loading && activeTab === "overview" && (
             <PointsOverviewTab
               wallets={paginatedWallets}

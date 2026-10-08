@@ -1,12 +1,14 @@
 import React, { useRef, useState } from "react";
 
 type AuthRecoveryStateProps = {
+  registrationPending?: boolean;
   error: { message: string; retryable: boolean } | null;
   onRetry: () => Promise<void>;
   onRestart: () => Promise<void>;
 };
 
 const AuthRecoveryState: React.FC<AuthRecoveryStateProps> = ({
+  registrationPending = false,
   error,
   onRetry,
   onRestart,
@@ -46,10 +48,16 @@ const AuthRecoveryState: React.FC<AuthRecoveryStateProps> = ({
         aria-busy={busy}
       >
         <h1 className="text-xl font-bold text-gray-900">
-          로그인을 확인하지 못했습니다
+          {registrationPending
+            ? "등록 승인 대기"
+            : "로그인을 확인하지 못했습니다"}
         </h1>
-        <p className="mt-3 break-keep text-base text-gray-700" role="alert">
+        <p
+          className="mt-3 break-keep text-base text-gray-700"
+          role={registrationPending && !actionError ? "status" : "alert"}
+        >
           {actionError ||
+            (registrationPending ? "선생님의 등록 승인이 필요합니다." : null) ||
             error?.message ||
             "연결 상태를 확인한 뒤 다시 시도해 주세요."}
         </p>
@@ -74,7 +82,11 @@ const AuthRecoveryState: React.FC<AuthRecoveryStateProps> = ({
             disabled={busy}
             onClick={() => void runAction("restart")}
           >
-            {pendingAction === "restart" ? "로그아웃 중…" : "다시 로그인"}
+            {pendingAction === "restart"
+              ? "로그아웃 중…"
+              : registrationPending
+                ? "로그아웃"
+                : "다시 로그인"}
           </button>
         </div>
       </section>

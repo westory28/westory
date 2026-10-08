@@ -8,6 +8,7 @@ import {
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { db } from "../../../lib/firebase";
+import SettingsStudentAccess from "./SettingsStudentAccess";
 import {
   ADMIN_EMAIL,
   STAFF_PERMISSION_KEYS,
@@ -173,6 +174,7 @@ const SettingsAccess: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <SettingsStudentAccess />
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-lg font-bold text-gray-900">세부 권한 관리</h3>

@@ -26,13 +26,17 @@ assert(
   "History classroom must delay visibility-hidden cancellation instead of cancelling immediately.",
 );
 assert(
-  /saveResult\(\{\s*status:\s*"cancelled"/.test(historyRunner),
-  "History classroom must still reset/cancel the attempt on confirmed page exits.",
+  /const handleForcedCancel[\s\S]*await persistCanonicalProgress/.test(historyRunner)
+    && !/saveResult\(\{\s*status:\s*"cancelled"/.test(historyRunner),
+  "History classroom exits must save the canonical attempt instead of fabricating cancelled results.",
 );
 assert(
-  /(attempt-started|attempt-active|attempt-left)/.test(historyRunner),
-  "History classroom must keep retry locks for actual attempt start/exit paths.",
+  /const beginCanonicalAttempt[\s\S]*await startAssessmentAttempt/.test(historyRunner)
+    && !/startAssessmentAttempt/.test(historyRunner.split("const loadAssignment = async")[1].split("const beginCanonicalAttempt")[0]),
+  "Reading the assignment must remain read-only; the student explicitly starts the server attempt.",
 );
+assert(!/attemptDeadlineMsRef\.current \+=|pausedMs/.test(historyRunner),
+  "Offline recovery must not extend the authoritative assessment deadline.");
 assert(
   /const handleBeforeUnload[\s\S]*persistAttemptProgress/.test(historyRunner),
   "History classroom browser reload must preserve the attempt; explicit confirmed exits still cancel above.",

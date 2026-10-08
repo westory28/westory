@@ -10,9 +10,9 @@ import { db } from "./firebase";
 import {
   getPointPolicy,
   getPointRankManualAdjustEarnedPointsByUid,
-  getPointWalletByUid,
   POINT_POLICY_FALLBACK,
 } from "./points";
+import { getStudentPointWallet as getPointWalletByUid } from "./studentWis";
 import {
   getPointRankDisplay,
   needsPointRankLegacyFallback,
@@ -22,6 +22,11 @@ import { normalizeBlankText } from "./lessonWorksheet";
 import { normalizeMockExamCategory } from "./mockExamRounds";
 import { getSemesterCollectionPath, getSemesterDocPath } from "./semesterScope";
 import type { PointWallet, SystemConfig } from "../types";
+import { readStudentVisibleLessons } from "./studentLessonReadCache";
+import {
+  readCanonicalQuizResults,
+  readCanonicalHistoryResults,
+} from "./studentAssessmentResults";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
@@ -270,6 +275,7 @@ const getHistoryStatusLabel = (result: HistoryClassroomResultDoc) => {
   if (result.status === "passed" || result.passed) return "통과";
   if (result.status === "failed") return "미통과";
   if (result.status === "cancelled") return "자동 종료";
+  if (result.status === "submitted") return "제출 완료";
   return "결과 없음";
 };
 
@@ -407,40 +413,32 @@ const readLessons = async (config: ConfigLike) => {
     console.warn("Failed to load lesson tree order:", error);
     return new Map<string, LessonTreeMeta>();
   });
-  const readCollection = async (path: string) => {
-    const snap = await getDocs(collection(db, path));
-    return snap.docs
-      .map((item) => ({ id: item.id, ...(item.data() as LessonDoc) }))
-      .map((item) => {
-        const unitId = String(item.unitId || item.id || "").trim();
-        const meta = treeMeta.get(unitId);
-        return {
-          unitId,
-          title: String(item.title || "").trim(),
-          visible: item.isVisibleToStudents !== false,
-          blankAnswers: getLessonBlankAnswers(item),
-          orderIndex: meta?.orderIndex,
-          sectionKey: meta?.sectionKey || "uncategorized",
-          sectionTitle: meta?.sectionTitle || "기타 수업 자료",
-          sectionOrder: meta?.sectionOrder ?? Number.MAX_SAFE_INTEGER,
-        };
-      })
-      .filter((item) => item.unitId && item.visible)
-      .sort((left, right) => {
-        const leftOrder = left.orderIndex ?? Number.MAX_SAFE_INTEGER;
-        const rightOrder = right.orderIndex ?? Number.MAX_SAFE_INTEGER;
-        if (leftOrder !== rightOrder) return leftOrder - rightOrder;
-        return (
-          left.title.localeCompare(right.title, "ko") ||
-          left.unitId.localeCompare(right.unitId, "ko")
-        );
-      });
-  };
-
-  const semesterLessons = await readCollection(
-    getSemesterCollectionPath(config, "lessons"),
-  );
-  return semesterLessons.length ? semesterLessons : readCollection("lessons");
+  const lessons = await readStudentVisibleLessons(config);
+  return lessons
+    .map((item) => {
+      const unitId = String(item.unitId || "").trim();
+      const meta = treeMeta.get(unitId);
+      return {
+        unitId,
+        title: String(item.title || "").trim(),
+        visible: item.isVisibleToStudents !== false,
+        blankAnswers: getLessonBlankAnswers(item),
+        orderIndex: meta?.orderIndex,
+        sectionKey: meta?.sectionKey || "uncategorized",
+        sectionTitle: meta?.sectionTitle || "기타 수업 자료",
+        sectionOrder: meta?.sectionOrder ?? Number.MAX_SAFE_INTEGER,
+      };
+    })
+    .filter((item) => item.unitId && item.visible)
+    .sort((left, right) => {
+      const leftOrder = left.orderIndex ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = right.orderIndex ?? Number.MAX_SAFE_INTEGER;
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      return (
+        left.title.localeCompare(right.title, "ko") ||
+        left.unitId.localeCompare(right.unitId, "ko")
+      );
+    });
 };
 
 type LessonCatalog = Awaited<ReturnType<typeof readLessons>>;
@@ -571,12 +569,14 @@ export const loadStudentQuizResults = async (
     ),
   );
 
-  return resultSnap.docs
-    .map((item) => ({
+  const canonical = await readCanonicalQuizResults(config, safeUid);
+  return [
+    ...canonical,
+    ...resultSnap.docs.map((item) => ({
       id: item.id,
       ...(item.data() as Omit<StudentQuizResultDoc, "id">),
-    }))
-    .sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp));
+    })),
+  ].sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp));
 };
 
 const loadQuizSummary = async (
@@ -760,6 +760,14 @@ const loadHistoryClassroomSummary = async (
     if (!results.length) {
       results = await readResults("history_classroom_results");
     }
+    const canonical = await readCanonicalHistoryResults(config, uid);
+    results = [
+      ...canonical.map((item) => ({
+        ...item,
+        status: item.sourceAvailable ? item.status : "submitted",
+      })),
+      ...results,
+    ];
     results.sort((a, b) => timestampMs(b.createdAt) - timestampMs(a.createdAt));
     if (!results.length) return emptyHistoryClassroomSummary();
 

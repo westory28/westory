@@ -72,8 +72,13 @@ export const callStudentDataService = async <Request extends object, Response>(
 ): Promise<Response> => {
   assertOwner(ownerUid);
   const user = auth.currentUser!;
+  const assertSameUser = () => {
+    assertOwner(ownerUid);
+    if (auth.currentUser !== user)
+      throw new Error("로그인 계정이 바뀌었습니다. 다시 저장해 주세요.");
+  };
   const token = await user.getIdTokenResult();
-  assertOwner(ownerUid);
+  assertSameUser();
   const open = await getHttpsCallable<
     { authorityGeneration: string; protocolVersion: number },
     Session
@@ -82,7 +87,7 @@ export const callStudentDataService = async <Request extends object, Response>(
     authorityGeneration: SESSION_GENERATION,
     protocolVersion: 2,
   });
-  assertOwner(ownerUid);
+  assertSameUser();
   if (
     session.status !== "active" ||
     session.authTime !== Number(token.claims.auth_time) ||
@@ -98,7 +103,7 @@ export const callStudentDataService = async <Request extends object, Response>(
     Response
   >(name);
   const currentToken = await user.getIdTokenResult();
-  assertOwner(ownerUid);
+  assertSameUser();
   if (currentToken.claims.auth_time !== token.claims.auth_time)
     throw new Error("로그인 상태가 바뀌었습니다. 다시 저장해 주세요.");
   const result = await callable({
@@ -109,7 +114,12 @@ export const callStudentDataService = async <Request extends object, Response>(
       revision: session.revision,
     },
   });
-  assertOwner(ownerUid);
+  assertSameUser();
+  if (
+    (await user.getIdTokenResult()).claims.auth_time !== token.claims.auth_time
+  )
+    throw new Error("로그인 상태가 바뀌었습니다. 다시 저장해 주세요.");
+  assertSameUser();
   return result.data;
 };
 

@@ -4,14 +4,11 @@ import MatchingConnectionLines from "../../../components/common/MatchingConnecti
 import { PageLoading } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
   query,
-  serverTimestamp,
-  setDoc,
   where,
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
@@ -35,18 +32,27 @@ import {
   normalizeMockExamRound,
 } from "../../../lib/mockExamRounds";
 import { db } from "../../../lib/firebase";
-import { claimPointActivityReward } from "../../../lib/points";
 import {
   getQuizSubmissionDeadlineMs,
-  getQuizSubmissionDocPath,
-  getQuizSubmissionRemainingSeconds,
-  getQuizSubmissionServerOffsetMs,
   normalizeQuizSubmissionDoc,
   readTimestampMs,
   type QuizSubmissionDoc,
 } from "../../../lib/quizSubmissions";
 import { emitSessionActivity } from "../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
+import { getYearSemester } from "../../../lib/semesterScope";
+import {
+  buildAssessmentDefinitionId,
+  getAssessmentState,
+  isAssessmentRevisionConflict,
+  saveAssessmentProgress,
+  startAssessmentAttempt,
+  submitAssessmentAttempt,
+} from "../../../lib/assessmentLifecycle";
+import type {
+  AssessmentAttemptState,
+  AssessmentRewardResult,
+} from "../../../lib/assessmentLifecycle";
 import {
   readStudentCurriculumTree,
   type StudentCurriculumTreeItem,
@@ -104,20 +110,8 @@ interface ResultDetail {
   matchingPairs?: MatchingPair[];
 }
 
-interface QuizLogDetail {
-  id: number;
-  correct: boolean;
-  u: string;
-  displayU?: string;
-}
-
 const ORDER_DELIMITER = "||";
 const MATCHING_PAIR_DELIMITER = "=>";
-
-const wait = (ms: number) =>
-  new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
 
 const normalizeStudentText = (value: unknown) => String(value ?? "").trim();
 const normalizeStudentEmail = (value: unknown) =>
@@ -142,27 +136,6 @@ const buildGradeClassLabel = (
   const className = normalizeStudentText(userData?.class);
   const number = normalizeStudentText(userData?.number);
   return `${grade}학년 ${className}반 ${number}번`.trim();
-};
-
-const readCommittedQuizSubmission = async (
-  submissionRef: ReturnType<typeof doc>,
-) => {
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const snap = await getDoc(submissionRef);
-    if (snap.exists()) {
-      const normalized = normalizeQuizSubmissionDoc(
-        snap.id,
-        snap.data() as Partial<QuizSubmissionDoc>,
-      );
-      if (readTimestampMs(normalized.startedAt) > 0) {
-        return normalized;
-      }
-    }
-    if (attempt < 3) {
-      await wait(140 * (attempt + 1));
-    }
-  }
-  return null;
 };
 
 const QuizRunner: React.FC = () => {
@@ -190,10 +163,22 @@ const QuizRunner: React.FC = () => {
   const [resumeNotice, setResumeNotice] = useState("");
 
   const [quizConfig, setQuizConfig] = useState<QuizConfig | null>(null);
+  const [questionBank, setQuestionBank] = useState<Question[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<Question[]>([]);
   const [historyCount, setHistoryCount] = useState(0);
   const [activeSubmission, setActiveSubmission] =
     useState<QuizSubmissionDoc | null>(null);
+  const [canonicalAttempt, setCanonicalAttemptState] =
+    useState<AssessmentAttemptState | null>(null);
+  const canonicalAttemptRef = useRef<AssessmentAttemptState | null>(null);
+  const setCanonicalAttempt = (
+    next: React.SetStateAction<AssessmentAttemptState | null>,
+  ) => {
+    const value =
+      typeof next === "function" ? next(canonicalAttemptRef.current) : next;
+    canonicalAttemptRef.current = value;
+    setCanonicalAttemptState(value);
+  };
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -224,6 +209,10 @@ const QuizRunner: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const persistTimeoutRef = useRef<number | null>(null);
   const persistInFlightRef = useRef(false);
+  const persistSaveTailRef = useRef<Promise<void>>(Promise.resolve());
+  const finishSubmittingRef = useRef(false);
+  const persistQueuedRef = useRef(false);
+  const persistQuizProgressRef = useRef<() => Promise<void>>(async () => {});
   const timeoutHandledRef = useRef(false);
   const unitOrderMapRef = useRef<Record<string, number>>({});
   const authIdentityRef = useRef<{ uid: string; email: string }>({
@@ -240,16 +229,61 @@ const QuizRunner: React.FC = () => {
   const fallbackStudentEmail =
     normalizeStudentEmail(currentUser?.email) ||
     normalizeStudentEmail(userData?.email);
-  const activeSubmissionPath =
-    fallbackStudentUid && unitId && category
-      ? getQuizSubmissionDocPath(
-          config,
-          fallbackStudentUid,
+  const { year: assessmentYear, semester: assessmentSemester } =
+    getYearSemester(config);
+  const assessmentDefinitionId =
+    unitId && category
+      ? buildAssessmentDefinitionId(
+          `${assessmentYear}-${assessmentSemester}`,
+          "QUIZ",
           unitId,
           category,
           examRound,
         )
       : "";
+
+  const mapCanonicalAttemptToSubmission = (
+    attempt: AssessmentAttemptState,
+  ): QuizSubmissionDoc => ({
+    id: attempt.attemptId,
+    uid: fallbackStudentUid,
+    name: normalizeStudentText(userData?.name),
+    email: fallbackStudentEmail,
+    class: normalizeStudentText(userData?.class),
+    number: normalizeStudentText(userData?.number),
+    gradeClass: buildGradeClassLabel(userData),
+    unitId: String(unitId || ""),
+    category: String(category || ""),
+    examRound,
+    title,
+    status: attempt.status === "SUBMITTED" ? "submitted" : "in_progress",
+    questionIds: attempt.questionIds,
+    answers: attempt.answers,
+    currentIndex: Math.max(
+      0,
+      attempt.questionIds.indexOf(attempt.currentItemId),
+    ),
+    hintUsedCount: 0,
+    revealedHintIds: [],
+    orderOptionMap: {},
+    timeLimitSeconds: Math.max(
+      60,
+      Math.round(
+        (Date.parse(attempt.deadlineAtIso) - Date.parse(attempt.startedAtIso)) /
+          1000,
+      ),
+    ),
+    clientStartedAtMs: Date.parse(attempt.startedAtIso),
+    lastClientSavedAtMs: Date.parse(attempt.lastSavedAtIso),
+    startedAt: { seconds: Math.floor(Date.parse(attempt.startedAtIso) / 1000) },
+    lastSavedAt: {
+      seconds: Math.floor(Date.parse(attempt.lastSavedAtIso) / 1000),
+    },
+    submittedAt: attempt.submittedAtIso
+      ? { seconds: Math.floor(Date.parse(attempt.submittedAtIso) / 1000) }
+      : undefined,
+    resultId: attempt.resultRef,
+  });
 
   const parseOrderAnswer = (value: string) =>
     value.split(ORDER_DELIMITER).filter(Boolean);
@@ -277,16 +311,18 @@ const QuizRunner: React.FC = () => {
       .filter((pair) => pair.left && pair.right);
   };
 
-  const parseMatchingAnswer = (value: string) =>
-    Object.fromEntries(
-      value
-        .split(ORDER_DELIMITER)
-        .map((item) => {
-          const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
-          return [left.trim(), right.trim()] as const;
-        })
-        .filter(([left, right]) => left && right),
-    );
+  const parseMatchingAnswer = (value: string): Record<string, string> =>
+    value
+      .split(ORDER_DELIMITER)
+      .reduce<Record<string, string>>((result, item) => {
+        const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
+        const normalizedLeft = left.trim();
+        const normalizedRight = right.trim();
+        if (normalizedLeft && normalizedRight) {
+          result[normalizedLeft] = normalizedRight;
+        }
+        return result;
+      }, {});
 
   const getChoiceOptionImage = (question: Question, index: number) =>
     Array.isArray(question.choiceOptionImages)
@@ -460,9 +496,6 @@ const QuizRunner: React.FC = () => {
   const getResolvedStudentUid = () =>
     authIdentityRef.current.uid || fallbackStudentUid;
 
-  const getResolvedStudentEmail = () =>
-    authIdentityRef.current.email || fallbackStudentEmail;
-
   const resolveStudentIdentity = async () => {
     const uid = fallbackStudentUid;
     let email = fallbackStudentEmail;
@@ -488,48 +521,6 @@ const QuizRunner: React.FC = () => {
     authIdentityRef.current = { uid, email };
     return authIdentityRef.current;
   };
-
-  const buildSubmissionPayload = (
-    status: QuizSubmissionDoc["status"],
-    overrides: Partial<QuizSubmissionDoc> = {},
-  ) => ({
-    uid: getResolvedStudentUid(),
-    name: normalizeStudentText(userData?.name) || "Student",
-    email: getResolvedStudentEmail(),
-    class: normalizeStudentText(userData?.class),
-    number: normalizeStudentText(userData?.number),
-    gradeClass: buildGradeClassLabel(userData || undefined),
-    unitId: String(unitId || "").trim(),
-    category: String(category || "").trim(),
-    title: String(title || "").trim(),
-    status,
-    questionIds:
-      overrides.questionIds ||
-      selectedQuestions.map((question) => String(question.id)),
-    answers: overrides.answers || answers,
-    currentIndex: overrides.currentIndex ?? currentIndex,
-    hintUsedCount: overrides.hintUsedCount ?? hintUsedCount,
-    revealedHintIds:
-      overrides.revealedHintIds ||
-      Object.entries(revealedHints)
-        .filter(([, value]) => value)
-        .map(([key]) => String(key)),
-    orderOptionMap:
-      overrides.orderOptionMap ||
-      Object.fromEntries(
-        Object.entries(orderOptionMap).map(([key, value]) => [
-          String(key),
-          value,
-        ]),
-      ),
-    timeLimitSeconds: Math.max(60, Number(quizConfig?.timeLimit) || 60),
-    clientStartedAtMs:
-      overrides.clientStartedAtMs ??
-      activeSubmission?.clientStartedAtMs ??
-      Date.now(),
-    lastClientSavedAtMs: Date.now(),
-    resultId: overrides.resultId ?? activeSubmission?.resultId ?? "",
-  });
 
   const selectQuestions = (
     all: Question[],
@@ -761,6 +752,7 @@ const QuizRunner: React.FC = () => {
   const restoreSubmissionState = (
     submission: QuizSubmissionDoc,
     questionList: Question[],
+    authoritativeServerNowIso: string,
   ) => {
     const restoredHints = submission.revealedHintIds.reduce<
       Record<number, boolean>
@@ -791,11 +783,22 @@ const QuizRunner: React.FC = () => {
       ),
     );
     setActiveSubmission(submission);
-    setServerTimeOffsetMs(getQuizSubmissionServerOffsetMs(submission));
+    const serverNowMs = Date.parse(authoritativeServerNowIso);
+    const nextServerOffsetMs = Number.isFinite(serverNowMs)
+      ? serverNowMs - Date.now()
+      : 0;
+    setServerTimeOffsetMs(nextServerOffsetMs);
     const deadlineMs = getQuizSubmissionDeadlineMs(submission);
     setQuizDeadlineMs(deadlineMs || null);
-    setTimeLeft(getQuizSubmissionRemainingSeconds(submission));
+    const remainingSeconds = deadlineMs
+      ? Math.max(
+          0,
+          Math.ceil((deadlineMs - (Date.now() + nextServerOffsetMs)) / 1000),
+        )
+      : 0;
+    setTimeLeft(remainingSeconds);
     timeoutHandledRef.current = false;
+    return remainingSeconds;
   };
 
   const finalizeQuizAttempt = async (
@@ -822,22 +825,25 @@ const QuizRunner: React.FC = () => {
         .filter(([, value]) => value)
         .map(([key]) => String(key));
 
-    let correctCount = 0;
+    await persistSaveTailRef.current;
+    const activeAttempt = canonicalAttemptRef.current;
+    if (!activeAttempt) {
+      throw new Error("응시 상태를 확인할 수 없습니다.");
+    }
+    const submitted = await submitAssessmentAttempt({
+      attemptId: activeAttempt.attemptId,
+      expectedRevision: activeAttempt.revision,
+      answers: answerMap,
+      submitReason: isTimeout ? "TIMEOUT" : "STUDENT",
+    });
+    const serverChecks = new Map(
+      submitted.answerChecks.map((check) => [check.id, check.correct]),
+    );
     const resultDetails: ResultDetail[] = [];
-    const logDetails: QuizLogDetail[] = [];
 
     questionList.forEach((question) => {
       const storedAnswer = answerMap[String(question.id)] || "";
-      const userAnswer = storedAnswer.toString().replace(/\s+/g, "").trim();
-      const actualAnswer = question.answer
-        .toString()
-        .replace(/\s+/g, "")
-        .trim();
-      const isCorrect = userAnswer === actualAnswer;
-
-      if (isCorrect) {
-        correctCount += 1;
-      }
+      const isCorrect = serverChecks.get(String(question.id)) === true;
 
       resultDetails.push({
         q: question.question,
@@ -851,81 +857,11 @@ const QuizRunner: React.FC = () => {
         matchingPairs:
           question.type === "matching" ? parseMatchingPairs(question) : [],
       });
-
-      logDetails.push({
-        id: question.id,
-        correct: isCorrect,
-        u: userAnswer,
-        displayU: storedAnswer,
-      });
     });
 
-    const finalScore = questionList.length
-      ? Math.round((correctCount / questionList.length) * 100)
-      : 0;
-    const resolvedUserData = userData;
-
-    const resultPayload = {
-      uid: getResolvedStudentUid(),
-      name: normalizeStudentText(resolvedUserData?.name) || "Student",
-      email: getResolvedStudentEmail(),
-      class: normalizeStudentText(resolvedUserData?.class),
-      number: normalizeStudentText(resolvedUserData?.number),
-      gradeClass: buildGradeClassLabel(resolvedUserData),
-      unitId: String(unitId || "").trim(),
-      category: getMockExamResultCategory(category, examRound),
-      ...(isMockExamCategory(category) ? { examRound } : {}),
-      score: finalScore,
-      details: logDetails,
-      status: isTimeout ? "시간 초과" : "완료",
-      timestamp: serverTimestamp(),
-      timeString: new Date().toLocaleString("ko-KR"),
-    };
-
-    console.info("[QuizRunner] Saving quiz result", {
-      resultCollectionPath: getSemesterCollectionPath(config, "quiz_results"),
-      submissionPath: activeSubmissionPath,
-      payload: {
-        uid: resultPayload.uid,
-        unitId: resultPayload.unitId,
-        category: resultPayload.category,
-        score: resultPayload.score,
-        status: resultPayload.status,
-      },
-    });
-
-    const resultRef = await addDoc(
-      collection(db, getSemesterCollectionPath(config, "quiz_results")),
-      resultPayload,
-    );
-
-    if (activeSubmissionPath) {
-      try {
-        await setDoc(
-          doc(db, activeSubmissionPath),
-          {
-            ...buildSubmissionPayload(isTimeout ? "timed_out" : "submitted", {
-              answers: answerMap,
-              hintUsedCount: hintCount,
-              revealedHintIds,
-              resultId: resultRef.id,
-            }),
-            lastSavedAt: serverTimestamp(),
-            submittedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      } catch (submissionError) {
-        console.error("Failed to update quiz submission after result save", {
-          submissionPath: activeSubmissionPath,
-          submissionError,
-        });
-      }
-    }
-
-    setScore(finalScore);
+    setScore(submitted.percent);
     setResults(resultDetails);
-    setFinalizedResultId(resultRef.id);
+    setFinalizedResultId(submitted.attemptId);
     setPointNotice("");
     setActiveSubmission((prev) =>
       prev
@@ -935,63 +871,102 @@ const QuizRunner: React.FC = () => {
             answers: answerMap,
             hintUsedCount: hintCount,
             revealedHintIds,
-            resultId: resultRef.id,
+            resultId: submitted.resultRef,
           })
         : prev,
     );
     setQuizDeadlineMs(null);
 
+    setCanonicalAttempt((previous) =>
+      previous
+        ? {
+            ...previous,
+            status: "SUBMITTED",
+            revision: submitted.revision || previous.revision,
+            answers: answerMap,
+            resultRef: submitted.resultRef,
+          }
+        : previous,
+    );
+
     return {
-      resultId: resultRef.id,
-      finalScore,
+      resultId: submitted.attemptId,
+      finalScore: submitted.percent,
       resultDetails,
+      reward: submitted.reward,
+      replayedSubmission: submitted.replayedSubmission,
     };
   };
 
   const persistQuizProgress = async () => {
+    if (persistQuizProgressRef.current !== persistQuizProgress) {
+      return persistQuizProgressRef.current();
+    }
     if (
       !getResolvedStudentUid() ||
       !unitId ||
       !category ||
-      !activeSubmissionPath ||
+      !canonicalAttempt ||
       view !== "quiz" ||
-      finishSubmitting ||
+      finishSubmittingRef.current ||
       startingQuiz
     ) {
       return;
     }
-    if (persistInFlightRef.current) return;
+    if (persistInFlightRef.current) {
+      persistQueuedRef.current = true;
+      return;
+    }
 
     persistInFlightRef.current = true;
 
     try {
-      const payload = {
-        ...buildSubmissionPayload("in_progress"),
-        lastSavedAt: serverTimestamp(),
-      };
-
-      console.info("[QuizRunner] Saving quiz progress", {
-        submissionPath: activeSubmissionPath,
-        payload: {
-          currentIndex: payload.currentIndex,
-          answerCount: Object.keys(payload.answers).length,
-          hintUsedCount: payload.hintUsedCount,
-        },
+      const pendingSave = saveAssessmentProgress({
+        attemptId: canonicalAttempt.attemptId,
+        expectedRevision: canonicalAttempt.revision,
+        answers,
+        currentItemId: String(selectedQuestions[currentIndex]?.id || ""),
+      }).then((saved) => {
+        setCanonicalAttempt((previous) =>
+          previous?.attemptId === canonicalAttempt.attemptId &&
+          ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(previous.status) &&
+          previous.revision <= saved.revision
+            ? {
+                ...previous,
+                status: "IN_PROGRESS",
+                revision: saved.revision,
+                answers,
+                currentItemId: String(
+                  selectedQuestions[currentIndex]?.id || "",
+                ),
+                lastSavedAtIso: saved.savedAtIso,
+              }
+            : previous,
+        );
       });
-
-      await setDoc(doc(db, activeSubmissionPath), payload, { merge: true });
+      persistSaveTailRef.current = pendingSave.then(
+        () => undefined,
+        () => undefined,
+      );
+      await pendingSave;
     } catch (saveError) {
       console.error("Failed to save quiz progress", {
-        submissionPath: activeSubmissionPath,
+        attemptId: canonicalAttempt.attemptId,
         saveError,
       });
     } finally {
       persistInFlightRef.current = false;
+      if (persistQueuedRef.current) {
+        persistQueuedRef.current = false;
+        schedulePersistQuizProgress();
+      }
     }
   };
+  // Debounced saves must use the committed answer and revision from the latest render.
+  persistQuizProgressRef.current = persistQuizProgress;
 
   const schedulePersistQuizProgress = () => {
-    if (view !== "quiz" || finishSubmitting || startingQuiz) return;
+    if (view !== "quiz" || finishSubmittingRef.current || startingQuiz) return;
     if (persistTimeoutRef.current) {
       window.clearTimeout(persistTimeoutRef.current);
     }
@@ -1011,7 +986,20 @@ const QuizRunner: React.FC = () => {
   }, [fallbackStudentUid, fallbackStudentEmail, currentUser]);
 
   useEffect(() => {
-    if (!unitId || !category || !fallbackStudentUid) return;
+    if (!fallbackStudentUid) return;
+    if (!unitId || !category) {
+      setBlockReason(
+        "평가 링크에 필요한 정보가 없습니다. 평가 목록에서 다시 선택해 주세요.",
+      );
+      setErrorMsg(null);
+      setSelectedQuestions([]);
+      setQuestionBank([]);
+      setActiveSubmission(null);
+      setCanonicalAttempt(null);
+      setHistoryCount(0);
+      setView("intro");
+      return;
+    }
     void initializeQuiz();
 
     return () => {
@@ -1027,7 +1015,7 @@ const QuizRunner: React.FC = () => {
   }, [config, unitId, category, examRound, fallbackStudentUid]);
 
   useEffect(() => {
-    if (view !== "quiz" || !activeSubmissionPath) return;
+    if (view !== "quiz" || !canonicalAttempt) return;
 
     return () => {
       if (persistTimeoutRef.current) {
@@ -1036,7 +1024,7 @@ const QuizRunner: React.FC = () => {
         void persistQuizProgress();
       }
     };
-  }, [activeSubmissionPath, view]);
+  }, [canonicalAttempt?.attemptId, view]);
 
   useEffect(() => {
     if (view !== "quiz" || !quizDeadlineMs || finishSubmitting) return;
@@ -1070,7 +1058,6 @@ const QuizRunner: React.FC = () => {
 
   useEffect(() => {
     if (view !== "quiz" || finishSubmitting) return undefined;
-
     emitSessionActivity();
     const timerId = window.setInterval(emitSessionActivity, 60 * 1000);
     return () => window.clearInterval(timerId);
@@ -1090,6 +1077,32 @@ const QuizRunner: React.FC = () => {
       setQuizDeadlineMs(null);
       setServerTimeOffsetMs(0);
       timeoutHandledRef.current = false;
+
+      const assessmentState = await getAssessmentState({
+        definitionId: assessmentDefinitionId,
+      });
+      if (!assessmentState.definition) {
+        setBlockReason(
+          "유효하지 않거나 더 이상 사용할 수 없는 평가 링크입니다.",
+        );
+        setView("intro");
+        return;
+      }
+      const stateBlockReason =
+        assessmentState.status === "PERMISSION"
+          ? "현재 학기·학급 배정으로는 이 평가에 응시할 수 없습니다."
+          : assessmentState.status === "NOT_OPEN"
+            ? "아직 응시할 수 있도록 공개되지 않은 평가입니다."
+            : assessmentState.status === "CLOSED"
+              ? "응시 기간이 종료된 평가입니다."
+              : assessmentState.status === "ARCHIVED"
+                ? "지난 학기 평가로, 읽기 전용입니다."
+                : "";
+      if (stateBlockReason) {
+        setBlockReason(stateBlockReason);
+        setView("intro");
+        return;
+      }
 
       const [grade3ClassIds, curriculumTree] = await Promise.all([
         getGrade3ClassIdsFromSchoolConfig(),
@@ -1158,94 +1171,14 @@ const QuizRunner: React.FC = () => {
       if (!fetchedQuestions.length) {
         throw new Error("등록된 문제가 없습니다.");
       }
+      setQuestionBank(fetchedQuestions);
 
-      const resultCollectionRef = collection(
-        db,
-        getSemesterCollectionPath(config, "quiz_results"),
-      );
-      const historyCategory = getMockExamResultCategory(category, examRound);
-      const historyQueries = [
-        query(
-          resultCollectionRef,
-          where("uid", "==", fallbackStudentUid),
-          where("unitId", "==", unitId),
-          where("category", "==", historyCategory),
-        ),
-      ];
-      if (isMockExamCategory(category) && historyCategory !== category) {
-        historyQueries.push(
-          query(
-            resultCollectionRef,
-            where("uid", "==", fallbackStudentUid),
-            where("unitId", "==", unitId),
-            where("category", "==", category),
-          ),
-        );
-      }
-      const historySnaps = await Promise.all(
-        historyQueries.map((historyQuery) => getDocs(historyQuery)),
-      );
-
-      const historyDocs = historySnaps
-        .flatMap((historySnap) => historySnap.docs)
-        .filter((historyDoc, index, docs) => {
-          if (docs.findIndex((item) => item.id === historyDoc.id) !== index) {
-            return false;
-          }
-          const historyData = historyDoc.data();
-          return mockExamRoundMatches(
-            historyData.category || category,
-            historyData.examRound,
-            examRound,
-          );
-        })
-        .sort((left, right) => {
-          const leftMs = readTimestampMs(left.data().timestamp);
-          const rightMs = readTimestampMs(right.data().timestamp);
-          return rightMs - leftMs;
-        });
-      setHistoryCount(historyDocs.length);
-
-      let solvedHistoryDocs = historyDocs;
-      if (isMockExamCategory(category)) {
-        try {
-          const allMockHistorySnap = await getDocs(
-            query(
-              resultCollectionRef,
-              where("uid", "==", fallbackStudentUid),
-              where("unitId", "==", unitId),
-            ),
-          );
-          solvedHistoryDocs = allMockHistorySnap.docs.filter((historyDoc) => {
-            const historyData = historyDoc.data();
-            return isMockExamCategory(historyData.category || category);
-          });
-        } catch (mockHistoryError) {
-          console.warn(
-            "Failed to load all mock exam attempts for question selection:",
-            mockHistoryError,
-          );
-        }
-      }
-
-      const submissionRef = doc(db, activeSubmissionPath);
-      const submissionSnap = await getDoc(submissionRef).catch(() => null);
-      const submissionData = submissionSnap?.data();
-      const submissionRoundMatches =
-        !isMockExamCategory(category) ||
-        !submissionData?.examRound ||
-        mockExamRoundMatches(category, submissionData.examRound, examRound);
-      const existingSubmission =
-        submissionSnap?.exists() &&
-        submissionData?.uid === fallbackStudentUid &&
-        submissionData?.unitId === unitId &&
-        submissionData?.category === category &&
-        submissionRoundMatches
-          ? normalizeQuizSubmissionDoc(
-              submissionSnap.id,
-              submissionData as Partial<QuizSubmissionDoc>,
-            )
-          : null;
+      const canonicalExistingAttempt = assessmentState.attempt;
+      setCanonicalAttempt(canonicalExistingAttempt);
+      setHistoryCount(Number(canonicalExistingAttempt?.attemptNumber || 0));
+      const existingSubmission = canonicalExistingAttempt
+        ? mapCanonicalAttemptToSubmission(canonicalExistingAttempt)
+        : null;
 
       if (existingSubmission?.status === "in_progress") {
         const questionMap = new Map(
@@ -1258,72 +1191,42 @@ const QuizRunner: React.FC = () => {
         if (
           restoredQuestions.length === existingSubmission.questionIds.length
         ) {
-          restoreSubmissionState(existingSubmission, restoredQuestions);
-
-          const remainingSeconds =
-            getQuizSubmissionRemainingSeconds(existingSubmission);
-          if (remainingSeconds <= 0) {
-            const finalized = await finalizeQuizAttempt({
-              isTimeout: true,
-              questionList: restoredQuestions,
-              answerMap: existingSubmission.answers,
-              hintCount: existingSubmission.hintUsedCount,
-              revealedHintIds: existingSubmission.revealedHintIds,
-            });
-            setScore(finalized.finalScore);
-            setResults(finalized.resultDetails);
-            setResumeNotice(
-              "저장된 응시가 종료 시각을 지나 자동 제출되었습니다.",
-            );
-            setView("result");
-            return;
-          }
-
-          setResumeNotice("저장된 진행 상태를 이어서 풀 수 있습니다.");
+          const remainingSeconds = restoreSubmissionState(
+            existingSubmission,
+            restoredQuestions,
+            assessmentState.serverNowIso,
+          );
+          setResumeNotice(
+            remainingSeconds <= 0
+              ? "제한 시간이 끝난 응시입니다. 이어하기를 누르면 저장된 답안으로 제출을 마칩니다."
+              : "서버에 저장된 진행 상태를 이어서 풀 수 있습니다.",
+          );
           setView("intro");
           return;
         }
       }
 
-      const allowRetakeForAttempt = isMockExamCategory(category)
-        ? isAdditionalMockExamRound(examRound)
-        : nextQuizConfig.allowRetake;
-
-      if (!allowRetakeForAttempt && historyDocs.length > 0) {
-        setBlockReason("재응시가 허용되지 않는 평가입니다.");
-        setView("intro");
-        return;
-      }
-
-      const cooldownMinutes = Number(nextQuizConfig.cooldown || 0);
-      if (cooldownMinutes > 0 && historyDocs.length > 0) {
-        const lastAttemptMs = readTimestampMs(historyDocs[0].data().timestamp);
-        if (lastAttemptMs > 0) {
-          const remainingMinutes =
-            cooldownMinutes - (Date.now() - lastAttemptMs) / 1000 / 60;
-          if (remainingMinutes > 0) {
-            setBlockReason(
-              `재응시 대기 시간: ${Math.ceil(remainingMinutes)}분 남음`,
-            );
-            setView("intro");
-            return;
-          }
+      if (canonicalExistingAttempt?.status === "SUBMITTED") {
+        if (
+          canonicalExistingAttempt.attemptNumber >=
+          assessmentState.definition.maxAttempts
+        ) {
+          setBlockReason("응시 가능 횟수를 모두 사용했습니다.");
+          setView("intro");
+          return;
+        }
+        const retryAt =
+          Date.parse(canonicalExistingAttempt.submittedAtIso) +
+          assessmentState.definition.cooldownMinutes * 60000;
+        if (retryAt > Date.parse(assessmentState.serverNowIso)) {
+          setBlockReason(
+            `${Math.ceil((retryAt - Date.parse(assessmentState.serverNowIso)) / 60000)}분 후 다시 응시할 수 있습니다.`,
+          );
+          setView("intro");
+          return;
         }
       }
-
       const solvedIds = new Set<number>();
-      solvedHistoryDocs.forEach((historyDoc) => {
-        const details = Array.isArray(historyDoc.data().details)
-          ? historyDoc.data().details
-          : [];
-        details.forEach((detail: { id?: string | number }) => {
-          const parsed = Number(detail?.id);
-          if (Number.isFinite(parsed)) {
-            solvedIds.add(parsed);
-          }
-        });
-      });
-
       const questionOrder = normalizeQuestionOrder(
         nextQuizConfig.questionOrder,
         nextQuizConfig.randomOrder,
@@ -1365,79 +1268,69 @@ const QuizRunner: React.FC = () => {
 
     if (activeSubmission?.status === "in_progress") {
       emitSessionActivity();
-      setTimeLeft(getQuizSubmissionRemainingSeconds(activeSubmission));
+      setTimeLeft(
+        quizDeadlineMs
+          ? Math.max(
+              0,
+              Math.ceil(
+                (quizDeadlineMs - (Date.now() + serverTimeOffsetMs)) / 1000,
+              ),
+            )
+          : 0,
+      );
       timeoutHandledRef.current = false;
       setView("quiz");
       return;
     }
 
     setStartingQuiz(true);
-    let submissionEmail = "";
-    let startPayloadSummary: {
-      uid: string;
-      unitId: string;
-      category: string;
-      questionCount: number;
-      title: string;
-      status: string;
-    } | null = null;
     try {
-      const identity = await resolveStudentIdentity();
-      const submissionRef = doc(db, activeSubmissionPath);
-      const clientStartedAtMs = Date.now();
-      submissionEmail = identity.email;
-      if (!submissionEmail) {
-        throw new Error("평가 시작에 필요한 이메일 정보를 찾지 못했습니다.");
-      }
-      const payload = {
-        ...buildSubmissionPayload("in_progress", {
-          answers: {},
-          currentIndex: 0,
-          hintUsedCount: 0,
-          revealedHintIds: [],
-          clientStartedAtMs,
-        }),
-        startedAt: serverTimestamp(),
-        lastSavedAt: serverTimestamp(),
-      };
-      startPayloadSummary = {
-        uid: payload.uid,
-        unitId: payload.unitId,
-        category: payload.category,
-        questionCount: payload.questionIds.length,
-        title: payload.title,
-        status: payload.status,
-      };
-
-      console.info("[QuizRunner] Starting quiz attempt", {
-        submissionPath: activeSubmissionPath,
-        payload: {
-          ...startPayloadSummary,
-          email: submissionEmail,
-        },
+      await resolveStudentIdentity();
+      const attempt = await startAssessmentAttempt({
+        definitionId: assessmentDefinitionId,
       });
-
-      await setDoc(submissionRef, payload);
-      const committedSubmission =
-        (await readCommittedQuizSubmission(submissionRef)) ||
-        normalizeQuizSubmissionDoc(submissionRef.id, {
-          ...payload,
-          startedAt: { seconds: Math.floor(clientStartedAtMs / 1000) },
-        });
+      const questionById = new Map(
+        questionBank.map((question) => [String(question.id), question]),
+      );
+      const committedQuestions = attempt.questionIds
+        .map((questionId) => questionById.get(questionId))
+        .filter((question): question is Question => Boolean(question));
+      if (committedQuestions.length !== attempt.questionIds.length) {
+        throw new Error("서버가 확정한 평가 문항을 불러오지 못했습니다.");
+      }
+      const startedState = await getAssessmentState({
+        attemptId: attempt.attemptId,
+      });
+      const committedSelection = selectQuestions(
+        committedQuestions,
+        new Set<number>(),
+        committedQuestions.length,
+        quizConfig?.questionOrder || "created",
+      );
+      const committedSubmission = mapCanonicalAttemptToSubmission(attempt);
 
       setAnswers({});
       setCurrentIndex(0);
       setHintUsedCount(0);
       setRevealedHints({});
-      restoreSubmissionState(committedSubmission, selectedQuestions);
-      setResumeNotice("저장된 진행 상태를 이어서 풀 수 있습니다.");
+      setCanonicalAttempt(attempt);
+      setSelectedQuestions(committedSelection.selected);
+      restoreSubmissionState(
+        committedSubmission,
+        committedSelection.selected,
+        startedState.serverNowIso,
+      );
+      setOrderOptionMap(committedSelection.orderOptionMap);
+      setResumeNotice(
+        attempt.resumed
+          ? "서버에 저장된 진행 상태를 이어서 풀 수 있습니다."
+          : "응시가 시작되었습니다. 답안은 서버에 자동 저장됩니다.",
+      );
       setView("quiz");
     } catch (error) {
       console.error("Failed to start quiz attempt", {
-        submissionPath: activeSubmissionPath,
-        payload: startPayloadSummary,
+        definitionId: assessmentDefinitionId,
         currentUserUid: currentUser?.uid || "",
-        currentUserEmail: submissionEmail,
         userDataUid: userData?.uid || "",
         code:
           typeof error === "object" && error && "code" in error
@@ -1569,8 +1462,85 @@ const QuizRunner: React.FC = () => {
     schedulePersistQuizProgress();
   };
 
+  const applyQuizPointReward = (
+    pointResult: AssessmentRewardResult | undefined,
+    replayedSubmission: boolean,
+  ) => {
+    if (!pointResult || pointResult.status === "NOT_RECORDED") {
+      setPointNotice("이전 제출에는 보상 내역이 기록되어 있지 않습니다.");
+      return;
+    }
+    if (
+      pointResult.status === "DISABLED" ||
+      pointResult.status === "NOT_ELIGIBLE"
+    ) {
+      setPointNotice(
+        pointResult.blockedMessage ||
+          "이번 문제 풀이에 지급할 위스가 없습니다.",
+      );
+      return;
+    }
+    if (replayedSubmission || pointResult.status === "DUPLICATE") {
+      setPointNotice(
+        pointResult.blockedMessage ||
+          "이번 문제 풀이 위스는 이미 반영되었습니다.",
+      );
+      return;
+    }
+    try {
+      if (
+        pointResult.awarded &&
+        (pointResult.totalAwarded || pointResult.amount)
+      ) {
+        notifyPointsUpdated();
+      }
+      if ((pointResult.totalAwarded || pointResult.amount) > 0) {
+        const totalAwarded = Number(
+          pointResult.totalAwarded || pointResult.amount || 0,
+        );
+        if (pointResult.bonusAwarded && pointResult.bonusAmount) {
+          setPointNotice(
+            `문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`,
+          );
+          showToast({
+            tone: "success",
+            title: "문제 풀이 완료",
+            message: `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
+          });
+        } else {
+          setPointNotice(
+            `문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`,
+          );
+          showToast({
+            tone: "success",
+            title: "문제 풀이 완료",
+            message: `+${totalAwarded}위스가 반영되었습니다.`,
+          });
+        }
+      } else if (pointResult.duplicate) {
+        setPointNotice("이번 문제 풀이 위스는 이미 반영되었습니다.");
+        showToast({
+          tone: "info",
+          title: "문제 풀이 위스가 이미 반영되었습니다.",
+        });
+      }
+    } catch (pointError) {
+      console.error(
+        "Failed to display confirmed quiz point reward",
+        pointError,
+      );
+      setPointNotice("문제 풀이 위스를 바로 반영하지 못했습니다.");
+      showToast({
+        tone: "warning",
+        title: "문제 풀이 결과는 저장되었습니다.",
+        message: "위스 반영 상태를 바로 확인하지 못했습니다.",
+      });
+    }
+  };
+
   const finishQuiz = async (isTimeout = false) => {
-    if (finishSubmitting) return;
+    if (finishSubmittingRef.current) return;
+    finishSubmittingRef.current = true;
     if (!isTimeout) {
       emitSessionActivity();
     }
@@ -1593,58 +1563,7 @@ const QuizRunner: React.FC = () => {
       const finalized = await finalizeQuizAttempt({ isTimeout });
       setFinalizedResultId(finalized.resultId);
 
-      try {
-        const pointResult = await claimPointActivityReward({
-          config,
-          activityType: "quiz",
-          sourceId: `quiz-result-${finalized.resultId}`,
-          sourceLabel: title || "문제 풀이 완료",
-        });
-        if (
-          pointResult.awarded &&
-          (pointResult.totalAwarded || pointResult.amount)
-        ) {
-          notifyPointsUpdated();
-        }
-        if ((pointResult.totalAwarded || pointResult.amount) > 0) {
-          const totalAwarded = Number(
-            pointResult.totalAwarded || pointResult.amount || 0,
-          );
-          if (pointResult.bonusAwarded && pointResult.bonusAmount) {
-            setPointNotice(
-              `문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`,
-            );
-            showToast({
-              tone: "success",
-              title: "문제 풀이 완료",
-              message: `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
-            });
-          } else {
-            setPointNotice(
-              `문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`,
-            );
-            showToast({
-              tone: "success",
-              title: "문제 풀이 완료",
-              message: `+${totalAwarded}위스가 반영되었습니다.`,
-            });
-          }
-        } else if (pointResult.duplicate) {
-          setPointNotice("이번 문제 풀이 위스는 이미 반영되었습니다.");
-          showToast({
-            tone: "info",
-            title: "문제 풀이 위스가 이미 반영되었습니다.",
-          });
-        }
-      } catch (pointError) {
-        console.error("Failed to claim quiz point reward", pointError);
-        setPointNotice("문제 풀이 위스를 바로 반영하지 못했습니다.");
-        showToast({
-          tone: "warning",
-          title: "문제 풀이 결과는 저장되었습니다.",
-          message: "위스 반영 상태를 바로 확인하지 못했습니다.",
-        });
-      }
+      applyQuizPointReward(finalized.reward, finalized.replayedSubmission);
 
       setView("result");
     } catch (error) {
@@ -1652,9 +1571,12 @@ const QuizRunner: React.FC = () => {
       showToast({
         tone: "error",
         title: "문제 풀이 결과 저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        message: isAssessmentRevisionConflict(error)
+          ? "다른 창에서 답안이 변경되었습니다. 입력한 답안을 보관한 뒤 새로고침하여 저장 상태를 확인해 주세요."
+          : "잠시 후 다시 시도해 주세요.",
       });
     } finally {
+      finishSubmittingRef.current = false;
       setFinishSubmitting(false);
     }
   };
@@ -1675,8 +1597,9 @@ const QuizRunner: React.FC = () => {
 
   if (view === "intro") {
     const timeLimitMinutes = Math.max(1, Math.round(timeLimitSeconds / 60));
-    const questionCount =
-      selectedQuestions.length || quizConfig?.questionCount || 10;
+    const questionCount = blockReason
+      ? 0
+      : selectedQuestions.length || quizConfig?.questionCount || 10;
     const assessmentTypeLabel =
       category === "diagnostic"
         ? "진단평가"

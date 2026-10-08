@@ -255,7 +255,6 @@ const OrderReviewFlowPanel: React.FC<{
   const canApprove = order.status === "requested";
   const canFulfill = order.status === "approved";
   const canCloseRequest = order.status === "requested";
-  const canReopen = order.status === "approved";
   const approvalComplete =
     order.status === "approved" || order.status === "fulfilled";
   const fulfillmentComplete = order.status === "fulfilled";
@@ -319,30 +318,7 @@ const OrderReviewFlowPanel: React.FC<{
           tone="danger"
           onClick={() => onSaveOrder("rejected")}
         />
-        <FlowActionButton
-          label="요청 취소 처리"
-          isSaving={isSavingThisOrder && orderSavingStatus === "cancelled"}
-          savingLabel={ORDER_SAVING_LABELS.cancelled}
-          disabled={disableAll || !canCloseRequest}
-          tone="neutral"
-          onClick={() => onSaveOrder("cancelled")}
-        />
       </div>
-
-      {canReopen && (
-        <button
-          type="button"
-          disabled={disableAll}
-          onClick={() => onSaveOrder("requested")}
-          className="mt-2 min-h-8 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:text-gray-300"
-        >
-          <OrderActionContent
-            isSaving={isSavingThisOrder && orderSavingStatus === "requested"}
-            idleLabel="승인 취소"
-            savingLabel={ORDER_SAVING_LABELS.requested}
-          />
-        </button>
-      )}
     </div>
   );
 };

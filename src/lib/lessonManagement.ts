@@ -1,6 +1,7 @@
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDocFromServer, onSnapshot } from "firebase/firestore";
-import { app, auth, db, getHttpsCallable } from "./firebase";
+import { auth, db, getHttpsCallable } from "./firebase";
+import { ensureWestoryAppCheck as ensureUploadAppCheck } from "./appCheck";
 import type { SystemConfig } from "../types";
 import type { LessonData } from "./lessonData";
 import type { LessonPdfProcessingMeta } from "./lessonPdfExtraction";
@@ -50,35 +51,6 @@ const preparedAssets = new Map<
   string,
   { asset: UploadedAsset; expiresAtMs: number }
 >();
-let uploadAppCheck: Promise<void> | null = null;
-
-const ensureUploadAppCheck = () => {
-  if (
-    import.meta.env.DEV &&
-    (import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ||
-      import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST)
-  )
-    return Promise.resolve();
-  if (!uploadAppCheck) {
-    uploadAppCheck = (async () => {
-      const siteKey = String(
-        import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || "",
-      ).trim();
-      if (!siteKey) throw new Error("파일 업로드 인증 설정을 확인해야 합니다.");
-      const { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken } =
-        await import("firebase/app-check");
-      const appCheck = initializeAppCheck(app, {
-        provider: new ReCaptchaEnterpriseProvider(siteKey),
-        isTokenAutoRefreshEnabled: true,
-      });
-      await getToken(appCheck);
-    })().catch((error) => {
-      uploadAppCheck = null;
-      throw error;
-    });
-  }
-  return uploadAppCheck;
-};
 
 const assertOwner = (uid: string) => {
   if (!uid || auth.currentUser?.uid !== uid)

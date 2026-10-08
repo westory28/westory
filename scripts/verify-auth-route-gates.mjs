@@ -320,6 +320,25 @@ for (const auth of [
   assert.equal(h.events.paints.length, 0);
 }
 
+for (const pathname of ["/student/dashboard", "/teacher/settings"]) {
+  const h = layoutHarness({
+    pathname,
+    auth: {
+      authPhase: "registration-pending",
+      currentUser: null,
+      onboardingUser: fakeUser,
+      userData: profile("student", { registrationApprovalStatus: "PENDING" }),
+    },
+  });
+  const tree = h.render();
+  assert.equal(tree.type, "AuthRecoveryState");
+  assert.equal(tree.props.registrationPending, true);
+  assertBlocked(h.flush(), "pending registration");
+  assert.equal(h.events.marks.length, 0);
+  assert.equal(h.events.paints.length, 0);
+  assert.equal(h.events.refreshes.length, 0);
+}
+
 for (const rolePreference of [null, "teacher"]) {
   const h = layoutHarness({ pathname: "/teacher/settings", rolePreference });
   const tree = h.render();
@@ -513,6 +532,31 @@ for (const [pathname, userData] of [
     JSON.stringify(tree).includes("로그아웃을 완료하지 못했습니다"),
     true,
   );
+}
+
+{
+  const h = hooks();
+  const { default: Recovery } = load(recoveryCode, { react: h.react });
+  h.initialize(() =>
+    Recovery({
+      registrationPending: true,
+      error: null,
+      onRetry: async () => {},
+      onRestart: async () => {},
+    }),
+  );
+  const tree = h.render();
+  assert.equal(
+    nodes(tree).some((node) => node.props?.role === "status"),
+    true,
+  );
+  assert.equal(JSON.stringify(tree).includes("등록 승인 대기"), true);
+  assert.equal(
+    JSON.stringify(tree).includes("선생님의 등록 승인이 필요합니다."),
+    true,
+  );
+  assert.equal(nodes(tree).filter((node) => node.type === "button").length, 2);
+  assert.equal(JSON.stringify(tree).includes("다시 로그인"), false);
 }
 
 console.log(

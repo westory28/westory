@@ -145,6 +145,10 @@ function fixture(options = {}) {
           return { getYearSemester: (value) => value };
         if (dependency === "./studentProfileCommands")
           return { callStudentDataService: service };
+        if (dependency === "./sensitiveOperation")
+          return { ensureSensitiveOperation: async () => {} };
+        if (dependency === "./studentRegistrationStatus")
+          return load("studentRegistrationStatus");
         throw new Error(dependency);
       },
     });

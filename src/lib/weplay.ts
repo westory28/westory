@@ -1,4 +1,4 @@
-import { getHttpsCallable } from "./firebase";
+import { getHistoryDictionaryCallable as getHttpsCallable } from "./historyDictionarySession";
 import { getYearSemester } from "./semesterScope";
 import type { SystemConfig } from "../types";
 import { DEFAULT_WEPLAY_GAME_TITLE } from "./weplayTitle";
@@ -155,7 +155,9 @@ async function call<T>(
 ): Promise<T> {
   if (!config?.year || !config?.semester)
     throw new Error("현재 학기를 확인하지 못했습니다. 새로고침해 주세요.");
-  const fn = await getHttpsCallable<object, T>(name);
+  const fn = await getHttpsCallable<object, T>(name, {
+    reuseSessionProof: true,
+  });
   return (await fn({ ...getYearSemester(config), ...data })).data;
 }
 export const getWeplayLobby = (config: WeplayConfig) =>

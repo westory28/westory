@@ -1,6 +1,6 @@
 import NumericInput from "../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
@@ -11,7 +11,6 @@ import {
   getAssessmentVisibilityOptionsFromSchoolConfig,
   normalizeAssessmentClassId,
   normalizeAssessmentConfigEntry,
-  resetAssessmentAttemptsByClass,
 } from "../../../lib/assessmentConfig";
 import {
   DEFAULT_MOCK_EXAM_ROUND,
@@ -26,6 +25,14 @@ import {
   type MockExamRound,
 } from "../../../lib/mockExamRounds";
 import { getSemesterDocPath } from "../../../lib/semesterScope";
+import {
+  getAssessmentSemesterId,
+  saveQuizAssessmentSettings,
+} from "../../../lib/assessmentRelease";
+import {
+  buildAssessmentDefinitionId,
+  executeAssessmentManagementCommand,
+} from "../../../lib/assessmentLifecycle";
 
 interface QuizSettingsModalProps {
   isOpen: boolean;
@@ -370,32 +377,34 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         category,
         isMockExam ? selectedExamRound : undefined,
       );
-      await setDoc(
-        doc(db, getSemesterDocPath(config, "assessment_config", "settings")),
+      await saveQuizAssessmentSettings(
+        config,
+        nodeId,
+        category,
+        isMockExam ? selectedExamRound : "",
+        nodeTitle || CATEGORY_LABELS[category] || "평가",
+        key,
         {
-          [key]: {
-            active: settings.active,
-            questionCount: Math.max(1, settings.questionCount),
-            randomOrder: settings.questionOrder === "random",
-            questionOrder: settings.questionOrder,
-            timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
-            allowRetake: isMockExam
-              ? isRetakableMockExam
-              : settings.allowRetake,
-            cooldown: Math.max(0, settings.cooldown),
-            hintLimit: isMockExam ? 0 : Math.max(0, settings.hintLimit),
-            visibleTargetGrade: "3",
-            visibleClassIds: normalizedSelectedClassIds,
-            visibilityVersion: 2,
-          },
+          active: settings.active,
+          questionCount: Math.max(1, settings.questionCount),
+          randomOrder: settings.questionOrder === "random",
+          questionOrder: settings.questionOrder,
+          timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
+          allowRetake: isMockExam ? isRetakableMockExam : settings.allowRetake,
+          cooldown: Math.max(0, settings.cooldown),
+          hintLimit: isMockExam ? 0 : Math.max(0, settings.hintLimit),
+          visibleTargetGrade: "3",
+          visibleClassIds: normalizedSelectedClassIds,
+          visibilityVersion: 2,
         },
-        { merge: true },
       );
       alert("설정을 저장했습니다.");
       onClose();
     } catch (error) {
       console.error("Failed to save assessment settings:", error);
-      alert("설정 저장에 실패했습니다.");
+      alert(
+        error instanceof Error ? error.message : "설정 저장에 실패했습니다.",
+      );
     } finally {
       setSaving(false);
     }
@@ -405,17 +414,23 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     if (!canEdit || !nodeId) return;
     setResettingClassId(classId);
     try {
-      const result = await resetAssessmentAttemptsByClass({
-        config,
-        unitId: nodeId,
-        category,
+      const result = await executeAssessmentManagementCommand<{
+        resetCount: number;
+      }>("resetAssessmentAttemptsByClassV2", {
+        definitionId: buildAssessmentDefinitionId(
+          getAssessmentSemesterId(config),
+          "QUIZ",
+          nodeId,
+          category,
+          isMockExam ? selectedExamRound : "",
+        ),
         classId,
-        ...(isMockExam ? { examRound: selectedExamRound } : {}),
+        reason: "교사 학급별 응시 초기화",
       });
       const classLabel = visibilityTargetMap.get(classId)?.fullLabel || classId;
       setConfirmResetClassId("");
       alert(
-        `${classLabel} 응시 초기화를 완료했습니다.\n응시 기록 ${result.deletedQuizResultCount}건, 포인트 거래 ${result.deletedPointTransactionCount}건을 정리했습니다.`,
+        `${classLabel} 응시 ${result.resetCount}건을 초기화했습니다. 기존 제출 결과와 위스는 유지됩니다.`,
       );
     } catch (error) {
       console.error("Failed to reset assessment attempts by class:", error);
@@ -507,9 +522,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               {target.fullLabel} 응시 기록을 초기화합니다.
             </div>
             <p className="mt-1 text-[10px] leading-4 text-rose-700">
-              {isMockExam
-                ? "응시 기록, 제출 상태, 해당 평가 포인트 거래를 정리합니다."
-                : "응시 기록, 제출 상태, 사용한 힌트, 해당 평가 포인트 거래를 정리합니다."}
+              다시 응시할 수 있도록 대기를 해제합니다. 기존 제출 결과와 위스는
+              유지됩니다.
             </p>
             <div className="mt-2 flex flex-wrap justify-end gap-1.5">
               <button

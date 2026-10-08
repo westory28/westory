@@ -2,15 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import { InlineLoading } from "../../../../components/common/LoadingState";
-import {
-  collection,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../../lib/appEvents";
 import { db } from "../../../../lib/firebase";
@@ -25,6 +17,11 @@ import {
 } from "../../../../lib/lessonData";
 import { buildLessonAnswerSnapshot } from "../../../../lib/lessonProgressAnswers";
 import { claimPointActivityReward } from "../../../../lib/points";
+import {
+  saveLessonAnswers,
+  recordLessonCorePointFind,
+  claimLessonCorePointReward,
+} from "../../../../lib/learningCommands";
 import { emitSessionActivity } from "../../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../../lib/semesterScope";
 import {
@@ -61,7 +58,6 @@ interface LessonContentProps {
 }
 
 const EMPTY_BLANK_LABEL = "빈칸";
-const LESSON_CORE_POINTS_ALL_SOURCE_ID = "lesson-core-points-all";
 const LESSON_CORE_POINTS_REWARD_LABEL = "500위스";
 const EMPTY_CORE_POINT_OVERVIEW: CorePointOverviewState = {
   loaded: false,
@@ -144,6 +140,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const highlightTimerRef = useRef<number | null>(null);
   const viewStartedAtRef = useRef(Date.now());
   const interactedRef = useRef(false);
+  const answerRevisionRef = useRef<number | null>(null);
+  const draftVersionRef = useRef(0);
+  const savingRef = useRef(false);
+  const coreFindsPendingRef = useRef(new Set<string>());
+  const activeScopeRef = useRef("");
+  const activeScope = `${currentUser?.uid}:${config?.year}:${config?.semester}:${unitId}`;
+  if (activeScopeRef.current !== activeScope) answerRevisionRef.current = null;
+  activeScopeRef.current = activeScope;
   const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
   const interactiveFootnoteMap = useMemo(() => {
     if (!lesson) return new Map<string, LessonFootnote>();
@@ -300,6 +304,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const refreshCorePointOverview = async (
     currentUnitFoundIds = foundCorePointIdsRef.current,
   ) => {
+    const operationScope = activeScope;
     if (!canPersist || !currentUser?.uid) {
       const fallbackOverview = {
         loaded: false,
@@ -321,6 +326,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
           ),
         ),
       ]);
+    if (activeScopeRef.current !== operationScope)
+      throw new Error("수업 자료가 바뀌었습니다.");
 
     const progressByUnitId = new Map(
       progressUnitsSnap.docs.map((item) => [
@@ -365,24 +372,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setCorePointOverview(nextOverview);
     setCorePointRewardSettled(Boolean(progressRoot?.corePointRewardClaimed));
     return nextOverview;
-  };
-
-  const persistCorePointProgress = async (
-    nextFoundIds: string[],
-    options?: { completed?: boolean },
-  ) => {
-    const progressRef = getProgressRef();
-    if (!progressRef || !currentUser?.uid || !unitId) return;
-    const payload = {
-      userId: currentUser.uid,
-      unitId,
-      corePointFinds: nextFoundIds,
-      updatedAt: serverTimestamp(),
-      ...(options?.completed
-        ? { corePointCompletedAt: serverTimestamp() }
-        : {}),
-    };
-    await setDoc(progressRef, payload, { merge: true });
   };
 
   const getAnswerSnapshot = (options?: { finalize?: boolean }) => {
@@ -483,6 +472,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       const key =
         input.dataset.blankId || input.dataset.blankIndex || String(index);
       const status = answers[key]?.status || "";
+      input.value = answers[key]?.value || "";
       input.classList.toggle("correct", status === "correct");
       input.classList.toggle("wrong", status === "wrong");
     });
@@ -492,36 +482,49 @@ const LessonContent: React.FC<LessonContentProps> = ({
     const progressRef = getProgressRef();
     if (!progressRef || !currentUser?.uid || !unitId) return;
     const answerSnapshot = getAnswerSnapshot({ finalize: true });
-    const correctCount = Object.values(answerSnapshot.answers).filter(
-      (answer) => answer.status === "correct",
-    ).length;
-    const accuracyPercent =
-      answerSnapshot.totalCount > 0
-        ? Math.round((correctCount / answerSnapshot.totalCount) * 100)
-        : 0;
-    const accuracyMessage =
-      answerSnapshot.totalCount > 0
-        ? `정답률 ${accuracyPercent}% · 정답 ${correctCount}/${answerSnapshot.totalCount}`
-        : "저장되었습니다.";
+    if (savingRef.current || !lesson) return;
+    if (answerRevisionRef.current === null) {
+      showToast({
+        tone: "error",
+        title: "학습 기록을 확인하지 못했습니다.",
+        message: "입력 내용을 보관한 뒤 자료를 다시 열어 주세요.",
+      });
+      return;
+    }
+    const operationScope = activeScope;
+    const savedDraftVersion = draftVersionRef.current;
+    savingRef.current = true;
     try {
       emitSessionActivity();
       setIsSaving(true);
-      await setDoc(
-        progressRef,
-        {
-          userId: currentUser.uid,
-          unitId,
-          answers: answerSnapshot.answers,
-          corePointFinds: foundCorePointIds,
-          annotations: deleteField(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      setStudentAnswers(answerSnapshot.answers);
-      applyAnswerStatusesToInputs(answerSnapshot.answers);
-      setHasUnsavedChanges(false);
-      setSaveMessage("저장됨");
+      const saved = await saveLessonAnswers(config, {
+        unitId,
+        expectedSemesterRevision: Number(lesson.semesterRevision),
+        expectedContentRevision: Number(lesson.contentRevision || 0),
+        expectedAnswerRevision: answerRevisionRef.current,
+        answers: Object.fromEntries(
+          Object.entries(answerSnapshot.answers).map(([key, answer]) => [
+            key,
+            answer.value || "",
+          ]),
+        ),
+      });
+      if (activeScopeRef.current !== operationScope) return;
+      answerRevisionRef.current = saved.answerRevision;
+      if (draftVersionRef.current === savedDraftVersion) {
+        setStudentAnswers(saved.answers);
+        applyAnswerStatusesToInputs(saved.answers);
+        setHasUnsavedChanges(false);
+        setSaveMessage("저장됨");
+      }
+      const accuracyPercent =
+        saved.totalCount > 0
+          ? Math.round((saved.correctCount / saved.totalCount) * 100)
+          : 0;
+      const accuracyMessage =
+        saved.totalCount > 0
+          ? `정답률 ${accuracyPercent}% · 정답 ${saved.correctCount}/${saved.totalCount}`
+          : "저장되었습니다.";
       let toastTitle = "수업 자료 저장 완료";
       let toastMessage = accuracyMessage;
       let awardedPointAmount = 0;
@@ -535,6 +538,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
               sourceId: `lesson-${unitId}`,
               sourceLabel: lesson.title || "수업 자료 학습",
             });
+            if (activeScopeRef.current !== operationScope) return;
             if (pointResult.awarded && pointResult.amount > 0) {
               awardedPointAmount =
                 Number(pointResult.totalAwarded || pointResult.amount) || 0;
@@ -553,6 +557,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           }
         }
       }
+      if (activeScopeRef.current !== operationScope) return;
       setSaveCompletionPopup(null);
       showToast({
         tone: awardedPointAmount > 0 ? "success" : "info",
@@ -560,15 +565,20 @@ const LessonContent: React.FC<LessonContentProps> = ({
         message: toastMessage,
       });
     } catch (saveError) {
+      if (activeScopeRef.current !== operationScope) return;
       console.error("Failed to save lesson progress:", saveError);
       setSaveMessage("저장 실패");
       setSaveCompletionPopup(null);
       showToast({
         tone: "error",
         title: "수업 자료 저장에 실패했습니다.",
-        message: "네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+        message:
+          saveError instanceof Error
+            ? saveError.message
+            : "입력 내용을 보관한 뒤 다시 시도해 주세요.",
       });
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -660,6 +670,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         return;
       target.classList.remove("correct", "wrong");
       interactedRef.current = true;
+      draftVersionRef.current += 1;
       setHasUnsavedChanges(true);
       setSaveMessage("저장 필요");
     };
@@ -708,14 +719,22 @@ const LessonContent: React.FC<LessonContentProps> = ({
   }, [activeFootnoteAnchorKey, highlightedFootnoteAnchorKey, lesson]);
 
   useEffect(() => {
+    answerRevisionRef.current = null;
     if (!canPersist || !lesson) return;
+    let cancelled = false;
+    const restoreDraftVersion = draftVersionRef.current;
     const restoreProgress = async () => {
       const progressRef = getProgressRef();
       const container = contentRef.current;
       if (!progressRef || !container) return;
       try {
         const snap = await getDoc(progressRef);
-        if (!snap.exists()) return;
+        if (cancelled) return;
+        answerRevisionRef.current = snap.exists()
+          ? Number(snap.data().answerRevision || 0)
+          : 0;
+        if (!snap.exists() || draftVersionRef.current !== restoreDraftVersion)
+          return;
         const data = snap.data() as {
           answers?: Record<string, { value?: string; status?: AnswerStatus }>;
           corePointFinds?: unknown;
@@ -768,7 +787,17 @@ const LessonContent: React.FC<LessonContentProps> = ({
     )
       return;
     void restoreProgress();
-  }, [canPersist, currentUser?.uid, lesson, unitId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    canPersist,
+    currentUser?.uid,
+    config?.year,
+    config?.semester,
+    lesson,
+    unitId,
+  ]);
 
   useEffect(() => {
     if (!canPersist || !currentUser?.uid || !lesson) {
@@ -833,6 +862,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       });
     }
     setStudentAnswers(nextAnswers);
+    draftVersionRef.current += 1;
     setHasUnsavedChanges(true);
     setSaveMessage("저장 필요");
     setSaveCompletionPopup(null);
@@ -848,6 +878,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       [blankId]: { value, status: "" },
     }));
     interactedRef.current = true;
+    draftVersionRef.current += 1;
     setHasUnsavedChanges(true);
     setSaveMessage("저장 필요");
     setSaveCompletionPopup(null);
@@ -925,9 +956,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
       ? `https://www.youtube.com/embed/${RegExp.$2}`
       : null
     : null;
-  const hasInteractiveBlanks = Boolean(
-    worksheet.blanks.length || /\[(?!fn:)(.*?)\]/.test(bodyHtml),
-  );
   const resolvedWorksheetPage =
     activeWorksheetPage ?? worksheet.pageImages[0]?.page ?? null;
   const activeWorksheetPageIndex =
@@ -1019,6 +1047,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       return;
 
     setCorePointRewardPending(true);
+    const operationScope = activeScope;
     try {
       const latestOverview =
         overview?.loaded === true
@@ -1040,12 +1069,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
         return;
       }
 
-      const pointResult = await claimPointActivityReward({
-        config,
-        activityType: "lesson_core_points",
-        sourceId: LESSON_CORE_POINTS_ALL_SOURCE_ID,
-        sourceLabel: "전체 수업자료 핵심포인트 완주",
-      });
+      const pointResult = await claimLessonCorePointReward(config);
+      if (activeScopeRef.current !== operationScope) return;
       const totalAwarded = Number(
         pointResult.totalAwarded || pointResult.amount || 0,
       );
@@ -1057,7 +1082,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
           message: `+${totalAwarded}위스가 반영되었습니다.`,
         });
         setCorePointRewardSettled(true);
-        await persistCorePointProgress(nextFoundIds, { completed: true });
         await refreshCorePointOverview(nextFoundIds);
       } else if (pointResult.duplicate) {
         showToast({
@@ -1068,7 +1092,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
             "핵심포인트 완주 보상은 이미 반영되었습니다.",
         });
         setCorePointRewardSettled(true);
-        await persistCorePointProgress(nextFoundIds, { completed: true });
         await refreshCorePointOverview(nextFoundIds);
       } else {
         showToast({
@@ -1079,7 +1102,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
             "전체 핵심포인트를 확인했지만 추가 위스는 지급되지 않았습니다.",
         });
         setCorePointRewardSettled(true);
-        await persistCorePointProgress(nextFoundIds, { completed: true });
         await refreshCorePointOverview(nextFoundIds);
       }
     } catch (pointError) {
@@ -1094,7 +1116,28 @@ const LessonContent: React.FC<LessonContentProps> = ({
     }
   };
 
-  const handleFindCorePoint = (highlightId: string) => {
+  const handleFindCorePoint = async (highlightId: string) => {
+    const operationScope = activeScope;
+    const pendingKey = `${operationScope}:${highlightId}`;
+    if (coreFindsPendingRef.current.has(pendingKey)) return;
+    if (canPersist && unitId) {
+      coreFindsPendingRef.current.add(pendingKey);
+      try {
+        await recordLessonCorePointFind(config, unitId, highlightId);
+      } catch (error) {
+        if (activeScopeRef.current === operationScope)
+          showToast({
+            tone: "error",
+            title: "핵심포인트를 저장하지 못했습니다.",
+            message:
+              error instanceof Error ? error.message : "다시 눌러 주세요.",
+          });
+        return;
+      } finally {
+        coreFindsPendingRef.current.delete(pendingKey);
+      }
+      if (activeScopeRef.current !== operationScope) return;
+    }
     const currentIdSet = new Set(currentCorePointIds);
     if (!currentIdSet.has(highlightId)) return;
     const previousFoundIds = foundCorePointIdsRef.current.filter((id) =>
@@ -1138,13 +1181,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
       0,
       nextOverview.totalCount - nextOverview.foundCount,
     );
-    if (canPersist) {
-      void persistCorePointProgress(nextFoundIds, {
-        completed: currentCorePointIds.length === nextFoundIds.length,
-      }).catch((persistError) => {
-        console.warn("Failed to persist core point progress:", persistError);
-      });
-    }
 
     if (remainingCount > 0) {
       showToast({
@@ -1509,14 +1545,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
             </section>
           )}
         </div>
-
-        {hasInteractiveBlanks && (
-          <div className="mt-6 flex justify-center border-t border-slate-200 pt-5">
-            <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-              빈칸 입력 시 정답 여부가 바로 표시됩니다.
-            </span>
-          </div>
-        )}
 
         {saveCompletionPopup && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">

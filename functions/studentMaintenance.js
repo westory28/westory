@@ -29,6 +29,7 @@ const UPDATE_CONFIG_KEYS = Object.freeze([
   "enabled",
   "message",
   "title",
+  "expectedRevision",
 ]);
 const MAX_BYPASS_UIDS = 20;
 const MAX_UID_LENGTH = 128;
@@ -146,12 +147,21 @@ const normalizeStoredStudentMaintenanceConfig = (value) => {
 };
 
 const normalizeUpdatePayload = (value) => {
-  if (!hasExactKeys(value, UPDATE_CONFIG_KEYS)) {
+  const requiredKeys = value?.enabled === false
+    ? [...UPDATE_CONFIG_KEYS, "expectedSemesterId"] : UPDATE_CONFIG_KEYS;
+  if (!hasExactKeys(value, requiredKeys)) {
     throw new TypeError(
-      "Maintenance updates must contain exactly enabled, blockedRoles, bypassUids, title, and message.",
+      "Maintenance updates must contain exactly enabled, blockedRoles, bypassUids, title, message, and expectedRevision.",
     );
   }
-  return normalizeStudentMaintenanceConfig(value);
+  if (!Number.isSafeInteger(value.expectedRevision) || value.expectedRevision < 0 || value.expectedRevision >= Number.MAX_SAFE_INTEGER) {
+    throw new TypeError("expectedRevision must be a non-negative safe integer below the revision limit.");
+  }
+  if (value.enabled === false && (typeof value.expectedSemesterId !== "string" || !/^\d{4}-[12]$/.test(value.expectedSemesterId))) {
+    throw new TypeError("Opening student access requires the reviewed expectedSemesterId.");
+  }
+  return { ...normalizeStudentMaintenanceConfig(value), expectedRevision: value.expectedRevision,
+    ...(value.enabled === false ? { expectedSemesterId: value.expectedSemesterId } : {}) };
 };
 
 const normalizeProfileRole = (value) => {
@@ -387,6 +397,26 @@ const createStudentMaintenanceService = ({
       const currentSnapshot = await transaction.get(configRef);
       const current = currentSnapshot.exists ? currentSnapshot.data() || {} : {};
       const previous = buildAuditConfig(current);
+      if ((currentSnapshot.exists && (!Number.isSafeInteger(current.revision) || current.revision < 0))
+        || previous.revision !== nextConfig.expectedRevision) {
+        throw new HttpsError("aborted", "학생 접속 설정이 바뀌었습니다. 현재 상태를 다시 확인해 주세요.", {
+          reason: "MAINTENANCE_REVISION_CONFLICT",
+        });
+      }
+      if (!nextConfig.enabled) {
+        const [schoolSnapshot, pointerSnapshot] = await Promise.all([
+          transaction.get(db.doc("site_settings/config")),
+          transaction.get(db.doc("site_settings/semester_active")),
+        ]);
+        const school = schoolSnapshot.exists ? schoolSnapshot.data() || {} : {};
+        const pointer = pointerSnapshot.exists ? pointerSnapshot.data() || {} : {};
+        if (`${school.year}-${school.semester}` !== nextConfig.expectedSemesterId
+          || pointer.semesterId !== nextConfig.expectedSemesterId) {
+          throw new HttpsError("aborted", "현재 학기가 바뀌었습니다. 공개 상태를 다시 점검해 주세요.", {
+            reason: "MAINTENANCE_SEMESTER_CONFLICT",
+          });
+        }
+      }
       const revision = previous.revision + 1;
       const now = serverTimestamp();
       const startedAt = nextConfig.enabled

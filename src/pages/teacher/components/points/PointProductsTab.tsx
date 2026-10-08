@@ -84,7 +84,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   );
 
   const normalizedSearchQuery = normalizeSearchValue(searchQuery);
-  const canReorderProducts = canManage && !normalizedSearchQuery;
+  const canReorderProducts = false;
   const filteredProducts = useMemo(() => {
     if (!normalizedSearchQuery) return products;
     return products.filter((product) =>
@@ -169,9 +169,6 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                 <h2 className="text-lg font-bold text-gray-800">
                   상점 상품 목록
                 </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  노출, 재고, 가격, 정렬 순서를 한 화면에서 관리합니다.
-                </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <span className="text-sm text-gray-500 whitespace-nowrap">
@@ -179,26 +176,6 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                     ? `검색 결과 ${filteredProducts.length}개 / 전체 ${products.length}개`
                     : `${products.length}개`}
                 </span>
-                {normalizedSearchQuery && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 whitespace-nowrap">
-                    검색 중에는 순서 변경이 잠시 멈춥니다.
-                  </span>
-                )}
-                {productOrderDirty && !normalizedSearchQuery && (
-                  <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">
-                    순서 변경 저장 대기 중
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={onSaveProductOrder}
-                  disabled={
-                    !canManage || !productOrderDirty || productOrderSaving
-                  }
-                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400 whitespace-nowrap"
-                >
-                  {productOrderSaving ? "순서 저장 중..." : "순서 저장"}
-                </button>
                 <button
                   type="button"
                   onClick={() => setPreviewOpen(true)}
@@ -249,7 +226,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
               </colgroup>
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>
-                  <th className="p-4 text-center whitespace-nowrap">순서</th>
+                  <th className="p-4 text-center whitespace-nowrap">번호</th>
                   <th className="p-4 whitespace-nowrap">상품명</th>
                   <th className="p-4 text-right whitespace-nowrap">가격</th>
                   <th className="p-4 text-right whitespace-nowrap">재고</th>
@@ -267,7 +244,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                     </td>
                   </tr>
                 )}
-                {filteredProducts.map((product) => (
+                {filteredProducts.map((product, index) => (
                   <tr
                     key={product.id}
                     onDragOver={(event) => {
@@ -288,39 +265,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                         : "hover:bg-gray-50"
                     }`}
                   >
-                    <td className="p-4 text-center">
-                      <button
-                        type="button"
-                        draggable={canReorderProducts}
-                        onDragStart={(event) =>
-                          handleDragStart(product.id, event)
-                        }
-                        onDragEnd={() => {
-                          setDraggedProductId(null);
-                          setDragOverProductId(null);
-                        }}
-                        disabled={!canReorderProducts}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label={`${product.name} 순서 변경`}
-                        title={
-                          canReorderProducts
-                            ? "드래그해서 순서를 바꿉니다."
-                            : "검색 중에는 순서 변경을 잠시 멈춥니다."
-                        }
-                      >
-                        <span
-                          className="grid grid-cols-3 gap-[2px]"
-                          aria-hidden="true"
-                        >
-                          {Array.from({ length: 6 }).map((_, dotIndex) => (
-                            <span
-                              key={`${product.id}-drag-dot-${dotIndex}`}
-                              className="h-1 w-1 rounded-full bg-current"
-                            ></span>
-                          ))}
-                        </span>
-                      </button>
-                    </td>
+                    <td className="p-4 text-center">{index + 1}</td>
                     <td className="min-w-0 p-4">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
@@ -381,7 +326,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                             onClick={() => onDeleteProduct(product)}
                             className="w-full rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 disabled:opacity-60 whitespace-nowrap"
                           >
-                            삭제
+                            보관
                           </button>
                         )}
                       </div>

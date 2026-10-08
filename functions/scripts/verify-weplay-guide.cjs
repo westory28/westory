@@ -15,6 +15,7 @@ function client(firebase) {
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const exports = {};
   new Function('require', 'exports', code)((name) => {
+    if (name === './historyDictionarySession') return { getHistoryDictionaryCallable: firebase.getHttpsCallable };
     assert.equal(name, './firebase');
     return firebase;
   }, exports);

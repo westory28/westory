@@ -9,13 +9,22 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 import { useSearchParams } from "react-router-dom";
 import HistoryClassroomAssignmentView from "../../components/common/HistoryClassroomAssignmentView";
 import LessonWorksheetStage from "../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../contexts/AuthContext";
 import { db, getHttpsCallable } from "../../lib/firebase";
+import {
+  buildAssessmentDefinitionId,
+  executeAssessmentManagementCommand,
+} from "../../lib/assessmentLifecycle";
+import {
+  deleteHistoryAssessmentSource,
+  getAssessmentSemesterId,
+  readAssessmentContentRevision,
+  saveHistoryAssessmentSource,
+} from "../../lib/assessmentRelease";
 import {
   buildAnswerOptions,
   buildHistoryClassroomPublishWindow,
@@ -1044,6 +1053,7 @@ const ManageHistoryClassroom: React.FC = () => {
   const [deletingAssignment, setDeletingAssignment] = useState(false);
   const [resettingAttemptUid, setResettingAttemptUid] = useState("");
   const resettingAttemptRef = React.useRef(false);
+  const pendingAssignmentId = React.useRef("");
   const assignmentCollectionPathsRef = React.useRef<Record<string, string>>({});
   const [expandedAttemptUids, setExpandedAttemptUids] = useState<string[]>([]);
   const [attemptResetFeedback, setAttemptResetFeedback] = useState<
@@ -1057,6 +1067,9 @@ const ManageHistoryClassroom: React.FC = () => {
   const [reviewResultId, setReviewResultId] = useState("");
   const [reviewCurrentPage, setReviewCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  useEffect(() => {
+    if (!isCreateModalOpen) pendingAssignmentId.current = "";
+  }, [isCreateModalOpen]);
   const [isMapManagerOpen, setIsMapManagerOpen] = useState(false);
   const [assignmentPage, setAssignmentPage] = useState(1);
   const [dashboardSearch, setDashboardSearch] = useState("");
@@ -3142,22 +3155,13 @@ const ManageHistoryClassroom: React.FC = () => {
         updatedAt: serverTimestamp(),
       });
 
-      await setDoc(
-        doc(
-          db,
-          assignmentCollectionPathsRef.current[targetAssignment.id] ||
-            getSemesterCollectionPath(config, "history_classrooms"),
-          targetAssignment.id,
-        ),
+      const saved = await saveHistoryAssessmentSource(
+        config,
+        targetAssignment.id,
         payload,
-        // Settings must not overwrite the server timestamp from a live reset.
-        // Top-level merge fields still replace assignment maps when students change.
-        {
-          mergeFields: Object.keys(payload).filter(
-            (key) => key !== "retryResetByStudentUid",
-          ),
-        },
+        Number(targetAssignment.contentRevision || 0),
       );
+      payload.contentRevision = saved.contentRevision;
       if (editingIsPublished && !targetAssignment.isPublished) {
         void createManagedNotifications(config, {
           recipientUids: updatedStudents.map((student) => student.uid),
@@ -3250,16 +3254,15 @@ const ManageHistoryClassroom: React.FC = () => {
     setResettingAttemptUid(student.uid);
     setAttemptResetFeedback((prev) => ({ ...prev, [student.uid]: "" }));
     try {
-      await setDoc(
-        doc(db, assignmentPath, targetAssignment.id),
-        {
-          retryResetByStudentUid: {
-            [student.uid]: serverTimestamp(),
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      await executeAssessmentManagementCommand("resetAssessmentAttempt", {
+        definitionId: buildAssessmentDefinitionId(
+          getAssessmentSemesterId(config),
+          "HISTORY_CLASSROOM",
+          targetAssignment.id,
+        ),
+        studentUid: student.uid,
+        reason: "교사 역사교실 재응시 대기 해제",
+      });
 
       setAssignments((prev) =>
         prev.map((assignment) =>
@@ -3310,18 +3313,11 @@ const ManageHistoryClassroom: React.FC = () => {
 
     setDeletingAssignment(true);
     try {
-      await setDoc(
-        doc(
-          db,
-          `${getSemesterCollectionPath(config, "history_classrooms")}/${targetAssignment.id}`,
-        ),
-        {
-          isPublished: false,
-          deletedAt: serverTimestamp(),
-          deletedByUid: String(userData?.uid || "").trim(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
+      await deleteHistoryAssessmentSource(
+        config,
+        targetAssignment.id,
+        targetAssignment,
+        Number(targetAssignment.contentRevision || 0),
       );
       setAssignments((prev) =>
         prev.filter((assignment) => assignment.id !== targetAssignment.id),
@@ -3401,7 +3397,10 @@ const ManageHistoryClassroom: React.FC = () => {
           ) || null
         : null;
       assignmentId =
-        existingAssignment?.id || `history-classroom-${Date.now()}`;
+        existingAssignment?.id ||
+        pendingAssignmentId.current ||
+        `history-classroom-${Date.now()}`;
+      pendingAssignmentId.current = assignmentId;
       const sourceSnapshot =
         worksheetSourceAssignment &&
         getHistoryClassroomSourceId(worksheetSourceAssignment) ===
@@ -3465,20 +3464,13 @@ const ManageHistoryClassroom: React.FC = () => {
         createdAt: existingAssignment?.createdAt || serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      await setDoc(
-        doc(
-          db,
-          assignmentCollectionPathsRef.current[assignmentId] ||
-            getSemesterCollectionPath(config, "history_classrooms"),
-          assignmentId,
-        ),
+      const saved = await saveHistoryAssessmentSource(
+        config,
+        assignmentId,
         payload,
-        {
-          mergeFields: Object.keys(payload).filter(
-            (key) => !existingAssignment || key !== "retryResetByStudentUid",
-          ),
-        },
+        Number(existingAssignment?.contentRevision || 0),
       );
+      payload.contentRevision = saved.contentRevision;
       if (nextIsPublished && !existingAssignment?.isPublished) {
         void createManagedNotifications(config, {
           recipientUids: selectedStudents.map((student) => student.uid),
@@ -3546,6 +3538,7 @@ const ManageHistoryClassroom: React.FC = () => {
       setWorksheetImportSourceTitle("");
       setWorksheetSourceAssignment(null);
       alert("역사교실 과제를 저장했습니다.");
+      pendingAssignmentId.current = "";
       setIsCreateModalOpen(false);
     } catch (error) {
       console.error("Failed to save history classroom assignment", {
@@ -3587,18 +3580,18 @@ const ManageHistoryClassroom: React.FC = () => {
         pdfBlanks: blanks,
         answerOptions: buildAnswerOptions(blanks),
       });
-      await setDoc(
-        doc(
-          db,
-          getSemesterCollectionPath(config, "map_resources"),
+      await executeAssessmentManagementCommand("updateMapResourceBlanks", {
+        semesterId: getAssessmentSemesterId(config),
+        mapResourceId: selectedStoredMap.id,
+        pdfBlanks: payload.pdfBlanks,
+        answerOptions: payload.answerOptions,
+        expectedRevision: await readAssessmentContentRevision(
+          config,
+          "map_resources",
           selectedStoredMap.id,
         ),
-        {
-          ...payload,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+        reason: "역사교실 지도 빈칸 저장",
+      });
       setMaps((prev) =>
         prev.map((map) => (map.id === selectedStoredMap.id ? payload : map)),
       );

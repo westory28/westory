@@ -300,9 +300,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return runAfterNextPaint(() => setTeacherEnhancementsReady(true));
   }, [canUseTeacherPatchMemo, currentUser?.uid, loading]);
 
-  if (authPhase === "error") {
+  if (authPhase === "error" || authPhase === "registration-pending") {
     return (
       <AuthRecoveryState
+        registrationPending={authPhase === "registration-pending"}
         error={authError}
         onRetry={retryAuth}
         onRestart={async () => {

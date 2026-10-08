@@ -6,10 +6,7 @@ import PortalSubNavigation from "../../../components/common/PortalSubNavigation"
 import MapViewer from "../../../components/common/MapViewer";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
-import {
-  buildMapTagRewardSourceId,
-  claimPointActivityReward,
-} from "../../../lib/points";
+import { claimMapTagReward } from "../../../lib/learningCommands";
 import {
   groupMapResourcesForDisplay,
   getGoogleMapsExternalUrl,
@@ -120,12 +117,7 @@ const StudentMaps: React.FC = () => {
     if (!selectedItem || mapRewardPending) return;
     setMapRewardPending(true);
     try {
-      const pointResult = await claimPointActivityReward({
-        config,
-        activityType: "map_tag",
-        sourceId: buildMapTagRewardSourceId(selectedItem.id, tag),
-        sourceLabel: `${currentGroup?.title || selectedItem.title} · ${tag} 태그 탐색`,
-      });
+      const pointResult = await claimMapTagReward(config, selectedItem.id, tag);
       if (
         pointResult.awarded &&
         (pointResult.totalAwarded || pointResult.amount)

@@ -48,6 +48,8 @@ function fixture(options = {}) {
     getHttpsCallable: async (name) => async (input) => {
       calls.push({ name, input });
       if (name === "openApplicationSession") {
+        if (options.sameUidReplacement)
+          auth.currentUser = { ...auth.currentUser };
         if (options.switchOwner)
           auth.currentUser = { ...auth.currentUser, uid: "another-teacher" };
         return {
@@ -62,6 +64,12 @@ function fixture(options = {}) {
       }
       assert.ok(input._session, `${name} requires session proof`);
       if (name === "getStudentEnrollmentProfileState") {
+        if (options.responseOwnerReplacement)
+          auth.currentUser = { ...auth.currentUser };
+        if (options.responseEpochChanged)
+          auth.currentUser.getIdTokenResult = async () => ({
+            claims: { auth_time: 11 },
+          });
         if (options.queryError)
           throw Object.assign(new Error("query unavailable"), {
             code: "functions/unavailable",
@@ -176,6 +184,9 @@ for (const options of [
   { source: "BLOCKED" },
   { queryError: true },
   { switchOwner: true },
+  { sameUidReplacement: true },
+  { responseOwnerReplacement: true },
+  { responseEpochChanged: true },
   { badSession: true },
 ]) {
   const test = fixture(options);

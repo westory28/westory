@@ -1,0 +1,398 @@
+{
+  "schemaVersion": 1,
+  "projectId": "history-quiz-yongsin",
+  "functionName": "executeCommand",
+  "capturedDate": "2026-10-08",
+  "entry": "productionSource.js",
+  "rootExports": [
+    "executeCommand",
+    "executeLessonCorePointCommand"
+  ],
+  "notes": [
+    "Full deployed closure dependencies are retained to preserve existing canonical command adapters.",
+    "Only executeCommand and executeLessonCorePointCommand are attached to the root Functions entry; all other nested exports remain excluded.",
+    "Package files are excluded; dependencies resolve from the existing functions/package.json.",
+    "Original SHA-256 hashes refer to downloaded deployment bytes; restored files use LF newlines."
+  ],
+  "files": [
+    {
+      "sourceFile": "adminSemesterContent.js",
+      "file": "adminSemesterContent.js",
+      "originalSha256": "000e85eec6ac64a244ea45bcabd33a8e6061035098ccec52119e0e2372a8f222",
+      "sha256": "f9ed16bcf5cc052e27ae39b4450d665030aaffa887223b1c093f75b9410426b7",
+      "changes": []
+    },
+    {
+      "sourceFile": "adminSemesterRecords.js",
+      "file": "adminSemesterRecords.js",
+      "originalSha256": "27187684d8bd42f27a6c6b661b9210c54f291993845742ae418379cc3bf11e6e",
+      "sha256": "aa2c48fdffbd1a37afdaeb56f4294217219a8c0645d56ae14cbfd4cb5809036f",
+      "changes": []
+    },
+    {
+      "sourceFile": "archiveEnrollment.js",
+      "file": "archiveEnrollment.js",
+      "originalSha256": "713b48ddfa72a0212c869e8997274c56ebf90c29ddf500b7b555436060066bfb",
+      "sha256": "9e914564f35e4b04cec8359b68328980bd3c65635e5d6a723c6a5a11cda9f4d9",
+      "changes": []
+    },
+    {
+      "sourceFile": "assessmentLifecycle.js",
+      "file": "assessmentLifecycle.js",
+      "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
+      "sha256": "576cf2677105a7df21e6540c689a86dc84e84fe65121f5e2b587c0a30c5e2ead",
+      "changes": [
+        "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
+        "Preserve current lesson-source metadata in the History Classroom source command."
+      ]
+    },
+    {
+      "sourceFile": "commandGateway.js",
+      "file": "commandGateway.js",
+      "originalSha256": "a2d260be728a5aed1861118fbd75f90babee6eea569c7bf8119b20296f45edce",
+      "sha256": "a2d69f0a1e9df443704c08a1a1713493564456995d8941fb47c458a3a9cbc8c0",
+      "changes": []
+    },
+    {
+      "sourceFile": "cutoverAuthorization.js",
+      "file": "cutoverAuthorization.js",
+      "originalSha256": "5748df7a498637bb2ef1b2dc371623d298ddae1d322be8a4da2b69589ed9254e",
+      "sha256": "669cf18a9345f50ba1565799120d614e473aafc852dd419ef5b9332110e1efaf",
+      "changes": []
+    },
+    {
+      "sourceFile": "dictionaryNotifications.js",
+      "file": "dictionaryNotifications.js",
+      "originalSha256": "2638f157125c4a73a026634185f8ce63e3c84dd1008d130d5b7a7ff437758ca7",
+      "sha256": "6644e41faa32f075cda2aeb01f2bf43601c36045105d54357a77be8d03868c62",
+      "changes": []
+    },
+    {
+      "sourceFile": "gradeEvidence.js",
+      "file": "gradeEvidence.js",
+      "originalSha256": "63bae8c7b6d32b4026c9864367be0ea7744001e6a97a944a46344291ab96d78b",
+      "sha256": "ec54c95539155518a9b56855197c4f61bc68552248ccfd4c95603bc4fb33f97e",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryCommands.js",
+      "file": "historyDictionaryCommands.js",
+      "originalSha256": "91deb9c0b63c3f1d3cf8a1031d737071b585b4c4c8b5e66a584ae7a6248245eb",
+      "sha256": "e1261994e29696eaab38704ab1221cff1e7e430058ffb1e0071ca3762ecae9ec",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryDelete.js",
+      "file": "historyDictionaryDelete.js",
+      "originalSha256": "99e69e4d2d06092d4d1d1db064ca42c665fd43324e5d5741212e42b3cb32cdf4",
+      "sha256": "90a0ffc61907f7160c20ed2c5070ae80984e24f876933a4d7505f898a57da599",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryImport.js",
+      "file": "historyDictionaryImport.js",
+      "originalSha256": "bfbeb4f61e556c436fa72274148b78e7870989272bda03b834fd9f074e56c008",
+      "sha256": "7a5e4666d27d1eea271bd42e3c4a2362094b407df96104715edda6d9ab5aac78",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryLegacyReward.js",
+      "file": "historyDictionaryLegacyReward.js",
+      "originalSha256": "21a6e720fd46daa91b99788b3900cd272984ed97afe094acb15fa3ff0368824a",
+      "sha256": "083e2ff26411e3a360378411430fca2b7fc3da1cd6ccf0c9bec3718ac67a992c",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryPrivacy.js",
+      "file": "historyDictionaryPrivacy.js",
+      "originalSha256": "2aadbc4617f0ed6496e4fdc4eb8c6de9f1f61ce8d6270d95669919fb70e8254e",
+      "sha256": "865a73981377943adcc4c510f4c223ea4106290ff1feea0154de7ab949711d65",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryRequestOrigin.js",
+      "file": "historyDictionaryRequestOrigin.js",
+      "originalSha256": "b06bb36a09478dc8606bcd02bd2f498040053555fbad021140f99a3f209aed66",
+      "sha256": "5c0ace9ad05160206e2e3147efe2a786639eb4ecf5887598e3dd9224f472846b",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryRewardOrigin.js",
+      "file": "historyDictionaryRewardOrigin.js",
+      "originalSha256": "1e40ba784d08151cf81c7d62e54e4661e483d583d34ca3d2d2eeff6c77961820",
+      "sha256": "7dbf50eadf73bf2599e53f30587f77c23b1947f443084d28a8cf4433ef1263fb",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryRuntime.js",
+      "file": "historyDictionaryRuntime.js",
+      "originalSha256": "63a00d3d230b3ee9c33a44e3f39afa905b0e8fec7551182879c2f5dcf7c3c7b0",
+      "sha256": "ca3951c67e5a6b66c4f1e078023b50e7db4292b8d661f5e70301bf2455975a1c",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryScope.js",
+      "file": "historyDictionaryScope.js",
+      "originalSha256": "aab69ce212b04b6aae2993629121ee083359b7a96ba5b136f3e61d1deb8754d4",
+      "sha256": "78cc9d9b878cd5eaac3c1f0495e54d83ce4729c15d5b52e8dbc38356ade24920",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryUpdate.js",
+      "file": "historyDictionaryUpdate.js",
+      "originalSha256": "703432a618a18afaa4faa5c4186fcff4173dfbbd789773d5a62acb118a8c6177",
+      "sha256": "c3ab09a7a5b23f756243e061983bc7fa830b44088e677da19b5f58870b16a547",
+      "changes": []
+    },
+    {
+      "sourceFile": "historyDictionaryWisReward.js",
+      "file": "historyDictionaryWisReward.js",
+      "originalSha256": "b26c327ba41e1c7200cd30785c4a67ec6c1d9e6c0318ecb9f12a079b76d10b67",
+      "sha256": "4da8c876032ffd67de66b1e69b5d167d91ba653a1a8e233e9c18c77a010e68f6",
+      "changes": []
+    },
+    {
+      "sourceFile": "index.js",
+      "file": "productionSource.js",
+      "originalSha256": "b1e4d2e8137f26f789f1037850e668c5194b5089421225d1ee275b6869b672cf",
+      "sha256": "87d8b25eb6db82c91118d9474bb7b51a7eed1f22a957b642a4715c1a938a0e01",
+      "changes": [
+        "Reuse the root initialized Firebase Admin app.",
+        "Lesson core-point record and completion catalog now exclude deleted/foreign-class sources and require an active writable semester, enrollment and classroom."
+      ]
+    },
+    {
+      "sourceFile": "legacyPointV1CommandAdapter.js",
+      "file": "legacyPointV1CommandAdapter.js",
+      "originalSha256": "023e3aa9020295078d2ad0ef992b55c08cd50692a4b8d7d0295b987267d4c93e",
+      "sha256": "4c428fd81a46a35de9027b86e01ce98f8bda58038a8f09a34f59c50681a87fb8",
+      "changes": []
+    },
+    {
+      "sourceFile": "lessonAnswers.js",
+      "file": "lessonAnswers.js",
+      "originalSha256": "7ecb718c63e3a3306ab9cdfda1befa35b4bbf268a86914d6f47f99013e96cd8b",
+      "sha256": "41ced99ca8aba72c3765220033c52187f5954d17f8c27b13fe2875a31497c008",
+      "changes": []
+    },
+    {
+      "sourceFile": "lessonAssetTransport.js",
+      "file": "lessonAssetTransport.js",
+      "originalSha256": "36e2ae10632127039ab2d7debe50cdc0f2b0fa7b7726dde4ef6f0e6d9b68fa10",
+      "sha256": "a4ea5c3fd8437b9b3b33e9c62433a9b22186f367a574afc0ead4c49e8e4e3b3d",
+      "changes": []
+    },
+    {
+      "sourceFile": "lessonAssetUploads.js",
+      "file": "lessonAssetUploads.js",
+      "originalSha256": "c86f50445f73d68ad4bdc57f813c74aca683d7d9c5abecca2df151fe97be0d77",
+      "sha256": "b4248c5921c157c90b13f2abcb9a807d0f7bf589c87374e53c539b6722f3cd9c",
+      "changes": []
+    },
+    {
+      "sourceFile": "lessonHtml.js",
+      "file": "lessonHtml.js",
+      "originalSha256": "a8ef55368672b3ee3063039b63ba64ff78a67f5f6d5b56502c4c7bd1667f9b05",
+      "sha256": "e8645a49604e68c1a88556a514aa7501231f7295d4896437c3fbc84ed62da8c2",
+      "changes": []
+    },
+    {
+      "sourceFile": "lessonManagement.js",
+      "file": "lessonManagement.js",
+      "originalSha256": "c5b27327f96d75c755478a486765b84705a32de7f5fcf5522d1397e3f348fb33",
+      "sha256": "45b976d6db6f66b0dd61b4cc2c617b251353817a4882ce4f463ff816840ab2fc",
+      "changes": []
+    },
+    {
+      "sourceFile": "lessonPdfBeta.js",
+      "file": "lessonPdfBeta.js",
+      "originalSha256": "271eaeed6df81496987e4cc4be375d4bae6ea485cbdff2517383c103c186d077",
+      "sha256": "ae8dc24b2f08ce8802607ee04bb2117599b37c63e120afcd6855fdf7051ddb82",
+      "changes": []
+    },
+    {
+      "sourceFile": "mapManagement.js",
+      "file": "mapManagement.js",
+      "originalSha256": "60cb839a13717c36bc5a70668748102db0c5968cc8435e5783284f086b35aca7",
+      "sha256": "861372c5ba17ce92f4abee4973cac65aa070e4b120cfb5fd97a9a69a9cc2be11",
+      "changes": []
+    },
+    {
+      "sourceFile": "mapTagWisReward.js",
+      "file": "mapTagWisReward.js",
+      "originalSha256": "f2a49e65563656c94c13943ac45084f5a543eda9e51dfb1d31d2799d8df4d932",
+      "sha256": "72671f985c74eeec6e06710cbc6f84b23d0d8afad3ec6338a52869a422110b30",
+      "changes": []
+    },
+    {
+      "sourceFile": "productionCutoverApproval.js",
+      "file": "productionCutoverApproval.js",
+      "originalSha256": "3bf23b3a80ea2a57031e6334b03da797eab8cf64e6c147d968d587056d21267b",
+      "sha256": "a27d9d7faae00476bbb5fecc716d827f3c5f37ee1a1226536e2aa9912d9c7fce",
+      "changes": []
+    },
+    {
+      "sourceFile": "routineContentWrites.json",
+      "file": "routineContentWrites.json",
+      "originalSha256": "edb30ba0f1bd8014d6a85331c7e084dae0edb7289a010064be6515d4b3faea52",
+      "sha256": "edb30ba0f1bd8014d6a85331c7e084dae0edb7289a010064be6515d4b3faea52",
+      "changes": []
+    },
+    {
+      "sourceFile": "schoolBanners.js",
+      "file": "schoolBanners.js",
+      "originalSha256": "04d17758ee28b9524e774d291e8dea54c906a8aa2d8d23c5306271b28416e3bb",
+      "sha256": "ece57729ed5618397d6c6bc684cc85c8096ac76999f9d801f6c01757b41c0e02",
+      "changes": []
+    },
+    {
+      "sourceFile": "semesterCore.js",
+      "file": "semesterCore.js",
+      "originalSha256": "6ac522a6b3f93fdac24701906bc85c4b4dc1256cbf9a09d90404be0955f18277",
+      "sha256": "80c2d7d8892c26d754038eba6c363812559222fdb3a32c12a63fdc2ffaea0541",
+      "changes": []
+    },
+    {
+      "sourceFile": "semesterCutover.js",
+      "file": "semesterCutover.js",
+      "originalSha256": "cb958be740a7ae05b04f42e63c50b6d23fb411cbd69b9d3b77567efd8463facd",
+      "sha256": "c9865cab9dbd2cc20ab579f2b8464346507d09d5c175d957dd4df7909339fd0a",
+      "changes": []
+    },
+    {
+      "sourceFile": "sessionAuthority.js",
+      "file": "sessionAuthority.js",
+      "originalSha256": "e3ae2d5dbb6f19ae06e2b028f576d91448a313281bb7e630455255b278fc633c",
+      "sha256": "dfe91819e12dd9318d13f6b67108f75c55d05c7ddf486ebaa5353ca926df4844",
+      "changes": [
+        "Match the current root sessionAuthority idle policy (60/60 minutes); all other source identical."
+      ]
+    },
+    {
+      "sourceFile": "sourceArchiveBeta.js",
+      "file": "sourceArchiveBeta.js",
+      "originalSha256": "917159bb1ba03b2639681b6bd57e21507ced05dcaab3eee57d2f07e93a320938",
+      "sha256": "9e009b92708617410c4b4d7b1d4c0cf557ed24b19bebe195ef1c2e41a55171b5",
+      "changes": []
+    },
+    {
+      "sourceFile": "sourceArchiveManagement.js",
+      "file": "sourceArchiveManagement.js",
+      "originalSha256": "54cdcb06bb6b4f2b49e73b78caf3d02fba5e93e5eaf1e9ee8ee72b630dc71c48",
+      "sha256": "346e2ec5c359249b284781bdb7dc02ad795ec642b80b0e09d0bf4df0567849bf",
+      "changes": []
+    },
+    {
+      "sourceFile": "sourceArchivePdfAdapter.js",
+      "file": "sourceArchivePdfAdapter.js",
+      "originalSha256": "a4df50b6056ac532fe4b678c9ca2373313542c565eac0c6c24b9fe8f5904b7f9",
+      "sha256": "657d17311b9504a36a9df9d72e1801e3623840bd9db155bfcd036bd5d13046ee",
+      "changes": []
+    },
+    {
+      "sourceFile": "sourceArchivePdfFallback.js",
+      "file": "sourceArchivePdfFallback.js",
+      "originalSha256": "cc99dedaa72a5e0b5867480ff318c37c47fbb30ff1833a26bcf63ece323dc568",
+      "sha256": "11edf9343e7137674876db90040748a0b964a151f9952163f920eae0f0f2b368",
+      "changes": []
+    },
+    {
+      "sourceFile": "sourceArchiveProcessor.js",
+      "file": "sourceArchiveProcessor.js",
+      "originalSha256": "7f7cd66ade782e4c18a3daf8373c8b2abf79488403bdde26bf82fa1a63b2fee6",
+      "sha256": "3c16887a31077bf6cce448713c335220b15cf281df9e6f84df590100df6df924",
+      "changes": []
+    },
+    {
+      "sourceFile": "studentEnrollmentProfile.js",
+      "file": "studentEnrollmentProfile.js",
+      "originalSha256": "a4e56b01c15b7ae2558a31b789abc572d0a7261d027a007f50c3f5d32bd3a439",
+      "sha256": "cc8cbb5ed1ff2af172a69c2c9b3f70b4799ec8ac5dcadc9cc8313c1f8d871780",
+      "changes": []
+    },
+    {
+      "sourceFile": "studentMaintenance.js",
+      "file": "studentMaintenance.js",
+      "originalSha256": "a75449c012d51f5c39c6b13483002ab46dfa6ff96550755092e626f0bb1b2955",
+      "sha256": "a688a12e0ab463c5f8422135a1c9dc0af7301564a486b0e3f8c728a150ea4125",
+      "changes": []
+    },
+    {
+      "sourceFile": "studentRegistrationAccess.js",
+      "file": "studentRegistrationAccess.js",
+      "originalSha256": "bd55ec289c0e68487f720841bc8125939026438ca79dd8efce8dc03184a0bf34",
+      "sha256": "d3ff1e17e1016204cc6d47ffa754aef55abeabbd7876dcec6a7bb889210114ac",
+      "changes": []
+    },
+    {
+      "sourceFile": "studentRegistrationApproval.js",
+      "file": "studentRegistrationApproval.js",
+      "originalSha256": "7da71582c196d76351dbc9b8124c8ab4c9507c38bef3c93c03f5018ce4f16c93",
+      "sha256": "ccf949f9f79e0587f1b6c1e4929322d496e09fc632760d519820169cad40380d",
+      "changes": []
+    },
+    {
+      "sourceFile": "studentSemesterReceipt.js",
+      "file": "studentSemesterReceipt.js",
+      "originalSha256": "1cc3a43dcd32aae216957f20a1398ed94de3719d22ea05118bbe14f23ed02ef7",
+      "sha256": "0ea52076e1a9fa1a733f37ff3e2a335a431dfbfe97bade40262e025962abf6f2",
+      "changes": []
+    },
+    {
+      "sourceFile": "teacherOperations.js",
+      "file": "teacherOperations.js",
+      "originalSha256": "f4460a5dd4f43da47b6dbf3c5c5b63350488fbc2ea7ace1151b1bf2ccc86c378",
+      "sha256": "316fbed30f044839f85d1bf97ea2cc1d524f89e5b8cd898f3fcd1dd62fc033ae",
+      "changes": []
+    },
+    {
+      "sourceFile": "teacherPatchNotes.js",
+      "file": "teacherPatchNotes.js",
+      "originalSha256": "81b3b2629aba0ab239452687e5e74ddfee6db7e68e27a1354bf84339d28d6fa6",
+      "sha256": "43a488b025a42b4c817d09cce5aa503ee6d229daebbfd4542afbacbdd00cfd27",
+      "changes": []
+    },
+    {
+      "sourceFile": "w8Domains.js",
+      "file": "w8Domains.js",
+      "originalSha256": "63312120ced4e2cbaba0361bfb24030e0d1999c133c3fb530a208e78369f9b01",
+      "sha256": "00e5ea53ca4df872a4a0549a760ea876abf35640042a075c40810c8ed3fa809f",
+      "changes": []
+    },
+    {
+      "sourceFile": "wisEconomy.js",
+      "file": "wisEconomy.js",
+      "originalSha256": "f6267e1d62b1e977b86cbac8de07b310b9ec4d220a46537550343978631986b4",
+      "sha256": "42c27ba55ba8e724b00b126956ed169bf915ce5e251b7d9679f277b47346e290",
+      "changes": []
+    },
+    {
+      "sourceFile": "wisInitialOpeningApproval.js",
+      "file": "wisInitialOpeningApproval.js",
+      "originalSha256": "f4b3eb66c2fdf5115464bc8962aab07aa20a30bb69741b291f8239f9a32b33c4",
+      "sha256": "667cd2e2f134b28118237ed7286626e0f2b6f902198fb76fee6add6c5527db54",
+      "changes": []
+    },
+    {
+      "sourceFile": "wisLegacyMigration.js",
+      "file": "wisLegacyMigration.js",
+      "originalSha256": "bd18bb5a85f1eca11023b44565cc6a3a21231ea422c23d1335569fd7b79017e8",
+      "sha256": "b852805c3d50eaf9afdcc28780cb088f3f150676d2631162e1bb6e2f288bc20e",
+      "changes": []
+    },
+    {
+      "sourceFile": "wisMigrationFence.js",
+      "file": "wisMigrationFence.js",
+      "originalSha256": "abe4f29a54faacc5e1cfacccfe26081c65c059eb104c7fb1d34dd11758e2170b",
+      "sha256": "06bd003874532e3ec0a1bf7de8f63ceec8532f2bcf45dc293ceaf8a94aa26453",
+      "changes": []
+    }
+  ],
+  "additionalDeploymentSources": [
+    {
+      "functionName": "executeLessonCorePointCommand",
+      "originalIndexSha256": "53fbcc68840be6fb83cff8ab45d88221e13aaa9a215445153839aad15d49163b",
+      "comparison": "Before patch, normalized function bodies matched executeCommand archive exactly for executeLessonCorePointBusinessCommand, readEffectiveVisibleLessonCorePointCatalog, getLessonCorePointCompletion, assertLessonCorePointStudent, assertLessonCorePointActiveEnrollment."
+    }
+  ]
+}

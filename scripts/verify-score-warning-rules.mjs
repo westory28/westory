@@ -5,64 +5,32 @@ import {
   assertFails,
   assertSucceeds,
 } from "@firebase/rules-unit-testing";
-import { initializeApp, deleteApp } from "firebase/app";
 import {
-  connectAuthEmulator,
-  createUserWithEmailAndPassword,
-  getAuth,
-} from "firebase/auth";
-import {
-  connectFirestoreEmulator,
   doc,
   getDoc,
-  getFirestore,
   serverTimestamp,
   setDoc,
+  Timestamp,
 } from "firebase/firestore";
 
 const projectId = "demo-westory-score-warning";
 const rules = readFileSync(resolve("firestore.rules"), "utf8");
-const authHost = "http://127.0.0.1:9099";
-const firestoreHost = "127.0.0.1";
-const firestorePort = 8080;
-
-const firebaseConfig = {
-  apiKey: "demo-api-key",
-  authDomain: `${projectId}.firebaseapp.com`,
-  projectId,
-};
-
-const apps = [];
-
-const createClient = async (name, email, password) => {
-  const app = initializeApp(firebaseConfig, name);
-  apps.push(app);
-
-  const auth = getAuth(app);
-  connectAuthEmulator(auth, authHost, { disableWarnings: true });
-
-  const db = getFirestore(app);
-  connectFirestoreEmulator(db, firestoreHost, firestorePort);
-
-  const userCredential = await createUserWithEmailAndPassword(
-    auth,
-    email,
-    password,
-  );
-  return {
-    app,
-    auth,
-    db,
-    user: userCredential.user,
-    email,
-  };
-};
+if (!/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST || "")) throw new Error("Local Firestore emulator required");
+const [firestoreHost, rawPort] = process.env.FIRESTORE_EMULATOR_HOST.split(":");
+const firestorePort = Number(rawPort);
+const authTime = Math.floor(Date.now() / 1000) - 10;
+let testEnv;
+const createClient = async (name, email) => ({
+  db: testEnv.authenticatedContext(name, { email, auth_time: authTime }).firestore(),
+  user: { uid: name }, email,
+});
 
 const existingStudentDoc = (uid, email) => ({
   uid,
   email,
   photoURL: "",
   role: "student",
+  registrationApprovalStatus: "APPROVED",
   staffPermissions: [],
   teacherPortalEnabled: false,
   name: "기존학생",
@@ -110,7 +78,7 @@ const newStudentDoc = (uid, email) => ({
 });
 
 const main = async () => {
-  const testEnv = await initializeTestEnvironment({
+  testEnv = await initializeTestEnvironment({
     projectId,
     firestore: {
       host: firestoreHost,
@@ -139,6 +107,10 @@ const main = async () => {
 
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const adminDb = context.firestore();
+    await setDoc(doc(adminDb, "site_settings", "student_maintenance"), {
+      enabled: false, blockedRoles: ["student"], bypassUids: [], title: "점검", message: "점검 중입니다.",
+      startedAt: null, updatedAt: Timestamp.now(), updatedBy: "teacher-test", revision: 1,
+    });
     await setDoc(
       doc(adminDb, "users", existingStudent.user.uid),
       existingStudentDoc(existingStudent.user.uid, existingStudent.email),
@@ -147,6 +119,13 @@ const main = async () => {
       doc(adminDb, "users", otherStudent.user.uid),
       existingStudentDoc(otherStudent.user.uid, otherStudent.email),
     );
+    for (const student of [existingStudent, newStudent, otherStudent]) {
+      await setDoc(doc(adminDb, "application_sessions", student.user.uid, "sessions", String(authTime)), {
+        schemaVersion: 2, authTime, status: "active", authorityGeneration: "w1r2-2026-08-09",
+        protocolVersion: 2, sessionRevision: "a".repeat(64), authorityModeAtOpen: "ENFORCE",
+        generalExpiresAt: Timestamp.fromMillis(Date.now() + 3600000),
+      });
+    }
   });
 
   await assertSucceeds(
@@ -176,7 +155,7 @@ const main = async () => {
     );
   }
 
-  await assertSucceeds(
+  await assertFails(
     setDoc(
       doc(newStudent.db, "users", newStudent.user.uid),
       newStudentDoc(newStudent.user.uid, newStudent.email),
@@ -211,11 +190,13 @@ const main = async () => {
   const performanceScoreOtherSemesterId = "performance-score-2";
   const warningVersion = "warning-test-version";
   const warningTextHash = "abc12345";
+  const scoreUpdatedAt = Timestamp.fromMillis(Date.now() - 60000);
   const signaturePayload = {
     uid: existingStudent.user.uid,
     rosterId: performanceScoreId,
     signatureName: "기존학생",
     signatureImage: "data:image/png;base64,AAAA",
+    scoreUpdatedAt,
     confirmedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -252,6 +233,7 @@ const main = async () => {
         rosterId: performanceScoreId,
         academicYear: performanceYear,
         semester: performanceSemester,
+        updatedAt: scoreUpdatedAt,
       },
     );
     await setDoc(
@@ -267,6 +249,7 @@ const main = async () => {
         rosterId: performanceScoreOtherSemesterId,
         academicYear: performanceYear,
         semester: "2",
+        updatedAt: scoreUpdatedAt,
       },
     );
   });
@@ -419,6 +402,23 @@ const main = async () => {
   );
   await assertSucceeds(setDoc(confirmationRef, signaturePayload));
 
+  for (const invalidScore of [
+    { enteredScoreCount: 0 },
+    { objectionPending: true },
+    { updatedAt: Timestamp.fromMillis(scoreUpdatedAt.toMillis() + 1000) },
+  ]) {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, confirmationRef.path), { uid: existingStudent.user.uid, rosterId: performanceScoreId });
+      await setDoc(doc(adminDb, "users", existingStudent.user.uid, "performance_scores", performanceScoreId), {
+        uid: existingStudent.user.uid, rosterId: performanceScoreId,
+        academicYear: performanceYear, semester: performanceSemester,
+        updatedAt: scoreUpdatedAt, enteredScoreCount: 1, objectionPending: false, ...invalidScore,
+      });
+    });
+    await assertFails(setDoc(confirmationRef, signaturePayload));
+  }
+
   console.log(
     JSON.stringify(
       {
@@ -426,7 +426,7 @@ const main = async () => {
         checks: [
           "existing student warning update with profileEmojiId passes",
           "legacy student profile fields do not block warning acknowledgement",
-          "new student bootstrap create with profileEmojiId passes",
+          "direct student bootstrap remains denied; server registration is required",
           "unexpected extra key remains blocked",
           "cross-user update remains blocked",
           "performance score signature requires scoped warning consent",
@@ -434,6 +434,7 @@ const main = async () => {
           "complete signatures cannot be overwritten or changed by another student",
           "legacy signatures with a missing image or name can be repaired and read back",
           "empty and oversized signature images remain blocked",
+          "zero entered score, pending objection and stale score version cannot be signed",
         ],
       },
       null,
@@ -441,11 +442,11 @@ const main = async () => {
     ),
   );
 
-  await Promise.all(apps.map((app) => deleteApp(app)));
   await testEnv.cleanup();
 };
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(error);
+  await testEnv?.cleanup();
   process.exitCode = 1;
 });

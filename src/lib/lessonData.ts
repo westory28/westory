@@ -43,6 +43,8 @@ export interface LessonFootnote {
 }
 
 export interface LessonData {
+  contentRevision?: number;
+  semesterRevision?: number;
   unitId?: string;
   title: string;
   videoUrl?: string;
@@ -381,6 +383,12 @@ export const normalizeLessonData = (
 
   return {
     unitId: String(source.unitId || fallback.unitId || "").trim() || undefined,
+    contentRevision: Number(
+      source.contentRevision ?? fallback.contentRevision ?? 0,
+    ),
+    semesterRevision: Number(
+      source.semesterRevision ?? fallback.semesterRevision ?? 0,
+    ),
     title: String(source.title || fallback.title || "").trim(),
     videoUrl: String(source.videoUrl || fallback.videoUrl || "").trim(),
     contentHtml: String(source.contentHtml || fallback.contentHtml || ""),

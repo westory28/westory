@@ -7,8 +7,9 @@ import type {
 import {
   getPointPolicy,
   getPointRankManualAdjustEarnedPointsByUid,
-  getPointWalletByUid,
 } from "./points";
+import { getStudentPointWallet as getPointWalletByUid } from "./studentWis";
+import { auth } from "./firebase";
 import {
   getPointRankDisplayByTierCode,
   getPointRankDisplay,
@@ -30,6 +31,8 @@ const snapshotCache = new Map<
   string,
   { expiresAt: number; value: StudentRankPromotionSnapshot }
 >();
+let cacheOwner: typeof auth.currentUser = null;
+let cacheEpoch = 0;
 
 export interface StudentRankPromotionSnapshot {
   policy: PointPolicy;
@@ -191,6 +194,19 @@ export const loadStudentRankPromotionSnapshot = async (
     throw new Error("Student uid is required.");
   }
 
+  const user = auth.currentUser;
+  if (!user || user.uid !== normalizedUid)
+    throw new Error("로그인 계정이 바뀌었습니다.");
+  const epoch = Number((await user.getIdTokenResult()).claims.auth_time);
+  if (auth.currentUser !== user || !Number.isFinite(epoch))
+    throw new Error("로그인 상태가 바뀌었습니다.");
+  if (cacheOwner !== user || cacheEpoch !== epoch) {
+    pendingLoads.clear();
+    snapshotCache.clear();
+    cacheOwner = user;
+    cacheEpoch = epoch;
+  }
+
   const { year, semester } = getYearSemester(config);
   const cacheKey = `${year}:${semester}:${normalizedUid}`;
   const cached = snapshotCache.get(cacheKey);
@@ -229,12 +245,17 @@ export const loadStudentRankPromotionSnapshot = async (
 
   try {
     const value = await promise;
+    if (
+      auth.currentUser !== user ||
+      Number((await user.getIdTokenResult()).claims.auth_time) !== epoch
+    )
+      throw new Error("로그인 계정이 바뀌었습니다.");
     snapshotCache.set(cacheKey, {
       expiresAt: Date.now() + SNAPSHOT_CACHE_TTL_MS,
       value,
     });
     return value;
   } finally {
-    pendingLoads.delete(cacheKey);
+    if (pendingLoads.get(cacheKey) === promise) pendingLoads.delete(cacheKey);
   }
 };

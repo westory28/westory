@@ -2,39 +2,26 @@ import PortalWorkspace from "../../components/common/PortalWorkspace";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  where,
-  writeBatch,
-} from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
 import WordCloudView from "../../components/common/WordCloudView";
 import {
-  buildThinkCloudResponsesCollectionPath,
-  buildThinkCloudSessionCollectionPath,
-  buildThinkCloudStateDocPath,
   DEFAULT_THINK_CLOUD_OPTIONS,
   formatClassLabel,
   formatGradeLabel,
-  normalizeThinkCloudOptions,
   type ThinkCloudOptions,
   type ThinkCloudResponse,
-  type ThinkCloudSession,
 } from "../../lib/thinkCloud";
 import { canWriteLessonManagement } from "../../lib/permissions";
 
-type SessionWithId = ThinkCloudSession & { id: string };
+import {
+  createThinkCloudSession,
+  deleteThinkCloudSession,
+  transitionThinkCloudSession,
+  subscribeThinkCloudState,
+  type CanonicalThinkCloudSession as SessionWithId,
+} from "../../lib/thinkCloudLifecycle";
 type SchoolOption = { value: string; label: string };
 type StudentRosterItem = {
   uid: string;
@@ -58,7 +45,8 @@ const defaultClassOptions: SchoolOption[] = Array.from(
 
 const ManageThinkCloud: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
-  const [activeSessionId, setActiveSessionId] = useState("");
+  const [activeSessionIds, setActiveSessionIds] = useState<string[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [sessions, setSessions] = useState<SessionWithId[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [responses, setResponses] = useState<
@@ -104,130 +92,36 @@ const ManageThinkCloud: React.FC = () => {
   );
 
   useEffect(() => {
-    const stateRef = doc(db, buildThinkCloudStateDocPath(config));
-    const unsubscribe = onSnapshot(stateRef, (snap) => {
-      if (!snap.exists()) {
-        setActiveSessionId("");
-        return;
-      }
-      setActiveSessionId(String(snap.data().activeSessionId || "").trim());
-    });
-    return () => unsubscribe();
-  }, [config]);
-
-  useEffect(() => {
-    const sessionsRef = collection(
-      db,
-      buildThinkCloudSessionCollectionPath(config),
+    if (!currentUser) return;
+    return subscribeThinkCloudState(
+      config,
+      "teacher",
+      selectedSessionId,
+      (state) => {
+        setSessions(state.thinkCloudSessions);
+        setResponses(state.thinkCloudResponses);
+        setClassStudents(state.thinkCloudRoster);
+        setActiveSessionIds(state.thinkCloudState.activeSessionIds || []);
+        setSelectedSessionId((selected) =>
+          state.thinkCloudSessions.some((session) => session.id === selected)
+            ? selected
+            : state.thinkCloudSessions[0]?.id || "",
+        );
+      },
+      (error) => {
+        setSessions([]);
+        setResponses([]);
+        setClassStudents([]);
+        setActiveSessionIds([]);
+        setSelectedSessionId("");
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "생각모아를 불러오지 못했습니다.",
+        );
+      },
     );
-    const unsubscribe = onSnapshot(sessionsRef, (snap) => {
-      const loaded = snap.docs.map((item) => {
-        const raw = item.data() as ThinkCloudSession;
-        return {
-          ...raw,
-          id: item.id,
-          options: normalizeThinkCloudOptions(raw.options),
-        };
-      });
-      loaded.sort((a, b) => {
-        const ta = Number(
-          (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        const tb = Number(
-          (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        return tb - ta;
-      });
-      setSessions(loaded);
-      if (!selectedSessionId && loaded.length > 0) {
-        setSelectedSessionId(loaded[0].id);
-      }
-      if (
-        selectedSessionId &&
-        !loaded.some((item) => item.id === selectedSessionId)
-      ) {
-        setSelectedSessionId(loaded.length > 0 ? loaded[0].id : "");
-      }
-    });
-    return () => unsubscribe();
-  }, [config, selectedSessionId]);
-
-  useEffect(() => {
-    if (!selectedSessionId) {
-      setResponses([]);
-      return;
-    }
-    const responsesRef = collection(
-      db,
-      buildThinkCloudResponsesCollectionPath(config, selectedSessionId),
-    );
-    const unsubscribe = onSnapshot(responsesRef, (snap) => {
-      const loaded = snap.docs.map((item) => ({
-        id: item.id,
-        ...(item.data() as ThinkCloudResponse),
-      }));
-      loaded.sort((a, b) => {
-        const ta = Number(
-          (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        const tb = Number(
-          (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        return tb - ta;
-      });
-      setResponses(loaded);
-    });
-    return () => unsubscribe();
-  }, [config, selectedSessionId]);
-
-  useEffect(() => {
-    if (
-      !selectedSession ||
-      !selectedSession.targetGrade ||
-      !selectedSession.targetClass
-    ) {
-      setClassStudents([]);
-      return;
-    }
-
-    const q = query(
-      collection(db, "users"),
-      where("grade", "==", selectedSession.targetGrade),
-      where("class", "==", selectedSession.targetClass),
-    );
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const loaded: StudentRosterItem[] = [];
-      snap.forEach((item) => {
-        const data = item.data() as {
-          role?: string;
-          name?: string;
-          number?: string;
-          uid?: string;
-        };
-        if (data.role === "teacher") return;
-        const uid = String(data.uid || item.id).trim();
-        if (!uid) return;
-        loaded.push({
-          uid,
-          name: String(data.name || "").trim() || "이름없음",
-          number: String(data.number || "").trim(),
-        });
-      });
-      loaded.sort((a, b) => {
-        const an = Number.parseInt(a.number, 10);
-        const bn = Number.parseInt(b.number, 10);
-        const aValid = Number.isFinite(an) && an > 0;
-        const bValid = Number.isFinite(bn) && bn > 0;
-        if (aValid && bValid) return an - bn;
-        if (aValid) return -1;
-        if (bValid) return 1;
-        return a.name.localeCompare(b.name);
-      });
-      setClassStudents(loaded);
-    });
-
-    return () => unsubscribe();
-  }, [selectedSession]);
+  }, [config, currentUser, selectedSessionId, refreshKey]);
 
   const cloudEntries = useMemo(() => {
     const buckets = new Map<
@@ -386,25 +280,7 @@ const ManageThinkCloud: React.FC = () => {
     setLoadingAction(true);
     setMessage("");
     try {
-      const stateRef = doc(db, buildThinkCloudStateDocPath(config));
-      const stateSnap = await getDoc(stateRef);
-      const previousSessionId = stateSnap.exists()
-        ? String(stateSnap.data().activeSessionId || "").trim()
-        : "";
-
-      if (previousSessionId) {
-        const previousRef = doc(
-          db,
-          buildThinkCloudSessionCollectionPath(config),
-          previousSessionId,
-        );
-        await updateDoc(previousRef, {
-          status: "closed",
-          closedAt: serverTimestamp(),
-        });
-      }
-
-      const payload: ThinkCloudSession = {
+      const added = await createThinkCloudSession(config, {
         title: safeTitle,
         description: description.trim(),
         targetGrade,
@@ -413,25 +289,12 @@ const ManageThinkCloud: React.FC = () => {
           gradeOptions.find((item) => item.value === targetGrade)?.label || "",
         targetClassLabel:
           classOptions.find((item) => item.value === targetClass)?.label || "",
-        status: "active",
         options,
-        createdBy: currentUser.uid,
-        createdByName: (userData?.name || "교사").trim() || "교사",
-        createdAt: serverTimestamp(),
-        activatedAt: serverTimestamp(),
-      };
-
-      const added = await addDoc(
-        collection(db, buildThinkCloudSessionCollectionPath(config)),
-        payload,
-      );
-      await setDoc(stateRef, {
-        activeSessionId: added.id,
-        updatedAt: serverTimestamp(),
       });
+      setRefreshKey((key) => key + 1);
       setMessage("새 생각모아 세션을 시작했습니다.");
       setIsCreateMode(false);
-      setSelectedSessionId(added.id);
+      setSelectedSessionId(added.sessionId);
     } catch (error) {
       console.error("Failed to start think cloud session:", error);
       setMessage("세션 시작에 실패했습니다.");
@@ -446,22 +309,9 @@ const ManageThinkCloud: React.FC = () => {
     setLoadingAction(true);
     setMessage("");
     try {
-      const sessionRef = doc(
-        db,
-        buildThinkCloudSessionCollectionPath(config),
-        selectedSessionId,
-      );
-      await updateDoc(sessionRef, {
-        status: "closed",
-        closedAt: serverTimestamp(),
-      });
-
-      if (selectedSessionId === activeSessionId) {
-        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-          activeSessionId: "",
-          updatedAt: serverTimestamp(),
-        });
-      }
+      if (!selectedSession) return;
+      await transitionThinkCloudSession(config, selectedSession, "closed");
+      setRefreshKey((key) => key + 1);
       setMessage("선택한 세션을 종료했습니다.");
     } catch (error) {
       console.error("Failed to close think cloud session:", error);
@@ -477,18 +327,9 @@ const ManageThinkCloud: React.FC = () => {
     setLoadingAction(true);
     setMessage("");
     try {
-      const sessionRef = doc(
-        db,
-        buildThinkCloudSessionCollectionPath(config),
-        selectedSessionId,
-      );
-      await updateDoc(sessionRef, { status: "paused" });
-      if (selectedSessionId === activeSessionId) {
-        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-          activeSessionId: "",
-          updatedAt: serverTimestamp(),
-        });
-      }
+      if (!selectedSession) return;
+      await transitionThinkCloudSession(config, selectedSession, "paused");
+      setRefreshKey((key) => key + 1);
       setMessage("선택한 세션을 일시 정지했습니다.");
     } catch (error) {
       console.error("Failed to pause think cloud session:", error);
@@ -504,28 +345,9 @@ const ManageThinkCloud: React.FC = () => {
     setLoadingAction(true);
     setMessage("");
     try {
-      if (activeSessionId && activeSessionId !== selectedSessionId) {
-        const previousRef = doc(
-          db,
-          buildThinkCloudSessionCollectionPath(config),
-          activeSessionId,
-        );
-        await updateDoc(previousRef, { status: "paused" });
-      }
-
-      const sessionRef = doc(
-        db,
-        buildThinkCloudSessionCollectionPath(config),
-        selectedSessionId,
-      );
-      await updateDoc(sessionRef, {
-        status: "active",
-        activatedAt: serverTimestamp(),
-      });
-      await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-        activeSessionId: selectedSessionId,
-        updatedAt: serverTimestamp(),
-      });
+      if (!selectedSession) return;
+      await transitionThinkCloudSession(config, selectedSession, "active");
+      setRefreshKey((key) => key + 1);
       setMessage("선택한 세션을 재개했습니다.");
     } catch (error) {
       console.error("Failed to resume think cloud session:", error);
@@ -546,33 +368,9 @@ const ManageThinkCloud: React.FC = () => {
     setLoadingAction(true);
     setMessage("");
     try {
-      const responsesRef = collection(
-        db,
-        buildThinkCloudResponsesCollectionPath(config, selectedSessionId),
-      );
-      const responsesSnap = await getDocs(responsesRef);
-      if (!responsesSnap.empty) {
-        const batch = writeBatch(db);
-        responsesSnap.docs.forEach((item) => {
-          batch.delete(item.ref);
-        });
-        await batch.commit();
-      }
-
-      const sessionRef = doc(
-        db,
-        buildThinkCloudSessionCollectionPath(config),
-        selectedSessionId,
-      );
-      await deleteDoc(sessionRef);
-
-      if (selectedSessionId === activeSessionId) {
-        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-          activeSessionId: "",
-          updatedAt: serverTimestamp(),
-        });
-      }
-
+      if (!selectedSession) return;
+      await deleteThinkCloudSession(config, selectedSession);
+      setRefreshKey((key) => key + 1);
       setSelectedSessionId("");
       setMessage("선택한 주제를 삭제했습니다.");
     } catch (error) {
@@ -775,7 +573,7 @@ const ManageThinkCloud: React.FC = () => {
     }
 
     const isActive =
-      selectedSession.id === activeSessionId &&
+      activeSessionIds.includes(selectedSession.id) &&
       selectedSession.status === "active";
     const isPaused = selectedSession.status === "paused";
 
@@ -982,7 +780,8 @@ const ManageThinkCloud: React.FC = () => {
               const isSelected =
                 !isCreateMode && selectedSessionId === session.id;
               const isActive =
-                session.id === activeSessionId && session.status === "active";
+                activeSessionIds.includes(session.id) &&
+                session.status === "active";
               return (
                 <button
                   type="button"

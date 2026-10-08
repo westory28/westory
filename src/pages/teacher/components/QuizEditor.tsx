@@ -1,22 +1,15 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../../../lib/firebase";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
+import {
+  getAssessmentSemesterId,
+  refreshPublishedQuizDefinitions,
+} from "../../../lib/assessmentRelease";
+import { executeAssessmentManagementCommand } from "../../../lib/assessmentLifecycle";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
-import {
-  getSemesterCollectionPath,
-  getSemesterDocPath,
-} from "../../../lib/semesterScope";
+import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 import {
   QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES,
   QUIZ_CHOICE_OPTION_IMAGE_OPTIONS,
@@ -48,6 +41,7 @@ interface MatchingPair {
 type ChoiceOptionImage = string | null;
 
 interface Question {
+  contentRevision?: number;
   id: number;
   unitId: string;
   subUnitId?: string | null;
@@ -166,6 +160,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 }) => {
   const { config } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
+  const pendingQuestionId = useRef<number | null>(null);
   const [category, setCategory] = useState<string>("diagnostic");
   const [loading, setLoading] = useState(false);
   const [epFilter, setEpFilter] = useState<CascadingFilter>(
@@ -492,6 +487,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const resetForm = () => {
+    pendingQuestionId.current = null;
     const defaultCategory = type === "special" ? "exam_prep" : category;
     setEditingQuestionId(null);
     setFormText("");
@@ -926,7 +922,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     }
     const payload = buildQuestionPayload();
     if (!payload) return;
-    const targetId = editingQuestionId ?? Date.now();
+    const targetId =
+      editingQuestionId ?? pendingQuestionId.current ?? Date.now();
+    pendingQuestionId.current = targetId;
     savingQuestionRef.current = true;
     setSavingQuestion(true);
     try {
@@ -974,20 +972,24 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       const questionData = { ...newQuestion };
       delete questionData.createdAt;
       delete questionData.updatedAt;
-      await setDoc(
-        doc(db, getSemesterDocPath(config, "quiz_questions", String(targetId))),
-        {
-          ...questionData,
-          updatedAt: serverTimestamp(),
-          ...(editingQuestionId ? {} : { createdAt: serverTimestamp() }),
-        },
-        { merge: true },
-      );
+      const saved = await executeAssessmentManagementCommand<{
+        contentRevision: number;
+      }>("upsertQuizQuestion", {
+        semesterId: getAssessmentSemesterId(config),
+        questionId: String(targetId),
+        question: questionData,
+        expectedRevision: Number(existingQuestion?.contentRevision || 0),
+        reason: "교사 문항 저장",
+      });
+      newQuestion.contentRevision = saved.contentRevision;
       setQuestions((prev) =>
         editingQuestionId
           ? prev.map((q) => (q.id === targetId ? newQuestion : q))
           : [...prev, newQuestion],
       );
+      setEditingQuestionId(targetId);
+      await refreshPublishedQuizDefinitions(config, node.id, category);
+      pendingQuestionId.current = null;
       resetForm();
       setIsComposerOpen(false);
     } catch (error: any) {
@@ -1006,10 +1008,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (!canEdit) return;
     if (!window.confirm("이 문제를 삭제하시겠습니까?")) return;
     try {
-      await deleteDoc(
-        doc(db, getSemesterDocPath(config, "quiz_questions", String(id))),
-      );
+      await executeAssessmentManagementCommand("deleteQuizQuestion", {
+        semesterId: getAssessmentSemesterId(config),
+        questionId: String(id),
+        expectedRevision: Number(
+          questions.find((question) => question.id === id)?.contentRevision ||
+            0,
+        ),
+        reason: "교사 문항 삭제",
+      });
       setQuestions((prev) => prev.filter((q) => q.id !== id));
+      await refreshPublishedQuizDefinitions(config, node.id, category);
     } catch (error) {
       console.error("Delete question failed", error);
       alert("현재 학기 문제를 삭제하지 못했습니다.");

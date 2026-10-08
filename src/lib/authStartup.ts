@@ -1,6 +1,7 @@
 import type { User } from "firebase/auth";
 import type { UserData } from "../types";
 import { normalizeStaffPermissions } from "./permissions";
+import { isStudentRegistrationPending } from "./studentRegistrationStatus";
 
 export const AUTH_STARTUP_DEADLINE_MS = 15_000;
 export type AuthPhase =
@@ -9,6 +10,7 @@ export type AuthPhase =
   | "loading-profile"
   | "ready"
   | "onboarding"
+  | "registration-pending"
   | "signed-out"
   | "error";
 export interface AuthStartupError {
@@ -357,7 +359,7 @@ export class AuthStartupController {
       const check = (state: AuthStartupState) => {
         if (!this.isCurrent(generation, user)) return finish(staleError());
         if (
-          state.phase === "ready" &&
+          (state.phase === "ready" || state.phase === "registration-pending") &&
           state.userData &&
           matches(state.userData)
         )
@@ -446,6 +448,7 @@ export class AuthStartupController {
       attempt.authTime = authTime;
       this.publish(this.empty("opening-session"));
       let sessionReady = false;
+      let settingsStarted = false;
       let verifiedSnapshot: ProfileSnapshot | null = null;
       const publishProfile = () => {
         if (!current() || !sessionReady || !verifiedSnapshot) return;
@@ -468,15 +471,26 @@ export class AuthStartupController {
                   teacherPortalEnabled: raw.teacherPortalEnabled === true,
                 } as UserData)
               : null;
+          const registrationPending = isStudentRegistrationPending(profile);
           this.clearDeadline();
           this.publish({
-            phase: profile ? "ready" : "onboarding",
+            phase: registrationPending
+              ? "registration-pending"
+              : profile
+                ? "ready"
+                : "onboarding",
             generation,
-            currentUser: profile ? user : null,
-            onboardingUser: profile ? null : user,
+            currentUser: profile && !registrationPending ? user : null,
+            onboardingUser: profile && !registrationPending ? null : user,
             userData: profile,
             error: null,
           });
+          if (profile && !registrationPending && !settingsStarted) {
+            settingsStarted = true;
+            this.deps.sessionReady(user, generation);
+          } else if (!profile || registrationPending) {
+            settingsStarted = false;
+          }
           if (!attempt.settled) {
             attempt.settled = true;
             attempt.resolve({ generation, user, authTime, profile });
@@ -508,8 +522,6 @@ export class AuthStartupController {
       }
       await this.deps.prepareSession(user, { fresh, isCurrent: current });
       await this.assertCurrent(generation, user);
-      if (!current()) return;
-      this.deps.sessionReady(user, generation);
       if (!current()) return;
       this.publish(this.empty("loading-profile"));
       sessionReady = true;
