@@ -1,7 +1,11 @@
 import { auth } from "./firebase";
 import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 
-export type SemesterReadinessStatus = "ready" | "partial" | "danger";
+export type SemesterReadinessStatus =
+  | "ready"
+  | "partial"
+  | "danger"
+  | "reference";
 
 export interface SemesterReadinessItem {
   key: "semesterCore";
@@ -73,6 +77,28 @@ export const loadSemesterReadiness = async (
     !data.readiness.reason,
   );
   const reason = data.error || data.readiness.reason;
+  const activeRecordChanged =
+    !data.error &&
+    data.requested?.status === "ACTIVE" &&
+    !data.readiness.current &&
+    reason === "SEMESTER_READINESS_DEPENDENCY_CHANGED";
+  if (activeRecordChanged) {
+    return {
+      status: "reference",
+      requiredItems: [],
+      advisoryItems: [
+        {
+          key: "semesterCore",
+          label: "개시 전 검증 기록",
+          ready: false,
+          advisory: true,
+          detail:
+            "이 기록 차이만으로 학생 로그인이나 학습 기능이 차단되지는 않습니다.",
+        },
+      ],
+      missingRequiredCount: 0,
+    };
+  }
   return {
     status: ready
       ? "ready"

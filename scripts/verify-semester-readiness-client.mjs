@@ -49,6 +49,7 @@ const compile = (file, imports) => {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
   }).outputText;
   vm.runInNewContext(source, {
@@ -102,7 +103,6 @@ console.log(
 for (const reason of [
   "SEMESTER_READINESS_NOT_FOUND",
   "SEMESTER_READINESS_STALE",
-  "SEMESTER_READINESS_DEPENDENCY_CHANGED",
   "SEMESTER_POLICY_VERSION_MISMATCH",
   "SEMESTER_READINESS_NOT_PASS",
 ]) {
@@ -123,7 +123,50 @@ assert.equal((await read()).status, "danger");
 state = { ...ready(), error: "CONFLICTING_ACTIVE_SEMESTER" };
 assert.equal((await read()).status, "danger");
 console.log(
-  "PASS missing/stale/changed/policy/failed readiness never appears ready and conflicts remain blocked",
+  "PASS missing/stale/policy/failed readiness never appears ready and conflicts remain blocked",
+);
+const React = require("react");
+const { renderToStaticMarkup } = require("react-dom/server");
+const ReadinessPanel = compile(
+  "src/pages/teacher/components/SettingsSemesterReadiness.tsx",
+  { react: React, "react/jsx-runtime": require("react/jsx-runtime") },
+).default;
+state = {
+  ...ready(),
+  readiness: {
+    current: false,
+    reason: "SEMESTER_READINESS_DEPENDENCY_CHANGED",
+  },
+};
+const reference = await read();
+assert.equal(reference.status, "reference");
+assert.equal(reference.requiredItems.length, 0);
+assert.equal(reference.missingRequiredCount, 0);
+assert.equal(reference.advisoryItems[0].ready, false);
+const markup = renderToStaticMarkup(
+  React.createElement(ReadinessPanel, {
+    readiness: reference,
+    loading: false,
+    error: "",
+    semesterLabel: "2026학년도 2학기",
+    showTransitionImpact: false,
+  }),
+);
+assert.match(markup, /개시 전 검증 기록 이후 운영 자료가 변경/);
+assert.match(markup, /학생 로그인이나 학습 기능이 차단되지는 않습니다/);
+assert.doesNotMatch(markup, /검증 완료|검증이 완료|기준 충족|재검증|필수 확인/);
+for (const status of ["PREPARING", "VALIDATING", "READY", "CLOSING"]) {
+  state.requested.status = status;
+  const result = await read();
+  assert.equal(result.status, "partial");
+  assert.equal(result.requiredItems[0].ready, false);
+  assert.match(result.requiredItems[0].detail, /재검증/);
+}
+state.requested.status = "ACTIVE";
+state.error = "CONFLICTING_ACTIVE_SEMESTER";
+assert.equal((await read()).status, "danger");
+console.log(
+  "PASS ACTIVE dependency drift is reference-only in actual panel; preparing and conflict checks remain strict",
 );
 for (const invalid of [
   null,
@@ -160,4 +203,4 @@ await assert.rejects(read(), (error) => error.code === "permission-denied");
 console.log(
   "PASS stale owner/auth epoch discard and actual gateway administrator-only authorization",
 );
-console.log("Semester readiness client: 4 groups passed.");
+console.log("Semester readiness client: 5 groups passed.");

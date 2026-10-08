@@ -16,10 +16,10 @@ const ReadinessGroup: React.FC<{
       <summary className="cursor-pointer px-4 py-4 text-sm text-gray-800 focus-visible:outline-blue-600">
         <span className="ml-2 font-bold">{title}</span>
         <span
-          className={`ml-3 text-xs font-bold ${missing.length ? "text-amber-800" : "text-gray-500"}`}
+          className={`ml-3 text-xs font-bold ${missing.length && !advisory ? "text-amber-800" : "text-gray-500"}`}
         >
           {missing.length
-            ? `${advisory ? "추가 준비" : "확인 필요"} ${missing.length}건`
+            ? `${advisory ? "참고" : "확인 필요"} ${missing.length}건`
             : "기본 항목 모두 확인됨"}
         </span>
         <span className="mt-2 block pl-6 text-xs leading-5 text-gray-500">
@@ -33,20 +33,16 @@ const ReadinessGroup: React.FC<{
           {ordered.map((item) => (
             <li
               key={item.key}
-              className={`py-3 ${item.ready ? "" : "bg-amber-50 px-3"}`}
+              className={`py-3 ${item.ready || advisory ? "" : "bg-amber-50 px-3"}`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-bold text-gray-800">
                   {item.label}
                 </span>
                 <span
-                  className={`text-xs font-bold ${item.ready ? "text-gray-500" : "text-amber-800"}`}
+                  className={`text-xs font-bold ${item.ready || advisory ? "text-gray-500" : "text-amber-800"}`}
                 >
-                  {item.ready
-                    ? "검증 완료"
-                    : advisory
-                      ? "추가 준비"
-                      : "확인 필요"}
+                  {item.ready ? "검증 완료" : advisory ? "참고" : "확인 필요"}
                 </span>
               </div>
               <p className="mt-1 text-xs leading-5 text-gray-600">
@@ -85,13 +81,15 @@ const SettingsSemesterReadiness: React.FC<{
           </span>
           {!loading && readiness && (
             <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${readiness.status === "danger" ? "bg-red-50 text-red-700" : readiness.status === "partial" ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-900"}`}
+              className={`rounded-full px-3 py-1 text-xs font-bold ${readiness.status === "danger" ? "bg-red-50 text-red-700" : readiness.status === "partial" ? "bg-amber-50 text-amber-800" : readiness.status === "reference" ? "bg-gray-100 text-gray-700" : "bg-blue-50 text-blue-900"}`}
             >
               {readiness.status === "danger"
                 ? "전환 비권장"
                 : readiness.status === "partial"
                   ? "일부 확인 필요"
-                  : "기본 전환 기준 충족"}
+                  : readiness.status === "reference"
+                    ? "참고"
+                    : "기본 전환 기준 충족"}
             </span>
           )}
         </div>
@@ -101,21 +99,29 @@ const SettingsSemesterReadiness: React.FC<{
             : error
               ? error
               : readiness
-                ? missingRequired.length
-                  ? `필수 확인 ${missingRequired.length}건 · ${missingRequired.map((item) => item.label).join(", ")}`
-                  : "필수 운영 항목 검증이 완료되었습니다."
+                ? readiness.status === "reference"
+                  ? "개시 전 검증 기록 이후 운영 자료가 변경되었습니다."
+                  : missingRequired.length
+                    ? `필수 확인 ${missingRequired.length}건 · ${missingRequired.map((item) => item.label).join(", ")}`
+                    : "필수 운영 항목 검증이 완료되었습니다."
                 : "학기를 선택하면 준비 현황을 확인할 수 있습니다."}
         </p>
       </div>
       {!loading && readiness && !error && (
         <>
-          <ReadinessGroup
-            title="필수 운영 항목"
-            items={readiness.requiredItems}
-          />
+          {readiness.requiredItems.length > 0 && (
+            <ReadinessGroup
+              title="필수 운영 항목"
+              items={readiness.requiredItems}
+            />
+          )}
           {readiness.advisoryItems.length > 0 && (
             <ReadinessGroup
-              title="선택 운영 자료"
+              title={
+                readiness.status === "reference"
+                  ? "검증 기록"
+                  : "선택 운영 자료"
+              }
               items={readiness.advisoryItems}
               advisory
             />
