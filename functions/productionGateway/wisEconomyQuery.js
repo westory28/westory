@@ -2829,6 +2829,12 @@ const projectStudentEconomy = (economy) =>
 
 const hallPublicId = (scope, uid) => `wispublic_${sha256(`${scope}\n${uid}`).slice(0, 24)}`;
 
+const isWisHallTestAccount = (account) =>
+  [account.studentUid, account.displayName].some((value) => {
+    const identity = String(value || "").toLowerCase().replace(/[\s._-]+/g, "");
+    return identity === "방테스트" || identity === "bangtest";
+  });
+
 const rankHallEntries = (entries) => {
   const sorted = [...entries].sort(
     (left, right) =>
@@ -2861,7 +2867,7 @@ const buildWisHallOfFameProjection = ({
   studentAccount = null,
 }) => {
   const entries = accounts
-    .filter((account) => Number(account.rankEarnedTotal || 0) > 0)
+    .filter((account) => Number(account.rankEarnedTotal || 0) > 0 && !isWisHallTestAccount(account))
     .map((account) => {
       const grade = String(account?.grade || "").trim();
       const className = String(account?.classNumber || "").trim();

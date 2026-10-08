@@ -973,6 +973,100 @@ const run = async () => {
     `semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", "student-other-class")}`,
   );
   tx.delete("semester_classes/class-2");
+  // Exclude only the operator's exact test identities before ranking and
+  // limiting public lists. Their managed accounts and own wallets stay usable.
+  const testAccountSeed = Object.fromEntries([
+    "semester_manifests/2026-2",
+    "semester_wis_economies/2026-2",
+    "semester_classes/class-1",
+    "users/teacher-1",
+    "site_settings/interface_config",
+  ].map((path) => [path, structuredClone(tx.documents.get(path))]));
+  testAccountSeed["site_settings/interface_config"].hallOfFame.publicRange = {
+    gradeRankLimit: 5,
+    classRankLimit: 5,
+    includeTies: false,
+  };
+  const excludedHallStudents = [
+    { uid: "operator-test-1", name: "방테스트", score: 9_000 },
+    { uid: "Bang_Test", name: "운영 계정", score: 8_000 },
+    { uid: "operator-test-3", name: " BANG.test ", score: 7_000 },
+  ];
+  const visibleHallStudents = [
+    { uid: "regular-1", name: "방민수", score: 600 },
+    { uid: "regular-2", name: "테스트 학생", score: 500 },
+    { uid: "regular-3", name: "방테스트와 함께", score: 400 },
+    { uid: "bangtest-helper", name: "일반 학생", score: 300 },
+    { uid: "regular-5", name: "다섯 번째 학생", score: 200 },
+    { uid: "regular-6", name: "여섯 번째 학생", score: 100 },
+  ];
+  for (const { uid, name, score } of [...excludedHallStudents, ...visibleHallStudents]) {
+    const fixtureAccountId = wis.accountIdFor("2026-2", uid);
+    const fixtureEnrollmentId = `enrollment-${uid}`;
+    testAccountSeed[`users/${uid}`] = { role: "student" };
+    testAccountSeed[`semester_enrollments/${fixtureEnrollmentId}`] = {
+      ...enrollment,
+      enrollmentId: fixtureEnrollmentId,
+      studentUid: uid,
+      displayName: name,
+    };
+    testAccountSeed[`semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", uid)}`] = {
+      semesterId: "2026-2",
+      studentUid: uid,
+      activeEnrollmentId: fixtureEnrollmentId,
+    };
+    testAccountSeed[`semester_wis_accounts/${fixtureAccountId}`] = {
+      accountId: fixtureAccountId,
+      semesterId: "2026-2",
+      studentUid: uid,
+      enrollmentId: fixtureEnrollmentId,
+      classId: "class-1",
+      displayName: name,
+      revision: 1,
+      balance: score + 500,
+      rankEarnedTotal: score,
+    };
+  }
+  const testAccountTx = new MemoryTransaction(testAccountSeed);
+  const testAccountBefore = structuredClone([...testAccountTx.documents]);
+  const testAccountCore = wis.createWisQueryCore({
+    store: {
+      get: (path) => testAccountTx.get(path),
+      runTransaction: (callback) => callback(testAccountTx),
+    },
+    assertSession: async (request) => ({ uid: request.auth.uid, email: request.auth.token.email }),
+  });
+  const testAccountQuery = (uid, audience, projection) => testAccountCore.getWisEconomyState({
+    auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr` } },
+    data: { audience, semesterId: "2026-2", source: "CURRENT", projection, limit: 20 },
+  });
+  for (const [uid, audience] of [["teacher-1", "teacher"], ["regular-6", "student"], ["operator-test-1", "student"]]) {
+    const hallState = await testAccountQuery(uid, audience, "hall-of-fame");
+    const hall = hallState.hallOfFame;
+    for (const [groupName, key, limit] of [
+      ["gradeLeaderboardByGrade", "2", 5],
+      ["classLeaderboardByClassKey", "2-3", 5],
+      ["gradeTop3ByGrade", "2", 3],
+      ["classTop3ByClassKey", "2-3", 3],
+    ]) {
+      const rows = hall[groupName][key];
+      assert.deepEqual(rows.map((entry) => entry.displayName), visibleHallStudents.slice(0, limit).map((entry) => entry.name));
+      assert.deepEqual(rows.map((entry) => entry.rank), Array.from({ length: limit }, (_, index) => index + 1));
+      assert.ok(rows.every((entry) => entry.currentBalance === 0));
+    }
+    assert.equal(hallState.writeCount, 0);
+  }
+  const testAccountOverview = await testAccountQuery("teacher-1", "teacher", "overview");
+  assert.equal(testAccountOverview.accounts.length, 9);
+  for (const { uid, score } of excludedHallStudents) {
+    assert.ok(testAccountOverview.accounts.some((account) => account.studentUid === uid));
+    const wallet = await testAccountQuery(uid, "student", "student-core");
+    assert.equal(wallet.account.studentUid, uid);
+    assert.equal(wallet.account.balance, score + 500);
+    assert.equal(wallet.account.rankEarnedTotal, score);
+    assert.equal(wallet.writeCount, 0);
+  }
+  assert.deepEqual([...testAccountTx.documents], testAccountBefore);
   const teacherState = await queryCore.getWisEconomyState({
     auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
     data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT" },
@@ -1795,7 +1889,7 @@ const run = async () => {
     (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
   );
 
-  console.log(JSON.stringify({ passed: true, cases: 49, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain", "canonical full name and student number ignore conflicting profile identity", "selected emoji only, invalid URL fallback and public-field allowlist", "unranked viewer retains own grade/class boundary"], productionAccess: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 50, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain", "canonical full name and student number ignore conflicting profile identity", "selected emoji only, invalid URL fallback and public-field allowlist", "unranked viewer retains own grade/class boundary", "exact operator test identities excluded from all public maps before limits for student/teacher viewers; partial names, managed accounts and personal wallets preserved without writes"], productionAccess: 0 }));
 };
 
 run().then(async () => {

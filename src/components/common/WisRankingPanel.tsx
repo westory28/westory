@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "./LoadingState";
 import PointRankBadge from "./PointRankBadge";
+import WisIcon from "./WisIcon";
 import { getWisHallOfFameGradeLeaderboard } from "../../lib/wisHallOfFame";
 import { getPointPolicy } from "../../lib/points";
 import { getStudentPointHallOfFame } from "../../lib/studentWis";
@@ -24,7 +25,7 @@ interface WisRankingPanelProps {
 
 const formatWis = (value: unknown) => {
   const amount = Math.max(0, Number(value || 0));
-  return `${amount.toLocaleString("ko-KR")} ₩s`;
+  return amount.toLocaleString("ko-KR");
 };
 
 const rankTone = (rank: number) => {
@@ -162,7 +163,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
 
         {!loading &&
           entries.map((entry, index) => {
-            const rank = Number(entry.rank || index + 1);
+            const rank = index + 1;
             const iconClassName = rankIcon(rank);
             const entryRank = rankPolicy
               ? getPointRankDisplay({
@@ -176,8 +177,19 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                 key={entry.uid}
                 className={`wis-ranking-row ${rankAccent} rounded-lg border ${rankTone(rank)}`}
               >
+                <span className="wis-ranking-classroom">
+                  <span>
+                    {entry.grade}학년 {entry.class}반
+                  </span>
+                  {entry.number && <span>{entry.number}번</span>}
+                </span>
                 <span className="wis-ranking-place">
-                  <span className="wis-ranking-rank-medal">{rank}</span>
+                  <span
+                    className="wis-ranking-rank-medal"
+                    aria-label={`${rank}위`}
+                  >
+                    {rank}
+                  </span>
                   {iconClassName && (
                     <i
                       className={`wis-ranking-crown ${iconClassName}`}
@@ -185,18 +197,14 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                     />
                   )}
                 </span>
-                <span className="wis-ranking-profile" aria-hidden="true">
-                  {entry.profileIcon || defaultProfileIcon}
-                </span>
-                <span className="wis-ranking-classroom">
-                  <span>
-                    {entry.grade}학년 {entry.class}반
-                  </span>
-                  {entry.number && <span>{entry.number}번</span>}
-                </span>
                 <span className="wis-ranking-person">
-                  <span className="wis-ranking-name">
-                    {entry.displayName || entry.studentName}
+                  <span className="wis-ranking-identity">
+                    <span className="wis-ranking-profile" aria-hidden="true">
+                      {entry.profileIcon || defaultProfileIcon}
+                    </span>
+                    <span className="wis-ranking-name">
+                      {entry.displayName || entry.studentName}
+                    </span>
                   </span>
                   <PointRankBadge
                     rank={entryRank}
@@ -204,8 +212,12 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                     className="wis-ranking-rank-badge"
                   />
                 </span>
-                <span className="wis-ranking-score">
-                  {formatWis(entry.cumulativeEarned)}
+                <span
+                  className="wis-ranking-score"
+                  aria-label={`${formatWis(entry.cumulativeEarned)} 위스`}
+                >
+                  <span>{formatWis(entry.cumulativeEarned)}</span>
+                  <WisIcon />
                 </span>
               </div>
             );

@@ -3050,17 +3050,22 @@ button.lesson-core-point-floating-status:disabled {
 
 .wis-ranking-row--rank-4,
 .wis-ranking-row--rank-5 {
-  --wis-ranking-accent-rgb: 14 116 144;
-  --wis-ranking-row-border: rgba(14, 116, 144, 0.24);
-  --wis-ranking-row-glow: rgba(14, 116, 144, 0.14);
-  --wis-ranking-medal-bg: linear-gradient(
-    135deg,
-    #020617,
-    #0f172a 58%,
-    #164e63
-  );
-  --wis-ranking-medal-color: #ffffff;
-  --wis-ranking-medal-ring: rgba(14, 116, 144, 0.32);
+  --wis-ranking-accent-rgb: 100 116 139;
+  --wis-ranking-row-border: var(--ws-border, #e5e7eb);
+  --wis-ranking-row-glow: transparent;
+  --wis-ranking-medal-bg: var(--ws-surface, #ffffff);
+  --wis-ranking-medal-color: var(--ws-text, #1f2937);
+  --wis-ranking-medal-ring: var(--ws-border, #e5e7eb);
+}
+
+.wis-ranking-row--rank-4::before,
+.wis-ranking-row--rank-5::before {
+  content: none;
+}
+
+.wis-ranking-row--rank-4 .wis-ranking-score,
+.wis-ranking-row--rank-5 .wis-ranking-score {
+  color: var(--ws-text, #1f2937);
 }
 
 .wis-ranking-rank-medal {
@@ -3180,10 +3185,8 @@ button.lesson-core-point-floating-status:disabled {
 
 .wis-ranking-row {
   display: grid;
-  grid-template-columns:
-    32px minmax(24px, 0.5fr) minmax(0, 1fr) minmax(0, 1.25fr)
-    minmax(max-content, 0.8fr);
-  grid-template-areas: "place profile classroom person score";
+  grid-template-columns: minmax(80px, 1fr) 32px minmax(0, 2fr) max-content;
+  grid-template-areas: "classroom place person score";
   align-items: center;
   gap: 8px 12px;
   min-width: 0;
@@ -3218,8 +3221,7 @@ button.lesson-core-point-floating-status:disabled {
 }
 
 .wis-ranking-profile {
-  grid-area: profile;
-  justify-self: center;
+  flex: 0 0 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3234,7 +3236,7 @@ button.lesson-core-point-floating-status:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 4px 8px;
   color: var(--ws-text-muted);
   font-size: 12px;
@@ -3256,6 +3258,14 @@ button.lesson-core-point-floating-status:disabled {
   min-width: 0;
 }
 
+.wis-ranking-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .wis-ranking-name {
   min-width: 0;
   color: var(--ws-text-strong);
@@ -3274,8 +3284,12 @@ button.lesson-core-point-floating-status:disabled {
 
 .wis-ranking-score {
   grid-area: score;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   color: var(--ws-primary);
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1.5;
   text-align: right;
@@ -3283,10 +3297,13 @@ button.lesson-core-point-floating-status:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+.wis-ranking-score .wis-icon {
+  flex: 0 0 24px;
+}
+
 @container wis-ranking (max-width: 480px) {
   .wis-ranking-row {
-    grid-template-columns: 32px 24px minmax(0, 1fr) max-content;
-    grid-template-areas: "place profile person score" "place profile classroom score";
+    grid-template-columns: 52px 24px minmax(0, 1fr) max-content;
     column-gap: 8px;
     row-gap: 4px;
     padding: 8px;
@@ -3298,9 +3315,28 @@ button.lesson-core-point-floating-status:disabled {
     align-self: center;
   }
 
-  .wis-ranking-name,
-  .wis-ranking-score {
+  .wis-ranking-name {
     font-size: 14px;
+  }
+
+  .wis-ranking-place .wis-ranking-rank-medal {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .wis-ranking-classroom {
+    font-size: 12px;
+  }
+
+  .wis-ranking-score {
+    font-size: 18px;
+  }
+
+  .wis-ranking-score .wis-icon {
+    flex-basis: 20px;
+    width: 20px;
+    height: 20px;
   }
 
   .wis-ranking-person {
@@ -3309,6 +3345,13 @@ button.lesson-core-point-floating-status:disabled {
 
   .wis-ranking-classroom > span {
     white-space: normal;
+  }
+}
+
+@container wis-ranking (max-width: 360px) {
+  .wis-ranking-row {
+    grid-template-columns: 52px 24px minmax(0, 1fr);
+    grid-template-areas: "classroom place person" "classroom place score";
   }
 }
 

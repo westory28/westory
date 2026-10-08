@@ -396,11 +396,12 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "248866fc4c2a6565aa2901867352f04fbaf262b8e0d39eab0d82c03aa8b68bee",
+      "sha256": "55a7824f0823afe38e50e21fa695312e7ccb32f7d9c6a6888f13db5c3339e8da",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
-        "Keep unranked student viewers scoped by their canonical account enrollment."
+        "Keep unranked student viewers scoped by their canonical account enrollment.",
+        "Exclude exact normalized Bang Test operator identities before public hall ranking; keep management accounts and personal wallets unchanged."
       ]
     }
   ],

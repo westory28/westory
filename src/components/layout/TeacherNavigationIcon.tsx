@@ -1,4 +1,5 @@
 import React from "react";
+import WisIcon from "../common/WisIcon";
 
 export type TeacherIconName =
   | "home"
@@ -135,32 +136,25 @@ const paths: Record<Exclude<TeacherIconName, "wis">, React.ReactNode> = {
 const TeacherNavigationIcon: React.FC<{
   name: TeacherIconName;
   className?: string;
-}> = ({ name, className = "" }) => (
-  <svg
-    viewBox="0 0 24 24"
-    width="24"
-    height="24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-    focusable="false"
-    className={`teacher-nav-icon ${className}`}
-  >
-    {name === "wis" ? (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path
-          d="m5.7 8 1.8 8 2.2-5 2.1 5 1.8-8m4.9 3c-3-1.1-4.1 1.2-1.9 2s1.4 3-1.3 2.1"
-          strokeWidth="1.5"
-        />
-      </>
-    ) : (
-      paths[name]
-    )}
-  </svg>
-);
+}> = ({ name, className = "" }) =>
+  name === "wis" ? (
+    <WisIcon className={`teacher-nav-icon ${className}`} />
+  ) : (
+    <svg
+      viewBox="0 0 24 24"
+      width="24"
+      height="24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className={`teacher-nav-icon ${className}`}
+    >
+      {paths[name]}
+    </svg>
+  );
 
 export default TeacherNavigationIcon;

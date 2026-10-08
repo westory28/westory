@@ -230,7 +230,14 @@ const normalizeEntry = (value: unknown): WisHallOfFameEntry | null => {
     toSafeText(raw.studentName) || toSafeText(raw.displayName);
   const displayName = toSafeText(raw.displayName) || studentName;
 
-  if (!uid || !rank || !grade || !className || !studentName) {
+  // Older snapshots can still contain the operator's test account.
+  const isOperatorTest = [uid, studentName, displayName].some((value) =>
+    ["방테스트", "bangtest"].includes(
+      value.toLowerCase().replace(/[\s._-]/g, ""),
+    ),
+  );
+
+  if (isOperatorTest || !uid || !rank || !grade || !className || !studentName) {
     return null;
   }
 
