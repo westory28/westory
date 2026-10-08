@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import { useEffect, useId, useRef, useState } from "react";
 import NavalBattleGame from "./NavalBattleGame";
 import {
@@ -154,12 +155,11 @@ export default function WeplayGuide({
     resize();
     viewport?.addEventListener("resize", resize);
     window.addEventListener("resize", resize);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
     return () => {
       viewport?.removeEventListener("resize", resize);
       window.removeEventListener("resize", resize);
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
     };
   }, [open]);
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   WEPLAY_DIFFICULTY_LABELS,
@@ -44,13 +45,12 @@ export default function WeplayRecordsDialog({
   useEffect(() => {
     const element = dialog.current;
     const opener = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
     element?.showModal();
     closeButton.current?.focus({ preventScroll: true });
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
     return () => {
       element?.close();
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, []);

@@ -7,6 +7,7 @@ const gatewayDir = path.resolve(__dirname, '../productionGateway');
 const manifest = require('../productionGateway/source-manifest.json');
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 assert.deepEqual(manifest.rootExports, ['executeCommand', 'executeLessonCorePointCommand']);
+assert.deepEqual(manifest.isolatedQueryExports, [{ name: 'getWisEconomyState', region: 'asia-northeast3', entry: '../studentWisQuery.js', source: 'wisEconomyQuery.js' }]);
 for (const entry of manifest.files) {
   assert.match(entry.originalSha256, /^[a-f0-9]{64}$/);
   const file = path.join(gatewayDir, entry.file);
@@ -22,5 +23,9 @@ assert.equal(fs.readFileSync(path.join(gatewayDir, 'sessionAuthority.js'), 'utf8
 const source = fs.readFileSync(path.resolve(__dirname, '../index.js'), 'utf8');
 assert.match(source, /exports\.executeCommand = require\('\.\/productionGateway\/productionSource'\)\.executeCommand/);
 assert.match(source, /exports\.executeLessonCorePointCommand = require\('\.\/productionGateway\/productionSource'\)\.executeLessonCorePointCommand/);
+assert.match(source, /exports\.getWisEconomyState = require\('\.\/studentWisQuery'\)\.getWisEconomyState/);
+const querySource = fs.readFileSync(path.resolve(__dirname, '../studentWisQuery.js'), 'utf8');
+assert.match(querySource, /region: 'asia-northeast3'/);
+assert.doesNotMatch(querySource, /region:\s*\[|createWisCallableExports/);
 assert.doesNotMatch(source, /Object\.assign\(exports, require\('\.\/productionGateway/);
-console.log(`PASS production gateway: ${manifest.files.length} source hashes, syntax and the two reviewed canonical exports`);
+console.log(`PASS production gateway: ${manifest.files.length} source hashes, syntax, two canonical command exports and the isolated Seoul query export`);

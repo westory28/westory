@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import React, { useEffect, useRef, useState } from "react";
 import {
   EntryOverview,
@@ -99,8 +100,7 @@ function PublicEntryContent({
     const previous = page.contains(document.activeElement)
       ? (document.activeElement as HTMLElement)
       : lastPageFocus.current;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
     page.setAttribute("inert", "");
     const dialog = page.parentElement?.querySelector<HTMLElement>(
       '[data-login-dialog="' + activeDialog + '"]',
@@ -138,7 +138,7 @@ function PublicEntryContent({
     return () => {
       window.cancelAnimationFrame(frame);
       page.removeAttribute("inert");
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       document.removeEventListener("keydown", trap);
       window.requestAnimationFrame(() => {
         if (previous?.isConnected) previous.focus({ preventScroll: true });

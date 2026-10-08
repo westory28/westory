@@ -96,3 +96,23 @@ firebase functions:list --project history-quiz-yongsin
 폐기된 과거 진입점이다. 로컬의 과거 구현을 이 이름으로 다시 배포해 활성화하지 않는다.
 접속 설정은 관리자 화면의 명령을 사용하고 Firestore 직접 수정으로 revision·학기·감사
 검사를 우회하지 않는다.
+
+## 순위 조회 표시 복구 (2026-10-08)
+
+`getWisEconomyState`의 운영 조회 소스는 `functions/productionGateway/wisEconomyQuery.js`에
+별도로 복구했다. 실명·번호와 공개 범위 안의 프로필 이모지를 반환하며 기존 학년·학급,
+학기 보관 조회, 로그인 세션 검사를 유지한다. `npm --prefix functions run check`에 조회와
+실제 callable export 검사가 포함된다.
+
+이 변경의 Firebase 배포 대상은 서울 `getWisEconomyState` 하나다. 같은 이름의 미국
+함수는 그대로 유지한다. CLI 이름 필터는 리전을 구분하지 않으므로 대화형 배포를 사용하고,
+미국 함수 삭제 질문에는 **No**를 선택해 서울 업데이트만 계속한다. `--force`를 사용하지 않는다.
+
+```powershell
+. .\scripts\use-westory-node.ps1
+firebase deploy --only "functions:getWisEconomyState" --project history-quiz-yongsin
+firebase functions:list --project history-quiz-yongsin
+```
+
+중첩 팝업의 닫힘·경로 이동 후 스크롤 복원은 `npm run verify:page-scroll-lock`으로
+검증한다. 화면 검증에는 390·768·1280px의 학생/교사 알림장, 위스 순위와 명예 배지를 포함한다.

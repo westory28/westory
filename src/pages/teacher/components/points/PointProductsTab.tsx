@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../../../lib/pageScrollLock";
 import NumericInput from "../../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import WisProductCard, {
@@ -131,11 +132,10 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   useEffect(() => {
     if (!previewOpen) return undefined;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
     };
   }, [previewOpen]);
 

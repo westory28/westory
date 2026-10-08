@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import React, { useEffect } from "react";
 import { formatWisAmount } from "../../lib/pointFormatters";
 import type { PointProduct } from "../../types";
@@ -21,8 +22,7 @@ const WisProductDetailModal: React.FC<WisProductDetailModalProps> = ({
   useEffect(() => {
     if (!open) return undefined;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -33,7 +33,7 @@ const WisProductDetailModal: React.FC<WisProductDetailModalProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose, open]);

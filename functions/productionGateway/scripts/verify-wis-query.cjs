@@ -1,0 +1,1843 @@
+const assert = require("node:assert/strict");
+const wis = require("../wisEconomyQuery");
+const archiveEnrollment = require("../archiveEnrollment");
+const gateway = require("../commandGateway");
+
+class MemoryTransaction {
+  constructor(seed = {}) {
+    this.documents = new Map(
+      Object.entries(seed).map(([path, data]) => [path, structuredClone(data)]),
+    );
+    this.readStats = {
+      documentReads: 0,
+      queryCalls: 0,
+      queryDocuments: 0,
+      maxQueryDocuments: 0,
+    };
+  }
+  async get(path) {
+    this.readStats.documentReads += 1;
+    return {
+      exists: this.documents.has(path),
+      data: this.documents.has(path)
+        ? structuredClone(this.documents.get(path))
+        : null,
+      path,
+    };
+  }
+  async getAll(paths) {
+    this.readStats.documentReads += paths.length;
+    return paths.map((path) => ({
+      exists: this.documents.has(path),
+      data: this.documents.has(path)
+        ? structuredClone(this.documents.get(path))
+        : null,
+      path,
+    }));
+  }
+  async query(collection, filter = null) {
+    const prefix = `${collection}/`;
+    const compare = (left, operator, right) => {
+      if (operator === "==") return left === right;
+      if (operator === ">") return left > right;
+      if (operator === ">=") return left >= right;
+      if (operator === "<") return left < right;
+      if (operator === "<=") return left <= right;
+      return false;
+    };
+    const clauses = Array.isArray(filter?.filters)
+      ? filter.filters
+      : filter?.field
+        ? [filter]
+        : [];
+    let rows = [...this.documents.entries()]
+      .filter(
+        ([path]) =>
+          path.startsWith(prefix) && !path.slice(prefix.length).includes("/"),
+      )
+      .map(([path, data]) => ({
+        exists: true,
+        path,
+        data: structuredClone(data),
+      }))
+      .filter((row) =>
+        clauses.every((clause) =>
+          compare(
+            row.data?.[clause.field],
+            clause.operator || "==",
+            clause.value,
+          ),
+        ),
+      );
+    const orderings = Array.isArray(filter?.orderBy)
+      ? filter.orderBy
+      : filter?.orderBy
+        ? [filter.orderBy]
+        : [];
+    if (orderings.length) {
+      rows.sort((left, right) => {
+        for (const ordering of orderings) {
+          const direction = ordering.direction === "desc" ? -1 : 1;
+          const comparison = String(
+            left.data?.[ordering.field] ?? "",
+          ).localeCompare(String(right.data?.[ordering.field] ?? ""));
+          if (comparison) return comparison * direction;
+        }
+        const documentDirection = filter?.documentIdOrder === "desc" ? -1 : 1;
+        return left.path.localeCompare(right.path) * documentDirection;
+      });
+    } else if (filter?.documentIdOrder) {
+      const direction = filter.documentIdOrder === "desc" ? -1 : 1;
+      rows.sort(
+        (left, right) => left.path.localeCompare(right.path) * direction,
+      );
+    }
+    if (filter?.startAfterId) {
+      const cursorPath = `${prefix}${filter.startAfterId}`;
+      const direction = filter.documentIdOrder === "desc" ? -1 : 1;
+      rows = rows.filter(
+        (row) => row.path.localeCompare(cursorPath) * direction > 0,
+      );
+    }
+    if (filter?.startAfterPath) {
+      const cursorIndex = rows.findIndex(
+        (row) => row.path === filter.startAfterPath,
+      );
+      rows = cursorIndex >= 0 ? rows.slice(cursorIndex + 1) : [];
+    }
+    if (Number.isSafeInteger(filter?.limit) && filter.limit > 0) {
+      rows = rows.slice(0, filter.limit);
+    }
+    this.readStats.queryCalls += 1;
+    this.readStats.queryDocuments += rows.length;
+    this.readStats.maxQueryDocuments = Math.max(
+      this.readStats.maxQueryDocuments,
+      rows.length,
+    );
+    return rows;
+  }
+  set(path, data, options) {
+    const current = this.documents.get(path) || {};
+    this.documents.set(
+      path,
+      structuredClone(options?.merge ? { ...current, ...data } : data),
+    );
+  }
+  create(path, data) {
+    if (this.documents.has(path)) throw new Error(`already exists: ${path}`);
+    this.documents.set(path, structuredClone(data));
+  }
+  delete(path) {
+    this.documents.delete(path);
+  }
+}
+
+const actor = {
+  actorUid: "teacher-1",
+  actorRole: "teacher",
+  actorEmail: "teacher@yongshin-ms.ms.kr",
+};
+const student = {
+  actorUid: "student-1",
+  actorRole: "student",
+  actorEmail: "student@yongshin-ms.ms.kr",
+};
+const manifest = { semesterId: "2026-2", revision: 7, status: "ACTIVE" };
+const enrollment = {
+  enrollmentId: "enrollment-1",
+  semesterId: "2026-2",
+  studentUid: "student-1",
+  classId: "class-1",
+  displayName: "합성 학생",
+  studentNumber: "7",
+  status: "ACTIVE",
+  enrollmentStatus: "ACTIVE",
+};
+const enrollmentSlotId = archiveEnrollment.buildEnrollmentSlotId(
+  "2026-2",
+  "student-1",
+);
+const tx = new MemoryTransaction({
+  "semester_manifests/2026-2": manifest,
+  "semester_enrollments/enrollment-1": enrollment,
+  [`semester_enrollment_slots/${enrollmentSlotId}`]: {
+    semesterId: "2026-2",
+    studentUid: "student-1",
+    activeEnrollmentId: "enrollment-1",
+  },
+  "semester_classes/class-1": {
+    classId: "class-1",
+    semesterId: "2026-2",
+    grade: "2",
+    classNumber: "3",
+    status: "ACTIVE",
+  },
+});
+const adapter = wis.createWisCommandAdapter();
+let commandIndex = 0;
+const apply = async (commandType, payload, targetActor = actor) =>
+  adapter.apply({
+    transaction: tx,
+    commandId: `command-${++commandIndex}`,
+    commandType,
+    payload: wis.normalizeWisPayload(commandType, payload),
+    receiptId: `receipt-${commandIndex}`,
+    timestamp: `timestamp-${commandIndex}`,
+    actor: targetActor,
+  });
+const common = { semesterId: "2026-2", expectedSemesterRevision: 7 };
+
+const run = async () => {
+  const created = await apply("createSemesterEconomy", {
+    ...common,
+    displayName: "2026학년도 2학기 위스",
+    currencyName: "위스",
+    initialGrantAmount: 500,
+  });
+  assert.equal(created.result.status, "ACTIVE_INITIALIZING");
+
+  const accounts = await apply("createWisAccounts", {
+    ...common,
+    expectedEconomyRevision: 1,
+    enrollmentIds: ["enrollment-1"],
+    reason: "계정 생성",
+  });
+  assert.equal(accounts.result.createdCount, 1);
+  const accountId = wis.accountIdFor("2026-2", "student-1");
+  assert.equal(
+    (await tx.get(`semester_wis_accounts/${accountId}`)).data.balance,
+    0,
+  );
+
+  await assert.rejects(
+    () =>
+      apply("grantInitialWis", {
+        ...common,
+        expectedEconomyRevision: 2,
+        accountId,
+        expectedAccountRevision: 1,
+        amount: 100,
+        sourceId: "invalid-initial",
+        reason: "정책과 다른 최초 지급",
+      }),
+    (error) => error.details?.reason === "WIS_INITIAL_GRANT_AMOUNT_MISMATCH",
+  );
+  assert.equal(
+    (await tx.get(`semester_wis_accounts/${accountId}`)).data.balance,
+    0,
+  );
+  assert.equal(
+    (
+      await tx.query("semester_wis_ledger", {
+        field: "accountId",
+        value: accountId,
+      })
+    ).length,
+    0,
+  );
+
+  // Prepared accounts must become usable when their active-semester opening
+  // posts, including the balance and ranking projections.
+  for (const collection of ["semester_wis_accounts", "semester_wis_balances", "semester_wis_rankings"]) {
+    tx.set(`${collection}/${accountId}`, { status: "PREPARING", provenance: "PREPARING", readOnly: true }, { merge: true });
+  }
+  const initial = await apply("grantInitialWis", {
+    ...common,
+    expectedEconomyRevision: 2,
+    accountId,
+    expectedAccountRevision: 1,
+    amount: 500,
+    sourceId: "initial-2026-2",
+    reason: "최초 지급",
+  });
+  assert.equal(initial.result.balance, 500);
+  for (const collection of ["semester_wis_accounts", "semester_wis_balances", "semester_wis_rankings"]) {
+    const saved = (await tx.get(`${collection}/${accountId}`)).data;
+    assert.equal(saved.status, "ACTIVE");
+    assert.equal(saved.provenance, "CURRENT");
+    assert.equal(saved.readOnly, false);
+  }
+  assert.deepEqual(
+    (({ earnedTotal, rankEarnedTotal, spentTotal, adjustedTotal }) => ({
+      earnedTotal,
+      rankEarnedTotal,
+      spentTotal,
+      adjustedTotal,
+    }))((await tx.get(`semester_wis_accounts/${accountId}`)).data),
+    {
+      earnedTotal: 500,
+      rankEarnedTotal: 0,
+      spentTotal: 0,
+      adjustedTotal: 0,
+    },
+  );
+  const ledgerCountBeforeInitialReverse = (
+    await tx.query("semester_wis_ledger", {
+      field: "accountId",
+      value: accountId,
+    })
+  ).length;
+  await assert.rejects(
+    () =>
+      apply("reverseWisEntry", {
+        ...common,
+        expectedEconomyRevision: 2,
+        accountId,
+        expectedAccountRevision: 2,
+        ledgerEntryId: initial.result.ledgerEntryId,
+        reason: "최초 지급 역분개 금지",
+      }),
+    (error) => error.details?.reason === "WIS_REVERSAL_INVALID",
+  );
+  assert.equal(
+    (
+      await tx.query("semester_wis_ledger", {
+        field: "accountId",
+        value: accountId,
+      })
+    ).length,
+    ledgerCountBeforeInitialReverse,
+  );
+  await assert.rejects(
+    () =>
+      apply("grantInitialWis", {
+        ...common,
+        expectedEconomyRevision: 2,
+        accountId,
+        expectedAccountRevision: 2,
+        amount: 500,
+        sourceId: "other-initial",
+        reason: "중복",
+      }),
+    (error) => error.details?.reason === "WIS_INITIAL_GRANT_ALREADY_APPLIED",
+  );
+
+  const opened = await apply("transitionWisEconomy", {
+    ...common,
+    expectedEconomyRevision: 2,
+    targetStatus: "ACTIVE_OPEN",
+    reason: "운영 시작",
+  });
+  assert.equal(opened.result.status, "ACTIVE_OPEN");
+
+  const grant = await apply("grantWis", {
+    ...common,
+    expectedEconomyRevision: 3,
+    accountId,
+    expectedAccountRevision: 2,
+    amount: 100,
+    sourceId: "lesson-1",
+    reason: "수업 참여",
+  });
+  assert.equal(grant.result.balance, 600);
+  assert.deepEqual(
+    (({ earnedTotal, rankEarnedTotal, spentTotal, adjustedTotal }) => ({
+      earnedTotal,
+      rankEarnedTotal,
+      spentTotal,
+      adjustedTotal,
+    }))((await tx.get(`semester_wis_accounts/${accountId}`)).data),
+    {
+      earnedTotal: 600,
+      rankEarnedTotal: 100,
+      spentTotal: 0,
+      adjustedTotal: 100,
+    },
+  );
+  await assert.rejects(
+    () =>
+      apply("grantWis", {
+        ...common,
+        expectedEconomyRevision: 3,
+        accountId,
+        expectedAccountRevision: 3,
+        amount: 100,
+        sourceId: "lesson-1",
+        reason: "중복",
+      }),
+    (error) => error.details?.reason === "WIS_LEDGER_SOURCE_EXISTS",
+  );
+  await assert.rejects(
+    () =>
+      apply("deductWis", {
+        ...common,
+        expectedEconomyRevision: 3,
+        accountId,
+        expectedAccountRevision: 3,
+        amount: 1000,
+        sourceId: "too-much",
+        reason: "초과 회수",
+      }),
+    (error) => error.details?.reason === "WIS_INSUFFICIENT_BALANCE",
+  );
+
+  const originalLedgerBeforeReversal = (
+    await tx.get(`semester_wis_ledger/${grant.result.ledgerEntryId}`)
+  ).data;
+  const reverse = await apply("reverseWisEntry", {
+    ...common,
+    expectedEconomyRevision: 3,
+    accountId,
+    expectedAccountRevision: 3,
+    ledgerEntryId: grant.result.ledgerEntryId,
+    reason: "오지급 취소",
+  });
+  assert.equal(reverse.result.balance, 500);
+  assert.deepEqual(
+    (({ earnedTotal, rankEarnedTotal, spentTotal, adjustedTotal }) => ({
+      earnedTotal,
+      rankEarnedTotal,
+      spentTotal,
+      adjustedTotal,
+    }))((await tx.get(`semester_wis_accounts/${accountId}`)).data),
+    {
+      earnedTotal: 500,
+      rankEarnedTotal: 0,
+      spentTotal: 0,
+      adjustedTotal: 0,
+    },
+  );
+  assert.deepEqual(
+    (await tx.get(`semester_wis_ledger/${grant.result.ledgerEntryId}`)).data,
+    originalLedgerBeforeReversal,
+  );
+  const ledgerCountBeforeReversalOfReversal = (
+    await tx.query("semester_wis_ledger", {
+      field: "accountId",
+      value: accountId,
+    })
+  ).length;
+  await assert.rejects(
+    () =>
+      apply("reverseWisEntry", {
+        ...common,
+        expectedEconomyRevision: 3,
+        accountId,
+        expectedAccountRevision: 4,
+        ledgerEntryId: reverse.result.ledgerEntryId,
+        reason: "재환수 금지",
+      }),
+    (error) => error.details?.reason === "WIS_REVERSAL_INVALID",
+  );
+  assert.equal(
+    (
+      await tx.query("semester_wis_ledger", {
+        field: "accountId",
+        value: accountId,
+      })
+    ).length,
+    ledgerCountBeforeReversalOfReversal,
+  );
+  tx.set("semester_wis_ledger/lesson-core-system-grant", {
+    ledgerEntryId: "lesson-core-system-grant",
+    semesterId: "2026-2",
+    accountId,
+    studentUid: "student-1",
+    type: "GRANT",
+    delta: 500,
+    sourceId: "lesson-core-points-all",
+    actorUid: "system",
+    actorRole: "system",
+  });
+  await assert.rejects(
+    () =>
+      apply("reverseWisEntry", {
+        ...common,
+        expectedEconomyRevision: 3,
+        accountId,
+        expectedAccountRevision: 4,
+        ledgerEntryId: "lesson-core-system-grant",
+        reason: "핵심포인트 보상 역분개 금지",
+      }),
+    (error) => error.details?.reason === "WIS_REVERSAL_INVALID",
+  );
+  tx.delete("semester_wis_ledger/lesson-core-system-grant");
+  await assert.rejects(
+    () =>
+      apply("reverseWisEntry", {
+        ...common,
+        expectedEconomyRevision: 3,
+        accountId,
+        expectedAccountRevision: 4,
+        ledgerEntryId: grant.result.ledgerEntryId,
+        reason: "중복 취소",
+      }),
+    (error) => error.details?.reason === "WIS_LEDGER_SOURCE_EXISTS",
+  );
+
+  const product = await apply("upsertWisProduct", {
+    ...common,
+    expectedEconomyRevision: 3,
+    expectedProductRevision: null,
+    name: "연필",
+    description: "학습용 연필",
+    imageUrl: "",
+    active: true,
+    reason: "상품 등록",
+  });
+  const inventory = await apply("upsertWisInventory", {
+    ...common,
+    expectedEconomyRevision: 3,
+    productId: product.result.productId,
+    expectedInventoryRevision: null,
+    price: 100,
+    stock: 2,
+    active: true,
+    reason: "재고 등록",
+  });
+  const orderReplayTx = new MemoryTransaction(Object.fromEntries(tx.documents));
+  const order = await apply(
+    "placeWisOrder",
+    {
+      ...common,
+      expectedEconomyRevision: 3,
+      inventoryId: inventory.result.inventoryId,
+      expectedInventoryRevision: 1,
+      expectedAccountRevision: 4,
+      quantity: 1,
+      memo: "  파란색/검은색 중\n파란색으로 부탁드립니다.  ",
+    },
+    student,
+  );
+  assert.equal(order.result.balance, 400);
+  assert.equal((await tx.get(`semester_wis_orders/${order.result.orderId}`)).data.memo,
+    "파란색/검은색 중\n파란색으로 부탁드립니다.");
+  const memoPayload = { ...common, expectedEconomyRevision: 3,
+    inventoryId: inventory.result.inventoryId, expectedInventoryRevision: 1,
+    expectedAccountRevision: 4, quantity: 1 };
+  assert.deepEqual(wis.normalizeWisPayload("placeWisOrder", memoPayload), memoPayload,
+    "pre-memo payload hashes must remain unchanged");
+  const replayCore = gateway.createCommandGatewayCore({
+    store: { runTransaction: (callback) => callback(orderReplayTx) },
+    assertSession: async () => ({ uid: student.actorUid }),
+    authorizeCommand: async () => student,
+    commandAdapters: { placeWisOrder: adapter },
+    serverTimestamp: () => "2026-09-11T01:00:00.000Z",
+    concreteTimestamp: () => "2026-09-11T01:00:00.000Z",
+    projectId: "demo-westory-session-wis-memo",
+  });
+  const replayRequest = { auth: { uid: student.actorUid }, data: {
+    commandId: "a0000000-0000-4000-8000-000000000001", commandType: "placeWisOrder",
+    payload: { ...memoPayload, memo: "원래 구매 메모" }, _testDropResponseAfterCommit: true,
+  } };
+  await assert.rejects(() => replayCore.execute(replayRequest), (error) => error.code === "unavailable");
+  const replayedOrder = await replayCore.execute(replayRequest);
+  assert.equal(replayedOrder.replayed, true);
+  assert.equal((await orderReplayTx.query("semester_wis_orders")).length, 1);
+  const replayOrderPath = `semester_wis_orders/${replayedOrder.result.orderId}`;
+  assert.equal((await orderReplayTx.get(replayOrderPath)).data.memo, "원래 구매 메모");
+  await assert.rejects(() => replayCore.execute({ ...replayRequest, data: { ...replayRequest.data,
+    payload: { ...memoPayload, memo: "변경된 메모" } } }),
+    (error) => error.details?.reason === "COMMAND_ID_CONFLICT");
+  assert.equal((await orderReplayTx.get(replayOrderPath)).data.memo, "원래 구매 메모");
+  const oldCommandId = "a0000000-0000-4000-8000-000000000002";
+  orderReplayTx.create(`${gateway.RECEIPT_COLLECTION}/${gateway.buildReceiptId(student.actorUid, "placeWisOrder", oldCommandId)}`, {
+    payloadHash: gateway.sha256(gateway.canonicalize(memoPayload)), status: "SUCCEEDED", result: { orderId: "pre-memo-order" },
+  });
+  const oldReplay = await replayCore.execute({ auth: replayRequest.auth, data: {
+    commandId: oldCommandId, commandType: "placeWisOrder", payload: memoPayload,
+  } });
+  assert.equal(oldReplay.replayed, true);
+  assert.equal(oldReplay.result.orderId, "pre-memo-order");
+  assert.equal(wis.normalizeWisPayload("placeWisOrder", { ...memoPayload, memo: "가".repeat(500) }).memo.length, 500);
+  for (const memo of ["가".repeat(501), null, 12, {}, []]) {
+    assert.throws(() => wis.normalizeWisPayload("placeWisOrder", { ...memoPayload, memo }),
+      (error) => error.details?.reason === "WIS_PAYLOAD_INVALID" && error.details?.field === "memo");
+  }
+  assert.equal(
+    (await tx.get(`semester_wis_accounts/${accountId}`)).data.spentTotal,
+    100,
+  );
+  assert.equal(
+    (await tx.get(`semester_wis_inventory/${inventory.result.inventoryId}`))
+      .data.available,
+    1,
+  );
+  await assert.rejects(
+    () =>
+      apply(
+        "placeWisOrder",
+        {
+          ...common,
+          expectedEconomyRevision: 3,
+          inventoryId: inventory.result.inventoryId,
+          expectedInventoryRevision: 2,
+          expectedAccountRevision: 5,
+          quantity: 5,
+        },
+        student,
+      ),
+    (error) => error.details?.reason === "WIS_INSUFFICIENT_STOCK",
+  );
+  const ledgerCountBeforeOrderDebitReverse = (
+    await tx.query("semester_wis_ledger", {
+      field: "accountId",
+      value: accountId,
+    })
+  ).length;
+  await assert.rejects(
+    () =>
+      apply("reverseWisEntry", {
+        ...common,
+        expectedEconomyRevision: 3,
+        accountId,
+        expectedAccountRevision: 5,
+        ledgerEntryId: order.result.ledgerEntryId,
+        reason: "주문 차감 역분개 금지",
+      }),
+    (error) => error.details?.reason === "WIS_REVERSAL_INVALID",
+  );
+  assert.equal(
+    (
+      await tx.query("semester_wis_ledger", {
+        field: "accountId",
+        value: accountId,
+      })
+    ).length,
+    ledgerCountBeforeOrderDebitReverse,
+  );
+
+  const rejected = await apply("reviewWisOrder", {
+    ...common,
+    expectedEconomyRevision: 3,
+    orderId: order.result.orderId,
+    expectedOrderRevision: 1,
+    action: "REJECT",
+    reason: "합성 반려",
+  });
+  assert.equal(rejected.result.balance, 500);
+  assert.equal((await tx.get(`semester_wis_orders/${order.result.orderId}`)).data.memo,
+    "파란색/검은색 중\n파란색으로 부탁드립니다.", "review must preserve the purchase memo");
+  assert.equal(
+    (await tx.get(`semester_wis_accounts/${accountId}`)).data.spentTotal,
+    0,
+  );
+  assert.equal(
+    (await tx.get(`semester_wis_inventory/${inventory.result.inventoryId}`))
+      .data.available,
+    2,
+  );
+  const ledgerCountBeforeRefundReverse = (
+    await tx.query("semester_wis_ledger", {
+      field: "accountId",
+      value: accountId,
+    })
+  ).length;
+  await assert.rejects(
+    () =>
+      apply("reverseWisEntry", {
+        ...common,
+        expectedEconomyRevision: 3,
+        accountId,
+        expectedAccountRevision: 6,
+        ledgerEntryId: rejected.result.refundLedgerEntryId,
+        reason: "주문 환불 역분개 금지",
+      }),
+    (error) => error.details?.reason === "WIS_REVERSAL_INVALID",
+  );
+  assert.equal(
+    (
+      await tx.query("semester_wis_ledger", {
+        field: "accountId",
+        value: accountId,
+      })
+    ).length,
+    ledgerCountBeforeRefundReverse,
+  );
+
+  const renamedProduct = await apply("upsertWisProduct", {
+    ...common,
+    expectedEconomyRevision: 3,
+    productId: product.result.productId,
+    expectedProductRevision: 1,
+    name: "새 이름 연필",
+    description: "학습용 연필",
+    imageUrl: "",
+    active: true,
+    reason: "상품명 변경",
+  });
+  assert.equal(renamedProduct.result.inventoryRevision, 4);
+  tx.set(`semester_enrollments/${enrollment.enrollmentId}`, {
+    ...enrollment,
+    enrollmentStatus: "WITHDRAWN",
+    status: "ACTIVE",
+  });
+  await assert.rejects(
+    () =>
+      apply(
+        "placeWisOrder",
+        {
+          ...common,
+          expectedEconomyRevision: 3,
+          inventoryId: inventory.result.inventoryId,
+          expectedInventoryRevision: 4,
+          expectedAccountRevision: 6,
+          quantity: 1,
+        },
+        student,
+      ),
+    (error) => error.details?.reason === "WIS_ACTIVE_ENROLLMENT_REQUIRED",
+  );
+  tx.set(`semester_enrollments/${enrollment.enrollmentId}`, enrollment);
+  tx.set(`wis_product_catalog/${product.result.productId}`, {
+    ...(await tx.get(`wis_product_catalog/${product.result.productId}`)).data,
+    active: false,
+  });
+  await assert.rejects(
+    () =>
+      apply(
+        "placeWisOrder",
+        {
+          ...common,
+          expectedEconomyRevision: 3,
+          inventoryId: inventory.result.inventoryId,
+          expectedInventoryRevision: 4,
+          expectedAccountRevision: 6,
+          quantity: 1,
+        },
+        student,
+      ),
+    (error) => error.details?.reason === "WIS_PRODUCT_UNAVAILABLE",
+  );
+  tx.set(`wis_product_catalog/${product.result.productId}`, {
+    ...(await tx.get(`wis_product_catalog/${product.result.productId}`)).data,
+    active: true,
+  });
+  const renamedOrder = await apply(
+    "placeWisOrder",
+    {
+      ...common,
+      expectedEconomyRevision: 3,
+      inventoryId: inventory.result.inventoryId,
+      expectedInventoryRevision: 4,
+      expectedAccountRevision: 6,
+      quantity: 1,
+    },
+    student,
+  );
+  assert.equal(
+    (await tx.get(`semester_wis_accounts/${accountId}`)).data.spentTotal,
+    100,
+  );
+  const renamedOrderDocument = (
+    await tx.get(`semester_wis_orders/${renamedOrder.result.orderId}`)
+  ).data;
+  assert.equal(renamedOrderDocument.productName, "새 이름 연필");
+  assert.match(
+    (await tx.get(`semester_wis_ledger/${renamedOrder.result.ledgerEntryId}`))
+      .data.reason,
+    /새 이름 연필/u,
+  );
+
+  const rebuild = await apply("rebuildWisProjection", {
+    ...common,
+    expectedEconomyRevision: 3,
+    accountId,
+    reason: "projection 대조",
+  });
+  assert.equal(rebuild.result.balance, 400);
+  assert.equal(rebuild.result.status, "PASS");
+
+  const savedHallConfig = await apply("saveWisHallOfFameConfig", {
+    ...common,
+    expectedEconomyRevision: 3,
+    expectedHallOfFameRevision: 0,
+    hallOfFame: {
+      podiumImageUrl: "",
+      podiumStoragePath: "",
+      positionPreset: "classic_podium_v1",
+      positions: {
+        desktop: {
+          first: { leftPercent: 50, topPercent: 26, widthPercent: 21 },
+          second: { leftPercent: 26.5, topPercent: 40.5, widthPercent: 18 },
+          third: { leftPercent: 73.5, topPercent: 40.5, widthPercent: 18 },
+        },
+        mobile: {
+          first: { leftPercent: 50, topPercent: 28, widthPercent: 28 },
+          second: { leftPercent: 28, topPercent: 46, widthPercent: 21 },
+          third: { leftPercent: 72, topPercent: 46, widthPercent: 21 },
+        },
+      },
+      leaderboardPanel: {
+        desktop: { leftPercent: 71, topPercent: 0, widthPercent: 29 },
+        mobile: { leftPercent: 50, topPercent: 0, widthPercent: 100 },
+      },
+      publicRange: {
+        gradeRankLimit: 10,
+        classRankLimit: 10,
+        includeTies: true,
+      },
+      recognitionPopup: {
+        enabled: true,
+        gradeEnabled: true,
+        classEnabled: true,
+      },
+    },
+    reason: "화랑의 전당 설정 저장",
+  });
+  assert.equal(savedHallConfig.result.hallOfFameRevision, 1);
+  assert.equal(
+    (await tx.get("site_settings/interface_config")).data.hallOfFameRevision,
+    1,
+  );
+
+  const newestLedgerEntries = [];
+  let expectedAccountRevision = rebuild.result.accountRevision;
+  for (const [sourceId, reason] of [
+    ["ordering-zebra", "순서 검증 첫 번째"],
+    ["ordering-apricot", "순서 검증 두 번째"],
+    ["ordering-middle", "순서 검증 세 번째"],
+  ]) {
+    const nextGrant = await apply("grantWis", {
+      ...common,
+      expectedEconomyRevision: 3,
+      accountId,
+      expectedAccountRevision,
+      amount: 1,
+      sourceId,
+      reason,
+    });
+    expectedAccountRevision = nextGrant.result.accountRevision;
+    newestLedgerEntries.unshift(nextGrant.result.ledgerEntryId);
+  }
+
+  const store = {
+    get: (path) => tx.get(path),
+    runTransaction: (callback) => callback(tx),
+  };
+  const queryCore = wis.createWisQueryCore({
+    store,
+    assertSession: async (request) => ({
+      uid: request.auth.uid,
+      email: request.auth.token.email,
+    }),
+  });
+  tx.set("users/student-1", { role: "student", profileIcon: "🦊", privateNote: "never-expose-profile",
+    displayName: "never-use-profile-name", studentNumber: "999", email: "never-expose@example.invalid" });
+  tx.set("users/teacher-1", {
+    role: "teacher",
+    staffPermissions: ["point_manage"],
+  });
+  tx.set("users/reader-1", {
+    role: "teacher",
+    staffPermissions: ["point_read"],
+  });
+  tx.set("users/delegated-1", {
+    role: "student",
+    staffPermissions: ["point_read"],
+  });
+  tx.set("semester_wis_rankings/foreign-ranking", {
+    accountId: "foreign-account",
+    semesterId: "2026-2",
+    studentUid: "foreign-student-uid",
+    displayName: "노출되면 안 되는 학생",
+    balance: 999999,
+  });
+  for (const [index, activityType] of ["history_dictionary", "history_dictionary_reclaim", "private-internal-type"].entries()) {
+    const path = `semester_wis_ledger/${newestLedgerEntries[index]}`;
+    tx.set(path, { ...(await tx.get(path)).data, activityType });
+  }
+  const activityById = new Map(newestLedgerEntries.map((id, index) => [id,
+    ["history_dictionary", "history_dictionary_reclaim", "private-internal-type"][index]]));
+  const accountWithRecent = (await tx.get(`semester_wis_accounts/${accountId}`)).data;
+  tx.set(`semester_wis_accounts/${accountId}`, { ...accountWithRecent,
+    recentLedgerEntries: accountWithRecent.recentLedgerEntries.map((entry) => ({ ...entry,
+      ...(activityById.has(entry.ledgerEntryId) ? { activityType: activityById.get(entry.ledgerEntryId) } : {}) })),
+  });
+  const studentState = await queryCore.getWisEconomyState({
+    auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+    data: { audience: "student", semesterId: "2026-2", source: "CURRENT" },
+  });
+  assert.equal(studentState.account.accountId, accountId);
+  assert.equal(studentState.writeCount, 0);
+  assert.deepEqual(studentState.ledger.slice(0, 3).map((entry) => entry.activityType),
+    ["history_dictionary", "history_dictionary_reclaim", undefined]);
+  assert.equal(studentState.rankings.length, 1);
+  assert.equal(studentState.rankings[0].studentUid, "student-1");
+  assert.deepEqual(
+    studentState.ledger.slice(0, 3).map((entry) => entry.ledgerEntryId),
+    newestLedgerEntries,
+  );
+  assert.notDeepEqual(
+    newestLedgerEntries,
+    [...newestLedgerEntries].sort((left, right) => right.localeCompare(left)),
+  );
+  for (const entry of studentState.ledger) {
+    for (const privateField of [
+      "accountId",
+      "studentUid",
+      "actorUid",
+      "actorRole",
+      "commandId",
+      "receiptId",
+      "sourceId",
+    ])
+      assert.equal(Object.hasOwn(entry, privateField), false);
+  }
+  assert.doesNotMatch(
+    JSON.stringify(studentState),
+    /foreign-student-uid|노출되면 안 되는 학생/u,
+  );
+  tx.set("semester_classes/class-2", {
+    classId: "class-2",
+    semesterId: "2026-2",
+    grade: "2",
+    classNumber: "4",
+    status: "ACTIVE",
+  });
+  tx.set("semester_enrollments/enrollment-other-class", {
+    enrollmentId: "enrollment-other-class",
+    semesterId: "2026-2",
+    studentUid: "student-other-class",
+    classId: "class-2",
+    displayName: "다른 반 학생",
+    studentNumber: "8",
+    status: "ACTIVE",
+    enrollmentStatus: "ACTIVE",
+  });
+  tx.set(
+    `semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", "student-other-class")}`,
+    {
+      semesterId: "2026-2",
+      studentUid: "student-other-class",
+      activeEnrollmentId: "enrollment-other-class",
+    },
+  );
+  tx.set("semester_wis_accounts/account-other-class", {
+    accountId: "account-other-class",
+    semesterId: "2026-2",
+    studentUid: "student-other-class",
+    enrollmentId: "enrollment-other-class",
+    classId: "class-2",
+    displayName: "다른 반 학생",
+    revision: 1,
+    balance: 250,
+    rankEarnedTotal: 250,
+  });
+  const studentHallState = await queryCore.getWisEconomyState({
+    auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+    data: {
+      audience: "student",
+      semesterId: "2026-2",
+      source: "CURRENT",
+      projection: "hall-of-fame",
+    },
+  });
+  const publicHallJson = JSON.stringify(studentHallState.hallOfFame);
+  assert.match(publicHallJson, /합성 학생/u);
+  assert.doesNotMatch(publicHallJson, /\*|never-expose|never-use-profile-name/u);
+  const ownHallEntry = studentHallState.hallOfFame.gradeLeaderboardByGrade["2"].find(entry => entry.studentName === "합성 학생");
+  assert.equal(ownHallEntry.number, "7");
+  assert.equal(ownHallEntry.profileIcon, "🦊");
+  assert.equal(ownHallEntry.currentBalance, 0);
+  assert.deepEqual(Object.keys(ownHallEntry).sort(), ["uid", "rank", "grade", "class", "classKey", "number",
+    "studentName", "displayName", "currentBalance", "cumulativeEarned", "profileIcon", "podiumSlot"].sort());
+  assert.doesNotMatch(
+    publicHallJson,
+    /student-1|wisacct_|"balance"|"studentUid"|"accountId"/u,
+  );
+  assert.deepEqual(
+    Object.keys(studentHallState.hallOfFame.classLeaderboardByClassKey),
+    ["2-3"],
+  );
+  assert.ok(
+    studentHallState.hallOfFame.gradeLeaderboardByGrade["2"].length > 1,
+  );
+  const profileBefore = structuredClone(tx.documents.get("users/student-1"));
+  tx.set("users/student-1", { ...profileBefore, profileIcon: "https://example.invalid/track" });
+  const invalidIconHall = await queryCore.getWisEconomyState({
+    auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+    data: { audience: "student", semesterId: "2026-2", source: "CURRENT", projection: "hall-of-fame" },
+  });
+  assert.equal(invalidIconHall.hallOfFame.gradeLeaderboardByGrade["2"].find(entry => entry.uid === ownHallEntry.uid).profileIcon, "😀");
+  assert.doesNotMatch(JSON.stringify(invalidIconHall.hallOfFame), /example\.invalid/u);
+  tx.set("users/student-1", profileBefore);
+  // An unranked viewer still has a grade/class scope; never fall back to the
+  // teacher's all-grade projection when their initial balance earns no rank.
+  const ownAccountPath = `semester_wis_accounts/${wis.accountIdFor("2026-2", "student-1")}`;
+  const ownAccountBefore = structuredClone(tx.documents.get(ownAccountPath));
+  tx.set(ownAccountPath, { ...ownAccountBefore, rankEarnedTotal: 0 });
+  const otherClassBefore = structuredClone(tx.documents.get("semester_classes/class-2"));
+  tx.set("semester_classes/class-2", { ...otherClassBefore, grade: "3" });
+  const unrankedHall = await queryCore.getWisEconomyState({
+    auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+    data: { audience: "student", semesterId: "2026-2", source: "CURRENT", projection: "hall-of-fame" },
+  });
+  assert.deepEqual(Object.keys(unrankedHall.hallOfFame.gradeLeaderboardByGrade), []);
+  assert.doesNotMatch(JSON.stringify(unrankedHall.hallOfFame), /다른 반 학생/u);
+  tx.set(ownAccountPath, ownAccountBefore);
+  tx.set("semester_classes/class-2", otherClassBefore);
+  tx.delete("semester_wis_accounts/account-other-class");
+  tx.delete("semester_enrollments/enrollment-other-class");
+  tx.delete(
+    `semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", "student-other-class")}`,
+  );
+  tx.delete("semester_classes/class-2");
+  const teacherState = await queryCore.getWisEconomyState({
+    auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
+    data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT" },
+  });
+  assert.deepEqual(
+    {
+      grade: teacherState.accounts[0].grade,
+      classNumber: teacherState.accounts[0].classNumber,
+      studentNumber: teacherState.accounts[0].studentNumber,
+    },
+    { grade: "2", classNumber: "3", studentNumber: "7" },
+  );
+  const teacherAccountState = await queryCore.getWisEconomyState({
+    auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
+    data: {
+      audience: "teacher",
+      semesterId: "2026-2",
+      source: "CURRENT",
+      projection: "account",
+      accountId,
+      limit: 20,
+    },
+  });
+  assert.deepEqual(
+    teacherAccountState.ledger.slice(0, 3).map((entry) => entry.ledgerEntryId),
+    newestLedgerEntries,
+  );
+  assert.equal("recentLedgerEntries" in teacherAccountState.accounts[0], false);
+
+  const latencyRequest = {
+    auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
+    data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT" },
+  };
+  let releaseIdentity;
+  let releaseProfile;
+  const identityGate = new Promise((resolve) => { releaseIdentity = resolve; });
+  const profileGate = new Promise((resolve) => { releaseProfile = resolve; });
+  const startedActorReads = new Set();
+  let domainTransactions = 0;
+  const parallelActorCore = wis.createWisQueryCore({
+    assertSession: async () => {
+      startedActorReads.add("session");
+      await identityGate;
+      return { uid: "teacher-1", email: "teacher@yongshin-ms.ms.kr" };
+    },
+    store: {
+      get: async (path) => {
+        assert.equal(path, "users/teacher-1");
+        startedActorReads.add("profile");
+        await profileGate;
+        return tx.get(path);
+      },
+      runTransaction: (callback) => { domainTransactions += 1; return callback(tx); },
+    },
+  });
+  const parallelActorResult = parallelActorCore.getWisEconomyState(latencyRequest);
+  try {
+    await new Promise(setImmediate);
+    assert.deepEqual(startedActorReads, new Set(["session", "profile"]));
+    releaseProfile();
+    await new Promise(setImmediate);
+    assert.equal(domainTransactions, 0, "Profile result alone cannot authorize domain reads");
+  } finally {
+    releaseProfile();
+    releaseIdentity();
+  }
+  assert.deepEqual(await parallelActorResult, teacherState);
+
+  const sessionFailure = new Error("synthetic expired session");
+  const profileFailure = new Error("synthetic profile read failure");
+  const deniedCore = wis.createWisQueryCore({
+    assertSession: async () => { throw sessionFailure; },
+    store: {
+      get: async () => { throw profileFailure; },
+      runTransaction: () => assert.fail("Denied session must not start domain reads"),
+    },
+  });
+  await assert.rejects(() => deniedCore.getWisEconomyState(latencyRequest), (error) => error === sessionFailure);
+  let unauthenticatedProfileReads = 0;
+  const unauthenticatedCore = wis.createWisQueryCore({
+    assertSession: async () => { throw sessionFailure; },
+    store: {
+      get: async () => { unauthenticatedProfileReads += 1; throw profileFailure; },
+      runTransaction: () => assert.fail("Unauthenticated request must not start domain reads"),
+    },
+  });
+  await assert.rejects(() => unauthenticatedCore.getWisEconomyState({ data: latencyRequest.data }),
+    (error) => error === sessionFailure);
+  assert.equal(unauthenticatedProfileReads, 0);
+
+  const originalAccount = (await tx.get(`semester_wis_accounts/${accountId}`)).data;
+  const fallbackAccount = { ...originalAccount };
+  delete fallbackAccount.recentLedgerEntries;
+  tx.set(`semester_wis_accounts/${accountId}`, fallbackAccount);
+  try {
+    for (const audience of ["student", "teacher"]) {
+      const request = audience === "student"
+        ? { auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+            data: { audience, semesterId: "2026-2", source: "CURRENT" } }
+        : { ...latencyRequest, data: { ...latencyRequest.data, projection: "account", accountId, limit: 20 } };
+      const expected = await queryCore.getWisEconomyState(request);
+      const started = new Set();
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      const core = wis.createWisQueryCore({
+        assertSession: async (value) => ({ uid: value.auth.uid, email: value.auth.token.email }),
+        store: {
+          get: (path) => tx.get(path),
+          runTransaction: (callback) => callback({
+            query: async (collection, filter) => {
+              if (collection === "semester_wis_ledger") { started.add("ledger"); await gate; }
+              return tx.query(collection, filter);
+            },
+            get: async (path) => {
+              if (path === `semester_wis_rankings/${accountId}`) { started.add("projection"); await gate; }
+              return tx.get(path);
+            },
+            getAll: async (paths) => {
+              if (paths.some((path) => path.startsWith("semester_enrollment_slots/"))) {
+                started.add("projection"); await gate;
+              }
+              return tx.getAll(paths);
+            },
+          }),
+        },
+      });
+      const result = core.getWisEconomyState(request);
+      try {
+        await new Promise(setImmediate);
+        assert.deepEqual(started, new Set(["ledger", "projection"]), `${audience} ledger and projection start independently`);
+      } finally { release(); }
+      assert.deepEqual(await result, expected);
+    }
+  } finally { tx.set(`semester_wis_accounts/${accountId}`, originalAccount); }
+  const readOnlyTeacherState = await queryCore.getWisEconomyState({
+    auth: { uid: "reader-1", token: { email: "reader@yongshin-ms.ms.kr" } },
+    data: {
+      audience: "teacher",
+      semesterId: "2026-2",
+      source: "CURRENT",
+      projection: "overview",
+      limit: 20,
+    },
+  });
+  assert.equal(readOnlyTeacherState.readOnly, true);
+  assert.equal(readOnlyTeacherState.accounts.length, 1);
+  await assert.rejects(
+    () =>
+      queryCore.getWisEconomyState({
+        auth: {
+          uid: "delegated-1",
+          token: { email: "delegated@yongshin-ms.ms.kr" },
+        },
+        data: {
+          audience: "teacher",
+          semesterId: "2026-2",
+          source: "CURRENT",
+        },
+      }),
+    (error) => error.details?.reason === "WIS_MANAGE_REQUIRED",
+  );
+  tx.set("users/delegated-1", {
+    role: "student",
+    teacherPortalEnabled: true,
+    staffPermissions: ["point_read"],
+  });
+  assert.equal(
+    (
+      await queryCore.getWisEconomyState({
+        auth: {
+          uid: "delegated-1",
+          token: { email: "delegated@yongshin-ms.ms.kr" },
+        },
+        data: {
+          audience: "teacher",
+          semesterId: "2026-2",
+          source: "CURRENT",
+          projection: "summary",
+        },
+      })
+    ).readOnly,
+    true,
+  );
+
+  const largeSeed = {
+    "semester_manifests/2026-2": manifest,
+    "semester_wis_economies/2026-2": {
+      semesterId: "2026-2",
+      revision: 3,
+      status: "ACTIVE_OPEN",
+    },
+    "users/large-reader": {
+      role: "teacher",
+      staffPermissions: ["point_read"],
+    },
+    "semester_classes/large-class": {
+      classId: "large-class",
+      semesterId: "2026-2",
+      grade: "2",
+      classNumber: "3",
+      status: "ACTIVE",
+    },
+  };
+  for (let index = 0; index < 205; index += 1) {
+    const suffix = String(index).padStart(3, "0");
+    largeSeed[`semester_enrollments/enrollment-${suffix}`] = {
+      enrollmentId: `enrollment-${suffix}`,
+      semesterId: "2026-2",
+      studentUid: `student-${suffix}`,
+      classId: "large-class",
+      displayName: `합성 학생 ${suffix}`,
+      studentNumber: String(index + 1),
+      status: "ACTIVE",
+      enrollmentStatus: "ACTIVE",
+    };
+    largeSeed[
+      `semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", `student-${suffix}`)}`
+    ] = {
+      semesterId: "2026-2",
+      studentUid: `student-${suffix}`,
+      activeEnrollmentId: `enrollment-${suffix}`,
+    };
+    largeSeed[`semester_wis_accounts/account-${suffix}`] = {
+      accountId: `account-${suffix}`,
+      semesterId: "2026-2",
+      studentUid: `student-${suffix}`,
+      enrollmentId: `enrollment-${suffix}`,
+      classId: "large-class",
+      displayName: `합성 학생 ${suffix}`,
+      revision: 1,
+      balance: index,
+    };
+  }
+  const orderStudentUid = "order-student";
+  const orderAccountId = wis.accountIdFor("2026-2", orderStudentUid);
+  largeSeed[`users/${orderStudentUid}`] = { role: "student" };
+  largeSeed["semester_enrollments/order-enrollment"] = {
+    enrollmentId: "order-enrollment",
+    semesterId: "2026-2",
+    studentUid: orderStudentUid,
+    classId: "large-class",
+    displayName: "주문 학생",
+    studentNumber: "999",
+    status: "ACTIVE",
+    enrollmentStatus: "ACTIVE",
+  };
+  largeSeed[
+    `semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", orderStudentUid)}`
+  ] = {
+    semesterId: "2026-2",
+    studentUid: orderStudentUid,
+    activeEnrollmentId: "order-enrollment",
+  };
+  largeSeed[`semester_wis_accounts/${orderAccountId}`] = {
+    accountId: orderAccountId,
+    semesterId: "2026-2",
+    studentUid: orderStudentUid,
+    enrollmentId: "order-enrollment",
+    classId: "large-class",
+    displayName: "주문 학생",
+    revision: 1,
+    balance: 1_000,
+  };
+  const orderedOrders = [
+    ["order-hash-z", "2026-08-18T09:00:00.000Z", "REQUESTED"],
+    ["order-hash-a", "2026-08-18T08:00:00.000Z", "REJECTED"],
+    ["order-hash-y", "2026-08-18T07:00:00.000Z", "REQUESTED"],
+    ["order-hash-b", "2026-08-18T06:00:00.000Z", "REJECTED"],
+    ["order-hash-x", "2026-08-18T05:00:00.000Z", "APPROVED"],
+  ];
+  for (const [orderId, createdAt, status] of orderedOrders) {
+    largeSeed[`semester_wis_orders/${orderId}`] = {
+      orderId,
+      semesterId: "2026-2",
+      accountId: orderAccountId,
+      studentUid: orderStudentUid,
+      productId: "product-order-fixture",
+      productName: "순서 검증 상품",
+      memo: `요청 메모 ${orderId}`,
+      quantity: 1,
+      unitPrice: 10,
+      totalPrice: 10,
+      revision: 1,
+      status,
+      reviewedBy: "private-teacher-uid",
+      createdAt,
+      updatedAt: createdAt,
+    };
+  }
+  for (let index = 0; index < 205; index += 1) {
+    const productId = `inactive-product-${String(index).padStart(3, "0")}`;
+    largeSeed[`wis_product_catalog/${productId}`] = {
+      productId,
+      revision: 1,
+      name: `숨김 상품 ${index}`,
+      description: "",
+      imageUrl: "",
+      active: false,
+    };
+  }
+  const activeProductId = "zz-active-product";
+  largeSeed[`wis_product_catalog/${activeProductId}`] = {
+    productId: activeProductId,
+    revision: 1,
+    name: "활성 상품",
+    description: "",
+    imageUrl: "",
+    active: true,
+    createdBy: "private-teacher-uid",
+    updatedBy: "private-teacher-uid",
+  };
+  const activeInventoryId = wis.inventoryIdFor("2026-2", activeProductId);
+  largeSeed[`semester_wis_inventory/${activeInventoryId}`] = {
+    inventoryId: activeInventoryId,
+    semesterId: "2026-2",
+    productId: activeProductId,
+    productName: "활성 상품",
+    revision: 1,
+    price: 10,
+    stock: 5,
+    available: 5,
+    reserved: 0,
+    sold: 0,
+    active: true,
+    updatedBy: "private-teacher-uid",
+  };
+  const largeTx = new MemoryTransaction(largeSeed);
+  const largeQueryCore = wis.createWisQueryCore({
+    store: {
+      get: (path) => largeTx.get(path),
+      runTransaction: (callback) => callback(largeTx),
+    },
+    assertSession: async (request) => ({
+      uid: request.auth.uid,
+      email: request.auth.token.email,
+    }),
+  });
+  // Exercise the real query core with a full school cohort and a bounded
+  // lookahead row. Canonical roster joins, permissions and writes stay fenced.
+  const createOverviewCohort = (count) => {
+    const seed = Object.fromEntries([
+      "semester_manifests/2026-2",
+      "semester_wis_economies/2026-2",
+      "users/large-reader",
+      "semester_classes/large-class",
+    ].map((path) => [path, structuredClone(largeSeed[path])]));
+    seed["users/cohort-student"] = { role: "student" };
+    for (let index = 0; index < count; index += 1) {
+      const suffix = String(index).padStart(3, "0");
+      const studentUid = `cohort-${suffix}`;
+      const enrollmentId = `cohort-enrollment-${suffix}`;
+      seed[`semester_enrollments/${enrollmentId}`] = {
+        ...largeSeed["semester_enrollments/enrollment-000"],
+        enrollmentId,
+        studentUid,
+        displayName: `검증 학생 ${suffix}`,
+        studentNumber: String(index + 1),
+      };
+      seed[`semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", studentUid)}`] = {
+        semesterId: "2026-2", studentUid, activeEnrollmentId: enrollmentId,
+      };
+      seed[`semester_wis_accounts/cohort-account-${suffix}`] = {
+        ...largeSeed["semester_wis_accounts/account-000"],
+        accountId: `cohort-account-${suffix}`,
+        studentUid,
+        enrollmentId: "stale-enrollment",
+        classId: "stale-class",
+        grade: "9", classNumber: "9", studentNumber: "999",
+        balance: 500,
+      };
+    }
+    const cohortTx = new MemoryTransaction(seed);
+    const before = structuredClone(cohortTx.documents);
+    let writes = 0;
+    cohortTx.set = cohortTx.delete = () => {
+      writes += 1;
+      throw new Error("Teacher overview must not write.");
+    };
+    const core = wis.createWisQueryCore({
+      store: {
+        get: (path) => cohortTx.get(path),
+        runTransaction: (callback) => callback(cohortTx),
+      },
+      assertSession: async (request) => ({ uid: request.auth.uid, email: request.auth.token.email }),
+    });
+    const request = (overrides = {}, actorUid = "large-reader") => core.getWisEconomyState({
+      auth: { uid: actorUid, token: { email: `${actorUid}@yongshin-ms.ms.kr` } },
+      data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT", projection: "overview", limit: 500, ...overrides },
+    });
+    return {
+      request,
+      transaction: cohortTx,
+      assertUnchanged: () => {
+        assert.equal(writes, 0);
+        assert.deepEqual(cohortTx.documents, before);
+      },
+    };
+  };
+  const cohort321 = createOverviewCohort(321);
+  const cohort321Page = await cohort321.request();
+  assert.equal(cohort321Page.accounts.length, 321);
+  assert.equal(cohort321Page.nextCursor, "");
+  assert.equal(cohort321Page.writeCount, 0);
+  assert.equal(cohort321Page.readOnly, true);
+  assert.equal(cohort321.transaction.readStats.queryCalls, 1);
+  assert.equal(cohort321.transaction.readStats.queryDocuments, 321);
+  assert.deepEqual(
+    [cohort321Page.accounts[0].grade, cohort321Page.accounts[0].classNumber, cohort321Page.accounts[0].studentNumber],
+    ["2", "3", "1"],
+  );
+  assert.equal(cohort321Page.accounts[0].enrollmentId, "cohort-enrollment-000");
+  const invalidLimit = (error) => error.code === "invalid-argument" && error.details?.field === "limit";
+  await assert.rejects(() => cohort321.request({ limit: 501 }), invalidLimit);
+  for (const projection of ["summary", "account", "orders", "catalog", "hall-of-fame"]) {
+    await assert.rejects(() => cohort321.request({ projection, limit: 201 }), invalidLimit);
+  }
+  for (const projection of ["summary", "student-core", "orders", "catalog", "hall-of-fame"]) {
+    await assert.rejects(
+      () => cohort321.request({ audience: "student", projection, limit: 201 }, "cohort-student"),
+      invalidLimit,
+    );
+  }
+  await assert.rejects(
+    () => cohort321.request({}, "cohort-student"),
+    (error) => error.code === "permission-denied" && error.details?.reason === "WIS_MANAGE_REQUIRED",
+  );
+  assert.equal(cohort321.transaction.readStats.queryCalls, 1, "Invalid or unauthorized requests must not query cohort data.");
+  cohort321.assertUnchanged();
+
+  const cohort501 = createOverviewCohort(501);
+  const cohortFirst = await cohort501.request();
+  const cohortLast = await cohort501.request({ cursor: cohortFirst.nextCursor });
+  assert.equal(cohortFirst.accounts.length, 500);
+  assert.equal(cohortFirst.nextCursor, "cohort-account-499");
+  assert.deepEqual(cohortLast.accounts.map((account) => account.accountId), ["cohort-account-500"]);
+  assert.equal(cohortLast.nextCursor, "");
+  assert.equal(new Set([...cohortFirst.accounts, ...cohortLast.accounts].map((account) => account.accountId)).size, 501);
+  assert.equal(cohort501.transaction.readStats.queryCalls, 2);
+  assert.equal(cohort501.transaction.readStats.maxQueryDocuments, 501);
+  assert.equal(cohortFirst.writeCount + cohortLast.writeCount, 0);
+  cohort501.assertUnchanged();
+
+  const largeRequest = (cursor = "") =>
+    largeQueryCore.getWisEconomyState({
+      auth: {
+        uid: "large-reader",
+        token: { email: "large-reader@yongshin-ms.ms.kr" },
+      },
+      data: {
+        audience: "teacher",
+        semesterId: "2026-2",
+        source: "CURRENT",
+        projection: "overview",
+        limit: 25,
+        ...(cursor ? { cursor } : {}),
+      },
+    });
+  const largePageOne = await largeRequest();
+  const firstPageQueryReads = largeTx.readStats.queryDocuments;
+  const largePageTwo = await largeRequest(largePageOne.nextCursor);
+  assert.equal(largePageOne.accounts.length, 25);
+  assert.equal(largePageTwo.accounts.length, 25);
+  assert.ok(largePageOne.nextCursor);
+  assert.equal(largePageOne.ledger.length, 0);
+  assert.equal(largePageOne.orders.length, 0);
+  assert.equal(largePageOne.inventory.length, 0);
+  assert.equal(largePageOne.rankings.length, 0);
+  assert.equal(
+    new Set([
+      ...largePageOne.accounts.map((item) => item.accountId),
+      ...largePageTwo.accounts.map((item) => item.accountId),
+    ]).size,
+    50,
+  );
+  assert.equal(firstPageQueryReads, 26);
+  assert.equal(largeTx.readStats.queryDocuments, 52);
+  assert.ok(largeTx.readStats.maxQueryDocuments <= 26);
+  const beforeHallQueryReads = largeTx.readStats.queryDocuments;
+  const largeHallState = await largeQueryCore.getWisEconomyState({
+    auth: {
+      uid: "large-reader",
+      token: { email: "large-reader@yongshin-ms.ms.kr" },
+    },
+    data: {
+      audience: "teacher",
+      semesterId: "2026-2",
+      source: "CURRENT",
+      projection: "hall-of-fame",
+      limit: 20,
+    },
+  });
+  assert.equal(largeHallState.hallOfFame.snapshotVersion, 7);
+  assert.deepEqual(largeHallState.hallOfFame.gradeLeaderboardByGrade, {});
+  assert.deepEqual(largeHallState.hallOfFame.classLeaderboardByClassKey, {});
+  assert.equal(largeTx.readStats.queryDocuments - beforeHallQueryReads, 206);
+  assert.ok(largeTx.readStats.maxQueryDocuments <= 2_001);
+  // Initial balances do not earn a rank, and a large tie must not render
+  // the complete school roster in the Hall of Fame.
+  const tiedSeed = structuredClone(largeSeed);
+  for (const [path, account] of Object.entries(tiedSeed)) {
+    if (path.startsWith("semester_wis_accounts/")) {
+      account.balance = 500;
+      account.rankEarnedTotal = 100;
+    }
+  }
+  const tiedTx = new MemoryTransaction(tiedSeed);
+  const tiedCore = wis.createWisQueryCore({
+    store: {
+      get: (path) => tiedTx.get(path),
+      runTransaction: (callback) => callback(tiedTx),
+    },
+    assertSession: async (request) => ({
+      uid: request.auth.uid,
+      email: request.auth.token.email,
+    }),
+  });
+  const tiedHall = await tiedCore.getWisEconomyState({
+    auth: {
+      uid: "large-reader",
+      token: { email: "large-reader@yongshin-ms.ms.kr" },
+    },
+    data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT", projection: "hall-of-fame", limit: 20 },
+  });
+  assert.equal(tiedHall.hallOfFame.gradeLeaderboardByGrade["2"].length, 20);
+  assert.equal(tiedHall.hallOfFame.classLeaderboardByClassKey["2-3"].length, 20);
+  const teacherOrderRequest = (cursor = "", orderStatus = "") =>
+    largeQueryCore.getWisEconomyState({
+      auth: {
+        uid: "large-reader",
+        token: { email: "large-reader@yongshin-ms.ms.kr" },
+      },
+      data: {
+        audience: "teacher",
+        semesterId: "2026-2",
+        source: "CURRENT",
+        projection: "orders",
+        limit: 2,
+        ...(cursor ? { cursor } : {}),
+        ...(orderStatus ? { orderStatus } : {}),
+      },
+    });
+  const newestOrderPage = await teacherOrderRequest();
+  assert.equal(newestOrderPage.orders[0].memo, "요청 메모 order-hash-z");
+  assert.deepEqual(
+    newestOrderPage.orders.map((order) => order.orderId),
+    ["order-hash-z", "order-hash-a"],
+  );
+  const nextOrderPage = await teacherOrderRequest(newestOrderPage.nextCursor);
+  assert.deepEqual(
+    nextOrderPage.orders.map((order) => order.orderId),
+    ["order-hash-y", "order-hash-b"],
+  );
+  const rejectedOrders = await teacherOrderRequest("", "REJECTED");
+  assert.deepEqual(
+    rejectedOrders.orders.map((order) => order.orderId),
+    ["order-hash-a", "order-hash-b"],
+  );
+  const studentOrders = await largeQueryCore.getWisEconomyState({
+    auth: {
+      uid: orderStudentUid,
+      token: { email: "order-student@yongshin-ms.ms.kr" },
+    },
+    data: {
+      audience: "student",
+      semesterId: "2026-2",
+      source: "CURRENT",
+      projection: "orders",
+      limit: 2,
+    },
+  });
+  assert.deepEqual(
+    studentOrders.orders.map((order) => order.orderId),
+    ["order-hash-z", "order-hash-a"],
+  );
+  assert.equal(studentOrders.orders[0].memo, "요청 메모 order-hash-z");
+  assert.doesNotMatch(
+    JSON.stringify(studentOrders.orders),
+    /private-teacher-uid|reviewedBy|studentUid|accountId/u,
+  );
+  const studentCatalogState = await largeQueryCore.getWisEconomyState({
+    auth: {
+      uid: orderStudentUid,
+      token: { email: "order-student@yongshin-ms.ms.kr" },
+    },
+    data: {
+      audience: "student",
+      semesterId: "2026-2",
+      source: "CURRENT",
+      projection: "catalog",
+      limit: 20,
+    },
+  });
+  assert.deepEqual(
+    studentCatalogState.products.map((product) => product.productId),
+    [activeProductId],
+  );
+  assert.doesNotMatch(
+    JSON.stringify({
+      products: studentCatalogState.products,
+      inventory: studentCatalogState.inventory,
+    }),
+    /private-teacher-uid|createdBy|updatedBy/u,
+  );
+  largeTx.set("semester_enrollments/order-enrollment", {
+    ...largeSeed["semester_enrollments/order-enrollment"],
+    status: "ACTIVE",
+    enrollmentStatus: "WITHDRAWN",
+  });
+  const withdrawnCatalogState = await largeQueryCore.getWisEconomyState({
+    auth: {
+      uid: orderStudentUid,
+      token: { email: "order-student@yongshin-ms.ms.kr" },
+    },
+    data: {
+      audience: "student",
+      semesterId: "2026-2",
+      source: "CURRENT",
+      projection: "catalog",
+    },
+  });
+  assert.equal(withdrawnCatalogState.status, "EMPTY");
+  assert.equal(withdrawnCatalogState.reason, "WIS_ACTIVE_ENROLLMENT_REQUIRED");
+  assert.deepEqual(withdrawnCatalogState.products, []);
+
+  const transitionSeed = {
+    "semester_manifests/2026-2": manifest,
+    "semester_wis_economies/2026-2": {
+      semesterId: "2026-2",
+      revision: 1,
+      status: "PREPARING_INITIALIZING",
+      initialGrantAmount: 500,
+      integrityVersion: "w10p-aggregate-v1",
+      accountCount: 600,
+      initializedAccountCount: 600,
+      ledgerEntryCount: 2_500,
+      inventoryCount: 150,
+      orderCount: 700,
+      unresolvedLegacyIssueCount: 0,
+    },
+  };
+  for (let index = 0; index < 600; index += 1) {
+    transitionSeed[`semester_wis_accounts/transition-${index}`] = {
+      accountId: `transition-${index}`,
+      semesterId: "2026-2",
+      studentUid: `transition-student-${index}`,
+      status: "PREPARING",
+      revision: 2,
+    };
+    transitionSeed[`semester_wis_balances/transition-${index}`] = {
+      accountId: `transition-${index}`,
+      semesterId: "2026-2",
+      balance: 500,
+    };
+    transitionSeed[`semester_wis_rankings/transition-${index}`] = {
+      accountId: `transition-${index}`,
+      semesterId: "2026-2",
+      balance: 500,
+    };
+  }
+  for (let index = 0; index < 2_500; index += 1) {
+    transitionSeed[`semester_wis_ledger/transition-ledger-${index}`] = {
+      ledgerEntryId: `transition-ledger-${index}`,
+      accountId: `transition-${index % 600}`,
+      semesterId: "2026-2",
+      type: "GRANT",
+      delta: 1,
+    };
+  }
+  for (let index = 0; index < 150; index += 1) {
+    transitionSeed[`semester_wis_inventory/transition-inventory-${index}`] = {
+      inventoryId: `transition-inventory-${index}`,
+      semesterId: "2026-2",
+    };
+  }
+  for (let index = 0; index < 700; index += 1) {
+    transitionSeed[`semester_wis_orders/transition-order-${index}`] = {
+      orderId: `transition-order-${index}`,
+      semesterId: "2026-2",
+      status: "REQUESTED",
+    };
+  }
+  const transitionTx = new MemoryTransaction(transitionSeed);
+  const transitionAdapter = wis.createWisCommandAdapter();
+  const transitionResult = await transitionAdapter.apply({
+    transaction: transitionTx,
+    commandId: "transition-large-1",
+    commandType: "transitionWisEconomy",
+    payload: wis.normalizeWisPayload("transitionWisEconomy", {
+      ...common,
+      expectedEconomyRevision: 1,
+      targetStatus: "ACTIVE_INITIALIZING",
+      reason: "대규모 안전 전환",
+    }),
+    receiptId: "transition-large-receipt-1",
+    timestamp: "transition-large-time-1",
+    actor,
+  });
+  assert.equal(transitionResult.result.status, "ACTIVE_INITIALIZING");
+  assert.equal((await transitionTx.get("semester_wis_economies/2026-2")).data.provenance, "CURRENT");
+  assert.equal((await transitionTx.get("semester_wis_economies/2026-2")).data.readOnly, false);
+  const openedLarge = await transitionAdapter.apply({
+    transaction: transitionTx,
+    commandId: "transition-large-2",
+    commandType: "transitionWisEconomy",
+    payload: wis.normalizeWisPayload("transitionWisEconomy", {
+      ...common,
+      expectedEconomyRevision: 2,
+      targetStatus: "ACTIVE_OPEN",
+      reason: "대규모 운영 시작",
+    }),
+    receiptId: "transition-large-receipt-2",
+    timestamp: "transition-large-time-2",
+    actor,
+  });
+  assert.equal(openedLarge.result.status, "ACTIVE_OPEN");
+  assert.equal(transitionTx.readStats.queryCalls, 0);
+  assert.equal(
+    (await transitionTx.get("semester_wis_accounts/transition-599")).data
+      .status,
+    "PREPARING",
+  );
+  const readinessQueryCallsBefore = transitionTx.readStats.queryCalls;
+  const readinessQueryDocumentsBefore = transitionTx.readStats.queryDocuments;
+  const [largeReadiness] = await wis
+    .createWisReadinessAdapter()
+    .evaluate({ transaction: transitionTx, manifest });
+  assert.equal(largeReadiness.status, "PASS");
+  assert.equal(
+    transitionTx.readStats.queryCalls - readinessQueryCallsBefore,
+    7,
+  );
+  assert.equal(
+    transitionTx.readStats.queryDocuments - readinessQueryDocumentsBefore,
+    6,
+  );
+  assert.ok(transitionTx.readStats.maxQueryDocuments <= 26);
+
+  const readiness = wis.createWisReadinessAdapter();
+  const [check] = await readiness.evaluate({ transaction: tx, manifest });
+  assert.equal(check.status, "PASS");
+  assert.match(check.evidence, /accounts=1/);
+
+  tx.set(`semester_enrollments/${enrollment.enrollmentId}`, {
+    ...enrollment,
+    status: "ACTIVE",
+    enrollmentStatus: "WITHDRAWN",
+  });
+  await assert.rejects(
+    () =>
+      apply("createWisAccounts", {
+        ...common,
+        expectedEconomyRevision: 3,
+        enrollmentIds: [enrollment.enrollmentId],
+        reason: "상충 재적 상태 차단",
+      }),
+    (error) => error.details?.reason === "WIS_ENROLLMENT_INVALID",
+  );
+  const movedEnrollmentId = "enrollment-moved";
+  tx.set("semester_classes/class-moved", {
+    classId: "class-moved",
+    semesterId: "2026-2",
+    grade: "2",
+    classNumber: "4",
+    status: "ACTIVE",
+  });
+  tx.set(`semester_enrollments/${enrollment.enrollmentId}`, {
+    ...enrollment,
+    enrollmentStatus: "TRANSFERRED",
+  });
+  tx.set(`semester_enrollments/${movedEnrollmentId}`, {
+    ...enrollment,
+    enrollmentId: movedEnrollmentId,
+    classId: "class-moved",
+    displayName: "이동 학생",
+    enrollmentStatus: "ACTIVE",
+  });
+  tx.set(`semester_enrollment_slots/${enrollmentSlotId}`, {
+    semesterId: "2026-2",
+    studentUid: "student-1",
+    activeEnrollmentId: movedEnrollmentId,
+  });
+  const syncedAccount = await apply("createWisAccounts", {
+    ...common,
+    expectedEconomyRevision: 3,
+    enrollmentIds: [movedEnrollmentId],
+    reason: "학급 이동 메타데이터 동기화",
+  });
+  assert.deepEqual(
+    {
+      createdCount: syncedAccount.result.createdCount,
+      syncedCount: syncedAccount.result.syncedCount,
+      enrollmentId: (await tx.get(`semester_wis_accounts/${accountId}`)).data
+        .enrollmentId,
+      classId: (await tx.get(`semester_wis_accounts/${accountId}`)).data
+        .classId,
+      rankingClassId: (await tx.get(`semester_wis_rankings/${accountId}`)).data
+        .classId,
+    },
+    {
+      createdCount: 0,
+      syncedCount: 1,
+      enrollmentId: movedEnrollmentId,
+      classId: "class-moved",
+      rankingClassId: "class-moved",
+    },
+  );
+
+  tx.set("semester_manifests/2026-2", { ...manifest, status: "ARCHIVED" });
+  await assert.rejects(
+    () =>
+      apply("grantWis", {
+        ...common,
+        expectedEconomyRevision: 3,
+        accountId,
+        expectedAccountRevision: 7,
+        amount: 1,
+        sourceId: "archive",
+        reason: "금지",
+      }),
+    (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
+  );
+
+  console.log(JSON.stringify({ passed: true, cases: 49, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain", "canonical full name and student number ignore conflicting profile identity", "selected emoji only, invalid URL fallback and public-field allowlist", "unranked viewer retains own grade/class boundary"], productionAccess: 0 }));
+};
+
+run().then(async () => {
+  const historical = new MemoryTransaction({
+    "site_settings/semester_active": { semesterId: "2026-2", revision: 1 },
+    "users/teacher": { role: "teacher", staffPermissions: ["point_manage"] },
+    "users/student": { role: "student" },
+    "users/old-student": { name: "현재 이름", grade: "3", email: "private@example.com" },
+    "semester_manifests/2026-1": { status: "ARCHIVED", revision: 1 },
+    "semester_wis_economies/2026-1": { status: "CLOSED", revision: 1 },
+    "semester_wis_accounts/old-account": { accountId: "old-account", semesterId: "2026-1", studentUid: "old-student", displayName: "과거 이름", grade: "2", classNumber: "1", studentNumber: "3", balance: 80 },
+    "semester_wis_accounts/other-account": { accountId: "other-account", semesterId: "2026-1", studentUid: "other-student", displayName: "이전 학생", balance: 20 },
+    "semester_wis_ledger/old-entry": { ledgerEntryId: "old-entry", accountId: "old-account", semesterId: "2026-1", studentUid: "old-student", delta: 10, balanceAfter: 80, createdAt: "2026-05-01T00:00:00Z", reason: "과거 지급" },
+  });
+  const historicalCore = wis.createWisQueryCore({ store: {
+    get: historical.get.bind(historical), runTransaction: callback => callback(historical),
+  }, assertSession: async request => ({ uid: request.auth.uid, email: request.auth.token.email }) });
+  const read = (data = {}, uid = "teacher") => historicalCore.getWisEconomyState({
+    auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr` } },
+    data: { semesterId: "2026-1", source: "EXPLICIT", audience: "teacher", limit: 1, ...data },
+  });
+  const before = JSON.stringify([...historical.documents]);
+  const first = await read();
+  assert.equal(first.readOnly, true);
+  assert.equal(first.accounts[0].displayName, "과거 이름");
+  assert.equal(first.accounts[0].grade, "2", "saved historical class is retained even after the enrollment slot closes");
+  assert.equal(first.accounts[0].balance, 80);
+  assert.equal(first.nextCursor, "old-account");
+  assert.equal((await read({ cursor: first.nextCursor })).accounts[0].studentUid, "other-student");
+  const detail = await read({ projection: "account", accountId: "old-account" });
+  assert.equal(detail.ledger[0].reason, "과거 지급");
+  assert.equal(detail.accounts[0].classNumber, "1");
+  assert.equal(JSON.stringify([...historical.documents]), before);
+  historical.documents.delete("semester_manifests/2026-1");
+  assert.equal((await read()).accounts[0].balance, 80, "stored scoped accounts remain readable without a manifest document");
+  historical.documents.set("semester_manifests/2026-1", { status: "ACTIVE", revision: 1 });
+  historical.documents.set("semester_wis_economies/2026-1", { status: "ACTIVE_OPEN", revision: 1 });
+  assert.equal((await read()).readOnly, true, "EXPLICIT is read-only even for a manager viewing an ACTIVE semester");
+  historical.documents.delete("semester_wis_economies/2026-1");
+  assert.equal((await read()).reason, "WIS_ECONOMY_NOT_CREATED", "no fabricated legacy economy is created");
+  console.log(JSON.stringify({ explicitTeacherWisReadOnly: true, historicalNamesPreserved: true, boundedPagination: true, writes: 0 }));
+}).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

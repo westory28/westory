@@ -10,9 +10,9 @@
 .teacher-weekly-dashboard__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1.04fr) minmax(328px, 1fr);
+  grid-template-rows: auto minmax(328px, 1fr);
   gap: 16px;
-  height: clamp(620px, calc(100dvh - 140px), 880px);
+  min-height: clamp(620px, calc(100dvh - 140px), 880px);
 }
 
 .teacher-weekly-dashboard__schedule {
@@ -543,6 +543,16 @@
   min-height: 0;
 }
 
+.teacher-weekly-dashboard .teacher-notice-board {
+  height: auto;
+}
+
+.teacher-weekly-dashboard .teacher-notice-board__viewport {
+  flex: none;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
 .teacher-weekly-dashboard .teacher-notice-board__viewport > button {
   position: absolute;
   inset: 0;
@@ -675,6 +685,7 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
     height: auto;
+    min-height: 0;
   }
   .teacher-weekly-dashboard__schedule,
   .teacher-weekly-dashboard__notice,
@@ -688,9 +699,6 @@
   .teacher-week-events {
     flex: none;
     max-height: 336px;
-  }
-  .teacher-weekly-dashboard__notice {
-    height: 360px;
   }
   .teacher-weekly-dashboard__ranking {
     min-height: 280px;
@@ -745,9 +753,6 @@
   .teacher-week-schedule__actions {
     min-width: 0;
     margin-left: auto;
-  }
-  .teacher-weekly-dashboard__notice {
-    height: 344px;
   }
 }
 

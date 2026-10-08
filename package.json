@@ -18,6 +18,7 @@
     "verify:assessment-release": "node scripts/verify-assessment-release.mjs",
     "verify:think-cloud-lifecycle": "node scripts/verify-think-cloud-lifecycle.mjs",
     "verify:teacher-nav": "node scripts/verify-teacher-nav.mjs",
+    "verify:page-scroll-lock": "node scripts/verify-page-scroll-lock.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
     "verify:teacher-patch-notes-rules": "node scripts/verify-teacher-patch-notes-rules.mjs",
     "verify:teacher-readiness-rules": "node scripts/verify-teacher-readiness-rules.mjs",

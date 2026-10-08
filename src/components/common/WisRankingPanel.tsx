@@ -51,7 +51,7 @@ const buildRankWallet = (entry: WisHallOfFameEntry): PointWallet => ({
   studentName: entry.studentName,
   grade: entry.grade,
   class: entry.class,
-  number: "",
+  number: entry.number || "",
   balance: Number(entry.currentBalance || 0),
   earnedTotal: Number(entry.cumulativeEarned || 0),
   rankEarnedTotal: Number(entry.cumulativeEarned || 0),
@@ -108,11 +108,11 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config]);
+  }, [config, hallOfFamePath]);
 
   return (
     <div className="wis-ranking-panel flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="wis-ranking-heading flex items-center justify-between gap-2">
         {hallOfFamePath ? (
           <button
             type="button"
@@ -174,81 +174,39 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
             return (
               <div
                 key={entry.uid}
-                className={`wis-ranking-row ${rankAccent} rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 max-[1120px]:sm:grid-cols-[52px_minmax(0,1fr)_70px_minmax(64px,auto)] max-[1120px]:sm:gap-1.5 max-[1120px]:sm:px-2 max-[1120px]:sm:py-2 ${rankTone(rank)}`}
+                className={`wis-ranking-row ${rankAccent} rounded-lg border ${rankTone(rank)}`}
               >
-                <div className="wis-ranking-mobile-row flex flex-nowrap items-center gap-x-1.5 gap-y-1 sm:hidden">
-                  <span className="wis-ranking-mobile-rank-cluster inline-grid shrink-0 grid-cols-[1.5rem_1rem] items-center gap-1">
-                    <span
-                      className={`wis-ranking-rank-medal inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
-                        rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
-                      }`}
-                    >
-                      {rank}
-                    </span>
-                    {iconClassName && (
-                      <i
-                        className={`wis-ranking-crown ${iconClassName} justify-self-center text-xs`}
-                        aria-hidden="true"
-                      ></i>
-                    )}
-                  </span>
-                  <span className="wis-ranking-mobile-profile wis-ranking-profile inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm">
-                    {entry.profileIcon || defaultProfileIcon}
-                  </span>
-                  <span className="wis-ranking-mobile-student min-w-0">
-                    <span className="wis-ranking-mobile-name block text-sm font-extrabold leading-snug text-gray-900">
-                      {entry.displayName || entry.studentName}
-                    </span>
-                    <span className="wis-ranking-mobile-class block text-[11px] font-bold leading-snug text-gray-500">
-                      {entry.grade}학년 {entry.class}반
-                    </span>
-                  </span>
-                  {entryRank && (
-                    <span
-                      className={`wis-ranking-mobile-badge wis-ranking-rank-badge inline-flex min-h-[1.25rem] shrink-0 items-center justify-center rounded-full border px-1.5 text-[10px] font-bold leading-none ${entryRank.badgeClass}`}
-                    >
-                      {entryRank.shortLabel || entryRank.label}
-                    </span>
-                  )}
-                  <span className="wis-ranking-mobile-score wis-ranking-score ml-auto shrink-0 text-xs font-black leading-snug text-blue-600">
-                    {formatWis(entry.cumulativeEarned)}
-                  </span>
-                </div>
-
-                <div className="wis-ranking-rank hidden grid-cols-[2rem_1.25rem] items-center gap-1.5 sm:grid max-[1120px]:sm:grid-cols-[1.75rem_0.875rem] max-[1120px]:sm:gap-1">
-                  <span
-                    className={`wis-ranking-rank-medal inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-black max-[1120px]:h-7 max-[1120px]:w-7 max-[1120px]:text-xs ${
-                      rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
-                    }`}
-                  >
-                    {rank}
-                  </span>
+                <span className="wis-ranking-place">
+                  <span className="wis-ranking-rank-medal">{rank}</span>
                   {iconClassName && (
                     <i
-                      className={`wis-ranking-crown ${iconClassName} justify-self-center text-base max-[1120px]:text-xs`}
+                      className={`wis-ranking-crown ${iconClassName}`}
                       aria-hidden="true"
-                    ></i>
+                    />
                   )}
-                </div>
-                <div className="wis-ranking-student hidden min-w-0 items-center gap-1.5 sm:flex max-[1120px]:sm:gap-1">
-                  <span className="wis-ranking-profile inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/80 text-sm shadow-sm max-[1120px]:h-5 max-[1120px]:w-5 max-[1120px]:text-xs">
-                    {entry.profileIcon || defaultProfileIcon}
+                </span>
+                <span className="wis-ranking-profile" aria-hidden="true">
+                  {entry.profileIcon || defaultProfileIcon}
+                </span>
+                <span className="wis-ranking-classroom">
+                  <span>
+                    {entry.grade}학년 {entry.class}반
                   </span>
-                  <span className="wis-ranking-name min-w-0 truncate text-base font-extrabold text-gray-900 max-[1120px]:text-[13px]">
+                  {entry.number && <span>{entry.number}번</span>}
+                </span>
+                <span className="wis-ranking-person">
+                  <span className="wis-ranking-name">
                     {entry.displayName || entry.studentName}
                   </span>
                   <PointRankBadge
                     rank={entryRank}
                     size="sm"
-                    className="wis-ranking-rank-badge max-[1120px]:!min-h-[1.45rem] max-[1120px]:!min-w-[2.75rem] max-[1120px]:!px-1.5 max-[1120px]:!py-0 max-[1120px]:!text-[10px]"
+                    className="wis-ranking-rank-badge"
                   />
-                </div>
-                <div className="wis-ranking-class hidden truncate text-sm font-bold text-gray-500 sm:block max-[1120px]:text-[11px]">
-                  {entry.grade}학년 {entry.class}반
-                </div>
-                <div className="wis-ranking-score hidden text-right text-base font-black text-blue-600 sm:block max-[1120px]:text-[13px]">
+                </span>
+                <span className="wis-ranking-score">
                   {formatWis(entry.cumulativeEarned)}
-                </div>
+                </span>
               </div>
             );
           })}

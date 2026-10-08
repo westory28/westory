@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import React, { useEffect, useState } from "react";
 import type { MapResource } from "../../lib/mapResources";
 import {
@@ -37,10 +38,10 @@ const MapViewer: React.FC<MapViewerProps> = ({
       }
     };
 
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = "";
+      releaseScrollLock();
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isModalOpen]);

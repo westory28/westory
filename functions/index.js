@@ -8468,5 +8468,6 @@ exports.deleteNoticeImageContent = require('./noticeImages').deleteNoticeImageCo
 // with an older local implementation or export its unrelated nested callables.
 exports.executeCommand = require('./productionGateway/productionSource').executeCommand;
 exports.executeLessonCorePointCommand = require('./productionGateway/productionSource').executeLessonCorePointCommand;
+exports.getWisEconomyState = require('./studentWisQuery').getWisEconomyState;
 
 exports.claimStudentLearningReward = onCall({ region: REGION }, require("./studentLearningReward").createStudentLearningRewardHandler({ db, loadPolicy }));

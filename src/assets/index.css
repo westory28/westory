@@ -3169,303 +3169,137 @@ button.lesson-core-point-floating-status:disabled {
   }
 }
 
-@media (min-width: 640px) and (max-width: 1280px) {
-  .wis-ranking-panel {
-    padding: clamp(0.75rem, 1.2vw, 1rem) !important;
-  }
+.wis-ranking-panel {
+  container: wis-ranking / inline-size;
+  min-width: 0;
+}
 
-  .wis-ranking-panel .mb-3 {
-    margin-bottom: clamp(0.5rem, 0.85vw, 0.75rem) !important;
-  }
+.wis-ranking-heading {
+  margin-bottom: 16px;
+}
 
-  .wis-ranking-title {
-    font-size: clamp(1rem, 1.45vw, 1.15rem) !important;
-    line-height: 1.15;
-  }
+.wis-ranking-row {
+  display: grid;
+  grid-template-columns: 32px 24px max-content minmax(0, 1fr) max-content;
+  grid-template-areas: "place profile classroom person score";
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+}
 
-  .wis-ranking-title i {
-    margin-right: 0.42rem !important;
-    font-size: 0.92em;
-  }
+.wis-ranking-place {
+  grid-area: place;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
-  .wis-ranking-list {
-    display: flex;
-    flex-direction: column;
-    gap: clamp(0.5rem, 0.75vw, 0.62rem) !important;
-  }
+.wis-ranking-place .wis-ranking-rank-medal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 800;
+}
 
+.wis-ranking-place .wis-ranking-crown {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 12px;
+}
+
+.wis-ranking-profile {
+  grid-area: profile;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.wis-ranking-classroom {
+  grid-area: classroom;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--ws-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.wis-ranking-classroom > span {
+  white-space: nowrap;
+}
+
+.wis-ranking-person {
+  grid-area: person;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.wis-ranking-name {
+  min-width: 0;
+  color: var(--ws-text-strong);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.wis-ranking-person .wis-ranking-rank-badge {
+  min-width: 0;
+  min-height: 24px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.wis-ranking-score {
+  grid-area: score;
+  color: var(--ws-primary);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@container wis-ranking (max-width: 480px) {
   .wis-ranking-row {
-    grid-template-columns:
-      clamp(3.1rem, 5vw, 4.25rem)
-      minmax(0, 1fr)
-      clamp(4.6rem, 7vw, 5.75rem)
-      clamp(5.15rem, 8vw, 6.35rem) !important;
-    grid-template-rows: auto !important;
-    justify-content: stretch;
-    column-gap: clamp(0.45rem, 0.85vw, 0.75rem) !important;
-    row-gap: 0 !important;
-    align-items: center;
-    min-width: 0;
-    max-width: 100%;
-    overflow: visible;
-    white-space: nowrap;
-    padding: clamp(0.46rem, 0.78vw, 0.62rem) clamp(0.5rem, 0.85vw, 0.75rem) !important;
+    grid-template-columns: 32px 24px minmax(0, 1fr) max-content;
+    grid-template-areas: "place profile person score" ". . classroom classroom";
+    column-gap: 8px;
+    row-gap: 4px;
+    padding: 8px;
   }
 
-  .wis-ranking-rank {
-    grid-column: 1;
-    grid-row: 1;
-    grid-template-columns: clamp(1.65rem, 2.6vw, 2rem) clamp(
-        0.82rem,
-        1.35vw,
-        1.12rem
-      ) !important;
-    gap: clamp(0.18rem, 0.34vw, 0.32rem) !important;
-    align-self: center;
-  }
-
-  .wis-ranking-rank > span {
-    width: clamp(1.65rem, 2.6vw, 2rem) !important;
-    height: clamp(1.65rem, 2.6vw, 2rem) !important;
-    font-size: clamp(0.72rem, 1vw, 0.88rem) !important;
-  }
-
-  .wis-ranking-rank > i {
-    font-size: clamp(0.72rem, 1vw, 0.94rem) !important;
-  }
-
-  .wis-ranking-student {
-    grid-column: 2;
-    grid-row: 1;
-    gap: clamp(0.28rem, 0.48vw, 0.42rem) !important;
-    align-self: center;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  .wis-ranking-profile {
-    width: clamp(1.18rem, 1.65vw, 1.5rem) !important;
-    height: clamp(1.18rem, 1.65vw, 1.5rem) !important;
-    font-size: clamp(0.68rem, 0.9vw, 0.85rem) !important;
-  }
-
-  .wis-ranking-name {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: clamp(0.8rem, 1.08vw, 0.95rem) !important;
-    line-height: 1.15;
-  }
-
-  .wis-ranking-rank-badge {
-    min-width: clamp(2.55rem, 3.8vw, 3.35rem) !important;
-    min-height: clamp(1.35rem, 1.75vw, 1.8rem) !important;
-    padding: 0 clamp(0.36rem, 0.55vw, 0.5rem) !important;
-    font-size: clamp(0.6rem, 0.8vw, 0.66rem) !important;
-  }
-
-  .wis-ranking-class {
-    grid-column: 3;
-    grid-row: 1;
-    align-self: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: clamp(0.68rem, 0.9vw, 0.82rem) !important;
-    line-height: 1.15;
-  }
-
+  .wis-ranking-place,
+  .wis-ranking-profile,
   .wis-ranking-score {
-    grid-column: 4;
-    grid-row: 1;
-    align-self: center;
-    white-space: nowrap;
-    text-align: right;
-    font-size: clamp(0.74rem, 0.98vw, 0.9rem) !important;
-    line-height: 1.12;
-  }
-}
-
-@media (max-width: 639px) {
-  .wis-ranking-mobile-row {
-    display: flex !important;
-    align-items: center;
-    gap: clamp(0.28rem, 1.65vw, 0.48rem) !important;
-    min-width: 0;
-    overflow: visible;
-    white-space: nowrap;
+    align-self: start;
   }
 
-  .wis-ranking-mobile-rank-cluster {
-    grid-template-columns: clamp(1.72rem, 7.1vw, 2rem) clamp(
-        0.9rem,
-        3.5vw,
-        1.05rem
-      ) !important;
-    gap: clamp(0.16rem, 1vw, 0.28rem) !important;
-    align-items: center;
-    min-width: clamp(2.9rem, 11.8vw, 3.32rem);
+  .wis-ranking-name,
+  .wis-ranking-score {
+    font-size: 14px;
   }
 
-  .wis-ranking-mobile-rank-cluster .wis-ranking-rank-medal {
-    width: clamp(1.72rem, 7.1vw, 2rem) !important;
-    height: clamp(1.72rem, 7.1vw, 2rem) !important;
-    font-size: clamp(0.78rem, 3.25vw, 0.95rem) !important;
-  }
-
-  .wis-ranking-mobile-rank-cluster .wis-ranking-crown {
-    font-size: clamp(0.78rem, 3.15vw, 0.95rem) !important;
-  }
-
-  .wis-ranking-mobile-profile {
-    width: clamp(1.3rem, 5.4vw, 1.55rem) !important;
-    height: clamp(1.3rem, 5.4vw, 1.55rem) !important;
-    font-size: clamp(0.76rem, 3.1vw, 0.9rem) !important;
-  }
-
-  .wis-ranking-mobile-student {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.08rem;
-    min-width: 0;
-  }
-
-  .wis-ranking-mobile-name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: clamp(0.92rem, 3.9vw, 1.05rem) !important;
-    line-height: 1.12;
-  }
-
-  .wis-ranking-mobile-badge {
-    align-self: center;
-    max-width: clamp(2.9rem, 15vw, 3.45rem);
-    min-height: clamp(1.34rem, 5.5vw, 1.55rem) !important;
-    line-height: 1 !important;
-    padding-inline: clamp(0.38rem, 1.45vw, 0.5rem) !important;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: clamp(0.68rem, 2.7vw, 0.78rem) !important;
-  }
-
-  .wis-ranking-mobile-class {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: clamp(0.74rem, 3.1vw, 0.86rem) !important;
-    line-height: 1.12;
-  }
-
-  .wis-ranking-mobile-score {
-    align-self: center;
-    margin-left: 0 !important;
-    white-space: nowrap;
-    font-size: clamp(0.9rem, 3.75vw, 1rem) !important;
-    line-height: 1.12;
-  }
-}
-
-@media (min-width: 640px) and (max-width: 900px) {
-  .wis-ranking-row {
-    display: block !important;
-    padding: clamp(0.48rem, 1.3vw, 0.62rem) clamp(0.55rem, 1.6vw, 0.75rem) !important;
-  }
-
-  .wis-ranking-mobile-row {
-    display: flex !important;
-    align-items: center;
-    gap: clamp(0.32rem, 0.95vw, 0.55rem) !important;
-    min-width: 0;
-    overflow: visible;
-    white-space: nowrap;
-  }
-
-  .wis-ranking-row > .wis-ranking-rank,
-  .wis-ranking-row > .wis-ranking-student,
-  .wis-ranking-row > .wis-ranking-class,
-  .wis-ranking-row > .wis-ranking-score {
-    display: none !important;
-  }
-
-  .wis-ranking-mobile-rank-cluster {
-    grid-template-columns: clamp(1.7rem, 3.5vw, 1.92rem) clamp(
-        0.92rem,
-        1.85vw,
-        1.08rem
-      ) !important;
-    gap: clamp(0.18rem, 0.55vw, 0.3rem) !important;
-    align-items: center;
-    min-width: clamp(2.92rem, 5.75vw, 3.28rem);
-  }
-
-  .wis-ranking-mobile-rank-cluster .wis-ranking-rank-medal {
-    width: clamp(1.7rem, 3.5vw, 1.92rem) !important;
-    height: clamp(1.7rem, 3.5vw, 1.92rem) !important;
-    font-size: clamp(0.78rem, 1.5vw, 0.9rem) !important;
-  }
-
-  .wis-ranking-mobile-rank-cluster .wis-ranking-crown {
-    font-size: clamp(0.78rem, 1.5vw, 0.92rem) !important;
-  }
-
-  .wis-ranking-mobile-profile {
-    width: clamp(1.25rem, 2.55vw, 1.45rem) !important;
-    height: clamp(1.25rem, 2.55vw, 1.45rem) !important;
-    font-size: clamp(0.72rem, 1.35vw, 0.86rem) !important;
-  }
-
-  .wis-ranking-mobile-student {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.08rem;
-    min-width: 0;
-  }
-
-  .wis-ranking-mobile-name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: clamp(0.9rem, 1.85vw, 1rem) !important;
-    line-height: 1.12;
-  }
-
-  .wis-ranking-mobile-badge {
-    align-self: center;
-    max-width: clamp(2.95rem, 6.6vw, 3.5rem);
-    min-height: clamp(1.28rem, 2.65vw, 1.5rem) !important;
-    line-height: 1 !important;
-    padding-inline: clamp(0.36rem, 0.8vw, 0.48rem) !important;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: clamp(0.66rem, 1.25vw, 0.76rem) !important;
-  }
-
-  .wis-ranking-mobile-class {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: clamp(0.72rem, 1.45vw, 0.84rem) !important;
-    line-height: 1.12;
-  }
-
-  .wis-ranking-mobile-score {
-    align-self: center;
-    margin-left: 0 !important;
-    white-space: nowrap;
-    font-size: clamp(0.86rem, 1.75vw, 0.98rem) !important;
-    line-height: 1.12;
+  .wis-ranking-person {
+    gap: 4px;
   }
 }
 

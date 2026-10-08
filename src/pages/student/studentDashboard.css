@@ -10,9 +10,9 @@
 .student-portal-dashboard__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1.04fr) minmax(328px, 1fr);
+  grid-template-rows: auto minmax(328px, 1fr);
   gap: 16px;
-  height: clamp(620px, calc(100dvh - 140px), 880px);
+  min-height: clamp(620px, calc(100dvh - 140px), 880px);
 }
 
 .student-portal-dashboard__calendar {
@@ -62,10 +62,14 @@
   min-height: 0;
 }
 
+.student-portal-dashboard .student-notice-board {
+  height: auto;
+}
+
 .student-portal-dashboard .student-notice-board__viewport {
-  flex: 1 1 0;
+  flex: none;
   min-height: 0;
-  aspect-ratio: auto;
+  aspect-ratio: 16 / 9;
   border-radius: var(--radius-md);
   background: var(--ws-surface-subtle);
 }
@@ -183,6 +187,7 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
     height: auto;
+    min-height: 0;
   }
 
   .student-portal-dashboard__grid > * {
@@ -200,12 +205,6 @@
 
   .student-portal-dashboard__ranking {
     order: 2;
-  }
-
-  .student-portal-dashboard .student-notice-board__viewport {
-    flex: none;
-    aspect-ratio: 16 / 9;
-    max-height: 328px;
   }
 
   .student-portal-dashboard .wis-ranking-list {

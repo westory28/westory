@@ -12,7 +12,8 @@
     "Full deployed closure dependencies are retained to preserve existing canonical command adapters.",
     "Only executeCommand and executeLessonCorePointCommand are attached to the root Functions entry; all other nested exports remain excluded.",
     "Package files are excluded; dependencies resolve from the existing functions/package.json.",
-    "Original SHA-256 hashes refer to downloaded deployment bytes; restored files use LF newlines."
+    "Original SHA-256 hashes refer to downloaded deployment bytes; restored files use LF newlines.",
+    "Isolated getWisEconomyState uses the current shared session contract; fresh live source generations verified on 2026-10-08T04:19:51.486Z. Seoul only; existing US query deployment is not a release target."
   ],
   "files": [
     {
@@ -386,6 +387,21 @@
       "originalSha256": "abe4f29a54faacc5e1cfacccfe26081c65c059eb104c7fb1d34dd11758e2170b",
       "sha256": "06bd003874532e3ec0a1bf7de8f63ceec8532f2bcf45dc293ceaf8a94aa26453",
       "changes": []
+    },
+    {
+      "sourceFunction": "getWisEconomyState",
+      "sourceRegion": "asia-northeast3",
+      "sourceRevision": "getwiseconomystate-00006-paf",
+      "sourceGeneration": "1789650242236123",
+      "sourceFile": "wisEconomy.js",
+      "file": "wisEconomyQuery.js",
+      "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
+      "sha256": "248866fc4c2a6565aa2901867352f04fbaf262b8e0d39eab0d82c03aa8b68bee",
+      "changes": [
+        "Restore the live EXPLICIT teacher archive query independently of the command closure.",
+        "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
+        "Keep unranked student viewers scoped by their canonical account enrollment."
+      ]
     }
   ],
   "additionalDeploymentSources": [
@@ -393,6 +409,14 @@
       "functionName": "executeLessonCorePointCommand",
       "originalIndexSha256": "53fbcc68840be6fb83cff8ab45d88221e13aaa9a215445153839aad15d49163b",
       "comparison": "Before patch, normalized function bodies matched executeCommand archive exactly for executeLessonCorePointBusinessCommand, readEffectiveVisibleLessonCorePointCatalog, getLessonCorePointCompletion, assertLessonCorePointStudent, assertLessonCorePointActiveEnrollment."
+    }
+  ],
+  "isolatedQueryExports": [
+    {
+      "name": "getWisEconomyState",
+      "region": "asia-northeast3",
+      "entry": "../studentWisQuery.js",
+      "source": "wisEconomyQuery.js"
     }
   ]
 }

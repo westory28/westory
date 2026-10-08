@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import { isSemesterArchive } from "../../lib/semesterArchive";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -584,23 +585,7 @@ const Header: React.FC<{
   useEffect(() => {
     if (!mobileMenuOpen) return undefined;
 
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousBodyOverscroll = document.body.style.overscrollBehavior;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    const previousHtmlOverscroll =
-      document.documentElement.style.overscrollBehavior;
-    document.body.style.overflow = "hidden";
-    document.body.style.overscrollBehavior = "contain";
-    document.documentElement.style.overflow = "hidden";
-    document.documentElement.style.overscrollBehavior = "contain";
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.body.style.overscrollBehavior = previousBodyOverscroll;
-      document.documentElement.style.overflow = previousHtmlOverflow;
-      document.documentElement.style.overscrollBehavior =
-        previousHtmlOverscroll;
-    };
+    return acquirePageScrollLock();
   }, [mobileMenuOpen]);
 
   useEffect(() => {

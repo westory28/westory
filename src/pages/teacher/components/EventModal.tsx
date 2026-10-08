@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import React, { useEffect, useRef, useState } from "react";
 import "./eventCalendar.css";
 import { doc, getDoc } from "firebase/firestore";
@@ -91,11 +92,10 @@ const EventModal: React.FC<EventModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const opener = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
     dialogRef.current?.querySelector<HTMLInputElement>("input")?.focus();
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       opener?.focus();
     };
   }, [isOpen]);

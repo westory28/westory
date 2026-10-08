@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import React, { useEffect, useId, useRef, useState } from "react";
 import NoticeModal from "./NoticeModal";
 import NoticeOrderModal from "./NoticeOrderModal";
@@ -84,11 +85,10 @@ const NoticeManagerModal: React.FC<Props> = ({
   };
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
     closeRef.current?.focus();
     return () => {
-      document.body.style.overflow = oldOverflow;
+      releaseScrollLock();
       opener?.focus();
     };
   }, []);

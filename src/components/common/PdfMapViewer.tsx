@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import { acquirePageScrollLock } from "../../lib/pageScrollLock";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { createPortal } from "react-dom";
 import type {
@@ -551,10 +552,10 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setIsModalOpen(false);
     };
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = "";
+      releaseScrollLock();
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isModalOpen]);

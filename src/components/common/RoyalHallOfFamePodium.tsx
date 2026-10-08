@@ -156,9 +156,7 @@ const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                   >
                     <span className="royal-hall-podium__school">
                       {entry.grade}학년 {entry.class}반
-                    </span>
-                    <span className="royal-hall-podium__number">
-                      {entry.number ? `${entry.number}번` : "번호 비공개"}
+                      {entry.number && ` ${entry.number}번`}
                     </span>
                     <strong className="royal-hall-podium__name">
                       {entry.displayName || entry.studentName}

@@ -1,3 +1,4 @@
+import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { normalizeProfileEmojiValue } from "../../lib/profileEmojis";
 import type { PointRankDisplay } from "../../lib/pointRanks";
@@ -81,11 +82,10 @@ const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
   useEffect(() => {
     if (!open) return undefined;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = acquirePageScrollLock();
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
     };
   }, [open]);
 

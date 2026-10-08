@@ -79,6 +79,12 @@ Design Read: 교육 현장용 React 앱, 학생과 교사가 함께 쓰는 운�
 - `MOTION_INTENSITY`: 3/10. 상태 변화와 메뉴 전환은 빠르고 절제한다.
 - `VISUAL_DENSITY`: 학생 4/10, 교사 7/10. 학생은 한 열 흐름, 교사는 정보 밀도를 허용하되 구조를 선명하게 한다.
 
+### 순위·명예의 전당 표시 복구 (2026-10-08)
+
+- 승인된 공개 순위에는 서버가 제공하는 학생의 전체 이름, 학년·반·번호, 선택한 이모지와 누적 위스를 표시한다. 기존 공개 학년·학급 범위와 비공개 계좌 경계는 유지한다. 대시보드 행은 기존 4/8/12px 간격을 사용해 순위·이모지·학급 정보·이름·금액의 열을 분리하고, 좁은 폭에서는 정보와 계급 배지가 줄바꿈되어 가로 스크롤 없이 읽히게 한다.
+- 명예의 전당 학생 배지는 학년·반·번호를 한 줄로 묶고 이름 14px, 기존 메타 12px, 내부 여백 8px, 열 간격 8px, 바깥 여백 12px를 사용한다. 배지 폭은 내용에 맞추고 각 순위 열의 중앙에 놓으며 열의 최대 폭을 넘지 않는다. 번호가 없으면 추측하지 않고 생략한다. 최소 44px 조작 영역과 기존 그림·순위·동점자 선택 동작을 유지한다. 앞선 4줄 정보·이름 16px 계약을 대체한다.
+- 공개 홈과 양쪽 포털은 기본적으로 문서의 자연 세로 스크롤을 사용한다. 모달·모바일 메뉴가 겹치면 잠금 소유권을 공유하고 마지막 소유자가 닫힌 후 원래 축별 overflow/overscroll 값과 우선순위를 복원한다. 경로 이동·부모 먼저 닫기·인증 화면 전환에서도 잠금이 남지 않아야 한다.
+
 ## 2. Color
 
 모든 새 색상은 아래 역할 중 하나로 매핑한다. 새 raw hex를 컴포넌트에 직접 추가하지 않는다.
@@ -385,9 +391,9 @@ For visible frontend work, use this sequence before editing UI code:
 
 No visible UI work is complete until the design contract and verification evidence agree.
 
-### Teacher notice image sizing
+### Dashboard notice image sizing
 
-- The dashboard notice viewport fills the space remaining after the heading and controls. Images and the carousel track use the measured slot without intrinsic aspect ratios imposing a minimum height; images use `contain` and never zoom on hover.
+- Student and teacher dashboard notices use the full card content width in a 16:9 viewport. Let the card and its grid row grow to the image height instead of shrinking the image into a fixed-height slot. Preserve existing card gutters, `contain`, carousel behavior and no hover zoom; the existing 16:9 upload crop fills this viewport without side gaps.
 - Measure the viewport with `ResizeObserver`. In the image registration/editing dialog only, recommend a 16:9 source at twice its contained image size, rounded to whole 16:9 units and capped at the existing 1200×675 upload maximum. The existing 16:9 center crop/compression contract remains unchanged; other editor entry points keep the 1200×675 fallback recommendation.
 - Do not show image size guidance below the dashboard notice image, including the empty state.
 
