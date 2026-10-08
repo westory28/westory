@@ -585,13 +585,11 @@
 
 .teacher-weekly-dashboard .wis-ranking-list {
   min-height: 0;
-  gap: 4px !important;
+  gap: 8px;
   overflow: auto;
   scrollbar-width: thin;
 }
 .teacher-weekly-dashboard .wis-ranking-row {
-  min-height: 40px;
-  padding: 4px 8px !important;
   box-shadow: none;
 }
 .teacher-weekly-dashboard .wis-ranking-row::before {
@@ -600,9 +598,6 @@
 .teacher-weekly-dashboard .wis-ranking-row:hover {
   transform: none;
   box-shadow: none;
-}
-.teacher-weekly-dashboard .wis-ranking-panel > .mb-3 {
-  margin-bottom: 8px;
 }
 
 .teacher-dashboard-dialog-loading {
@@ -616,65 +611,6 @@
   border-radius: var(--radius-lg, 12px);
   background: var(--ws-surface, #fff);
   box-shadow: var(--shadow-md);
-}
-
-@media (min-width: 1120px) and (max-width: 1599px) {
-  .teacher-weekly-dashboard .wis-ranking-row {
-    display: block !important;
-  }
-  .teacher-weekly-dashboard .wis-ranking-row > .wis-ranking-mobile-row {
-    display: flex !important;
-    align-items: center;
-    gap: 8px;
-  }
-  .teacher-weekly-dashboard
-    .wis-ranking-row
-    > :is(
-      .wis-ranking-rank,
-      .wis-ranking-student,
-      .wis-ranking-class,
-      .wis-ranking-score
-    ) {
-    display: none !important;
-  }
-  .teacher-weekly-dashboard .wis-ranking-mobile-rank-cluster {
-    display: inline-grid;
-    grid-template-columns: 24px 16px;
-  }
-  .teacher-weekly-dashboard .wis-ranking-mobile-profile {
-    width: 24px;
-    height: 24px;
-  }
-  .teacher-weekly-dashboard .wis-ranking-mobile-student {
-    min-width: 0;
-  }
-  .teacher-weekly-dashboard .wis-ranking-mobile-name {
-    font-size: var(--ws-type-small, 0.875rem);
-  }
-  .teacher-weekly-dashboard .wis-ranking-mobile-class {
-    font-size: var(--ws-type-meta, 0.72rem);
-  }
-  .teacher-weekly-dashboard .wis-ranking-mobile-score {
-    margin-left: auto;
-    font-size: var(--ws-type-small, 0.875rem) !important;
-  }
-  .teacher-weekly-dashboard .wis-ranking-mobile-badge {
-    min-width: 0 !important;
-  }
-}
-
-@media (min-width: 1600px) {
-  .teacher-weekly-dashboard .wis-ranking-row {
-    grid-template-columns: 56px minmax(0, 1fr) 72px auto;
-    gap: 8px;
-  }
-  .teacher-weekly-dashboard .wis-ranking-name,
-  .teacher-weekly-dashboard .wis-ranking-score {
-    font-size: var(--ws-type-small, 0.875rem);
-  }
-  .teacher-weekly-dashboard .wis-ranking-class {
-    font-size: var(--ws-type-label, 0.75rem);
-  }
 }
 
 @media (max-width: 1119px) {

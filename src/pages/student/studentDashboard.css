@@ -116,15 +116,13 @@
 }
 
 .student-portal-dashboard .wis-ranking-list {
-  gap: 4px;
+  gap: 8px;
   min-height: 0;
   overflow: auto;
   scrollbar-width: thin;
 }
 
 .student-portal-dashboard .wis-ranking-row {
-  min-height: 40px;
-  padding: 4px 8px !important;
   transform: none;
   box-shadow: none;
 }
@@ -136,46 +134,6 @@
 .student-portal-dashboard :is(button, a):focus-visible {
   outline: 2px solid var(--ws-ring);
   outline-offset: 2px;
-}
-
-@media (min-width: 1120px) and (max-width: 1599px) {
-  .student-portal-dashboard .wis-ranking-row {
-    display: block !important;
-  }
-
-  .student-portal-dashboard .wis-ranking-row > .wis-ranking-mobile-row {
-    display: flex !important;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .student-portal-dashboard
-    .wis-ranking-row
-    > :is(
-      .wis-ranking-rank,
-      .wis-ranking-student,
-      .wis-ranking-class,
-      .wis-ranking-score
-    ) {
-    display: none !important;
-  }
-
-  .student-portal-dashboard .wis-ranking-mobile-name,
-  .student-portal-dashboard .wis-ranking-mobile-score {
-    font-size: var(--ws-type-small);
-  }
-}
-
-@media (min-width: 1600px) {
-  .student-portal-dashboard .wis-ranking-row {
-    grid-template-columns: 56px minmax(0, 1fr) 72px auto;
-    gap: 8px;
-  }
-
-  .student-portal-dashboard .wis-ranking-name,
-  .student-portal-dashboard .wis-ranking-score {
-    font-size: var(--ws-type-small);
-  }
 }
 
 @media (max-width: 1119px) {
