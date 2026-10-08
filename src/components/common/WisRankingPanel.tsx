@@ -177,12 +177,6 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                 key={entry.uid}
                 className={`wis-ranking-row ${rankAccent} rounded-lg border ${rankTone(rank)}`}
               >
-                <span className="wis-ranking-classroom">
-                  <span>
-                    {entry.grade}학년 {entry.class}반
-                  </span>
-                  {entry.number && <span>{entry.number}번</span>}
-                </span>
                 <span className="wis-ranking-place">
                   <span
                     className="wis-ranking-rank-medal"
@@ -211,6 +205,12 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                     size="sm"
                     className="wis-ranking-rank-badge"
                   />
+                </span>
+                <span className="wis-ranking-classroom">
+                  <span>
+                    {entry.grade}학년 {entry.class}반
+                  </span>
+                  {entry.number && <span>{entry.number}번</span>}
                 </span>
                 <span
                   className="wis-ranking-score"
