@@ -3180,7 +3180,9 @@ button.lesson-core-point-floating-status:disabled {
 
 .wis-ranking-row {
   display: grid;
-  grid-template-columns: 32px 24px max-content minmax(0, 1fr) max-content;
+  grid-template-columns:
+    32px minmax(24px, 0.5fr) minmax(0, 1fr) minmax(0, 1.25fr)
+    minmax(max-content, 0.8fr);
   grid-template-areas: "place profile classroom person score";
   align-items: center;
   gap: 8px 12px;
@@ -3217,6 +3219,7 @@ button.lesson-core-point-floating-status:disabled {
 
 .wis-ranking-profile {
   grid-area: profile;
+  justify-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3231,6 +3234,7 @@ button.lesson-core-point-floating-status:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 4px 8px;
   color: var(--ws-text-muted);
   font-size: 12px;
@@ -3247,6 +3251,7 @@ button.lesson-core-point-floating-status:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 4px 8px;
   min-width: 0;
 }
@@ -3281,7 +3286,7 @@ button.lesson-core-point-floating-status:disabled {
 @container wis-ranking (max-width: 480px) {
   .wis-ranking-row {
     grid-template-columns: 32px 24px minmax(0, 1fr) max-content;
-    grid-template-areas: "place profile person score" ". . classroom classroom";
+    grid-template-areas: "place profile person score" "place profile classroom score";
     column-gap: 8px;
     row-gap: 4px;
     padding: 8px;
@@ -3290,7 +3295,7 @@ button.lesson-core-point-floating-status:disabled {
   .wis-ranking-place,
   .wis-ranking-profile,
   .wis-ranking-score {
-    align-self: start;
+    align-self: center;
   }
 
   .wis-ranking-name,
@@ -3300,6 +3305,10 @@ button.lesson-core-point-floating-status:disabled {
 
   .wis-ranking-person {
     gap: 4px;
+  }
+
+  .wis-ranking-classroom > span {
+    white-space: normal;
   }
 }
 
