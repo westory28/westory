@@ -286,7 +286,8 @@ const normalizePodiumEntryMap = (value: unknown) =>
     Record<string, WisHallOfFameEntry[]>
   >((accumulator, [key, entries]) => {
     const normalizedEntries = (entries || []).filter(
-      (entry) => Number(entry.rank || 0) <= 3,
+      (entry) =>
+        Number(entry.rank || 0) <= 3 && Number(entry.cumulativeEarned || 0) > 0,
     );
     if (normalizedEntries.length > 0) {
       accumulator[key] = normalizedEntries.map((entry) => ({
@@ -372,7 +373,10 @@ const resolveSnapshotSourceUpdatedAtMs = (
 const buildPodiumEntriesFromLeaderboard = (entries: WisHallOfFameEntry[]) =>
   entries
     .filter(
-      (entry) => Number(entry.rank || 0) > 0 && Number(entry.rank || 0) <= 3,
+      (entry) =>
+        Number(entry.rank || 0) > 0 &&
+        Number(entry.rank || 0) <= 3 &&
+        Number(entry.cumulativeEarned || 0) > 0,
     )
     .map((entry) => ({
       ...entry,
@@ -385,7 +389,9 @@ const resolveBestPodiumEntries = (
   podiumEntries: WisHallOfFameEntry[] | null | undefined,
   leaderboardEntries: WisHallOfFameEntry[] | null | undefined,
 ) => {
-  const normalizedPodiumEntries = podiumEntries || [];
+  const normalizedPodiumEntries = (podiumEntries || []).filter(
+    (entry) => Number(entry.cumulativeEarned || 0) > 0,
+  );
   const rebuiltEntries = buildPodiumEntriesFromLeaderboard(
     leaderboardEntries || [],
   );

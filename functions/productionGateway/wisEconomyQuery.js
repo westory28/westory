@@ -2613,6 +2613,8 @@ const projectTeacherRosterFields = async (transaction, accounts, scope) => {
         : {};
     return {
       ...account,
+      hallZeroEligible:
+        account.status === "ACTIVE" && validClass && semesterClass.status === "ACTIVE",
       enrollmentId: validEnrollment ? activeEnrollmentId : "",
       classId: validEnrollment ? canonicalClassId : "",
       displayName: validEnrollment
@@ -2725,7 +2727,7 @@ const queryHallAccounts = async (transaction, scope) => {
       { limit: WIS_HALL_ACCOUNT_LIMIT },
     );
   }
-  return rows.map((row) => row.data || {}).filter((account) => Number(account.rankEarnedTotal || 0) > 0);
+  return rows.map((row) => row.data || {});
 };
 
 const projectWisAccount = (account) =>
@@ -2849,15 +2851,22 @@ const rankHallEntries = (entries) => {
     const rank = previousScore === score ? previousRank : index + 1;
     previousScore = score;
     previousRank = rank;
-    return { ...entry, rank, ...(rank <= 3 ? { podiumSlot: rank } : {}) };
+    return { ...entry, rank, ...(score > 0 && rank <= 3 ? { podiumSlot: rank } : {}) };
   });
 };
 
 const limitHallEntries = (entries, limit, includeTies) => {
   const ranked = rankHallEntries(entries);
-  if (!includeTies) return ranked.slice(0, limit);
-  // Keep equal ranks, but never turn a podium into the complete school roster.
-  return ranked.filter((entry) => entry.rank <= limit).slice(0, 20);
+  const earned = ranked.filter((entry) => entry.cumulativeEarned > 0);
+  // Preserve earned-score ties and the existing public cap. Zero-score entries
+  // only fill a five-person preview, never expand it to every tied student.
+  const visible = includeTies
+    ? earned.filter((entry) => entry.rank <= limit).slice(0, 20)
+    : earned.slice(0, limit);
+  const remaining = Math.max(0, Math.min(5, limit) - visible.length);
+  return visible.concat(
+    ranked.filter((entry) => entry.cumulativeEarned === 0).slice(0, remaining),
+  );
 };
 
 const buildWisHallOfFameProjection = ({
@@ -2867,7 +2876,11 @@ const buildWisHallOfFameProjection = ({
   studentAccount = null,
 }) => {
   const entries = accounts
-    .filter((account) => Number(account.rankEarnedTotal || 0) > 0 && !isWisHallTestAccount(account))
+    .filter((account) =>
+      !isWisHallTestAccount(account) &&
+      (Number(account.rankEarnedTotal || 0) > 0 ||
+        (Number(account.rankEarnedTotal || 0) === 0 && account.hallZeroEligible === true)),
+    )
     .map((account) => {
       const grade = String(account?.grade || "").trim();
       const className = String(account?.classNumber || "").trim();
@@ -2932,13 +2945,13 @@ const buildWisHallOfFameProjection = ({
   const gradeTop3ByGrade = Object.fromEntries(
     Object.entries(gradeLeaderboardByGrade).map(([key, rows]) => [
       key,
-      rows.filter((entry) => entry.rank <= 3),
+      rows.filter((entry) => entry.cumulativeEarned > 0 && entry.rank <= 3),
     ]),
   );
   const classTop3ByClassKey = Object.fromEntries(
     Object.entries(classLeaderboardByClassKey).map(([key, rows]) => [
       key,
-      rows.filter((entry) => entry.rank <= 3),
+      rows.filter((entry) => entry.cumulativeEarned > 0 && entry.rank <= 3),
     ]),
   );
   const [year = "", semester = ""] = scope.split("-");

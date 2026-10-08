@@ -164,18 +164,22 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
         {!loading &&
           entries.map((entry, index) => {
             const rank = index + 1;
-            const iconClassName = rankIcon(rank);
+            const scoreRank =
+              Number(entry.cumulativeEarned || 0) > 0
+                ? Number(entry.rank || rank)
+                : 4;
+            const iconClassName = rankIcon(scoreRank);
             const entryRank = rankPolicy
               ? getPointRankDisplay({
                   rankPolicy,
                   wallet: buildRankWallet(entry),
                 })
               : null;
-            const rankAccent = rankAccentClassName(rank);
+            const rankAccent = rankAccentClassName(scoreRank);
             return (
               <div
                 key={entry.uid}
-                className={`wis-ranking-row ${rankAccent} rounded-lg border ${rankTone(rank)}`}
+                className={`wis-ranking-row ${rankAccent} rounded-lg border ${rankTone(scoreRank)}`}
               >
                 <span className="wis-ranking-place">
                   <span

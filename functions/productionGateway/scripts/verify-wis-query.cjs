@@ -963,7 +963,9 @@ const run = async () => {
     auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
     data: { audience: "student", semesterId: "2026-2", source: "CURRENT", projection: "hall-of-fame" },
   });
-  assert.deepEqual(Object.keys(unrankedHall.hallOfFame.gradeLeaderboardByGrade), []);
+  assert.deepEqual(Object.keys(unrankedHall.hallOfFame.gradeLeaderboardByGrade), ["2"]);
+  assert.equal(unrankedHall.hallOfFame.gradeLeaderboardByGrade["2"][0].cumulativeEarned, 0);
+  assert.deepEqual(unrankedHall.hallOfFame.gradeTop3ByGrade["2"], []);
   assert.doesNotMatch(JSON.stringify(unrankedHall.hallOfFame), /다른 반 학생/u);
   tx.set(ownAccountPath, ownAccountBefore);
   tx.set("semester_classes/class-2", otherClassBefore);
@@ -1022,6 +1024,7 @@ const run = async () => {
       enrollmentId: fixtureEnrollmentId,
       classId: "class-1",
       displayName: name,
+      status: "ACTIVE",
       revision: 1,
       balance: score + 500,
       rankEarnedTotal: score,
@@ -1067,6 +1070,116 @@ const run = async () => {
     assert.equal(wallet.writeCount, 0);
   }
   assert.deepEqual([...testAccountTx.documents], testAccountBefore);
+
+  // Fill sparse public lists with real active zero-score accounts, while
+  // preserving earned ties, disclosure limits, scope, and the earned podium.
+  const sparseSeed = structuredClone(testAccountSeed);
+  const addSparseStudent = (uid, overrides = {}) => {
+    const fixtureEnrollmentId = `enrollment-${uid}`;
+    const fixtureAccountId = wis.accountIdFor("2026-2", uid);
+    sparseSeed[`users/${uid}`] = { role: "student" };
+    sparseSeed[`semester_enrollments/${fixtureEnrollmentId}`] = {
+      ...enrollment, enrollmentId: fixtureEnrollmentId, studentUid: uid,
+      displayName: uid, ...overrides.enrollment,
+    };
+    sparseSeed[`semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId("2026-2", uid)}`] = {
+      semesterId: "2026-2", studentUid: uid, activeEnrollmentId: fixtureEnrollmentId,
+    };
+    sparseSeed[`semester_wis_accounts/${fixtureAccountId}`] = {
+      accountId: fixtureAccountId, semesterId: "2026-2", studentUid: uid,
+      enrollmentId: fixtureEnrollmentId, classId: "class-1", displayName: uid,
+      status: "ACTIVE", balance: 500, rankEarnedTotal: 0, ...overrides.account,
+    };
+  };
+  for (let index = 0; index < 30; index += 1) addSparseStudent(`zero-${index}`);
+  addSparseStudent("inactive-account", { account: { status: "CLOSED" } });
+  addSparseStudent("inactive-enrollment", { enrollment: { enrollmentStatus: "WITHDRAWN" } });
+  addSparseStudent("foreign-semester", { account: { semesterId: "2026-1" } });
+  addSparseStudent("foreign-enrollment", { enrollment: { semesterId: "2026-1" } });
+  sparseSeed["semester_classes/inactive-class"] = {
+    classId: "inactive-class", semesterId: "2026-2", grade: "2", classNumber: "3", status: "CLOSED",
+  };
+  addSparseStudent("inactive-class-student", { enrollment: { classId: "inactive-class" } });
+  sparseSeed["semester_classes/other-grade"] = {
+    classId: "other-grade", semesterId: "2026-2", grade: "3", classNumber: "1", status: "ACTIVE",
+  };
+  addSparseStudent("other-grade-student", { enrollment: { classId: "other-grade" } });
+  sparseSeed["semester_classes/other-class"] = {
+    classId: "other-class", semesterId: "2026-2", grade: "2", classNumber: "4", status: "ACTIVE",
+  };
+  addSparseStudent("other-class-student", { enrollment: { classId: "other-class" } });
+  for (const positiveCount of [0, 1, 2, 3, 4, 5, 6]) {
+    for (const limit of [4, 5, 10]) {
+      for (const includeTies of [false, true]) {
+        const seed = structuredClone(sparseSeed);
+        seed["site_settings/interface_config"].hallOfFame.publicRange = {
+          gradeRankLimit: limit, classRankLimit: limit, includeTies,
+        };
+        for (const { uid } of excludedHallStudents) {
+          seed[`semester_wis_accounts/${wis.accountIdFor("2026-2", uid)}`].rankEarnedTotal = 0;
+        }
+        visibleHallStudents.forEach(({ uid }, index) => {
+          seed[`semester_wis_accounts/${wis.accountIdFor("2026-2", uid)}`].rankEarnedTotal =
+            index < positiveCount ? (index === 0 ? 275 : 75) : 0;
+        });
+        const sparseTx = new MemoryTransaction(seed);
+        const before = structuredClone([...sparseTx.documents]);
+        const core = wis.createWisQueryCore({
+          store: { get: (path) => sparseTx.get(path), runTransaction: (callback) => callback(sparseTx) },
+          assertSession: async (request) => ({ uid: request.auth.uid, email: request.auth.token.email }),
+        });
+        const query = (uid, audience) => core.getWisEconomyState({
+          auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr` } },
+          data: { audience, semesterId: "2026-2", source: "CURRENT", projection: "hall-of-fame" },
+        });
+        for (const [uid, audience] of [["teacher-1", "teacher"], ["regular-6", "student"], ["operator-test-1", "student"]]) {
+          const { hallOfFame: hall, writeCount } = await query(uid, audience);
+          const earnedCount = includeTies ? positiveCount : Math.min(positiveCount, limit);
+          const expectedCount = Math.max(earnedCount, Math.min(5, limit));
+          for (const rows of [hall.gradeLeaderboardByGrade["2"], hall.classLeaderboardByClassKey["2-3"]]) {
+            assert.equal(rows.length, expectedCount, `${audience}: positives=${positiveCount}, limit=${limit}, ties=${includeTies}`);
+            assert.equal(rows.filter((entry) => entry.cumulativeEarned > 0).length, earnedCount);
+            assert.ok(rows.slice(earnedCount).every((entry) => entry.cumulativeEarned === 0 && !Object.hasOwn(entry, "podiumSlot")));
+            assert.ok(rows.every((entry) => entry.currentBalance === 0));
+          }
+          for (const rows of [hall.gradeTop3ByGrade["2"], hall.classTop3ByClassKey["2-3"]]) {
+            assert.equal(rows.length, earnedCount);
+            assert.ok(rows.every((entry) => entry.cumulativeEarned > 0));
+          }
+          assert.doesNotMatch(JSON.stringify(hall), /방테스트"|운영 계정|BANG.test|inactive-account|inactive-enrollment|inactive-class-student|foreign-semester|foreign-enrollment/u);
+          assert.doesNotMatch(JSON.stringify(hall.classLeaderboardByClassKey["2-3"]), /other-class-student|other-grade-student/u);
+          if (audience === "student") {
+            assert.deepEqual(Object.keys(hall.gradeLeaderboardByGrade), ["2"]);
+            assert.deepEqual(Object.keys(hall.classLeaderboardByClassKey), ["2-3"]);
+          }
+          const repeated = await query(uid, audience);
+          assert.deepEqual(repeated.hallOfFame.gradeLeaderboardByGrade, hall.gradeLeaderboardByGrade);
+          assert.equal(repeated.hallOfFame.snapshotKey, hall.snapshotKey);
+          assert.equal(writeCount, 0);
+        }
+        assert.deepEqual([...sparseTx.documents], before);
+        assert.ok(sparseTx.readStats.maxQueryDocuments <= 2_001);
+      }
+    }
+  }
+  const overLimitSeed = structuredClone(testAccountSeed);
+  for (let index = 0; index < 2_001; index += 1) {
+    overLimitSeed[`semester_wis_accounts/over-limit-${index}`] = {
+      semesterId: "2026-2", rankEarnedTotal: 0,
+    };
+  }
+  const overLimitTx = new MemoryTransaction(overLimitSeed);
+  const overLimitBefore = structuredClone([...overLimitTx.documents]);
+  const overLimitCore = wis.createWisQueryCore({
+    store: { get: (path) => overLimitTx.get(path), runTransaction: (callback) => callback(overLimitTx) },
+    assertSession: async (request) => ({ uid: request.auth.uid }),
+  });
+  await assert.rejects(() => overLimitCore.getWisEconomyState({
+    auth: { uid: "teacher-1" },
+    data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT", projection: "hall-of-fame" },
+  }), (error) => error.details?.reason === "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED");
+  assert.equal(overLimitTx.readStats.maxQueryDocuments, 2_001);
+  assert.deepEqual([...overLimitTx.documents], overLimitBefore);
   const teacherState = await queryCore.getWisEconomyState({
     auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
     data: { audience: "teacher", semesterId: "2026-2", source: "CURRENT" },
@@ -1889,7 +2002,7 @@ const run = async () => {
     (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
   );
 
-  console.log(JSON.stringify({ passed: true, cases: 50, addedChecks: ["order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain", "canonical full name and student number ignore conflicting profile identity", "selected emoji only, invalid URL fallback and public-field allowlist", "unranked viewer retains own grade/class boundary", "exact operator test identities excluded from all public maps before limits for student/teacher viewers; partial names, managed accounts and personal wallets preserved without writes"], productionAccess: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 50, sparseHallScenarios: 126, addedChecks: ["sparse hall zero-score fill, positive ties, public limits, active scope, test exclusion, stable snapshots and zero writes; hard account cap preserved", "order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain", "canonical full name and student number ignore conflicting profile identity", "selected emoji only, invalid URL fallback and public-field allowlist", "unranked viewer retains own grade/class boundary", "exact operator test identities excluded from all public maps before limits for student/teacher viewers; partial names, managed accounts and personal wallets preserved without writes"], productionAccess: 0 }));
 };
 
 run().then(async () => {

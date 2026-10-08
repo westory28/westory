@@ -3185,7 +3185,7 @@ button.lesson-core-point-floating-status:disabled {
 
 .wis-ranking-row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 2fr) minmax(80px, 1fr) max-content;
+  grid-template-columns: 32px minmax(0, 2fr) minmax(80px, 1fr) 128px;
   grid-template-areas: "place person classroom score";
   align-items: center;
   gap: 8px 12px;
@@ -3285,6 +3285,7 @@ button.lesson-core-point-floating-status:disabled {
 .wis-ranking-score {
   grid-area: score;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
@@ -3297,13 +3298,19 @@ button.lesson-core-point-floating-status:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+.wis-ranking-score > span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .wis-ranking-score .wis-icon {
   flex: 0 0 24px;
 }
 
 @container wis-ranking (max-width: 480px) {
   .wis-ranking-row {
-    grid-template-columns: 24px minmax(0, 1fr) 52px max-content;
+    grid-template-columns: 24px minmax(0, 1fr) 52px 96px;
     column-gap: 8px;
     row-gap: 4px;
     padding: 8px;
