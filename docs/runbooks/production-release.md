@@ -34,6 +34,16 @@ Vercel 로컬 연결이 없으면 `vercel link --yes --project westory --scope b
 
 커밋·push 후 Git 연동 배포의 Source commit과 Ready를 확인한다. Staged이면 `vercel promote <검증한 deployment ID 또는 URL> --yes --scope bbbs-projects-44f9da30`으로 승격한다. `vercel inspect www.westory.kr`와 실제 HTTPS 화면 확인까지 완료해야 운영 반영으로 보고한다. [공식 승격 명령](https://vercel.com/docs/cli/promote)을 참고하며, 자동 도메인 할당 설정은 바꾸지 않는다.
 
+## 학습지 원본 PDF 브라우저 읽기
+
+OCR 선택은 기존 Firebase Storage의 원본 PDF를 브라우저에서 읽어 글자 위치를 계산한다. AI나 외부 OCR API를 사용하지 않는다. `storage.cors.json`은 운영 도메인 두 곳의 `GET`·`HEAD`만 허용한다. Storage 권한 규칙과 다운로드 토큰은 그대로 적용된다.
+
+```powershell
+gcloud storage buckets update gs://history-quiz-yongsin.firebasestorage.app --cors-file=storage.cors.json
+```
+
+CORS는 `firebase deploy --only storage`로 반영되지 않는 별도 버킷 설정이다. 적용 전 기존 CORS를 조회하고 다른 설정이 있으면 덮어쓰지 말고 병합한다. 적용 후 운영 원본 PDF 응답의 `Access-Control-Allow-Origin`과 실제 OCR 드래그를 확인한다. 원본 다운로드 URL과 토큰을 검증 기록에 남기지 않는다.
+
 ## 로그인 함수 소스 동기화
 
 2026-10-07 회사 PC에서 확인한 `7b1107a8`에는 운영 로그인 함수의 소스가 없었다. 이후 `76cb10f`에서 `sessionAuthority.js`, `studentMaintenance.js`, `studentRegistrationAccess.js`가 운영 원본으로 복원됐지만, `index.js`의 배포 export 연결은 빠져 있었다. 로그인 소스 동기화 패치에서 이 연결과 실제 export 검사, 배포 전 검사를 추가했다. [소스 대조 및 검증 기록](../reviews/login-source-sync-20261007.md)을 참고한다.

@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://westory.kr", "https://www.westory.kr"],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"],
+    "maxAgeSeconds": 3600
+  }
+]
