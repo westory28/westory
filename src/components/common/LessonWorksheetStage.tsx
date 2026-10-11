@@ -11,10 +11,7 @@ import {
   type LessonWorksheetStageMode,
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
-import {
-  getLessonTextBounds,
-  selectLessonText,
-} from "../../lib/lessonTextSelection";
+import { selectLessonText } from "../../lib/lessonTextSelection";
 import { useLessonTextSelection } from "../../lib/useLessonTextSelection";
 
 type AnswerStatus = "" | "correct" | "wrong";
@@ -2321,19 +2318,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
               : null;
 
           const draftSelection =
-            liveDraft &&
-            teacherTool === "ocr" &&
-            textSelectionStatus === "ready"
+            liveDraft && textSelectionEnabled && textSelectionStatus === "ready"
               ? selectLessonText(preciseTextRegions, pageImage, liveDraft)
               : null;
-          const draftRegions =
-            draftSelection && "regions" in draftSelection
-              ? draftSelection.regions
-              : [];
+          const selectedDraft =
+            draftSelection && "answer" in draftSelection
+              ? draftSelection
+              : null;
+          const draftStatusMessage = selectedDraft
+            ? `선택한 글자: ${selectedDraft.answer}`
+            : draftSelection
+              ? "선택된 글자 없음"
+              : "";
 
           const showDraftRect = Boolean(
             isTeacherEditMode &&
-            teacherTool !== "ocr" &&
+            !selectedDraft &&
             liveDraft &&
             (liveDraft.widthRatio > 0.0001 || liveDraft.heightRatio > 0.0001),
           );
@@ -2367,9 +2367,21 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     </div>
                   )}
                   {textSelectionEnabled && (
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                      <span role="status" aria-live="polite">
-                        {textSelectionStatusMessage || textSelectionError}
+                    <div className="flex min-w-0 flex-1 items-center justify-end gap-2 text-xs text-gray-600">
+                      <span
+                        role="status"
+                        aria-live="polite"
+                        aria-atomic="true"
+                        className={
+                          draftStatusMessage
+                            ? "min-w-0 truncate font-bold text-blue-900"
+                            : ""
+                        }
+                        title={draftStatusMessage || undefined}
+                      >
+                        {draftStatusMessage ||
+                          textSelectionStatusMessage ||
+                          textSelectionError}
                       </span>
                       {(textSelectionStatus === "error" ||
                         textSelectionStatus === "empty") && (
@@ -3298,36 +3310,34 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     />
                   )}
 
-                  {capabilities.enableBlankDrafting &&
-                    draftRegions.map((region, index) => {
-                      const bounds = getLessonTextBounds([region], pageImage);
-                      if (!bounds) return null;
-                      return (
-                        <div
-                          key={`draft-${pageImage.page}-${index}`}
-                          className="pointer-events-none absolute z-30 bg-sky-500/42"
-                          style={{
-                            left: toPercent(bounds.leftRatio),
-                            top: toPercent(bounds.topRatio),
-                            width: toPercent(bounds.widthRatio),
-                            height: toPercent(bounds.heightRatio),
-                          }}
-                        />
-                      );
-                    })}
+                  {capabilities.enableBlankDrafting && selectedDraft && (
+                    <div
+                      data-ocr-selection-preview
+                      className="pointer-events-none absolute z-30 bg-blue-500/30 outline outline-2 outline-blue-600"
+                      style={{
+                        left: toPercent(selectedDraft.rect.leftRatio),
+                        top: toPercent(selectedDraft.rect.topRatio),
+                        width: toPercent(selectedDraft.rect.widthRatio),
+                        height: toPercent(selectedDraft.rect.heightRatio),
+                      }}
+                    />
+                  )}
 
                   {showDraftRect && liveDraft && (
                     <div
                       className={`pointer-events-none absolute z-30 border-2 ${
                         teacherTool === "exam"
                           ? "border-amber-500 bg-amber-200/30"
-                          : "border-sky-500 bg-sky-500/20"
+                          : teacherTool === "ocr"
+                            ? "border-dashed border-blue-600"
+                            : "border-sky-500 bg-sky-500/20"
                       }`}
                       style={{
                         left: toPercent(liveDraft.leftRatio),
                         top: toPercent(liveDraft.topRatio),
                         width: toPercent(liveDraft.widthRatio),
                         height: toPercent(liveDraft.heightRatio),
+                        minHeight: teacherTool === "ocr" ? 2 : undefined,
                       }}
                     />
                   )}
