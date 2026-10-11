@@ -31,10 +31,8 @@ import {
 } from "../../lib/semesterScope";
 import { type ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import {
-  clampRatio,
   normalizeWorksheetBlanks,
   normalizeWorksheetExamHighlights,
-  getTightTextRegionBounds,
   normalizeWorksheetFootnoteAnchors,
   normalizeWorksheetPageImages,
   normalizeWorksheetTextRegions,
@@ -211,37 +209,6 @@ const getBlankAnswerFromRegions = (regions: LessonWorksheetTextRegion[]) =>
     .map((region) => String(region.label || "").trim())
     .filter(Boolean)
     .join(" ");
-
-const getBoundsFromRegions = (
-  regions: LessonWorksheetTextRegion[],
-  pageImage?: LessonWorksheetPageImage | null,
-) => {
-  if (
-    !regions.length ||
-    !pageImage ||
-    pageImage.width <= 0 ||
-    pageImage.height <= 0
-  )
-    return null;
-  const tightened = regions
-    .map((region) => getTightTextRegionBounds(region, pageImage))
-    .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  if (!tightened.length) return null;
-  const left = Math.min(...tightened.map((region) => region.left));
-  const top = Math.min(...tightened.map((region) => region.top));
-  const right = Math.max(
-    ...tightened.map((region) => region.left + region.width),
-  );
-  const bottom = Math.max(
-    ...tightened.map((region) => region.top + region.height),
-  );
-  return {
-    leftRatio: clampRatio(left / pageImage.width),
-    topRatio: clampRatio(top / pageImage.height),
-    widthRatio: clampRatio((right - left) / pageImage.width),
-    heightRatio: clampRatio((bottom - top) / pageImage.height),
-  };
-};
 
 const revokeBlobUrls = (pages: LessonWorksheetPageImage[]) => {
   pages.forEach((page) => {
@@ -679,6 +646,13 @@ const ManageLesson: React.FC = () => {
   >([]);
   const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
   const [preparedPdf, setPreparedPdf] = useState<ProcessedPdfMap | null>(null);
+  const [worksheetPdfBinding, setWorksheetPdfBinding] = useState<{
+    unitId: string | null;
+    loadId: number;
+    source: File | string;
+    pageImages: LessonWorksheetPageImage[];
+    preparedPdf: ProcessedPdfMap | null;
+  } | null>(null);
   const [activeBlankId, setActiveBlankId] = useState<string | null>(null);
   const [activeExamHighlightId, setActiveExamHighlightId] = useState<
     string | null
@@ -746,6 +720,22 @@ const ManageLesson: React.FC = () => {
     canWriteLessonManagement(userData, currentUser?.email || "");
   const [savedLessonState, setSavedLessonState] =
     useState<NormalizedLessonData>(() => createEmptyNormalizedLessonData());
+
+  // OCR may only read the PDF that produced the currently displayed images.
+  const teacherPdfSource =
+    !pdfBusy &&
+    worksheetPdfBinding &&
+    worksheetPdfBinding.unitId === selectedNodeId &&
+    worksheetPdfBinding.loadId === lessonLoadIdRef.current &&
+    worksheetPdfBinding.pageImages === worksheetPageImages &&
+    (typeof worksheetPdfBinding.source === "string"
+      ? !selectedPdfFile &&
+        !preparedPdf &&
+        worksheetPdfBinding.source === lessonPdfUrl
+      : selectedPdfFile === worksheetPdfBinding.source &&
+        preparedPdf === worksheetPdfBinding.preparedPdf)
+      ? worksheetPdfBinding.source
+      : undefined;
 
   const sortedBlanks = useMemo(
     () =>
@@ -1117,6 +1107,7 @@ const ManageLesson: React.FC = () => {
 
   const refreshLessonPdfProcessing = useCallback(
     async (unitId: string) => {
+      const loadId = lessonLoadIdRef.current;
       const lessonDocRef = await findLessonDocRefByUnitId(unitId);
       if (!lessonDocRef) return null;
 
@@ -1181,6 +1172,13 @@ const ManageLesson: React.FC = () => {
         setLessonPdfStoragePath(normalizedLesson.pdfStoragePath);
         setLessonPdfProcessing(normalizedLesson.pdfProcessing);
         setWorksheetPageImages(normalizedLesson.worksheetPageImages);
+        setWorksheetPdfBinding({
+          unitId,
+          loadId,
+          source: normalizedLesson.pdfUrl,
+          pageImages: normalizedLesson.worksheetPageImages,
+          preparedPdf: null,
+        });
         setWorksheetTextRegions(normalizedLesson.worksheetTextRegions);
         setWorksheetBlanks(normalizedLesson.worksheetBlanks);
         setWorksheetExamHighlights(normalizedLesson.worksheetExamHighlights);
@@ -1766,6 +1764,7 @@ const ManageLesson: React.FC = () => {
   }, []);
 
   const resetWorksheetState = (revokeExisting = false) => {
+    setWorksheetPdfBinding(null);
     if (revokeExisting) revokeBlobUrls(worksheetPageImages);
     setLessonPdfName("");
     setLessonPdfUrl("");
@@ -2129,9 +2128,17 @@ const ManageLesson: React.FC = () => {
         setLessonPdfUrl(data.pdfUrl);
         setLessonPdfStoragePath(data.pdfStoragePath);
         setLessonPdfProcessing(data.pdfProcessing);
-        setWorksheetPageImages(
-          normalizeWorksheetPageImages(data.worksheetPageImages),
+        const loadedPageImages = normalizeWorksheetPageImages(
+          data.worksheetPageImages,
         );
+        setWorksheetPageImages(loadedPageImages);
+        setWorksheetPdfBinding({
+          unitId,
+          loadId,
+          source: data.pdfUrl,
+          pageImages: loadedPageImages,
+          preparedPdf: null,
+        });
         setWorksheetTextRegions(
           normalizeWorksheetTextRegions(data.worksheetTextRegions),
         );
@@ -2227,6 +2234,9 @@ const ManageLesson: React.FC = () => {
   const handlePreparePdf = async (fileOverride?: File | null) => {
     const targetFile = fileOverride ?? selectedPdfFile;
     if (!targetFile) return alert("먼저 PDF 파일을 선택해 주세요.");
+    const loadId = lessonLoadIdRef.current;
+    setWorksheetPdfBinding(null);
+    setPreparedPdf(null);
     setPdfBusy(true);
     setScreenBusyMessage("PDF 페이지를 준비하는 중입니다...");
     try {
@@ -2243,6 +2253,13 @@ const ManageLesson: React.FC = () => {
       setSelectedPdfFile(targetFile);
       setLessonPdfName(targetFile.name);
       setWorksheetPageImages(nextPageImages);
+      setWorksheetPdfBinding({
+        unitId: selectedNodeId,
+        loadId,
+        source: targetFile,
+        pageImages: nextPageImages,
+        preparedPdf: processed,
+      });
       setWorksheetTextRegions(processed.regions);
       setWorksheetBlanks([]);
       setWorksheetExamHighlights([]);
@@ -2256,6 +2273,8 @@ const ManageLesson: React.FC = () => {
       setDraftBlankPrompt("");
     } catch (error) {
       console.error(error);
+      setWorksheetPdfBinding(null);
+      setPreparedPdf(null);
       alert("PDF 준비에 실패했습니다.");
     } finally {
       setPdfBusy(false);
@@ -2274,14 +2293,7 @@ const ManageLesson: React.FC = () => {
     matchedRegions: LessonWorksheetTextRegion[],
     source: "ocr" | "manual",
   ) => {
-    const pageImage =
-      worksheetPageImages.find((item) => item.page === page) || null;
-    const regionBounds = getBoundsFromRegions(matchedRegions, pageImage);
-    const blank = createBlankFromRect(
-      page,
-      regionBounds || rect,
-      matchedRegions.length ? "ocr" : source,
-    );
+    const blank = createBlankFromRect(page, rect, source);
     setBlankEditorMode("draft");
     setDraftBlank(blank);
     setDraftBlankAnswer(getBlankAnswerFromRegions(matchedRegions));
@@ -3174,6 +3186,17 @@ const ManageLesson: React.FC = () => {
       setLessonPdfStoragePath(savedDraft.pdfStoragePath);
       setLessonPdfProcessing(savedDraft.pdfProcessing);
       setWorksheetPageImages(savedDraft.worksheetPageImages);
+      setWorksheetPdfBinding(
+        teacherPdfSource
+          ? {
+              unitId: selectedNodeId,
+              loadId,
+              source: savedDraft.pdfUrl,
+              pageImages: savedDraft.worksheetPageImages,
+              preparedPdf: null,
+            }
+          : null,
+      );
       setWorksheetTextRegions(savedDraft.worksheetTextRegions);
       setWorksheetBlanks(savedDraft.worksheetBlanks);
       setWorksheetExamHighlights(savedDraft.worksheetExamHighlights);
@@ -3447,6 +3470,7 @@ const ManageLesson: React.FC = () => {
                       <LessonPdfSection
                         pdfBusy={pdfBusy}
                         selectedPdfFile={selectedPdfFile}
+                        teacherPdfSource={teacherPdfSource}
                         lessonPdfName={lessonPdfName}
                         lessonPdfUrl={lessonPdfUrl}
                         pdfProcessing={lessonPdfProcessing}

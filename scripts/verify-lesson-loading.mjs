@@ -306,10 +306,11 @@ const walk = (node) =>
     : node && typeof node === "object"
       ? [node, ...walk(node.props?.children)]
       : [];
-const harness = (store) => {
+const harness = (store, { processPdfMapFile } = {}) => {
   const slots = [],
     effects = [],
     saves = [],
+    uploads = [],
     alerts = [],
     errors = [];
   let cursor = 0,
@@ -418,7 +419,16 @@ const harness = (store) => {
             treeRevision: 4,
           };
         },
+        async uploadLessonAsset(config, input) {
+          uploads.push({ config, input });
+          return {
+            uploadId: `upload-${uploads.length}`,
+            url: `https://worksheet.example/${uploads.length}`,
+            storagePath: `assets/${uploads.length}`,
+          };
+        },
       },
+      "../../lib/pdfMapProcessor": { processPdfMapFile },
       "firebase/firestore": store.firestore,
       "firebase/storage": {},
       "../../lib/semesterScope": {
@@ -498,6 +508,7 @@ const harness = (store) => {
     authState,
     commandScope,
     saves,
+    uploads,
     alerts,
     errors,
     setScopeWait: (promise) => {
@@ -679,4 +690,122 @@ console.log(
 }
 console.log(
   "PASS selected-document parallel reads, dirty-state protection and stale user/semester response rejection",
+);
+
+{
+  const store = makeStore({ [scopePath]: [lesson("A", 100)] });
+  const fileA = { name: "prepared-A.pdf", type: "application/pdf" };
+  const fileB = { name: "replacement-B.pdf", type: "application/pdf" };
+  const blobA = new Blob(["page A"], { type: "image/png" });
+  const blobB = new Blob(["page B"], { type: "image/png" });
+  const gate = deferred();
+  let failB = true;
+  const app = harness(store, {
+    async processPdfMapFile(file) {
+      if (file === fileB && failB) {
+        await gate.promise;
+        throw new Error("PDF B later-page rendering failed");
+      }
+      return {
+        pageImages: [
+          {
+            page: 1,
+            width: file === fileA ? 800 : 900,
+            height: file === fileA ? 1000 : 1200,
+            blob: file === fileA ? blobA : blobB,
+          },
+        ],
+        regions: [],
+      };
+    },
+  });
+  app.render();
+  await app.settle();
+  app.find("LessonPdfSection").onPdfFileChange(fileA);
+  await app.settle();
+  const pagesA = app.find("LessonPdfSection").worksheetPageImages;
+  assert.equal(app.find("LessonPdfSection").teacherPdfSource, fileA);
+  assert.equal(pagesA[0].width, 800);
+
+  app.find("LessonPdfSection").onPdfFileChange(fileB);
+  await app.settle();
+  assert.equal(app.find("LessonPdfSection").pdfBusy, true);
+  assert.equal(app.find("LessonPdfSection").teacherPdfSource, undefined);
+  assert.equal(app.find("LessonPdfSection").worksheetPageImages, pagesA);
+  app.find("LessonPdfSection").onSavePdf();
+  await app.settle();
+  assert.equal(
+    app.uploads.length,
+    0,
+    "Do not upload B with A pages during preparation",
+  );
+  assert.equal(app.saves.length, 0);
+  assert.match(app.alerts.at(-1), /PDF 페이지 추출/);
+
+  gate.resolve();
+  await app.settle();
+  assert.equal(app.find("LessonPdfSection").pdfBusy, false);
+  assert.equal(app.find("LessonPdfSection").selectedPdfFile, fileB);
+  assert.equal(app.find("LessonPdfSection").teacherPdfSource, undefined);
+  assert.equal(app.find("LessonPdfSection").worksheetPageImages, pagesA);
+  assert.equal(
+    app.errors.length,
+    1,
+    "Only the simulated rendering failure is logged",
+  );
+  assert.match(app.errors[0][0].message, /PDF B later-page rendering failed/);
+  app.find("LessonPdfSection").onSavePdf();
+  await app.settle();
+  assert.equal(
+    app.uploads.length,
+    0,
+    "Failed preparation must not upload a mismatched PDF/page pair",
+  );
+  assert.equal(
+    app.saves.length,
+    0,
+    "The mismatched pair must not persist across reload",
+  );
+  assert.match(app.alerts.at(-1), /PDF 페이지 추출/);
+
+  failB = false;
+  app.find("LessonPdfSection").onPreparePdf();
+  await app.settle();
+  assert.equal(app.find("LessonPdfSection").teacherPdfSource, fileB);
+  assert.equal(app.find("LessonPdfSection").worksheetPageImages[0].width, 900);
+  app.find("LessonPdfSection").onSavePdf();
+  await app.settle();
+  assert.equal(app.uploads.length, 2);
+  assert.equal(app.uploads[0].input.file, fileB);
+  assert.equal(
+    app.uploads[1].input.file,
+    blobB,
+    "Retry must upload B's own rendered page",
+  );
+  assert.equal(app.saves.length, 1);
+  const saved = app.saves[0].input.document;
+  assert.equal(saved.pdfUrl, "https://worksheet.example/1");
+  assert.equal(
+    saved.worksheetPageImages[0].imageUrl,
+    "https://worksheet.example/2",
+  );
+  assert.equal(saved.worksheetPageImages[0].width, 900);
+  assert.equal(app.find("LessonPdfSection").teacherPdfSource, saved.pdfUrl);
+  const reloaded = harness(
+    makeStore({ [scopePath]: [lesson("A", 200, saved)] }),
+  );
+  reloaded.render();
+  await reloaded.settle();
+  assert.equal(
+    reloaded.find("LessonPdfSection").teacherPdfSource,
+    saved.pdfUrl,
+  );
+  assert.equal(
+    reloaded.find("LessonPdfSection").worksheetPageImages[0].width,
+    900,
+  );
+  assert.equal(reloaded.errors.length, 0);
+}
+console.log(
+  "PASS replacement PDF preparation blocks mismatched OCR/upload/save and recovers with a matched retry and reload",
 );

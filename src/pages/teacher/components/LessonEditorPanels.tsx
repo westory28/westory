@@ -103,6 +103,7 @@ type LessonPdfTeacherTool = "pan" | "ocr" | "box" | "exam" | "footnote";
 type LessonPdfSectionProps = {
   pdfBusy: boolean;
   selectedPdfFile: File | null;
+  teacherPdfSource?: File | string;
   lessonPdfName: string;
   lessonPdfUrl: string;
   pdfProcessing: LessonPdfProcessingMeta;
@@ -898,6 +899,7 @@ export function LessonBodyEditor({
 export function LessonPdfSection({
   pdfBusy,
   selectedPdfFile,
+  teacherPdfSource,
   lessonPdfName,
   lessonPdfUrl,
   pdfProcessing,
@@ -1386,6 +1388,7 @@ export function LessonPdfSection({
                 <LessonWorksheetStage
                   mode="teacher-edit"
                   teacherRightButtonPan
+                  teacherPdfSource={teacherPdfSource}
                   pageImages={worksheetPageImages}
                   blanks={worksheetBlanks}
                   examHighlights={worksheetExamHighlights}

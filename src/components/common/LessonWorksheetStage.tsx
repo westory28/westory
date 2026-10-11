@@ -4,8 +4,6 @@ import WorksheetBlankInput from "./WorksheetBlankInput";
 import {
   clampRatio,
   getLessonWorksheetStageCapabilities,
-  getTightTextRegionBounds,
-  splitTextRegionIntoTokens,
   type LessonWorksheetBlank,
   type LessonWorksheetExamHighlight,
   type LessonWorksheetFootnoteAnchor,
@@ -13,6 +11,11 @@ import {
   type LessonWorksheetStageMode,
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
+import {
+  getLessonTextBounds,
+  selectLessonText,
+} from "../../lib/lessonTextSelection";
+import { useLessonTextSelection } from "../../lib/useLessonTextSelection";
 
 type AnswerStatus = "" | "correct" | "wrong";
 type StudentTool =
@@ -31,6 +34,7 @@ interface LessonWorksheetStageProps {
   mode: LessonWorksheetStageMode;
   teacherTool?: TeacherWorksheetTool;
   teacherRightButtonPan?: boolean;
+  teacherPdfSource?: File | string;
   textRegions?: LessonWorksheetTextRegion[];
   examHighlights?: LessonWorksheetExamHighlight[];
   footnoteAnchors?: LessonWorksheetFootnoteAnchor[];
@@ -214,11 +218,8 @@ interface ToolColorOption {
   highlighter: string;
 }
 
-const MIN_DRAG_SIZE = 0.0012;
 const MIN_BOX_DRAG_SIZE = 0.003;
 const MIN_FOOTNOTE_DRAG_SIZE = 0.002;
-const LIVE_REGION_INTERSECTION_RATIO = 0.04;
-const FINAL_REGION_INTERSECTION_RATIO = 0.12;
 const EMPTY_BLANK_LABEL = "빈칸";
 const MIN_STUDENT_ZOOM = 0.7;
 const MAX_STUDENT_ZOOM = 2.4;
@@ -294,109 +295,6 @@ const getDefaultFootnoteAnchorRect = (
     widthRatio,
     heightRatio,
   };
-};
-
-const getIntersectionArea = (
-  leftA: number,
-  topA: number,
-  rightA: number,
-  bottomA: number,
-  leftB: number,
-  topB: number,
-  rightB: number,
-  bottomB: number,
-) => {
-  const width = Math.max(0, Math.min(rightA, rightB) - Math.max(leftA, leftB));
-  const height = Math.max(0, Math.min(bottomA, bottomB) - Math.max(topA, topB));
-  return width * height;
-};
-
-const expandRegionsForSelection = (
-  pageRegions: LessonWorksheetTextRegion[],
-  pageImage: LessonWorksheetPageImage,
-) =>
-  pageRegions.flatMap((region) => {
-    const tokens = splitTextRegionIntoTokens(region, pageImage);
-    return tokens.length > 0 ? tokens : [region];
-  });
-
-const getMatchedRegions = (
-  pageImage: LessonWorksheetPageImage,
-  pageRegions: LessonWorksheetTextRegion[],
-  rect: {
-    leftRatio: number;
-    topRatio: number;
-    widthRatio: number;
-    heightRatio: number;
-  },
-  minIntersectionRatio: number,
-) => {
-  const expandedRegions = expandRegionsForSelection(pageRegions, pageImage);
-  const selection = {
-    left: rect.leftRatio * pageImage.width,
-    top: rect.topRatio * pageImage.height,
-    right: (rect.leftRatio + rect.widthRatio) * pageImage.width,
-    bottom: (rect.topRatio + rect.heightRatio) * pageImage.height,
-  };
-
-  return expandedRegions.filter((region) => {
-    const regionRight = region.left + region.width;
-    const regionBottom = region.top + region.height;
-    const intersectionArea = getIntersectionArea(
-      selection.left,
-      selection.top,
-      selection.right,
-      selection.bottom,
-      region.left,
-      region.top,
-      regionRight,
-      regionBottom,
-    );
-    const regionArea = Math.max(1, region.width * region.height);
-    return intersectionArea / regionArea >= minIntersectionRatio;
-  });
-};
-
-const getPointMatchedRegions = (
-  pageImage: LessonWorksheetPageImage,
-  pageRegions: LessonWorksheetTextRegion[],
-  point: RatioPoint,
-) => {
-  const expandedRegions = expandRegionsForSelection(pageRegions, pageImage);
-  const px = point.x * pageImage.width;
-  const py = point.y * pageImage.height;
-
-  const directHits = expandedRegions.filter((region) => {
-    const bounds = getTightTextRegionBounds(region, pageImage);
-    if (!bounds) return false;
-    const left = Math.min(region.left, bounds.left) - 6;
-    const top = Math.min(region.top, bounds.top) - 4;
-    const right =
-      Math.max(region.left + region.width, bounds.left + bounds.width) + 6;
-    const bottom =
-      Math.max(region.top + region.height, bounds.top + bounds.height) + 4;
-    return px >= left && px <= right && py >= top && py <= bottom;
-  });
-  if (directHits.length) return directHits;
-
-  let nearest: LessonWorksheetTextRegion | null = null;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  expandedRegions.forEach((region) => {
-    const bounds = getTightTextRegionBounds(region, pageImage);
-    if (!bounds) return;
-    const cx = bounds.left + bounds.width / 2;
-    const cy = bounds.top + bounds.height / 2;
-    const dx = cx - px;
-    const dy = cy - py;
-    const distance = Math.hypot(dx, dy);
-    const threshold = Math.max(region.width, bounds.width, bounds.height) * 1.8;
-    if (distance <= threshold && distance < nearestDistance) {
-      nearest = region;
-      nearestDistance = distance;
-    }
-  });
-
-  return nearest ? [nearest] : [];
 };
 
 const buildStrokePath = (
@@ -489,7 +387,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   mode,
   teacherTool = "pan",
   teacherRightButtonPan = false,
-  textRegions = [],
+  teacherPdfSource,
   examHighlights = [],
   footnoteAnchors = [],
   selectedFootnoteAnchorId = null,
@@ -540,6 +438,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     mode === "teacher-present" || isStudentSolveMode || isTeacherEditMode;
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
+  const [textSelectionError, setTextSelectionError] = useState("");
   const [corePointBursts, setCorePointBursts] = useState<CorePointBurst[]>([]);
   const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(
     pageImages[0]?.page ?? null,
@@ -618,16 +517,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   useEffect(() => {
     studentZoomRef.current = studentZoom;
   }, [studentZoom]);
-
-  const regionsByPage = useMemo(() => {
-    const grouped = new Map<number, LessonWorksheetTextRegion[]>();
-    textRegions.forEach((region) => {
-      const current = grouped.get(region.page) || [];
-      current.push(region);
-      grouped.set(region.page, current);
-    });
-    return grouped;
-  }, [textRegions]);
 
   const blanksByPage = useMemo(() => {
     const grouped = new Map<number, LessonWorksheetBlank[]>();
@@ -848,6 +737,37 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     isTeacherViewMode,
     pageImages,
   ]);
+
+  const textSelectionPage = isTeacherEditMode
+    ? visiblePageImages[0]
+    : undefined;
+  const textSelectionEnabled = isTeacherEditMode && teacherTool === "ocr";
+  const {
+    regions: preciseTextRegions,
+    status: textSelectionStatus,
+    retry: retryTextSelection,
+  } = useLessonTextSelection({
+    enabled: textSelectionEnabled,
+    source: teacherPdfSource,
+    pageImage: textSelectionPage,
+  });
+  const textSelectionStatusMessage =
+    textSelectionStatus === "loading" || textSelectionStatus === "idle"
+      ? "글자 위치를 확인하고 있습니다."
+      : textSelectionStatus === "empty"
+        ? "정확히 선택할 수 있는 글자가 없습니다. 직접 도구를 이용해 주세요."
+        : textSelectionStatus === "error"
+          ? "글자 위치를 확인하지 못했습니다. 다시 시도하거나 직접 도구를 사용해 주세요."
+          : "";
+
+  useEffect(() => {
+    setDraftRect(null);
+    setTextSelectionError("");
+  }, [teacherPdfSource, textSelectionPage, teacherTool, mode]);
+
+  useEffect(() => {
+    if (textSelectionStatus !== "ready") setDraftRect(null);
+  }, [textSelectionStatus]);
 
   const activeTeacherPageIndex =
     isTeacherViewMode && activeTeacherPage != null
@@ -1409,6 +1329,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       const pageImage = pageImages.find((item) => item.page === page);
       if (!point || !pageImage) return;
       event.preventDefault();
+      if (teacherTool === "ocr") {
+        if (
+          textSelectionStatus !== "ready" ||
+          textSelectionPage?.page !== page
+        ) {
+          setTextSelectionError(textSelectionStatusMessage);
+          return;
+        }
+        setTextSelectionError("");
+      }
       if (teacherTool === "footnote") {
         onCreateFootnoteAnchorFromSelection?.(
           page,
@@ -1623,10 +1553,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       heightRatio: Math.abs(draftRect.currentY - draftRect.startY),
     };
 
-    const pageRegions = regionsByPage.get(pageImage.page) || [];
-    const isTinyDrag =
-      nextRect.widthRatio < MIN_DRAG_SIZE ||
-      nextRect.heightRatio < MIN_DRAG_SIZE;
     const isBoxTool = teacherTool === "box";
     const isExamTool = teacherTool === "exam";
     const isFootnoteTool = teacherTool === "footnote";
@@ -1671,28 +1597,40 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       return;
     }
 
-    const matchedRegions = isTinyDrag
-      ? getPointMatchedRegions(pageImage, pageRegions, {
-          x: (draftRect.startX + draftRect.currentX) / 2,
-          y: (draftRect.startY + draftRect.currentY) / 2,
-        })
-      : getMatchedRegions(
-          pageImage,
-          pageRegions,
-          nextRect,
-          FINAL_REGION_INTERSECTION_RATIO,
-        );
-
-    if (!isBoxTool && !matchedRegions.length && isTinyDrag) {
+    if (isBoxTool) {
+      onCreateBlankFromSelection?.(pageImage.page, nextRect, [], "manual");
       setDraftRect(null);
       return;
     }
 
+    if (textSelectionStatus !== "ready" || textSelectionPage !== pageImage) {
+      setTextSelectionError(textSelectionStatusMessage);
+      setDraftRect(null);
+      return;
+    }
+
+    const selection = selectLessonText(preciseTextRegions, pageImage, nextRect);
+    if ("error" in selection) {
+      setTextSelectionError(selection.error);
+      setDraftRect(null);
+      return;
+    }
+
+    setTextSelectionError("");
     onCreateBlankFromSelection?.(
       pageImage.page,
-      nextRect,
-      isBoxTool ? [] : matchedRegions,
-      isBoxTool ? "manual" : matchedRegions.length ? "ocr" : "manual",
+      selection.rect,
+      [
+        {
+          page: pageImage.page,
+          label: selection.answer,
+          left: selection.rect.leftRatio * pageImage.width,
+          top: selection.rect.topRatio * pageImage.height,
+          width: selection.rect.widthRatio * pageImage.width,
+          height: selection.rect.heightRatio * pageImage.height,
+        },
+      ],
+      "ocr",
     );
     setDraftRect(null);
   };
@@ -1730,15 +1668,25 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       }
       handleTeacherPointerUp(pageImage);
     };
+    const handleWindowPointerCancel = () => setDraftRect(null);
     window.addEventListener("pointermove", handleWindowPointerMove);
     window.addEventListener("pointerup", handleWindowPointerUp);
-    window.addEventListener("pointercancel", handleWindowPointerUp);
+    window.addEventListener("pointercancel", handleWindowPointerCancel);
     return () => {
       window.removeEventListener("pointermove", handleWindowPointerMove);
       window.removeEventListener("pointerup", handleWindowPointerUp);
-      window.removeEventListener("pointercancel", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", handleWindowPointerCancel);
     };
-  }, [draftRect, isTeacherEditMode, pageImages, teacherTool, textRegions]);
+  }, [
+    draftRect,
+    isTeacherEditMode,
+    pageImages,
+    teacherTool,
+    preciseTextRegions,
+    textSelectionStatus,
+    textSelectionPage,
+    textSelectionStatusMessage,
+  ]);
 
   useEffect(() => {
     if (!draftStroke) return undefined;
@@ -2360,7 +2308,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             examHighlightsByPage.get(pageImage.page) || [];
           const pageFootnoteAnchors =
             footnoteAnchorsByPage.get(pageImage.page) || [];
-          const pageRegions = regionsByPage.get(pageImage.page) || [];
           const pagePendingBlank =
             pendingBlank?.page === pageImage.page ? pendingBlank : null;
           const liveDraft =
@@ -2373,24 +2320,20 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                 }
               : null;
 
+          const draftSelection =
+            liveDraft &&
+            teacherTool === "ocr" &&
+            textSelectionStatus === "ready"
+              ? selectLessonText(preciseTextRegions, pageImage, liveDraft)
+              : null;
           const draftRegions =
-            liveDraft && teacherTool === "ocr"
-              ? liveDraft.widthRatio < MIN_DRAG_SIZE ||
-                liveDraft.heightRatio < MIN_DRAG_SIZE
-                ? getPointMatchedRegions(pageImage, pageRegions, {
-                    x: (draftRect!.startX + draftRect!.currentX) / 2,
-                    y: (draftRect!.startY + draftRect!.currentY) / 2,
-                  })
-                : getMatchedRegions(
-                    pageImage,
-                    pageRegions,
-                    liveDraft,
-                    LIVE_REGION_INTERSECTION_RATIO,
-                  )
+            draftSelection && "regions" in draftSelection
+              ? draftSelection.regions
               : [];
 
           const showDraftRect = Boolean(
             isTeacherEditMode &&
+            teacherTool !== "ocr" &&
             liveDraft &&
             (liveDraft.widthRatio > 0.0001 || liveDraft.heightRatio > 0.0001),
           );
@@ -2416,17 +2359,32 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   : "rounded-[2rem] border border-gray-200 bg-white p-3 shadow-sm md:p-4"
               }
             >
-              {(showPageLabel || capabilities.showTextRegionHints) && (
-                <div className="mb-3 flex items-center justify-between gap-2">
+              {(showPageLabel || textSelectionEnabled) && (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   {showPageLabel && (
                     <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
                       Page {pageImage.page}
                     </div>
                   )}
-                  {capabilities.showTextRegionHints && (
-                    <div className="text-xs text-gray-500">
-                      페이지에서 원하는 글자를 드래그하면 실제 선택처럼
-                      반영되고, 놓으면 그 글자만 가려집니다.
+                  {textSelectionEnabled && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                      <span role="status" aria-live="polite">
+                        {textSelectionStatusMessage || textSelectionError}
+                      </span>
+                      {(textSelectionStatus === "error" ||
+                        textSelectionStatus === "empty") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraftRect(null);
+                            setTextSelectionError("");
+                            retryTextSelection();
+                          }}
+                          className="min-h-11 rounded-lg border border-gray-200 bg-white px-3 font-semibold text-gray-700 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+                        >
+                          다시 시도
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2731,7 +2689,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     }
                     if (isTeacherEditMode) {
                       // The window fallback must not finalize the same draft twice.
-                      if (enableTeacherRightButtonPan) event.stopPropagation();
+                      event.stopPropagation();
                       handleTeacherPointerUp(pageImage);
                     } else finishStudentStroke();
                   }}
@@ -3208,43 +3166,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
                   {capabilities.enableBlankSelection &&
                     pageBlanks.map((blank) => {
-                      const maskedRegions = getMatchedRegions(
-                        pageImage,
-                        pageRegions,
-                        blank,
-                        FINAL_REGION_INTERSECTION_RATIO,
-                      );
-                      const renderRegions =
-                        blank.source !== "manual" && maskedRegions.length
-                          ? maskedRegions
-                              .map((region) => {
-                                const bounds = getTightTextRegionBounds(
-                                  region,
-                                  pageImage,
-                                );
-                                return bounds
-                                  ? {
-                                      key: `${blank.id}-${region.left}-${region.top}`,
-                                      leftRatio: bounds.leftRatio,
-                                      topRatio: bounds.topRatio,
-                                      widthRatio: bounds.widthRatio,
-                                      heightRatio: bounds.heightRatio,
-                                    }
-                                  : null;
-                              })
-                              .filter(
-                                (item): item is NonNullable<typeof item> =>
-                                  Boolean(item),
-                              )
-                          : [
-                              {
-                                key: blank.id,
-                                leftRatio: blank.leftRatio,
-                                topRatio: blank.topRatio,
-                                widthRatio: blank.widthRatio,
-                                heightRatio: blank.heightRatio,
-                              },
-                            ];
+                      const renderRegions = [{ key: blank.id, ...blank }];
 
                       return renderRegions.map((region) => (
                         <button
@@ -3365,68 +3287,20 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     })}
 
                   {capabilities.enableBlankDrafting && pagePendingBlank && (
-                    <>
-                      {(pagePendingBlank.source !== "manual" &&
-                      getMatchedRegions(
-                        pageImage,
-                        pageRegions,
-                        pagePendingBlank,
-                        FINAL_REGION_INTERSECTION_RATIO,
-                      ).length
-                        ? getMatchedRegions(
-                            pageImage,
-                            pageRegions,
-                            pagePendingBlank,
-                            FINAL_REGION_INTERSECTION_RATIO,
-                          )
-                            .map((region) => {
-                              const bounds = getTightTextRegionBounds(
-                                region,
-                                pageImage,
-                              );
-                              return bounds
-                                ? {
-                                    key: `pending-${region.left}-${region.top}`,
-                                    leftRatio: bounds.leftRatio,
-                                    topRatio: bounds.topRatio,
-                                    widthRatio: bounds.widthRatio,
-                                    heightRatio: bounds.heightRatio,
-                                  }
-                                : null;
-                            })
-                            .filter((item): item is NonNullable<typeof item> =>
-                              Boolean(item),
-                            )
-                        : [
-                            {
-                              key: `pending-${pagePendingBlank.id}`,
-                              leftRatio: pagePendingBlank.leftRatio,
-                              topRatio: pagePendingBlank.topRatio,
-                              widthRatio: pagePendingBlank.widthRatio,
-                              heightRatio: pagePendingBlank.heightRatio,
-                            },
-                          ]
-                      ).map((region) => (
-                        <div
-                          key={region.key}
-                          className="pointer-events-none absolute z-20 bg-sky-400/40"
-                          style={{
-                            left: toPercent(region.leftRatio),
-                            top: toPercent(region.topRatio),
-                            width: toPercent(region.widthRatio),
-                            height: toPercent(region.heightRatio),
-                          }}
-                        />
-                      ))}
-                    </>
+                    <div
+                      className="pointer-events-none absolute z-20 bg-sky-400/40"
+                      style={{
+                        left: toPercent(pagePendingBlank.leftRatio),
+                        top: toPercent(pagePendingBlank.topRatio),
+                        width: toPercent(pagePendingBlank.widthRatio),
+                        height: toPercent(pagePendingBlank.heightRatio),
+                      }}
+                    />
                   )}
 
                   {capabilities.enableBlankDrafting &&
                     draftRegions.map((region, index) => {
-                      const bounds = getTightTextRegionBounds(
-                        region,
-                        pageImage,
-                      );
+                      const bounds = getLessonTextBounds([region], pageImage);
                       if (!bounds) return null;
                       return (
                         <div
