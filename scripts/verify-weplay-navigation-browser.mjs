@@ -347,7 +347,8 @@ try {
     assert.equal((await dimensions(page)).overflow, false);
     await page.screenshot({
       path: path.join(out, `game-${width}-${touch ? "touch" : "mouse"}.png`),
-      fullPage: true,
+      // Full-page capture temporarily overrides Chromium's touch emulation.
+      fullPage: !touch,
     });
     checks.push(
       `${width}px ${touch ? "touch" : "mouse"}: automatic rail, keyboard/menu controls, game/input/request preservation, rotation, no overflow`,
