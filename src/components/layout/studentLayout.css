@@ -24,6 +24,12 @@
   min-width: 0;
 }
 
+.student-weplay-layout .teacher-sidebar-collapse {
+  flex-basis: 44px;
+  width: 44px;
+  height: 44px;
+}
+
 .student-layout .teacher-sidebar-bottom {
   justify-content: flex-end;
 }

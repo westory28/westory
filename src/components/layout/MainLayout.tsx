@@ -37,6 +37,7 @@ import {
 
 const ROLE_SESSION_KEY = "westoryPortalRole";
 const VISIBILITY_SETTINGS_FRESH_MS = 5000;
+const WEPLAY_COMPACT_NAVIGATION = "(max-width: 1279px), (any-pointer: coarse)";
 
 const StudentHistoryDictionaryController = lazyWithRetry(
   () => import("../common/StudentHistoryDictionaryController"),
@@ -107,6 +108,35 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const toggleTeacherSidebar = React.useCallback(() => {
     setTeacherSidebarCollapsed((previous) => !previous);
   }, []);
+  const isStudentWeplayRoute = /^\/student\/weplay\/?$/.test(location.pathname);
+  const [compactWeplayNavigation, setCompactWeplayNavigation] = React.useState(
+    () => window.matchMedia(WEPLAY_COMPACT_NAVIGATION).matches,
+  );
+  const [weplaySidebarExpanded, setWeplaySidebarExpanded] =
+    React.useState(false);
+  const useCompactWeplayNavigation =
+    isStudentWeplayRoute && compactWeplayNavigation;
+  const sidebarCollapsed = useCompactWeplayNavigation
+    ? !weplaySidebarExpanded
+    : teacherSidebarCollapsed;
+  const toggleSidebar = useCompactWeplayNavigation
+    ? () => setWeplaySidebarExpanded((previous) => !previous)
+    : toggleTeacherSidebar;
+
+  useEffect(() => {
+    const media = window.matchMedia(WEPLAY_COMPACT_NAVIGATION);
+    const update = () => {
+      setCompactWeplayNavigation(media.matches);
+      setWeplaySidebarExpanded(false);
+    };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    setWeplaySidebarExpanded(false);
+  }, [location.pathname]);
+
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
     !isSemesterArchive &&
@@ -341,13 +371,13 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <PortalWorkspaceFooterProvider>
       <div
-        className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? "teacher-layout" : isStudentRoute ? "student-layout" : ""} ${teacherSidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
+        className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? "teacher-layout" : isStudentRoute ? "student-layout" : ""} ${isStudentWeplayRoute ? "student-weplay-layout" : ""} ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
       >
         <Header
           teacherLayout={isTeacherRoute}
           studentLayout={isStudentRoute}
-          sidebarCollapsed={teacherSidebarCollapsed}
-          onToggleSidebar={toggleTeacherSidebar}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
         />
         <SemesterArchiveBanner />
         {studentEnhancementsReady && (
