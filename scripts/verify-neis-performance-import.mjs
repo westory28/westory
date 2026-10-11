@@ -180,7 +180,7 @@ assert.equal(ws.pageSetup.paperSize, 9);
 
 // Inspect the serialized XLSX, not ExcelJS's merged-cell style aliases. The
 // user's reference stores these fine separators as "hair", not "dotted".
-const assertReferenceBorders = async (buffer, studentCount, label) => {
+const assertReferenceBorders = async (buffer, studentCount, label, assessmentCount = 2) => {
   const zip = await JSZip.loadAsync(buffer);
   const styles = await zip.file("xl/styles.xml").async("string");
   const sheetXml = await zip.file("xl/worksheets/sheet1.xml").async("string");
@@ -198,21 +198,32 @@ const assertReferenceBorders = async (buffer, studentCount, label) => {
     assert.equal(actual, expected, `${label}: ${address}.${side} must preserve reference ${expected}`);
   };
   const lastStudent = 6 + studentCount;
+  const columns = assessmentCount === 2 ? "BCDEFGHIJKLM" : assessmentCount === 1 ? "BCDEFGHI" : "BCDEFG";
+  const rightColumn = assessmentCount === 2 ? "M" : assessmentCount === 1 ? "I" : "G";
   for (let row = 7; row < lastStudent; row++) {
-    for (const column of "BCDEFGHIJKLM") {
+    for (const column of columns) {
       edge(`${column}${row}`, "bottom", "hair");
       edge(`${column}${row + 1}`, "top", "hair");
     }
   }
   for (let row = 6; row <= lastStudent + 3; row++) {
-    edge(`F${row}`, "right", "hair");
-    edge(`G${row}`, "left", "hair");
+    if (assessmentCount === 2) {
+      edge(`F${row}`, "right", "hair");
+      edge(`G${row}`, "left", "hair");
+      edge(`H${row}`, "left", "thin");
+    } else {
+      edge(`F${row}`, "right", "thin");
+      edge(`G${row}`, "left", "thin");
+      if (assessmentCount === 1) {
+        edge(`G${row}`, "right", "thin");
+        edge(`H${row}`, "left", "thin");
+      }
+    }
     edge(`B${row}`, "left", "thin");
-    edge(`M${row}`, "right", "thin");
+    edge(`${rightColumn}${row}`, "right", "thin");
     edge(`D${row}`, "right", "thin");
-    edge(`H${row}`, "left", "thin");
   }
-  for (const column of "BCDEFGHIJKLM") {
+  for (const column of columns) {
     edge(`${column}6`, "top", "thin");
     edge(`${column}6`, "bottom", "thin");
     edge(`${column}7`, "top", "thin");
@@ -229,13 +240,15 @@ for (const test of finalSignatureCases) {
   const finalWorkbook = new ExcelJS.Workbook();
   await finalWorkbook.xlsx.load(await finalBlob.arrayBuffer());
   const images = finalWorkbook.worksheets[0].getImages();
+  const assessmentCount = test.second.enteredScoreCount === 0 ? 1 : 2;
   assert.equal(images.length, test.expected === null ? 0 : 1, `${test.label}: exported final image count`);
   if (test.expected !== null) {
     assert.deepEqual(Buffer.from(finalWorkbook.getImage(images[0].imageId).buffer), signaturePngs[test.expected], `${test.label}: actual XLSX PNG is the latest valid signature`);
     assert.equal(images[0].range.tl.nativeRow, 6);
-    assert.ok(images[0].range.tl.nativeCol >= 9);
+    assert.ok(images[0].range.tl.nativeCol >= (assessmentCount === 1 ? 7 : 9));
+    assert.ok(images[0].range.tl.nativeCol < (assessmentCount === 1 ? 9 : 13));
   }
-  await assertReferenceBorders(await finalBlob.arrayBuffer(), 1, `Final signature: ${test.label}`);
+  await assertReferenceBorders(await finalBlob.arrayBuffer(), 1, `Final signature: ${test.label}`, assessmentCount);
 }
 const solidRegression = await JSZip.loadAsync(await blob.arrayBuffer());
 solidRegression.file("xl/styles.xml", (await solidRegression.file("xl/styles.xml").async("string")).replaceAll('style="hair"', 'style="thin"'));
@@ -251,9 +264,98 @@ for (const count of [1, 31, 33, 40]) {
   const resized = await manager.buildClassSummaryWorkbookFromTemplate({ ...exportParams, students: resizedStudents });
   await assertReferenceBorders(await resized.arrayBuffer(), count, `${count} students`);
 }
+const blankRecord = (record) => ({
+  ...record, totalScore: 0, enteredScoreCount: 0,
+  items: record.items.map((item) => ({ ...item, score: 0, scoreEntered: false })),
+});
+const firstOnlyStudents = students.map((student) => ({ ...student, secondRecord: blankRecord(student.secondRecord) }));
+const allBlankStudents = firstOnlyStudents.map((student) => ({ ...student, firstRecord: blankRecord(student.firstRecord) }));
+const compactCases = [
+  { label: "scored first and entirely blank second", students: firstOnlyStudents, assessmentCount: 1, title: firstRoster.title, score: 17, count: 32, total: 544 },
+  { label: "only first roster registered", secondRoster: null, students: students.map((student) => ({ ...student, secondRecord: null })), assessmentCount: 1, title: firstRoster.title, score: 17, count: 32, total: 544 },
+  { label: "only second roster registered", firstRoster: null, students: students.map((student) => ({ ...student, firstRecord: null })), assessmentCount: 1, title: secondRoster.title, score: 29, count: 32, total: 928 },
+  { label: "blank first and scored second", students: students.map((student) => ({ ...student, firstRecord: blankRecord(student.firstRecord) })), assessmentCount: 1, title: secondRoster.title, score: 29, count: 32, total: 928 },
+  { label: "a single actual zero keeps the assessment", students: allBlankStudents.map((student, index) => index ? student : ({ ...student, firstRecord: { ...student.firstRecord, enteredScoreCount: 1, items: [{ score: 0, maxScore: 25, scoreEntered: true }] } })), assessmentCount: 1, title: firstRoster.title, score: 0, count: 1, total: 0 },
+  { label: "registered rosters without entered scores", students: allBlankStudents, assessmentCount: 0 },
+  { label: "no registered rosters", firstRoster: null, secondRoster: null, students: students.map((student) => ({ ...student, firstRecord: null, secondRecord: null })), assessmentCount: 0 },
+];
+const assertCompactTable = async (buffer, count, label, assessmentCount = 1, referenceWorksheet = ws) => {
+  await assertReferenceBorders(buffer, count, label, assessmentCount);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const worksheet = workbook.worksheets[0];
+  const lastTableRow = count + 9;
+  const lastColumn = assessmentCount === 1 ? 9 : 7;
+  assert.equal(worksheet.getCell(6, assessmentCount === 1 ? 7 : 5).value, "합계", `${label}: total header shifts left`);
+  assert.equal(worksheet.getCell(6, assessmentCount === 1 ? 8 : 7).text.trim(), "비고", `${label}: remarks header shifts left`);
+  for (const range of worksheet.model.merges) {
+    const [start, end] = range.split(":");
+    const startRow = Number(start.match(/\d+/)[0]);
+    if (startRow >= 6 && startRow <= lastTableRow) {
+      const endColumn = end.match(/[A-Z]+/)[0];
+      assert.ok(endColumn.charCodeAt(0) - 64 <= lastColumn, `${label}: stale table merge ${range} removed`);
+    }
+  }
+  for (let row = 6; row <= lastTableRow; row++) {
+    for (let column = lastColumn + 1; column <= 13; column++) {
+      const cell = worksheet.getCell(row, column);
+      assert.equal(cell.value, null, `${label}: ${cell.address} removed from table`);
+      for (const side of ["top", "bottom", "left", "right"]) {
+        assert.equal(cell.border?.[side]?.style, undefined, `${label}: ${cell.address}.${side} removed from table`);
+      }
+    }
+  }
+  assert.deepEqual(worksheet.columns.map((column) => column.width), referenceWorksheet.columns.map((column) => column.width), `${label}: global column widths stay unchanged`);
+  for (let row = 1; row <= 5; row++) {
+    assert.deepEqual(worksheet.getRow(row).values, referenceWorksheet.getRow(row).values, `${label}: page heading row ${row} unchanged`);
+  }
+  assert.deepEqual(worksheet.getRow(count + 13).values, referenceWorksheet.getRow(count + 13).values, `${label}: print metadata unchanged`);
+  assert.deepEqual(worksheet.pageSetup, referenceWorksheet.pageSetup, `${label}: print configuration unchanged`);
+  return worksheet;
+};
+for (const test of compactCases) {
+  const compact = await manager.buildClassSummaryWorkbookFromTemplate({ ...exportParams, ...test });
+  if (process.env.SCORE_QA_PARTIAL_OUTPUT && test.label === "scored first and entirely blank second") {
+    await fs.writeFile(process.env.SCORE_QA_PARTIAL_OUTPUT, Buffer.from(await compact.arrayBuffer()));
+  }
+  const worksheet = await assertCompactTable(await compact.arrayBuffer(), 32, test.label, test.assessmentCount);
+  if (test.assessmentCount === 1) {
+    assert.ok(worksheet.getCell("E6").text.includes(test.title), `${test.label}: remaining assessment uses E:F`);
+    assert.ok(worksheet.model.merges.includes("E7:F7"));
+    assert.ok(worksheet.model.merges.includes("H7:I7"));
+    assert.equal(worksheet.getCell("E7").value, test.score);
+    assert.equal(worksheet.getCell("G7").value, test.score);
+    assert.equal(worksheet.getCell("E39").value, `${test.count} 명`);
+    assert.equal(worksheet.getCell("E40").value, test.total);
+    assert.equal(worksheet.getCell("G40").value, test.total);
+    if (test.count === 1) {
+      assert.equal(worksheet.getCell("E8").value, null, "A different student's missing score remains blank");
+      assert.equal(worksheet.getCell("E41").value, 0, "One entered zero contributes a zero average");
+    }
+  }
+}
+for (const count of [1, 31, 33, 40]) {
+  const resizedStudents = Array.from({ length: count }, (_, index) => ({
+    ...firstOnlyStudents[index % firstOnlyStudents.length], uid: `compact-qa-${index}`, number: String(index + 1), studentName: `검증${index + 1}`,
+  }));
+  const compact = await manager.buildClassSummaryWorkbookFromTemplate({ ...exportParams, students: resizedStudents });
+  const full = await manager.buildClassSummaryWorkbookFromTemplate({ ...exportParams, students: resizedStudents.map((student, index) => ({ ...student, secondRecord: students[index % students.length].secondRecord })) });
+  const fullWorkbook = new ExcelJS.Workbook();
+  await fullWorkbook.xlsx.load(await full.arrayBuffer());
+  await assertCompactTable(await compact.arrayBuffer(), count, `Single assessment, ${count} students`, 1, fullWorkbook.worksheets[0]);
+}
+// The same registered evaluations can have a different set of entered scores per class.
+const otherClass = await manager.buildClassSummaryWorkbookFromTemplate({
+  ...exportParams, classValue: "3", students: students.map((student) => ({ ...student, class: "3" })),
+});
+await assertReferenceBorders(await otherClass.arrayBuffer(), 32, "Another class retains both scored assessments");
+const otherWorkbook = new ExcelJS.Workbook();
+await otherWorkbook.xlsx.load(await otherClass.arrayBuffer());
+assert.equal(otherWorkbook.worksheets[0].getCell("B7").value, "3/1");
+assert.ok(otherWorkbook.worksheets[0].getCell("G6").text.includes(secondRoster.title));
 if (process.env.SCORE_QA_BORDER_REFERENCE) {
   const reference = await reader.normalizeScoreWorkbookNamespaces(await fs.readFile(process.env.SCORE_QA_BORDER_REFERENCE));
   await assertReferenceBorders(reference, 32, "Original reference (no personal values read)");
 }
 if (process.env.SCORE_QA_OUTPUT) await fs.writeFile(process.env.SCORE_QA_OUTPUT, Buffer.from(await blob.arrayBuffer()));
-console.log("NEIS import, zero/blank/range validation, versioned signatures and template cell/layout contracts passed. Final signatures follow timestamp order across blank/scored/unsigned/re-signed states and actual exported PNG bytes match; invalid revisions block export signatures. Reference hair separators and solid outer/header boundaries preserved for 1/31/32/33/40 students.");
+console.log("NEIS import, zero/blank/range validation, versioned signatures and template cell/layout contracts passed. Only class assessments with entered scores appear, including one entered zero; missing rosters and first/second-only assessments compact correctly without residual borders or merges. Final signatures use the latest valid image in the moved remarks column. Global print layout, reference hair separators and solid outer/header boundaries are preserved for 1/31/32/33/40 students.");

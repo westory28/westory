@@ -186,7 +186,7 @@ const blankReuploadFile = {
   name: "가상_기존평가_빈점수.xlsx",
   buffer: Buffer.from(await blankReuploadWorkbook.xlsx.writeBuffer()),
 };
-const assertDetailedHairBorders = async (buffer) => {
+const assertDetailedHairBorders = async (buffer, assessmentCount = 2) => {
   const zip = await JSZip.loadAsync(buffer);
   const styles = await zip.file("xl/styles.xml").async("string");
   const xml = await zip.file("xl/worksheets/sheet1.xml").async("string");
@@ -212,15 +212,24 @@ const assertDetailedHairBorders = async (buffer) => {
     assert.equal(actual, expected, `detailed XLSX ${address}.${side}`);
   };
   for (let row = 7; row < 38; row += 1)
-    for (const column of "BCDEFGHIJKLM") {
+    for (const column of assessmentCount === 1
+      ? "BCDEFGHI"
+      : "BCDEFGHIJKLM") {
       edge(`${column}${row}`, "bottom", "hair");
       edge(`${column}${row + 1}`, "top", "hair");
     }
   for (let row = 6; row <= 41; row += 1) {
-    edge(`F${row}`, "right", "hair");
-    edge(`G${row}`, "left", "hair");
+    edge(`F${row}`, "right", assessmentCount === 1 ? "thin" : "hair");
+    edge(`G${row}`, "left", assessmentCount === 1 ? "thin" : "hair");
     edge(`B${row}`, "left", "thin");
-    edge(`M${row}`, "right", "thin");
+    edge(`${assessmentCount === 1 ? "I" : "M"}${row}`, "right", "thin");
+    if (assessmentCount === 1) {
+      edge(`G${row}`, "right", "thin");
+      edge(`H${row}`, "left", "thin");
+      for (const column of "JKLM")
+        for (const side of ["top", "bottom", "left", "right"])
+          edge(`${column}${row}`, side, undefined);
+    }
   }
 };
 const state = `
@@ -357,7 +366,6 @@ const report = {
   limitations: [
     "Auth/Firestore/callables are in-memory stubs; no production student data or writes.",
     "Synthetic NEIS and detailed grading workbooks use 32 fictitious names; optional reference workbooks are read separately without screenshot/save.",
-    "Class-sheet exports retain the existing requirement for two assessments; detailed import is first proven to save one assessment, then a separate synthetic second assessment is added only for export checks.",
   ],
 };
 let browser;
@@ -1642,36 +1650,21 @@ try {
       );
       assert.deepEqual(after.scores, before.scores);
       assert.equal(after.writes.length, 0);
-      // The unchanged class-sheet workflow requires both assessments. Verify
-      // single-assessment storage above, then add a separate synthetic second.
-      preview = await openDetailedPreview(secondDetailedFile);
-      await preview.getByLabel("평가 순서", { exact: true }).selectOption("2");
-      await preview
-        .getByRole("button", { name: "학생별 점수 저장", exact: true })
-        .click();
-      await preview.waitFor({ state: "hidden" });
-      await page.evaluate(() => {
-        const first = [...window.scoreQa.docs].find(([key]) =>
-          key.includes("/confirmations/"),
-        )[1];
-        const [key, score] = [...window.scoreQa.docs].find(
-          ([key, score]) =>
-            key.includes("/performance_scores/") &&
-            !key.includes("/confirmations/") &&
-            score.uid === "qa-1" &&
-            score.title === "가상 두 번째 평가",
-        );
-        window.scoreQa.docs.set(key + "/confirmations/" + score.uid, {
-          ...first,
-          rosterId: score.rosterId,
-          scoreUpdatedAt: score.updatedAt,
-        });
-      });
+      // One registered evaluation is enough to query and export a class sheet.
       await page.getByRole("button", { name: "일람표", exact: true }).click();
       await page
         .getByRole("button", { name: "현황 조회", exact: true })
         .click();
       await page.getByText("학급 인원", { exact: true }).waitFor();
+      assert.equal(
+        await page.getByText("점수 누락", { exact: true }).count(),
+        0,
+      );
+      await page.screenshot({
+        path: out + "/single-roster-class-sheet-1280.png",
+        fullPage: false,
+      });
+      report.screenshots.push("single-roster-class-sheet-1280.png");
       const downloadWait = page.waitForEvent("download");
       await page
         .getByRole("button", { name: "일람표 다운로드", exact: true })
@@ -1690,12 +1683,17 @@ try {
       assert.ok(worksheet.getCell("E6").text.includes("30.00"));
       assert.equal(worksheet.getCell("E7").value, 30);
       assert.equal(worksheet.getCell("E38").value, 0);
+      assert.equal(worksheet.getCell("G6").value, "합계");
+      assert.equal(worksheet.getCell("G7").value, 30);
+      assert.equal(worksheet.getCell("G38").value, 0);
+      assert.ok(worksheet.model.merges.includes("H7:I7"));
       assert.equal(worksheet.getImages().length, 1);
       assert.equal(worksheet.getImages()[0].range.tl.nativeRow, 6);
-      assert.ok(worksheet.getImages()[0].range.tl.nativeCol >= 9);
-      await assertDetailedHairBorders(await fs.readFile(savedPath));
+      assert.ok(worksheet.getImages()[0].range.tl.nativeCol >= 7);
+      assert.ok(worksheet.getImages()[0].range.tl.nativeCol < 9);
+      await assertDetailedHairBorders(await fs.readFile(savedPath), 1);
       report.checks.push(
-        "Detailed grading: unchanged reupload writes no student score document and preserves the score revision/signature; downloaded E6 has the single assessment title and 30.00 max, E7/E38 include full/zero totals, one valid signature remains in remarks, serialized hair student/assessment separators and thin outer edges survive.",
+        "Detailed grading: unchanged reupload writes no student score document and preserves the score revision/signature; one registered assessment can query/export without missing-score status. Downloaded E6 has the single assessment title and 30.00 max, E7/E38 include full/zero totals, G holds totals, H:I holds one valid signature, and unused J:M borders are removed while student hair separators and thin outer edges survive.",
       );
     }
     await page.close();
@@ -2234,15 +2232,18 @@ try {
       const worksheet = generated.worksheets[0];
       assert.ok(worksheet.getCell("E6").text.includes(detailedTitle));
       assert.ok(worksheet.getCell("E6").text.includes("30.00"));
-      assert.ok(worksheet.getCell("G6").text.includes(blankTitle));
-      assert.ok(worksheet.getCell("G6").text.includes("20.00"));
+      assert.equal(worksheet.getCell("G6").value, "합계");
+      assert.equal(worksheet.getCell("H6").text.trim(), "비고");
+      assert.ok(worksheet.model.merges.includes("H7:I7"));
+      assert.ok(!worksheet.model.merges.includes("J7:M7"));
       for (let row = 7; row <= 38; row += 1) {
         assert.equal(worksheet.getCell(`E${row}`).value, row === 38 ? 0 : 30);
         assert.equal(
           worksheet.getCell(`G${row}`).value,
-          null,
-          `Second assessment G${row} must be a real blank, not zero or a dash.`,
+          row === 38 ? 0 : 30,
+          `G${row} holds the total after the blank assessment column is removed.`,
         );
+        assert.equal(worksheet.getCell(`J${row}`).value, null);
       }
       assert.equal(worksheet.getImages().length, 32);
       assert.deepEqual(
@@ -2253,14 +2254,19 @@ try {
         Array.from({ length: 32 }, (_, index) => index + 6),
       );
       assert.ok(
-        worksheet.getImages().every((image) => image.range.tl.nativeCol >= 9),
+        worksheet
+          .getImages()
+          .every(
+            (image) =>
+              image.range.tl.nativeCol >= 7 && image.range.tl.nativeCol < 9,
+          ),
       );
-      await assertDetailedHairBorders(await fs.readFile(savedPath));
+      await assertDetailedHairBorders(await fs.readFile(savedPath), 1);
     }
     await page.close();
   }
   report.checks.push(
-    "Blank second assessment at 390/768/1280: all 32 dash/empty rows remain saveable and create one four-criterion/20-point roster plus 32 explicitly unentered student records. First-assessment zero remains entered and signed. Blank reupload preserves prior points, score revisions and all signatures without score writes. XLSX includes both titles, G7:G38 true blanks, all 32 first-assessment signatures (including zero) without a missing-second-signature warning, and unchanged hair borders.",
+    "Blank second assessment at 390/768/1280: all 32 dash/empty rows remain saveable and create one four-criterion/20-point roster plus 32 explicitly unentered student records. First-assessment zero remains entered and signed. Blank reupload preserves prior points, score revisions and all signatures without score writes. XLSX omits the entirely blank assessment, moves totals to G and all 32 first-assessment signatures (including zero) to H:I, requires no missing-second-signature warning, and preserves student hair borders.",
   );
   const signaturePage = await browser.newPage({
     viewport: { width: 1280, height: 900 },
@@ -2434,10 +2440,11 @@ try {
       `${key}: final exported image count`,
     );
     assert.equal(worksheet.getCell("E7").value, stage >= 3 ? 29 : 30);
-    assert.equal(worksheet.getCell("G7").value, stage >= 1 ? 20 : null);
+    assert.equal(worksheet.getCell("G7").value, stage >= 1 ? 20 : 30);
     if (color) {
       assert.equal(images[0].range.tl.nativeRow, 6);
-      assert.ok(images[0].range.tl.nativeCol >= 9);
+      assert.ok(images[0].range.tl.nativeCol >= (stage >= 1 ? 9 : 7));
+      assert.ok(images[0].range.tl.nativeCol < (stage >= 1 ? 13 : 9));
       const dataUrl =
         "data:image/png;base64," +
         Buffer.from(generated.getImage(images[0].imageId).buffer).toString(
@@ -2471,7 +2478,10 @@ try {
         `${key}: actual exported PNG contains the latest signature color after canvas normalization`,
       );
     }
-    await assertDetailedHairBorders(await fs.readFile(savedPath));
+    await assertDetailedHairBorders(
+      await fs.readFile(savedPath),
+      stage >= 1 ? 2 : 1,
+    );
     report.finalSignatureExports.push({
       stage: key,
       signatureCount: images.length,

@@ -3823,6 +3823,27 @@ const getClassSheetSummaryScore = (
   record?: PerformanceScoreRecord,
 ) => (isClassSheetTransferredStudent(student) ? null : getScoreNumber(record));
 
+const getClassSheetScoreRequirements = (
+  students: ClassSheetStudent[],
+  rosters: {
+    firstRoster?: PerformanceScoreRoster;
+    secondRoster?: PerformanceScoreRoster;
+  },
+) => ({
+  requireFirst:
+    Boolean(rosters.firstRoster) &&
+    students.some(
+      (student) =>
+        getClassSheetSummaryScore(student, student.firstRecord) !== null,
+    ),
+  requireSecond:
+    Boolean(rosters.secondRoster) &&
+    students.some(
+      (student) =>
+        getClassSheetSummaryScore(student, student.secondRecord) !== null,
+    ),
+});
+
 const getScoreListSummaryTotalOnlyLabel = (
   record?: PerformanceScoreRecord,
   forceAcademicStatus = "",
@@ -4985,15 +5006,15 @@ const getClassSheetColumnPixelWidth = (width?: number) => {
   return Math.max(1, Math.round(width * 7 + 5));
 };
 
-const getClassSheetSignatureCellPixelWidth = (worksheet: {
-  getColumn: (column: number) => { width?: number };
-}) => {
+const getClassSheetSignatureCellPixelWidth = (
+  worksheet: {
+    getColumn: (column: number) => { width?: number };
+  },
+  startColumn = CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX,
+  endColumn = CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX,
+) => {
   let width = 0;
-  for (
-    let column = CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX;
-    column <= CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX;
-    column += 1
-  ) {
+  for (let column = startColumn; column <= endColumn; column += 1) {
     width += getClassSheetColumnPixelWidth(worksheet.getColumn(column).width);
   }
   return width || CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH;
@@ -5053,8 +5074,14 @@ const getClassSheetSignatureImagePosition = (
   worksheet: { getColumn: (column: number) => { width?: number } },
   row: number,
   dataUrl: string,
+  startColumn = CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX,
+  endColumn = CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX,
 ) => {
-  const cellWidth = getClassSheetSignatureCellPixelWidth(worksheet);
+  const cellWidth = getClassSheetSignatureCellPixelWidth(
+    worksheet,
+    startColumn,
+    endColumn,
+  );
   const maxWidth = Math.min(
     CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH,
     Math.max(1, cellWidth - CLASS_SHEET_SIGNATURE_CELL_HORIZONTAL_PADDING * 2),
@@ -5074,8 +5101,8 @@ const getClassSheetSignatureImagePosition = (
     tl: {
       col: getClassSheetColumnPositionByPixelOffset(
         worksheet,
-        CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX,
-        CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX,
+        startColumn,
+        endColumn,
         horizontalCenterOffset,
       ),
       row:
@@ -5182,6 +5209,88 @@ const trimClassSheetSignatureImage = async (dataUrl: string) => {
   }
 };
 
+// Compact only the table: changing worksheet columns also moves the page title,
+// teacher/date and print footer. Reuse the template's existing column widths.
+const compactClassSheetAssessmentColumns = (
+  worksheet: import("exceljs").Worksheet,
+  summaryEndRow: number,
+  requirements: { requireFirst: boolean; requireSecond: boolean },
+) => {
+  if (requirements.requireFirst && requirements.requireSecond) {
+    return { startColumn: 10, endColumn: 13 };
+  }
+  const hasAssessment = requirements.requireFirst || requirements.requireSecond;
+  const assessmentColumn = requirements.requireFirst ? 5 : 7;
+  const ranges = [
+    ...(hasAssessment
+      ? [
+          {
+            source: assessmentColumn,
+            sourceEnd: requirements.requireFirst ? 6 : 7,
+            start: 5,
+            end: 6,
+          },
+        ]
+      : []),
+    {
+      source: 8,
+      sourceEnd: 9,
+      start: hasAssessment ? 7 : 5,
+      end: hasAssessment ? 7 : 6,
+    },
+    {
+      source: 10,
+      sourceEnd: 13,
+      start: hasAssessment ? 8 : 7,
+      end: hasAssessment ? 9 : 7,
+    },
+  ];
+  for (
+    let row = CLASS_SHEET_STUDENT_NAME_HEADER_ROW;
+    row <= summaryEndRow;
+    row += 1
+  ) {
+    const cells = ranges.map((range) => ({
+      ...range,
+      value: worksheet.getCell(row, range.source).value,
+      style: cloneWorksheetStyle(worksheet.getCell(row, range.source).style),
+      right: cloneWorksheetStyle(
+        worksheet.getCell(row, range.sourceEnd).border.right,
+      ),
+    }));
+    unmergeWorksheetRange(worksheet, `E${row}:M${row}`);
+    for (
+      let column = 5;
+      column <= CLASS_SHEET_TEMPLATE_COLUMN_COUNT;
+      column += 1
+    ) {
+      const cell = worksheet.getCell(row, column);
+      cell.value = null;
+      cell.style = {};
+    }
+    cells.forEach(({ value, style, right, start, end }) => {
+      if (start < end) worksheet.mergeCells(row, start, row, end);
+      worksheet.getCell(row, start).value = value;
+      for (let column = start; column <= end; column += 1) {
+        const cell = worksheet.getCell(row, column);
+        cell.style = cloneWorksheetStyle(style);
+        cell.border = {
+          ...cell.border,
+          left:
+            column === start
+              ? { ...cloneWorksheetStyle(style.border?.left), style: "thin" }
+              : undefined,
+          right: column === end ? { ...right, style: "thin" } : undefined,
+        };
+      }
+    });
+  }
+  return {
+    startColumn: hasAssessment ? 8 : 7,
+    endColumn: hasAssessment ? 9 : 7,
+  };
+};
+
 const buildClassSummaryWorkbookFromTemplate = async (params: {
   year: string;
   semester: string;
@@ -5202,6 +5311,10 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   await workbook.xlsx.load(await response.arrayBuffer());
   const worksheet = workbook.worksheets[0];
   if (!worksheet) throw new Error("class-sheet-template-empty");
+  const scoreRequirements = getClassSheetScoreRequirements(
+    params.students,
+    params,
+  );
   worksheet.pageSetup = {
     ...worksheet.pageSetup,
     paperSize: 9,
@@ -5313,10 +5426,10 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     setWorksheetCellValue(worksheet, row, 7, secondScore ?? null);
     setWorksheetCellValue(worksheet, row, 8, totalScore);
 
-    const signatureRecord = getConfirmedSignatureRecord(student, {
-      requireFirst: Boolean(params.firstRoster),
-      requireSecond: Boolean(params.secondRoster),
-    });
+    const signatureRecord = getConfirmedSignatureRecord(
+      student,
+      scoreRequirements,
+    );
     const signatureImage =
       signatureRecord?.signatureImage ||
       signatureRecord?.confirmation?.signatureImage ||
@@ -5404,6 +5517,11 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       : "",
   );
 
+  const signatureColumns = compactClassSheetAssessmentColumns(
+    worksheet,
+    summaryStartRow + 2,
+    scoreRequirements,
+  );
   imagesToAdd.forEach((image) => {
     const imageId = workbook.addImage({
       base64: image.dataUrl,
@@ -5414,6 +5532,8 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
         worksheet,
         image.row,
         image.dataUrl,
+        signatureColumns.startColumn,
+        signatureColumns.endColumn,
       ),
     });
   });
@@ -7307,11 +7427,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     !!classSheetPreviewLoadedKey &&
     classSheetPreviewLoadedKey === classSheetSelectionKey;
   const classSheetSignatureRequirements = useMemo(
-    () => ({
-      requireFirst: Boolean(summaryExportRosters.firstRoster),
-      requireSecond: Boolean(summaryExportRosters.secondRoster),
-    }),
-    [summaryExportRosters],
+    () =>
+      !isWrittenExamMode && classSheetPreviewReady
+        ? getClassSheetScoreRequirements(
+            classSheetPreviewStudents,
+            summaryExportRosters,
+          )
+        : {
+            requireFirst: Boolean(summaryExportRosters.firstRoster),
+            requireSecond: Boolean(summaryExportRosters.secondRoster),
+          },
+    [
+      summaryExportRosters,
+      isWrittenExamMode,
+      classSheetPreviewReady,
+      classSheetPreviewStudents,
+    ],
   );
   const classSheetModalTitle = isWrittenExamMode
     ? "정기시험 서명 현황"
@@ -9322,12 +9453,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const ensureClassSheetSelection = () => {
     const hasFirstRoster = Boolean(summaryExportRosters.firstRoster);
     const hasSecondRoster = Boolean(summaryExportRosters.secondRoster);
-    if (classSheetEnabled && (!hasFirstRoster || !hasSecondRoster)) {
+    if (classSheetEnabled && !hasFirstRoster && !hasSecondRoster) {
       showToast({
         tone: "warning",
         title: "일람표 점수표를 선택해 주세요.",
-        message:
-          "1차와 2차 수행평가 점수표를 모두 선택해야 확인할 수 있습니다.",
+        message: "수행평가 점수표를 하나 이상 선택해 주세요.",
       });
       return false;
     }
@@ -9433,12 +9563,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         return;
       }
 
+      const scoreRequirements = getClassSheetScoreRequirements(
+        studentsForSheet,
+        summaryExportRosters,
+      );
       const unsignedStudents = studentsForSheet.filter(
-        (student) =>
-          !getConfirmedSignatureRecord(
-            student,
-            classSheetSignatureRequirements,
-          ),
+        (student) => !getConfirmedSignatureRecord(student, scoreRequirements),
       );
       if (unsignedStudents.length > 0) {
         const visibleUnsignedStudents = unsignedStudents.slice(0, 50);
@@ -12838,10 +12968,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             );
                             const studentKey = getClassSheetStudentKey(student);
                             const missingLabels = [
-                              !transferredStudent && !student.firstRecord
+                              !transferredStudent &&
+                              classSheetSignatureRequirements.requireFirst &&
+                              !student.firstRecord
                                 ? classSheetFirstScoreLabel
                                 : "",
-                              !transferredStudent && !student.secondRecord
+                              !transferredStudent &&
+                              classSheetSignatureRequirements.requireSecond &&
+                              !student.secondRecord
                                 ? classSheetSecondScoreLabel
                                 : "",
                             ].filter(Boolean);
