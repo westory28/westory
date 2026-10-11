@@ -668,3 +668,43 @@ test("identity changes during upload are rejected before returning an attachable
   });
   await assert.rejects(client.uploadLessonAsset(config, uploadInput()));
 });
+
+test("a denied upload ticket read stops before transferring the file", async () => {
+  const client = harness({
+    ticketRead: () => {
+      throw failure(
+        "permission-denied",
+        "Missing or insufficient permissions.",
+      );
+    },
+  });
+  await assert.rejects(client.uploadLessonAsset(config, uploadInput()), {
+    code: "permission-denied",
+  });
+  assert.equal(client.calls.execute[0].commandType, "prepareLessonAssetUpload");
+  assert.equal(client.calls.upload.length, 0);
+});
+
+test("accepted asynchronous uploads wait for server verification for every asset kind", async () => {
+  for (const kind of ["PDF", "PAGE", "FOOTNOTE"]) {
+    const client = harness({
+      upload: () => ({ data: { accepted: true } }),
+    });
+    const asset = await client.uploadLessonAsset(config, uploadInput({ kind }));
+    assert.equal(asset.url, "https://example.test/observed.pdf");
+    assert.equal(client.calls.listeners.length, 1);
+    assert.equal(client.calls.listeners[0].stopped, true);
+  }
+});
+
+test("failed or already attached upload tickets are never returned as reusable assets", async () => {
+  for (const status of ["FAILED", "ATTACHED"]) {
+    const client = harness({
+      ticketStatus: status,
+      observedTicket: { status, url: "https://example.test/unusable.pdf" },
+    });
+    await assert.rejects(client.uploadLessonAsset(config, uploadInput()));
+    assert.equal(client.calls.upload.length, 0);
+    assert.equal(client.calls.listeners[0].stopped, true);
+  }
+});

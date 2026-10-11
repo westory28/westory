@@ -18,9 +18,7 @@ import {
   getDoc,
   getDocFromServer,
   getDocs,
-  getDocsFromServer,
   limit,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -59,7 +57,11 @@ import {
   type LessonFootnote,
   type NormalizedLessonData,
 } from "../../lib/lessonData";
-import { findLatestLessonTreeSelection } from "../../lib/lessonTreeSelection";
+import {
+  readLatestTeacherLesson,
+  readTeacherLessonDocument,
+  type TeacherLessonDocument,
+} from "../../lib/teacherLessonLoading";
 import {
   buildFailedLessonPdfProcessingMeta,
   buildQueuedLessonPdfProcessingMeta,
@@ -1440,6 +1442,7 @@ const ManageLesson: React.FC = () => {
     };
   }, [config?.year, config?.semester, currentUser?.uid]);
   useEffect(() => {
+    if (!sourceArchivePickerFootnoteId || !currentUser?.uid) return;
     const unsubscribe = subscribeSourceArchiveAssets(
       (items) => {
         setSourceArchiveAssets(
@@ -1455,7 +1458,7 @@ const ManageLesson: React.FC = () => {
       },
     );
     return unsubscribe;
-  }, []);
+  }, [sourceArchivePickerFootnoteId, currentUser?.uid]);
   useEffect(() => {
     if (
       activeFootnoteId &&
@@ -1837,56 +1840,55 @@ const ManageLesson: React.FC = () => {
 
   const loadTree = async () => {
     const loadId = lessonLoadIdRef.current;
+    const expectedUid = currentUser?.uid;
+    const isCurrent = () =>
+      loadId === lessonLoadIdRef.current &&
+      Boolean(expectedUid) &&
+      expectedUid === auth.currentUser?.uid;
+    const scopedCollectionPath = getSemesterCollectionPath(config, "lessons");
     try {
-      const commandScope = await getLessonCommandScope(config).catch(
-        () => null,
-      );
+      const [commandScope, scopedDoc] = await Promise.all([
+        getLessonCommandScope(config).catch(() => null),
+        getDocFromServer(
+          doc(db, getSemesterDocPath(config, "curriculum", "tree")),
+        ),
+      ]);
       const applyLoadedTree = async (nextTree: TreeNode[]) => {
-        if (loadId !== lessonLoadIdRef.current) return;
+        if (!isCurrent()) return;
         setTreeData(nextTree);
         if (selectedNodeId) {
-          await loadLessonContent(selectedNodeId, selectedNodeTitle);
+          await loadLessonContent(selectedNodeId, selectedNodeTitle, {
+            commandScope,
+            expectedUid,
+            scopedCollectionPath,
+          });
           return;
         }
 
-        const readRecentLessons = async (collectionPath: string) => {
-          const snap = await getDocs(
-            query(collection(db, collectionPath), orderBy("updatedAt", "desc")),
-          );
-          return snap.docs.map((docSnap) => docSnap.data() as LessonData);
-        };
-
-        const scopedLessons = await readRecentLessons(
-          getSemesterCollectionPath(config, "lessons"),
-        );
-        let latestSelection = findLatestLessonTreeSelection(
+        const latest = await readLatestTeacherLesson(
+          scopedCollectionPath,
           nextTree,
-          scopedLessons,
+          isCurrent,
         );
-
-        if (!latestSelection) {
-          const legacyLessons = await readRecentLessons("lessons");
-          latestSelection = findLatestLessonTreeSelection(nextTree, [
-            ...scopedLessons,
-            ...legacyLessons,
-          ]);
-        }
-
-        if (!latestSelection || loadId !== lessonLoadIdRef.current) return;
+        if (!latest || !isCurrent()) return;
+        const latestSelection = latest.selection;
         setExpandedIds(new Set(latestSelection.pathIds.slice(0, -1)));
         setSelectedNodeId(latestSelection.node.id);
         setSelectedNodeTitle(latestSelection.node.title);
         setEditorTab("pdf");
-        void loadLessonContent(
+        await loadLessonContent(
           latestSelection.node.id,
           latestSelection.node.title,
+          {
+            commandScope,
+            expectedUid,
+            scopedCollectionPath,
+            lesson: latest.lesson,
+          },
         );
       };
 
-      const scopedDoc = await getDocFromServer(
-        doc(db, getSemesterDocPath(config, "curriculum", "tree")),
-      );
-      if (loadId !== lessonLoadIdRef.current) return;
+      if (!isCurrent()) return;
       if (scopedDoc.metadata.hasPendingWrites)
         throw new Error("트리의 저장 상태를 확인하지 못했습니다.");
       if (scopedDoc.exists() && scopedDoc.data().tree) {
@@ -1896,7 +1898,9 @@ const ManageLesson: React.FC = () => {
         return;
       }
       const legacyDoc = await getDocFromServer(doc(db, "curriculum", "tree"));
-      if (loadId !== lessonLoadIdRef.current) return;
+      if (!isCurrent()) return;
+      if (legacyDoc.metadata.hasPendingWrites)
+        throw new Error("트리의 저장 상태를 확인하지 못했습니다.");
       treeRevisionRef.current = 0;
       treeScopeRef.current = commandScope;
       if (legacyDoc.exists() && legacyDoc.data().tree) {
@@ -2053,8 +2057,29 @@ const ManageLesson: React.FC = () => {
     void saveTree(nextTree);
   };
 
-  const loadLessonContent = async (unitId: string, title: string) => {
+  const loadLessonContent = async (
+    unitId: string,
+    title: string,
+    loaded?: {
+      commandScope: LessonCommandScope | null;
+      expectedUid: string | undefined;
+      scopedCollectionPath: string;
+      lesson?: TeacherLessonDocument;
+    },
+  ) => {
+    const expectedUid = currentUser?.uid;
+    const scopedCollectionPath = getSemesterCollectionPath(config, "lessons");
+    if (
+      loaded &&
+      (loaded.expectedUid !== expectedUid ||
+        loaded.scopedCollectionPath !== scopedCollectionPath)
+    )
+      return;
     const loadId = ++lessonLoadIdRef.current;
+    const isCurrent = () =>
+      loadId === lessonLoadIdRef.current &&
+      Boolean(expectedUid) &&
+      expectedUid === auth.currentUser?.uid;
     lessonRevisionRef.current = null;
     lessonScopeRef.current = null;
     lessonLegacyRef.current = false;
@@ -2072,40 +2097,20 @@ const ManageLesson: React.FC = () => {
     deletedFootnoteAssetPathsRef.current = [];
     setScreenBusyMessage("수업 자료를 불러오는 중입니다...");
     try {
-      const commandScope = await getLessonCommandScope(config).catch(
-        () => null,
-      );
-      const scopedRef = collection(
-        db,
-        getSemesterCollectionPath(config, "lessons"),
-      );
-      const scopedQuery = query(
-        scopedRef,
-        where("unitId", "==", unitId),
-        limit(1),
-      );
-      let snap = await getDocsFromServer(scopedQuery);
-      let legacy = false;
-      if (snap.empty) {
-        snap = await getDocsFromServer(
-          query(
-            collection(db, "lessons"),
-            where("unitId", "==", unitId),
-            limit(1),
-          ),
-        );
-        legacy = !snap.empty;
-      }
-      if (loadId !== lessonLoadIdRef.current) return;
-      if (snap.metadata.hasPendingWrites)
-        throw new Error("자료의 저장 상태를 확인하지 못했습니다.");
-      lessonRevisionRef.current = snap.empty
-        ? 0
-        : (snap.docs[0].data().contentRevision ?? 0);
+      const [commandScope, lesson] = await Promise.all([
+        loaded
+          ? loaded.commandScope
+          : getLessonCommandScope(config).catch(() => null),
+        loaded?.lesson ||
+          readTeacherLessonDocument(scopedCollectionPath, unitId, isCurrent),
+      ]);
+      if (!lesson || !isCurrent()) return;
+      const snapshot = lesson.snapshot;
+      lessonRevisionRef.current = snapshot?.data().contentRevision ?? 0;
       lessonScopeRef.current = commandScope;
-      lessonLegacyRef.current = legacy;
-      if (!snap.empty) {
-        const data = normalizeLessonData(snap.docs[0].data(), {
+      lessonLegacyRef.current = lesson.legacy;
+      if (snapshot) {
+        const data = normalizeLessonData(snapshot.data(), {
           unitId,
           title,
         });

@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "verify:semester-archive": "node scripts/verify-semester-archive.mjs",
+    "verify:lesson-management": "node scripts/verify-lesson-management-client.mjs && node scripts/verify-lesson-loading.mjs",
+    "test:lesson-assets": "firebase emulators:exec --only firestore --config firebase.student-access-test.json --project demo-westory-session-student-access \"node scripts/verify-lesson-asset-rules.mjs\"",
     "verify:login-functions": "npm --prefix functions run check",
     "test:login-session": "firebase emulators:exec --only firestore --config firebase.login-test.json --project demo-westory-session-authority \"node functions/scripts/verify-session-authority.cjs\"",
     "test:student-access": "firebase emulators:exec --only firestore,auth --config firebase.student-access-test.json --project demo-westory-session-student-access \"node scripts/verify-student-access.mjs\"",

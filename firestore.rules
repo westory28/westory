@@ -1038,6 +1038,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /lesson_asset_uploads/{uploadId} {
+      // The server owns upload verification and attachment; the uploader only
+      // observes their own ticket while PDF/page/footnote files are prepared.
+      allow get: if (isAdmin() || isTeacherRole())
+        && resource.data.ownerUid == request.auth.uid;
+      allow list, create, update, delete: if false;
+    }
+
     match /map_resources/{docId} {
       allow read: if canUseWestory();
       allow write: if isAdmin();
