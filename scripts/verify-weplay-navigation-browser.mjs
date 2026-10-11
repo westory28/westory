@@ -328,6 +328,12 @@ try {
       width,
       height: width >= 1024 && touch ? 768 : 900,
     });
+    await page.clock.runFor(50);
+    assert.deepEqual(await dimensions(page), {
+      width,
+      padding: width < 1024 ? 0 : compact ? 88 : 232,
+      overflow: false,
+    });
     assert.equal(
       await input.evaluate(
         (el) => el === window.originalGameInput && el.value === "입력 유지",
