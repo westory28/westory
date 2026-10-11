@@ -231,13 +231,35 @@
   cursor: pointer;
 }
 
+.teacher-settings-section {
+  position: relative;
+  isolation: isolate;
+  padding-block: 8px;
+}
+
+/* Keep the full click target while matching the primary sidebar's slim highlight. */
+.teacher-settings-section::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 6px 0;
+  border-radius: inherit;
+  background: var(--teacher-section-background, transparent);
+  pointer-events: none;
+}
+
+.teacher-settings-section:hover,
+.teacher-settings-section:focus-within {
+  z-index: 1;
+}
+
 .teacher-settings-section:hover {
-  background: var(--ws-surface-subtle, #f8fafc);
+  --teacher-section-background: var(--ws-surface-subtle, #f8fafc);
   color: var(--ws-text-strong, #111827);
 }
 
 .teacher-settings-section.is-active {
-  background: var(--ws-primary-soft, #eff6ff);
+  --teacher-section-background: var(--ws-primary-soft, #eff6ff);
   box-shadow: none;
   color: var(--ws-primary, #2563eb);
   font-weight: 700;
