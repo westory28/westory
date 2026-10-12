@@ -12,7 +12,7 @@ type FeedbackPosition = { x: number; y: number };
 
 const FEEDBACK_SIZE = 48;
 const FEEDBACK_GAP = 8;
-const FEEDBACK_DURATION = 1200;
+const FEEDBACK_DURATION = 1400;
 
 const getFeedbackPosition = (
   anchor: HTMLInputElement,
@@ -130,6 +130,7 @@ const LessonAnswerFeedback: React.FC<LessonAnswerFeedbackProps> = ({
   return createPortal(
     <HistoryBlankFeedback
       correct={correct}
+      drawStrokes
       scale={1.5}
       style={{
         position: "fixed",

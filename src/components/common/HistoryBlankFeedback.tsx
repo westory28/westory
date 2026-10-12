@@ -4,6 +4,7 @@ type HistoryBlankFeedbackProps = {
   correct: boolean;
   scale?: number;
   style?: React.CSSProperties;
+  drawStrokes?: boolean;
 };
 
 /** Screen-size brush marks anchored to the blank's page-coordinate center. */
@@ -11,6 +12,7 @@ const HistoryBlankFeedback: React.FC<HistoryBlankFeedbackProps> = ({
   correct,
   scale = 1,
   style,
+  drawStrokes = false,
 }) => {
   const id = `history-brush-${useId().replace(/:/g, "")}`;
   const pageScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
@@ -18,6 +20,7 @@ const HistoryBlankFeedback: React.FC<HistoryBlankFeedbackProps> = ({
     <span
       data-blank-feedback="true"
       data-correct={correct}
+      data-draw-strokes={drawStrokes || undefined}
       role="status"
       aria-label={correct ? "정답" : "오답"}
       aria-atomic="true"

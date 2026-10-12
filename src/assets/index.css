@@ -3923,6 +3923,28 @@ button.lesson-core-point-floating-status:disabled {
   0%, 83.33% { opacity: 1; }
   100% { opacity: 0; }
 }
+/* Lesson answers explicitly draw each brush stroke, including reduced-motion mode. */
+.history-blank-feedback[data-draw-strokes="true"] .history-blank-feedback__brush {
+  animation: lesson-answer-feedback-fade 1400ms linear both;
+}
+.history-blank-feedback[data-draw-strokes="true"] .history-blank-feedback__stroke {
+  stroke-dashoffset: 100;
+  animation: history-blank-feedback-draw 800ms cubic-bezier(.45,0,.55,1) both;
+}
+.history-blank-feedback[data-draw-strokes="true"] .history-blank-feedback__stroke--first {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(.2,.05,.55,1);
+}
+.history-blank-feedback[data-draw-strokes="true"] .history-blank-feedback__stroke--second {
+  animation-duration: 280ms;
+  animation-delay: 320ms;
+  animation-timing-function: cubic-bezier(.2,.05,.55,1);
+}
+@keyframes lesson-answer-feedback-fade {
+  0%, 85.714% { opacity: 1; }
+  100% { opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .history-blank-feedback, .history-blank-feedback * { animation: none !important; }
+  .history-blank-feedback:not([data-draw-strokes="true"]),
+  .history-blank-feedback:not([data-draw-strokes="true"]) * { animation: none !important; }
 }
