@@ -9,10 +9,35 @@ const compiled = await build({
   platform: "node",
   format: "esm",
 });
-const { selectLessonText, selectLessonTextDrag, findLessonTextAtPoint } =
-  await import(
-    `data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString("base64")}`
+const {
+  selectLessonText,
+  selectLessonTextDrag,
+  createLessonTextBlank,
+  findLessonTextAtPoint,
+} = await import(
+  `data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString("base64")}`
+);
+// These existing regressions exercise the complete blank pipeline. The separate
+// principles suite tests character selection independently from mask viability.
+const createBlank = (selection, regions, page) => {
+  if ("error" in selection) return selection;
+  const before = JSON.stringify(selection);
+  const result = createLessonTextBlank(selection, regions, page);
+  assert.equal(
+    JSON.stringify(selection),
+    before,
+    "Blank construction must not mutate the selected characters",
   );
+  if (!("error" in result)) {
+    assert.equal(result.answer, selection.answer);
+    assert.deepEqual(result.regions, selection.regions);
+  }
+  return result;
+};
+const selectBlankFromRect = (regions, page, rect) =>
+  createBlank(selectLessonText(regions, page, rect), regions, page);
+const selectBlankFromDrag = (regions, page, start, end) =>
+  createBlank(selectLessonTextDrag(regions, page, start, end), regions, page);
 const page = { page: 1, width: 1348, height: 953, imageUrl: "fixture" };
 // Actual embedded-font ink bounds from the supplied worksheet. The year begins
 // less than one page pixel beyond the Korean word: average-width splitting fails.
@@ -101,7 +126,7 @@ const rect = (x1, y1, x2, y2) => ({
   widthRatio: Math.abs(x2 - x1) / page.width,
   heightRatio: Math.abs(y2 - y1) / page.height,
 });
-const selected = selectLessonText(sample, page, rect(389, 267, 450, 267));
+const selected = selectBlankFromRect(sample, page, rect(389, 267, 450, 267));
 assert.equal(selected.answer, "정유재란");
 assert.equal(selected.regions.length, 4);
 assert.ok(selected.rect.widthRatio * page.width < 60);
@@ -111,52 +136,52 @@ assert.ok(
     sample[4].left + 0.3,
 );
 assert.deepEqual(
-  selectLessonText(sample, page, rect(450, 267, 389, 267)),
+  selectBlankFromRect(sample, page, rect(450, 267, 389, 267)),
   selected,
   "reverse drag",
 );
 assert.deepEqual(
-  selectLessonText(sample, page, rect(389, 250, 450, 283)),
+  selectBlankFromRect(sample, page, rect(389, 250, 450, 283)),
   selected,
   "loose drag snaps to ink",
 );
 assert.equal(
-  selectLessonText(sample, page, rect(391, 260, 407, 276)).answer,
+  selectBlankFromRect(sample, page, rect(391, 260, 407, 276)).answer,
   "정",
   "partial word",
 );
 assert.equal(
-  selectLessonText(sample, page, rect(389, 250, 500, 285)).answer,
+  selectBlankFromRect(sample, page, rect(389, 250, 500, 285)).answer,
   "정유재란(1597)",
   "punctuation retained",
 );
 assert.ok(
-  selectLessonText(sample, page, rect(100, 267, 200, 267)).error,
+  selectBlankFromRect(sample, page, rect(100, 267, 200, 267)).error,
   "blank-space drag must fail",
 );
 assert.ok(
-  selectLessonText(sample, page, rect(370, 267, 370, 267)).error,
+  selectBlankFromRect(sample, page, rect(370, 267, 370, 267)).error,
   "no nearest-word click",
 );
 assert.ok(
-  selectLessonText([], page, rect(389, 250, 500, 285)).error,
+  selectBlankFromRect([], page, rect(389, 250, 500, 285)).error,
   "scanned page must fail",
 );
 const second = sample.map((r) => ({ ...r, top: r.top + 35 }));
 assert.ok(
-  selectLessonText([...sample, ...second], page, rect(389, 250, 450, 320))
+  selectBlankFromRect([...sample, ...second], page, rect(389, 250, 450, 320))
     .error,
   "two lines must fail",
 );
 assert.equal(
-  selectLessonText([...sample, ...second], page, rect(389, 300, 450, 310))
+  selectBlankFromRect([...sample, ...second], page, rect(389, 300, 450, 310))
     .answer,
   "정유재란",
   "repeated words preserved",
 );
 const distant = sample.slice(0, 4).map((r) => ({ ...r, left: r.left + 300 }));
 assert.ok(
-  selectLessonText([...sample, ...distant], page, rect(389, 250, 752, 285))
+  selectBlankFromRect([...sample, ...distant], page, rect(389, 250, 752, 285))
     .error,
   "distant words must fail",
 );
@@ -169,13 +194,13 @@ const interloper = {
   height: 10,
 };
 assert.ok(
-  selectLessonText([...sample, interloper], page, rect(389, 267, 450, 267))
+  selectBlankFromRect([...sample, interloper], page, rect(389, 267, 450, 267))
     .error,
   "mask may not hide unselected glyphs",
 );
 const otherPage = sample.map((r) => ({ ...r, page: 2 }));
 assert.ok(
-  selectLessonText(otherPage, page, rect(389, 267, 450, 267)).error,
+  selectBlankFromRect(otherPage, page, rect(389, 267, 450, 267)).error,
   "page boundary",
 );
 console.log(
@@ -331,7 +356,7 @@ for (const context of fixture.cases) {
           x: (reverse ? x1 : x2) / page.width,
           y: (y + wobble) / page.height,
         };
-        const selection = selectLessonTextDrag(glyphs, page, a, b);
+        const selection = selectBlankFromDrag(glyphs, page, a, b);
         assert.equal(
           selection.answer?.replaceAll(" ", ""),
           word,
@@ -357,7 +382,7 @@ assert.equal(
   "decorative/rotated glyph is not an I-beam target",
 );
 assert.ok(
-  selectLessonTextDrag(
+  selectBlankFromDrag(
     [blocked],
     page,
     blockedPoint(blocked.left, blocked.top + 2),
@@ -371,7 +396,7 @@ console.log(
 
 const point = (x, y) => ({ x: x / page.width, y: y / page.height });
 const drag = (glyphs, x1, y1, x2, y2) =>
-  selectLessonTextDrag(glyphs, page, point(x1, y1), point(x2, y2));
+  selectBlankFromDrag(glyphs, page, point(x1, y1), point(x2, y2));
 
 const inkRow = (top, bottom, spans) => ({
   top,

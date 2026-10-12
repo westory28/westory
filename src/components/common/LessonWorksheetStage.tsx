@@ -12,8 +12,10 @@ import {
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
 import {
+  createLessonTextBlank,
   findLessonTextAtPoint,
   selectLessonTextDrag,
+  type LessonTextSelection,
 } from "../../lib/lessonTextSelection";
 import { useLessonTextSelection } from "../../lib/useLessonTextSelection";
 import { getLessonBlankClipPath } from "../../lib/lessonBlankClip";
@@ -110,6 +112,9 @@ interface DraftRect {
   startY: number;
   currentX: number;
   currentY: number;
+  existingBlankId?: string;
+  pointerId: number;
+  hasDragged: boolean;
 }
 
 interface CorePointBurst {
@@ -442,6 +447,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
   const [hoveredTextPage, setHoveredTextPage] = useState<number | null>(null);
   const [textSelectionError, setTextSelectionError] = useState("");
+  const [retainedTextSelection, setRetainedTextSelection] = useState<{
+    page: number;
+    selection: LessonTextSelection;
+  } | null>(null);
   const [corePointBursts, setCorePointBursts] = useState<CorePointBurst[]>([]);
   const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(
     pageImages[0]?.page ?? null,
@@ -766,13 +775,28 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
   useEffect(() => {
     setDraftRect(null);
+    setRetainedTextSelection(null);
     setTextSelectionError("");
     setHoveredTextPage(null);
   }, [teacherPdfSource, textSelectionPage, teacherTool, mode]);
 
   useEffect(() => {
-    if (textSelectionStatus !== "ready") setDraftRect(null);
+    if (textSelectionStatus !== "ready") {
+      setDraftRect(null);
+      setRetainedTextSelection(null);
+    }
   }, [textSelectionStatus]);
+
+  useEffect(() => {
+    if (!retainedTextSelection) return;
+    const clearSelection = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setRetainedTextSelection(null);
+      setTextSelectionError("");
+    };
+    window.addEventListener("keydown", clearSelection);
+    return () => window.removeEventListener("keydown", clearSelection);
+  }, [retainedTextSelection]);
 
   const activeTeacherPageIndex =
     isTeacherViewMode && activeTeacherPage != null
@@ -1318,14 +1342,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     if (event.button !== 0) return;
 
     if (isTeacherEditMode) {
+      if (draftRect && draftRect.pointerId !== event.pointerId) return;
       if (teacherTool === "pan") {
         event.preventDefault();
         setStagePointerCapture(event.currentTarget, event.pointerId);
         beginMovePan(page, event.clientX, event.clientY);
         return;
       }
+      const existingBlank = (event.target as HTMLElement).closest<HTMLElement>(
+        "[data-blank-box]",
+      );
       if (
-        (event.target as HTMLElement).closest("[data-blank-box]") ||
+        (existingBlank && teacherTool !== "ocr") ||
         (event.target as HTMLElement).closest("[data-exam-highlight]") ||
         (event.target as HTMLElement).closest("[data-footnote-anchor]")
       )
@@ -1335,6 +1363,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       if (!point || !pageImage) return;
       event.preventDefault();
       if (teacherTool === "ocr") {
+        setRetainedTextSelection(null);
         if (
           textSelectionStatus !== "ready" ||
           textSelectionPage?.page !== page
@@ -1358,6 +1387,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         startY: point.y,
         currentX: point.x,
         currentY: point.y,
+        pointerId: event.pointerId,
+        hasDragged: false,
+        ...(teacherTool === "ocr" && existingBlank?.dataset.blankId
+          ? { existingBlankId: existingBlank.dataset.blankId }
+          : {}),
       });
       return;
     }
@@ -1467,10 +1501,22 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     if (isTeacherEditMode) {
       if (!draftRect || draftRect.page !== page) return;
+      if (pointerId !== undefined && draftRect.pointerId !== pointerId) return;
       const point = resolveRatioPoint(page, clientX, clientY);
-      if (!point) return;
+      const pageImage = pageImages.find((item) => item.page === page);
+      if (!point || !pageImage) return;
       setDraftRect((prev) =>
-        prev ? { ...prev, currentX: point.x, currentY: point.y } : null,
+        prev
+          ? {
+              ...prev,
+              currentX: point.x,
+              currentY: point.y,
+              hasDragged:
+                prev.hasDragged ||
+                Math.abs(point.x - prev.startX) * pageImage.width >= 1 ||
+                Math.abs(point.y - prev.startY) * pageImage.height >= 1,
+            }
+          : null,
       );
       return;
     }
@@ -1547,12 +1593,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const handleTeacherPointerUp = (
     pageImage: LessonWorksheetPageImage,
     endPoint?: { x: number; y: number } | null,
+    pointerId?: number,
   ) => {
     if (teacherTool === "pan") {
       panRef.current = null;
       return;
     }
     if (!draftRect || draftRect.page !== pageImage.page) return;
+    if (pointerId !== undefined && draftRect.pointerId !== pointerId) return;
 
     const nextRect = {
       leftRatio: Math.min(draftRect.startX, draftRect.currentX),
@@ -1617,11 +1665,26 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       return;
     }
 
+    const finalPoint = endPoint || {
+      x: draftRect.currentX,
+      y: draftRect.currentY,
+    };
+    if (
+      draftRect.existingBlankId &&
+      !draftRect.hasDragged &&
+      Math.abs(finalPoint.x - draftRect.startX) * pageImage.width < 1 &&
+      Math.abs(finalPoint.y - draftRect.startY) * pageImage.height < 1
+    ) {
+      onSelectBlank?.(draftRect.existingBlankId);
+      setDraftRect(null);
+      return;
+    }
+
     const selection = selectLessonTextDrag(
       preciseTextRegions,
       pageImage,
       { x: draftRect.startX, y: draftRect.startY },
-      endPoint || { x: draftRect.currentX, y: draftRect.currentY },
+      finalPoint,
     );
     if ("error" in selection) {
       setTextSelectionError(selection.error);
@@ -1629,18 +1692,33 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       return;
     }
 
+    // Selecting text never depends on whether a safe blank can be painted.
+    // Keep the exact selection visible if its neighbouring ink cannot be spared.
+    const blank = createLessonTextBlank(
+      selection,
+      preciseTextRegions,
+      pageImage,
+    );
+    if ("error" in blank) {
+      setRetainedTextSelection({ page: pageImage.page, selection });
+      setTextSelectionError(blank.error);
+      setDraftRect(null);
+      return;
+    }
+
     setTextSelectionError("");
+    setRetainedTextSelection(null);
     onCreateBlankFromSelection?.(
       pageImage.page,
-      selection.rect,
+      blank.rect,
       [
         {
           page: pageImage.page,
           label: selection.answer,
-          left: selection.rect.leftRatio * pageImage.width,
-          top: selection.rect.topRatio * pageImage.height,
-          width: selection.rect.widthRatio * pageImage.width,
-          height: selection.rect.heightRatio * pageImage.height,
+          left: blank.rect.leftRatio * pageImage.width,
+          top: blank.rect.topRatio * pageImage.height,
+          width: blank.rect.widthRatio * pageImage.width,
+          height: blank.rect.heightRatio * pageImage.height,
         },
       ],
       "ocr",
@@ -1671,7 +1749,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   useEffect(() => {
     if (!draftRect) return undefined;
     const handleWindowPointerMove = (event: PointerEvent) => {
-      updateDraftPoint(draftRect.page, event.clientX, event.clientY);
+      updateDraftPoint(
+        draftRect.page,
+        event.clientX,
+        event.clientY,
+        event.pointerId,
+      );
     };
     const handleWindowPointerUp = (event: PointerEvent) => {
       const pageImage = pageImages.find((item) => item.page === draftRect.page);
@@ -1682,9 +1765,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       handleTeacherPointerUp(
         pageImage,
         resolveRatioPoint(pageImage.page, event.clientX, event.clientY),
+        event.pointerId,
       );
     };
-    const handleWindowPointerCancel = () => setDraftRect(null);
+    const handleWindowPointerCancel = (event: PointerEvent) => {
+      if (event.pointerId === draftRect.pointerId) setDraftRect(null);
+    };
     window.addEventListener("pointermove", handleWindowPointerMove);
     window.addEventListener("pointerup", handleWindowPointerUp);
     window.addEventListener("pointercancel", handleWindowPointerCancel);
@@ -2347,13 +2433,15 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   { x: draftRect.startX, y: draftRect.startY },
                   { x: draftRect.currentX, y: draftRect.currentY },
                 )
-              : null;
+              : retainedTextSelection?.page === pageImage.page
+                ? retainedTextSelection.selection
+                : null;
           const selectedDraft =
             draftSelection && "answer" in draftSelection
               ? draftSelection
               : null;
           const draftStatusMessage = selectedDraft
-            ? `선택한 글자: ${selectedDraft.answer}`
+            ? `선택한 글자: ${selectedDraft.answer}${!draftRect && textSelectionError ? ` · ${textSelectionError}` : ""}`
             : draftSelection
               ? "선택된 글자 없음"
               : "";
@@ -2759,10 +2847,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           event.clientX,
                           event.clientY,
                         ),
+                        event.pointerId,
                       );
                     } else finishStudentStroke();
                   }}
                   onPointerCancel={(event) => {
+                    if (
+                      isTeacherEditMode &&
+                      draftRect &&
+                      draftRect.pointerId !== event.pointerId
+                    )
+                      return;
                     if (
                       enableTeacherRightButtonPan &&
                       temporaryPanRef.current?.pointerId === event.pointerId
@@ -3243,7 +3338,18 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           key={region.key}
                           type="button"
                           data-blank-box="true"
-                          onClick={() => onSelectBlank?.(blank.id)}
+                          data-blank-id={blank.id}
+                          onClick={(event) => {
+                            // OCR pointer gestures finish at the stage. Keyboard
+                            // activation and the other tools keep normal editing.
+                            if (
+                              textSelectionEnabled &&
+                              textSelectionStatus === "ready" &&
+                              event.detail !== 0
+                            )
+                              return;
+                            onSelectBlank?.(blank.id);
+                          }}
                           onPointerDown={(event) => {
                             if (
                               !enableTeacherRightButtonPan &&

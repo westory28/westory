@@ -29,20 +29,32 @@ export const findLessonTextAtPoint = (
   regions: LessonPdfGlyph[],
   page: LessonWorksheetPageImage,
   point: LessonTextPoint,
-) =>
-  regions.find((r) => {
+) => {
+  const x = point.x * page.width,
+    y = point.y * page.height;
+  let closest: LessonPdfGlyph | undefined;
+  let nearest = Infinity;
+  for (const r of regions) {
     const bounds = ink(r);
-    const x = point.x * page.width,
-      y = point.y * page.height;
-    return (
+    if (
       r.page === page.page &&
       r.selectable !== false &&
       x >= bounds.left &&
       x <= bounds.left + bounds.width &&
       y >= bounds.top &&
       y <= bounds.top + bounds.height
-    );
-  });
+    ) {
+      const distance =
+        (x - bounds.left - bounds.width / 2) ** 2 +
+        (y - bounds.top - bounds.height / 2) ** 2;
+      if (distance < nearest) {
+        closest = r;
+        nearest = distance;
+      }
+    }
+  }
+  return closest;
+};
 
 export interface LessonTextRect {
   leftRatio: number;
@@ -52,6 +64,138 @@ export interface LessonTextRect {
   /** A normally rectangular blank can preserve a neighbouring curved stroke. */
   inkClip?: Array<{ x: number; y: number }>;
 }
+
+export interface LessonTextSelection {
+  regions: LessonPdfGlyph[];
+  rect: LessonTextRect;
+  answer: string;
+}
+
+export type LessonTextSelectionResult = LessonTextSelection | { error: string };
+
+interface TextLine {
+  glyphs: LessonPdfGlyph[];
+  height: number;
+  top: number;
+  bottom: number;
+  /** Crossing a glyph's centre advances one caret index, independently of ink masks. */
+  caretBoundaries: number[];
+  spaces: boolean[];
+  breaks: boolean[];
+  runs: number[];
+}
+
+interface PageTextIndex {
+  lines: TextLine[];
+  locations: Map<LessonPdfGlyph, { line: TextLine; index: number }>;
+}
+
+// The reader publishes a new array after all geometry refinements finish.
+// Pointer frames share this index; no paint/contour work belongs in selection.
+const pageIndexes = new WeakMap<LessonPdfGlyph[], Map<string, PageTextIndex>>();
+const getPageTextIndex = (
+  regions: LessonPdfGlyph[],
+  page: LessonWorksheetPageImage,
+): PageTextIndex => {
+  const key = `${page.page}:${page.width}:${page.height}`;
+  const cached = pageIndexes.get(regions)?.get(key);
+  if (cached) return cached;
+  const verticalPosition = (glyph: LessonPdfGlyph) =>
+    glyph.baseline ?? glyph.top + glyph.height / 2;
+  const center = (glyph: LessonPdfGlyph) => {
+    const bounds = ink(glyph);
+    return bounds.left + bounds.width / 2;
+  };
+  const ordered = regions
+    .filter((glyph) => glyph.page === page.page && glyph.selectable !== false)
+    .sort(
+      (a, b) =>
+        verticalPosition(a) - verticalPosition(b) || center(a) - center(b),
+    );
+  const rows: LessonPdfGlyph[][] = [];
+  for (const glyph of ordered) {
+    const row = rows.find((items) => sameLine(items[0], glyph));
+    if (row) row.push(glyph);
+    else rows.push([glyph]);
+  }
+  const locations: PageTextIndex["locations"] = new Map();
+  const lines = rows.map((glyphs): TextLine => {
+    glyphs.sort((a, b) => center(a) - center(b) || a.left - b.left);
+    const heights = glyphs.map((glyph) => glyph.height).sort((a, b) => a - b);
+    const tallest = heights[heights.length - 1];
+    const median = heights[Math.floor(heights.length / 2)];
+    const height = median < tallest * 0.5 ? tallest : median;
+    const gaps = glyphs.map((glyph, index) =>
+      index ? glyph.left - glyphs[index - 1].left - glyphs[index - 1].width : 0,
+    );
+    let run = 0;
+    const line: TextLine = {
+      glyphs,
+      height,
+      top: Math.min(...glyphs.map((glyph) => glyph.top)),
+      bottom: Math.max(...glyphs.map((glyph) => glyph.top + glyph.height)),
+      caretBoundaries: glyphs.map(center),
+      spaces: gaps.map((gap) => gap > height * 0.35),
+      breaks: gaps.map((gap) => gap > height * 1.5),
+      runs: gaps.map((gap) => (gap > height * 1.5 ? ++run : run)),
+    };
+    glyphs.forEach((glyph, index) => locations.set(glyph, { line, index }));
+    return line;
+  });
+  const result = { lines, locations };
+  const pages = pageIndexes.get(regions) ?? new Map<string, PageTextIndex>();
+  pages.set(key, result);
+  pageIndexes.set(regions, pages);
+  return result;
+};
+
+const caretAt = (line: TextLine, x: number) => {
+  let left = 0,
+    right = line.caretBoundaries.length;
+  while (left < right) {
+    const middle = (left + right) >>> 1;
+    if (line.caretBoundaries[middle] < x) left = middle + 1;
+    else right = middle;
+  }
+  return left;
+};
+
+const selectLineSlice = (
+  line: TextLine,
+  from: number,
+  to: number,
+  page: LessonWorksheetPageImage,
+): LessonTextSelectionResult => {
+  if (from >= to) return noText();
+  if (line.breaks.slice(from + 1, to).some(Boolean))
+    return { error: "떨어진 글자는 각각 선택해 주세요." };
+  const hits = line.glyphs.slice(from, to);
+  const answer = hits
+    .map(
+      (glyph, index) =>
+        `${index && line.spaces[from + index] ? " " : ""}${glyph.label}`,
+    )
+    .join("");
+  return { regions: hits, rect: getLessonTextBounds(hits, page), answer };
+};
+
+const selectHits = (
+  hits: LessonPdfGlyph[],
+  index: PageTextIndex,
+  page: LessonWorksheetPageImage,
+): LessonTextSelectionResult => {
+  if (!hits.length) return noText();
+  const first = index.locations.get(hits[0])!;
+  if (hits.some((glyph) => index.locations.get(glyph)?.line !== first.line))
+    return { error: "한 줄의 이어진 글자만 선택해 주세요." };
+  const positions = hits.map((glyph) => index.locations.get(glyph)!.index);
+  return selectLineSlice(
+    first.line,
+    Math.min(...positions),
+    Math.max(...positions) + 1,
+    page,
+  );
+};
 
 export const getLessonTextBounds = (
   regions: LessonWorksheetTextRegion[],
@@ -80,39 +224,33 @@ export const selectLessonText = (
   regions: LessonPdfGlyph[],
   page: LessonWorksheetPageImage,
   rect: LessonTextRect,
-):
-  | {
-      regions: LessonWorksheetTextRegion[];
-      rect: LessonTextRect;
-      answer: string;
-    }
-  | { error: string } => {
+): LessonTextSelectionResult => {
   const left = rect.leftRatio * page.width;
   const top = rect.topRatio * page.height;
   const right = left + rect.widthRatio * page.width;
   const bottom = top + rect.heightRatio * page.height;
   // A horizontal text-selection gesture remains a line, not a distant point hit.
   const point = right - left < 1 && bottom - top < 1;
-  const hits = regions
-    .filter((r) => {
-      if (r.page !== page.page || r.selectable === false) return false;
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      if (point)
-        return (
-          left >= r.left &&
-          left <= r.left + r.width &&
-          top >= r.top &&
-          top <= r.top + r.height
-        );
-      const vertical =
-        bottom - top < 1
-          ? top >= r.top && top <= r.top + r.height
-          : cy >= top && cy <= bottom;
-      return cx >= left && cx <= right && vertical;
-    })
-    .sort((a, b) => a.left - b.left);
-  return finishSelection(hits, regions, page);
+  const index = getPageTextIndex(regions, page);
+  if (point) {
+    const hit = findLessonTextAtPoint(regions, page, {
+      x: rect.leftRatio,
+      y: rect.topRatio,
+    });
+    return selectHits(hit ? [hit] : [], index, page);
+  }
+  const hits = regions.filter((r) => {
+    if (r.page !== page.page || r.selectable === false) return false;
+    const bounds = ink(r);
+    const cx = bounds.left + bounds.width / 2;
+    const cy = r.top + r.height / 2;
+    const vertical =
+      bottom - top < 1
+        ? top >= r.top && top <= r.top + r.height
+        : cy >= top && cy <= bottom;
+    return cx >= left && cx <= right && vertical;
+  });
+  return selectHits(hits, index, page);
 };
 
 /** Follow the anchor line like text selection; a slight vertical wobble is harmless. */
@@ -121,51 +259,35 @@ export const selectLessonTextDrag = (
   page: LessonWorksheetPageImage,
   start: LessonTextPoint,
   end: LessonTextPoint,
-) => {
+): LessonTextSelectionResult => {
   const sx = start.x * page.width,
     sy = start.y * page.height;
   const ex = end.x * page.width,
     ey = end.y * page.height;
+  const index = getPageTextIndex(regions, page);
   if (Math.abs(ex - sx) < 1 && Math.abs(ey - sy) < 1) {
     const hit = findLessonTextAtPoint(regions, page, start);
-    return finishSelection(hit ? [hit] : [], regions, page);
+    return selectHits(hit ? [hit] : [], index, page);
   }
   const distance = (r: LessonPdfGlyph) =>
     Math.max(r.left - sx, sx - r.left - r.width, 0);
-  const anchor = regions
+  const anchor = [...index.locations.keys()]
     .filter(
       (r) =>
-        r.page === page.page &&
-        r.selectable !== false &&
         sy >= r.top &&
         sy <= r.top + r.height &&
-        distance(r) <= r.height * 0.5,
+        distance(r) <= index.locations.get(r)!.line.height * 0.5,
     )
     .sort((a, b) => distance(a) - distance(b))[0];
   if (!anchor) return noText();
-  const row = regions.filter(
-    (r) =>
-      r.page === page.page && r.selectable !== false && sameLine(anchor, r),
-  );
-  // A comma/dash shares its baseline with the full-height letters. Its tiny
-  // ink height must not turn a two-pixel hand movement into a different line.
-  const rowHeights = row.map((r) => r.height).sort((a, b) => a - b);
-  const lineHeight = Math.max(
-    anchor.height,
-    rowHeights[Math.floor(rowHeights.length / 2)] || anchor.height,
-  );
-  const lineTop =
-    anchor.baseline === undefined
-      ? anchor.top
-      : Math.min(anchor.top, anchor.baseline - lineHeight * 0.9);
+  const line = index.locations.get(anchor)!.line;
   // Endpoints on another line must not silently create a partial blank.
   if (
-    ey < lineTop - lineHeight * 0.5 ||
-    ey > lineTop + lineHeight * 1.5 ||
-    regions.some(
+    ey < line.top - line.height * 0.5 ||
+    ey > line.bottom + line.height * 0.5 ||
+    [...index.locations.keys()].some(
       (r) =>
-        r.page === page.page &&
-        !sameLine(anchor, r) &&
+        index.locations.get(r)!.line !== line &&
         ex >= r.left &&
         ex <= r.left + r.width &&
         ey >= r.top &&
@@ -174,44 +296,34 @@ export const selectLessonTextDrag = (
   ) {
     return { error: "한 줄의 이어진 글자만 선택해 주세요." };
   }
-  return finishSelection(
-    row
-      .filter((r) => {
-        const bounds = ink(r);
-        const center = bounds.left + bounds.width / 2;
-        return center >= Math.min(sx, ex) && center <= Math.max(sx, ex);
-      })
-      .sort((a, b) => a.left - b.left),
-    regions,
+  // At an exact centre, caret affinity can leave the endpoint glyph outside
+  // the slice. Landing in a different cell must still reject the cross-cell drag.
+  const endHit = findLessonTextAtPoint(regions, page, end);
+  const endLocation = endHit ? index.locations.get(endHit) : undefined;
+  if (
+    endLocation?.line === line &&
+    line.runs[endLocation.index] !==
+      line.runs[index.locations.get(anchor)!.index]
+  )
+    return { error: "떨어진 글자는 각각 선택해 주세요." };
+  const startCaret = caretAt(line, sx),
+    endCaret = caretAt(line, ex);
+  return selectLineSlice(
+    line,
+    Math.min(startCaret, endCaret),
+    Math.max(startCaret, endCaret),
     page,
   );
 };
 
-const finishSelection = (
-  hits: LessonPdfGlyph[],
+/** Build a safe mask for the exact chosen characters; never change the selection. */
+export const createLessonTextBlank = (
+  selection: LessonTextSelection,
   regions: LessonPdfGlyph[],
   page: LessonWorksheetPageImage,
-) => {
+): LessonTextSelectionResult => {
+  const { regions: hits, answer } = selection;
   if (!hits.length) return noText();
-  const heights = hits.map((r) => r.height).sort((a, b) => a - b);
-  const medianHeight = heights[Math.floor(heights.length / 2)];
-  const tallest = heights[heights.length - 1];
-  // A heading such as "一. 전" has two very short marks and one normal letter.
-  // Their median ink height must not classify its ordinary word space as a cell gap.
-  const height = medianHeight < tallest * 0.5 ? tallest : medianHeight;
-  if (hits.some((r) => !sameLine(hits[0], r))) {
-    return { error: "한 줄의 이어진 글자만 선택해 주세요." };
-  }
-  let answer = "";
-  for (let i = 0; i < hits.length; i++) {
-    const r = hits[i],
-      previous = hits[i - 1];
-    const gap = previous ? r.left - previous.left - previous.width : 0;
-    if (gap > height * 1.5)
-      return { error: "떨어진 글자는 각각 선택해 주세요." };
-    if (previous && gap > height * 0.35) answer += " ";
-    answer += r.label;
-  }
   const bounds = getLessonTextBounds(hits, page);
   const core = getLessonTextBounds(
     hits.map((r) => ({ ...r, ...ink(r) })),
@@ -235,7 +347,7 @@ const finishSelection = (
   }> = [];
   const collision = () => ({
     error:
-      "주변 글자와 겹칩니다. 선택 범위를 줄이거나 직접 도구를 사용해 주세요.",
+      "글자는 선택됐지만, 이웃 글자를 가리지 않고 빈칸을 만들 수 없습니다.",
   });
   const selectedRows: LessonPdfGlyphInkRow[] = hits.flatMap(
     (r) =>

@@ -157,8 +157,9 @@ const walk = (node) =>
       ? [node, ...walk(node.props?.children)]
       : [];
 const page = { page: 1, width: 1000, height: 1000, imageUrl: "page.png" };
-const selection = { rect, answer: blank.answer, regions: [] };
-const makeStage = (props) => {
+const { inkClip: _selectionClip, ...selectionRect } = rect;
+const selection = { rect: selectionRect, answer: blank.answer, regions: [] };
+const makeStage = (props, options = {}) => {
   const slots = [];
   let cursor = 0;
   const react = {
@@ -195,12 +196,18 @@ const makeStage = (props) => {
     "../../lib/lessonTextSelection": {
       findLessonTextAtPoint: () => ({}),
       selectLessonTextDrag: () => selection,
+      createLessonTextBlank: () => {
+        options.onMask?.();
+        return options.maskError
+          ? { error: options.maskError }
+          : { ...selection, rect };
+      },
     },
     "../../lib/useLessonTextSelection": {
       useLessonTextSelection: () => ({
         regions: [],
         maskUrl: "mask.png",
-        status: "ready",
+        status: options.readerStatus || "ready",
         retry() {},
       }),
     },
@@ -272,14 +279,18 @@ assert.equal(manualMask.props.style.clipPath, undefined);
 assert.match(manualMask.props.className, /rounded-md/);
 
 let created;
-const renderTeacher = makeStage({
-  mode: "teacher-edit",
-  teacherTool: "ocr",
-  pendingBlank: reloaded,
-  onCreateBlankFromSelection: (...args) => {
-    created = args;
+let maskCalls = 0;
+const renderTeacher = makeStage(
+  {
+    mode: "teacher-edit",
+    teacherTool: "ocr",
+    pendingBlank: reloaded,
+    onCreateBlankFromSelection: (...args) => {
+      created = args;
+    },
   },
-});
+  { onMask: () => maskCalls++ },
+);
 let teacherNodes = walk(renderTeacher());
 assert.equal(
   teacherNodes.find((n) => n.type === "button" && n.props["data-blank-box"])
@@ -322,11 +333,17 @@ teacherNodes = walk(renderTeacher());
 const preview = teacherNodes.find(
   (n) => "data-ocr-selection-preview" in n.props,
 );
-assert.equal(preview.props.style.clipPath, cssClip);
+assert.equal(
+  preview.props.style.clipPath,
+  undefined,
+  "Live selection uses character geometry, not the final blank contour",
+);
+assert.equal(maskCalls, 0, "Dragging must not build a blank mask");
 assert.ok(
   walk(preview).some((n) => n.type === "img" && n.props.src === "mask.png"),
 );
 pageNode().props.onPointerUp(event(400, 220));
+assert.equal(maskCalls, 1, "Only pointer-up builds the blank mask");
 assert.deepEqual(
   plain(created[1].inkClip),
   clip,
@@ -334,6 +351,109 @@ assert.deepEqual(
 );
 assert.equal(created[2][0].label, blank.answer);
 assert.equal(created[3], "ocr");
+
+{
+  let saves = 0;
+  let builds = 0;
+  let edited;
+  const failure =
+    "글자는 선택됐지만 이웃 글자를 가리지 않고 빈칸을 만들 수 없습니다.";
+  const render = makeStage(
+    {
+      mode: "teacher-edit",
+      teacherTool: "ocr",
+      onSelectBlank: (id) => {
+        edited = id;
+      },
+      onCreateBlankFromSelection: () => saves++,
+    },
+    { maskError: failure, onMask: () => builds++ },
+  );
+  const nodes = () => walk(render());
+  const stage = () =>
+    nodes().find((n) => n.props.onPointerMove && n.props.onPointerUp);
+  stage().props.ref(host);
+  const existing = { dataset: { blankId: "clipped" } };
+  const target = {
+    closest: (selector) => (selector === "[data-blank-box]" ? existing : null),
+  };
+  stage().props.onPointerDown({ ...event(100, 220), target });
+  stage().props.onPointerMove(event(400, 220));
+  assert.ok(nodes().some((n) => "data-ocr-selection-preview" in n.props));
+  assert.equal(builds, 0);
+  stage().props.onPointerUp(event(400, 220));
+  assert.equal(builds, 1);
+  assert.equal(saves, 0);
+  assert.equal(
+    edited,
+    undefined,
+    "Dragging over an existing blank must not open its editor",
+  );
+  const retained = nodes();
+  assert.ok(
+    retained.some((n) => "data-ocr-selection-preview" in n.props),
+    "An unsafe mask must not erase the selected text highlight",
+  );
+  const status = retained.find((n) => n.props.role === "status");
+  assert.match(status.props.title, new RegExp(blank.answer));
+  assert.ok(status.props.title.includes(failure));
+  // A new gesture clears the retained result. A short click still edits the old blank.
+  stage().props.onPointerDown({ ...event(100, 220), target });
+  stage().props.onPointerUp(event(100.5, 220));
+  assert.equal(edited, "clipped");
+  assert.equal(builds, 1);
+  const button = nodes().find(
+    (n) => n.type === "button" && n.props["data-blank-box"],
+  );
+  edited = undefined;
+  button.props.onClick({ detail: 1 });
+  assert.equal(
+    edited,
+    undefined,
+    "Pointer click must not re-open the editor after an OCR drag",
+  );
+  button.props.onClick({ detail: 0 });
+  assert.equal(
+    edited,
+    "clipped",
+    "Keyboard blank activation remains available",
+  );
+  edited = undefined;
+  stage().props.onPointerDown({ ...event(100, 220), target });
+  stage().props.onPointerMove(event(130, 220));
+  stage().props.onPointerMove(event(100, 220));
+  stage().props.onPointerUp({ ...event(130, 220), pointerId: 2 });
+  assert.equal(builds, 1, "An unrelated pointer cannot finish the active drag");
+  stage().props.onPointerUp(event(100.5, 220));
+  assert.equal(
+    builds,
+    2,
+    "A drag returning to its start must remain a text gesture",
+  );
+  assert.equal(edited, undefined);
+}
+for (const readerStatus of ["loading", "empty", "error"]) {
+  let edited;
+  const render = makeStage(
+    {
+      mode: "teacher-edit",
+      teacherTool: "ocr",
+      onSelectBlank: (id) => {
+        edited = id;
+      },
+    },
+    { readerStatus },
+  );
+  const button = walk(render()).find(
+    (n) => n.type === "button" && n.props["data-blank-box"],
+  );
+  button.props.onClick({ detail: 1 });
+  assert.equal(
+    edited,
+    "clipped",
+    `Existing blanks remain editable during OCR ${readerStatus}`,
+  );
+}
 console.log(
   "PASS blank clip validation, JSON round-trip, exact selection transfer, teacher/live/pending/student masks and delegated answer feedback",
 );
