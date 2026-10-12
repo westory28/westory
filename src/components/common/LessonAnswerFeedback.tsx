@@ -10,9 +10,7 @@ type LessonAnswerFeedbackProps = {
 
 type FeedbackPosition = { x: number; y: number };
 
-const FEEDBACK_SIZE = 48;
-const FEEDBACK_GAP = 8;
-const FEEDBACK_DURATION = 1400;
+const FEEDBACK_DURATION = 1200;
 
 const getFeedbackPosition = (
   anchor: HTMLInputElement,
@@ -37,31 +35,10 @@ const getFeedbackPosition = (
     return null;
   }
 
-  const half = FEEDBACK_SIZE / 2;
-  const minX = left + FEEDBACK_GAP + half;
-  const maxX = right - FEEDBACK_GAP - half;
-  const minY = top + FEEDBACK_GAP + half;
-  const maxY = bottom - FEEDBACK_GAP - half;
-  if (minX > maxX || minY > maxY) return null;
-
-  const x = Math.min(maxX, Math.max(minX, rect.left + rect.width / 2));
-  const y = Math.min(maxY, Math.max(minY, rect.top + rect.height / 2));
-  if (rect.right + FEEDBACK_GAP + half <= maxX) {
-    return { x: rect.right + FEEDBACK_GAP + half, y };
-  }
-  if (rect.left - FEEDBACK_GAP - half >= minX) {
-    return { x: rect.left - FEEDBACK_GAP - half, y };
-  }
-  if (rect.bottom + FEEDBACK_GAP + half <= maxY) {
-    return { x, y: rect.bottom + FEEDBACK_GAP + half };
-  }
-  if (rect.top - FEEDBACK_GAP - half >= minY) {
-    return { x, y: rect.top - FEEDBACK_GAP - half };
-  }
-  return null;
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 };
 
-/** Reuse the brush animation beside a committed lesson answer, outside its page zoom. */
+/** Center the brush animation over a committed answer, outside its page zoom. */
 const LessonAnswerFeedback: React.FC<LessonAnswerFeedbackProps> = ({
   anchor,
   correct,

@@ -3925,23 +3925,23 @@ button.lesson-core-point-floating-status:disabled {
 }
 /* Lesson answers explicitly draw each brush stroke, including reduced-motion mode. */
 .history-blank-feedback[data-draw-strokes="true"] .history-blank-feedback__brush {
-  animation: lesson-answer-feedback-fade 1400ms linear both;
+  animation: lesson-answer-feedback-fade 1200ms linear both;
 }
 .history-blank-feedback[data-draw-strokes="true"] .history-blank-feedback__stroke {
   stroke-dashoffset: 100;
-  animation: history-blank-feedback-draw 800ms cubic-bezier(.45,0,.55,1) both;
+  animation: history-blank-feedback-draw 680ms cubic-bezier(.45,0,.55,1) both;
 }
 .history-blank-feedback[data-draw-strokes="true"] .history-blank-feedback__stroke--first {
-  animation-duration: 280ms;
+  animation-duration: 240ms;
   animation-timing-function: cubic-bezier(.2,.05,.55,1);
 }
 .history-blank-feedback[data-draw-strokes="true"] .history-blank-feedback__stroke--second {
-  animation-duration: 280ms;
-  animation-delay: 320ms;
+  animation-duration: 240ms;
+  animation-delay: 280ms;
   animation-timing-function: cubic-bezier(.2,.05,.55,1);
 }
 @keyframes lesson-answer-feedback-fade {
-  0%, 85.714% { opacity: 1; }
+  0%, 83.333% { opacity: 1; }
   100% { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
