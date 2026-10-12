@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 
 const compiled = await build({
@@ -181,9 +182,448 @@ console.log(
   "Lesson text selection: real Korean/year bounds, horizontal/reverse/partial selection, adjacent text, duplicate words, whitespace, multi-line, distant text and page isolation passed.",
 );
 
+// Browser-measured embedded font contours from the reported worksheets. These
+// regressions include real negative spacing, rather than evenly spaced mocks.
+const fixture = JSON.parse(
+  readFileSync(
+    new URL("./fixtures/lesson-text-ink.json", import.meta.url),
+    "utf8",
+  ),
+);
+const scanLine = (polygon, y) => {
+  const xs = [];
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i],
+      b = polygon[j];
+    if (a.y > y !== b.y > y)
+      xs.push(a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y));
+  }
+  return xs.sort((a, b) => a - b);
+};
+const mergeSpans = (spans) => {
+  const merged = [];
+  for (const span of [...spans].sort((a, b) => a.left - b.left)) {
+    if (span.right <= span.left) continue;
+    const previous = merged.at(-1);
+    if (previous && span.left <= previous.right)
+      previous.right = Math.max(previous.right, span.right);
+    else merged.push({ ...span });
+  }
+  return merged;
+};
+const subtractSpans = (source, remove) => {
+  const remaining = [];
+  for (const span of source) {
+    let left = span.left;
+    for (const cut of remove) {
+      if (cut.right <= left || cut.left >= span.right) continue;
+      if (cut.left > left) remaining.push({ left, right: cut.left });
+      left = Math.max(left, cut.right);
+      if (left >= span.right) break;
+    }
+    if (left < span.right) remaining.push({ left, right: span.right });
+  }
+  return remaining;
+};
+const checkPaint = (selection, all) => {
+  const rect = selection.rect,
+    left = rect.leftRatio * page.width,
+    top = rect.topRatio * page.height;
+  const width = rect.widthRatio * page.width,
+    height = rect.heightRatio * page.height;
+  const polygon = (
+    rect.inkClip || [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+    ]
+  ).map((p) => ({ x: left + p.x * width, y: top + p.y * height }));
+  const selected = new Set(selection.regions);
+  const rows = all
+    .filter((glyph) => glyph.page === page.page)
+    .flatMap((glyph) => {
+      const bounds = glyph.inkBounds || glyph;
+      return (
+        glyph.inkRows || [
+          {
+            top: bounds.top,
+            bottom: bounds.top + bounds.height,
+            left: bounds.left,
+            right: bounds.left + bounds.width,
+          },
+        ]
+      ).map((row) => ({
+        ...row,
+        selected: selected.has(glyph),
+        label: glyph.label,
+      }));
+    });
+  // Partition at every measured row and polygon boundary. Checking only the
+  // selected row midpoint can miss an adjacent glyph's much shorter ink run.
+  const ys = [
+    ...new Set([
+      ...polygon.map((p) => p.y),
+      ...rows.flatMap((row) => [row.top, row.bottom]),
+    ]),
+  ].sort((a, b) => a - b);
+  for (let i = 1; i < ys.length; i++) {
+    if (ys[i] - ys[i - 1] < 1e-7) continue;
+    const y = (ys[i] + ys[i - 1]) / 2;
+    const active = rows.filter((row) => row.top < y && row.bottom > y);
+    const paint = (wantSelected) =>
+      mergeSpans(
+        active
+          .filter((row) => row.selected === wantSelected)
+          .flatMap(
+            (row) => row.spans || [{ left: row.left, right: row.right }],
+          ),
+      );
+    const chosenInk = paint(true),
+      neighbourInk = paint(false);
+    const xs = scanLine(polygon, y);
+    assert.equal(
+      xs.length % 2,
+      0,
+      "even-odd polygon crossings form complete pairs",
+    );
+    const mask = mergeSpans(
+      xs.flatMap((x, index) =>
+        index % 2 === 0 ? [{ left: x, right: xs[index + 1] }] : [],
+      ),
+    );
+    // Shared original pixels must stay visible with the neighbour. Only the
+    // selected glyph's exclusive paint is required to be covered by the mask.
+    const exclusive = subtractSpans(chosenInk, neighbourInk);
+    assert.ok(
+      subtractSpans(exclusive, mask).every(
+        (span) => span.right - span.left <= 1e-6,
+      ),
+      `selected-exclusive ink must be hidden at y=${y}: ${selection.answer}`,
+    );
+    for (const span of neighbourInk)
+      for (const cover of mask)
+        assert.ok(
+          Math.min(cover.right, span.right) - Math.max(cover.left, span.left) <=
+            1e-6,
+          `neighbour ink must remain visible at y=${y}: ${selection.answer}`,
+        );
+  }
+};
+let actualChecks = 0;
+for (const context of fixture.cases) {
+  const glyphs = context.regions;
+  const text = glyphs.map((g) => g.label).join("");
+  for (const expected of context.words) {
+    const word = expected.replaceAll(" ", ""),
+      start = text.indexOf(word);
+    assert.ok(start >= 0, `${context.name}: fixture includes ${word}`);
+    const selected = glyphs.slice(start, start + Array.from(word).length);
+    const first = selected[0],
+      last = selected.at(-1);
+    const x1 = first.inkBounds.left + 0.05,
+      x2 = last.inkBounds.left + last.inkBounds.width - 0.05;
+    const y = first.top + first.height / 2;
+    for (const reverse of [false, true])
+      for (const wobble of [-1, 0, 1]) {
+        const a = { x: (reverse ? x2 : x1) / page.width, y: y / page.height };
+        const b = {
+          x: (reverse ? x1 : x2) / page.width,
+          y: (y + wobble) / page.height,
+        };
+        const selection = selectLessonTextDrag(glyphs, page, a, b);
+        assert.equal(
+          selection.answer?.replaceAll(" ", ""),
+          word,
+          `${context.name}/${word}/${reverse}/${wobble}: ${selection.error || selection.answer}`,
+        );
+        checkPaint(selection, glyphs);
+        actualChecks++;
+      }
+  }
+}
+const blocked = { ...fixture.cases[0].regions[0], selectable: false };
+const blockedPoint = (x, y) => ({ x: x / page.width, y: y / page.height });
+assert.equal(
+  findLessonTextAtPoint(
+    [blocked],
+    page,
+    blockedPoint(
+      blocked.left + blocked.width / 2,
+      blocked.top + blocked.height / 2,
+    ),
+  ),
+  undefined,
+  "decorative/rotated glyph is not an I-beam target",
+);
+assert.ok(
+  selectLessonTextDrag(
+    [blocked],
+    page,
+    blockedPoint(blocked.left, blocked.top + 2),
+    blockedPoint(blocked.left + blocked.width, blocked.top + 2),
+  ).error,
+  "decorative glyph is never an answer",
+);
+console.log(
+  `Actual PDF contours: ${actualChecks} comma/particle/parenthesis/negative-spacing gestures; selected-exclusive ink coverage and neighbouring ink preservation passed.`,
+);
+
 const point = (x, y) => ({ x: x / page.width, y: y / page.height });
 const drag = (glyphs, x1, y1, x2, y2) =>
   selectLessonTextDrag(glyphs, page, point(x1, y1), point(x2, y2));
+
+const inkRow = (top, bottom, spans) => ({
+  top,
+  bottom,
+  left: Math.min(...spans.map((span) => span.left)),
+  right: Math.max(...spans.map((span) => span.right)),
+  spans,
+});
+const inkGlyph = (label, rows) => {
+  const left = Math.min(...rows.map((row) => row.left)),
+    right = Math.max(...rows.map((row) => row.right)),
+    top = Math.min(...rows.map((row) => row.top)),
+    bottom = Math.max(...rows.map((row) => row.bottom));
+  return {
+    label,
+    page: 1,
+    left: left - 0.3,
+    top: top - 0.3,
+    width: right - left + 0.6,
+    height: bottom - top + 0.6,
+    inkBounds: { left, top, width: right - left, height: bottom - top },
+    baseline: 115,
+    inkRows: rows,
+  };
+};
+// A heading marker and full stop contribute two short ink heights to a
+// three-glyph selection. Their median must not shrink the ordinary word gap.
+const heading = [
+  inkGlyph("一", [inkRow(107, 109, [{ left: 100, right: 110 }])]),
+  inkGlyph(".", [inkRow(114, 116, [{ left: 111, right: 114 }])]),
+  inkGlyph("전", [inkRow(100, 116, [{ left: 124, right: 134 }])]),
+  inkGlyph("쟁", [inkRow(100, 116, [{ left: 135, right: 145 }])]),
+];
+let headingChecks = 0;
+for (const reverse of [false, true]) {
+  for (const [x1, x2, expected] of [
+    [100.1, 133.9, "一.전"],
+    [124.1, 144.9, "전쟁"],
+  ]) {
+    const result = drag(
+      heading,
+      reverse ? x2 : x1,
+      108,
+      reverse ? x1 : x2,
+      108,
+    );
+    assert.equal(
+      result.answer?.replaceAll(" ", ""),
+      expected,
+      `short heading marker/${reverse}: ${result.error}`,
+    );
+    checkPaint(result, heading);
+    headingChecks++;
+  }
+  const separatedCell = inkGlyph("칸", [
+    inkRow(100, 116, [{ left: 184, right: 194 }]),
+  ]);
+  const cells = [...heading.slice(0, 3), separatedCell];
+  assert.ok(
+    drag(cells, reverse ? 193.9 : 100.1, 108, reverse ? 100.1 : 193.9, 108)
+      .error,
+    "A short heading marker must not permit a 50px gap into a separate table cell",
+  );
+}
+console.log(
+  `Heading punctuation: ${headingChecks} short-marker/full-height-letter and ordinary-word gestures passed; separate table cells remain blocked.`,
+);
+const centerGlyph = inkGlyph("환", [
+  inkRow(100, 116, [{ left: 100, right: 110 }]),
+]);
+const rightGlyph = inkGlyph("국", [
+  inkRow(100, 108, [{ left: 109.95, right: 120 }]),
+  inkRow(108, 116, [{ left: 110.5, right: 120 }]),
+]);
+const leftGlyph = inkGlyph("의", [
+  inkRow(100, 108, [{ left: 90, right: 100.05 }]),
+  inkRow(108, 116, [{ left: 90, right: 99.5 }]),
+]);
+let sharedChecks = 0;
+for (const glyphs of [
+  [centerGlyph, rightGlyph],
+  [leftGlyph, centerGlyph],
+  [leftGlyph, centerGlyph, rightGlyph],
+]) {
+  for (const [x1, x2, expected] of [
+    [100.2, 109.7, "환"],
+    ...(glyphs.includes(leftGlyph) ? [[90.2, 99.8, "의"]] : []),
+    ...(glyphs.includes(rightGlyph) ? [[110.2, 119.8, "국"]] : []),
+  ]) {
+    let forward;
+    for (const reverse of [false, true]) {
+      const result = drag(
+        glyphs,
+        reverse ? x2 : x1,
+        104,
+        reverse ? x1 : x2,
+        104,
+      );
+      assert.equal(
+        result.answer,
+        expected,
+        `shared edge/${expected}/${reverse}: ${result.error}`,
+      );
+      assert.ok(
+        result.rect.inkClip?.length,
+        "A shared edge requires an explicit contour",
+      );
+      checkPaint(result, glyphs);
+      if (!reverse) forward = result;
+      else
+        assert.deepEqual(
+          result.rect,
+          forward.rect,
+          "Reverse gestures must use the same contour",
+        );
+      sharedChecks++;
+    }
+  }
+}
+const sharedSelection = drag([centerGlyph, rightGlyph], 100.2, 104, 109.7, 104);
+assert.throws(
+  () =>
+    checkPaint(
+      {
+        ...sharedSelection,
+        rect: { ...sharedSelection.rect, inkClip: undefined },
+      },
+      [centerGlyph, rightGlyph],
+    ),
+  /neighbour ink/,
+  "Paint audit catches a mask that hides shared neighbour pixels",
+);
+assert.throws(
+  () =>
+    checkPaint(
+      {
+        ...sharedSelection,
+        rect: {
+          ...sharedSelection.rect,
+          inkClip: [
+            { x: 0, y: 0 },
+            { x: 0.5, y: 0 },
+            { x: 0.5, y: 1 },
+            { x: 0, y: 1 },
+          ],
+        },
+      },
+      [centerGlyph, rightGlyph],
+    ),
+  /selected-exclusive ink/,
+  "Paint audit catches uncovered independent selected strokes",
+);
+
+// A neighbour may have separated strokes. A polygon hole preserves its internal
+// stroke while a second mask span still covers the selected independent stroke.
+const hollowSelected = inkGlyph("약", [
+  inkRow(100, 116, [
+    { left: 100, right: 108 },
+    { left: 109, right: 110 },
+  ]),
+]);
+const internalNeighbour = inkGlyph("화", [
+  inkRow(100, 116, [
+    { left: 107.95, right: 108.05 },
+    { left: 112, right: 120 },
+  ]),
+]);
+for (const reverse of [false, true]) {
+  const a = reverse ? 109.7 : 100.2,
+    b = reverse ? 100.2 : 109.7;
+  const hollowSelection = drag(
+    [hollowSelected, internalNeighbour],
+    a,
+    104,
+    b,
+    104,
+  );
+  assert.equal(
+    hollowSelection.answer,
+    "약",
+    "Exact spans permit a safe internal hole",
+  );
+  assert.ok(hollowSelection.rect.inkClip?.length);
+  checkPaint(hollowSelection, [hollowSelected, internalNeighbour]);
+  assert.throws(
+    () =>
+      checkPaint(
+        {
+          ...hollowSelection,
+          rect: { ...hollowSelection.rect, inkClip: undefined },
+        },
+        [hollowSelected, internalNeighbour],
+      ),
+    /neighbour ink/,
+    "Removing an internal hole must fail the independent paint audit",
+  );
+  for (const missing of ["selected", "neighbour", "both"]) {
+    const withoutSpans = (glyph) => ({
+      ...glyph,
+      inkRows: glyph.inkRows.map(({ spans: _spans, ...row }) => row),
+    });
+    const measured = [
+      missing === "neighbour" ? centerGlyph : withoutSpans(centerGlyph),
+      missing === "selected" ? rightGlyph : withoutSpans(rightGlyph),
+    ];
+    assert.ok(
+      drag(measured, a, 104, b, 104).error,
+      `Shared pixels require exact spans on both glyphs (${missing}, reverse=${reverse})`,
+    );
+  }
+  for (const neighbour of [
+    inkGlyph("왼", [inkRow(100, 116, [{ left: 95.1, right: 105.1 }])]),
+    inkGlyph("오", [inkRow(100, 116, [{ left: 104.9, right: 114.9 }])]),
+  ]) {
+    assert.ok(
+      drag([centerGlyph, neighbour], a, 104, b, 104).error,
+      "A neighbour-priority cut beyond the boundary glyph centre must fail",
+    );
+  }
+}
+console.log(
+  `Shared ink: ${sharedChecks} forward/reverse left/right/both-edge cases and exact internal holes preserve neighbour paint; missing spans and excessive cut-ins are rejected.`,
+);
+
+const sharedOnly = (label, left, right, spans) => ({
+  page: 1,
+  label,
+  left: left - 0.1,
+  top: 19.9,
+  width: right - left + 0.2,
+  height: 10.2,
+  baseline: 30,
+  inkBounds: { left, top: 20, width: right - left, height: 10 },
+  inkRows: [{ left, right, top: 20, bottom: 30, spans }],
+});
+assert.ok(
+  drag(
+    [
+      sharedOnly("이", 40, 50, [
+        { left: 40, right: 42 },
+        { left: 48, right: 50 },
+      ]),
+      sharedOnly("왼", 20, 43, [{ left: 20, right: 43 }]),
+      sharedOnly("오", 47, 70, [{ left: 47, right: 70 }]),
+    ],
+    45,
+    25,
+    45.2,
+    25,
+  ).error,
+  "a hollow blank may not expose every selected stroke shared with two neighbours",
+);
 for (const dy of [-3, -2, -1, 0, 1, 2, 3]) {
   assert.equal(
     drag(sample, 389, 267, 450, 267 + dy).answer,
@@ -222,7 +662,8 @@ for (const [start, end, expected] of [
       end - 0.2 - 1e-8,
   );
   assert.ok(
-    (result.rect.leftRatio + result.rect.widthRatio) * page.width <= end + (end === 170 ? 0.3 : 1e-8),
+    (result.rect.leftRatio + result.rect.widthRatio) * page.width <=
+      end + (end === 170 ? 0.3 : 1e-8),
     "padding must not mask next glyph",
   );
 }

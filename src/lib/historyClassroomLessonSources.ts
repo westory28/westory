@@ -147,6 +147,7 @@ export const buildHistoryClassroomLessonSources = (
               answer: blank.answer,
               prompt: blank.prompt,
               source: blank.source,
+              ...(blank.inkClip ? { inkClip: blank.inkClip } : {}),
             },
           ];
         });

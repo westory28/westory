@@ -294,7 +294,10 @@ console.log(
 
 // Execute the actual component's hooks and event handlers with server I/O stubs.
 // No DOM or visual layout assertions are implied by this controller harness.
-const worksheet = compile("src/lib/lessonWorksheet.ts", {});
+const blankClip = compile("src/lib/lessonBlankClip.ts", {});
+const worksheet = compile("src/lib/lessonWorksheet.ts", {
+  "./lessonBlankClip": blankClip,
+});
 const pdf = compile("src/lib/lessonPdfExtraction.ts", {});
 const data = compile("src/lib/lessonData.ts", {
   "./lessonWorksheet": worksheet,
@@ -438,6 +441,7 @@ const harness = (store, { processPdfMapFile } = {}) => {
           `years/${config.year}/semesters/${config.semester}/${name}/${id}`,
       },
       "../../lib/lessonWorksheet": worksheet,
+      "../../lib/lessonBlankClip": blankClip,
       "../../lib/lessonData": data,
       "../../lib/teacherLessonLoading": store.loading,
       "../../lib/lessonPdfExtraction": pdf,
@@ -808,4 +812,88 @@ console.log(
 }
 console.log(
   "PASS replacement PDF preparation blocks mismatched OCR/upload/save and recovers with a matched retry and reload",
+);
+
+{
+  const page = {
+    page: 1,
+    width: 1000,
+    height: 1000,
+    imageUrl: "https://worksheet.example/page",
+  };
+  const app = harness(
+    makeStore({
+      [scopePath]: [
+        lesson("A", 200, {
+          pdfUrl: "https://worksheet.example/original.pdf",
+          worksheetPageImages: [page],
+        }),
+      ],
+    }),
+  );
+  app.render();
+  await app.settle();
+  const inkClip = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 0.4 },
+    { x: 0.9987, y: 0.4 },
+    { x: 0.9987, y: 0.6 },
+    { x: 1, y: 0.6 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ];
+  app.find("LessonPdfSection").onCreateBlankFromSelection(
+    1,
+    {
+      leftRatio: 0.1,
+      topRatio: 0.2,
+      widthRatio: 0.3,
+      heightRatio: 0.04,
+      inkClip,
+    },
+    [
+      {
+        page: 1,
+        left: 100,
+        top: 200,
+        width: 300,
+        height: 40,
+        label: "이조전랑",
+      },
+    ],
+    "ocr",
+  );
+  assert.equal(
+    JSON.stringify(app.find("LessonPdfSection").draftBlank.inkClip),
+    JSON.stringify(inkClip),
+  );
+  app.find("LessonPdfSection").onConfirmDraftBlank();
+  app.find("LessonPdfSection").onSavePdf();
+  await app.settle();
+  assert.equal(app.errors.length, 0);
+  assert.equal(app.saves.length, 1);
+  const saved = app.saves[0].input.document;
+  assert.equal(
+    JSON.stringify(saved.worksheetBlanks[0].inkClip),
+    JSON.stringify(inkClip),
+  );
+  assert.equal(saved.worksheetBlanks[0].answer, "이조전랑");
+  const reloaded = harness(
+    makeStore({
+      [scopePath]: [lesson("A", 300, JSON.parse(JSON.stringify(saved)))],
+    }),
+  );
+  reloaded.render();
+  await reloaded.settle();
+  assert.equal(
+    JSON.stringify(
+      reloaded.find("LessonPdfSection").worksheetBlanks[0].inkClip,
+    ),
+    JSON.stringify(inkClip),
+  );
+  assert.equal(reloaded.errors.length, 0);
+}
+console.log(
+  "PASS actual editor OCR contour draft, confirm, save payload and reload preserve precise blank edges",
 );

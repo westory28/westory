@@ -10,7 +10,7 @@
     "build": "vite build",
     "verify:semester-archive": "node scripts/verify-semester-archive.mjs",
     "verify:lesson-management": "node scripts/verify-lesson-management-client.mjs && node scripts/verify-lesson-loading.mjs",
-    "verify:lesson-text-selection": "node scripts/verify-lesson-text-selection.mjs && node scripts/verify-lesson-pdf-glyphs.mjs",
+    "verify:lesson-text-selection": "node scripts/verify-lesson-text-selection.mjs && node scripts/verify-lesson-ink-clip.mjs && node scripts/verify-lesson-pdf-glyphs.mjs && node scripts/verify-lesson-blank-clip.mjs && node scripts/verify-history-classroom-lesson-sources.mjs",
     "test:lesson-assets": "firebase emulators:exec --only firestore --config firebase.student-access-test.json --project demo-westory-session-student-access \"node scripts/verify-lesson-asset-rules.mjs\"",
     "verify:login-functions": "npm --prefix functions run check",
     "test:login-session": "firebase emulators:exec --only firestore --config firebase.login-test.json --project demo-westory-session-authority \"node functions/scripts/verify-session-authority.cjs\"",

@@ -16,6 +16,7 @@ import {
   selectLessonTextDrag,
 } from "../../lib/lessonTextSelection";
 import { useLessonTextSelection } from "../../lib/useLessonTextSelection";
+import { getLessonBlankClipPath } from "../../lib/lessonBlankClip";
 
 type AnswerStatus = "" | "correct" | "wrong";
 type StudentTool =
@@ -61,6 +62,7 @@ interface LessonWorksheetStageProps {
       topRatio: number;
       widthRatio: number;
       heightRatio: number;
+      inkClip?: LessonWorksheetBlank["inkClip"];
     },
     matchedRegions: LessonWorksheetTextRegion[],
     source: "ocr" | "manual",
@@ -1542,7 +1544,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     });
   };
 
-  const handleTeacherPointerUp = (pageImage: LessonWorksheetPageImage) => {
+  const handleTeacherPointerUp = (
+    pageImage: LessonWorksheetPageImage,
+    endPoint?: { x: number; y: number } | null,
+  ) => {
     if (teacherTool === "pan") {
       panRef.current = null;
       return;
@@ -1616,7 +1621,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       preciseTextRegions,
       pageImage,
       { x: draftRect.startX, y: draftRect.startY },
-      { x: draftRect.currentX, y: draftRect.currentY },
+      endPoint || { x: draftRect.currentX, y: draftRect.currentY },
     );
     if ("error" in selection) {
       setTextSelectionError(selection.error);
@@ -1668,13 +1673,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const handleWindowPointerMove = (event: PointerEvent) => {
       updateDraftPoint(draftRect.page, event.clientX, event.clientY);
     };
-    const handleWindowPointerUp = () => {
+    const handleWindowPointerUp = (event: PointerEvent) => {
       const pageImage = pageImages.find((item) => item.page === draftRect.page);
       if (!pageImage) {
         setDraftRect(null);
         return;
       }
-      handleTeacherPointerUp(pageImage);
+      handleTeacherPointerUp(
+        pageImage,
+        resolveRatioPoint(pageImage.page, event.clientX, event.clientY),
+      );
     };
     const handleWindowPointerCancel = () => setDraftRect(null);
     window.addEventListener("pointermove", handleWindowPointerMove);
@@ -2744,7 +2752,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     if (isTeacherEditMode) {
                       // The window fallback must not finalize the same draft twice.
                       event.stopPropagation();
-                      handleTeacherPointerUp(pageImage);
+                      handleTeacherPointerUp(
+                        pageImage,
+                        resolveRatioPoint(
+                          pageImage.page,
+                          event.clientX,
+                          event.clientY,
+                        ),
+                      );
                     } else finishStudentStroke();
                   }}
                   onPointerCancel={(event) => {
@@ -3256,6 +3271,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             top: toPercent(region.topRatio),
                             width: toPercent(region.widthRatio),
                             height: toPercent(region.heightRatio),
+                            clipPath: getLessonBlankClipPath(blank.inkClip),
                           }}
                         />
                       ));
@@ -3265,6 +3281,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     pageBlanks.map((blank) => {
                       const studentAnswer = studentAnswers[blank.id];
                       const status = studentAnswer?.status || "";
+                      const clipPath = getLessonBlankClipPath(blank.inkClip);
                       // OCR and manual blanks use the exact saved geometry.
                       const renderRect = blank;
                       const placeholder = blank.prompt || EMPTY_BLANK_LABEL;
@@ -3275,7 +3292,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         <div
                           key={blank.id}
                           data-blank-box="true"
-                          className="absolute overflow-visible rounded-md border border-slate-200 bg-white shadow-sm"
+                          className="absolute overflow-visible"
                           style={{
                             left: toPercent(renderRect.leftRatio),
                             top: toPercent(renderRect.topRatio),
@@ -3287,41 +3304,49 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               : "none",
                           }}
                         >
-                          <WorksheetBlankInput
-                            lang="ko"
-                            aria-label={`${pageImage.page}페이지 빈칸 ${pageBlanks.indexOf(blank) + 1}`}
-                            aria-invalid={status === "wrong" || undefined}
-                            title={
-                              status === "correct"
-                                ? "정답"
-                                : status === "wrong"
-                                  ? "오답"
-                                  : undefined
-                            }
-                            autoComplete="off"
-                            autoCorrect="off"
-                            spellCheck={false}
-                            inputMode="text"
-                            type="text"
-                            value={studentAnswer?.value || ""}
-                            data-blank-id={blank.id}
-                            data-answer={blank.answer}
-                            className={`worksheet-blank-input relative z-10 block h-full w-full border-0 bg-white text-center font-bold outline-none ${
-                              status === "correct"
-                                ? "text-blue-600"
-                                : status === "wrong"
-                                  ? "text-red-600"
-                                  : "text-slate-700"
+                          <div
+                            data-blank-mask="true"
+                            className={`h-full w-full border border-slate-200 bg-white shadow-sm ${
+                              clipPath ? "" : "rounded-md"
                             }`}
-                            placeholder={placeholder}
-                            onChange={(event) =>
-                              onStudentAnswerChange?.(
-                                blank.id,
-                                event.target.value,
-                                blank.answer,
-                              )
-                            }
-                          />
+                            style={{ clipPath }}
+                          >
+                            <WorksheetBlankInput
+                              lang="ko"
+                              aria-label={`${pageImage.page}페이지 빈칸 ${pageBlanks.indexOf(blank) + 1}`}
+                              aria-invalid={status === "wrong" || undefined}
+                              title={
+                                status === "correct"
+                                  ? "정답"
+                                  : status === "wrong"
+                                    ? "오답"
+                                    : undefined
+                              }
+                              autoComplete="off"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              inputMode="text"
+                              type="text"
+                              value={studentAnswer?.value || ""}
+                              data-blank-id={blank.id}
+                              data-answer={blank.answer}
+                              className={`worksheet-blank-input relative z-10 block h-full w-full border-0 bg-white text-center font-bold outline-none ${
+                                status === "correct"
+                                  ? "text-blue-600"
+                                  : status === "wrong"
+                                    ? "text-red-600"
+                                    : "text-slate-700"
+                              }`}
+                              placeholder={placeholder}
+                              onChange={(event) =>
+                                onStudentAnswerChange?.(
+                                  blank.id,
+                                  event.target.value,
+                                  blank.answer,
+                                )
+                              }
+                            />
+                          </div>
                         </div>
                       );
                     })}
@@ -3334,6 +3359,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         top: toPercent(pagePendingBlank.topRatio),
                         width: toPercent(pagePendingBlank.widthRatio),
                         height: toPercent(pagePendingBlank.heightRatio),
+                        clipPath: getLessonBlankClipPath(
+                          pagePendingBlank.inkClip,
+                        ),
                       }}
                     />
                   )}
@@ -3350,6 +3378,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           top: toPercent(selectedDraft.rect.topRatio),
                           width: toPercent(selectedDraft.rect.widthRatio),
                           height: toPercent(selectedDraft.rect.heightRatio),
+                          clipPath: getLessonBlankClipPath(
+                            selectedDraft.rect.inkClip,
+                          ),
                         }}
                       >
                         <img

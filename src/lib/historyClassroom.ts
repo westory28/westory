@@ -3,6 +3,10 @@ import { getHttpsCallable } from "./firebase";
 import type { MapResource } from "./mapResources";
 import { getYearSemester } from "./semesterScope";
 import {
+  normalizeLessonBlankClip,
+  type LessonBlankClipPoint,
+} from "./lessonBlankClip";
+import {
   clampRatio,
   getTightTextRegionBounds,
   normalizeBlankText,
@@ -23,6 +27,7 @@ export interface HistoryClassroomBlank {
   answer: string;
   prompt?: string;
   source?: HistoryClassroomBlankSource;
+  inkClip?: LessonBlankClipPoint[];
 }
 
 export interface HistoryClassroomAssignment {
@@ -294,17 +299,25 @@ export const normalizeHistoryClassroomAssignment = (
       : [],
     blanks: Array.isArray(raw.blanks)
       ? ((usedIds) =>
-          raw.blanks!.map((blank, index) => ({
-            id: resolveUniqueHistoryClassroomBlankId(blank?.id, index, usedIds),
-            page: Number(blank?.page) || 1,
-            left: Number(blank?.left) || 0,
-            top: Number(blank?.top) || 0,
-            width: Number(blank?.width) || 140,
-            height: Number(blank?.height) || 52,
-            answer: String(blank?.answer || "").trim(),
-            prompt: String(blank?.prompt || "").trim(),
-            source: blank?.source === "ocr" ? "ocr" : "manual",
-          })))(new Set<string>())
+          raw.blanks!.map((blank, index) => {
+            const inkClip = normalizeLessonBlankClip(blank?.inkClip);
+            return {
+              id: resolveUniqueHistoryClassroomBlankId(
+                blank?.id,
+                index,
+                usedIds,
+              ),
+              page: Number(blank?.page) || 1,
+              left: Number(blank?.left) || 0,
+              top: Number(blank?.top) || 0,
+              width: Number(blank?.width) || 140,
+              height: Number(blank?.height) || 52,
+              answer: String(blank?.answer || "").trim(),
+              prompt: String(blank?.prompt || "").trim(),
+              source: blank?.source === "ocr" ? "ocr" : "manual",
+              ...(inkClip ? { inkClip } : {}),
+            };
+          }))(new Set<string>())
       : [],
     answerOptions: Array.isArray(raw.answerOptions)
       ? raw.answerOptions
@@ -659,6 +672,8 @@ export const sanitizeHistoryClassroomAssignmentForWrite = (
             if (blank?.source === "ocr" || blank?.source === "manual") {
               normalizedBlank.source = blank.source;
             }
+            const inkClip = normalizeLessonBlankClip(blank?.inkClip);
+            if (inkClip) normalizedBlank.inkClip = inkClip;
             return normalizedBlank;
           }))(new Set<string>())
       : [],
@@ -1122,6 +1137,9 @@ export const getHistoryClassroomBlankRenderRect = (
     widthRatio: clampRatio(blank.width / pageImage.width),
     heightRatio: clampRatio(blank.height / pageImage.height),
   };
+  // The contour is relative to this exact rectangle; expansion would move it.
+  const inkClip = normalizeLessonBlankClip(blank.inkClip);
+  if (inkClip) return { ...baseRect, inkClip };
 
   if (blankSource === "manual" || pageRegions.length === 0) {
     const pixelWidth = Math.max(1, baseRect.widthRatio * pageImage.width);

@@ -87,6 +87,16 @@ const tree = [
     ],
   },
 ];
+const inkClip = [
+  { x: 0, y: 0 },
+  { x: 1, y: 0 },
+  { x: 1, y: 0.4 },
+  { x: 0.9987, y: 0.4 },
+  { x: 0.9987, y: 0.6 },
+  { x: 1, y: 0.6 },
+  { x: 1, y: 1 },
+  { x: 0, y: 1 },
+];
 const lesson = (unitId, answer = "고조선") => ({
   unitId,
   title: `${unitId}의 자료 제목`,
@@ -115,6 +125,7 @@ const lesson = (unitId, answer = "고조선") => ({
       answer,
       prompt: "나라 이름",
       source: "ocr",
+      inkClip,
     },
     {
       id: "second",
@@ -173,6 +184,7 @@ assert.deepEqual(
     answer: "고조선",
     prompt: "나라 이름",
     source: "ocr",
+    inkClip,
   },
   "Convert against the corresponding page dimensions without OCR resizing or renumbering",
 );
@@ -285,6 +297,16 @@ const payload = sanitizeHistoryClassroomAssignmentForWrite({
 const assignment = normalizeHistoryClassroomAssignment(
   "lesson-assignment",
   payload,
+);
+assert.deepEqual(
+  plain(assignment.blanks[0].inkClip),
+  inkClip,
+  "Lesson contour survives history snapshot save and reload",
+);
+assert.equal(
+  "inkClip" in assignment.blanks[1],
+  false,
+  "Manual blanks stay unchanged",
 );
 assert.equal(assignment.sourceType, "lesson");
 assert.equal(assignment.mapResourceId, "");

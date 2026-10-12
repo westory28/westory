@@ -53,6 +53,7 @@ import {
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
 import { normalizeMapResource, type MapResource } from "../../lib/mapResources";
+import { normalizeLessonBlankClip } from "../../lib/lessonBlankClip";
 import {
   getHistoryClassroomSourceFields,
   getHistoryClassroomLessonSelectLevels,
@@ -646,6 +647,7 @@ const historyBlankToWorksheetBlank = (
     return null;
   }
 
+  const inkClip = normalizeLessonBlankClip(blank.inkClip);
   return {
     id: blank.id,
     page: blank.page,
@@ -656,6 +658,7 @@ const historyBlankToWorksheetBlank = (
     answer: blank.answer,
     prompt: blank.prompt || "",
     source: inferHistoryClassroomBlankSource(blank, pageImage, pageRegions),
+    ...(inkClip ? { inkClip } : {}),
   };
 };
 
@@ -667,16 +670,19 @@ const worksheetBlankToHistoryBlank = (
     return null;
   }
 
+  const inkClip = normalizeLessonBlankClip(blank.inkClip);
+  const coordinate = inkClip ? (value: number) => value : Math.round;
   return {
     id: blank.id,
     page: blank.page,
-    left: Math.round(blank.leftRatio * pageImage.width),
-    top: Math.round(blank.topRatio * pageImage.height),
-    width: Math.max(1, Math.round(blank.widthRatio * pageImage.width)),
-    height: Math.max(1, Math.round(blank.heightRatio * pageImage.height)),
+    left: coordinate(blank.leftRatio * pageImage.width),
+    top: coordinate(blank.topRatio * pageImage.height),
+    width: Math.max(1, coordinate(blank.widthRatio * pageImage.width)),
+    height: Math.max(1, coordinate(blank.heightRatio * pageImage.height)),
     answer: blank.answer.trim(),
     prompt: String(blank.prompt || "").trim(),
     source: blank.source === "ocr" ? "ocr" : "manual",
+    ...(inkClip ? { inkClip } : {}),
   };
 };
 
@@ -686,19 +692,23 @@ const cloneMapResourceBlanks = (
   mapResource && "lessonUnitId" in mapResource
     ? (mapResource.pdfBlanks || []).map((blank) => ({ ...blank }))
     : (mapResource?.pdfBlanks || [])
-        .map<HistoryClassroomBlank>((blank) => ({
-          id:
-            String(blank.id || "").trim() ||
-            `blank-${blank.page}-${blank.left}-${blank.top}`,
-          page: Math.max(1, Number(blank.page) || 1),
-          left: Number(blank.left) || 0,
-          top: Number(blank.top) || 0,
-          width: Math.max(1, Number(blank.width) || 1),
-          height: Math.max(1, Number(blank.height) || 1),
-          answer: String(blank.answer || "").trim(),
-          prompt: String(blank.prompt || "").trim(),
-          source: blank.source === "ocr" ? "ocr" : "manual",
-        }))
+        .map<HistoryClassroomBlank>((blank) => {
+          const inkClip = normalizeLessonBlankClip(blank.inkClip);
+          return {
+            id:
+              String(blank.id || "").trim() ||
+              `blank-${blank.page}-${blank.left}-${blank.top}`,
+            page: Math.max(1, Number(blank.page) || 1),
+            left: Number(blank.left) || 0,
+            top: Number(blank.top) || 0,
+            width: Math.max(1, Number(blank.width) || 1),
+            height: Math.max(1, Number(blank.height) || 1),
+            answer: String(blank.answer || "").trim(),
+            prompt: String(blank.prompt || "").trim(),
+            source: blank.source === "ocr" ? "ocr" : "manual",
+            ...(inkClip ? { inkClip } : {}),
+          };
+        })
         .filter((blank) => blank.answer)
         .sort((a, b) => a.page - b.page || a.top - b.top || a.left - b.left);
 

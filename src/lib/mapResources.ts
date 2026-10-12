@@ -1,3 +1,8 @@
+import {
+  normalizeLessonBlankClip,
+  type LessonBlankClipPoint,
+} from "./lessonBlankClip";
+
 export type MapResourceType = "image" | "iframe" | "google" | "pdf";
 
 export interface PdfMapPageImage {
@@ -30,6 +35,7 @@ export interface PdfMapBlank {
   answer: string;
   prompt?: string;
   source?: PdfMapBlankSource;
+  inkClip?: LessonBlankClipPoint[];
 }
 
 export interface PdfTagSection {
@@ -173,67 +179,75 @@ const normalizePdfBlanks = (blanks: unknown): PdfMapBlank[] => {
   if (!Array.isArray(blanks)) return [];
 
   return blanks
-    .map((blank, index) => ({
-      id:
-        String(
-          blank && typeof blank === "object" && "id" in blank
-            ? (blank as { id?: string }).id
+    .map((blank, index) => {
+      const inkClip = normalizeLessonBlankClip(
+        blank && typeof blank === "object" && "inkClip" in blank
+          ? blank.inkClip
+          : undefined,
+      );
+      return {
+        id:
+          String(
+            blank && typeof blank === "object" && "id" in blank
+              ? (blank as { id?: string }).id
+              : "",
+          ).trim() || `blank-${index + 1}`,
+        page: Math.max(
+          1,
+          Number(
+            blank && typeof blank === "object" && "page" in blank
+              ? (blank as { page?: unknown }).page
+              : 1,
+          ) || 1,
+        ),
+        left:
+          Number(
+            blank && typeof blank === "object" && "left" in blank
+              ? (blank as { left?: unknown }).left
+              : 0,
+          ) || 0,
+        top:
+          Number(
+            blank && typeof blank === "object" && "top" in blank
+              ? (blank as { top?: unknown }).top
+              : 0,
+          ) || 0,
+        width: Math.max(
+          1,
+          Number(
+            blank && typeof blank === "object" && "width" in blank
+              ? (blank as { width?: unknown }).width
+              : 1,
+          ) || 1,
+        ),
+        height: Math.max(
+          1,
+          Number(
+            blank && typeof blank === "object" && "height" in blank
+              ? (blank as { height?: unknown }).height
+              : 1,
+          ) || 1,
+        ),
+        answer: String(
+          blank && typeof blank === "object" && "answer" in blank
+            ? (blank as { answer?: string }).answer
             : "",
-        ).trim() || `blank-${index + 1}`,
-      page: Math.max(
-        1,
-        Number(
-          blank && typeof blank === "object" && "page" in blank
-            ? (blank as { page?: unknown }).page
-            : 1,
-        ) || 1,
-      ),
-      left:
-        Number(
-          blank && typeof blank === "object" && "left" in blank
-            ? (blank as { left?: unknown }).left
-            : 0,
-        ) || 0,
-      top:
-        Number(
-          blank && typeof blank === "object" && "top" in blank
-            ? (blank as { top?: unknown }).top
-            : 0,
-        ) || 0,
-      width: Math.max(
-        1,
-        Number(
-          blank && typeof blank === "object" && "width" in blank
-            ? (blank as { width?: unknown }).width
-            : 1,
-        ) || 1,
-      ),
-      height: Math.max(
-        1,
-        Number(
-          blank && typeof blank === "object" && "height" in blank
-            ? (blank as { height?: unknown }).height
-            : 1,
-        ) || 1,
-      ),
-      answer: String(
-        blank && typeof blank === "object" && "answer" in blank
-          ? (blank as { answer?: string }).answer
-          : "",
-      ).trim(),
-      prompt: String(
-        blank && typeof blank === "object" && "prompt" in blank
-          ? (blank as { prompt?: string }).prompt
-          : "",
-      ).trim(),
-      source:
-        blank &&
-        typeof blank === "object" &&
-        "source" in blank &&
-        (blank as { source?: string }).source === "ocr"
-          ? ("ocr" as const)
-          : ("manual" as const),
-    }))
+        ).trim(),
+        prompt: String(
+          blank && typeof blank === "object" && "prompt" in blank
+            ? (blank as { prompt?: string }).prompt
+            : "",
+        ).trim(),
+        source:
+          blank &&
+          typeof blank === "object" &&
+          "source" in blank &&
+          (blank as { source?: string }).source === "ocr"
+            ? ("ocr" as const)
+            : ("manual" as const),
+        ...(inkClip ? { inkClip } : {}),
+      };
+    })
     .filter((blank) => blank.answer && blank.width > 0 && blank.height > 0)
     .sort((a, b) => a.page - b.page || a.top - b.top || a.left - b.left);
 };

@@ -30,6 +30,7 @@ import {
   getSemesterDocPath,
 } from "../../lib/semesterScope";
 import { type ProcessedPdfMap } from "../../lib/pdfMapProcessor";
+import { normalizeLessonBlankClip } from "../../lib/lessonBlankClip";
 import {
   normalizeWorksheetBlanks,
   normalizeWorksheetExamHighlights,
@@ -173,19 +174,24 @@ const createBlankFromRect = (
     topRatio: number;
     widthRatio: number;
     heightRatio: number;
+    inkClip?: LessonWorksheetBlank["inkClip"];
   },
   source: "ocr" | "manual" = "manual",
-): LessonWorksheetBlank => ({
-  id: `blank-${page}-${Date.now()}`,
-  page,
-  leftRatio: rect.leftRatio,
-  topRatio: rect.topRatio,
-  widthRatio: rect.widthRatio,
-  heightRatio: rect.heightRatio,
-  answer: "",
-  prompt: "",
-  source,
-});
+): LessonWorksheetBlank => {
+  const inkClip = normalizeLessonBlankClip(rect.inkClip);
+  return {
+    id: `blank-${page}-${Date.now()}`,
+    page,
+    leftRatio: rect.leftRatio,
+    topRatio: rect.topRatio,
+    widthRatio: rect.widthRatio,
+    heightRatio: rect.heightRatio,
+    answer: "",
+    prompt: "",
+    source,
+    ...(inkClip ? { inkClip } : {}),
+  };
+};
 
 const createExamHighlightFromRect = (
   page: number,
@@ -2289,6 +2295,7 @@ const ManageLesson: React.FC = () => {
       topRatio: number;
       widthRatio: number;
       heightRatio: number;
+      inkClip?: LessonWorksheetBlank["inkClip"];
     },
     matchedRegions: LessonWorksheetTextRegion[],
     source: "ocr" | "manual",

@@ -1,6 +1,14 @@
 import { pdfjs } from "react-pdf";
 import type { LessonWorksheetPageImage } from "./lessonWorksheet";
 import type { LessonPdfGlyph, LessonPdfGlyphPage } from "./lessonPdfGlyphTypes";
+import {
+  createLessonPdfInkSampler,
+  paintLessonPdfGlyph,
+  snapshotLessonPdfGlyphPaint,
+  type LessonPdfGlyphPaintState,
+  type LessonPdfInkBounds,
+  type LessonPdfInkSample,
+} from "./lessonPdfGlyphInk";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -13,6 +21,40 @@ interface PdfGlyph {
   accent?: unknown;
   isInFont?: boolean;
 }
+
+interface CapturedPaint {
+  state: LessonPdfGlyphPaintState;
+  text: string;
+  x: number;
+  y: number;
+  stroke: boolean;
+  candidate: LessonPdfInkBounds;
+}
+
+const inkIntersects = (a: LessonPdfGlyph, b: LessonPdfGlyph) => {
+  const left = a.inkBounds,
+    right = b.inkBounds;
+  if (
+    !left ||
+    !right ||
+    left.left >= right.left + right.width ||
+    right.left >= left.left + left.width ||
+    left.top >= right.top + right.height ||
+    right.top >= left.top + left.height
+  )
+    return false;
+  return (
+    a.inkRows?.some((row) =>
+      b.inkRows?.some(
+        (other) =>
+          row.left < other.right &&
+          other.left < row.right &&
+          row.top < other.bottom &&
+          other.top < row.bottom,
+      ),
+    ) ?? false
+  );
+};
 
 /**
  * Observe PDF.js's real paint calls: embedded font, kerning, crop and viewport
@@ -64,6 +106,7 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
         const maskContext = maskCanvas.getContext("2d");
         if (!metricsContext || !maskContext)
           throw new Error("canvas-unavailable");
+        const inkSampler = createLessonPdfInkSampler();
         const ops = await page.getOperatorList();
         const expected = new Map<number, Map<string, number>>();
         for (let index = 0; index < ops.fnArray.length; index++) {
@@ -86,8 +129,56 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
         let operationIndex = -1;
         const captured = new Map<number, Map<string, Set<string>>>();
         const regions: LessonPdfGlyph[] = [];
+        const originalPaints = new Map<LessonPdfGlyph, CapturedPaint[]>();
         const scaleX = pageImage.width / viewport.width,
           scaleY = pageImage.height / viewport.height;
+        const pageInk = (ink: LessonPdfInkSample) => {
+          // Keep only a small antialias margin around the actual painted ink.
+          const left = Math.max(0, ink.left - 0.6) * scaleX,
+            top = Math.max(0, ink.top - 0.6) * scaleY;
+          const inkLeft = Math.max(0, ink.left) * scaleX,
+            inkTop = Math.max(0, ink.top) * scaleY;
+          return {
+            left,
+            top,
+            width:
+              Math.min(pageImage.width, (ink.left + ink.width + 0.6) * scaleX) -
+              left,
+            height:
+              Math.min(
+                pageImage.height,
+                (ink.top + ink.height + 0.6) * scaleY,
+              ) - top,
+            inkBounds: {
+              left: inkLeft,
+              top: inkTop,
+              width:
+                Math.min(pageImage.width, (ink.left + ink.width) * scaleX) -
+                inkLeft,
+              height:
+                Math.min(pageImage.height, (ink.top + ink.height) * scaleY) -
+                inkTop,
+            },
+            inkRows: ink.rows
+              .map((row) => ({
+                left: Math.max(0, row.left) * scaleX,
+                right: Math.min(pageImage.width, row.right * scaleX),
+                top: Math.max(0, row.top) * scaleY,
+                bottom: Math.min(pageImage.height, row.bottom * scaleY),
+                ...(row.spans
+                  ? {
+                      spans: row.spans
+                        .map((span) => ({
+                          left: Math.max(0, span.left) * scaleX,
+                          right: Math.min(pageImage.width, span.right * scaleX),
+                        }))
+                        .filter((span) => span.right > span.left),
+                    }
+                  : {}),
+              }))
+              .filter((row) => row.right > row.left && row.bottom > row.top),
+          };
+        };
         const capture = (
           text: string,
           x: number,
@@ -95,24 +186,17 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
           stroke: boolean,
         ) => {
           const label = glyphMap.get(text);
-          if (
-            !label ||
-            !label.trim() ||
-            /[\uFFFD\uE000-\uF8FF]/u.test(label) ||
-            ctx.globalAlpha < 0.95
-          )
-            return;
+          if (!label || !label.trim() || ctx.globalAlpha < 0.95) return;
           const t = ctx.getTransform();
-          // A rectangular blank cannot fit diagonal/vertical writing safely.
-          if (
-            t.a <= 0 ||
-            t.d <= 0 ||
-            Math.abs(t.b) > 0.001 ||
-            Math.abs(t.c) > 0.001
-          )
-            return;
-          // Canvas rounds small-font ink metrics to whole font-space pixels.
-          // Measure the same embedded face at 32x to avoid masking the next glyph.
+          // Preserve the actual ink of decorative/rotated glyphs as blockers.
+          // They must neither disable unrelated text nor enter a blank answer.
+          const selectable =
+            !/[\uFFFD\uE000-\uF8FF]/u.test(label) &&
+            t.a > 0 &&
+            t.d > 0 &&
+            Math.abs(t.b) <= 0.001 &&
+            Math.abs(t.c) <= 0.001;
+          // These rounded font metrics reserve a scratch tile, never the final ink box.
           metricsContext.font = ctx.font.replace(
             /([\d.]+)px/u,
             (_, size) => `${Number(size) * 32}px`,
@@ -125,12 +209,41 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
             actualBoundingBoxDescent: measured.actualBoundingBoxDescent / 32,
           };
           const edge = stroke ? ctx.lineWidth / 2 : 0;
-          const x1 = (x - m.actualBoundingBoxLeft - edge) * t.a + t.e;
-          const x2 = (x + m.actualBoundingBoxRight + edge) * t.a + t.e;
-          const y1 = (y - m.actualBoundingBoxAscent - edge) * t.d + t.f;
-          const y2 = (y + m.actualBoundingBoxDescent + edge) * t.d + t.f;
+          const corners = [
+            [
+              x - m.actualBoundingBoxLeft - edge,
+              y - m.actualBoundingBoxAscent - edge,
+            ],
+            [
+              x + m.actualBoundingBoxRight + edge,
+              y - m.actualBoundingBoxAscent - edge,
+            ],
+            [
+              x - m.actualBoundingBoxLeft - edge,
+              y + m.actualBoundingBoxDescent + edge,
+            ],
+            [
+              x + m.actualBoundingBoxRight + edge,
+              y + m.actualBoundingBoxDescent + edge,
+            ],
+          ].map(([cx, cy]) => [
+            cx * t.a + cy * t.c + t.e,
+            cx * t.b + cy * t.d + t.f,
+          ]);
+          const x1 = Math.min(...corners.map(([cx]) => cx));
+          const x2 = Math.max(...corners.map(([cx]) => cx));
+          const y1 = Math.min(...corners.map(([, cy]) => cy));
+          const y2 = Math.max(...corners.map(([, cy]) => cy));
           if (![x1, x2, y1, y2].every(Number.isFinite) || x2 <= x1 || y2 <= y1)
             return;
+          const candidate = {
+            left: x1,
+            top: y1,
+            width: x2 - x1,
+            height: y2 - y1,
+          };
+          const ink = inkSampler.measure(ctx, text, x, y, stroke, candidate);
+          if (!ink) return;
           const operation =
             captured.get(operationIndex) || new Map<string, Set<string>>();
           captured.set(operationIndex, operation);
@@ -140,52 +253,26 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
           paints.add(
             `${text}:${x}:${y}:${t.a}:${t.b}:${t.c}:${t.d}:${t.e}:${t.f}`,
           );
-          // One render pixel covers antialiasing, without a CSS pixel minimum.
-          const left = Math.max(0, x1 - 0.6) * scaleX,
-            top = Math.max(0, y1 - 0.6) * scaleY;
-          const inkLeft = Math.max(0, x1) * scaleX,
-            inkTop = Math.max(0, y1) * scaleY;
-          regions.push({
+          const region: LessonPdfGlyph = {
             label,
+            ...(selectable ? {} : { selectable: false as const }),
             page: pageImage.page,
-            left,
-            top,
-            width: Math.min(pageImage.width, (x2 + 0.6) * scaleX) - left,
-            height: Math.min(pageImage.height, (y2 + 0.6) * scaleY) - top,
-            inkBounds: {
-              left: inkLeft,
-              top: inkTop,
-              width: Math.min(pageImage.width, x2 * scaleX) - inkLeft,
-              height: Math.min(pageImage.height, y2 * scaleY) - inkTop,
-            },
+            ...pageInk(ink),
             baseline: (y * t.d + t.f) * scaleY,
-          });
-          // Paint the original embedded glyph, not a Unicode replacement in a UI font.
-          maskContext.setTransform(t);
-          maskContext.font = ctx.font;
-          maskContext.textAlign = ctx.textAlign;
-          maskContext.textBaseline = ctx.textBaseline;
-          maskContext.direction = ctx.direction;
-          maskContext.fontKerning = ctx.fontKerning;
-          maskContext.fontStretch = ctx.fontStretch;
-          maskContext.fontVariantCaps = ctx.fontVariantCaps;
-          maskContext.letterSpacing = ctx.letterSpacing;
-          maskContext.wordSpacing = ctx.wordSpacing;
-          maskContext.textRendering = ctx.textRendering;
-          maskContext.globalAlpha = ctx.globalAlpha;
-          maskContext.fillStyle = "#ffffff";
-          maskContext.strokeStyle = "#ffffff";
-          if (stroke) {
-            maskContext.lineWidth = ctx.lineWidth;
-            maskContext.lineCap = ctx.lineCap;
-            maskContext.lineJoin = ctx.lineJoin;
-            maskContext.miterLimit = ctx.miterLimit;
-            maskContext.setLineDash(ctx.getLineDash());
-            maskContext.lineDashOffset = ctx.lineDashOffset;
-            maskContext.strokeText(text, x, y);
-          } else {
-            maskContext.fillText(text, x, y);
-          }
+          };
+          regions.push(region);
+          originalPaints.set(region, [
+            {
+              state: snapshotLessonPdfGlyphPaint(ctx),
+              text,
+              x,
+              y,
+              stroke,
+              candidate,
+            },
+          ]);
+          if (selectable)
+            paintLessonPdfGlyph(maskContext, ctx, text, x, y, stroke, t);
         };
         const maskPathMethods = new Set([
           "save",
@@ -295,6 +382,9 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
             );
             if (!previous) unique.push(r);
             else {
+              originalPaints.get(previous)!.push(...originalPaints.get(r)!);
+              originalPaints.delete(r);
+              if (r.selectable === false) previous.selectable = false;
               const right = Math.max(
                 previous.left + previous.width,
                 r.left + r.width,
@@ -307,6 +397,8 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
               previous.top = Math.min(previous.top, r.top);
               previous.width = right - previous.left;
               previous.height = bottom - previous.top;
+              if (r.inkRows)
+                previous.inkRows = [...(previous.inkRows || []), ...r.inkRows];
               if (previous.inkBounds && r.inkBounds) {
                 const inkRight = Math.max(
                   previous.inkBounds.left + previous.inkBounds.width,
@@ -329,9 +421,87 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
               }
             }
           }
+          // A single coarse alpha cell can straddle a narrow but real gap.
+          // Spend higher resolution only on neighbouring ink that actually overlaps.
+          const refine = new Set<LessonPdfGlyph>();
+          for (let i = 0; i < unique.length; i++) {
+            const a = unique[i];
+            if (a.selectable === false || a.baseline === undefined) continue;
+            for (let j = i + 1; j < unique.length; j++) {
+              const b = unique[j];
+              if (
+                b.selectable === false ||
+                b.baseline === undefined ||
+                Math.abs(a.baseline - b.baseline) >
+                  Math.max(a.height, b.height) * 0.3
+              )
+                continue;
+              if (inkIntersects(a, b)) {
+                refine.add(a);
+                refine.add(b);
+              }
+            }
+          }
+          let refinedCount = 0;
+          for (const region of refine) {
+            try {
+              const samples = originalPaints
+                .get(region)!
+                .map((paint) =>
+                  inkSampler.measure(
+                    paint.state,
+                    paint.text,
+                    paint.x,
+                    paint.y,
+                    paint.stroke,
+                    paint.candidate,
+                    64,
+                  ),
+                );
+              if (
+                samples.every(
+                  (sample): sample is LessonPdfInkSample => !!sample,
+                )
+              ) {
+                const left = Math.min(...samples.map((sample) => sample.left));
+                const top = Math.min(...samples.map((sample) => sample.top));
+                Object.assign(
+                  region,
+                  pageInk({
+                    left,
+                    top,
+                    width:
+                      Math.max(
+                        ...samples.map((sample) => sample.left + sample.width),
+                      ) - left,
+                    height:
+                      Math.max(
+                        ...samples.map((sample) => sample.top + sample.height),
+                      ) - top,
+                    rows: samples.flatMap((sample) => sample.rows),
+                  }),
+                );
+              }
+            } catch (error) {
+              // A larger tile must never relax the allocation cap or the collision guard.
+              if (
+                !(error instanceof Error) ||
+                !/^unsupported-pdf-glyph-(size|crop|complexity)$/u.test(
+                  error.message,
+                )
+              )
+                throw error;
+            }
+            if (++refinedCount % 4 === 0) {
+              await new Promise<void>((resolve) => setTimeout(resolve, 0));
+              if (destroyed) throw new Error("cancelled");
+            }
+          }
           return {
             regions: unique,
-            maskUrl: unique.length ? maskCanvas.toDataURL("image/png") : "",
+            maskUrl: unique.some((r) => r.selectable !== false)
+              ? maskCanvas.toDataURL("image/png")
+              : "",
           };
         } finally {
           canvas.width = 0;
@@ -340,6 +510,7 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
           metricsCanvas.height = 0;
           maskCanvas.width = 0;
           maskCanvas.height = 0;
+          inkSampler.destroy();
           page.cleanup();
         }
       })();

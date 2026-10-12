@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import WorksheetBlankInput from "./WorksheetBlankInput";
 import HistoryBlankFeedback from "./HistoryBlankFeedback";
+import { getLessonBlankClipPath } from "../../lib/lessonBlankClip";
 import {
   getHistoryClassroomBlankRenderRect,
   isHistoryClassroomBlankCorrect,
@@ -197,6 +198,10 @@ const resolveBlankPlacements = ({
         0,
         Math.max(0, displayHeight - entry.chipHeight),
       );
+      if (getLessonBlankClipPath(entry.blank.inkClip)) {
+        placed.push({ ...entry, leftPx: baseLeft, topPx: baseTop });
+        return;
+      }
       const stepX = Math.max(
         10,
         Math.min(26, Math.round(entry.chipWidth * 0.26)),
@@ -1570,6 +1575,7 @@ const HistoryClassroomAssignmentView: React.FC<
                           topPx,
                         } = placement;
                         const isFocused = focusedBlankId === blank.id;
+                        const clipPath = getLessonBlankClipPath(blank.inkClip);
                         const hasReview = reviewCorrect !== null;
                         const reviewToneClass = hasReview
                           ? reviewCorrect
@@ -1603,6 +1609,8 @@ const HistoryClassroomAssignmentView: React.FC<
                                 height: `${chipHeight}px`,
                                 backgroundColor: "#ffffff",
                                 opacity: 1,
+                                clipPath,
+                                borderRadius: clipPath ? 0 : undefined,
                               }}
                             >
                               {isInputLocked ? (
