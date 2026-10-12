@@ -3275,13 +3275,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         <div
                           key={blank.id}
                           data-blank-box="true"
-                          className={`absolute overflow-visible rounded-md border shadow-sm ${
-                            status === "correct"
-                              ? "border-emerald-500 bg-emerald-50/98"
-                              : status === "wrong"
-                                ? "border-rose-500 bg-rose-50"
-                                : "border-slate-200 bg-white"
-                          }`}
+                          className="absolute overflow-visible rounded-md border border-slate-200 bg-white shadow-sm"
                           style={{
                             left: toPercent(renderRect.leftRatio),
                             top: toPercent(renderRect.topRatio),
@@ -3296,6 +3290,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                           <WorksheetBlankInput
                             lang="ko"
                             aria-label={`${pageImage.page}페이지 빈칸 ${pageBlanks.indexOf(blank) + 1}`}
+                            aria-invalid={status === "wrong" || undefined}
+                            title={
+                              status === "correct"
+                                ? "정답"
+                                : status === "wrong"
+                                  ? "오답"
+                                  : undefined
+                            }
                             autoComplete="off"
                             autoCorrect="off"
                             spellCheck={false}
@@ -3304,12 +3306,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             value={studentAnswer?.value || ""}
                             data-blank-id={blank.id}
                             data-answer={blank.answer}
-                            className={`worksheet-blank-input relative z-10 block h-full w-full border-0 text-center font-bold outline-none ${
+                            className={`worksheet-blank-input relative z-10 block h-full w-full border-0 bg-white text-center font-bold outline-none ${
                               status === "correct"
-                                ? "bg-emerald-50 text-emerald-700"
+                                ? "text-blue-600"
                                 : status === "wrong"
-                                  ? "bg-rose-50 text-rose-700"
-                                  : "bg-white text-blue-700"
+                                  ? "text-red-600"
+                                  : "text-slate-700"
                             }`}
                             placeholder={placeholder}
                             onChange={(event) =>
@@ -3320,23 +3322,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               )
                             }
                           />
-                          {(status === "correct" || status === "wrong") && (
-                            <div
-                              className={`pointer-events-none absolute -right-1.5 -top-3 z-20 rounded-full px-1.5 py-[1px] text-[9px] font-black shadow-sm ${
-                                status === "correct"
-                                  ? "bg-emerald-500 text-white"
-                                  : status === "wrong"
-                                    ? "bg-rose-500 text-white"
-                                    : "hidden"
-                              }`}
-                            >
-                              {status === "correct"
-                                ? "정답"
-                                : status === "wrong"
-                                  ? "오답"
-                                  : ""}
-                            </div>
-                          )}
                         </div>
                       );
                     })}

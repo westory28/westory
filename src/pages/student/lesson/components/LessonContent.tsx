@@ -1,5 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
+import LessonAnswerFeedback from "../../../../components/common/LessonAnswerFeedback";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import { InlineLoading } from "../../../../components/common/LoadingState";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
@@ -78,6 +85,17 @@ const getInputStatus = (
     : normalizeAnswer(value) === normalizeAnswer(answer)
       ? "correct"
       : "wrong";
+const applyInputStatus = (input: HTMLInputElement, status: AnswerStatus) => {
+  input.classList.toggle("correct", status === "correct");
+  input.classList.toggle("wrong", status === "wrong");
+  if (status) {
+    input.setAttribute("aria-invalid", String(status === "wrong"));
+    input.title = status === "correct" ? "정답" : "오답";
+  } else {
+    input.removeAttribute("aria-invalid");
+    input.removeAttribute("title");
+  }
+};
 const getInlineBlankWidth = (answer: string) =>
   Math.min(220, Math.max(76, answer.length * 14 + 24));
 const getInlineBlankFontSize = (width: number, textLength: number) =>
@@ -102,6 +120,16 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [studentAnswers, setStudentAnswers] = useState<
     Record<string, { value?: string; status?: AnswerStatus }>
   >({});
+  const [answerFeedback, setAnswerFeedback] = useState<{
+    anchor: HTMLInputElement;
+    correct: boolean;
+    sequence: number;
+  } | null>(null);
+  const answerFeedbackSequenceRef = useRef(0);
+  const composingInputsRef = useRef(new Set<HTMLInputElement>());
+  const deferredBlurInputsRef = useRef(new Set<HTMLInputElement>());
+  const compositionFramesRef = useRef(new Set<number>());
+  const dismissAnswerFeedback = useCallback(() => setAnswerFeedback(null), []);
   const [worksheetScreenOpen, setWorksheetScreenOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -149,9 +177,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
   if (activeScopeRef.current !== activeScope) answerRevisionRef.current = null;
   activeScopeRef.current = activeScope;
   const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
-  // Only the local teacher preview has an answer key for immediate feedback.
-  // Student grading continues to use the server's saved result.
-  const canCheckPreviewAnswers = disablePersistence && Boolean(lessonOverride);
   const interactiveFootnoteMap = useMemo(() => {
     if (!lesson) return new Map<string, LessonFootnote>();
     const normalized = normalizeLessonData(lesson, {
@@ -198,6 +223,22 @@ const LessonContent: React.FC<LessonContentProps> = ({
   useEffect(() => {
     setActiveWorksheetPage(worksheetPageImagesForNav[0]?.page ?? null);
   }, [worksheetPageImagesForNav]);
+
+  useEffect(() => {
+    setAnswerFeedback(null);
+    composingInputsRef.current.clear();
+    deferredBlurInputsRef.current.clear();
+    return () => {
+      compositionFramesRef.current.forEach(window.cancelAnimationFrame);
+      compositionFramesRef.current.clear();
+    };
+  }, [lesson, unitId, activeWorksheetPage]);
+
+  useEffect(() => {
+    if (footnotePanelOpen || saveCompletionPopup || worksheetScreenOpen) {
+      setAnswerFeedback(null);
+    }
+  }, [footnotePanelOpen, saveCompletionPopup, worksheetScreenOpen]);
 
   useEffect(() => {
     const normalized = lessonOverride
@@ -476,8 +517,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         input.dataset.blankId || input.dataset.blankIndex || String(index);
       const status = answers[key]?.status || "";
       input.value = answers[key]?.value || "";
-      input.classList.toggle("correct", status === "correct");
-      input.classList.toggle("wrong", status === "wrong");
+      applyInputStatus(input, status);
     });
   };
 
@@ -517,6 +557,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       if (draftVersionRef.current === savedDraftVersion) {
         setStudentAnswers(saved.answers);
         applyAnswerStatusesToInputs(saved.answers);
+        setAnswerFeedback(null);
         setHasUnsavedChanges(false);
         setSaveMessage("저장됨");
       }
@@ -660,30 +701,75 @@ const LessonContent: React.FC<LessonContentProps> = ({
     );
   };
 
-  useEffect(() => {
-    const container = contentRef.current;
-    if (!container) return;
-    const handleInput = (event: Event) => {
-      const target = event.target as HTMLInputElement | null;
-      if (
-        !target ||
-        (!target.classList.contains("cloze-input") &&
-          !target.classList.contains("worksheet-blank-input"))
-      )
-        return;
-      const status = canCheckPreviewAnswers
-        ? getInputStatus(target.value, target.dataset.answer || "")
-        : "";
-      target.classList.toggle("correct", status === "correct");
-      target.classList.toggle("wrong", status === "wrong");
-      interactedRef.current = true;
-      draftVersionRef.current += 1;
-      setHasUnsavedChanges(true);
-      setSaveMessage("저장 필요");
-    };
-    container.addEventListener("input", handleInput);
-    return () => container.removeEventListener("input", handleInput);
-  }, [canCheckPreviewAnswers, lesson?.contentHtml, lesson?.worksheetBlanks]);
+  const getBlankInput = (target: EventTarget | null) =>
+    target instanceof HTMLInputElement &&
+    target.matches(".cloze-input, .worksheet-blank-input")
+      ? target
+      : null;
+
+  const handleLessonInput = (event: React.FormEvent<HTMLDivElement>) => {
+    const target = getBlankInput(event.target);
+    if (!target) return;
+    applyInputStatus(target, "");
+    setAnswerFeedback((current) =>
+      current?.anchor === target ? null : current,
+    );
+    interactedRef.current = true;
+    draftVersionRef.current += 1;
+    setHasUnsavedChanges(true);
+    setSaveMessage("저장 필요");
+  };
+
+  const checkBlurredAnswer = (target: HTMLInputElement) => {
+    if (!target.isConnected || !contentRef.current?.contains(target)) return;
+    const value = target.value;
+    const status = getInputStatus(value, target.dataset.answer || "");
+    applyInputStatus(target, status);
+    if (target.dataset.blankId) {
+      const blankId = target.dataset.blankId;
+      setStudentAnswers((current) => ({
+        ...current,
+        [blankId]: { value, status },
+      }));
+    }
+    // This is display-only feedback. Saving still sends values to the server
+    // for authoritative grading and never runs from a blur event.
+    setAnswerFeedback(
+      status
+        ? {
+            anchor: target,
+            correct: status === "correct",
+            sequence: ++answerFeedbackSequenceRef.current,
+          }
+        : null,
+    );
+  };
+
+  const handleLessonBlur = (event: React.FocusEvent<HTMLDivElement>) => {
+    const target = getBlankInput(event.target);
+    if (!target) return;
+    if (composingInputsRef.current.has(target)) {
+      deferredBlurInputsRef.current.add(target);
+      return;
+    }
+    checkBlurredAnswer(target);
+  };
+
+  const handleLessonCompositionEnd = (
+    event: React.CompositionEvent<HTMLDivElement>,
+  ) => {
+    const target = getBlankInput(event.target);
+    if (!target) return;
+    composingInputsRef.current.delete(target);
+    if (!deferredBlurInputsRef.current.delete(target)) return;
+    // The final Korean input event may follow compositionend. Grade only after
+    // React has committed that value, and only if the input is still blurred.
+    const frame = window.requestAnimationFrame(() => {
+      compositionFramesRef.current.delete(frame);
+      if (document.activeElement !== target) checkBlurredAnswer(target);
+    });
+    compositionFramesRef.current.add(frame);
+  };
 
   useEffect(() => {
     const container = contentRef.current;
@@ -769,8 +855,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           const saved = answers[key];
           if (!saved) return;
           input.value = saved.value || "";
-          input.classList.remove("correct", "wrong");
-          if (saved.status) input.classList.add(saved.status);
+          applyInputStatus(input, saved.status || "");
         });
         void refreshCorePointOverview(restoredCorePointIds).catch(
           (overviewError) => {
@@ -858,7 +943,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       const key =
         input.dataset.blankId || input.dataset.blankIndex || String(index);
       input.value = "";
-      input.classList.remove("correct", "wrong");
+      applyInputStatus(input, "");
       nextAnswers[key] = { value: "", status: "" };
     });
     if (lesson) {
@@ -869,6 +954,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       });
     }
     setStudentAnswers(nextAnswers);
+    setAnswerFeedback(null);
     draftVersionRef.current += 1;
     setHasUnsavedChanges(true);
     setSaveMessage("저장 필요");
@@ -878,14 +964,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const handleWorksheetAnswerChange = (
     blankId: string,
     value: string,
-    answer: string,
+    _answer: string,
   ) => {
     setStudentAnswers((prev) => ({
       ...prev,
-      [blankId]: {
-        value,
-        status: canCheckPreviewAnswers ? getInputStatus(value, answer) : "",
-      },
+      [blankId]: { value, status: "" },
     }));
     interactedRef.current = true;
     draftVersionRef.current += 1;
@@ -1454,7 +1537,25 @@ const LessonContent: React.FC<LessonContentProps> = ({
           </div>
         )}
 
-        <div ref={contentRef} className="space-y-6">
+        <div
+          ref={contentRef}
+          className="space-y-6"
+          onInput={handleLessonInput}
+          onBlur={handleLessonBlur}
+          onFocus={(event) => {
+            const target = getBlankInput(event.target);
+            if (!target) return;
+            deferredBlurInputsRef.current.delete(target);
+            setAnswerFeedback((current) =>
+              current?.anchor === target ? null : current,
+            );
+          }}
+          onCompositionStart={(event) => {
+            const target = getBlankInput(event.target);
+            if (target) composingInputsRef.current.add(target);
+          }}
+          onCompositionEnd={handleLessonCompositionEnd}
+        >
           {!!worksheet.pageImages.length && (
             <React.Suspense
               fallback={
@@ -1556,6 +1657,18 @@ const LessonContent: React.FC<LessonContentProps> = ({
           )}
         </div>
 
+        {answerFeedback &&
+          !footnotePanelOpen &&
+          !saveCompletionPopup &&
+          !worksheetScreenOpen && (
+            <LessonAnswerFeedback
+              key={answerFeedback.sequence}
+              anchor={answerFeedback.anchor}
+              correct={answerFeedback.correct}
+              onComplete={dismissAnswerFeedback}
+            />
+          )}
+
         {saveCompletionPopup && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
             <div
@@ -1623,8 +1736,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 .cloze-input { border: none; border-bottom: 2px solid #334155; text-align: center; font-weight: 700; color: #2563eb; background: transparent; padding: 0 4px; margin: 0 4px; transition: all 0.2s ease; font-size: var(--blank-font-size, 1rem); line-height: 1.2; }
                 .cloze-input::placeholder, .worksheet-blank-input::placeholder { color: #94a3b8; opacity: 1; }
                 .cloze-input:focus { outline: none; border-bottom-color: #2563eb; background-color: #eff6ff; }
-                .cloze-input.correct { border-bottom-color: #22c55e; color: #15803d; background-color: #dcfce7; }
-                .cloze-input.wrong { border-bottom-color: #ef4444; color: #b91c1c; background-color: #fee2e2; }
+                .cloze-input.correct { border-bottom-color: var(--ws-primary, #2563eb); color: var(--ws-primary, #2563eb); background-color: white; }
+                .cloze-input.wrong { border-bottom-color: var(--ws-warning-text, #dc2626); color: var(--ws-warning-text, #dc2626); background-color: white; }
                 .worksheet-blank-input { border-radius: 0; }
                 .worksheet-blank-input:focus { box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.2); }
                 .note-content h1 { margin-top: 1em; margin-bottom: 0.5em; color: #111827; font-size: 1.5em; font-weight: 700; }
