@@ -11,7 +11,10 @@ import {
   type LessonWorksheetStageMode,
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
-import { selectLessonText } from "../../lib/lessonTextSelection";
+import {
+  findLessonTextAtPoint,
+  selectLessonTextDrag,
+} from "../../lib/lessonTextSelection";
 import { useLessonTextSelection } from "../../lib/useLessonTextSelection";
 
 type AnswerStatus = "" | "correct" | "wrong";
@@ -435,6 +438,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     mode === "teacher-present" || isStudentSolveMode || isTeacherEditMode;
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
+  const [hoveredTextPage, setHoveredTextPage] = useState<number | null>(null);
   const [textSelectionError, setTextSelectionError] = useState("");
   const [corePointBursts, setCorePointBursts] = useState<CorePointBurst[]>([]);
   const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(
@@ -741,6 +745,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const textSelectionEnabled = isTeacherEditMode && teacherTool === "ocr";
   const {
     regions: preciseTextRegions,
+    maskUrl: textSelectionMaskUrl,
     status: textSelectionStatus,
     retry: retryTextSelection,
   } = useLessonTextSelection({
@@ -760,6 +765,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   useEffect(() => {
     setDraftRect(null);
     setTextSelectionError("");
+    setHoveredTextPage(null);
   }, [teacherPdfSource, textSelectionPage, teacherTool, mode]);
 
   useEffect(() => {
@@ -1606,7 +1612,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       return;
     }
 
-    const selection = selectLessonText(preciseTextRegions, pageImage, nextRect);
+    const selection = selectLessonTextDrag(
+      preciseTextRegions,
+      pageImage,
+      { x: draftRect.startX, y: draftRect.startY },
+      { x: draftRect.currentX, y: draftRect.currentY },
+    );
     if ("error" in selection) {
       setTextSelectionError(selection.error);
       setDraftRect(null);
@@ -2318,8 +2329,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
               : null;
 
           const draftSelection =
-            liveDraft && textSelectionEnabled && textSelectionStatus === "ready"
-              ? selectLessonText(preciseTextRegions, pageImage, liveDraft)
+            liveDraft &&
+            draftRect &&
+            textSelectionEnabled &&
+            textSelectionStatus === "ready"
+              ? selectLessonTextDrag(
+                  preciseTextRegions,
+                  pageImage,
+                  { x: draftRect.startX, y: draftRect.startY },
+                  { x: draftRect.currentX, y: draftRect.currentY },
+                )
               : null;
           const selectedDraft =
             draftSelection && "answer" in draftSelection
@@ -2333,7 +2352,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
           const showDraftRect = Boolean(
             isTeacherEditMode &&
-            !selectedDraft &&
+            teacherTool !== "ocr" &&
             liveDraft &&
             (liveDraft.widthRatio > 0.0001 || liveDraft.heightRatio > 0.0001),
           );
@@ -2562,7 +2581,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               : teacherTool === "exam" ||
                                   teacherTool === "footnote"
                                 ? "cursor-crosshair"
-                                : "cursor-text"
+                                : "cursor-default"
                         }`
                       : isViewportInteractive
                         ? `${activeStudentTool === "move" ? (panRef.current?.page === pageImage.page ? "cursor-grabbing" : "cursor-grab") : `touch-none ${activeStudentTool === "eraser" ? "cursor-not-allowed" : activeStudentTool === "text" ? "cursor-text" : "cursor-crosshair"}`}`
@@ -2572,7 +2591,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     cursor:
                       temporaryPanPage === pageImage.page
                         ? "grabbing"
-                        : stageCursor,
+                        : textSelectionEnabled
+                          ? textSelectionStatus === "ready" &&
+                            hoveredTextPage === pageImage.page
+                            ? "text"
+                            : "default"
+                          : stageCursor,
                     touchAction: isViewportInteractive
                       ? allowNativeStudentTouchScroll
                         ? "pan-y"
@@ -2676,6 +2700,24 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     handlePointerDown(pageImage.page, event)
                   }
                   onPointerMove={(event) => {
+                    if (textSelectionEnabled) {
+                      const point = resolveRatioPoint(
+                        pageImage.page,
+                        event.clientX,
+                        event.clientY,
+                      );
+                      setHoveredTextPage(
+                        textSelectionStatus === "ready" &&
+                          point &&
+                          findLessonTextAtPoint(
+                            preciseTextRegions,
+                            pageImage,
+                            point,
+                          )
+                          ? pageImage.page
+                          : null,
+                      );
+                    }
                     if (
                       event.pointerType === "touch" &&
                       hasActiveTouchGesture(pageImage.page)
@@ -2723,6 +2765,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     eraserSessionRef.current = null;
                   }}
                   onPointerLeave={(event) => {
+                    setHoveredTextPage(null);
                     if (event.pointerType === "touch") {
                       clearTouchPointer(event.pointerId);
                     }
@@ -3310,34 +3353,47 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     />
                   )}
 
-                  {capabilities.enableBlankDrafting && selectedDraft && (
-                    <div
-                      data-ocr-selection-preview
-                      className="pointer-events-none absolute z-30 bg-blue-500/30 outline outline-2 outline-blue-600"
-                      style={{
-                        left: toPercent(selectedDraft.rect.leftRatio),
-                        top: toPercent(selectedDraft.rect.topRatio),
-                        width: toPercent(selectedDraft.rect.widthRatio),
-                        height: toPercent(selectedDraft.rect.heightRatio),
-                      }}
-                    />
-                  )}
+                  {capabilities.enableBlankDrafting &&
+                    selectedDraft &&
+                    textSelectionMaskUrl && (
+                      <div
+                        data-ocr-selection-preview
+                        aria-hidden="true"
+                        className="pointer-events-none absolute z-30 overflow-hidden bg-blue-600"
+                        style={{
+                          left: toPercent(selectedDraft.rect.leftRatio),
+                          top: toPercent(selectedDraft.rect.topRatio),
+                          width: toPercent(selectedDraft.rect.widthRatio),
+                          height: toPercent(selectedDraft.rect.heightRatio),
+                        }}
+                      >
+                        <img
+                          src={textSelectionMaskUrl}
+                          alt=""
+                          draggable={false}
+                          className="absolute max-w-none"
+                          style={{
+                            width: `${100 / selectedDraft.rect.widthRatio}%`,
+                            height: `${100 / selectedDraft.rect.heightRatio}%`,
+                            left: `${(-100 * selectedDraft.rect.leftRatio) / selectedDraft.rect.widthRatio}%`,
+                            top: `${(-100 * selectedDraft.rect.topRatio) / selectedDraft.rect.heightRatio}%`,
+                          }}
+                        />
+                      </div>
+                    )}
 
                   {showDraftRect && liveDraft && (
                     <div
                       className={`pointer-events-none absolute z-30 border-2 ${
                         teacherTool === "exam"
                           ? "border-amber-500 bg-amber-200/30"
-                          : teacherTool === "ocr"
-                            ? "border-dashed border-blue-600"
-                            : "border-sky-500 bg-sky-500/20"
+                          : "border-sky-500 bg-sky-500/20"
                       }`}
                       style={{
                         left: toPercent(liveDraft.leftRatio),
                         top: toPercent(liveDraft.topRatio),
                         width: toPercent(liveDraft.widthRatio),
                         height: toPercent(liveDraft.heightRatio),
-                        minHeight: teacherTool === "ocr" ? 2 : undefined,
                       }}
                     />
                   )}

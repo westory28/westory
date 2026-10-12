@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type {
-  LessonWorksheetPageImage,
-  LessonWorksheetTextRegion,
-} from "./lessonWorksheet";
+import type { LessonWorksheetPageImage } from "./lessonWorksheet";
+import type { LessonPdfGlyph } from "./lessonPdfGlyphTypes";
 import type { createLessonPdfGlyphReader } from "./lessonPdfGlyphs";
 
 type Status = "idle" | "loading" | "ready" | "empty" | "error";
@@ -22,9 +20,10 @@ export const useLessonTextSelection = ({
   const [result, setResult] = useState<{
     source: typeof source;
     key: string;
-    regions: LessonWorksheetTextRegion[];
+    regions: LessonPdfGlyph[];
+    maskUrl: string;
     status: Status;
-  }>({ source: undefined, key: "", regions: [], status: "idle" });
+  }>({ source: undefined, key: "", regions: [], maskUrl: "", status: "idle" });
   const key = pageImage
     ? `${pageImage.page}:${pageImage.width}:${pageImage.height}:${pageImage.imageUrl}`
     : "";
@@ -36,11 +35,15 @@ export const useLessonTextSelection = ({
   }, [source, attempt]);
   useEffect(() => {
     let cancelled = false;
-    if (!enabled || !pageImage) return;
+    if (!enabled || !pageImage) {
+      setResult({ source, key, regions: [], maskUrl: "", status: "idle" });
+      return;
+    }
     setResult({
       source,
       key,
       regions: [],
+      maskUrl: "",
       status: source ? "loading" : "error",
     });
     if (!source) return;
@@ -49,20 +52,22 @@ export const useLessonTextSelection = ({
       if (cancelled) return;
       const active = (reader.current ??= createLessonPdfGlyphReader(source));
       try {
-        const regions = await active.read(pageImage);
+        const { regions, maskUrl } = await active.read(pageImage);
         if (!cancelled)
           setResult({
             source,
             key,
             regions,
+            maskUrl,
             status: regions.length ? "ready" : "empty",
           });
       } catch {
         if (!cancelled)
-          setResult({ source, key, regions: [], status: "error" });
+          setResult({ source, key, regions: [], maskUrl: "", status: "error" });
       }
     })().catch(() => {
-      if (!cancelled) setResult({ source, key, regions: [], status: "error" });
+      if (!cancelled)
+        setResult({ source, key, regions: [], maskUrl: "", status: "error" });
     });
     return () => {
       cancelled = true;
@@ -71,6 +76,7 @@ export const useLessonTextSelection = ({
   const current = enabled && result.source === source && result.key === key;
   return {
     regions: current ? result.regions : [],
+    maskUrl: current ? result.maskUrl : "",
     status: current
       ? result.status
       : enabled

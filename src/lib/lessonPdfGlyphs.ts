@@ -1,8 +1,6 @@
 import { pdfjs } from "react-pdf";
-import type {
-  LessonWorksheetPageImage,
-  LessonWorksheetTextRegion,
-} from "./lessonWorksheet";
+import type { LessonWorksheetPageImage } from "./lessonWorksheet";
+import type { LessonPdfGlyph, LessonPdfGlyphPage } from "./lessonPdfGlyphTypes";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -32,7 +30,7 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
         ? { url: source }
         : { data: new Uint8Array(await source.arrayBuffer()) },
     ))();
-  const cache = new Map<string, Promise<LessonWorksheetTextRegion[]>>();
+  const cache = new Map<string, Promise<LessonPdfGlyphPage>>();
   return {
     read(pageImage: LessonWorksheetPageImage) {
       const key = `${pageImage.page}:${pageImage.width}:${pageImage.height}`;
@@ -58,9 +56,14 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
         canvas.height = Math.ceil(viewport.height);
         const ctx = canvas.getContext("2d");
         if (!ctx) throw new Error("canvas-unavailable");
-        const metricsContext = document
-          .createElement("canvas")
-          .getContext("2d")!;
+        const metricsCanvas = document.createElement("canvas");
+        const metricsContext = metricsCanvas.getContext("2d")!;
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = canvas.width;
+        maskCanvas.height = canvas.height;
+        const maskContext = maskCanvas.getContext("2d");
+        if (!metricsContext || !maskContext)
+          throw new Error("canvas-unavailable");
         const ops = await page.getOperatorList();
         const expected = new Map<number, Map<string, number>>();
         for (let index = 0; index < ops.fnArray.length; index++) {
@@ -82,7 +85,7 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
         let glyphMap = new Map<string, string>();
         let operationIndex = -1;
         const captured = new Map<number, Map<string, Set<string>>>();
-        const regions: LessonWorksheetTextRegion[] = [];
+        const regions: LessonPdfGlyph[] = [];
         const scaleX = pageImage.width / viewport.width,
           scaleY = pageImage.height / viewport.height;
         const capture = (
@@ -140,6 +143,8 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
           // One render pixel covers antialiasing, without a CSS pixel minimum.
           const left = Math.max(0, x1 - 0.6) * scaleX,
             top = Math.max(0, y1 - 0.6) * scaleY;
+          const inkLeft = Math.max(0, x1) * scaleX,
+            inkTop = Math.max(0, y1) * scaleY;
           regions.push({
             label,
             page: pageImage.page,
@@ -147,10 +152,72 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
             top,
             width: Math.min(pageImage.width, (x2 + 0.6) * scaleX) - left,
             height: Math.min(pageImage.height, (y2 + 0.6) * scaleY) - top,
+            inkBounds: {
+              left: inkLeft,
+              top: inkTop,
+              width: Math.min(pageImage.width, x2 * scaleX) - inkLeft,
+              height: Math.min(pageImage.height, y2 * scaleY) - inkTop,
+            },
+            baseline: (y * t.d + t.f) * scaleY,
           });
+          // Paint the original embedded glyph, not a Unicode replacement in a UI font.
+          maskContext.setTransform(t);
+          maskContext.font = ctx.font;
+          maskContext.textAlign = ctx.textAlign;
+          maskContext.textBaseline = ctx.textBaseline;
+          maskContext.direction = ctx.direction;
+          maskContext.fontKerning = ctx.fontKerning;
+          maskContext.fontStretch = ctx.fontStretch;
+          maskContext.fontVariantCaps = ctx.fontVariantCaps;
+          maskContext.letterSpacing = ctx.letterSpacing;
+          maskContext.wordSpacing = ctx.wordSpacing;
+          maskContext.textRendering = ctx.textRendering;
+          maskContext.globalAlpha = ctx.globalAlpha;
+          maskContext.fillStyle = "#ffffff";
+          maskContext.strokeStyle = "#ffffff";
+          if (stroke) {
+            maskContext.lineWidth = ctx.lineWidth;
+            maskContext.lineCap = ctx.lineCap;
+            maskContext.lineJoin = ctx.lineJoin;
+            maskContext.miterLimit = ctx.miterLimit;
+            maskContext.setLineDash(ctx.getLineDash());
+            maskContext.lineDashOffset = ctx.lineDashOffset;
+            maskContext.strokeText(text, x, y);
+          } else {
+            maskContext.fillText(text, x, y);
+          }
         };
+        const maskPathMethods = new Set([
+          "save",
+          "restore",
+          "beginPath",
+          "closePath",
+          "moveTo",
+          "lineTo",
+          "bezierCurveTo",
+          "quadraticCurveTo",
+          "rect",
+          "arc",
+          "arcTo",
+          "ellipse",
+          "roundRect",
+          "clip",
+        ]);
         const observed = new Proxy(ctx, {
           get(target, property) {
+            // Keep the PDF's clipping path so glyphs outside the crop stay hidden.
+            if (typeof property === "string" && maskPathMethods.has(property))
+              return (...args: unknown[]) => {
+                maskContext.setTransform(target.getTransform());
+                Reflect.get(maskContext, property, maskContext).apply(
+                  maskContext,
+                  args,
+                );
+                return Reflect.get(target, property, target).apply(
+                  target,
+                  args,
+                );
+              };
             if (property === "fillText" || property === "strokeText")
               return (
                 text: string,
@@ -217,7 +284,7 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
             throw new Error("unsupported-pdf-text-paint");
           }
           // Filled/stroked copies and faux-bold overprints refer to one glyph.
-          const unique: LessonWorksheetTextRegion[] = [];
+          const unique: LessonPdfGlyph[] = [];
           for (const r of regions) {
             if (r.width <= 0 || r.height <= 0) continue;
             const previous = unique.find(
@@ -240,12 +307,39 @@ export const createLessonPdfGlyphReader = (source: File | string) => {
               previous.top = Math.min(previous.top, r.top);
               previous.width = right - previous.left;
               previous.height = bottom - previous.top;
+              if (previous.inkBounds && r.inkBounds) {
+                const inkRight = Math.max(
+                  previous.inkBounds.left + previous.inkBounds.width,
+                  r.inkBounds.left + r.inkBounds.width,
+                );
+                const inkBottom = Math.max(
+                  previous.inkBounds.top + previous.inkBounds.height,
+                  r.inkBounds.top + r.inkBounds.height,
+                );
+                previous.inkBounds.left = Math.min(
+                  previous.inkBounds.left,
+                  r.inkBounds.left,
+                );
+                previous.inkBounds.top = Math.min(
+                  previous.inkBounds.top,
+                  r.inkBounds.top,
+                );
+                previous.inkBounds.width = inkRight - previous.inkBounds.left;
+                previous.inkBounds.height = inkBottom - previous.inkBounds.top;
+              }
             }
           }
-          return unique;
+          return {
+            regions: unique,
+            maskUrl: unique.length ? maskCanvas.toDataURL("image/png") : "",
+          };
         } finally {
           canvas.width = 0;
           canvas.height = 0;
+          metricsCanvas.width = 0;
+          metricsCanvas.height = 0;
+          maskCanvas.width = 0;
+          maskCanvas.height = 0;
           page.cleanup();
         }
       })();
