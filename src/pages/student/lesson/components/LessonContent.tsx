@@ -149,6 +149,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
   if (activeScopeRef.current !== activeScope) answerRevisionRef.current = null;
   activeScopeRef.current = activeScope;
   const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
+  // Only the local teacher preview has an answer key for immediate feedback.
+  // Student grading continues to use the server's saved result.
+  const canCheckPreviewAnswers = disablePersistence && Boolean(lessonOverride);
   const interactiveFootnoteMap = useMemo(() => {
     if (!lesson) return new Map<string, LessonFootnote>();
     const normalized = normalizeLessonData(lesson, {
@@ -668,7 +671,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
           !target.classList.contains("worksheet-blank-input"))
       )
         return;
-      target.classList.remove("correct", "wrong");
+      const status = canCheckPreviewAnswers
+        ? getInputStatus(target.value, target.dataset.answer || "")
+        : "";
+      target.classList.toggle("correct", status === "correct");
+      target.classList.toggle("wrong", status === "wrong");
       interactedRef.current = true;
       draftVersionRef.current += 1;
       setHasUnsavedChanges(true);
@@ -676,7 +683,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     };
     container.addEventListener("input", handleInput);
     return () => container.removeEventListener("input", handleInput);
-  }, [lesson?.contentHtml, lesson?.worksheetBlanks]);
+  }, [canCheckPreviewAnswers, lesson?.contentHtml, lesson?.worksheetBlanks]);
 
   useEffect(() => {
     const container = contentRef.current;
@@ -871,11 +878,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const handleWorksheetAnswerChange = (
     blankId: string,
     value: string,
-    _answer: string,
+    answer: string,
   ) => {
     setStudentAnswers((prev) => ({
       ...prev,
-      [blankId]: { value, status: "" },
+      [blankId]: {
+        value,
+        status: canCheckPreviewAnswers ? getInputStatus(value, answer) : "",
+      },
     }));
     interactedRef.current = true;
     draftVersionRef.current += 1;
