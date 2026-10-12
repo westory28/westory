@@ -943,6 +943,90 @@ const run = async () => {
   assert.ok(
     studentHallState.hallOfFame.gradeLeaderboardByGrade["2"].length > 1,
   );
+  // Hall roster hints remove two serial reads when current, but never decide
+  // membership. Compare both audiences against canonical moved/missing hints.
+  const hallRosterSeed = structuredClone(Object.fromEntries(tx.documents));
+  const hallRosterAccountPaths = Object.keys(hallRosterSeed).filter((path) =>
+    path.startsWith("semester_wis_accounts/") && hallRosterSeed[path].semesterId === "2026-2");
+  const runHallRosterProbe = async (seed, audience, source = "CURRENT", assertSession) => {
+    const probe = new MemoryTransaction(seed);
+    const before = structuredClone(probe.documents);
+    const batches = [];
+    let transactions = 0;
+    const core = wis.createWisQueryCore({
+      assertSession: assertSession || (async (request) => ({ uid: request.auth.uid, email: request.auth.token.email })),
+      store: {
+        get: (path) => probe.get(path),
+        runTransaction: (callback) => {
+          transactions += 1;
+          return callback({
+            get: (path) => probe.get(path),
+            query: (collection, filter) => probe.query(collection, filter),
+            getAll: (paths) => {
+              if (paths.some((path) => /^semester_(enrollment_slots|enrollments|classes)\//.test(path)))
+                batches.push([...paths]);
+              return probe.getAll(paths);
+            },
+          });
+        },
+      },
+    });
+    const uid = audience === "teacher" ? "teacher-1" : "student-1";
+    try {
+      const state = await core.getWisEconomyState({
+        auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr` } },
+        data: { audience, semesterId: "2026-2", source, projection: "hall-of-fame" },
+      });
+      assert.deepEqual(probe.documents, before, "Hall reads must not mutate the roster");
+      assert.equal(state.writeCount, 0);
+      const { updatedAt, updatedAtMs, sourceUpdatedAtMs, ...hall } = state.hallOfFame;
+      return { hall, batches };
+    } catch (error) {
+      assert.equal(transactions, 0, "Rejected actors must not start hall roster reads");
+      throw error;
+    }
+  };
+  for (const audience of ["student", "teacher"]) {
+    const current = await runHallRosterProbe(hallRosterSeed, audience);
+    assert.equal(current.batches.length, 1, "Current hall roster hints need one batched read");
+    assert.ok(current.batches[0].some((path) => path.startsWith("semester_enrollment_slots/")));
+    assert.ok(current.batches[0].includes("semester_enrollments/enrollment-1"));
+    assert.ok(current.batches[0].includes("semester_classes/class-1"));
+    if (audience === "student") {
+      const { updatedAt, updatedAtMs, sourceUpdatedAtMs, ...expected } = studentHallState.hallOfFame;
+      assert.deepEqual(current.hall, expected);
+    }
+    for (const hintState of ["stale", "missing", "malformed"]) {
+      const seed = structuredClone(hallRosterSeed);
+      seed["semester_enrollments/stale-enrollment"] = { ...enrollment,
+        enrollmentId: "stale-enrollment", semesterId: "2025-1", classId: "stale-class",
+        displayName: "never-expose-stale-hint", studentUid: "foreign-student" };
+      seed["semester_classes/stale-class"] = { classId: "stale-class", semesterId: "2025-1",
+        grade: "9", classNumber: "9", status: "ACTIVE" };
+      for (const path of hallRosterAccountPaths) {
+        if (hintState === "missing") {
+          delete seed[path].enrollmentId;
+          delete seed[path].classId;
+        } else {
+          seed[path].enrollmentId = hintState === "stale" ? "stale-enrollment" : "bad/../enrollment";
+          seed[path].classId = hintState === "stale" ? "stale-class" : "bad/class";
+        }
+      }
+      const corrected = await runHallRosterProbe(seed, audience);
+      assert.deepEqual(corrected.hall, current.hall, `${audience} ${hintState} hints preserve canonical ranking`);
+      assert.equal(corrected.batches.length, 3, "Unusable hints fall back to canonical enrollment and class reads");
+      assert.doesNotMatch(JSON.stringify(corrected.batches), /bad\//u, "Malformed hints must not become document paths");
+    }
+  }
+  const explicitHallProbe = await runHallRosterProbe(hallRosterSeed, "teacher", "EXPLICIT");
+  assert.equal(explicitHallProbe.batches.length, 0, "Explicit historical teacher reads keep their existing roster behavior");
+  const deniedHallSeed = structuredClone(hallRosterSeed);
+  deniedHallSeed["users/teacher-1"] = { role: "teacher", staffPermissions: [] };
+  await assert.rejects(() => runHallRosterProbe(deniedHallSeed, "teacher"),
+    (error) => error.code === "permission-denied" && error.details.reason === "WIS_MANAGE_REQUIRED");
+  const rejectedHallSession = new Error("synthetic rejected hall session");
+  await assert.rejects(() => runHallRosterProbe(hallRosterSeed, "student", "CURRENT",
+    async () => { throw rejectedHallSession; }), (error) => error === rejectedHallSession);
   const profileBefore = structuredClone(tx.documents.get("users/student-1"));
   tx.set("users/student-1", { ...profileBefore, profileIcon: "https://example.invalid/track" });
   const invalidIconHall = await queryCore.getWisEconomyState({

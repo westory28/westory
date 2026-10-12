@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { getYearSemester } from "../../lib/semesterScope";
 import { InlineLoading } from "./LoadingState";
 import PointRankBadge from "./PointRankBadge";
 import WisIcon from "./WisIcon";
@@ -66,6 +68,12 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
   hallOfFamePath,
 }) => {
   const navigate = useNavigate();
+  const { currentUser, authGeneration, configReady } = useAuth();
+  const { year, semester } = getYearSemester(config);
+  const scopeReady = Boolean(
+    currentUser && configReady && config?.year && config?.semester,
+  );
+  const studentAudience = Boolean(hallOfFamePath?.startsWith("/student"));
   const [entries, setEntries] = useState<WisHallOfFameEntry[]>([]);
   const [rankPolicy, setRankPolicy] = useState<
     PointPolicy["rankPolicy"] | null
@@ -76,25 +84,32 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void (async () => {
-      try {
-        const [snapshot, pointPolicy] = await Promise.all([
-          hallOfFamePath?.startsWith("/student")
-            ? getStudentPointHallOfFame(config)
-            : getCanonicalWisHallOfFame(config),
-          getPointPolicy(config).catch((error) => {
-            console.warn("Failed to load wis ranking policy:", error);
-            return null;
-          }),
-        ]);
+    setEntries([]);
+    setRankPolicy(null);
+    setDefaultProfileIcon("😀");
+    if (!scopeReady) return;
+    const scope = { year, semester };
+    // Badge settings must not hold up the ranking itself.
+    void getPointPolicy(scope)
+      .then((pointPolicy) => {
         if (cancelled) return;
-        setEntries(getWisHallOfFameGradeLeaderboard(snapshot).slice(0, 5));
-        setRankPolicy(pointPolicy?.rankPolicy || null);
+        setRankPolicy(pointPolicy.rankPolicy || null);
         setDefaultProfileIcon(
-          pointPolicy?.rankPolicy
+          pointPolicy.rankPolicy
             ? getPointRankDefaultEmojiValue(pointPolicy.rankPolicy)
             : "😀",
         );
+      })
+      .catch((error) => {
+        console.warn("Failed to load wis ranking policy:", error);
+      });
+    void (async () => {
+      try {
+        const snapshot = await (studentAudience
+          ? getStudentPointHallOfFame(scope)
+          : getCanonicalWisHallOfFame(scope));
+        if (cancelled) return;
+        setEntries(getWisHallOfFameGradeLeaderboard(snapshot).slice(0, 5));
       } catch (error) {
         console.warn("Failed to load wis ranking:", error);
         if (!cancelled) {
@@ -109,7 +124,14 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config, hallOfFamePath]);
+  }, [
+    scopeReady,
+    year,
+    semester,
+    studentAudience,
+    currentUser,
+    authGeneration,
+  ]);
 
   return (
     <div className="wis-ranking-panel flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">

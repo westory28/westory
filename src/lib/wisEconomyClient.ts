@@ -82,7 +82,10 @@ export const callWisService = async <T>(
   const epoch = Number((await user.getIdTokenResult()).claims.auth_time);
   if (auth.currentUser !== user || !Number.isFinite(epoch))
     throw ownerChanged();
-  const call = await getHistoryDictionaryCallable<WisRow, T>(name);
+  const call = await getHistoryDictionaryCallable<WisRow, T>(name, {
+    // Read calls still validate the proof on the server on every request.
+    reuseSessionProof: name === "getWisEconomyState",
+  });
   if (auth.currentUser !== user) throw ownerChanged();
   let result;
   try {

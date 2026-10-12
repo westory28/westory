@@ -2536,7 +2536,12 @@ const normalizeQuery = (raw) => {
           }),
   };
 };
-const projectTeacherRosterFields = async (transaction, accounts, scope) => {
+const projectTeacherRosterFields = async (
+  transaction,
+  accounts,
+  scope,
+  { prefetchAccountHints = false } = {},
+) => {
   const studentUids = [
     ...new Set(
       accounts
@@ -2544,8 +2549,32 @@ const projectTeacherRosterFields = async (transaction, accounts, scope) => {
         .filter(Boolean),
     ),
   ];
+  let readRosterDocuments = (paths) => transaction.getAll(paths);
+  if (prefetchAccountHints) {
+    // Account metadata is only a read hint. Canonical slots and enrollments
+    // below still decide membership; moved students take the same fallback.
+    const safeHint = (value) =>
+      typeof value === "string" && /^[A-Za-z0-9_-]{1,180}$/.test(value);
+    const paths = [...new Set([
+      ...studentUids.map((studentUid) => enrollmentSlotPath(scope, studentUid)),
+      ...accounts.filter((account) => safeHint(account?.enrollmentId))
+        .map((account) => enrollmentPath(account.enrollmentId)),
+      ...accounts.filter((account) => safeHint(account?.classId))
+        .map((account) => classPath(account.classId)),
+    ])];
+    const snapshots = paths.length ? await transaction.getAll(paths) : [];
+    const cached = new Map(paths.map((path, index) => [path, snapshots[index]]));
+    readRosterDocuments = async (requestedPaths) => {
+      const missing = [...new Set(requestedPaths.filter((path) => !cached.has(path)))];
+      if (missing.length) {
+        const additional = await transaction.getAll(missing);
+        missing.forEach((path, index) => cached.set(path, additional[index]));
+      }
+      return requestedPaths.map((path) => cached.get(path));
+    };
+  }
   const slotSnapshots = studentUids.length
-    ? await transaction.getAll(
+    ? await readRosterDocuments(
         studentUids.map((studentUid) => enrollmentSlotPath(scope, studentUid)),
       )
     : [];
@@ -2559,7 +2588,7 @@ const projectTeacherRosterFields = async (transaction, accounts, scope) => {
   );
   const enrollmentIds = [...new Set(activeEnrollmentIdByStudentUid.values())];
   const enrollmentSnapshots = enrollmentIds.length
-    ? await transaction.getAll(enrollmentIds.map(enrollmentPath))
+    ? await readRosterDocuments(enrollmentIds.map(enrollmentPath))
     : [];
   const enrollments = new Map(
     enrollmentSnapshots
@@ -2577,7 +2606,7 @@ const projectTeacherRosterFields = async (transaction, accounts, scope) => {
     ),
   ];
   const classSnapshots = classIds.length
-    ? await transaction.getAll(classIds.map(classPath))
+    ? await readRosterDocuments(classIds.map(classPath))
     : [];
   const classes = new Map(
     classSnapshots
@@ -3356,6 +3385,7 @@ const createWisQueryCore = ({
             transaction,
             await queryHallAccounts(transaction, query.semesterId),
             query.semesterId,
+            { prefetchAccountHints: true },
           );
           const studentAccount =
             projectedAccounts.find((item) => item.studentUid === uid) || account;
@@ -3546,6 +3576,7 @@ const createWisQueryCore = ({
           transaction,
           await queryHallAccounts(transaction, query.semesterId),
           query.semesterId,
+          { prefetchAccountHints: true },
         );
         return {
           ...base,
