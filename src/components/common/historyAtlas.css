@@ -301,6 +301,10 @@
 .history-atlas__point.is-active {
   z-index: 1;
 }
+.history-atlas__point.is-priority .history-atlas__dot {
+  width: 12px;
+  height: 12px;
+}
 .history-atlas__point.is-active .history-atlas__dot {
   width: 16px;
   height: 16px;
@@ -423,13 +427,16 @@
     1px 0 0 var(--atlas-land),
     -1px 0 0 var(--atlas-land);
 }
-.history-atlas__label-anchor.is-active .history-atlas__point-label {
+.history-atlas__label-anchor.is-active .history-atlas__point-label,
+.history-atlas__label-anchor.is-priority .history-atlas__point-label {
   color: var(--ws-primary-text, #1e3a8a);
   background: var(--ws-primary-soft, #eff6ff);
   padding: 4px 8px;
   border-radius: 8px;
   box-shadow: inset 0 0 0 1px var(--ws-primary, #2563eb);
   text-shadow: none;
+}
+.history-atlas__label-anchor.is-active .history-atlas__point-label {
   animation: atlas-label-emphasis 2400ms ease-in-out infinite;
 }
 /* Selection emphasis stays enabled; hidden maps pause without changing selection. */
@@ -946,6 +953,24 @@
 @media (any-pointer: coarse) {
   .history-atlas__map-actions .history-atlas__move {
     display: block;
+  }
+}
+@media (max-width: 1023px) {
+  /* The teacher's floating memo launcher must not cover the map compass. */
+  .teacher-layout:has(.history-atlas-page) {
+    position: relative;
+  }
+  .teacher-layout:has(.history-atlas-page) > button[data-patch-memo-root] {
+    position: absolute;
+    top: calc(
+      var(--space-6, 24px) + env(safe-area-inset-top, 0px) +
+        var(--teacher-header-height, 64px) / 2 - 16px
+    );
+    right: calc(env(safe-area-inset-right, 0px) + 64px);
+    bottom: auto;
+    width: 32px;
+    height: 32px;
+    box-shadow: none;
   }
 }
 @media (max-width: 639px) {

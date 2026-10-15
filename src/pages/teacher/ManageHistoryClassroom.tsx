@@ -4148,7 +4148,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
             <HistoryActionButton
               icon="plus"
-              label="+ 새 역사교실"
+              label="새 역사교실"
               type="button"
               onClick={openCreateModal}
               className="h-11 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
@@ -4808,7 +4808,7 @@ const ManageHistoryClassroom: React.FC = () => {
         ))}
         {!assignmentRows.length && (
           <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm font-semibold text-gray-400">
-            아직 생성된 역사교실 과제가 없습니다. + 새 역사교실로 첫 과제를
+            아직 생성된 역사교실 과제가 없습니다. 새 역사교실로 첫 과제를
             등록하세요.
           </div>
         )}
@@ -6097,7 +6097,7 @@ const ManageHistoryClassroom: React.FC = () => {
       )}
 
       {editingAssignment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-4 py-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-2 py-6 sm:px-4">
           <div
             id="history-edit-dialog"
             role="dialog"
@@ -6369,7 +6369,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 <div className="history-edit-results flex min-h-0 min-w-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5">
                   <section
                     aria-label="응시 현황 및 제출 내역"
-                    className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-3.5"
+                    className="history-attempt-section flex min-h-0 min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-3.5"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="text-sm font-bold text-gray-700">
@@ -6510,7 +6510,10 @@ const ManageHistoryClassroom: React.FC = () => {
                                       {row.student.className || "-"}{" "}
                                       {row.student.number || "-"}번
                                     </span>
-                                    <span className="history-attempt-name">
+                                    <span
+                                      className="history-attempt-name"
+                                      title={row.student.name}
+                                    >
                                       {studentResults.length > 0 && (
                                         <span
                                           aria-hidden="true"
@@ -6527,7 +6530,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                     title={feedback || row.detailLabel}
                                   >
                                     <span
-                                      className={`inline-block rounded-full border px-2 py-1 text-[11px] font-bold ${row.toneClassName}`}
+                                      className={`history-attempt-status inline-block rounded-full border text-[11px] font-bold ${row.toneClassName}`}
                                     >
                                       {feedback
                                         ? feedback.includes("못했습니다")
@@ -6537,7 +6540,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                     </span>
                                     {latestResult &&
                                       row.statusLabel !== "면제 완료" && (
-                                        <span className="font-semibold">
+                                        <span className="history-attempt-percent font-semibold">
                                           {latestResult.percent}%
                                         </span>
                                       )}

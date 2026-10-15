@@ -1,10 +1,31 @@
 import type { AtlasHistoricalStory } from "../lib/historyAtlasStories";
+import { ATLAS_DOKDO_ID, ATLAS_DOKDO_LABEL } from "./historyAtlasDokdo";
 
 /** Place-specific historical narratives checked against the linked sources.
  * Broad periods use approximate bounds for sorting, not an asserted event date.
  * Source-map captions are not evidence for an event or a place-to-place edge.
  */
 export const koreaHistoricalStories: AtlasHistoricalStory[] = [
+  {
+    id: "korea-dokdo-imperial-decree",
+    subject: "korea",
+    placeIds: [ATLAS_DOKDO_ID],
+    displayNames: { [ATLAS_DOKDO_ID]: ATLAS_DOKDO_LABEL },
+    title: "칙령 제41호로 밝힌 독도 관할",
+    period: "1900년",
+    startYear: 1900,
+    eraIds: ["k-opening"],
+    unitId: "korea-modern",
+    summary:
+      "1900년 10월 25일 대한제국은 칙령 제41호로 울도군의 관할에 석도, 곧 독도를 포함했다. 같은 달 27일 관보에 실린 이 칙령은 독도를 행정구역으로 관리한 사실을 보여 주는 공식 문서이다.",
+    sources: [
+      {
+        title:
+          "국사편찬위원회 우리역사넷 · 울릉도와 독도 - 대한제국 칙령 제41호",
+        url: "https://contents.history.go.kr/front/hm/view.do?levelId=hm_122_0020",
+      },
+    ],
+  },
   {
     id: "korea-wiman-fall",
     subject: "korea",

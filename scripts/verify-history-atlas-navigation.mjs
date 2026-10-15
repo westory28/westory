@@ -6,6 +6,7 @@ import { gzipSync } from "node:zlib";
 import vm from "node:vm";
 import ts from "typescript";
 import * as geography from "d3-geo";
+import "./verify-history-atlas-dokdo-ui.mjs";
 
 const cache = new Map();
 const load = (filename) => {
@@ -48,6 +49,7 @@ const {
   includeAtlasContextBounds,
   reframeAtlasSelectionBounds,
   atlasRegionCameraBounds,
+  withAtlasDokdoLand,
 } = load("src/lib/historyAtlasGeometry.ts");
 const { ATLAS_KOREA_PROVINCES, ATLAS_WORLD_REGION_GROUPS, matchesAtlasRegion } =
   load("src/lib/historyAtlasRegions.ts");
@@ -703,6 +705,60 @@ const globeBytes = readFileSync("src/data/atlas/land-globe.json");
 assert(
   gzipSync(globeBytes).length < 64 * 1024,
   "Globe terrain must remain separately small",
+);
+const dokdoBytes = readFileSync("src/data/atlas/dokdo-islands.json");
+const dokdoIslands = JSON.parse(dokdoBytes);
+const dokdoSources = read("dokdo-islands.sources.json");
+assert.equal(
+  createHash("sha256").update(dokdoBytes).digest("hex"),
+  dokdoSources.assetSha256,
+);
+assert.equal(dokdoSources.license, "ODbL 1.0");
+assert(
+  gzipSync(dokdoBytes).length < 24 * 1024,
+  "Dokdo coastline transfer budget",
+);
+const dokdoEast = [131 + 52 / 60 + 10.4 / 3600, 37 + 14 / 60 + 26.8 / 3600];
+const dokdoWest = [131 + 51 / 60 + 54.6 / 3600, 37 + 14 / 60 + 30.6 / 3600];
+for (const officialPoint of [dokdoEast, dokdoWest])
+  assert(
+    geography.geoContains(dokdoIslands, officialPoint),
+    "Official island point lies on the coastline asset",
+  );
+// Catch reversed spherical winding or artificially enlarged island shapes.
+const dokdoArea = geography.geoArea(dokdoIslands) * 6371008.8 ** 2;
+assert(
+  dokdoArea > 170000 && dokdoArea < 210000,
+  "Dokdo coastline preserves its real geographic scale",
+);
+for (const file of ["land-korea.json", "land-world.json", "land-globe.json"]) {
+  const original = read(file);
+  const before = JSON.stringify(original);
+  const merged = withAtlasDokdoLand(original, dokdoIslands);
+  assert.equal(
+    JSON.stringify(original),
+    before,
+    "Source terrain remains unmodified",
+  );
+  for (const coordinates of [dokdoEast, dokdoWest])
+    assert(
+      geography.geoContains(merged, coordinates),
+      `${file}: both Dokdo islands exist`,
+    );
+  for (const coordinates of [
+    [127, 37],
+    [139.7, 35.7],
+    [128, 38],
+    [135, 36],
+  ])
+    assert.equal(
+      geography.geoContains(merged, coordinates),
+      geography.geoContains(original, coordinates),
+      `${file}: unrelated land and sea are unchanged`,
+    );
+}
+console.log(
+  `Dokdo geography checks passed: ${dokdoIslands.features.length} source coastline polygons, official east/west points, realistic area, all map layers, attribution and payload budget.`,
 );
 console.log(
   `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} full-geometry camera fits, ${polarCameraCases} polar camera fits, ${popupCameraCases} real-place camera fits across ${popupViewports.length} bottom-left popup layouts, ${regionCameraCases} region camera fits, region handler state transitions, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,

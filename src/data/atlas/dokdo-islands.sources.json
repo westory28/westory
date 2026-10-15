@@ -1,0 +1,443 @@
+{
+  "source": "© OpenStreetMap contributors",
+  "sourceUrl": "https://api.openstreetmap.org/api/0.6/map?bbox=131.85,37.23,131.88,37.25",
+  "license": "ODbL 1.0",
+  "licenseUrl": "https://opendatacommons.org/licenses/odbl/1-0/",
+  "attributionUrl": "https://www.openstreetmap.org/copyright",
+  "coordinateSystem": "WGS84 longitude, latitude",
+  "sourceSha256": "a63585951a7e99fbfa5c802e961833a818733f362c3b07659c89ddf116444873",
+  "assetSha256": "6bd1796b7b3ca43a9e79c0d3fa81514341836fc18c85a4a0952c835d33751084",
+  "notes": "Independent coastline layer. Original coordinates retained, clockwise winding for D3. No simplification, scaling, country boundaries or OSM sovereignty attributes. Korean names and jurisdiction are supplied separately from Korean government sources.",
+  "ways": [
+    {
+      "wayId": "456788677",
+      "version": "8",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788678",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788679",
+      "version": "168",
+      "timestamp": "2026-06-02T16:03:17Z"
+    },
+    {
+      "wayId": "456788681",
+      "version": "153",
+      "timestamp": "2026-06-02T16:03:21Z"
+    },
+    {
+      "wayId": "456788682",
+      "version": "6",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788683",
+      "version": "30",
+      "timestamp": "2026-06-02T16:02:57Z"
+    },
+    {
+      "wayId": "456788684",
+      "version": "9",
+      "timestamp": "2026-06-02T16:03:12Z"
+    },
+    {
+      "wayId": "456788685",
+      "version": "29",
+      "timestamp": "2026-06-02T16:02:58Z"
+    },
+    {
+      "wayId": "456788686",
+      "version": "31",
+      "timestamp": "2026-06-02T16:02:55Z"
+    },
+    {
+      "wayId": "456788687",
+      "version": "9",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788688",
+      "version": "6",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788691",
+      "version": "6",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788696",
+      "version": "21",
+      "timestamp": "2026-06-02T16:03:05Z"
+    },
+    {
+      "wayId": "456788698",
+      "version": "37",
+      "timestamp": "2026-06-02T16:03:28Z"
+    },
+    {
+      "wayId": "456788699",
+      "version": "8",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788700",
+      "version": "9",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788702",
+      "version": "7",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "456788703",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788704",
+      "version": "9",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788705",
+      "version": "39",
+      "timestamp": "2026-06-02T16:02:49Z"
+    },
+    {
+      "wayId": "456788706",
+      "version": "11",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788707",
+      "version": "52",
+      "timestamp": "2026-06-02T16:03:26Z"
+    },
+    {
+      "wayId": "456788708",
+      "version": "10",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "456788709",
+      "version": "9",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788710",
+      "version": "39",
+      "timestamp": "2026-06-02T16:02:48Z"
+    },
+    {
+      "wayId": "456788711",
+      "version": "12",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "456788712",
+      "version": "41",
+      "timestamp": "2026-06-02T16:02:46Z"
+    },
+    {
+      "wayId": "456788713",
+      "version": "9",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788714",
+      "version": "9",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788715",
+      "version": "9",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788716",
+      "version": "51",
+      "timestamp": "2026-06-02T16:03:27Z"
+    },
+    {
+      "wayId": "456788719",
+      "version": "25",
+      "timestamp": "2026-06-02T16:03:01Z"
+    },
+    {
+      "wayId": "456788722",
+      "version": "58",
+      "timestamp": "2026-06-02T16:03:25Z"
+    },
+    {
+      "wayId": "456788725",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788727",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788730",
+      "version": "28",
+      "timestamp": "2026-06-02T16:03:00Z"
+    },
+    {
+      "wayId": "456788736",
+      "version": "8",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "456788743",
+      "version": "7",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "456788745",
+      "version": "8",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "456788747",
+      "version": "7",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "456788749",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788751",
+      "version": "6",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788753",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788758",
+      "version": "6",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788760",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788766",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788769",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788771",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788773",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788776",
+      "version": "7",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "456788780",
+      "version": "36",
+      "timestamp": "2026-06-02T16:02:51Z"
+    },
+    {
+      "wayId": "456788796",
+      "version": "46",
+      "timestamp": "2026-06-02T16:03:27Z"
+    },
+    {
+      "wayId": "503149144",
+      "version": "28",
+      "timestamp": "2026-06-02T16:02:59Z"
+    },
+    {
+      "wayId": "880490218",
+      "version": "17",
+      "timestamp": "2026-06-02T16:03:07Z"
+    },
+    {
+      "wayId": "1314616710",
+      "version": "4",
+      "timestamp": "2025-03-26T01:52:16Z"
+    },
+    {
+      "wayId": "1417231643",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231644",
+      "version": "2",
+      "timestamp": "2025-07-28T09:26:39Z"
+    },
+    {
+      "wayId": "1417231645",
+      "version": "2",
+      "timestamp": "2025-07-28T09:26:23Z"
+    },
+    {
+      "wayId": "1417231646",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231649",
+      "version": "2",
+      "timestamp": "2025-07-28T09:25:59Z"
+    },
+    {
+      "wayId": "1417231651",
+      "version": "2",
+      "timestamp": "2025-07-28T09:25:39Z"
+    },
+    {
+      "wayId": "1417231652",
+      "version": "2",
+      "timestamp": "2025-07-28T09:23:35Z"
+    },
+    {
+      "wayId": "1417231653",
+      "version": "2",
+      "timestamp": "2025-07-28T09:23:15Z"
+    },
+    {
+      "wayId": "1417231654",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231655",
+      "version": "2",
+      "timestamp": "2025-07-28T09:34:20Z"
+    },
+    {
+      "wayId": "1417231656",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231657",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231658",
+      "version": "2",
+      "timestamp": "2025-07-28T09:21:21Z"
+    },
+    {
+      "wayId": "1417231660",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231661",
+      "version": "2",
+      "timestamp": "2025-07-28T09:21:01Z"
+    },
+    {
+      "wayId": "1417231662",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231665",
+      "version": "2",
+      "timestamp": "2025-07-28T09:20:34Z"
+    },
+    {
+      "wayId": "1417231666",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231667",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231668",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231670",
+      "version": "2",
+      "timestamp": "2025-07-28T09:20:12Z"
+    },
+    {
+      "wayId": "1417231671",
+      "version": "2",
+      "timestamp": "2025-07-28T09:19:45Z"
+    },
+    {
+      "wayId": "1417231673",
+      "version": "2",
+      "timestamp": "2025-07-28T09:19:24Z"
+    },
+    {
+      "wayId": "1417231676",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231680",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231681",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231682",
+      "version": "2",
+      "timestamp": "2025-07-28T09:14:40Z"
+    },
+    {
+      "wayId": "1417231683",
+      "version": "1",
+      "timestamp": "2025-07-25T14:45:36Z"
+    },
+    {
+      "wayId": "1417231685",
+      "version": "2",
+      "timestamp": "2025-07-28T09:14:17Z"
+    },
+    {
+      "wayId": "1417231686",
+      "version": "2",
+      "timestamp": "2025-07-28T09:13:56Z"
+    },
+    {
+      "wayId": "1427056849",
+      "version": "1",
+      "timestamp": "2025-09-04T08:46:14Z"
+    }
+  ]
+}

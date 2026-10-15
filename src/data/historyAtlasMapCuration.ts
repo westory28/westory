@@ -1,14 +1,20 @@
 import type { AtlasPlace } from "../lib/historyAtlas";
 import type { AtlasHistoricalStory } from "../lib/historyAtlasStories";
+import {
+  ATLAS_DOKDO_COORDINATES,
+  ATLAS_DOKDO_ID,
+  ATLAS_DOKDO_LOCATION_SOURCE,
+} from "./historyAtlasDokdo";
 
 export const ATLAS_CHEORWON_ID = "kr-5946842fc116";
 export const ATLAS_GWIJU_ID = "kr-bd065f0d1538";
 export const ATLAS_TAEBONG_EVENT_ID = `story-korea-taebong-renamed-${ATLAS_CHEORWON_ID}`;
 
-/** Historical identity and modern location were checked independently.
- * This is a town reference point, not a claimed 1019 battlefield position.
+/** Sources for independently checked modern reference points.
+ * These points do not assert historic battlefield positions or site boundaries.
  */
 export const atlasMapLocationEvidence = {
+  [ATLAS_DOKDO_ID]: [ATLAS_DOKDO_LOCATION_SOURCE],
   [ATLAS_GWIJU_ID]: [
     {
       title: "국사편찬위원회 우리역사넷 · 귀주대첩",
@@ -24,6 +30,13 @@ export const atlasMapLocationEvidence = {
 };
 
 export const atlasMapPlaceOverrides: Record<string, Partial<AtlasPlace>> = {
+  [ATLAS_DOKDO_ID]: {
+    modernName: "대한민국 경상북도 울릉군 울릉읍 독도리",
+    coordinates: ATLAS_DOKDO_COORDINATES,
+    kind: "island",
+    locationNote:
+      "대한민국 경상북도 울릉군의 독도이다. 해양수산부가 공개한 동도의 좌표를 대표점으로 사용했다. 동도·서도 전체의 경계나 면적을 나타내는 점은 아니다.",
+  },
   [ATLAS_GWIJU_ID]: {
     modernName: "평안북도 구성시",
     coordinates: [125.2529, 39.97969],

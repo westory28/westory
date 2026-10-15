@@ -39,7 +39,9 @@ import {
   atlasProjectedNorthBearing,
   fitGlobeRegionCamera,
   globeSelectionCenterY,
+  loadAtlasDokdoGeometry,
   loadAtlasRiverGeometry,
+  withAtlasDokdoLand,
 } from "../../lib/historyAtlasGeometry";
 import {
   findAtlasRiver,
@@ -51,9 +53,17 @@ import AtlasRegionFilters from "./AtlasRegionFilters";
 import AtlasCompass from "./AtlasCompass";
 import { matchesAtlasRegion } from "../../lib/historyAtlasRegions";
 import InfoHelp from "./InfoHelp";
-import { atlasRiverCreditItems } from "./AtlasRiverCredits";
+import {
+  atlasRiverCreditItems,
+  atlasDokdoCreditItems,
+} from "./AtlasRiverCredits";
 import landUrl from "../../data/atlas/land-globe.json?url";
 import geographyUrl from "../../data/atlas/globe-geography.json?url";
+import {
+  ATLAS_DOKDO_COORDINATES,
+  ATLAS_DOKDO_ID,
+  ATLAS_DOKDO_LABEL,
+} from "../../data/historyAtlasDokdo";
 import "./historyGlobe.css";
 
 type Item = {
@@ -103,11 +113,14 @@ const grid = geoGraticule10();
 let landPromise: Promise<GeoPermissibleObjects> | undefined;
 function loadLand() {
   if (!landPromise)
-    landPromise = fetch(landUrl)
-      .then((response) => {
+    landPromise = Promise.all([
+      fetch(landUrl).then((response) => {
         if (!response.ok) throw new Error("지형을 불러오지 못했다.");
         return response.json() as Promise<GeoPermissibleObjects>;
-      })
+      }),
+      loadAtlasDokdoGeometry(),
+    ])
+      .then(([land, dokdo]) => withAtlasDokdoLand(land, dokdo))
       .catch((error) => {
         landPromise = undefined;
         throw error;
@@ -149,6 +162,7 @@ export default function HistoryGlobe({
   const zoomRef = useRef<HTMLOutputElement>(null);
   const compassRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<SVGSVGElement>(null);
+  const dokdoLabelRef = useRef<HTMLButtonElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
   const riverHaloRef = useRef<SVGPathElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -230,6 +244,13 @@ export default function HistoryGlobe({
     [items],
   );
   const selected = selectedId ? itemsById.get(selectedId) : undefined;
+  const dokdoItem = useMemo(
+    () =>
+      items.find(
+        (item) => item.subject === "korea" && item.place.id === ATLAS_DOKDO_ID,
+      ),
+    [items],
+  );
   const filtered = useMemo(() => {
     const normalized = normalizeAtlasSearch(query);
     const result = items.filter(
@@ -268,6 +289,8 @@ export default function HistoryGlobe({
   );
   const mapItems = useMemo(() => {
     const result = filtered.filter((item) => item.place.coordinates);
+    if (dokdoItem && !result.some((item) => item.place.id === ATLAS_DOKDO_ID))
+      result.push(dokdoItem);
     if (selected?.place.coordinates) {
       const index = result.findIndex(
         (item) => item.place.id === selected.place.id,
@@ -276,7 +299,7 @@ export default function HistoryGlobe({
       else result[index] = selected;
     }
     return result;
-  }, [filtered, selected]);
+  }, [filtered, selected, dokdoItem]);
   const selectedRiver = useMemo(
     () => (selected && rivers ? findAtlasRiver(selected.place, rivers) : null),
     [selected, rivers],
@@ -292,9 +315,6 @@ export default function HistoryGlobe({
           }
         : selected?.place,
     [selected?.place, selectedRiver],
-  );
-  const hasOsmRiver = !!selectedRiver?.features.some(
-    (feature) => feature.properties?.source === "OpenStreetMap",
   );
 
   const cancelDraw = useCallback(() => {
@@ -556,7 +576,12 @@ export default function HistoryGlobe({
       };
       for (const item of mapItems) {
         if (selectedRiver && item.place.id === selected?.place.id) continue;
-        addPoint(item, item.place.coordinates);
+        addPoint(
+          item,
+          item.place.id === ATLAS_DOKDO_ID
+            ? ATLAS_DOKDO_COORDINATES
+            : item.place.coordinates,
+        );
       }
       // A verified river has a course, not an arbitrary city-style point. Its
       // geographical centroid anchors only the label, including null-point data.
@@ -566,21 +591,30 @@ export default function HistoryGlobe({
       const rendered: Point[] = [];
       const ordered = [...points].sort(
         (a, b) =>
-          Number(b.item.place.id === selected?.place.id) -
-          Number(a.item.place.id === selected?.place.id),
+          Number(b.item.place.id === selected?.place.id) * 2 +
+          Number(b.item.place.id === ATLAS_DOKDO_ID) -
+          (Number(a.item.place.id === selected?.place.id) * 2 +
+            Number(a.item.place.id === ATLAS_DOKDO_ID)),
       );
       context.fillStyle = color("--ws-primary");
       for (const point of ordered) {
         const cell = Math.floor(point.x / 12) + ":" + Math.floor(point.y / 12);
-        if (occupied.has(cell)) continue;
+        const isDokdo = point.item.place.id === ATLAS_DOKDO_ID;
+        if (occupied.has(cell) && !isDokdo) continue;
         occupied.add(cell);
         rendered.push(point);
         const active = point.item.place.id === selected?.place.id;
         if (active && selectedRiver) continue;
         context.beginPath();
-        context.arc(point.x, point.y, active ? 6 : 3, 0, Math.PI * 2);
+        context.arc(
+          point.x,
+          point.y,
+          active ? 6 : isDokdo ? 5 : 3,
+          0,
+          Math.PI * 2,
+        );
         context.fill();
-        if (active) {
+        if (active || isDokdo) {
           context.strokeStyle = color("--ws-surface");
           context.lineWidth = 2;
           context.stroke();
@@ -603,6 +637,18 @@ export default function HistoryGlobe({
         Math.max(4, Math.min(18, Math.floor(width / 60))),
       );
       const boxes: { x: number; y: number; w: number; h: number }[] = [];
+      const popup =
+        selected && panel === "detail"
+          ? detailRef.current?.parentElement
+          : null;
+      if (popup)
+        boxes.push({
+          x: popup.offsetLeft,
+          y: popup.offsetTop + popup.offsetHeight / 2,
+          w: popup.offsetWidth,
+          h: popup.offsetHeight,
+        });
+      if (dokdoLabelRef.current) dokdoLabelRef.current.hidden = true;
       // Keep labels above both animated halo layers without another bitmap or
       // a render loop. Reuse this small SVG pool on the existing draw schedule.
       const labelNodes = labelsRef.current?.children;
@@ -611,30 +657,38 @@ export default function HistoryGlobe({
         (node as SVGGElement).style.display = "none";
       let labelIndex = 0;
       for (const point of labels) {
-        const label = nameOf(point.item);
+        const isDokdo = point.item.place.id === ATLAS_DOKDO_ID;
+        const label = isDokdo ? ATLAS_DOKDO_LABEL : nameOf(point.item);
         const activeLabel = point.item.place.id === selected?.place.id;
-        context.font = `${activeLabel ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
+        const emphasized = activeLabel || isDokdo;
+        context.font = `${emphasized ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
         const textWidth = Math.min(
           width - 32,
           context.measureText(label).width,
         );
         const x = Math.min(width - textWidth - 12, Math.max(12, point.x + 10));
         const naturalY = point.y < 100 ? point.y + 22 : point.y - 18;
-        const y = activeLabel
+        let y = emphasized
           ? Math.max(80, Math.min(height - 80, naturalY))
           : naturalY;
-        const labelHeight = activeLabel ? 32 : 22;
-        if (
-          y < 80 ||
-          y > height - 68 ||
+        const labelHeight = emphasized ? 32 : 22;
+        const overlaps = (candidateY: number) =>
           boxes.some(
             (box) =>
-              Math.abs(box.y - y) < (box.h + labelHeight) / 2 &&
+              Math.abs(box.y - candidateY) < (box.h + labelHeight) / 2 &&
               x < box.x + box.w + 12 &&
               x + textWidth > box.x - 12,
-          )
-        )
-          continue;
+          );
+        if (isDokdo) {
+          for (const candidateY of [y, point.y + 32, point.y - 32, 80]) {
+            const candidate = Math.max(80, Math.min(height - 80, candidateY));
+            if (!overlaps(candidate)) {
+              y = candidate;
+              break;
+            }
+          }
+        }
+        if (y < 80 || y > height - 68 || overlaps(y)) continue;
         boxes.push({ x, y, w: textWidth, h: labelHeight });
         const group = labelNodes[labelIndex++] as SVGGElement;
         const background = group.children[0] as SVGRectElement;
@@ -642,13 +696,21 @@ export default function HistoryGlobe({
         const ripple = group.children[2] as SVGRectElement;
         group.style.display = "";
         group.classList.toggle("is-active", activeLabel);
+        group.classList.toggle("is-priority", isDokdo);
         group.setAttribute("transform", `translate(${x},${y})`);
-        background.style.display = activeLabel ? "" : "none";
+        background.style.display = emphasized ? "" : "none";
         background.setAttribute("width", String(textWidth + 16));
         ripple.style.display = activeLabel ? "" : "none";
         ripple.setAttribute("width", String(textWidth + 16));
         text.textContent = label;
         text.setAttribute("textLength", String(textWidth));
+        if (isDokdo && dokdoLabelRef.current) {
+          const button = dokdoLabelRef.current;
+          button.style.left = `${x - 8}px`;
+          button.style.top = `${y - 16}px`;
+          button.style.width = `${textWidth + 16}px`;
+          button.hidden = false;
+        }
       }
       // Geographic labels share collision boxes with place names; selected
       // places always get priority. Draw these static labels in the same frame.
@@ -918,7 +980,7 @@ export default function HistoryGlobe({
     if (!cancelled && original && !original.moved && !original.multiple) {
       const hit = nearestGlobePoint(drawnPoints.current, pointer.x, pointer.y);
       if (hit) {
-        chooseFromList(hit.item.entry.id);
+        chooseEntry(hit.item.entry.id);
       }
     }
     if (pointers.current.size) startGesture(original || undefined);
@@ -1092,7 +1154,7 @@ export default function HistoryGlobe({
             },
             {
               title: "자료 출처",
-              items: atlasRiverCreditItems,
+              items: [...atlasRiverCreditItems, ...atlasDokdoCreditItems],
             },
           ]}
         />
@@ -1301,6 +1363,16 @@ export default function HistoryGlobe({
               </g>
             ))}
           </svg>
+          {dokdoItem && (
+            <button
+              ref={dokdoLabelRef}
+              className="history-globe__dokdo-label"
+              hidden
+              aria-label={`${ATLAS_DOKDO_LABEL} 설명 보기`}
+              aria-pressed={selected?.place.id === ATLAS_DOKDO_ID}
+              onClick={() => chooseEntry(dokdoItem.entry.id)}
+            />
+          )}
           <div className="history-globe__controls">
             {!wide && (
               <button
@@ -1403,20 +1475,15 @@ export default function HistoryGlobe({
               rel="noreferrer"
             >
               Natural Earth
+            </a>{" "}
+            ·{" "}
+            <a
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noreferrer"
+            >
+              © OpenStreetMap contributors
             </a>
-            {hasOsmRiver && (
-              <>
-                {" "}
-                ·{" "}
-                <a
-                  href="https://www.openstreetmap.org/copyright"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  © OpenStreetMap contributors
-                </a>
-              </>
-            )}
           </div>
         </div>
         {wide && (

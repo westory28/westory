@@ -1,4 +1,8 @@
 import type { AtlasCitation } from "../lib/historyAtlas";
+import {
+  ATLAS_DOKDO_ID,
+  ATLAS_DOKDO_LOCATION_SOURCE,
+} from "./historyAtlasDokdo";
 import { historyAtlasSupplementalProfiles } from "./historyAtlasSupplementalProfiles";
 
 export interface AtlasProfileSource {
@@ -37,6 +41,29 @@ const aks = (name: string, article: string): AtlasProfileSource => ({
  */
 export const historyAtlasPlaceProfiles: CuratedAtlasPlaceProfile[] = [
   ...historyAtlasSupplementalProfiles,
+  {
+    names: ["독도"],
+    placeIds: [ATLAS_DOKDO_ID],
+    definition:
+      "독도는 대한민국 경상북도 울릉군에 속한 동해의 섬으로, 동도와 서도 및 주변 부속 섬으로 이루어져 있다.",
+    facts: [
+      {
+        label: "현재 위치",
+        value: "대한민국 경상북도 울릉군 울릉읍 독도리",
+      },
+    ],
+    sources: [
+      ATLAS_DOKDO_LOCATION_SOURCE,
+      {
+        title: "국회도서관 독도 · 독도의 위치",
+        url: "https://dokdo.nanet.go.kr/dokdo/front.dokdo?menu=position",
+      },
+      {
+        title: "대한민국 외교부 · 독도의 구성 및 위치",
+        url: "https://dokdo.mofa.go.kr/kor/introduce/location.jsp",
+      },
+    ],
+  },
   {
     names: [],
     placeIds: ["kr-7fb1e90e9e47"],

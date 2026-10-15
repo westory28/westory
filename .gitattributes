@@ -1,4 +1,6 @@
 /.gitattributes text eol=lf
+/src/data/atlas/dokdo-islands.json text eol=lf
+/src/data/atlas/dokdo-islands.sources.json text eol=lf
 *.ts text eol=lf
 *.tsx text eol=lf
 /functions/productionGateway/*.js text eol=lf

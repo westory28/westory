@@ -42,13 +42,21 @@ import AtlasRegionFilters from "./AtlasRegionFilters";
 import AtlasCompass from "./AtlasCompass";
 import { matchesAtlasRegion } from "../../lib/historyAtlasRegions";
 import InfoHelp from "./InfoHelp";
-import { atlasRiverCreditItems } from "./AtlasRiverCredits";
+import {
+  atlasRiverCreditItems,
+  atlasDokdoCreditItems,
+} from "./AtlasRiverCredits";
 import {
   atlasFocusExtent,
   atlasRiverPath,
   findAtlasRiver,
 } from "../../lib/historyAtlasRivers";
 import "./historyAtlas.css";
+import {
+  ATLAS_DOKDO_COORDINATES,
+  ATLAS_DOKDO_ID,
+  ATLAS_DOKDO_LABEL,
+} from "../../data/historyAtlasDokdo";
 
 interface HistoryAtlasProps {
   dataset: AtlasDataset;
@@ -69,6 +77,7 @@ type MapPoint = {
   x: number;
   y: number;
   active: boolean;
+  priority?: boolean;
 };
 const PAGE_SIZE = 40;
 const entryName = ({ entry, place }: LocatedEntry) =>
@@ -138,6 +147,7 @@ function AtlasHelp() {
           title: "자료 출처",
           items: [
             ...atlasRiverCreditItems,
+            ...atlasDokdoCreditItems,
             <a
               key="ne"
               href="https://www.naturalearthdata.com/about/terms-of-use/"
@@ -152,7 +162,7 @@ function AtlasHelp() {
               target="_blank"
               rel="noreferrer"
             >
-              © OpenStreetMap contributors · ODbL · 하천 선형
+              © OpenStreetMap contributors · ODbL · 하천 선형·독도 해안선
             </a>,
             <span key="gn">
               <a
@@ -217,8 +227,14 @@ function placeLabelLayout(
   const occupied = new Map<string, MapPoint[]>();
   const labelLimit = Math.max(12, Math.floor((width * height) / 7500));
   return [...points]
-    .sort((a, b) => Number(b.active) - Number(a.active))
+    .sort(
+      (a, b) =>
+        Number(b.active) * 2 +
+        Number(!!b.priority) -
+        (Number(a.active) * 2 + Number(!!a.priority)),
+    )
     .map((point) => {
+      const emphasized = point.active || point.priority;
       const cellX = Math.floor(point.x / 44);
       const cellY = Math.floor(point.y / 44);
       let overlaps = false;
@@ -241,33 +257,33 @@ function placeLabelLayout(
         point.x < obstacle.right + 22 &&
         point.y > obstacle.top - 22 &&
         point.y < obstacle.bottom + 22;
-      const hitVisible = !behindCard && (point.active || !overlaps);
+      const hitVisible = !behindCard && (emphasized || !overlaps);
       if (hitVisible) {
         const key = `${cellX}:${cellY}`;
         occupied.set(key, [...(occupied.get(key) || []), point]);
       }
       const textWidth = Math.max(24, point.name.length * 14);
-      const naturalWidth = Math.max(40, textWidth + (point.active ? 16 : 12));
+      const naturalWidth = Math.max(40, textWidth + (emphasized ? 16 : 12));
       const frameLeft =
-        point.active &&
+        emphasized &&
         obstacle &&
         point.y > obstacle.top - 22 &&
         point.x > obstacle.right + 22
           ? obstacle.right + 12
           : 8;
       const frameTop =
-        point.active && obstacle && point.y > obstacle.bottom + 22
+        emphasized && obstacle && point.y > obstacle.bottom + 22
           ? obstacle.bottom + 12
           : 8;
-      const labelWidth = point.active
+      const labelWidth = emphasized
         ? Math.min(naturalWidth, Math.max(1, width - frameLeft - 8))
         : naturalWidth;
-      const labelHeight = point.active
+      const labelHeight = emphasized
         ? Math.ceil(textWidth / Math.max(1, labelWidth - 16)) * 24 + 8
         : Math.ceil(naturalWidth / labelWidth) * 24;
       const rightSide = point.x + labelWidth + 14 <= width - 8;
       const fitsLeft = point.x - labelWidth - 14 >= frameLeft;
-      const centered = point.active && !rightSide && !fitsLeft;
+      const centered = emphasized && !rightSide && !fitsLeft;
       let left = centered
         ? point.x - labelWidth / 2
         : rightSide
@@ -278,7 +294,7 @@ function placeLabelLayout(
           ? point.y + 14
           : point.y - labelHeight - 14
         : point.y - labelHeight / 2;
-      if (point.active) {
+      if (emphasized) {
         left = Math.max(frameLeft, Math.min(width - labelWidth - 8, left));
         top = Math.max(frameTop, Math.min(height - labelHeight - 8, top));
       }
@@ -288,9 +304,42 @@ function placeLabelLayout(
         top,
         bottom: top + labelHeight,
       };
+      if (point.priority && !point.active) {
+        // The base-map label has priority over ordinary names, while leaving
+        // the selected label and the description popup unobscured.
+        const collides = (candidate: typeof box) =>
+          boxes.some(
+            (other) =>
+              candidate.left < other.right &&
+              candidate.right > other.left &&
+              candidate.top < other.bottom &&
+              candidate.bottom > other.top,
+          );
+        for (const candidateTop of [
+          top,
+          point.y + 14,
+          point.y - labelHeight - 14,
+          frameTop,
+        ]) {
+          const candidate = {
+            ...box,
+            top: Math.max(
+              frameTop,
+              Math.min(height - labelHeight - 8, candidateTop),
+            ),
+          };
+          candidate.bottom = candidate.top + labelHeight;
+          if (!collides(candidate)) {
+            top = candidate.top;
+            box.top = top;
+            box.bottom = candidate.bottom;
+            break;
+          }
+        }
+      }
       const labelVisible =
         hitVisible &&
-        (point.active || boxes.length < labelLimit) &&
+        (emphasized || boxes.length < labelLimit) &&
         box.left >= 4 &&
         box.right <= width - 4 &&
         box.top >= 4 &&
@@ -422,6 +471,13 @@ export default function HistoryAtlas({
       ),
     [allEntries, unitsById, subject],
   );
+  const dokdoItem = useMemo(
+    () =>
+      subject === "korea"
+        ? subjectEntries.find(({ place }) => place.id === ATLAS_DOKDO_ID)
+        : undefined,
+    [subjectEntries, subject],
+  );
   const entriesById = useMemo(
     () => new Map(allEntries.map((item) => [item.entry.id, item])),
     [allEntries],
@@ -487,6 +543,14 @@ export default function HistoryAtlas({
       entryName(a).localeCompare(entryName(b), "ko", { numeric: true }),
     );
   }, [entries, selected?.entry.id]);
+  const mapPlaces = useMemo(
+    () =>
+      dokdoItem &&
+      !visiblePlaces.some(({ place }) => place.id === ATLAS_DOKDO_ID)
+        ? [...visiblePlaces, dokdoItem]
+        : visiblePlaces,
+    [visiblePlaces, dokdoItem],
+  );
   const pageCount = Math.max(1, Math.ceil(visiblePlaces.length / PAGE_SIZE));
   const currentPage = Math.min(listPage, pageCount - 1);
   const pagePlaces = visiblePlaces.slice(
@@ -538,10 +602,15 @@ export default function HistoryAtlas({
   );
   const mapPoints = useMemo(() => {
     const points: MapPoint[] = [];
-    visiblePlaces.forEach((item) => {
+    mapPlaces.forEach((item) => {
       const { place } = item;
       const river = riversByPlace.get(place.id);
-      const coordinates = river ? geoCentroid(river) : place.coordinates;
+      const coordinates =
+        place.id === ATLAS_DOKDO_ID
+          ? ATLAS_DOKDO_COORDINATES
+          : river
+            ? geoCentroid(river)
+            : place.coordinates;
       if (!coordinates) return;
       const position = projection(coordinates);
       if (!position) return;
@@ -550,10 +619,11 @@ export default function HistoryAtlas({
       if (x < 0 || x > mapWidth || y < 0 || y > mapHeight) return;
       points.push({
         place,
-        name: entryName(item),
+        name: place.id === ATLAS_DOKDO_ID ? ATLAS_DOKDO_LABEL : entryName(item),
         x,
         y,
         active: selected?.place.id === place.id,
+        priority: place.id === ATLAS_DOKDO_ID,
       });
     });
     return placeLabelLayout(
@@ -563,7 +633,7 @@ export default function HistoryAtlas({
       overlayObstacle,
     );
   }, [
-    visiblePlaces,
+    mapPlaces,
     projection,
     transform,
     mapWidth,
@@ -1050,7 +1120,10 @@ export default function HistoryAtlas({
         ({ entry, place }) =>
           place.id === placeId && entry.id === selected?.entry.id,
       ) || entries.find(({ place }) => place.id === placeId);
-    if (!next) return;
+    if (!next) {
+      if (dokdoItem?.place.id === placeId) selectStory(dokdoItem);
+      return;
+    }
     setFilterNotice("");
     setSelectedId(next.entry.id);
     setDetailOpen(true);
@@ -1560,7 +1633,7 @@ export default function HistoryAtlas({
                   <button
                     key={point.place.id}
                     type="button"
-                    className={`history-atlas__point${point.active ? " is-active" : ""}${riversByPlace.has(point.place.id) ? " is-river" : ""}`}
+                    className={`history-atlas__point${point.active ? " is-active" : ""}${point.priority ? " is-priority" : ""}${riversByPlace.has(point.place.id) ? " is-river" : ""}`}
                     style={{ left: point.x, top: point.y }}
                     aria-label={`${point.name} 설명 보기`}
                     aria-pressed={point.active}
@@ -1575,7 +1648,7 @@ export default function HistoryAtlas({
                 point.hitVisible && point.labelVisible ? (
                   <span
                     key={point.place.id}
-                    className={`history-atlas__label-anchor${point.active ? " is-active" : ""}`}
+                    className={`history-atlas__label-anchor${point.active ? " is-active" : ""}${point.priority ? " is-priority" : ""}`}
                     style={{ left: point.x, top: point.y }}
                     aria-hidden="true"
                   >

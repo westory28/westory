@@ -626,7 +626,7 @@ try {
     );
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page
-      .getByRole("button", { name: "+ 새 역사교실", exact: true })
+      .getByRole("button", { name: "새 역사교실", exact: true })
       .click();
     await assertNewDefaults(page);
     assert.equal(
@@ -776,13 +776,13 @@ try {
       [10, 5, 90, "3", "2"],
     );
     await page
-      .getByRole("button", { name: "+ 새 역사교실", exact: true })
+      .getByRole("button", { name: "새 역사교실", exact: true })
       .click();
     await assertNewDefaults(page);
     await page.locator('input[type="number"]').first().fill("17");
     await page.getByRole("button", { name: "닫기", exact: true }).click();
     await page
-      .getByRole("button", { name: "+ 새 역사교실", exact: true })
+      .getByRole("button", { name: "새 역사교실", exact: true })
       .click();
     await assertNewDefaults(page);
     await page.getByRole("button", { name: "닫기", exact: true }).click();
@@ -1043,7 +1043,7 @@ try {
     for (const row of [pending, cancelled, passed]) {
       const geometry = await row.boundingBox();
       assert(
-        geometry.height >= 44 && geometry.height <= 80,
+        geometry.height === 36,
         `compact responsive student row: ${JSON.stringify(geometry)}`,
       );
     }
@@ -1054,8 +1054,8 @@ try {
         return { hitHeight: hit.height, borderWidth: parseFloat(getComputedStyle(el).borderTopWidth), nestedControls: el.querySelectorAll("button,input,select").length };
       });
       assert(
-        geometry.hitHeight >= 44,
-        "compact reset retains a 44px touch area",
+        geometry.hitHeight === 28,
+        "reset fits the requested 28px dense table control",
       );
       assert(
         geometry.borderWidth > 0 && geometry.nestedControls === 0,
