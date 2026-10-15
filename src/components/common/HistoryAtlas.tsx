@@ -9,7 +9,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
-import { geoCentroid, geoPath } from "d3-geo";
+import { geoArea, geoBounds, geoCentroid, geoPath } from "d3-geo";
 import {
   ATLAS_SUBJECT_BOUNDS,
   ATLAS_SUBJECT_LABELS,
@@ -25,6 +25,7 @@ import {
   ATLAS_IDENTITY,
   ATLAS_MAX_ZOOM,
   atlasRegionCameraBounds,
+  atlasShapeLabelAnchor,
   constrainAtlasTransform,
   createAtlasPaths,
   createAtlasProjection,
@@ -38,6 +39,7 @@ import {
 } from "../../lib/historyAtlasGeometry";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import AtlasPlaceDetails from "./AtlasPlaceDetails";
+import AtlasAreaDetails from "./AtlasAreaDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
 import AtlasCompass from "./AtlasCompass";
 import { matchesAtlasRegion } from "../../lib/historyAtlasRegions";
@@ -57,9 +59,14 @@ import {
 } from "../../lib/historyAtlasLandforms";
 import "./historyAtlas.css";
 import {
+  findAtlasArea,
+  findAtlasProvinceArea,
+  isAtlasAreaPlace,
+  loadAtlasAreaGeometry,
+} from "../../lib/historyAtlasAreas";
+import {
   ATLAS_DOKDO_COORDINATES,
   ATLAS_DOKDO_ID,
-  ATLAS_DOKDO_LABEL,
 } from "../../data/historyAtlasDokdo";
 
 interface HistoryAtlasProps {
@@ -82,6 +89,7 @@ type MapPoint = {
   y: number;
   active: boolean;
   priority?: boolean;
+  shape?: boolean;
 };
 const PAGE_SIZE = 40;
 // Keep a city's identity stable while its historical names change by era.
@@ -145,6 +153,11 @@ function AtlasHelp() {
               label: "위치",
               content: "도시·유적은 출처에 근거한 대표 위치로 표시한다.",
             },
+            {
+              label: "지역 범위",
+              content:
+                "8도는 국사편찬위원회의 1910년 경계를 합친 탐색 범위이다. 인천은 현대 행정 경계의 육지, 강화도·제주도·한산도는 본섬의 해안선을 표시한다.",
+            },
           ],
         },
         {
@@ -152,6 +165,14 @@ function AtlasHelp() {
           items: [
             ...atlasRiverCreditItems,
             ...atlasDokdoCreditItems,
+            <a
+              key="hgis"
+              href="https://hgis.history.go.kr/pro_g1/dataset.do"
+              target="_blank"
+              rel="noreferrer"
+            >
+              국사편찬위원회 역사지리정보DB · 도 경계
+            </a>,
             <a
               key="ne"
               href="https://www.naturalearthdata.com/about/terms-of-use/"
@@ -238,7 +259,7 @@ function placeLabelLayout(
         (Number(a.active) * 2 + Number(!!a.priority)),
     )
     .map((point) => {
-      const emphasized = point.active || point.priority;
+      const emphasized = point.active;
       const cellX = Math.floor(point.x / 44);
       const cellY = Math.floor(point.y / 44);
       let overlaps = false;
@@ -261,7 +282,8 @@ function placeLabelLayout(
         point.x < obstacle.right + 22 &&
         point.y > obstacle.top - 22 &&
         point.y < obstacle.bottom + 22;
-      const hitVisible = !behindCard && (emphasized || !overlaps);
+      const hitVisible =
+        !behindCard && (emphasized || point.priority || !overlaps);
       if (hitVisible) {
         const key = `${cellX}:${cellY}`;
         occupied.set(key, [...(occupied.get(key) || []), point]);
@@ -272,6 +294,7 @@ function placeLabelLayout(
         emphasized &&
         obstacle &&
         point.y > obstacle.top - 22 &&
+        point.y < obstacle.bottom + 22 &&
         point.x > obstacle.right + 22
           ? obstacle.right + 12
           : 8;
@@ -285,19 +308,26 @@ function placeLabelLayout(
       const labelHeight = emphasized
         ? Math.ceil(textWidth / Math.max(1, labelWidth - 16)) * 24 + 8
         : Math.ceil(naturalWidth / labelWidth) * 24;
-      const rightSide = point.x + labelWidth + 14 <= width - 8;
+      const rightSide =
+        point.x + labelWidth + (point.shape ? -8 : 14) <= width - 8;
       const fitsLeft = point.x - labelWidth - 14 >= frameLeft;
-      const centered = emphasized && !rightSide && !fitsLeft;
-      let left = centered
-        ? point.x - labelWidth / 2
-        : rightSide
-          ? point.x + 14
-          : point.x - labelWidth - 14;
-      let top = centered
-        ? point.y + labelHeight + 14 <= height - 8
-          ? point.y + 14
-          : point.y - labelHeight - 14
-        : point.y - labelHeight / 2;
+      const centered = !!point.shape || (emphasized && !rightSide && !fitsLeft);
+      let left = point.shape
+        ? rightSide
+          ? point.x - 8
+          : point.x - labelWidth + 8
+        : centered
+          ? point.x - labelWidth / 2
+          : rightSide
+            ? point.x + 14
+            : point.x - labelWidth - 14;
+      let top = point.shape
+        ? point.y - labelHeight / 2
+        : centered
+          ? point.y + labelHeight + 14 <= height - 8
+            ? point.y + 14
+            : point.y - labelHeight - 14
+          : point.y - labelHeight / 2;
       if (emphasized) {
         left = Math.max(frameLeft, Math.min(width - labelWidth - 8, left));
         top = Math.max(frameTop, Math.min(height - labelHeight - 8, top));
@@ -343,7 +373,7 @@ function placeLabelLayout(
       }
       const labelVisible =
         hitVisible &&
-        (emphasized || boxes.length < labelLimit) &&
+        (emphasized || point.priority || boxes.length < labelLimit) &&
         box.left >= 4 &&
         box.right <= width - 4 &&
         box.top >= 4 &&
@@ -396,6 +426,7 @@ export default function HistoryAtlas({
   const [mobilePanel, setMobilePanel] = useState<"places" | null>(null);
   const [filterNotice, setFilterNotice] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
+  const [provinceDetailOpen, setProvinceDetailOpen] = useState(false);
   const [listPage, setListPage] = useState(0);
   const [viewBounds, setViewBounds] = useState<AtlasUnit["bounds"] | null>(
     null,
@@ -405,15 +436,19 @@ export default function HistoryAtlas({
   const pendingFocusRef = useRef<string | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [mapWidth, setMapWidth] = useState(640);
-  const [overlayTop, setOverlayTop] = useState<number | null>(null);
+  const [overlayHeight, setOverlayHeight] = useState<number | null>(null);
   const [geometry, setGeometry] = useState<{
     subject: AtlasSubject;
     bounds: AtlasUnit["bounds"];
     data: AtlasGeometry;
   } | null>(null);
   const [geometryError, setGeometryError] = useState(false);
+  const [areaError, setAreaError] = useState(false);
   const [landformGeometry, setLandformGeometry] = useState<Awaited<
     ReturnType<typeof loadAtlasLandformGeometry>
+  > | null>(null);
+  const [areaGeometry, setAreaGeometry] = useState<Awaited<
+    ReturnType<typeof loadAtlasAreaGeometry>
   > | null>(null);
   const [geometryAttempt, setGeometryAttempt] = useState(0);
   const [transform, setTransform] = useState<AtlasTransform>(ATLAS_IDENTITY);
@@ -513,33 +548,41 @@ export default function HistoryAtlas({
     [scopeEntries, query],
   );
   const selected = entries.find(({ entry }) => entry.id === selectedId);
+  const provinceArea =
+    subject === "korea" && areaGeometry && !selected
+      ? findAtlasProvinceArea(regionId, areaGeometry)
+      : null;
   const overlayWidth = Math.min(wide ? 320 : 280, mapWidth - 16);
   const overlayMaxHeight = mapHeight * (wide ? 0.55 : 0.42);
-  const overlayBottom = mapWidth < 344 ? 84 : 28;
+  const overlayTop = !wide || mapWidth < 650 ? 56 : 8;
   const overlayObstacle = useMemo(
     () =>
-      detailOpen && selected
+      detailOpen && (selected || (provinceDetailOpen && provinceArea))
         ? {
             left: 8,
-            top: overlayTop ?? mapHeight - overlayMaxHeight - overlayBottom,
+            top: overlayTop,
             right: 8 + overlayWidth,
-            bottom: mapHeight - overlayBottom,
+            bottom: overlayTop + (overlayHeight ?? overlayMaxHeight),
           }
         : null,
     [
       detailOpen,
       !!selected,
+      provinceDetailOpen,
+      provinceArea,
       overlayTop,
+      overlayHeight,
       mapHeight,
       overlayWidth,
       overlayMaxHeight,
-      overlayBottom,
     ],
   );
   const availableMapHeight =
     overlayObstacle && mapWidth < 650
-      ? overlayObstacle.top - 8
+      ? mapHeight - overlayObstacle.bottom - 8
       : mapHeight - 32;
+  const availableMapTop =
+    overlayObstacle && mapWidth < 650 ? overlayObstacle.bottom + 8 : 0;
   const visiblePlaces = useMemo(() => {
     const result = new Map<string, LocatedEntry>();
     entries.forEach((item) => {
@@ -594,25 +637,56 @@ export default function HistoryAtlas({
   const landformsByPlace = useMemo(() => {
     const result = new Map<
       string,
-      NonNullable<ReturnType<typeof findAtlasLandform>>
+      NonNullable<
+        ReturnType<typeof findAtlasLandform> | ReturnType<typeof findAtlasArea>
+      >
     >();
-    if (!landformGeometry) return result;
     for (const { place } of visiblePlaces) {
-      const area = findAtlasLandform(place, landformGeometry);
+      const area =
+        (areaGeometry && findAtlasArea(place, areaGeometry)) ||
+        (landformGeometry && findAtlasLandform(place, landformGeometry));
       if (area) result.set(place.id, area);
     }
     return result;
-  }, [visiblePlaces, landformGeometry]);
+  }, [visiblePlaces, landformGeometry, areaGeometry]);
   const selectedLandform = selected
     ? landformsByPlace.get(selected.place.id) || null
     : null;
   const selectedShape = selectedRiver || selectedLandform;
+  const provincePath = provinceArea
+    ? geoPath(projection)(provinceArea) || ""
+    : "";
+  const provinceLabel = provinceArea
+    ? atlasShapeLabelAnchor(
+        provinceArea,
+        (coordinate) => {
+          const point = projection(coordinate as [number, number]);
+          return point
+            ? [
+                point[0] * transform.scale + transform.x,
+                point[1] * transform.scale + transform.y,
+              ]
+            : null;
+        },
+        {
+          left:
+            overlayObstacle && mapWidth >= 650
+              ? overlayObstacle.right + 48
+              : 48,
+          top: availableMapTop + 56,
+          right: mapWidth - 48,
+          bottom: mapHeight - 48,
+        },
+      )
+    : null;
   const landformPaths = useMemo(() => {
     const path = geoPath(projection).digits(1);
-    return [...landformsByPlace].map(([placeId, area]) => ({
-      placeId,
-      path: path(area) || "",
-    }));
+    return [...landformsByPlace]
+      .sort((a, b) => geoArea(b[1]) - geoArea(a[1]))
+      .map(([placeId, area]) => ({
+        placeId,
+        path: path(area) || "",
+      }));
   }, [landformsByPlace, projection]);
   const riverPaths = useMemo(
     () =>
@@ -633,7 +707,9 @@ export default function HistoryAtlas({
             ...selected.place,
             coordinates: geoCentroid(selectedShape) as [number, number],
             locationNote: selectedLandform
-              ? "현대 자연지형의 분포를 면으로 표시한다. 경계는 지도 축척에 맞춰 단순화한 것이다."
+              ? selectedLandform.type === "Feature"
+                ? selectedLandform.properties.locationNote
+                : "현대 자연지형의 분포를 면으로 표시한다. 경계는 지도 축척에 맞춰 단순화한 것이다."
               : "확인된 현대 수계의 물줄기를 선으로 표시한다. 지도 축척에 맞춰 작은 굴곡은 단순화했다.",
           }
         : selected?.place,
@@ -652,26 +728,47 @@ export default function HistoryAtlas({
             ? geoCentroid(river)
             : place.coordinates;
       if (!coordinates) return;
-      const position = projection(coordinates);
+      const shapeViewport = {
+        left:
+          overlayObstacle && mapWidth >= 650 ? overlayObstacle.right + 24 : 24,
+        top: availableMapTop + 24,
+        right: mapWidth - 24,
+        bottom: mapHeight - 48,
+      };
+      const position = river
+        ? atlasShapeLabelAnchor(
+            river,
+            (coordinate) => {
+              const point = projection(coordinate as [number, number]);
+              return point
+                ? [
+                    point[0] * transform.scale + transform.x,
+                    point[1] * transform.scale + transform.y,
+                  ]
+                : null;
+            },
+            shapeViewport,
+          )
+        : projection(coordinates);
       if (!position) return;
-      const x = position[0] * transform.scale + transform.x;
-      const y = position[1] * transform.scale + transform.y;
+      const x = river
+        ? position[0]
+        : position[0] * transform.scale + transform.x;
+      const y = river
+        ? position[1]
+        : position[1] * transform.scale + transform.y;
       if (x < 0 || x > mapWidth || y < 0 || y > mapHeight) return;
       points.push({
         place,
-        name: place.id === ATLAS_DOKDO_ID ? ATLAS_DOKDO_LABEL : entryName(item),
+        name: entryName(item),
         x,
         y,
         active: selected?.place.id === place.id,
         priority: place.id === ATLAS_DOKDO_ID,
+        shape: !!river,
       });
     });
-    return placeLabelLayout(
-      points,
-      mapWidth,
-      availableMapHeight,
-      overlayObstacle,
-    );
+    return placeLabelLayout(points, mapWidth, mapHeight, overlayObstacle);
   }, [
     mapPlaces,
     projection,
@@ -679,6 +776,7 @@ export default function HistoryAtlas({
     mapWidth,
     mapHeight,
     availableMapHeight,
+    availableMapTop,
     selected?.place.id,
     overlayObstacle,
     riversByPlace,
@@ -687,7 +785,7 @@ export default function HistoryAtlas({
   const minorDotsPath = useMemo(
     () =>
       mapPoints
-        .filter((point) => !point.hitVisible)
+        .filter((point) => !point.hitVisible && !point.shape)
         .map(({ x, y }) => `M${x - 2},${y}a2,2 0 1,0 4,0a2,2 0 1,0 -4,0`)
         .join(""),
     [mapPoints],
@@ -763,6 +861,21 @@ export default function HistoryAtlas({
 
   useEffect(() => {
     let disposed = false;
+    setAreaError(false);
+    loadAtlasAreaGeometry()
+      .then((data) => {
+        if (!disposed) setAreaGeometry(data);
+      })
+      .catch(() => {
+        if (!disposed) setAreaError(true);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [geometryAttempt]);
+
+  useEffect(() => {
+    let disposed = false;
     loadAtlasLandformGeometry()
       .then((data) => {
         if (!disposed) setLandformGeometry(data);
@@ -806,21 +919,34 @@ export default function HistoryAtlas({
   useLayoutEffect(() => {
     const card = overlayRef.current;
     const map = mapRef.current;
-    if (!detailOpen || !selected || !card || !map) {
-      setOverlayTop(null);
+    if (
+      !detailOpen ||
+      !(selected || (provinceDetailOpen && provinceArea)) ||
+      !card ||
+      !map
+    ) {
+      setOverlayHeight(null);
       return;
     }
     const measure = () => {
       if (map.clientWidth <= 0 || card.clientWidth <= 0) return;
-      const top = Math.max(0, Math.min(mapHeight, card.offsetTop));
-      setOverlayTop((previous) => (previous === top ? previous : top));
+      const height = Math.min(mapHeight, card.offsetHeight);
+      setOverlayHeight((previous) => (previous === height ? previous : height));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(card);
     observer.observe(map);
     return () => observer.disconnect();
-  }, [detailOpen, wide, selected?.entry.id, mapHeight, overlayBottom]);
+  }, [
+    detailOpen,
+    wide,
+    selected?.entry.id,
+    provinceDetailOpen,
+    provinceArea,
+    mapHeight,
+    overlayTop,
+  ]);
 
   useEffect(() => {
     if (detailOpen && selected) {
@@ -880,6 +1006,35 @@ export default function HistoryAtlas({
   );
 
   useEffect(() => {
+    if (!provinceArea) return;
+    updateTransform(
+      fitAtlasSelection(
+        projection,
+        {
+          coordinates: geoCentroid(provinceArea) as [number, number],
+          geometry: provinceArea,
+        },
+        {
+          width: mapWidth,
+          height: availableMapHeight,
+          top: availableMapTop,
+          mapHeight,
+          overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
+        },
+      ),
+    );
+  }, [
+    provinceArea,
+    projection,
+    mapWidth,
+    mapHeight,
+    availableMapHeight,
+    availableMapTop,
+    overlayObstacle?.right,
+    updateTransform,
+  ]);
+
+  useEffect(() => {
     if (!selected || !pendingFocusRef.current) return;
     if (
       pendingFocusRef.current &&
@@ -895,6 +1050,7 @@ export default function HistoryAtlas({
     )
       return;
     if (selected.place.kind === "desert" && !landformGeometry) return;
+    if (isAtlasAreaPlace(selected.place) && !areaGeometry) return;
     const coordinates = selectedShape
       ? geoCentroid(selectedShape)
       : selected.place.coordinates;
@@ -934,6 +1090,7 @@ export default function HistoryAtlas({
         {
           width: mapWidth,
           height: availableMapHeight,
+          top: availableMapTop,
           mapHeight,
           overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
         },
@@ -953,9 +1110,11 @@ export default function HistoryAtlas({
     mapWidth,
     mapHeight,
     availableMapHeight,
+    availableMapTop,
     updateTransform,
     selectedShape,
     landformGeometry,
+    areaGeometry,
     geometry,
     subject,
   ]);
@@ -1103,6 +1262,7 @@ export default function HistoryAtlas({
     const regionChanged =
       nextRegionId !== regionId || nextSubregionId !== subregionId;
     if (regionChanged) {
+      setProvinceDetailOpen(false);
       setListPage(0);
       setQuery("");
     }
@@ -1132,8 +1292,22 @@ export default function HistoryAtlas({
       setSelectedId("");
       setDetailOpen(false);
       pendingFocusRef.current = null;
+      const area =
+        subject === "korea" && areaGeometry
+          ? findAtlasProvinceArea(nextRegionId, areaGeometry)
+          : null;
+      const extent = area ? geoBounds(area) : null;
       setViewBounds(
-        nextRegionId ? atlasRegionCameraBounds(coordinates, subject) : null,
+        extent
+          ? [
+              extent[0][0] - 0.25,
+              extent[0][1] - 0.25,
+              extent[1][0] + 0.25,
+              extent[1][1] + 0.25,
+            ]
+          : nextRegionId
+            ? atlasRegionCameraBounds(coordinates, subject)
+            : null,
       );
       resetMap();
       return;
@@ -1585,7 +1759,7 @@ export default function HistoryAtlas({
                 event.detail === 0 ||
                 !(event.target instanceof Element) ||
                 event.target.closest(
-                  ".history-atlas__overlay, .history-atlas__selection-card, .history-atlas__reopen, .history-atlas__point-label, .history-atlas__attribution",
+                  ".history-atlas__overlay, .history-atlas__selection-card, .history-atlas__reopen, .history-atlas__point-label, .history-atlas__province-label, .history-atlas__attribution",
                 )
               )
                 return;
@@ -1595,6 +1769,7 @@ export default function HistoryAtlas({
               let nearest: MapPoint | undefined;
               let distance = 12;
               for (const point of mapPoints) {
+                if (point.shape) continue;
                 const nextDistance = Math.hypot(point.x - x, point.y - y);
                 if (nextDistance < distance) {
                   nearest = point;
@@ -1608,7 +1783,7 @@ export default function HistoryAtlas({
               }
             }}
           >
-            {selected &&
+            {(selected || (provinceDetailOpen && provinceArea)) &&
               (detailOpen ? (
                 <section
                   ref={overlayRef}
@@ -1618,7 +1793,7 @@ export default function HistoryAtlas({
                   style={{
                     width: overlayWidth,
                     maxHeight: overlayMaxHeight,
-                    bottom: overlayBottom,
+                    top: overlayTop,
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== "Escape") return;
@@ -1644,13 +1819,19 @@ export default function HistoryAtlas({
                       ×
                     </button>
                   </div>
-                  {placeDetail}
+                  {selected
+                    ? placeDetail
+                    : provinceArea && (
+                        <div className="history-atlas__detail">
+                          <AtlasAreaDetails area={provinceArea} />
+                        </div>
+                      )}
                 </section>
-              ) : (
+              ) : selected ? (
                 <button
                   type="button"
                   className="history-atlas__button history-atlas__reopen"
-                  style={{ bottom: overlayBottom }}
+                  style={{ top: overlayTop }}
                   aria-expanded={false}
                   aria-controls={`${id}-overlay`}
                   onPointerDown={(event) => {
@@ -1664,7 +1845,7 @@ export default function HistoryAtlas({
                 >
                   {entryName(selected)} · 설명
                 </button>
-              ))}
+              ) : null)}
             <svg
               width="100%"
               height="100%"
@@ -1684,11 +1865,23 @@ export default function HistoryAtlas({
                     <path
                       key={placeId}
                       data-place-id={placeId}
-                      className={`history-atlas__landform${selected?.place.id === placeId ? " is-active" : ""}`}
+                      className={`history-atlas__landform${areaGeometry && findAtlasArea(placesById.get(placeId)!, areaGeometry) ? " is-area" : ""}${selected?.place.id === placeId ? " is-active" : ""}`}
                       d={path}
                       onClick={() => focusPlace(placeId)}
                     />
                   ))}
+                  {provinceArea && (
+                    <path
+                      className="history-atlas__landform is-area is-active"
+                      d={provincePath}
+                      onClick={() => {
+                        setProvinceDetailOpen(true);
+                        setDetailOpen(true);
+                      }}
+                    >
+                      <title>{provinceArea.properties.locationNote}</title>
+                    </path>
+                  )}
                   {riverPaths.map(({ placeId, path }) => (
                     <path
                       key={placeId}
@@ -1708,13 +1901,39 @@ export default function HistoryAtlas({
                 />
               )}
             </svg>
+            {paths && provinceArea && provinceLabel && (
+              <button
+                type="button"
+                className="history-atlas__province-label"
+                style={{
+                  left:
+                    provinceLabel[0] +
+                      provinceArea.properties.name.length * 14 +
+                      8 <=
+                    mapWidth - 8
+                      ? provinceLabel[0] - 8
+                      : provinceLabel[0] -
+                        provinceArea.properties.name.length * 14 -
+                        8,
+                  top: provinceLabel[1],
+                  width: provinceArea.properties.name.length * 14 + 16,
+                }}
+                aria-label={`${provinceArea.properties.name} 설명 보기`}
+                onClick={() => {
+                  setProvinceDetailOpen(true);
+                  setDetailOpen(true);
+                }}
+              >
+                {provinceArea.properties.name}
+              </button>
+            )}
             {paths &&
               mapPoints.map((point) =>
-                point.hitVisible ? (
+                point.hitVisible && !point.shape ? (
                   <button
                     key={point.place.id}
                     type="button"
-                    className={`history-atlas__point${point.active ? " is-active" : ""}${point.priority ? " is-priority" : ""}${riversByPlace.has(point.place.id) ? " is-river" : ""}`}
+                    className={`history-atlas__point${point.active ? " is-active" : ""}`}
                     style={{ left: point.x, top: point.y }}
                     aria-label={`${point.name} 설명 보기`}
                     aria-pressed={point.active}
@@ -1729,13 +1948,13 @@ export default function HistoryAtlas({
                 point.hitVisible && point.labelVisible ? (
                   <span
                     key={point.place.id}
-                    className={`history-atlas__label-anchor${point.active ? " is-active" : ""}${point.priority ? " is-priority" : ""}`}
+                    className={`history-atlas__label-anchor${point.active ? " is-active" : ""}`}
                     style={{ left: point.x, top: point.y }}
-                    aria-hidden="true"
                   >
                     <button
                       type="button"
-                      tabIndex={-1}
+                      aria-label={`${point.name} 설명 보기`}
+                      aria-pressed={point.active}
                       className="history-atlas__point-label"
                       onClick={() => focusPlace(point.place.id)}
                       style={{
@@ -1762,7 +1981,7 @@ export default function HistoryAtlas({
                   overlayObstacle
                     ? mapWidth >= 650
                       ? { left: overlayObstacle.right }
-                      : { bottom: mapHeight - overlayObstacle.top }
+                      : { top: overlayObstacle.bottom }
                     : undefined
                 }
               >
@@ -1782,6 +2001,32 @@ export default function HistoryAtlas({
                 )}
               </div>
             )}
+            {paths &&
+              areaError &&
+              (selected
+                ? isAtlasAreaPlace(selected.place)
+                : subject === "korea" && regionId) && (
+                <div
+                  className="history-atlas__map-state"
+                  role="alert"
+                  style={
+                    overlayObstacle
+                      ? mapWidth >= 650
+                        ? { left: overlayObstacle.right }
+                        : { top: overlayObstacle.bottom }
+                      : undefined
+                  }
+                >
+                  <span>지역 범위를 불러오지 못했다.</span>
+                  <button
+                    type="button"
+                    className="history-atlas__button"
+                    onClick={() => setGeometryAttempt((value) => value + 1)}
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              )}
             <AtlasCompass />
             <div className="history-atlas__attribution">
               <a

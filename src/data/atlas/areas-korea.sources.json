@@ -1,0 +1,212 @@
+{
+  "coordinateSystem": "WGS84 longitude, latitude; D3 clockwise exterior rings",
+  "assetSha256": "dc2392e5ab44017b4c69e3fbdbc9573366a34b5a307daabb508cbb408845b0e2",
+  "historical": {
+    "source": "국사편찬위원회 역사지리정보DB · 행정구역 GIS 데이터 (1910~1945년)",
+    "sourceUrl": "https://hgis.history.go.kr/pro_g1/dataset.do",
+    "download": {
+      "url": "https://hgis.history.go.kr/pro_g1/fileDownload.do",
+      "method": "POST",
+      "fileName": "data_set_03_01.zip"
+    },
+    "sourceSha256": "2e2fab2d5acf4a7b0264a3d02a87c71124633538e384cec6e3e929c5e2dd898c",
+    "boundaryDate": "1910-05-10",
+    "datasetUpdated": "2025-04-24",
+    "usage": "Official open dataset; retain National Institute of Korean History attribution. Source describes restored boundaries as research references without legal effect.",
+    "notes": "Dissolved north/south provinces; Hanseong included in Gyeonggi navigation only. Never a claim of identical boundaries in all Joseon eras. Source geometry reference/trust codes retained below. make_valid repairs source rings; topology-preserving simplification 0.002 degrees, six decimal precision grid removes only sub-grid collapsed slivers. No island area threshold.",
+    "provinces": [
+      {
+        "regionId": "gyeonggi",
+        "sourceRecords": [
+          {
+            "id": 46532,
+            "name": "경기도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          },
+          {
+            "id": 8906,
+            "name": "한성부",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          }
+        ]
+      },
+      {
+        "regionId": "gangwon",
+        "sourceRecords": [
+          {
+            "id": 56138,
+            "name": "강원도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          }
+        ]
+      },
+      {
+        "regionId": "chungcheong",
+        "sourceRecords": [
+          {
+            "id": 35018,
+            "name": "충청남도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          },
+          {
+            "id": 20171,
+            "name": "충청북도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          }
+        ]
+      },
+      {
+        "regionId": "jeolla",
+        "sourceRecords": [
+          {
+            "id": 124244,
+            "name": "전라남도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          },
+          {
+            "id": 95353,
+            "name": "전라북도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          }
+        ]
+      },
+      {
+        "regionId": "gyeongsang",
+        "sourceRecords": [
+          {
+            "id": 145035,
+            "name": "경상남도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          },
+          {
+            "id": 157691,
+            "name": "경상북도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          }
+        ]
+      },
+      {
+        "regionId": "hwanghae",
+        "sourceRecords": [
+          {
+            "id": 56460,
+            "name": "황해도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          }
+        ]
+      },
+      {
+        "regionId": "pyeongan",
+        "sourceRecords": [
+          {
+            "id": 85432,
+            "name": "평안남도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          },
+          {
+            "id": 136547,
+            "name": "평안북도",
+            "geometryReference": "기호",
+            "sourceTrustCode": 2
+          }
+        ]
+      },
+      {
+        "regionId": "hamgyeong",
+        "sourceRecords": [
+          {
+            "id": 69703,
+            "name": "함경남도",
+            "geometryReference": "기호",
+            "sourceTrustCode": 2
+          },
+          {
+            "id": 80994,
+            "name": "함경북도",
+            "geometryReference": "추정",
+            "sourceTrustCode": 2
+          }
+        ]
+      }
+    ]
+  },
+  "incheon": {
+    "source": "© OpenStreetMap contributors",
+    "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2297419/full.json",
+    "license": "ODbL 1.0",
+    "licenseUrl": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "attributionUrl": "https://www.openstreetmap.org/copyright",
+    "sourceSha256": "6f76466497a3453908664bdcbdc9dd63efa755eaa61dc23e237b5a8951133e37",
+    "relationId": 2297419,
+    "relationVersion": 117,
+    "relationTimestamp": "2026-06-30T04:26:06Z",
+    "notes": "Current administrative polygon intersected with the existing Natural Earth base land; topology-preserving simplification 0.0003 degrees. No new sovereign or historic-territory attributes."
+  },
+  "land": {
+    "file": "land-korea.json",
+    "sourceSha256": "991436b68399d903633ed403b171adc1a085adf6973db771780595a83ab481d1",
+    "source": "Natural Earth",
+    "license": "Public domain",
+    "sourceUrl": "https://www.naturalearthdata.com/about/terms-of-use/",
+    "revision": "ca96624a56bd078437bca8184e78163e5039ad19",
+    "notes": "Reviewed active island places retain their original base-map main-island polygons, without additional simplification. No administrative province, historic battle extent, mainland, nearby island or archipelago inference.",
+    "islands": [
+      {
+        "placeId": "ganghwa",
+        "name": "강화도",
+        "sourcePolygonIndex": 761,
+        "interiorPoint": [
+          126.49,
+          37.75
+        ],
+        "bounds": [
+          126.366954,
+          37.596177,
+          126.542003,
+          37.824449
+        ]
+      },
+      {
+        "placeId": "jeju",
+        "name": "제주도",
+        "sourcePolygonIndex": 635,
+        "interiorPoint": [
+          126.53,
+          33.42
+        ],
+        "bounds": [
+          126.161143,
+          33.197577,
+          126.953624,
+          33.563797
+        ]
+      },
+      {
+        "placeId": "hansando",
+        "name": "한산도",
+        "sourcePolygonIndex": 705,
+        "interiorPoint": [
+          128.48,
+          34.77
+        ],
+        "bounds": [
+          128.461599,
+          34.757392,
+          128.508474,
+          34.816514
+        ]
+      }
+    ]
+  }
+}

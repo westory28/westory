@@ -211,7 +211,7 @@
   box-sizing: border-box;
   z-index: 4;
   position: absolute;
-  inset: auto auto 32px 8px;
+  inset: 8px auto auto 8px;
   width: min(280px, calc(100% - 16px));
   max-height: 42%;
   display: flex;
@@ -227,6 +227,9 @@
   left: 12px;
   width: min(320px, calc(100% - 24px));
   max-height: min(360px, 55%);
+}
+.history-globe__map-shell.is-compact .history-globe__popup {
+  top: 56px;
 }
 .history-globe__attribution {
   z-index: 3;
@@ -283,32 +286,48 @@
   stroke-linejoin: round;
   paint-order: stroke;
 }
-.history-globe__labels .is-active text,
-.history-globe__labels .is-priority text {
+.history-globe__labels .is-active text {
   fill: var(--ws-primary-text, #1e3a8a);
   stroke: none;
   font-weight: 700;
 }
-.history-globe .history-globe__dokdo-label,
-.history-globe .history-globe__dokdo-label:hover:not(:disabled) {
-  position: absolute;
-  z-index: 3;
-  height: 32px;
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
+.history-globe__labels [data-geography-kind="desert"] text,
+.history-globe__labels [data-geography-kind="terrain"] text {
+  fill: var(--ws-accent-text, #92400e);
 }
-.history-globe .history-globe__dokdo-label[hidden] {
-  display: none;
+.history-globe__labels [data-geography-kind="country"] text {
+  fill: var(--ws-text-muted, #6b7280);
+}
+.history-globe__labels [data-geography-kind="river"] text,
+.history-globe__labels [data-geography-kind="ocean"] text {
+  fill: var(--ws-primary-text, #1e3a8a);
+}
+.history-globe__labels [data-geography-kind="ocean"] text {
+  stroke: var(--ws-primary-soft, #eff6ff);
+}
+.history-globe__labels g[data-globe-label],
+.history-globe__labels g[data-globe-region] {
+  pointer-events: all;
+  cursor: pointer;
 }
 .history-globe__labels rect {
   fill: var(--ws-primary-soft, #eff6ff);
   stroke: var(--ws-primary, #2563eb);
   stroke-width: 1px;
 }
+.history-globe__labels .history-globe__label-hit {
+  fill: transparent;
+  stroke: none;
+}
+.history-globe__labels g:focus-visible {
+  outline: none;
+}
+.history-globe__labels g:focus-visible .history-globe__label-hit {
+  stroke: var(--ws-ring, #3b82f6);
+  stroke-width: 3px;
+}
 .history-globe__labels .history-globe__label-ripple {
+  pointer-events: none;
   fill: none;
   stroke-width: 2px;
   opacity: 0;

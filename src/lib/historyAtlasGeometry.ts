@@ -4,6 +4,10 @@ import {
   geoCentroid,
   geoOrthographic,
   geoPath,
+  geoContains,
+  geoDistance,
+  geoInterpolate,
+  geoStream,
   type GeoPermissibleObjects,
   type GeoProjection,
 } from "d3-geo";
@@ -394,9 +398,10 @@ export function fitAtlasSelection(
     height: number;
     mapHeight?: number;
     overlayRight?: number;
+    top?: number;
   },
 ): AtlasTransform {
-  const { width, height, overlayRight = 0 } = viewport;
+  const { width, height, overlayRight = 0, top: viewportTop = 0 } = viewport;
   const coordinates: [number, number][] = [selection.coordinates];
   if (selection.contextBounds) {
     const [west, south, east, north] = selection.contextBounds;
@@ -439,11 +444,114 @@ export function fitAtlasSelection(
     {
       scale,
       x: availableLeft + availableWidth / 2 - ((left + right) / 2) * scale,
-      y: height / 2 - ((top + bottom) / 2) * scale,
+      y: viewportTop + height / 2 - ((top + bottom) / 2) * scale,
     },
     width,
     viewport.mapHeight ?? height,
   );
+}
+
+/** Anchor a label on its actual visible shape, never at a river's off-line centroid.
+ * Polygon centroids are accepted only inside the polygon. Otherwise use a visible
+ * boundary segment. Densification also follows curved globe projections.
+ */
+export function atlasShapeLabelAnchor(
+  shape: GeoPermissibleObjects,
+  project: (coordinate: number[]) => [number, number] | null,
+  viewport?: { left: number; top: number; right: number; bottom: number },
+  preferred?: [number, number],
+): [number, number] | null {
+  const center = geoCentroid(shape);
+  const projectedCenter = project(center);
+  const target = preferred || projectedCenter || [0, 0];
+  const inside = (point: number[]) =>
+    point.every(Number.isFinite) &&
+    (!viewport ||
+      (point[0] >= viewport.left &&
+        point[0] <= viewport.right &&
+        point[1] >= viewport.top &&
+        point[1] <= viewport.bottom));
+  if (projectedCenter && inside(projectedCenter) && geoContains(shape, center))
+    return projectedCenter;
+  let best: [number, number] | null = null;
+  let distance = Infinity;
+  let polygon = false;
+  let first: [number, number] | null = null;
+  let previous: [number, number] | null = null;
+  const consider = (point: [number, number]) => {
+    const next = Math.hypot(point[0] - target[0], point[1] - target[1]);
+    if (inside(point) && next < distance) {
+      best = point;
+      distance = next;
+    }
+  };
+  const segment = (a: [number, number], b: [number, number]) => {
+    const dx = b[0] - a[0],
+      dy = b[1] - a[1];
+    let low = 0,
+      high = 1;
+    if (viewport) {
+      for (const [p, q] of [
+        [-dx, a[0] - viewport.left],
+        [dx, viewport.right - a[0]],
+        [-dy, a[1] - viewport.top],
+        [dy, viewport.bottom - a[1]],
+      ]) {
+        if (p === 0) {
+          if (q < 0) return;
+        } else if (p < 0) low = Math.max(low, q / p);
+        else high = Math.min(high, q / p);
+      }
+    }
+    if (low > high) return;
+    const fraction = Math.max(
+      low,
+      Math.min(
+        high,
+        ((target[0] - a[0]) * dx + (target[1] - a[1]) * dy) /
+          (dx * dx + dy * dy || 1),
+      ),
+    );
+    consider([a[0] + fraction * dx, a[1] + fraction * dy]);
+  };
+  const connect = (a: [number, number], b: [number, number]) => {
+    const steps = Math.max(1, Math.ceil((geoDistance(a, b) * 180) / Math.PI));
+    const interpolate = geoInterpolate(a, b);
+    let last = project(a);
+    for (let step = 1; step <= steps; step++) {
+      const next = project(interpolate(step / steps));
+      if (last && next) segment(last, next);
+      last = next;
+    }
+  };
+  geoStream(shape, {
+    point(x, y) {
+      const point: [number, number] = [x, y];
+      if (previous) connect(previous, point);
+      else {
+        first = point;
+        const projected = project(point);
+        if (projected) consider(projected);
+      }
+      previous = point;
+    },
+    lineStart() {
+      first = null;
+      previous = null;
+    },
+    lineEnd() {
+      if (polygon && previous && first) connect(previous, first);
+      previous = null;
+    },
+    polygonStart() {
+      polygon = true;
+    },
+    polygonEnd() {
+      polygon = false;
+    },
+    sphere() {},
+  });
+  return best;
 }
 
 export function constrainAtlasTransform(

@@ -50,6 +50,7 @@ const {
   reframeAtlasSelectionBounds,
   atlasRegionCameraBounds,
   withAtlasDokdoLand,
+  atlasShapeLabelAnchor,
 } = load("src/lib/historyAtlasGeometry.ts");
 const { ATLAS_KOREA_PROVINCES, ATLAS_WORLD_REGION_GROUPS, matchesAtlasRegion } =
   load("src/lib/historyAtlasRegions.ts");
@@ -70,83 +71,83 @@ const place = (name) => {
   return item;
 };
 
-// Physical map/popup rectangles for the bottom-left layout. Keep these fixtures
+// Physical map/popup rectangles for the top-left layout. Keep these fixtures
 // independent of the component's viewport calculation: the assertions below
 // check projected geography against the actual card and visible map, not just
 // whether the production branch chose the same numbers as another copy of it.
 // Compact maps are 480px tall (42% card cap); wide maps are 640px (55%).
-// Cards are 8px from the left and 28px above the map bottom; below 344px map
-// width they rise to 84px so the four-direction compass remains visible. A wide layout
+// Cards are 8px from the left, below the toolbar in compact layouts or narrow
+// maps and 8px from the top in wide layouts with a wide map. A wide layout
 // can still have a narrow map after its sidebar takes space (the 624px case).
 const popupViewports = [
   {
     name: "compact-286",
     width: 286,
     mapHeight: 480,
-    popup: { left: 8, top: 194.4, right: 278, bottom: 396 },
-    focus: { height: 186.4 },
+    popup: { left: 8, top: 56, right: 278, bottom: 257.6 },
+    focus: { top: 265.6, height: 214.4 },
   },
   {
     name: "compact-343",
     width: 343,
     mapHeight: 480,
-    popup: { left: 8, top: 194.4, right: 288, bottom: 396 },
-    focus: { height: 186.4 },
+    popup: { left: 8, top: 56, right: 288, bottom: 257.6 },
+    focus: { top: 265.6, height: 214.4 },
   },
   {
     name: "compact-344",
     width: 344,
     mapHeight: 480,
-    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
-    focus: { height: 242.4 },
+    popup: { left: 8, top: 56, right: 288, bottom: 257.6 },
+    focus: { top: 265.6, height: 214.4 },
   },
   {
     name: "compact-356",
     width: 356,
     mapHeight: 480,
-    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
-    focus: { height: 242.4 },
+    popup: { left: 8, top: 56, right: 288, bottom: 257.6 },
+    focus: { top: 265.6, height: 214.4 },
   },
   {
     name: "compact-640",
     width: 640,
     mapHeight: 480,
-    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
-    focus: { height: 242.4 },
+    popup: { left: 8, top: 56, right: 288, bottom: 257.6 },
+    focus: { top: 265.6, height: 214.4 },
   },
   {
     name: "compact-649",
     width: 649,
     mapHeight: 480,
-    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
-    focus: { height: 242.4 },
+    popup: { left: 8, top: 56, right: 288, bottom: 257.6 },
+    focus: { top: 265.6, height: 214.4 },
   },
   {
     name: "compact-650",
     width: 650,
     mapHeight: 480,
-    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
+    popup: { left: 8, top: 56, right: 288, bottom: 257.6 },
     focus: { height: 448, overlayRight: 288 },
   },
   {
     name: "compact-720",
     width: 720,
     mapHeight: 480,
-    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
+    popup: { left: 8, top: 56, right: 288, bottom: 257.6 },
     focus: { height: 448, overlayRight: 288 },
   },
   {
     name: "wide-narrow-map-624",
     width: 624,
     mapHeight: 640,
-    popup: { left: 8, top: 260, right: 328, bottom: 612 },
-    focus: { height: 252 },
+    popup: { left: 8, top: 56, right: 328, bottom: 408 },
+    focus: { top: 416, height: 224 },
   },
   {
     name: "wide-920",
     width: 920,
     mapHeight: 640,
-    popup: { left: 8, top: 260, right: 328, bottom: 612 },
+    popup: { left: 8, top: 8, right: 328, bottom: 360 },
     focus: { height: 608, overlayRight: 328 },
   },
 ];
@@ -176,14 +177,182 @@ const assertVisibleSelection = (box, viewport, label) => {
   );
   assert(
     box.left >= (focus.overlayRight || 0) + 24 - 1e-6 &&
-      box.bottom <= focus.height - 24 + 1e-6,
+      box.top >= (focus.top || 0) + 24 - 1e-6 &&
+      box.bottom <= (focus.top || 0) + focus.height - 24 + 1e-6,
     `${label}/${viewport.name}: selection leaves the popup-free area, ${JSON.stringify(box)}`,
   );
   assert(
     !intersects(box, popup),
-    `${label}/${viewport.name}: geography is hidden behind the bottom-left popup`,
+    `${label}/${viewport.name}: geography is hidden behind the top-left popup`,
   );
 };
+
+// Verify shape attachment independently of the label helper's implementation.
+// A projected path adapter measures the distance to the actual rendered stroke.
+function distanceToShape(shape, projection, point) {
+  let last,
+    first,
+    distance = Infinity;
+  const segment = (next) => {
+    if (last) {
+      const dx = next[0] - last[0],
+        dy = next[1] - last[1];
+      const t = Math.max(
+        0,
+        Math.min(
+          1,
+          ((point[0] - last[0]) * dx + (point[1] - last[1]) * dy) /
+            (dx * dx + dy * dy || 1),
+        ),
+      );
+      distance = Math.min(
+        distance,
+        Math.hypot(point[0] - last[0] - t * dx, point[1] - last[1] - t * dy),
+      );
+    }
+    last = next;
+  };
+  geography.geoPath(projection, {
+    moveTo(x, y) {
+      first = last = [x, y];
+    },
+    lineTo(x, y) {
+      segment([x, y]);
+    },
+    closePath() {
+      segment(first);
+    },
+    arc() {},
+  })(shape);
+  return distance;
+}
+const windingRiver = {
+  type: "LineString",
+  coordinates: [
+    [-10, -5],
+    [-10, 10],
+    [10, 10],
+    [10, -5],
+  ],
+};
+const shapeProjection = geography
+  .geoMercator()
+  .scale(200)
+  .translate([200, 200]);
+const shapeAnchor = atlasShapeLabelAnchor(windingRiver, (point) =>
+  shapeProjection(point),
+);
+assert(
+  shapeAnchor &&
+    distanceToShape(windingRiver, shapeProjection, shapeAnchor) < 0.75,
+  "A winding river label stays on its course rather than its off-course centroid",
+);
+assert(
+  distanceToShape(
+    windingRiver,
+    shapeProjection,
+    shapeProjection(geography.geoCentroid(windingRiver)),
+  ) > 10,
+  "The winding-river fixture must expose a detached centroid badge",
+);
+const crossingRiver = {
+  type: "LineString",
+  coordinates: [
+    [-20, 0],
+    [20, 0],
+  ],
+};
+const clipped = atlasShapeLabelAnchor(crossingRiver, (point) => point, {
+  left: 4,
+  top: -1,
+  right: 6,
+  bottom: 1,
+});
+assert(
+  clipped && clipped[0] >= 4 && clipped[0] <= 6 && Math.abs(clipped[1]) < 1e-9,
+  "A visible river segment remains attachable when both original vertices are offscreen",
+);
+const disconnected = {
+  type: "MultiLineString",
+  coordinates: [
+    [
+      [0, 0],
+      [10, 0],
+    ],
+    [
+      [30, 0],
+      [40, 0],
+    ],
+  ],
+};
+const separateAnchor = atlasShapeLabelAnchor(
+  disconnected,
+  (point) => point,
+  undefined,
+  [20, 0],
+);
+assert(
+  separateAnchor && (separateAnchor[0] <= 10 || separateAnchor[0] >= 30),
+  "A label cannot anchor on an invented bridge between disconnected river parts",
+);
+assert.equal(
+  atlasShapeLabelAnchor(crossingRiver, () => null),
+  null,
+  "A completely hidden shape must not acquire a mirrored label",
+);
+assert.equal(
+  atlasShapeLabelAnchor(crossingRiver, (point) => point, {
+    left: 50,
+    top: -1,
+    right: 60,
+    bottom: 1,
+  }),
+  null,
+  "A completely offscreen shape must not acquire a detached label",
+);
+const areaWithHole = {
+  type: "Polygon",
+  coordinates: [
+    [
+      [-10, -10],
+      [-10, 10],
+      [10, 10],
+      [10, -10],
+      [-10, -10],
+    ],
+    [
+      [-5, -5],
+      [5, -5],
+      [5, 5],
+      [-5, 5],
+      [-5, -5],
+    ],
+  ],
+};
+assert(
+  !geography.geoContains(areaWithHole, geography.geoCentroid(areaWithHole)),
+  "The area fixture must expose a centroid outside the selected land",
+);
+const holeAnchor = atlasShapeLabelAnchor(areaWithHole, (point) =>
+  shapeProjection(point),
+);
+assert(
+  holeAnchor &&
+    distanceToShape(areaWithHole, shapeProjection, holeAnchor) < 0.75,
+  "A polygon whose centroid lies in a hole anchors on its actual boundary",
+);
+const visibleArea = {
+  type: "Polygon",
+  coordinates: [areaWithHole.coordinates[0]],
+};
+const areaAnchor = atlasShapeLabelAnchor(visibleArea, (point) =>
+  shapeProjection(point),
+);
+assert(
+  areaAnchor &&
+    geography.geoContains(visibleArea, shapeProjection.invert(areaAnchor)),
+  "A simple area label overlaps the selected area",
+);
 
 // The globe and world atlas load this layer only. A Korean-layer union would
 // conceal missing world watercourses even though their points remain visible.
@@ -395,7 +564,7 @@ for (const name of ["나일강", "창장강", "아마존강", "한강", "백두�
       cameraCases += 1;
     }
 }
-// Keep the actual 480/640px projection height even when only the area above or
+// Keep the actual 480/640px projection height even when only the area below or
 // beside the popup is available. Using the shortened focus height for pan limits
 // previously clamped southern locations (Jeju and Cape Town) under the card.
 let popupCameraCases = 0;
@@ -617,6 +786,7 @@ for (const empty of [false, true]) {
       subregionId: "",
       query: "old search",
       selected: undefined,
+      areaGeometry: null,
       subjectEntries: empty ? [] : regionFixture,
       pendingFocusRef,
       matchesAtlasRegion: () => true,
@@ -645,6 +815,7 @@ for (const empty of [false, true]) {
           "FilterNotice",
           "SelectedId",
           "DetailOpen",
+          "ProvinceDetailOpen",
           "ViewBounds",
         ].map((key) => [
           `set${key}`,
@@ -761,5 +932,5 @@ console.log(
   `Dokdo geography checks passed: ${dokdoIslands.features.length} source coastline polygons, official east/west points, realistic area, all map layers, attribution and payload budget.`,
 );
 console.log(
-  `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} full-geometry camera fits, ${polarCameraCases} polar camera fits, ${popupCameraCases} real-place camera fits across ${popupViewports.length} bottom-left popup layouts, ${regionCameraCases} region camera fits, region handler state transitions, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,
+  `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} full-geometry camera fits, ${polarCameraCases} polar camera fits, ${popupCameraCases} real-place camera fits across ${popupViewports.length} top-left popup layouts, ${regionCameraCases} region camera fits, region handler state transitions, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,
 );

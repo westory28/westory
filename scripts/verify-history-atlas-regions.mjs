@@ -235,3 +235,4 @@ assert(bytes < 35_000, `Region membership traffic budget exceeded: ${bytes}`);
 console.log(
   `Atlas region hierarchy, independent examples, historical province exceptions, unknown-name retention and ${bytes}-byte gzip data budget passed.`,
 );
+await import("./verify-history-atlas-areas.mjs");

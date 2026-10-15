@@ -37,8 +37,8 @@ import {
 } from "../../lib/historyGlobeMath";
 import {
   atlasProjectedNorthBearing,
+  atlasShapeLabelAnchor,
   fitGlobeRegionCamera,
-  globeSelectionCenterY,
   loadAtlasDokdoGeometry,
   loadAtlasRiverGeometry,
   withAtlasDokdoLand,
@@ -48,9 +48,17 @@ import {
   type AtlasRiverCollection,
 } from "../../lib/historyAtlasRivers";
 import { findAtlasLandform } from "../../lib/historyAtlasLandforms";
+import {
+  findAtlasArea,
+  findAtlasProvinceArea,
+  isAtlasAreaPlace,
+  loadAtlasAreaGeometry,
+  type AtlasAreaCollection,
+} from "../../lib/historyAtlasAreas";
 import type { MultiPolygon } from "geojson";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import AtlasPlaceDetails from "./AtlasPlaceDetails";
+import AtlasAreaDetails from "./AtlasAreaDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
 import AtlasCompass from "./AtlasCompass";
 import {
@@ -68,7 +76,6 @@ import geographyUrl from "../../data/atlas/globe-geography.json?url";
 import {
   ATLAS_DOKDO_COORDINATES,
   ATLAS_DOKDO_ID,
-  ATLAS_DOKDO_LABEL,
 } from "../../data/historyAtlasDokdo";
 import "./historyGlobe.css";
 
@@ -102,6 +109,17 @@ type Gesture = {
   multiple: boolean;
 };
 const PAGE_SIZE = 40;
+function selectionViewport(
+  width: number,
+  height: number,
+  popup: HTMLElement | null,
+) {
+  const frame = { left: 32, top: 64, right: width - 32, bottom: height - 64 };
+  if (!popup) return frame;
+  if (width >= 650) frame.left = popup.offsetLeft + popup.offsetWidth + 24;
+  else frame.top = popup.offsetTop + popup.offsetHeight + 24;
+  return frame;
+}
 // Both portal layouts use the same DESIGN contract, even without inherited tokens.
 const GLOBE_COLORS = {
   "--ws-surface-subtle": "#f8fafc",
@@ -186,7 +204,6 @@ export default function HistoryGlobe({
   const zoomRef = useRef<HTMLOutputElement>(null);
   const compassRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<SVGSVGElement>(null);
-  const dokdoLabelRef = useRef<HTMLButtonElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
   const riverHaloRef = useRef<SVGPathElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -206,6 +223,7 @@ export default function HistoryGlobe({
   const [page, setPage] = useState(0);
   const [panel, setPanel] = useState<"list" | "detail">("list");
   const [panelOpen, setPanelOpen] = useState(false);
+  const [provinceDetailOpen, setProvinceDetailOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [land, setLand] = useState<GeoPermissibleObjects | null>(null);
   const [geography, setGeography] = useState<GlobeGeography | null>(null);
@@ -214,6 +232,9 @@ export default function HistoryGlobe({
   const [rivers, setRivers] = useState<AtlasRiverCollection | null>(null);
   const [riverError, setRiverError] = useState(false);
   const [riverAttempt, setRiverAttempt] = useState(0);
+  const [areas, setAreas] = useState<AtlasAreaCollection | null>(null);
+  const [areaError, setAreaError] = useState(false);
+  const [areaAttempt, setAreaAttempt] = useState(0);
   const [view, setView] = useState<GlobeView>(GLOBE_INITIAL_VIEW);
   const [motionPaused, setMotionPaused] = useState(false);
   const viewRef = useRef(view);
@@ -338,19 +359,35 @@ export default function HistoryGlobe({
         : null,
     [selected, geography],
   );
-  const selectedShape = selectedRiver || selectedLandform;
+  const selectedArea = useMemo(
+    () => (selected && areas ? findAtlasArea(selected.place, areas) : null),
+    [selected, areas],
+  );
+  const provinceArea = useMemo(() => {
+    if (!areas || selected) return null;
+    const province =
+      subject === "all" ? regionId.replace(/^korea:/, "") : regionId;
+    return subject === "korea" || regionId.startsWith("korea:")
+      ? findAtlasProvinceArea(province, areas)
+      : null;
+  }, [areas, selected, subject, regionId]);
+  const selectedShape = selectedRiver || selectedLandform || selectedArea;
+  const highlightedShape = selectedShape || provinceArea;
+  const highlightedArea = selectedLandform || selectedArea || provinceArea;
+  const detailOpen =
+    (selected && panel === "detail") || (provinceArea && provinceDetailOpen);
   const selectableGeography = useMemo(
     () =>
       filtered.flatMap((item) => {
         const river = rivers ? findAtlasRiver(item.place, rivers) : null;
-        const area = geography
-          ? findAtlasLandform(item.place, geography)
-          : null;
+        const area =
+          (areas ? findAtlasArea(item.place, areas) : null) ||
+          (geography ? findAtlasLandform(item.place, geography) : null);
         return river || area
           ? [{ item, shape: (river || area)!, area: !!area }]
           : [];
       }),
-    [filtered, rivers, geography],
+    [filtered, rivers, geography, areas],
   );
   const displayedPlace = useMemo(
     () =>
@@ -361,8 +398,13 @@ export default function HistoryGlobe({
             locationNote:
               "확인된 현대 수계의 물줄기를 선으로 표시한다. 지도 축척에 맞춰 작은 굴곡은 단순화했다.",
           }
-        : selected?.place,
-    [selected?.place, selectedRiver],
+        : selected && selectedArea
+          ? {
+              ...selected.place,
+              locationNote: selectedArea.properties.locationNote,
+            }
+          : selected?.place,
+    [selected?.place, selectedRiver, selectedArea],
   );
 
   const cancelDraw = useCallback(() => {
@@ -443,8 +485,22 @@ export default function HistoryGlobe({
     };
   }, [riverAttempt]);
   useEffect(() => {
-    if (!selectedShape || !mapRef.current) return;
-    const center = geoCentroid(selectedShape);
+    let active = true;
+    setAreaError(false);
+    loadAtlasAreaGeometry()
+      .then((value) => {
+        if (active) setAreas(value);
+      })
+      .catch(() => {
+        if (active) setAreaError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [areaAttempt]);
+  useEffect(() => {
+    if (!highlightedShape || !mapRef.current) return;
+    const center = geoCentroid(highlightedShape);
     if (!center.every(Number.isFinite)) return;
     const width = mapRef.current.clientWidth,
       height = mapRef.current.clientHeight;
@@ -455,10 +511,17 @@ export default function HistoryGlobe({
       .rotate([-center[0], -center[1], 0])
       .clipAngle(90);
     const [[left, top], [right, bottom]] =
-      geoPath(projection).bounds(selectedShape);
+      geoPath(projection).bounds(highlightedShape);
+    const viewport = selectionViewport(
+      width,
+      height,
+      detailOpen ? detailRef.current?.parentElement || null : null,
+    );
     const scale = Math.min(
-      (width - 80) / Math.max(0.01, right - left),
-      (height - 160) / Math.max(0.01, bottom - top),
+      ((viewport.right - viewport.left) * 0.85) /
+        Math.max(0.01, 2 * Math.max(Math.abs(left), Math.abs(right))),
+      ((viewport.bottom - viewport.top) * 0.85) /
+        Math.max(0.01, 2 * Math.max(Math.abs(top), Math.abs(bottom))),
     );
     setCamera({
       longitude: center[0],
@@ -466,7 +529,7 @@ export default function HistoryGlobe({
       roll: 0,
       zoom: Math.min(GLOBE_MAX_ZOOM, scale / (Math.min(width, height) * 0.44)),
     });
-  }, [selectedShape, selectionRevision, setCamera]);
+  }, [highlightedShape, selectionRevision, setCamera, size, detailOpen]);
   useEffect(() => {
     const root = rootRef.current,
       map = mapRef.current;
@@ -537,12 +600,15 @@ export default function HistoryGlobe({
       const zoomLabel = `${Math.round(camera.zoom * 100)}%`;
       if (zoomRef.current && zoomRef.current.textContent !== zoomLabel)
         zoomRef.current.textContent = zoomLabel;
+      const popup = detailOpen
+        ? detailRef.current?.parentElement || null
+        : null;
+      const selectionFrame = selectionViewport(width, height, popup);
       const projection = geoOrthographic()
         .translate([
-          width / 2,
-          // Keep the selected point above the lower-left description popup.
-          selected && panel === "detail"
-            ? globeSelectionCenterY(width, height)
+          popup ? (selectionFrame.left + selectionFrame.right) / 2 : width / 2,
+          popup
+            ? (selectionFrame.top + selectionFrame.bottom) / 2
             : height * 0.5,
         ])
         .scale(Math.min(width, height) * 0.44 * camera.zoom)
@@ -612,10 +678,10 @@ export default function HistoryGlobe({
         context.stroke();
       }
       context.globalAlpha = 1;
-      if (selectedShape) {
+      if (highlightedShape) {
         context.beginPath();
-        path(selectedShape);
-        if (selectedLandform) {
+        path(highlightedShape);
+        if (highlightedArea) {
           context.fillStyle = color("--ws-primary-soft");
           context.fill();
         }
@@ -627,7 +693,9 @@ export default function HistoryGlobe({
       }
       riverHaloRef.current?.setAttribute(
         "d",
-        selectedShape ? geoPath(projection).digits(1)(selectedShape) || "" : "",
+        highlightedShape
+          ? geoPath(projection).digits(1)(highlightedShape) || ""
+          : "",
       );
       // Build projected, hemisphere-clipped paths only on a click, not while
       // dragging. CSS-pixel coordinates stay independent of canvas DPR.
@@ -676,10 +744,20 @@ export default function HistoryGlobe({
             : item.place.coordinates,
         );
       }
-      // A verified river has a course, not an arbitrary city-style point. Its
-      // geographical centroid anchors only the label, including null-point data.
-      if (selected && selectedShape)
-        addPoint(selected, geoCentroid(selectedShape));
+      // Shape badges are anchored on the visible geometry itself. A centroid
+      // can fall outside a winding river or a concave island boundary.
+      const shapeAnchor = highlightedShape
+        ? atlasShapeLabelAnchor(
+            highlightedShape,
+            (coordinates) =>
+              isGlobePointVisible(coordinates as [number, number], camera)
+                ? projection(coordinates as [number, number])
+                : null,
+            selectionFrame,
+          )
+        : null;
+      if (selected && shapeAnchor)
+        points.push({ item: selected, x: shapeAnchor[0], y: shapeAnchor[1] });
       const occupied = new Set<string>();
       const rendered: Point[] = [];
       const ordered = [...points].sort(
@@ -699,15 +777,9 @@ export default function HistoryGlobe({
         const active = point.item.place.id === selected?.place.id;
         if (active && selectedShape) continue;
         context.beginPath();
-        context.arc(
-          point.x,
-          point.y,
-          active ? 6 : isDokdo ? 5 : 3,
-          0,
-          Math.PI * 2,
-        );
+        context.arc(point.x, point.y, active ? 6 : 3, 0, Math.PI * 2);
         context.fill();
-        if (active || isDokdo) {
+        if (active) {
           context.strokeStyle = color("--ws-surface");
           context.lineWidth = 2;
           context.stroke();
@@ -730,10 +802,6 @@ export default function HistoryGlobe({
         Math.max(4, Math.min(18, Math.floor(width / 60))),
       );
       const boxes: { x: number; y: number; w: number; h: number }[] = [];
-      const popup =
-        selected && panel === "detail"
-          ? detailRef.current?.parentElement
-          : null;
       if (popup)
         boxes.push({
           x: popup.offsetLeft,
@@ -741,30 +809,78 @@ export default function HistoryGlobe({
           w: popup.offsetWidth,
           h: popup.offsetHeight,
         });
-      if (dokdoLabelRef.current) dokdoLabelRef.current.hidden = true;
+      const provinceLabel =
+        provinceArea && shapeAnchor
+          ? (() => {
+              context.font = "700 14px 'Noto Sans KR', sans-serif";
+              const textWidth = Math.min(
+                width - 32,
+                context.measureText(provinceArea.properties.name).width,
+              );
+              const x = Math.max(
+                selectionFrame.left - 8,
+                Math.min(
+                  selectionFrame.right - textWidth + 8,
+                  shapeAnchor[0] + textWidth + 8 <= selectionFrame.right
+                    ? shapeAnchor[0]
+                    : shapeAnchor[0] - textWidth,
+                ),
+              );
+              const y = shapeAnchor[1];
+              boxes.push({ x, y, w: textWidth, h: 44 });
+              return { x, y, textWidth };
+            })()
+          : null;
       // Keep labels above both animated halo layers without another bitmap or
       // a render loop. Reuse this small SVG pool on the existing draw schedule.
       const labelNodes = labelsRef.current?.children;
       if (!labelNodes) return;
-      for (const node of labelNodes)
-        (node as SVGGElement).style.display = "none";
+      for (const node of labelNodes) {
+        const group = node as SVGGElement;
+        group.style.display = "none";
+        group.removeAttribute("data-globe-label");
+        group.removeAttribute("data-globe-region");
+        group.removeAttribute("data-geography-kind");
+        group.classList.remove("is-active");
+        group.setAttribute("role", "img");
+        group.removeAttribute("aria-pressed");
+        group.setAttribute("tabindex", "-1");
+      }
       let labelIndex = 0;
+      const labelledPlaces = new Set<string>();
       for (const point of labels) {
         const isDokdo = point.item.place.id === ATLAS_DOKDO_ID;
-        const label = isDokdo ? ATLAS_DOKDO_LABEL : nameOf(point.item);
+        const label = nameOf(point.item);
         const activeLabel = point.item.place.id === selected?.place.id;
-        const emphasized = activeLabel || isDokdo;
+        const emphasized = activeLabel;
         context.font = `${emphasized ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
         const textWidth = Math.min(
           width - 32,
           context.measureText(label).width,
         );
-        const x = Math.min(width - textWidth - 12, Math.max(12, point.x + 10));
-        const naturalY = point.y < 100 ? point.y + 22 : point.y - 18;
-        let y = emphasized
-          ? Math.max(80, Math.min(height - 80, naturalY))
-          : naturalY;
-        const labelHeight = emphasized ? 32 : 22;
+        const onShape = activeLabel && !!selectedShape;
+        const x = onShape
+          ? Math.max(
+              selectionFrame.left - 8,
+              Math.min(
+                selectionFrame.right - textWidth + 8,
+                point.x + textWidth + 8 <= selectionFrame.right
+                  ? point.x
+                  : point.x - textWidth,
+              ),
+            )
+          : Math.min(width - textWidth - 12, Math.max(12, point.x + 10));
+        const naturalY = onShape
+          ? point.y
+          : point.y < 100
+            ? point.y + 22
+            : point.y - 18;
+        let y = onShape
+          ? naturalY
+          : emphasized
+            ? Math.max(80, Math.min(height - 80, naturalY))
+            : naturalY;
+        const labelHeight = 44;
         const overlaps = (candidateY: number) =>
           boxes.some(
             (box) =>
@@ -772,7 +888,7 @@ export default function HistoryGlobe({
               x < box.x + box.w + 12 &&
               x + textWidth > box.x - 12,
           );
-        if (isDokdo) {
+        if (isDokdo && !onShape) {
           for (const candidateY of [y, point.y + 32, point.y - 32, 80]) {
             const candidate = Math.max(80, Math.min(height - 80, candidateY));
             if (!overlaps(candidate)) {
@@ -788,8 +904,13 @@ export default function HistoryGlobe({
         const text = group.children[1] as SVGTextElement;
         const ripple = group.children[2] as SVGRectElement;
         group.style.display = "";
+        labelledPlaces.add(point.item.place.id);
         group.classList.toggle("is-active", activeLabel);
-        group.classList.toggle("is-priority", isDokdo);
+        group.setAttribute("data-globe-label", point.item.entry.id);
+        group.setAttribute("role", "button");
+        group.setAttribute("aria-label", `${label} 설명 보기`);
+        group.setAttribute("aria-pressed", String(activeLabel));
+        group.setAttribute("tabindex", "0");
         group.setAttribute("transform", `translate(${x},${y})`);
         background.style.display = emphasized ? "" : "none";
         background.setAttribute("width", String(textWidth + 16));
@@ -797,13 +918,39 @@ export default function HistoryGlobe({
         ripple.setAttribute("width", String(textWidth + 16));
         text.textContent = label;
         text.setAttribute("textLength", String(textWidth));
-        if (isDokdo && dokdoLabelRef.current) {
-          const button = dokdoLabelRef.current;
-          button.style.left = `${x - 8}px`;
-          button.style.top = `${y - 16}px`;
-          button.style.width = `${textWidth + 16}px`;
-          button.hidden = false;
-        }
+        (group.children[3] as SVGRectElement).setAttribute(
+          "width",
+          String(Math.max(44, textWidth + 16)),
+        );
+      }
+      if (provinceArea && provinceLabel) {
+        const label = provinceArea.properties.name;
+        const { x, y, textWidth } = provinceLabel;
+        const group = labelNodes[labelIndex++] as SVGGElement;
+        group.style.display = "";
+        group.classList.add("is-active");
+        group.setAttribute(
+          "data-globe-region",
+          provinceArea.properties.regionId || "",
+        );
+        group.setAttribute("role", "button");
+        group.setAttribute("tabindex", "0");
+        group.setAttribute("aria-pressed", String(provinceDetailOpen));
+        group.setAttribute("transform", `translate(${x},${y})`);
+        group.setAttribute("aria-label", `${label} 설명 보기`);
+        const background = group.children[0] as SVGRectElement;
+        const text = group.children[1] as SVGTextElement;
+        const ripple = group.children[2] as SVGRectElement;
+        background.style.display = "";
+        background.setAttribute("width", String(textWidth + 16));
+        text.textContent = label;
+        text.setAttribute("textLength", String(textWidth));
+        ripple.style.display = "";
+        ripple.setAttribute("width", String(textWidth + 16));
+        (group.children[3] as SVGRectElement).setAttribute(
+          "width",
+          String(Math.max(44, textWidth + 16)),
+        );
       }
       // Geographic labels share collision boxes with place names; selected
       // places always get priority. Draw these static labels in the same frame.
@@ -816,6 +963,17 @@ export default function HistoryGlobe({
         if (
           camera.zoom < label.minZoom ||
           !isGlobePointVisible(label.coordinates, camera)
+        )
+          continue;
+        const labelName = normalizeAtlasSearch(label.name);
+        const labelItem = mapItems.find(
+          (item) =>
+            item.names.includes(labelName) || item.aliases.includes(labelName),
+        );
+        if (
+          labelItem &&
+          (labelledPlaces.has(labelItem.place.id) ||
+            (selectedShape && labelItem.place.id === selected?.place.id))
         )
           continue;
         const xy = projection(label.coordinates);
@@ -839,7 +997,30 @@ export default function HistoryGlobe({
           )
         )
           continue;
-        boxes.push({ x: left, y, w: textWidth, h: 22 });
+        boxes.push({ x: left, y, w: textWidth, h: labelItem ? 44 : 22 });
+        if (labelItem) {
+          const group = labelNodes[labelIndex++] as SVGGElement;
+          group.style.display = "";
+          group.setAttribute("data-globe-label", labelItem.entry.id);
+          group.setAttribute("data-geography-kind", label.kind);
+          group.setAttribute("role", "button");
+          group.setAttribute("tabindex", "0");
+          group.setAttribute("aria-label", `${label.name} 설명 보기`);
+          group.setAttribute("aria-pressed", "false");
+          group.setAttribute("transform", `translate(${left},${y})`);
+          (group.children[0] as SVGRectElement).style.display = "none";
+          const text = group.children[1] as SVGTextElement;
+          text.textContent = label.name;
+          text.setAttribute("textLength", String(textWidth));
+          (group.children[2] as SVGRectElement).style.display = "none";
+          (group.children[3] as SVGRectElement).setAttribute(
+            "width",
+            String(Math.max(44, textWidth + 16)),
+          );
+          labelledPlaces.add(labelItem.place.id);
+          geographicLabelCount += 1;
+          continue;
+        }
         context.lineWidth = 4;
         context.strokeStyle = color(
           label.kind === "ocean" ? "--ws-primary-soft" : "--ws-surface",
@@ -866,6 +1047,11 @@ export default function HistoryGlobe({
     selectedRiver,
     selectedShape,
     selectedLandform,
+    highlightedShape,
+    highlightedArea,
+    provinceArea,
+    provinceDetailOpen,
+    detailOpen,
     selectableGeography,
     size,
     panel,
@@ -913,6 +1099,7 @@ export default function HistoryGlobe({
         );
       } else setNotice("");
       pendingPanelFocus.current = "detail";
+      setProvinceDetailOpen(false);
       setSelectedId(entryId);
       setSelectionRevision((value) => value + 1);
       setPanel("detail");
@@ -935,6 +1122,7 @@ export default function HistoryGlobe({
     const item = itemsById.get(entryId);
     if (!item) return;
     pendingPanelFocus.current = "detail";
+    setProvinceDetailOpen(false);
     setSelectedId(entryId);
     setSelectionRevision((value) => value + 1);
     setPanel("detail");
@@ -943,7 +1131,15 @@ export default function HistoryGlobe({
     if (item.place.coordinates)
       setCamera(focusGlobeView(viewRef.current, item.place.coordinates));
   };
+  const openProvinceDetails = () => {
+    if (!provinceArea) return;
+    pendingPanelFocus.current = "detail";
+    setProvinceDetailOpen(true);
+    setPanel("detail");
+    setSelectionRevision((value) => value + 1);
+  };
   const resetFilters = () => {
+    setProvinceDetailOpen(false);
     setUnitId("");
     setEraId("");
     setRegionId("");
@@ -964,6 +1160,7 @@ export default function HistoryGlobe({
     );
   };
   const changeRegion = (group: string, subregion: string) => {
+    setProvinceDetailOpen(false);
     setRegionId(group);
     setSubregionId(subregion);
     setSelectedId(null);
@@ -994,6 +1191,7 @@ export default function HistoryGlobe({
     if (next) setCamera(next);
   };
   const returnToList = () => {
+    setProvinceDetailOpen(false);
     const index = filtered.findIndex(
       (item) => item.place.id === selected?.place.id,
     );
@@ -1043,7 +1241,15 @@ export default function HistoryGlobe({
       (row || listHeadingRef.current)?.focus({ preventScroll: true });
     } else return;
     pendingPanelFocus.current = null;
-  }, [panel, selected?.entry.id, currentPage, wide, panelOpen]);
+  }, [
+    panel,
+    selected?.entry.id,
+    provinceDetailOpen,
+    selectionRevision,
+    currentPage,
+    wide,
+    panelOpen,
+  ]);
 
   const localPointer = (event: { clientX: number; clientY: number }) => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -1276,7 +1482,9 @@ export default function HistoryGlobe({
                   </a>
                   의 현대 국경·하천·사막과 지명을 표시한다. 점선은 분쟁·통제선
                   등이며 역사 시대의 영토를 뜻하지 않는다. 작은 섬과 해안선은
-                  세계 개관에 맞춰 단순화되어 있다.
+                  세계 개관에 맞춰 단순화되어 있다. 8도는 1910년 도 경계를
+                  남·북도별로 합친 탐색 범위이며 조선 전 시기의 경계가 같았다는
+                  뜻은 아니다.
                 </>
               ),
             },
@@ -1329,6 +1537,7 @@ export default function HistoryGlobe({
               value={unitId}
               onChange={(event) => {
                 setUnitId(event.target.value);
+                setProvinceDetailOpen(false);
                 setSelectedId(null);
                 setPanel("list");
                 setPage(0);
@@ -1355,6 +1564,7 @@ export default function HistoryGlobe({
               value={eraId}
               onChange={(event) => {
                 setEraId(event.target.value);
+                setProvinceDetailOpen(false);
                 setSelectedId(null);
                 setPanel("list");
                 setPage(0);
@@ -1443,6 +1653,7 @@ export default function HistoryGlobe({
             placeholder="지명·옛 이름"
             onChange={(event) => {
               setQuery(event.target.value);
+              setProvinceDetailOpen(false);
               setSelectedId(null);
               setPage(0);
               setPanel("list");
@@ -1457,7 +1668,10 @@ export default function HistoryGlobe({
         </p>
       )}
       <div className="history-globe__workspace">
-        <div className="history-globe__map-shell" ref={mapRef}>
+        <div
+          className={`history-globe__map-shell${!wide || size.width < 650 ? " is-compact" : ""}`}
+          ref={mapRef}
+        >
           <canvas
             ref={canvasRef}
             tabIndex={0}
@@ -1495,10 +1709,31 @@ export default function HistoryGlobe({
             className="history-globe__labels"
             width={size.width}
             height={size.height}
-            aria-hidden="true"
+            role="group"
+            aria-label="지도 지명"
           >
-            {Array.from({ length: 18 }, (_, index) => (
-              <g key={index} style={{ display: "none" }}>
+            {Array.from({ length: 47 }, (_, index) => (
+              <g
+                key={index}
+                style={{ display: "none" }}
+                role="button"
+                tabIndex={-1}
+                onClick={(event) => {
+                  const entryId = event.currentTarget.dataset.globeLabel;
+                  if (entryId) chooseEntry(entryId);
+                  else if (event.currentTarget.dataset.globeRegion)
+                    openProvinceDetails();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  const entryId = event.currentTarget.dataset.globeLabel;
+                  if (!entryId && !event.currentTarget.dataset.globeRegion)
+                    return;
+                  event.preventDefault();
+                  if (entryId) chooseEntry(entryId);
+                  else openProvinceDetails();
+                }}
+              >
                 <rect x={-8} y={-16} height={32} rx={8} />
                 <text
                   dominantBaseline="central"
@@ -1511,19 +1746,16 @@ export default function HistoryGlobe({
                   height={32}
                   rx={8}
                 />
+                <rect
+                  className="history-globe__label-hit"
+                  x={-8}
+                  y={-22}
+                  height={44}
+                  rx={8}
+                />
               </g>
             ))}
           </svg>
-          {dokdoItem && (
-            <button
-              ref={dokdoLabelRef}
-              className="history-globe__dokdo-label"
-              hidden
-              aria-label={`${ATLAS_DOKDO_LABEL} 설명 보기`}
-              aria-pressed={selected?.place.id === ATLAS_DOKDO_ID}
-              onClick={() => chooseEntry(dokdoItem.entry.id)}
-            />
-          )}
           <div className="history-globe__controls">
             {!wide && (
               <button
@@ -1596,12 +1828,26 @@ export default function HistoryGlobe({
               </button>
             </div>
           )}
-          {selected && panel === "detail" && (
+          {areaError &&
+            (selected
+              ? isAtlasAreaPlace(selected.place)
+              : regionId &&
+                (subject === "korea" || regionId.startsWith("korea:"))) && (
+              <div className="history-globe__loading" role="alert">
+                <span>지역 범위를 불러오지 못했다.</span>
+                <button onClick={() => setAreaAttempt((value) => value + 1)}>
+                  다시 시도
+                </button>
+              </div>
+            )}
+          {detailOpen && (
             <div
               className="history-globe__popup"
-              style={size.width < 344 ? { bottom: 84 } : undefined}
               role="region"
-              aria-label={nameOf(selected) + " 장소 설명"}
+              aria-label={
+                (selected ? nameOf(selected) : provinceArea?.properties.name) +
+                " 장소 설명"
+              }
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
@@ -1616,7 +1862,13 @@ export default function HistoryGlobe({
               >
                 ×
               </button>
-              {detail}
+              {selected
+                ? detail
+                : provinceArea && (
+                    <div className="history-globe__detail" ref={detailRef}>
+                      <AtlasAreaDetails area={provinceArea} />
+                    </div>
+                  )}
             </div>
           )}
           <div className="history-globe__attribution">

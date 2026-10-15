@@ -34,11 +34,9 @@ const load = (filename) => {
   return exports;
 };
 const m = load("src/lib/historyGlobeMath.ts");
-const {
-  atlasProjectedNorthBearing,
-  fitGlobeRegionCamera,
-  globeSelectionCenterY,
-} = load("src/lib/historyAtlasGeometry.ts");
+const { atlasProjectedNorthBearing, fitGlobeRegionCamera } = load(
+  "src/lib/historyAtlasGeometry.ts",
+);
 const equal = (actual, expected) =>
   assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected);
 equal(
@@ -564,40 +562,6 @@ for (const latitude of [-89.5, -60, 0, 37, 89.5]) {
   }
 }
 assert.equal(fitGlobeRegionCamera([], 356, 480), null);
-// Actual narrow popup rectangles: retain its reading width and move it up only
-// below 344px, with enough room for the selected point's full 1.8x halo.
-for (const width of [286, 343, 344, 356]) {
-  for (const height of [400, 480, 640]) {
-    const bottom = width < 344 ? 84 : 32;
-    const popup = {
-      left: 8,
-      right: Math.min(288, width - 8),
-      top: height * 0.58 - bottom,
-      bottom: height - bottom,
-    };
-    const compass = {
-      left: width - 56,
-      right: width - 8,
-      top: height - 76,
-      bottom: height - 28,
-    };
-    assert(
-      !(
-        popup.left < compass.right &&
-        popup.right > compass.left &&
-        popup.top < compass.bottom &&
-        popup.bottom > compass.top
-      ),
-      `${width}/${height}: popup leaves all four compass directions visible`,
-    );
-    const centerY = globeSelectionCenterY(width, height);
-    const haloRadius = (44 * 1.8) / 2;
-    assert(
-      centerY - haloRadius >= 42 && centerY + haloRadius < popup.top,
-      `${width}/${height}: selected ripple stays between toolbar and popup`,
-    );
-  }
-}
 const regionFixtures = [
   {
     name: "전라도",
@@ -684,6 +648,41 @@ const visitGlobe = (node) => {
   ts.forEachChild(node, visitGlobe);
 };
 visitGlobe(globeAst);
+const selectionViewport = evaluateGlobe(
+  globeDeclarations.get("selectionViewport").getText(globeAst),
+);
+// Exercise the actual current frame calculation against physical top-left cards,
+// including the wide-layout/narrow-map case and both sides of the 650px cutoff.
+for (const width of [286, 343, 344, 356, 624, 649, 650, 920]) {
+  for (const height of [400, 480, 640]) {
+    const popup = {
+      offsetLeft: 8,
+      offsetTop: width < 920 ? 56 : 8,
+      offsetWidth: Math.min(width >= 920 ? 320 : 280, width - 16),
+      offsetHeight: height * (width >= 920 ? 0.55 : 0.42),
+    };
+    const frame = selectionViewport(width, height, popup);
+    const x = (frame.left + frame.right) / 2;
+    const y = (frame.top + frame.bottom) / 2;
+    const haloRadius = (44 * 1.8) / 2;
+    assert(
+      x - haloRadius >= 0 &&
+        x + haloRadius <= width &&
+        y - haloRadius >= 42 &&
+        y + haloRadius <= height - 28,
+      `${width}/${height}: selected ripple stays in the visible map`,
+    );
+    assert(
+      x - haloRadius >= popup.offsetLeft + popup.offsetWidth ||
+        y - haloRadius >= popup.offsetTop + popup.offsetHeight,
+      `${width}/${height}: selected ripple stays beside or below the top-left popup`,
+    );
+    assert(
+      popup.offsetTop + popup.offsetHeight < height - 76,
+      `${width}/${height}: popup leaves the compass visible`,
+    );
+  }
+}
 regionHandler = globeDeclarations.get("changeRegion").getText(globeAst);
 chooseEntryHandler = globeDeclarations
   .get("chooseEntry")
@@ -716,6 +715,7 @@ for (const empty of [false, true]) {
       unitId: "chosen-unit",
       eraId: "chosen-era",
       size: { width: 356, height: 480 },
+      areas: null,
       fitGlobeRegionCamera,
       GLOBE_INITIAL_VIEW: m.GLOBE_INITIAL_VIEW,
       matchesGlobeRegion: () => true,
@@ -729,6 +729,7 @@ for (const empty of [false, true]) {
           "Notice",
           "Query",
           "Camera",
+          "ProvinceDetailOpen",
         ].map((key) => [
           `set${key}`,
           (value) => {
@@ -786,6 +787,7 @@ vm.runInNewContext(
     setSelectedId: () => {},
     setPanel: () => {},
     setPanelOpen: () => {},
+    setProvinceDetailOpen: () => {},
     setSelectionRevision: (update) => {
       selectionState.revision = update(selectionState.revision);
     },
@@ -941,6 +943,7 @@ const selectFromAll = evaluateGlobe(chooseEntryHandler, {
       "SelectionRevision",
       "Panel",
       "PanelOpen",
+      "ProvinceDetailOpen",
       "Camera",
     ].map((key) => [
       `set${key}`,
