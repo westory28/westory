@@ -36,4 +36,8 @@
 
 - 배포 전 `executecommand-00011-ziv`의 source generation `1792064037131628`과 HEAD의 gateway 55개 파일을 LF 정규화해 대조했으며 모두 일치했다.
 - 이번 백엔드 대상은 서울 `executeCommand` 하나다. 명령 이름·상태 조회 allowlist·rules는 변경하지 않았다.
-- 최종 커밋·배포·운영 도메인 확인 결과는 반영 후 추가한다.
+- 기능 커밋은 `7165482`, 동시 반영된 지도 개선 `cccf8a3`을 보존한 병합 커밋은 `4d0731c`다. 병합 후 전체 빌드를 다시 통과하고 원격 main에 반영했다.
+- 서울 `executeCommand` 배포와 functions 목록의 ACTIVE 상태를 확인했다. revision은 `executecommand-00012-fiy`, 갱신 시각은 `2026-10-15T12:06:51.961573607Z`, source generation은 `1792065952797495`다. 배포된 gateway 55개 파일은 검증한 로컬 소스와 모두 일치한다.
+- 프론트엔드 `dpl_8LZAhqK7p5hwG4QsUYREfRaEGkeb`의 source commit `4d0731c`와 Ready를 확인하고 Production으로 승격했다. `www.westory.kr` 조회가 동일 배포를 반환했다.
+- 로그인된 운영 역사교실에서 새 CSS `ManageHistoryClassroom-BVrUfae3.css`, 어절 줄바꿈, 등록 사유 선선택을 확인했다. 390px에서 모든 모달 동작 라벨은 아이콘으로 전환됐고 모달 client/scroll 폭은 모두 366px였다. 운영 화면 오류 로그는 없었다. 사용자 작성 중 탭은 새로고침하지 않고 별도 읽기 검증 탭을 사용했다.
+- 이 기록을 추가하는 후속 커밋은 문서만 변경한다.
