@@ -8,6 +8,7 @@ import {
   type GeoProjection,
 } from "d3-geo";
 import type { AtlasSubject, AtlasUnit } from "./historyAtlas";
+import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import {
   constrainGlobeView,
   isGlobePointVisible,
@@ -18,6 +19,7 @@ import koreaRiversUrl from "../data/atlas/rivers-korea.json?url";
 import worldLandUrl from "../data/atlas/land-world.json?url";
 import worldRiversUrl from "../data/atlas/rivers-world.json?url";
 import riverSupplementUrl from "../data/atlas/rivers-supplement.json?url";
+import dokdoIslandsUrl from "../data/atlas/dokdo-islands.json?url";
 import type { AtlasRiverCollection } from "./historyAtlasRivers";
 
 export interface AtlasGeometry {
@@ -37,6 +39,44 @@ export const ATLAS_MAX_ZOOM = 12;
 const geometryCache = new Map<AtlasSubject, Promise<AtlasGeometry>>();
 const riversCache = new Map<AtlasSubject, Promise<AtlasRiverCollection>>();
 let supplementPromise: Promise<GeoPermissibleObjects> | undefined;
+let dokdoPromise: Promise<GeoPermissibleObjects> | undefined;
+
+/** Independent ODbL coastline asset, cached locally like the base geography. */
+export function loadAtlasDokdoGeometry(): Promise<GeoPermissibleObjects> {
+  dokdoPromise ||= readGeometry(dokdoIslandsUrl).catch((error) => {
+    dokdoPromise = undefined;
+    throw error;
+  });
+  return dokdoPromise;
+}
+
+export function withAtlasDokdoLand(
+  land: GeoPermissibleObjects,
+  islands: GeoPermissibleObjects,
+): GeoPermissibleObjects {
+  if (land.type !== "MultiPolygon" || islands.type !== "FeatureCollection")
+    throw new Error("독도 지형 자료의 형식이 올바르지 않다.");
+  const terrain = land as MultiPolygon;
+  const coastlines = islands as FeatureCollection<Polygon>;
+  return {
+    type: "MultiPolygon",
+    coordinates: [
+      // Replace only tiny, coarse polygons wholly within the surveyed island
+      // area. The existing mainland and every other island stay untouched.
+      ...terrain.coordinates.filter(
+        (polygon) =>
+          !polygon[0].every(
+            ([x, y]) => x >= 131.85 && x <= 131.88 && y >= 37.23 && y <= 37.25,
+          ),
+      ),
+      ...coastlines.features.flatMap((feature) =>
+        feature.geometry?.type === "Polygon"
+          ? [feature.geometry.coordinates]
+          : [],
+      ),
+    ],
+  };
+}
 
 async function readGeometry(url: string): Promise<GeoPermissibleObjects> {
   const response = await fetch(url);
@@ -100,8 +140,12 @@ export function loadAtlasGeometry(
   const promise = Promise.all([
     readGeometry(layer === "korea" ? koreaLandUrl : worldLandUrl),
     loadAtlasRiverGeometry(layer),
+    loadAtlasDokdoGeometry(),
   ])
-    .then(([land, rivers]) => ({ land, rivers }))
+    .then(([land, rivers, islands]) => ({
+      land: withAtlasDokdoLand(land, islands),
+      rivers,
+    }))
     .catch((error) => {
       geometryCache.delete(layer);
       throw error;

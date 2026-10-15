@@ -83,6 +83,7 @@ export const getAtlasPlaceKindLabel = (place: AtlasPlace): string => {
   }
   if (place.kind === "settlement") return "도시·취락";
   if (place.kind === "site") return "유적·장소";
+  if (place.kind === "island") return "섬";
   if (place.kind === "region") return "지역";
   if (place.kind === "country") return "국가·정치 영역";
   return "지명";

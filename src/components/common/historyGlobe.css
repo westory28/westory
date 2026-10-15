@@ -283,10 +283,25 @@
   stroke-linejoin: round;
   paint-order: stroke;
 }
-.history-globe__labels .is-active text {
+.history-globe__labels .is-active text,
+.history-globe__labels .is-priority text {
   fill: var(--ws-primary-text, #1e3a8a);
   stroke: none;
   font-weight: 700;
+}
+.history-globe .history-globe__dokdo-label,
+.history-globe .history-globe__dokdo-label:hover:not(:disabled) {
+  position: absolute;
+  z-index: 3;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.history-globe .history-globe__dokdo-label[hidden] {
+  display: none;
 }
 .history-globe__labels rect {
   fill: var(--ws-primary-soft, #eff6ff);

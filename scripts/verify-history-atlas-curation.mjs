@@ -42,6 +42,15 @@ const {
   getAtlasHistoryEntries,
 } = load("src/lib/historyAtlasStories.ts");
 const { matchesAtlasSearch } = load("src/lib/historyAtlas.ts");
+const { getAtlasPlaceKindLabel, getAtlasPlaceProfile } = load(
+  "src/lib/historyAtlasProfiles.ts",
+);
+const {
+  ATLAS_DOKDO_ID,
+  ATLAS_DOKDO_COORDINATES,
+  ATLAS_DOKDO_LABEL,
+  ATLAS_DOKDO_LOCATION_SOURCE,
+} = load("src/data/historyAtlasDokdo.ts");
 const { ATLAS_KOREA_PROVINCES, matchesAtlasRegion } = load(
   "src/lib/historyAtlasRegions.ts",
 );
@@ -136,6 +145,82 @@ for (const entry of dataset.entries) {
 
 const cheorwon = places.get(ATLAS_CHEORWON_ID);
 const gwiju = places.get(ATLAS_GWIJU_ID);
+const dokdo = places.get(ATLAS_DOKDO_ID);
+assert(finitePoint(dokdo), "Dokdo must remain a selectable physical island");
+assert.equal(dokdo.kind, "island");
+assert.equal(getAtlasPlaceKindLabel(dokdo), "섬");
+assert.equal(dokdo.modernName, "대한민국 경상북도 울릉군 울릉읍 독도리");
+// Independently check the shared constant against MOF's east-island DMS point:
+// 131°52′10.4″ E, 37°14′26.8″ N. Never swap longitude and latitude.
+assert(Math.abs(dokdo.coordinates[0] - 131.86955555555556) < 1e-9);
+assert(Math.abs(dokdo.coordinates[1] - 37.24077777777778) < 1e-9);
+assert.equal(
+  JSON.stringify(dokdo.coordinates),
+  JSON.stringify(ATLAS_DOKDO_COORDINATES),
+);
+assert(dokdo.locationNote.includes("대한민국"));
+assert(dokdo.locationNote.includes("동도"));
+const dokdoHistory = getAtlasHistoryEntries(dataset, ATLAS_DOKDO_ID, "korea");
+const dokdoEntry = dokdoHistory[0];
+assert.equal(
+  dokdoEntry?.id,
+  `story-korea-dokdo-imperial-decree-${ATLAS_DOKDO_ID}`,
+  "Selecting Dokdo opens the evidenced 1900 account, not a source caption",
+);
+assert.equal(dokdoEntry.displayName, ATLAS_DOKDO_LABEL);
+assert.equal(ATLAS_DOKDO_LABEL, "독도 · 대한민국");
+assert.equal(dokdoEntry.historicalStory.startYear, 1900);
+assert.equal(dokdoEntry.unitId, "korea-modern");
+assert(dokdoEntry.eraIds.includes("k-opening"));
+assert(dokdoEntry.summary.includes("칙령 제41호"));
+assert(dokdoEntry.summary.includes("석도, 곧 독도"));
+assert(dokdoEntry.summary.includes("1900년 10월 25일"));
+assert(dokdoEntry.summary.includes("27일 관보"));
+assert(
+  dokdoEntry.historicalStory.sources.some(
+    (item) =>
+      item.url ===
+      "https://contents.history.go.kr/front/hm/view.do?levelId=hm_122_0020",
+  ),
+);
+assert(
+  dokdoEntry.historicalStory.sources.some(
+    (item) => item.url === ATLAS_DOKDO_LOCATION_SOURCE.url,
+  ),
+);
+assert(matchesAtlasSearch(dokdoEntry, dokdo, "독도"));
+assert.equal(
+  getAtlasHistoryEntries(dataset, ATLAS_DOKDO_ID)[0]?.id,
+  dokdoEntry.id,
+  "The globe includes the same historical account",
+);
+assert.equal(
+  getAtlasHistoryEntries(dataset, ATLAS_DOKDO_ID, "world").length,
+  0,
+  "The Korean historical island must not enter the world-history catalogue",
+);
+const dokdoProfile = getAtlasPlaceProfile(dokdo, dokdoHistory);
+assert.equal(dokdoProfile.quality, "verified");
+assert(dokdoProfile.definition.includes("대한민국"));
+assert(dokdoProfile.definition.includes("동도와 서도"));
+assert(dokdoProfile.facts.some((fact) => fact.value === dokdo.modernName));
+for (const id of [
+  "kr-entry-52c075a797c8",
+  "kr-entry-8446393120ac",
+  "kr-entry-ca1825db5bac",
+  "kr-entry-4da99cfb6df0",
+]) {
+  assert(
+    source.entries.some(
+      (entry) =>
+        entry.id === id &&
+        entry.placeId === ATLAS_DOKDO_ID &&
+        entry.citations.length > 0,
+    ),
+    "The original Dokdo textbook citations must remain in the source ledger",
+  );
+  assert(!entries.has(id), "A Dokdo caption must not become a dated event");
+}
 assert(finitePoint(gwiju));
 assert.equal(JSON.stringify(gwiju.coordinates), "[125.2529,39.97969]");
 assert(gwiju.modernName.includes("구성"));
@@ -277,6 +362,15 @@ assert.equal(
   "Curation mutated the source ledger",
 );
 assert.equal(JSON.stringify(rebuilt.dataset), JSON.stringify(dataset));
+assert.equal(
+  source.places.find((place) => place.id === ATLAS_DOKDO_ID).coordinates,
+  null,
+  "Restoring the verified Dokdo point must not mutate its raw coordinates",
+);
+assert.equal(
+  source.places.find((place) => place.id === ATLAS_DOKDO_ID).kind,
+  "region",
+);
 assert.equal(
   source.places.find((place) => place.id === ATLAS_GWIJU_ID).coordinates,
   null,
@@ -458,6 +552,7 @@ writeFileSync(
     "",
     "- 태봉은 원본의 country 분류·null 좌표를 유지한다. 철원의 905년 이야기에서 ‘태봉’ 키워드를 누르면 같은 철원 지점의 911년 국호 변경 이야기로 이동한다. 도시의 별칭으로 태봉을 추가하지 않는다.",
     "- 귀주는 국사편찬위원회의 현대 지명 비정과 GeoNames 1875107의 구성 정주지 좌표를 대조했다. [125.2529, 39.97969]는 구성시 일대의 대표 위치이며 정확한 전투 지점이나 성곽의 경계가 아니다.",
+    "- 독도는 해양수산부의 동도 좌표(동경 131도 52분 10.4초, 북위 37도 14분 26.8초)를 사용한 대한민국의 섬으로 복원했다. 현재 위치는 대한민국 경상북도 울릉군 울릉읍 독도리이며, 기본 역사 이야기는 1900년 대한제국 칙령 제41호이다. 한국사와 전체 지구본에 포함하고 세계사 목록에는 포함하지 않는다. 원본의 null 좌표·region 분류·교과서 인용은 보존했다.",
     "- 모든 entry·관련 연결의 실제 좌표, 과목 경계, 원본 불변, 잘못된 targetEntryId의 대체 선택 방지, 시설 재도입 방지, 평서형 문체를 자동 검사했다.",
     "- 선별된 설명과 시대가 맞지 않는 전주(후백제)→광주, 강화도조약→부산, 공산 전투→경주, 서경 천도 운동→개경, 강화 천도→개경 관계는 지도용 데이터에서 제외했다. 원본 관계는 보존하며, 제외한 이유가 정방향·역방향 연결에 다시 나타나지 않는지 전수 검사했다.",
     "- 철원의 고려 건국→송악은 919년 천도 이야기로, 인천상륙작전·부산 피란→서울은 6·25전쟁 피해 이야기로 정확히 연결했다.",

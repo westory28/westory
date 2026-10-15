@@ -21,7 +21,14 @@ export interface AtlasPlace {
   aliases?: string[];
   /** The source catalogue may lack a position; such places never enter the map dataset. */
   coordinates: [number, number] | null;
-  kind?: "settlement" | "site" | "region" | "country" | "water" | "mountain";
+  kind?:
+    | "settlement"
+    | "site"
+    | "region"
+    | "country"
+    | "water"
+    | "mountain"
+    | "island";
   locationNote?: string;
 }
 
