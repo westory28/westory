@@ -7,6 +7,7 @@ const cutoverAuthorization = require("./cutoverAuthorization");
 const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
 const historyExemptions = require("./historyClassroomExemptions");
+const learning = require("./assessmentLearning");
 
 const REGION = "asia-northeast3";
 const ASSESSMENT_SCHEMA_VERSION = 1;
@@ -286,7 +287,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     };
   }
   if (commandType === ASSESSMENT_COMMAND_TYPES.SUBMIT_ASSESSMENT_ATTEMPT) {
-    assertAllowedKeys(payload, ["attemptId", "expectedRevision", "answers", "submitReason"], "submitAssessmentAttempt payload");
+    assertAllowedKeys(payload, ["attemptId", "expectedRevision", "answers", "submitReason", "analytics"], "submitAssessmentAttempt payload");
     if (!["STUDENT", "TIMEOUT"].includes(payload.submitReason)) {
       fail("invalid-argument", "submitReason is invalid.", "ASSESSMENT_SUBMIT_REASON_INVALID");
     }
@@ -295,6 +296,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       expectedRevision: positiveInteger(payload.expectedRevision, "expectedRevision"),
       answers: normalizeAnswers(payload.answers),
       submitReason: payload.submitReason,
+      ...(payload.analytics !== undefined ? { analytics: learning.normalizeAnalytics(payload.analytics) } : {}),
     };
   }
   if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPTS_BY_CLASS) {
@@ -320,6 +322,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       "id", "unitId", "subUnitId", "category", "type", "question", "answer",
       "options", "choiceOptionImages", "matchingPairs", "explanation", "image",
       "passage", "hintEnabled", "hint", "refBig", "refMid", "refSmall",
+      "concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId",
     ], "question");
     if (String(question.id) !== questionId || !question.unitId || !question.category || !question.type || !question.question) {
       fail("invalid-argument", "question identity is invalid.", "ASSESSMENT_QUESTION_INVALID");
@@ -327,7 +330,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     return {
       semesterId: normalizeSemesterId(payload.semesterId),
       questionId,
-      question,
+      question: { ...question, ...(["concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId"].some(key => Object.hasOwn(question, key)) ? learning.normalizeQuestionLearning(question) : {}) },
       expectedRevision: nonNegativeInteger(payload.expectedRevision, "expectedRevision"),
       reason: text(payload.reason, "reason", 300),
     };
@@ -452,7 +455,9 @@ const loadDefinitionSource = async (transaction, payload) => {
     if (!questions.length) {
       fail("failed-precondition", "No canonical quiz questions were found.", "ASSESSMENT_SOURCE_EMPTY");
     }
-    return { itemCount: questions.length, answerKey: questions, assignedStudentUids: [], sourceHash: sha256(canonicalJson(questions)) };
+    return { itemCount: questions.length, answerKey: questions,
+      learningSnapshot: documents.filter(document => questions.some(item => item.id === String(document.data?.id ?? document.path.split("/").at(-1)))).map(learning.questionLearningSnapshot),
+      assignedStudentUids: [], sourceHash: sha256(canonicalJson(questions)) };
   }
   const sourcePath = `${semesterRoot(payload.semesterId)}/history_classrooms/${payload.sourceId}`;
   const snapshot = await transaction.get(sourcePath);
@@ -500,7 +505,7 @@ const resolveAssignedClassIds = async (transaction, semesterId, requestedIds) =>
   return [...new Set(resolved)];
 };
 
-const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumber }) => {
+const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumber, priorAttempts = [] }) => {
   const allIds = source.answerKey.map((item) => item.id);
   if (definition.assessmentKind !== "QUIZ") return allIds;
   const requestedCount = Number(definition.questionCount || 0);
@@ -508,12 +513,13 @@ const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumbe
   if (count < 1) {
     fail("failed-precondition", "The published quiz question count is invalid.", "ASSESSMENT_QUESTION_SET_INVALID");
   }
+  const learningRanks = learning.rankLearningCandidates(source, priorAttempts);
   return [...allIds]
     .map((id) => ({
       id,
       rank: sha256(`${studentUid}\n${definition.definitionId}\n${attemptNumber}\n${id}`),
     }))
-    .sort((left, right) => left.rank.localeCompare(right.rank) || left.id.localeCompare(right.id))
+    .sort((left, right) => (learningRanks.get(left.id) - learningRanks.get(right.id)) || left.rank.localeCompare(right.rank) || left.id.localeCompare(right.id))
     .slice(0, count)
     .map((item) => item.id);
 };
@@ -909,6 +915,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         definition,
         studentUid: actor.actorUid,
         attemptNumber,
+        priorAttempts: allPrior.map(document => document.data || {}),
       });
       const answerById = new Map(source.answerKey.map((item) => [item.id, item]));
       const gradingSnapshot = selectedIds.map((id) => answerById.get(id));
@@ -937,6 +944,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         currentItemId: selectedIds[0] || "",
         questionIds: selectedIds,
         gradingSnapshot,
+        ...(definition.assessmentKind === "QUIZ" ? {
+          sourceId: definition.sourceId || "", category: definition.category || "", examRound: definition.examRound || "",
+          learningSnapshot: (source.learningSnapshot || []).filter(item => selectedIds.includes(item.id)),
+        } : {}),
         ...(definition.assessmentKind === "HISTORY_CLASSROOM" ? { passThresholdPercent: source.passThresholdPercent } : {}),
         sourceHash: source.sourceHash,
         startedAtIso: nowDate.toISOString(),
@@ -970,7 +981,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         const reward = result.reward || { status: "NOT_RECORDED", awarded: false, duplicate: false, amount: 0, bonusAwarded: false,
           bonusAmount: 0, totalAwarded: 0, blockedReason: "reward_not_recorded", blockedMessage: "이전 제출의 보상 확인 기록이 없습니다.", ledgerEntryIds: [] };
         return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, attempt.submissionRef, attempt.resultRef] }, sourceHash: attempt.sourceHash || null, result: { attemptId: attempt.attemptId, status: "SUBMITTED", resultRef: attempt.resultRef, submissionRef: attempt.submissionRef,
-          score: result.score, total: result.total, percent: result.percent, ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, reward, replayedSubmission: true } };
+          score: result.score, total: result.total, percent: result.percent, ...(attempt.assessmentKind === "QUIZ" ? { analytics: result.analytics || null, learningSnapshot: result.learningSnapshot || [] } : {}), ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, reward, replayedSubmission: true } };
       }
       if (!Array.isArray(attempt.gradingSnapshot) || !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status)) fail("failed-precondition", "Assessment attempt cannot be submitted.", "ASSESSMENT_ATTEMPT_NOT_SUBMITTABLE");
       if (Number(attempt.revision || 0) !== payload.expectedRevision) fail("aborted", "Assessment attempt revision changed.", "ASSESSMENT_ATTEMPT_REVISION_CONFLICT", { currentRevision: Number(attempt.revision || 0) });
@@ -979,6 +990,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         fail("deadline-exceeded", "The authoritative assessment deadline has passed.", "ASSESSMENT_DEADLINE_EXPIRED");
       }
       const effectiveAnswers = payload.answers;
+      const analytics = attempt.assessmentKind === "QUIZ"
+        ? learning.normalizeAnalytics(payload.analytics === undefined ? attempt.analytics : payload.analytics, attempt, nowDate.getTime(), effectiveAnswers) : null;
       const checks = attempt.gradingSnapshot.map((item) => ({ id: item.id, correct: normalizeAnswer(effectiveAnswers[item.id]) === normalizeAnswer(item.answer) }));
       const correctCount = checks.filter((item) => item.correct).length;
       const total = checks.length;
@@ -1003,6 +1016,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         semesterId: attempt.semesterId,
         studentUid: actor.actorUid,
         answers: effectiveAnswers,
+        ...(attempt.assessmentKind === "QUIZ" ? { analytics } : {}),
         submitReason: payload.submitReason,
         attemptRevision: nextRevision,
         sourceHash: attempt.sourceHash,
@@ -1026,6 +1040,11 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         percent,
         ...historyOutcome,
         answerChecks: checks,
+        ...(attempt.assessmentKind === "QUIZ" ? {
+          analytics, learningSnapshot: attempt.learningSnapshot || [], answers: effectiveAnswers,
+          sourceId: attempt.sourceId || "", category: attempt.category || "", examRound: attempt.examRound || "",
+          attemptNumber: attempt.attemptNumber,
+        } : {}),
         sourceHash: attempt.sourceHash,
         submittedAtIso,
         submissionRef: immutableSubmissionPath,
@@ -1033,9 +1052,9 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         receiptId,
         createdAt: timestamp,
       });
-      transaction.set(path, { status: "SUBMITTED", revision: nextRevision, answers: effectiveAnswers, submittedAtIso, submissionRef: immutableSubmissionPath, resultRef: immutableResultPath, submitReason: payload.submitReason, updatedAt: timestamp }, { merge: true });
+      transaction.set(path, { status: "SUBMITTED", revision: nextRevision, answers: effectiveAnswers, ...(attempt.assessmentKind === "QUIZ" ? { analytics } : {}), submittedAtIso, submissionRef: immutableSubmissionPath, resultRef: immutableResultPath, submitReason: payload.submitReason, updatedAt: timestamp }, { merge: true });
       rewardPlan.apply();
-      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
+      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, ...(attempt.assessmentKind === "QUIZ" ? { analytics, learningSnapshot: attempt.learningSnapshot || [] } : {}), resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPTS_BY_CLASS) {
@@ -1087,6 +1106,7 @@ const serializeAttempt = (attempt, resumed) => ({
   status: attempt.status,
   revision: attempt.revision,
   answers: attempt.answers || {},
+  ...(attempt.assessmentKind === "QUIZ" ? { analytics: attempt.analytics || null, learningSnapshot: attempt.learningSnapshot || [] } : {}),
   currentItemId: attempt.currentItemId || "",
   questionIds: attempt.questionIds || [],
   startedAtIso: attempt.startedAtIso,
@@ -1131,13 +1151,14 @@ const normalizeSaveRequest = (data, projectId) => {
   if (testAuthorizedSignalId && testDelayAfterSessionMs === 0) {
     fail("invalid-argument", "Assessment test signal requires a delay.", "ASSESSMENT_TEST_SIGNAL_INVALID");
   }
-  assertAllowedKeys(payload, ["attemptId", "expectedRevision", "answers", "currentItemId", "saveId"], "saveAssessmentProgress payload");
+  assertAllowedKeys(payload, ["attemptId", "expectedRevision", "answers", "currentItemId", "saveId", "analytics"], "saveAssessmentProgress payload");
   return {
     attemptId: normalizeAttemptId(payload.attemptId),
     expectedRevision: positiveInteger(payload.expectedRevision, "expectedRevision"),
     answers: normalizeAnswers(payload.answers),
     currentItemId: optionalText(payload.currentItemId, "currentItemId", 160),
     saveId: text(payload.saveId, "saveId", 100),
+    ...(payload.analytics !== undefined ? { analytics: learning.normalizeAnalytics(payload.analytics) } : {}),
     testDelayAfterSessionMs,
     testAuthorizedSignalId,
     testDropResponseAfterCommit,
@@ -1262,7 +1283,8 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
       const attempt = snapshot.data || {};
       if (attempt.studentUid !== actor.uid) fail("permission-denied", "Assessment attempt belongs to another student.", "ASSESSMENT_ATTEMPT_FORBIDDEN");
       await assertAssessmentSemesterWritable(transaction, attempt.semesterId);
-      const saveHash = sha256(canonicalJson({ answers: payload.answers, currentItemId: payload.currentItemId }));
+      const saveHash = sha256(canonicalJson({ answers: payload.answers, currentItemId: payload.currentItemId,
+        ...(payload.analytics !== undefined ? { analytics: payload.analytics } : {}) }));
       if (attempt.lastSaveId === payload.saveId) {
         if (attempt.lastSaveHash !== saveHash) fail("already-exists", "saveId was reused with different progress.", "ASSESSMENT_SAVE_ID_CONFLICT");
         return { attemptId: attempt.attemptId, status: attempt.status, revision: attempt.revision, deadlineAtIso: attempt.deadlineAtIso, savedAtIso: attempt.lastSavedAtIso, replayed: true };
@@ -1275,7 +1297,9 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
       }
       const savedAtIso = savedAt.toISOString();
       const revision = payload.expectedRevision + 1;
-      transaction.set(path, { status: "IN_PROGRESS", revision, answers: payload.answers, currentItemId: payload.currentItemId, lastSaveId: payload.saveId, lastSaveHash: saveHash, lastSavedAtIso: savedAtIso, updatedAt: serverTimestamp() }, { merge: true });
+      const analytics = attempt.assessmentKind === "QUIZ" && payload.analytics !== undefined
+        ? { analytics: learning.normalizeAnalytics(payload.analytics, attempt, savedAt.getTime(), payload.answers) } : {};
+      transaction.set(path, { status: "IN_PROGRESS", revision, answers: payload.answers, ...analytics, currentItemId: payload.currentItemId, lastSaveId: payload.saveId, lastSaveHash: saveHash, lastSavedAtIso: savedAtIso, updatedAt: serverTimestamp() }, { merge: true });
       return { attemptId: attempt.attemptId, status: "IN_PROGRESS", revision, deadlineAtIso: attempt.deadlineAtIso, savedAtIso, replayed: false };
     });
     if (payload.testDropResponseAfterCommit) {

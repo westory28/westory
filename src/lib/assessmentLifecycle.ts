@@ -2,6 +2,8 @@ import { getHistoryDictionaryCallable as getHttpsCallable } from "./historyDicti
 import { auth } from "./firebase";
 import { ensureSensitiveOperation } from "./sensitiveOperation";
 import { getIdTokenResult } from "firebase/auth";
+import type { AssessmentTelemetrySnapshot } from "./assessmentTelemetry";
+import type { AssessmentLearningQuestion } from "./assessmentLearning";
 
 export type AssessmentKind = "QUIZ" | "HISTORY_CLASSROOM";
 
@@ -223,6 +225,7 @@ export const saveAssessmentProgress = async (input: {
   answers: Record<string, string>;
   currentItemId: string;
   saveId?: string;
+  analytics?: AssessmentTelemetrySnapshot;
 }) => {
   const assertOwner = await captureAssessmentOwner();
   const callable = await getHttpsCallable<
@@ -256,6 +259,7 @@ export const submitAssessmentAttempt = async (input: {
   expectedRevision: number;
   answers: Record<string, string>;
   submitReason: "STUDENT" | "TIMEOUT";
+  analytics?: AssessmentTelemetrySnapshot;
 }) => {
   // A different writer may have saved this revision. Preserve local answers
   // and surface the conflict rather than submitting them over that writer.
@@ -321,6 +325,8 @@ export interface AssessmentAttemptState {
   submittedAtIso: string;
   resultRef: string;
   resumed: boolean;
+  analytics?: AssessmentTelemetrySnapshot | null;
+  learningSnapshot?: AssessmentLearningQuestion[];
 }
 
 export interface AssessmentRewardResult {
@@ -357,4 +363,6 @@ export interface AssessmentSubmissionResult {
   submissionRef: string;
   replayedSubmission: boolean;
   reward?: AssessmentRewardResult;
+  analytics?: AssessmentTelemetrySnapshot | null;
+  learningSnapshot?: AssessmentLearningQuestion[];
 }

@@ -23,6 +23,8 @@ assert.equal(fs.readFileSync(path.join(gatewayDir, 'sessionAuthority.js'), 'utf8
 const source = fs.readFileSync(path.resolve(__dirname, '../index.js'), 'utf8');
 assert.match(source, /exports\.executeCommand = require\('\.\/productionGateway\/productionSource'\)\.executeCommand/);
 assert.match(source, /exports\.getCommandStatus = require\('\.\/productionGateway\/productionSource'\)\.getCommandStatus/);
+assert.match(source, /exports\.getAssessmentState = require\('\.\/productionGateway\/productionSource'\)\.getAssessmentState/);
+assert.match(source, /exports\.saveAssessmentProgress = require\('\.\/productionGateway\/productionSource'\)\.saveAssessmentProgress/);
 assert.match(source, /exports\.executeLessonCorePointCommand = require\('\.\/productionGateway\/productionSource'\)\.executeLessonCorePointCommand/);
 assert.match(source, /exports\.getWisEconomyState = require\('\.\/studentWisQuery'\)\.getWisEconomyState/);
 const querySource = fs.readFileSync(path.resolve(__dirname, '../studentWisQuery.js'), 'utf8');
@@ -36,7 +38,7 @@ process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:18192';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:19192';
 const deployedFunctions = require('../index');
 const canonicalFunctions = require('../productionGateway/productionSource');
-for (const name of manifest.rootExports) {
+for (const name of [...manifest.rootExports, 'getAssessmentState', 'saveAssessmentProgress']) {
   assert.equal(typeof deployedFunctions[name], 'function', `${name} must be a deployed callable`);
   assert.equal(deployedFunctions[name], canonicalFunctions[name], `${name} must share the canonical command closure`);
   assert.deepEqual(deployedFunctions[name].__endpoint?.region, ['asia-northeast3']);

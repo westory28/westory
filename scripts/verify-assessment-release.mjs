@@ -3,6 +3,8 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { createHash, webcrypto } from "node:crypto";
 import ts from "typescript";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 
 // Exercise the real browser release planner against the deployed command adapter.
 // The store is synthetic and contains no credentials or production connection.
@@ -26,6 +28,7 @@ vm.runInNewContext(fs.readFileSync(serverPath, "utf8"), {
     if (name === "firebase-functions/v2/https") return { HttpsError: class extends Error { constructor(code, message, details) { super(message); this.code = code; this.details = details; } } };
     if (name === "./semesterCore") return semesterCore;
     if (name === "./historyClassroomExemptions") return exemptionModule.exports;
+    if (name === "./assessmentLearning") return require("../functions/productionGateway/assessmentLearning.js");
     if (name === "./archiveEnrollment") return { SEMESTER_CLASS_COLLECTION: "semester_classes" };
     if (["./cutoverAuthorization", "./sessionAuthority", "./studentMaintenance"].includes(name)) return {};
     throw new Error(name);
@@ -42,7 +45,7 @@ function harness() {
     ["semester_classes/class_a", { semesterId: "2026-2", classId: "class_a", status: "ACTIVE", grade: "3", classNumber: "1" }],
     [`${root}/quiz_questions/q1`, { id: "q1", unitId: "unit_1", category: "diagnostic", question: "Q", type: "word", answer: "A", contentRevision: 1 }],
     [`${root}/assessment_config/settings`, { unit_1_diagnostic: { ...settings } }],
-    [`${root}/history_classrooms/history1`, { title: "역사교실", isPublished: true, blanks: [{ id: "blank-a", answer: "A" }], targetStudentUids: ["student-a"], timeLimitMinutes: 10, cooldownMinutes: 5 }],
+    [`${root}/history_classrooms/history1`, { title: "역사교실", sourceType: "lesson", lessonUnitId: "lesson-unit", isPublished: true, blanks: [{ id: "blank-a", answer: "A" }], targetStudentUids: ["student-a"], timeLimitMinutes: 10, cooldownMinutes: 5 }],
   ]);
   const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
   const snap = (path) => ({ path, id: path.split("/").at(-1), exists: docs.has(path), data: clone(docs.get(path)) });

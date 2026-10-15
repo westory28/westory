@@ -42,12 +42,13 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "a3dfefe3b32dbdebb3d2a090dbeca1b928be434c3b7a4e566bedeb3de2b7a5dd",
+      "sha256": "4f2394e34762c7f07e6bc7b766d38e24e984bcac69bf9c7cf700525b47082d19",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "Preserve current lesson-source metadata in the History Classroom source command.",
         "Restore History Classroom reusable exemption tickets through canonical receipt-protected commands; add student-owned violation lock and preserve pass thresholds in new attempt/result snapshots.",
-        "Restrict new History Classroom sources to worksheets; keep old map worksheets byte-for-byte on settings updates, treat omitted prompt/source defaults as equivalent, and reject live map blank writes."
+        "Restrict new History Classroom sources to worksheets; keep old map worksheets byte-for-byte on settings updates, treat omitted prompt/source defaults as equivalent, and reject live map blank writes.",
+        "2026-10-15: Optional bounded local diagnostics travel with existing saves/submissions; frozen learning metadata and unseen concept rechecks preserve grading/reward authority."
       ]
     },
     {
@@ -419,6 +420,15 @@
       "changes": [
         "New canonical adapter, not restored legacy code: active semester/enrollment/class validated reusable grants, requests, reviews, and atomic compatible/canonical exemption results."
       ]
+    },
+    {
+      "sourceFile": "assessmentLearning.js",
+      "file": "assessmentLearning.js",
+      "originalSha256": "eda2e5e2924fad5353422a00a0eb42a280e0f5af1c95853481699bdc48b553a5",
+      "sha256": "89ab81ef965332c49226f6af9ec450f08af72d3c4ff3120f24fc5eaf9cc63da6",
+      "changes": [
+        "New diagnostic-only validation, metadata snapshot and recheck ranking module; no production ancestor."
+      ]
     }
   ],
   "additionalDeploymentSources": [
@@ -443,5 +453,16 @@
       "entry": "../studentWisQuery.js",
       "source": "wisEconomyQuery.js"
     }
-  ]
+  ],
+  "assessmentQueryExports": [
+    "getAssessmentState",
+    "saveAssessmentProgress"
+  ],
+  "liveAssessmentComparison": {
+    "date": "2026-10-15",
+    "executeCommandGeneration": "1792061944527461",
+    "saveAssessmentProgressGeneration": "1789221981500978",
+    "getAssessmentStateGeneration": "1789221981193263",
+    "comparison": "Latest executeCommand archive: 54 preserved source files match origin/main 4f817fa after LF normalization. Assessment changes build on that source, including the current exemption routine policy. Live saveAssessmentProgress and getAssessmentState assessmentLifecycle sources match each other; createAssessmentQueryCore and callable options matched the gateway before this patch."
+  }
 }

@@ -11,6 +11,8 @@ import { db } from "./firebase";
 import { buildAssessmentDefinitionId } from "./assessmentLifecycle";
 import { getSemesterDocPath, getYearSemester } from "./semesterScope";
 import { getMockExamResultCategory } from "./mockExamRounds";
+import type { AssessmentTelemetrySnapshot } from "./assessmentTelemetry";
+import type { AssessmentLearningQuestion } from "./assessmentLearning";
 import {
   normalizeHistoryClassroomAssignment,
   normalizeHistoryClassroomResult,
@@ -35,6 +37,9 @@ type Result = {
   submittedAtIso: string;
   submissionRef: string;
   answers: Record<string, string>;
+  analytics?: AssessmentTelemetrySnapshot | null;
+  learningSnapshot?: AssessmentLearningQuestion[];
+  attemptNumber?: number;
   passed?: boolean;
   passThresholdPercent?: number;
   completionSource?: "attempt" | "exemption";
@@ -124,6 +129,12 @@ export const readCanonicalQuizResults = async (
       const unitId = parts.join(":");
       return {
         id: item.id,
+        attemptId: item.attemptId,
+        studentUid: item.studentUid,
+        semesterId: item.semesterId,
+        attemptNumber: item.attemptNumber,
+        analytics: item.analytics,
+        learningSnapshot: item.learningSnapshot,
         unitId,
         category: getMockExamResultCategory(category, examRound),
         examRound,
@@ -131,8 +142,12 @@ export const readCanonicalQuizResults = async (
         timestamp: Timestamp.fromDate(new Date(item.submittedAtIso)),
         timeString: new Date(item.submittedAtIso).toLocaleString("ko-KR"),
         details: item.answerChecks.map((check) => ({
+          ...item.learningSnapshot?.find(
+            (question) => String(question.id) === String(check.id),
+          ),
           id: check.id,
           correct: check.correct,
+          confidence: item.analytics?.questions?.[check.id]?.confidence ?? null,
           u: item.answers[check.id] || "",
           displayU: item.answers[check.id] || "",
         })),

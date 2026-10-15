@@ -8468,6 +8468,8 @@ exports.deleteNoticeImageContent = require('./noticeImages').deleteNoticeImageCo
 // with an older local implementation or export its unrelated nested callables.
 exports.executeCommand = require('./productionGateway/productionSource').executeCommand;
 exports.getCommandStatus = require('./productionGateway/productionSource').getCommandStatus;
+exports.getAssessmentState = require('./productionGateway/productionSource').getAssessmentState;
+exports.saveAssessmentProgress = require('./productionGateway/productionSource').saveAssessmentProgress;
 exports.executeLessonCorePointCommand = require('./productionGateway/productionSource').executeLessonCorePointCommand;
 exports.getWisEconomyState = require('./studentWisQuery').getWisEconomyState;
 

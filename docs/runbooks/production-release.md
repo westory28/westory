@@ -88,6 +88,8 @@ PC에는 코드와 개발 도구가 있고 실제 로그인 처리는 공통 Fir
 
 2026-10-15 역사교실 안정화에서는 신규 면제권·응시 잠금 명령과 응답 유실 복구를 함께 지원하도록 `executeCommand`, `getCommandStatus` 두 함수를 배포한다. 명령 이름이나 학생 명령 분류를 바꾸면 상태 조회 함수의 동일 allowlist도 확인한다. [검증 기록](../reviews/history-classroom-stabilization-20261015.md)을 참고한다.
 
+2026-10-15 평가 개선에서는 운영 소스를 대조한 `getAssessmentState`, `saveAssessmentProgress` 두 조회·저장 callable도 명시적으로 연결한다. 이 패치의 배포 대상은 서울 `executeCommand`, `getAssessmentState`, `saveAssessmentProgress` 세 함수다. 진단 기록은 기존 답안 저장에 함께 전송하며 채점·보상·응시 권한을 바꾸지 않는다. 다른 callable을 일괄 export하지 않는다. [설계 및 서술형·AI 검토](../reviews/assessment-design-20261015.md)를 참고한다.
+
 학생 개방 전에는 교사 설정의 학생 접속 항목에서 현재 학기 평가 공개 상태를 점검하고,
 현재 공개 설정에 해당하는 평가를 준비한다. 가입 승인·세션·학급 권한, 서버 저장/보상,
 운영 프론트엔드와 Firebase 반영을 확인한 뒤 접속을 연다. 개방/제한 설정은 관리자
