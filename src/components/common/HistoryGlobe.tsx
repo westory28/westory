@@ -169,6 +169,8 @@ export default function HistoryGlobe({
   const [riverError, setRiverError] = useState(false);
   const [riverAttempt, setRiverAttempt] = useState(0);
   const [view, setView] = useState<GlobeView>(GLOBE_INITIAL_VIEW);
+  const [highlightMotion, setHighlightMotion] = useState(true);
+  const [motionPaused, setMotionPaused] = useState(false);
   const viewRef = useRef(view);
   const pointers = useRef(new Map<number, Pointer>());
   const gesture = useRef<Gesture | null>(null);
@@ -411,19 +413,19 @@ export default function HistoryGlobe({
   }, []);
   useEffect(() => {
     const visibility = () => {
-      rootRef.current?.classList.toggle("is-hidden", document.hidden);
-      if (document.hidden) {
+      const paused = document.hidden || !inView.current;
+      setMotionPaused(paused);
+      if (paused) {
         cancelDraw();
         pointers.current.clear();
         gesture.current = null;
       } else requestDraw();
     };
     document.addEventListener("visibilitychange", visibility);
+    visibility();
     const observer = new IntersectionObserver(([entry]) => {
       inView.current = entry.isIntersecting;
-      rootRef.current?.classList.toggle("is-offscreen", !entry.isIntersecting);
-      if (entry.isIntersecting) requestDraw();
-      else cancelDraw();
+      visibility();
     });
     if (mapRef.current) observer.observe(mapRef.current);
     return () => {
@@ -623,11 +625,14 @@ export default function HistoryGlobe({
         const group = labelNodes[labelIndex++] as SVGGElement;
         const background = group.children[0] as SVGRectElement;
         const text = group.children[1] as SVGTextElement;
+        const ripple = group.children[2] as SVGRectElement;
         group.style.display = "";
         group.classList.toggle("is-active", activeLabel);
         group.setAttribute("transform", `translate(${x},${y})`);
         background.style.display = activeLabel ? "" : "none";
         background.setAttribute("width", String(textWidth + 16));
+        ripple.style.display = activeLabel ? "" : "none";
+        ripple.setAttribute("width", String(textWidth + 16));
         text.textContent = label;
         text.setAttribute("textLength", String(textWidth));
       }
@@ -1020,7 +1025,7 @@ export default function HistoryGlobe({
   );
   return (
     <section
-      className={"history-globe" + (wide ? " is-wide" : "")}
+      className={`history-globe${wide ? " is-wide" : ""}${motionPaused ? " is-motion-paused" : ""}${highlightMotion ? "" : " is-motion-off"}`}
       ref={rootRef}
     >
       <header className="history-globe__header">
@@ -1238,10 +1243,51 @@ export default function HistoryGlobe({
                   dominantBaseline="central"
                   lengthAdjust="spacingAndGlyphs"
                 />
+                <rect
+                  className="history-globe__label-ripple"
+                  x={-8}
+                  y={-16}
+                  height={32}
+                  rx={8}
+                />
               </g>
             ))}
           </svg>
           <div className="history-globe__controls">
+            <button
+              type="button"
+              className="history-globe__motion-toggle"
+              aria-label="위치 강조 애니메이션"
+              aria-pressed={highlightMotion}
+              title={`위치 강조 애니메이션 ${highlightMotion ? "끄기" : "켜기"}`}
+              onClick={() => setHighlightMotion((enabled) => !enabled)}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="24"
+                height="24"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                {highlightMotion ? (
+                  <path
+                    d="M9 8v8m6-8v8"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                  />
+                ) : (
+                  <path d="m10 7 7 5-7 5Z" fill="currentColor" />
+                )}
+              </svg>
+            </button>
             {!wide && (
               <button
                 className="history-globe__list-toggle"

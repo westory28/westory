@@ -1,3 +1,5 @@
+import type { AtlasHistoricalStory } from "./historyAtlasStories";
+
 export type AtlasSubject = "korea" | "world";
 
 export interface AtlasSource {
@@ -48,6 +50,8 @@ export interface AtlasEntry {
   displayName?: string;
   nameNote?: string;
   relatedEntryIds?: string[];
+  /** Individually sourced event; source-map captions must not populate this. */
+  historicalStory?: AtlasHistoricalStory;
 }
 
 export interface AtlasEra {

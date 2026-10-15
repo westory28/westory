@@ -359,6 +359,7 @@ export default function HistoryAtlas({
   const [transform, setTransform] = useState<AtlasTransform>(ATLAS_IDENTITY);
   const [cameraMoving, setCameraMoving] = useState(false);
   const [motionPaused, setMotionPaused] = useState(false);
+  const [highlightMotion, setHighlightMotion] = useState(true);
   const [moveMode, setMoveMode] = useState(false);
   const transformRef = useRef(transform);
   const movedRef = useRef(false);
@@ -598,7 +599,7 @@ export default function HistoryAtlas({
       onscreen = entry.isIntersecting;
       update();
     });
-    if (rootRef.current) observer.observe(rootRef.current);
+    if (mapRef.current) observer.observe(mapRef.current);
     document.addEventListener("visibilitychange", update);
     update();
     return () => {
@@ -1024,43 +1025,32 @@ export default function HistoryAtlas({
   const selectStory = (next: LocatedEntry) => {
     const cleared: string[] = [];
     const nextSubject = unitsById.get(next.entry.unitId)?.subject || subject;
-    const subjectChanged = nextSubject !== subject;
-    if (subjectChanged) {
-      setSubject(nextSubject);
-      onSubjectChange?.(nextSubject);
-      setViewBounds(null);
-    }
+    if (nextSubject !== subject) return;
     if (unitId && next.entry.unitId !== unitId) {
       setUnitId("");
       setViewBounds(null);
       cleared.push("단원");
     }
-    if (eraId && (subjectChanged || !next.entry.eraIds?.includes(eraId))) {
+    if (eraId && !next.entry.eraIds?.includes(eraId)) {
       setEraId("");
       cleared.push("시대");
     }
     if (
-      subjectChanged ||
-      (regionId &&
-        !matchesAtlasRegion(next.place, subject, regionId, subregionId))
+      regionId &&
+      !matchesAtlasRegion(next.place, subject, regionId, subregionId)
     ) {
       setRegionId("");
       setSubregionId("");
       if (regionId) cleared.push("지역");
     }
-    if (
-      query &&
-      (subjectChanged || !matchesAtlasSearch(next.entry, next.place, query))
-    ) {
+    if (query && !matchesAtlasSearch(next.entry, next.place, query)) {
       setQuery("");
       cleared.push("검색");
     }
     setFilterNotice(
-      subjectChanged
-        ? `${entryName(next)} 이야기로 이동하며 ${ATLAS_SUBJECT_LABELS[nextSubject]}로 전환했습니다.${cleared.length ? ` ${cleared.join("·")} 조건을 해제했습니다.` : ""}`
-        : cleared.length
-          ? `${entryName(next)} 이야기로 이동하며 ${cleared.join("·")} 조건을 해제했습니다.`
-          : "",
+      cleared.length
+        ? `${entryName(next)} 이야기로 이동하며 ${cleared.join("·")} 조건을 해제했습니다.`
+        : "",
     );
     setSelectedId(next.entry.id);
     setDetailOpen(true);
@@ -1145,6 +1135,7 @@ export default function HistoryAtlas({
       {selected ? (
         <AtlasPlaceDetails
           dataset={dataset}
+          subject={subject}
           entry={selected.entry}
           place={displayedPlace || selected.place}
           onSelectEntry={(entryId) => {
@@ -1163,7 +1154,7 @@ export default function HistoryAtlas({
   return (
     <div
       ref={rootRef}
-      className={`history-atlas${wide ? " history-atlas--wide" : ""}${containerWidth >= 1100 ? " history-atlas--large" : ""}${cameraMoving ? " history-atlas--focusing" : ""}${motionPaused ? " history-atlas--paused" : ""}`}
+      className={`history-atlas${wide ? " history-atlas--wide" : ""}${containerWidth >= 1100 ? " history-atlas--large" : ""}${cameraMoving ? " history-atlas--focusing" : ""}${motionPaused ? " history-atlas--paused" : ""}${highlightMotion ? "" : " history-atlas--motion-off"}`}
     >
       <div className="history-atlas__heading">
         <div className="history-atlas__heading-title">
@@ -1271,6 +1262,35 @@ export default function HistoryAtlas({
       </div>
       <div className="history-atlas__workspace">
         <div className="history-atlas__map-column">
+          <button
+            type="button"
+            className="history-atlas__button history-atlas__motion-toggle"
+            aria-label="위치 강조 애니메이션"
+            aria-pressed={highlightMotion}
+            title={`위치 강조 애니메이션 ${highlightMotion ? "끄기" : "켜기"}`}
+            onClick={() => setHighlightMotion((enabled) => !enabled)}
+          >
+            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
+              {highlightMotion ? (
+                <path
+                  d="M9 8v8m6-8v8"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                />
+              ) : (
+                <path d="m10 7 7 5-7 5Z" fill="currentColor" />
+              )}
+            </svg>
+          </button>
           <div className="history-atlas__map-toolbar">
             {!wide && (
               <button

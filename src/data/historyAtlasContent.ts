@@ -1,4 +1,14 @@
 import type { AtlasDataset, AtlasPlace } from "../lib/historyAtlas";
+import { addAtlasHistoricalStories } from "../lib/historyAtlasStories";
+import { profileHistoricalStories } from "./historyAtlasProfileStories";
+import {
+  koreaHistoricalStories,
+  koreaHistoricalEntryCorrections,
+} from "./historyAtlasKoreaStories";
+import {
+  worldHistoricalStories,
+  worldHistoricalEntryCorrections,
+} from "./historyAtlasWorldStories";
 import { historyAtlasEras, originalAtlasEntryEras } from "./historyAtlasEras";
 import {
   koreaExpansionEntries,
@@ -1759,16 +1769,29 @@ for (const update of [...koreaPlaceUpdates, ...worldPlaceUpdates]) {
   });
 }
 
-export const historyAtlasDataset: AtlasDataset = {
-  ...originalHistoryAtlasDataset,
-  places: [...places.values()],
-  eras: historyAtlasEras,
-  entries: [
-    ...originalHistoryAtlasDataset.entries.map((entry) => ({
-      ...entry,
-      eraIds: originalAtlasEntryEras[entry.id] || [],
-    })),
-    ...koreaExpansionEntries,
-    ...worldExpansionEntries,
+export const historyAtlasDataset: AtlasDataset = addAtlasHistoricalStories(
+  {
+    ...originalHistoryAtlasDataset,
+    places: [...places.values()],
+    eras: historyAtlasEras,
+    entries: [
+      ...originalHistoryAtlasDataset.entries.map((entry) => ({
+        ...entry,
+        eraIds: originalAtlasEntryEras[entry.id] || [],
+      })),
+      ...koreaExpansionEntries.map((entry) => ({
+        ...entry,
+        ...koreaHistoricalEntryCorrections[entry.id],
+      })),
+      ...worldExpansionEntries.map((entry) => ({
+        ...entry,
+        ...worldHistoricalEntryCorrections[entry.id],
+      })),
+    ],
+  },
+  [
+    ...koreaHistoricalStories,
+    ...worldHistoricalStories,
+    ...profileHistoricalStories,
   ],
-};
+);
