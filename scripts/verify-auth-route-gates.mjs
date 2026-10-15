@@ -178,52 +178,65 @@ function layoutHarness({
   const navigate = (...args) => events.navigation.push(args);
   const showToast = (value) => events.toasts.push(value);
   const location = { pathname, search: "" };
-  const { default: MainLayout } = load(layoutCode, {
-    react: h.react,
-    "../../lib/semesterArchive": { isSemesterArchive: false },
-    "../common/SemesterArchiveBoundary": {
-      SemesterArchiveBanner: "SemesterArchiveBanner",
-      SemesterArchiveUnavailable: "SemesterArchiveUnavailable",
-      isArchiveUnavailableRoute: () => false,
+  const { default: MainLayout } = load(
+    layoutCode,
+    {
+      react: h.react,
+      "../../lib/semesterArchive": { isSemesterArchive: false },
+      "../common/SemesterArchiveBoundary": {
+        SemesterArchiveBanner: "SemesterArchiveBanner",
+        SemesterArchiveUnavailable: "SemesterArchiveUnavailable",
+        isArchiveUnavailableRoute: () => false,
+      },
+      "../common/AppToastProvider": {
+        inferToastFromAlertMessage: () => null,
+        useAppToast: () => ({ showToast }),
+      },
+      "../common/Header": { default: "Header", __esModule: true },
+      "../common/PortalWorkspace": {
+        PortalFallbackFooter: "PortalFallbackFooter",
+        PortalWorkspaceFooterProvider: "PortalWorkspaceFooterProvider",
+      },
+      "./teacherLayout.css": {},
+      "./studentLayout.css": {},
+      "../common/LoadingState": { PageLoading: "PageLoading" },
+      "../common/AuthRecoveryState": {
+        default: "AuthRecoveryState",
+        __esModule: true,
+      },
+      "../../contexts/AuthContext": { useAuth: () => nextAuth },
+      "react-router-dom": {
+        Navigate: "Navigate",
+        useLocation: () => location,
+        useNavigate: () => navigate,
+      },
+      "../../lib/loginPerf": {
+        markLoginPerf: (...args) => events.marks.push(args),
+        measureLoginPerf: () => {},
+      },
+      "../../lib/safeStorage": { readStorage: () => rolePreference },
+      "../../lib/browserTasks": {
+        runAfterNextPaint: (fn) => {
+          events.paints.push(fn);
+          fn();
+          return () => {};
+        },
+      },
+      "../../lib/lazyWithRetry": { lazyWithRetry: (_fn, label) => label },
+      "../../lib/studentMenuAccess": studentMenuAccess,
+      "../../lib/permissions": permissions,
     },
-    "../common/AppToastProvider": {
-      inferToastFromAlertMessage: () => null,
-      useAppToast: () => ({ showToast }),
-    },
-    "../common/Header": { default: "Header", __esModule: true },
-    "../common/PortalWorkspace": {
-      PortalFallbackFooter: "PortalFallbackFooter",
-      PortalWorkspaceFooterProvider: "PortalWorkspaceFooterProvider",
-    },
-    "./teacherLayout.css": {},
-    "./studentLayout.css": {},
-    "../common/LoadingState": { PageLoading: "PageLoading" },
-    "../common/AuthRecoveryState": {
-      default: "AuthRecoveryState",
-      __esModule: true,
-    },
-    "../../contexts/AuthContext": { useAuth: () => nextAuth },
-    "react-router-dom": {
-      Navigate: "Navigate",
-      useLocation: () => location,
-      useNavigate: () => navigate,
-    },
-    "../../lib/loginPerf": {
-      markLoginPerf: (...args) => events.marks.push(args),
-      measureLoginPerf: () => {},
-    },
-    "../../lib/safeStorage": { readStorage: () => rolePreference },
-    "../../lib/browserTasks": {
-      runAfterNextPaint: (fn) => {
-        events.paints.push(fn);
-        fn();
-        return () => {};
+    {
+      window: {
+        matchMedia: () => ({
+          matches: false,
+          addEventListener() {},
+          removeEventListener() {},
+        }),
+        alert() {},
       },
     },
-    "../../lib/lazyWithRetry": { lazyWithRetry: (_fn, label) => label },
-    "../../lib/studentMenuAccess": studentMenuAccess,
-    "../../lib/permissions": permissions,
-  });
+  );
   h.initialize(() =>
     MainLayout({ children: h.react.createElement("ProtectedChild") }),
   );

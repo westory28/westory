@@ -56,6 +56,7 @@ const ALLOWED_SCHOOL_EMAIL_DOMAIN = "yongshin-ms.ms.kr";
 const ROLE_SESSION_KEY = "westoryPortalRole";
 const PENDING_LOGIN_MODE_KEY = "westoryPendingLoginMode";
 const REDIRECT_ATTEMPT_KEY = "westoryRedirectAttempt";
+const REDIRECT_PREFERENCE_KEY = "westoryGoogleRedirectPreferred";
 const REDIRECT_ATTEMPT_MAX_AGE_MS = 10 * 60 * 1000;
 type LoginMode = "student" | "teacher";
 const staleLoginError = () =>
@@ -467,6 +468,7 @@ const isLocalAuthHost = (): boolean => {
 };
 
 const shouldPreferRedirectLogin = (): boolean => {
+  if (readLocalOnly(REDIRECT_PREFERENCE_KEY) === "1") return true;
   if (isLocalAuthHost()) return false;
   if (
     isSafariBrowser() ||
@@ -680,6 +682,36 @@ const isIgnorableRedirectError = (error: unknown): boolean => {
   ].includes(code);
 };
 
+const GooglePopupPending: React.FC<{
+  onCancel: () => void;
+  onRedirect: () => void;
+}> = ({ onCancel, onRedirect }) => (
+  <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+    <section className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm">
+      <h1 className="text-xl font-bold text-gray-900">Google 로그인</h1>
+      <p role="status" className="mt-3 text-sm font-medium text-gray-600">
+        Google 로그인 창의 응답을 기다리고 있습니다.
+      </p>
+      <div className="mt-6 flex flex-col gap-3">
+        <button
+          type="button"
+          onClick={onRedirect}
+          className="min-h-11 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        >
+          현재 창에서 로그인
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        >
+          취소
+        </button>
+      </div>
+    </section>
+  </main>
+);
+
 const Login: React.FC = () => {
   const {
     currentUser: verifiedUser,
@@ -716,6 +748,12 @@ const Login: React.FC = () => {
       : null;
 
   const [authBusy, setAuthBusy] = useState(false);
+  const [popupLoginMode, setPopupLoginMode] = useState<LoginMode | null>(null);
+  const popupLoginRef = useRef<{
+    mode: LoginMode;
+    flow: number;
+    operation: number;
+  } | null>(null);
   const [loginNotice, setLoginNotice] = useState("");
   const [redirectRecoveryPending, setRedirectRecoveryPending] = useState(() =>
     shouldResolveRedirectOnBoot(),
@@ -928,6 +966,8 @@ const Login: React.FC = () => {
       actionVersionRef.current += 1;
       activeActionFlowRef.current = null;
       authActionLockRef.current = false;
+      popupLoginRef.current = null;
+      setPopupLoginMode(null);
       setAuthBusy(false);
       setRedirectRecoveryPending(false);
     }
@@ -1786,7 +1826,36 @@ const Login: React.FC = () => {
     }
   };
 
-  const startGoogleLogin = async (mode: LoginMode) => {
+  const clearPopupLogin = (operation: number) => {
+    if (popupLoginRef.current?.operation !== operation) return;
+    popupLoginRef.current = null;
+    setPopupLoginMode(null);
+  };
+
+  const cancelPopupLogin = (): LoginMode | null => {
+    const pending = popupLoginRef.current;
+    if (
+      !pending ||
+      actionVersionRef.current !== pending.operation ||
+      !isLoginFlowCurrent(pending.flow)
+    )
+      return null;
+    clearPopupLogin(pending.operation);
+    // Retire the owner before making controls available. A late SDK result
+    // still passes through discardStaleLoginUser and cannot enter bootstrap.
+    actionVersionRef.current += 1;
+    activeActionFlowRef.current = null;
+    resumeFlowRef.current = null;
+    abandonLoginFlow(pending.flow);
+    clearPendingLoginMode();
+    clearRedirectAttempt();
+    authActionLockRef.current = false;
+    setAuthBusy(false);
+    setLoginNotice("로그인이 취소되었습니다. 다시 로그인할 수 있습니다.");
+    return pending.mode;
+  };
+
+  const startGoogleLogin = async (mode: LoginMode, forceRedirect = false) => {
     const flow = beginLoginFlow();
     resumeFlowRef.current = flow;
     const operation = ++actionVersionRef.current;
@@ -1801,7 +1870,7 @@ const Login: React.FC = () => {
     };
     let acquired = false;
     const provider = buildGoogleProvider();
-    const useRedirect = shouldPreferRedirectLogin();
+    const useRedirect = forceRedirect || shouldPreferRedirectLogin();
     setPendingLoginMode(mode);
     setLoginNotice("");
     setAuthBusy(true);
@@ -1818,6 +1887,8 @@ const Login: React.FC = () => {
         return;
       }
       console.info("[Auth] Starting Google popup login", { mode });
+      popupLoginRef.current = { mode, flow, operation };
+      setPopupLoginMode(mode);
       const result = await signInWithPopup(auth, provider);
       acquired = true;
       markLoginPerf("westory-login-popup-credential", { mode });
@@ -1825,6 +1896,7 @@ const Login: React.FC = () => {
         await discardStaleLoginUser(result.user, flow);
         return;
       }
+      clearPopupLogin(operation);
       await awaitLoginNetwork(authPersistenceReady);
       assertAcquisition();
       await finishLoginForRole(result.user, mode, flow);
@@ -1835,6 +1907,7 @@ const Login: React.FC = () => {
         !isLoginFlowCurrent(flow)
       )
         return;
+      clearPopupLogin(operation);
       if (!acquired && shouldFallbackToRedirectLogin(error)) {
         try {
           await awaitLoginNetwork(authPersistenceReady);
@@ -1867,11 +1940,22 @@ const Login: React.FC = () => {
       setLoginNotice(getLoginFailureMessage(error));
     } finally {
       if (actionVersionRef.current === operation) {
+        clearPopupLogin(operation);
         activeActionFlowRef.current = null;
         authActionLockRef.current = false;
         setAuthBusy(false);
       }
     }
+  };
+
+  const retryPopupWithRedirect = async () => {
+    const mode = cancelPopupLogin();
+    if (!mode) return;
+    // Remember only the user's explicit recovery choice, never a timeout or
+    // cancellation. This preference grants no account or session authority.
+    writeLocalOnly(REDIRECT_PREFERENCE_KEY, "1");
+    authActionLockRef.current = true;
+    await startGoogleLogin(mode, true);
   };
 
   const handleLogin = async (mode: LoginMode) => {
@@ -1973,6 +2057,15 @@ const Login: React.FC = () => {
         error={authError}
         onRetry={retryAuth}
         onRestart={() => handleSwitchAccount()}
+      />
+    );
+  }
+
+  if (loading && popupLoginMode) {
+    return (
+      <GooglePopupPending
+        onCancel={() => cancelPopupLogin()}
+        onRedirect={() => void retryPopupWithRedirect()}
       />
     );
   }

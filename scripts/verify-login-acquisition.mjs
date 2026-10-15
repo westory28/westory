@@ -24,17 +24,14 @@ for (const statement of parsed.statements) {
       topLevel.set(declaration.name.text, declaration);
   }
 }
-let acquisition;
+const componentHelpers = new Map();
 const findAcquisition = (node) => {
-  if (
-    ts.isVariableDeclaration(node) &&
-    ts.isIdentifier(node.name) &&
-    node.name.text === "startGoogleLogin"
-  )
-    acquisition = node;
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name))
+    componentHelpers.set(node.name.text, node);
   ts.forEachChild(node, findAcquisition);
 };
 findAcquisition(parsed);
+const acquisition = componentHelpers.get("startGoogleLogin");
 assert.ok(acquisition?.initializer, "Actual OAuth acquisition must exist");
 
 const exportedNames = [
@@ -44,6 +41,10 @@ const exportedNames = [
   "getLoginFailureMessage",
   "buildGoogleProvider",
   "startGoogleLogin",
+  "clearPopupLogin",
+  "cancelPopupLogin",
+  "retryPopupWithRedirect",
+  "GooglePopupPending",
 ];
 const selected = new Map();
 const include = (declaration) => {
@@ -52,7 +53,11 @@ const include = (declaration) => {
   selected.set(name, declaration);
   const visit = (node) => {
     if (ts.isIdentifier(node)) {
-      const dependency = topLevel.get(node.text);
+      const dependency =
+        topLevel.get(node.text) ||
+        (exportedNames.includes(node.text)
+          ? componentHelpers.get(node.text)
+          : undefined);
       // Network deadline behavior has its own startup regression coverage.
       if (
         ![
@@ -71,8 +76,7 @@ const include = (declaration) => {
   visit(declaration.initializer);
 };
 for (const name of exportedNames) {
-  const declaration =
-    name === "startGoogleLogin" ? acquisition : topLevel.get(name);
+  const declaration = topLevel.get(name) || componentHelpers.get(name);
   assert.ok(declaration, `Actual helper ${name} must exist`);
   include(declaration);
 }
@@ -84,6 +88,7 @@ const code = ts.transpileModule(
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.React,
     },
   },
 ).outputText;
@@ -132,6 +137,7 @@ function harness({
   popup,
   redirect,
   finish,
+  redirectPreferred = false,
 } = {}) {
   const state = {
     busy: false,
@@ -144,6 +150,10 @@ function harness({
     failures: [],
     discarded: [],
     completed: [],
+    popupMode: null,
+    preferences: new Map(
+      redirectPreferred ? [["westoryGoogleRedirectPreferred", "1"]] : [],
+    ),
   };
   const persistence = deferred();
   const refs = {
@@ -152,6 +162,7 @@ function harness({
     activeActionFlowRef: { current: null },
     actionVersionRef: { current: 0 },
     authActionLockRef: { current: true },
+    popupLoginRef: { current: null },
   };
   const browserWindow = { location: { hostname, protocol } };
   browserWindow.self = browserWindow;
@@ -175,6 +186,12 @@ function harness({
   const exports = {};
   vm.runInNewContext(code, {
     exports,
+    React: {
+      createElement: (type, props, ...children) => ({
+        type,
+        props: { ...props, children },
+      }),
+    },
     navigator: {
       userAgent: ua,
       ...(touchInfoAvailable ? { maxTouchPoints } : {}),
@@ -185,11 +202,22 @@ function harness({
     console: { info() {}, error() {}, warn() {} },
     ALLOWED_SCHOOL_EMAIL_DOMAIN: "school.example",
     configuredAuthDomain: "www.westory.kr",
+    REDIRECT_PREFERENCE_KEY: "westoryGoogleRedirectPreferred",
+    readLocalOnly: (key) => state.preferences.get(key) ?? null,
+    writeLocalOnly: (key, value) => state.preferences.set(key, value),
     ...refs,
     auth: sdkAuth,
     authPersistenceReady: persistence.promise,
     awaitLoginNetwork: (promise) => promise,
     beginLoginFlow: () => ++state.flow,
+    abandonLoginFlow: (flow) => {
+      assert.equal(
+        flow,
+        state.flow,
+        "Only the current chooser can be cancelled",
+      );
+      state.flow++;
+    },
     isLoginFlowCurrent: (flow) => state.flow === flow,
     setPendingLoginMode: (mode) => {
       state.pendingMode = mode;
@@ -209,6 +237,9 @@ function harness({
     },
     setAuthBusy: (busy) => {
       state.busy = busy;
+    },
+    setPopupLoginMode: (mode) => {
+      state.popupMode = mode;
     },
     failLoginFlow: (flow, error) => {
       state.failures.push({ flow, error });
@@ -642,6 +673,183 @@ await check(
     assert.equal(h.state.failures.length, 0);
     assert.equal(h.state.busy, true);
     assert.equal(h.refs.authActionLockRef.current, true);
+  },
+);
+
+await check(
+  "Explicit redirect preference survives the next login",
+  async () => {
+    const h = harness({ redirectPreferred: true });
+    assert.equal(h.shouldPreferRedirectLogin(), true);
+    h.persistence.resolve();
+    await h.startGoogleLogin("teacher");
+    assert.deepEqual(h.state.calls, ["mark-redirect", "redirect"]);
+    assert.equal(h.state.popupMode, null);
+  },
+);
+
+await check(
+  "Cancelling a waiting popup retires its eventual credential",
+  async () => {
+    const popup = deferred();
+    const h = harness({ popup: () => popup.promise });
+    const pending = h.startGoogleLogin("student");
+    assert.equal(h.state.popupMode, "student");
+    assert.equal(h.state.busy, true);
+    assert.equal(h.cancelPopupLogin(), "student");
+    assert.equal(
+      h.cancelPopupLogin(),
+      null,
+      "Repeated clicks cannot retire another flow",
+    );
+    assert.equal(h.state.popupMode, null);
+    assert.equal(h.state.busy, false);
+    assert.equal(h.refs.authActionLockRef.current, false);
+    assert.equal(h.refs.resumeFlowRef.current, null);
+    assert.equal(h.state.pendingMode, null);
+    assert.equal(
+      h.state.preferences.size,
+      0,
+      "Cancel does not change browser policy",
+    );
+    popup.resolve({ user: h.account });
+    await pending;
+    assert.equal(h.state.discarded.length, 1);
+    assert.equal(h.state.completed.length, 0);
+    assert.equal(h.state.failures.length, 0);
+    assert.deepEqual(h.state.calls, ["popup"]);
+  },
+);
+
+await check(
+  "Cancelled popup cannot clear a newer popup's recovery controls",
+  async () => {
+    const first = deferred();
+    const second = deferred();
+    let count = 0;
+    const h = harness({
+      popup: () => (++count === 1 ? first.promise : second.promise),
+    });
+    const oldAttempt = h.startGoogleLogin("student");
+    h.cancelPopupLogin();
+    h.refs.authActionLockRef.current = true;
+    const newAttempt = h.startGoogleLogin("teacher");
+    first.resolve({ user: h.account });
+    await oldAttempt;
+    assert.equal(h.state.popupMode, "teacher");
+    assert.equal(h.state.busy, true);
+    assert.equal(h.refs.authActionLockRef.current, true);
+    assert.equal(h.state.discarded.length, 1);
+    h.persistence.resolve();
+    second.resolve({ user: h.account });
+    await newAttempt;
+    assert.equal(h.state.popupMode, null);
+    assert.equal(h.state.completed.length, 1);
+    assert.equal(h.state.completed[0].mode, "teacher");
+  },
+);
+
+for (const lateResult of ["credential", "failure"])
+  await check(
+    `Explicit redirect survives a late popup ${lateResult}`,
+    async () => {
+      const popup = deferred();
+      const redirect = deferred();
+      const h = harness({
+        popup: () => popup.promise,
+        redirect: () => redirect.promise,
+      });
+      const oldAttempt = h.startGoogleLogin("teacher");
+      const oldFlow = h.state.flow;
+      const recovery = h.retryPopupWithRedirect();
+      await flush();
+      assert.ok(
+        h.state.flow > oldFlow,
+        "Explicit recovery uses a new auth owner",
+      );
+      assert.equal(h.state.popupMode, null);
+      assert.equal(h.state.busy, true);
+      assert.equal(h.state.pendingMode, "teacher");
+      assert.equal(h.shouldPreferRedirectLogin(), true);
+      assert.deepEqual(
+        h.state.calls,
+        ["popup"],
+        "Redirect still waits for persistence",
+      );
+      h.persistence.resolve();
+      await flush();
+      assert.deepEqual(h.state.calls, ["popup", "mark-redirect", "redirect"]);
+      await h.retryPopupWithRedirect();
+      assert.equal(
+        h.state.calls.filter((call) => call === "redirect").length,
+        1,
+      );
+      if (lateResult === "credential") popup.resolve({ user: h.account });
+      else popup.reject(authError("auth/popup-closed-by-user"));
+      await oldAttempt;
+      assert.equal(
+        h.state.busy,
+        true,
+        "Old finally cannot unlock redirect acquisition",
+      );
+      assert.equal(h.refs.authActionLockRef.current, true);
+      assert.equal(h.state.redirectMode, "teacher");
+      assert.equal(h.state.pendingMode, "teacher");
+      assert.equal(h.state.failures.length, 0);
+      assert.equal(h.state.completed.length, 0);
+      assert.equal(
+        h.state.discarded.length,
+        lateResult === "credential" ? 1 : 0,
+      );
+      redirect.resolve();
+      await recovery;
+      assert.equal(h.state.busy, false);
+    },
+  );
+
+await check(
+  "Popup recovery buttons remain usable while acquisition is pending",
+  async () => {
+    const popup = deferred();
+    const h = harness({ popup: () => popup.promise });
+    const pending = h.startGoogleLogin("student");
+    let redirects = 0;
+    const tree = h.GooglePopupPending({
+      onCancel: h.cancelPopupLogin,
+      onRedirect: () => redirects++,
+    });
+    const nodes = (node) =>
+      !node || typeof node !== "object"
+        ? []
+        : Array.isArray(node)
+          ? node.flatMap(nodes)
+          : [node, ...nodes(node.props?.children)];
+    const buttons = nodes(tree).filter((node) => node.type === "button");
+    assert.equal(buttons.length, 2);
+    assert.equal(
+      buttons.every(
+        (node) => node.props.type === "button" && !node.props.disabled,
+      ),
+      true,
+    );
+    assert.ok(nodes(tree).some((node) => node.props?.role === "status"));
+    const redirectButton = buttons.find((node) =>
+      node.props.children.includes("현재 창에서 로그인"),
+    );
+    const cancelButton = buttons.find((node) =>
+      node.props.children.includes("취소"),
+    );
+    assert.ok(
+      redirectButton && cancelButton,
+      "Both recovery actions have visible text labels",
+    );
+    redirectButton.props.onClick();
+    assert.equal(redirects, 1);
+    cancelButton.props.onClick();
+    assert.equal(h.state.busy, false);
+    popup.reject(authError("auth/popup-closed-by-user"));
+    await pending;
+    assert.equal(h.state.failures.length, 0);
   },
 );
 
