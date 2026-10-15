@@ -6,7 +6,6 @@ import QuizPassage from "../../../components/common/QuizPassage";
 import InfoHelp from "../../../components/common/InfoHelp";
 import {
   AssessmentTelemetryCollector,
-  type AssessmentConfidence,
   type AssessmentTelemetrySnapshot,
 } from "../../../lib/assessmentTelemetry";
 import "./QuizLearning.css";
@@ -80,6 +79,8 @@ interface Question {
   choiceOptionImages?: Array<string | null>;
   answer: string | number;
   matchingPairs?: MatchingPair[];
+  matchingLeftOptions?: string[];
+  matchingRightOptions?: Array<{ right: string; rightImage?: string | null }>;
   explanation?: string;
   image?: string;
   passage?: string;
@@ -220,6 +221,8 @@ const QuizRunner: React.FC = () => {
 
   const [score, setScore] = useState(0);
   const [results, setResults] = useState<ResultDetail[]>([]);
+  const [resultSnapshotOmittedCount, setResultSnapshotOmittedCount] =
+    useState(0);
   const [resultLearningSnapshot, setResultLearningSnapshot] = useState<
     AssessmentLearningQuestion[] | undefined
   >();
@@ -234,9 +237,6 @@ const QuizRunner: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "pending" | "saving" | "saved" | "error"
   >("idle");
-  const [confidences, setConfidences] = useState<
-    Record<string, AssessmentConfidence | null>
-  >({});
   const telemetryRef = useRef<AssessmentTelemetryCollector | null>(null);
   const pendingSubmitAnalyticsRef = useRef<AssessmentTelemetrySnapshot>();
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
@@ -314,17 +314,8 @@ const QuizRunner: React.FC = () => {
           resumed,
         },
       );
-      setConfidences(
-        Object.fromEntries(
-          Object.entries(readTelemetry()?.questions || {}).map(([id, item]) => [
-            id,
-            item.confidence,
-          ]),
-        ),
-      );
     } catch {
       telemetryRef.current = null;
-      setConfidences({});
     }
   };
   const currentQuestionImages = [
@@ -333,7 +324,9 @@ const QuizRunner: React.FC = () => {
       ? selectedQuestions[currentIndex]?.choiceOptionImages || []
       : []),
     ...(selectedQuestions[currentIndex]?.type === "matching"
-      ? selectedQuestions[currentIndex]?.matchingPairs || []
+      ? selectedQuestions[currentIndex]?.matchingRightOptions ||
+        selectedQuestions[currentIndex]?.matchingPairs ||
+        []
       : []
     ).map((pair) => pair.rightImage),
   ].filter((source): source is string => !!source);
@@ -392,6 +385,16 @@ const QuizRunner: React.FC = () => {
     value.split(ORDER_DELIMITER).filter(Boolean);
 
   const parseMatchingPairs = (question: Question): MatchingPair[] => {
+    if (question.matchingLeftOptions && question.matchingRightOptions) {
+      return question.matchingLeftOptions
+        .map((left, index) => ({
+          left,
+          right: question.matchingRightOptions?.[index]?.right || "",
+          rightImage:
+            question.matchingRightOptions?.[index]?.rightImage || null,
+        }))
+        .filter((pair) => pair.left && pair.right);
+    }
     if (
       Array.isArray(question.matchingPairs) &&
       question.matchingPairs.length
@@ -426,6 +429,37 @@ const QuizRunner: React.FC = () => {
         }
         return result;
       }, {});
+
+  const questionsForAttempt = (
+    attempt: AssessmentAttemptState,
+    bank: Question[],
+  ): Question[] => {
+    const presentation = new Map(
+      (attempt.questionPresentation || []).map((item) => [
+        String(item.id),
+        item,
+      ]),
+    );
+    const metadata = new Map(
+      (attempt.learningSnapshot || []).map((item) => [String(item.id), item]),
+    );
+    const fallback = new Map(bank.map((item) => [String(item.id), item]));
+    return attempt.questionIds
+      .map((id) => {
+        const item = presentation.get(id);
+        // New attempts use the frozen server presentation. Legacy/oversized
+        // items remain compatible, with missing historical snapshots explicit.
+        return item
+          ? ({
+              ...metadata.get(id),
+              ...item,
+              id: Number(item.id),
+              answer: "",
+            } as Question)
+          : fallback.get(id);
+      })
+      .filter((item): item is Question => !!item);
+  };
 
   const getChoiceOptionImage = (question: Question, index: number) =>
     Array.isArray(question.choiceOptionImages)
@@ -949,28 +983,38 @@ const QuizRunner: React.FC = () => {
       submitted.answerChecks.map((check) => [check.id, check.correct]),
     );
     const resultDetails: ResultDetail[] = [];
+    const reviewQuestions = new Map(
+      (submitted.questionSnapshots || []).map((item) => [
+        String(item.id),
+        item,
+      ]),
+    );
 
     questionList.forEach((question) => {
       const storedAnswer = answerMap[String(question.id)] || "";
       const isCorrect = serverChecks.get(String(question.id)) === true;
+      const snapshot = reviewQuestions.get(String(question.id));
 
       resultDetails.push({
         questionId: question.id,
-        q: question.question,
+        q: snapshot?.question || question.question,
         u: storedAnswer,
-        a: question.answer,
+        a: snapshot?.answer || "",
         correct: isCorrect,
-        exp: question.explanation,
+        exp: snapshot?.explanation,
         image: question.image,
         passage: question.passage,
         type: question.type,
-        matchingPairs:
-          question.type === "matching" ? parseMatchingPairs(question) : [],
+        matchingPairs: snapshot?.matchingPairs || [],
       });
     });
 
     setScore(submitted.percent);
     setResults(resultDetails);
+    setResultSnapshotOmittedCount(
+      submitted.questionSnapshotOmittedIds?.length ??
+        (submitted.questionSnapshots ? 0 : resultDetails.length),
+    );
     setResultLearningSnapshot(
       submitted.learningSnapshot || activeAttempt.learningSnapshot,
     );
@@ -979,16 +1023,6 @@ const QuizRunner: React.FC = () => {
         ? pendingSubmitAnalyticsRef.current
         : submitted.analytics,
     );
-    if (submitted.analytics) {
-      setConfidences(
-        Object.fromEntries(
-          Object.entries(submitted.analytics.questions).map(([id, item]) => [
-            id,
-            item.confidence,
-          ]),
-        ),
-      );
-    }
     setFinalizedResultId(submitted.attemptId);
     setPointNotice("");
     setActiveSubmission((prev) =>
@@ -1365,7 +1399,10 @@ const QuizRunner: React.FC = () => {
         fetchedQuestions.push(question);
       });
 
-      if (!fetchedQuestions.length) {
+      if (
+        !fetchedQuestions.length &&
+        !assessmentState.attempt?.questionPresentation?.length
+      ) {
         throw new Error("등록된 문제가 없습니다.");
       }
       setQuestionBank(fetchedQuestions);
@@ -1380,12 +1417,9 @@ const QuizRunner: React.FC = () => {
       if (existingSubmission?.status === "in_progress") {
         if (canonicalExistingAttempt)
           beginTelemetry(canonicalExistingAttempt, true);
-        const questionMap = new Map(
-          fetchedQuestions.map((question) => [String(question.id), question]),
-        );
-        const restoredQuestions = existingSubmission.questionIds
-          .map((questionId) => questionMap.get(questionId))
-          .filter((question): question is Question => Boolean(question));
+        const restoredQuestions = canonicalExistingAttempt
+          ? questionsForAttempt(canonicalExistingAttempt, fetchedQuestions)
+          : [];
 
         if (
           restoredQuestions.length === existingSubmission.questionIds.length
@@ -1488,12 +1522,7 @@ const QuizRunner: React.FC = () => {
       const attempt = await startAssessmentAttempt({
         definitionId: assessmentDefinitionId,
       });
-      const questionById = new Map(
-        questionBank.map((question) => [String(question.id), question]),
-      );
-      const committedQuestions = attempt.questionIds
-        .map((questionId) => questionById.get(questionId))
-        .filter((question): question is Question => Boolean(question));
+      const committedQuestions = questionsForAttempt(attempt, questionBank);
       if (committedQuestions.length !== attempt.questionIds.length) {
         throw new Error("서버가 확정한 평가 문항을 불러오지 못했습니다.");
       }
@@ -1573,17 +1602,6 @@ const QuizRunner: React.FC = () => {
       ...prev,
       [String(question.id)]: value,
     }));
-    schedulePersistQuizProgress();
-  };
-
-  const chooseConfidence = (value: AssessmentConfidence) => {
-    const question = selectedQuestions[currentIndex];
-    if (!question || finishSubmittingRef.current) return;
-    const id = String(question.id);
-    const next = confidences[id] === value ? null : value;
-    pendingSubmitAnalyticsRef.current = undefined;
-    observe((collector) => collector.setConfidence(id, next));
-    setConfidences((previous) => ({ ...previous, [id]: next }));
     schedulePersistQuizProgress();
   };
 
@@ -1892,10 +1910,10 @@ const QuizRunner: React.FC = () => {
               <div className="mt-2 flex items-center gap-1 text-sm text-slate-500">
                 <span>풀이 기록</span>
                 <InfoHelp label="풀이 기록 수집 안내">
-                  문항을 화면에서 본 시간, 화면 밖에 있던 시간, 답 변경과
-                  재방문, 선택한 확신도를 답안과 함께 저장합니다. 복습할 부분을
-                  찾기 위한 참고 자료이며, 시간만으로 실력이나 찍기를 판단하지
-                  않습니다. 확신도는 선택 사항이며 점수와 위스에 영향을 주지
+                  문항을 화면에서 본 시간, 첫 답과 마지막 답을 고른 시점, 답
+                  변경·재방문·힌트 사용을 답안과 함께 저장합니다. 화면을 벗어난
+                  시간은 풀이 시간에서 제외합니다. 시간만으로 실력이나 찍기를
+                  판단하지 않으며, 풀이 기록은 점수와 위스에 영향을 주지
                   않습니다.
                 </InfoHelp>
               </div>
@@ -2057,7 +2075,7 @@ const QuizRunner: React.FC = () => {
               className="flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm"
             >
               <i className="fas fa-stopwatch text-red-500"></i>
-              <span className="w-12 text-center font-mono text-lg font-bold text-gray-700">
+              <span className="min-w-12 whitespace-nowrap text-center font-mono text-lg font-bold text-gray-700">
                 {Math.floor(timeLeft / 60)
                   .toString()
                   .padStart(2, "0")}
@@ -2631,52 +2649,6 @@ const QuizRunner: React.FC = () => {
                   </button>
                 </div>
               )}
-              <div
-                className="student-quiz-confidence"
-                onFocusCapture={() =>
-                  observe((collector) => collector.setConfidenceFocused(true))
-                }
-                onBlurCapture={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget)) {
-                    observe((collector) =>
-                      collector.setConfidenceFocused(false),
-                    );
-                  }
-                }}
-              >
-                <div className="student-quiz-confidence-label">
-                  <span>
-                    내 확신도 <span className="font-normal">(선택)</span>
-                  </span>
-                  <InfoHelp label="확신도 도움말">
-                    답에 대한 느낌을 남겨 주세요. 선택하지 않아도 제출할 수
-                    있으며 점수와 위스는 달라지지 않습니다. 선택한 버튼을 다시
-                    누르면 해제됩니다.
-                  </InfoHelp>
-                </div>
-                <div
-                  className="student-quiz-confidence-options"
-                  role="group"
-                  aria-label="답에 대한 확신도"
-                >
-                  {(
-                    [
-                      ["sure", "확실해요"],
-                      ["unsure", "헷갈려요"],
-                      ["unknown", "모르겠어요"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={confidences[String(question.id)] === value}
-                      onClick={() => chooseConfidence(value)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </section>
           </fieldset>
 
@@ -2756,9 +2728,7 @@ const QuizRunner: React.FC = () => {
             questionId: result.questionId,
             correct: result.correct,
             answer: result.u,
-            confidence:
-              resultTelemetry?.questions[String(result.questionId)]
-                ?.confidence || null,
+            observation: resultTelemetry?.questions[String(result.questionId)],
             hintViewed:
               resultTelemetry?.questions[String(result.questionId)]
                 ?.hintViewed === true,
@@ -2775,6 +2745,7 @@ const QuizRunner: React.FC = () => {
         summary={learningSummary}
         labels={curriculumLabelsRef.current}
         pointNotice={pointNotice}
+        missingOriginalQuestionCount={resultSnapshotOmittedCount}
         onReview={() => navigate(resultReviewUrl)}
         onChooseAssessment={() => navigate("/student/quiz")}
         onRetry={() => {

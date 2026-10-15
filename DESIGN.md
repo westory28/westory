@@ -2,9 +2,9 @@
 
 ## 평가 작업공간과 풀이 진단 (2026-10-15)
 
-교사 평가 메뉴는 하나의 작업공간 안에서 문제 등록·문제 은행·학습 진단을 전환한다. 기존 탭 주소는 유지하고 저장된 이전 메뉴도 이 진입점으로 묶는다. 문제 등록 단원명은 전체 줄바꿈하며 조작 영역은 최소 44px로 유지한다. 원문 지문·이미지·선지·해설과 같은 단원·개념을 보존한 파생 문항을 별도 ID로 등록하고, 정답과 변경 내용을 교사가 확인한다. 진단은 최초/최근 결과와 서로 다른 문항 수를 구분하며 자료 부족과 수집 이전 상태를 숨기지 않는다.
+교사 평가 메뉴는 하나의 작업공간 안에서 문제 등록·문제 은행·학습 진단을 전환한다. 기존 탭 주소는 유지하고 저장된 이전 메뉴도 이 진입점으로 묶는다. 문제 등록 목차는 한 줄을 유지하며 넓이를 확보하고, 넘치는 제목은 말줄임과 전체 제목 표시로 보완한다. 조작 영역은 최소 44px로 유지한다. 원문 지문·이미지·선지·해설과 같은 단원·개념을 보존한 파생 문항을 별도 ID로 등록하고, 정답과 변경 내용을 교사가 확인한다. 진단은 최초/최근 결과와 서로 다른 문항 수를 구분하며 자료 부족과 수집 이전 상태를 숨기지 않는다.
 
-학생 풀이의 지문·선지·이전/다음·제출 구조는 유지한다. 번호 버튼은 44px, 긴 선지는 줄바꿈, 본문은 16px를 사용하고 기존 8/12/16/24px 간격·8px radius·파란 primary·흰 표면을 재사용한다. 미완성 문항 이동과 저장 실패 재시도는 현재 답안을 유지한다. 선택 확신도는 선택 입력이며 초시계·속도 순위·찍기 판정은 표시하지 않는다. 결과에서 단원/명시 개념별 정오답, 오답 해설, 연결 수업 자료, 기존 응시 제한을 적용한 재확인을 이어 준다. 계측 설명과 한계는 제목 옆 i 도움말에 둔다. 새 색상·타이포·모션 토큰은 추가하지 않는다.
+학생 풀이의 지문·선지·이전/다음·제출 구조는 유지한다. 번호 버튼은 44px, 긴 선지는 어절 단위 줄바꿈, 본문은 16px를 사용하고 기존 8/12/16/24px 간격·8px radius·파란 primary·흰 표면을 재사용한다. 미완성 문항 이동과 저장 실패 재시도는 현재 답안을 유지한다. 확신도 입력은 제공하지 않으며 답안 선택·변경·풀이 시간은 실제 관찰만 기록한다. 초시계·속도 순위·찍기 판정은 표시하지 않는다. 결과에서 단원/명시 개념별 정오답, 오답 해설, 연결 수업 자료, 기존 응시 제한을 적용한 재확인을 이어 준다. 계측 설명과 한계는 제목 옆 i 도움말에 둔다. 새 색상·타이포·모션 토큰은 추가하지 않는다.
 
 ## 역사 학습지도 (2026-10-15)
 
@@ -533,3 +533,8 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 ### Student full calendar alignment
 - Student full calendar reuses the teacher calendar shell, 1536px page width, 16px/24px gutters, and `max(600px, 100dvh - 176px)` canvas. Keep student actions read-only.
 - Reuse the teacher left-aligned numeric date header and 24px event labels. The attendance stamp stays beside the date in one non-wrapping row; mobile stamps scale from 16px to 24px wide to fit seven equal columns.
+
+### Korean text and assessment navigation
+
+- Korean prose, question content, options, hints, forms and dialogs preserve word boundaries with `word-break: keep-all`; `overflow-wrap: anywhere` is only the fallback for a single token wider than its container. Preserve explicit line breaks, code/preformatted text and existing numeric/table layout rules.
+- Contents and navigation labels remain on one line. Question registration reuses the lesson navigation width: 320px desktop / 288px tablet, with the existing full-width mobile disclosure. Overflow uses ellipsis and the full original title on hover; do not make contents rows multiline to expose long names. This supersedes the earlier assessment wrapping behavior.

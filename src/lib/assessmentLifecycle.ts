@@ -338,6 +338,38 @@ export const getAssessmentRemainingSeconds = (
   return Math.max(0, Math.ceil((deadlineMs - (Date.now() + offset)) / 1000));
 };
 
+export interface AssessmentQuestionSnapshot {
+  id: string;
+  type: "choice" | "ox" | "short" | "word" | "order" | "matching";
+  question: string;
+  answer: string;
+  explanation?: string;
+  passage?: string;
+  image?: string;
+  options?: string[];
+  choiceOptionImages?: Array<string | null>;
+  hint?: string;
+  hintEnabled?: boolean;
+  matchingPairs?: Array<{
+    left: string;
+    right: string;
+    rightImage?: string | null;
+  }>;
+  unitId?: string;
+  subUnitId?: string;
+  refBig?: string;
+  refMid?: string;
+  refSmall?: string;
+}
+
+export type AssessmentQuestionPresentation = Omit<
+  AssessmentQuestionSnapshot,
+  "answer" | "explanation" | "matchingPairs"
+> & {
+  matchingLeftOptions?: string[];
+  matchingRightOptions?: Array<{ right: string; rightImage?: string | null }>;
+};
+
 export interface AssessmentAttemptState {
   attemptId: string;
   definitionId: string;
@@ -363,6 +395,8 @@ export interface AssessmentAttemptState {
   resumed: boolean;
   analytics?: AssessmentTelemetrySnapshot | null;
   learningSnapshot?: AssessmentLearningQuestion[];
+  questionPresentation?: AssessmentQuestionPresentation[];
+  questionSnapshotOmittedIds?: string[];
 }
 
 export interface AssessmentRewardResult {
@@ -401,4 +435,6 @@ export interface AssessmentSubmissionResult {
   reward?: AssessmentRewardResult;
   analytics?: AssessmentTelemetrySnapshot | null;
   learningSnapshot?: AssessmentLearningQuestion[];
+  questionSnapshots?: AssessmentQuestionSnapshot[];
+  questionSnapshotOmittedIds?: string[];
 }

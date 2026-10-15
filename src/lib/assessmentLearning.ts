@@ -16,13 +16,33 @@ export interface AssessmentLearningQuestion {
   reviewLessonId?: string;
 }
 
-export type AssessmentLearningConfidence = "sure" | "unsure" | "unknown";
+export interface AssessmentLearningObservation {
+  activeMs?: number | null;
+  hiddenMs?: number | null;
+  firstResponseMs?: number | null;
+  finalResponseMs?: number | null;
+  answerChangeCount?: number | null;
+  revisitCount?: number | null;
+  quality?: "complete" | "partial";
+}
+
+export interface AssessmentLearningBehavior {
+  observedQuestionCount: number;
+  partialQuestionCount: number;
+  activeMs: number | null;
+  responseQuestionCount: number;
+  meanFirstResponseMs: number | null;
+  meanFinalResponseMs: number | null;
+  changedQuestionCount: number | null;
+  answerChangeCount: number | null;
+  revisitCount: number | null;
+}
 
 export interface AssessmentLearningItem {
   questionId: string | number;
   correct: boolean;
   answer?: string;
-  confidence?: AssessmentLearningConfidence | null;
+  observation?: AssessmentLearningObservation | null;
   hintViewed?: boolean;
 }
 
@@ -57,8 +77,7 @@ export interface AssessmentLearningGroup {
   /** Unseen only within the attempts supplied by the caller. */
   unseenQuestionIds: string[];
   possibleConfusions: string[];
-  unsureQuestionCount: number;
-  confidentWrongQuestionCount: number;
+  behavior: AssessmentLearningBehavior;
   hintedQuestionCount: number;
   contentChangedQuestionCount: number;
   limitedMetadataQuestionCount: number;
@@ -160,6 +179,43 @@ interface QuestionEvidence {
 
 type Dimension = "unit" | "concept" | "cognitiveProcess";
 
+const observedNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+/** Facts from the latest response only; missing observations never become zero. */
+const summarizeBehavior = (
+  rows: QuestionEvidence[],
+): AssessmentLearningBehavior => {
+  const observed = rows
+    .map((row) => row.latest.item.observation)
+    .filter(
+      (value): value is AssessmentLearningObservation =>
+        !!value && observedNumber(value.activeMs),
+    );
+  const values = (key: keyof AssessmentLearningObservation) =>
+    observed.map((value) => value[key]).filter(observedNumber);
+  const sum = (items: number[]) =>
+    items.length ? items.reduce((a, b) => a + b, 0) : null;
+  const mean = (items: number[]) =>
+    items.length ? items.reduce((a, b) => a + b, 0) / items.length : null;
+  const changes = values("answerChangeCount");
+  return {
+    observedQuestionCount: observed.length,
+    partialQuestionCount: observed.filter(
+      (value) => value.quality !== "complete",
+    ).length,
+    activeMs: sum(values("activeMs")),
+    responseQuestionCount: values("firstResponseMs").length,
+    meanFirstResponseMs: mean(values("firstResponseMs")),
+    meanFinalResponseMs: mean(values("finalResponseMs")),
+    changedQuestionCount: changes.length
+      ? changes.filter((value) => value > 0).length
+      : null,
+    answerChangeCount: sum(changes),
+    revisitCount: sum(values("revisitCount")),
+  };
+};
+
 const groupKeys = (
   question: AssessmentLearningQuestion,
   dimension: Dimension,
@@ -187,11 +243,6 @@ const buildGroups = (
   }
   return [...groups].map(([key, rows]): AssessmentLearningGroup => {
     const wrong = rows.filter((row) => !row.latest.item.correct);
-    const unsure = rows.filter(
-      (row) =>
-        row.latest.item.confidence === "unsure" ||
-        row.latest.item.confidence === "unknown",
-    );
     const chronologyIncomplete = rows.some((row) => row.chronologyIncomplete);
     const hinted = rows.filter((row) => row.latest.item.hintViewed === true);
     const recoveredOnSameQuestion = rows.some(
@@ -204,7 +255,7 @@ const buildGroups = (
         ? "insufficient"
         : wrong.length > 0
           ? "review"
-          : recoveredOnSameQuestion || unsure.length > 0 || hinted.length > 0
+          : recoveredOnSameQuestion || hinted.length > 0
             ? "recheck"
             : "positive";
     const possibleConfusions = wrong
@@ -243,10 +294,7 @@ const buildGroups = (
           .map((question) => question.id),
       ),
       possibleConfusions: uniqueText(possibleConfusions),
-      unsureQuestionCount: unsure.length,
-      confidentWrongQuestionCount: wrong.filter(
-        (row) => row.latest.item.confidence === "sure",
-      ).length,
+      behavior: summarizeBehavior(rows),
       hintedQuestionCount: hinted.length,
       contentChangedQuestionCount: rows.filter((row) => row.contentChanged)
         .length,

@@ -1,15 +1,12 @@
-export type AssessmentConfidence = "sure" | "unsure" | "unknown";
 export type AssessmentTelemetryQuality = "complete" | "partial";
 
 export interface AssessmentQuestionTelemetry {
   activeMs: number;
   hiddenMs: number;
-  confidenceMs: number;
   firstResponseMs: number | null;
   finalResponseMs: number | null;
   answerChangeCount: number;
   revisitCount: number;
-  confidence: AssessmentConfidence | null;
   hintViewed?: boolean;
   quality: AssessmentTelemetryQuality;
 }
@@ -29,12 +26,10 @@ const blank = (
 ): AssessmentQuestionTelemetry => ({
   activeMs: 0,
   hiddenMs: 0,
-  confidenceMs: 0,
   firstResponseMs: null,
   finalResponseMs: null,
   answerChangeCount: 0,
   revisitCount: 0,
-  confidence: null,
   hintViewed: false,
   quality,
 });
@@ -45,10 +40,10 @@ export class AssessmentTelemetryCollector {
   private readonly answers: Record<string, string> = {};
   private readonly committedAnswers: Record<string, string> = {};
   private readonly visited = new Set<string>();
+  private readonly missingInitialResponse = new Set<string>();
   private currentId = "";
   private running = false;
   private visible = true;
-  private confidenceFocused = false;
   private lastTick: number;
   private quality: AssessmentTelemetryQuality;
 
@@ -69,11 +64,12 @@ export class AssessmentTelemetryCollector {
       const answer = String(options.answers?.[id] || "");
       this.answers[id] = answer;
       this.committedAnswers[id] = answer;
+      if (answer.trim() && typeof previous?.firstResponseMs !== "number")
+        this.missingInitialResponse.add(id);
       this.questions[id] = previous
         ? {
             activeMs: boundedMs(previous.activeMs),
             hiddenMs: boundedMs(previous.hiddenMs),
-            confidenceMs: boundedMs(previous.confidenceMs),
             firstResponseMs:
               answer.trim() && typeof previous.firstResponseMs === "number"
                 ? boundedMs(previous.firstResponseMs)
@@ -84,11 +80,6 @@ export class AssessmentTelemetryCollector {
                 : null,
             answerChangeCount: boundedCount(previous.answerChangeCount),
             revisitCount: boundedCount(previous.revisitCount),
-            confidence: ["sure", "unsure", "unknown"].includes(
-              previous.confidence || "",
-            )
-              ? previous.confidence
-              : null,
             quality: this.quality,
             hintViewed: previous.hintViewed === true,
           }
@@ -107,8 +98,6 @@ export class AssessmentTelemetryCollector {
     const item = this.questions[this.currentId];
     if (!this.running || !item) return;
     if (!this.visible) item.hiddenMs = boundedMs(item.hiddenMs + elapsed);
-    else if (this.confidenceFocused)
-      item.confidenceMs = boundedMs(item.confidenceMs + elapsed);
     else item.activeMs = boundedMs(item.activeMs + elapsed);
   }
 
@@ -122,11 +111,6 @@ export class AssessmentTelemetryCollector {
     this.visible = visible;
   }
 
-  setConfidenceFocused(focused: boolean) {
-    this.flush();
-    this.confidenceFocused = focused;
-  }
-
   markHintViewed(id: string) {
     if (this.questions[id]) this.questions[id].hintViewed = true;
   }
@@ -136,7 +120,6 @@ export class AssessmentTelemetryCollector {
     if (!this.questions[id] || id === this.currentId) return;
     this.commitAnswer(this.currentId);
     this.currentId = id;
-    this.confidenceFocused = false;
     if (this.visited.has(id)) this.questions[id].revisitCount += 1;
     this.visited.add(id);
   }
@@ -147,7 +130,8 @@ export class AssessmentTelemetryCollector {
     if (!item || this.answers[id] === answer) return;
     this.answers[id] = answer;
     if (answer.trim()) {
-      item.firstResponseMs ??= item.activeMs;
+      if (!this.missingInitialResponse.has(id))
+        item.firstResponseMs ??= item.activeMs;
       item.finalResponseMs = item.activeMs;
     } else {
       item.finalResponseMs = null;
@@ -164,22 +148,20 @@ export class AssessmentTelemetryCollector {
     this.committedAnswers[id] = next;
   }
 
-  setConfidence(id: string, confidence: AssessmentConfidence | null) {
-    if (this.questions[id]) this.questions[id].confidence = confidence;
-  }
-
   snapshot(): AssessmentTelemetrySnapshot {
     this.flush();
     return {
       version: 1,
       quality: this.quality,
       questions: Object.fromEntries(
-        Object.entries(this.questions).map(([id, item]) => [
-          id,
-          this.answers[id]?.trim()
-            ? { ...item }
-            : { ...item, firstResponseMs: null, finalResponseMs: null },
-        ]),
+        Object.entries(this.questions)
+          .filter(([id]) => this.visited.has(id))
+          .map(([id, item]) => [
+            id,
+            this.answers[id]?.trim()
+              ? { ...item }
+              : { ...item, firstResponseMs: null, finalResponseMs: null },
+          ]),
       ),
     };
   }

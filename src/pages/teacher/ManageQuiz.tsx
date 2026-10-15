@@ -116,7 +116,7 @@ const ManageQuiz: React.FC = () => {
       footerActive={isManageTab && canWrite}
       className={
         isManageTab && canWrite
-          ? "teacher-sub-workspace teacher-sub-workspace--page"
+          ? "teacher-sub-workspace teacher-sub-workspace--page quiz-workspace"
           : "min-h-[calc(100dvh-64px)] bg-gray-50"
       }
     >

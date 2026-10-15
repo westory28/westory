@@ -8,7 +8,10 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { buildAssessmentDefinitionId } from "./assessmentLifecycle";
+import {
+  buildAssessmentDefinitionId,
+  type AssessmentQuestionSnapshot,
+} from "./assessmentLifecycle";
 import { getSemesterDocPath, getYearSemester } from "./semesterScope";
 import { getMockExamResultCategory } from "./mockExamRounds";
 import type { AssessmentTelemetrySnapshot } from "./assessmentTelemetry";
@@ -39,6 +42,8 @@ type Result = {
   answers: Record<string, string>;
   analytics?: AssessmentTelemetrySnapshot | null;
   learningSnapshot?: AssessmentLearningQuestion[];
+  questionSnapshots?: AssessmentQuestionSnapshot[];
+  questionSnapshotOmittedIds?: string[];
   attemptNumber?: number;
   passed?: boolean;
   passThresholdPercent?: number;
@@ -98,6 +103,8 @@ export const readStudentAssessmentResults = async (
         throw new Error("평가 결과를 확인할 수 없습니다.");
       const submitted = await getDoc(doc(db, result.submissionRef));
       const data = submitted.data();
+      if (!data && result.assessmentKind === "QUIZ")
+        return { ...result, answers: {} };
       if (
         !data ||
         data.studentUid !== uid ||
@@ -147,9 +154,13 @@ export const readCanonicalQuizResults = async (
           ),
           id: check.id,
           correct: check.correct,
-          confidence: item.analytics?.questions?.[check.id]?.confidence ?? null,
-          u: item.answers[check.id] || "",
-          displayU: item.answers[check.id] || "",
+          questionSnapshot: item.questionSnapshots?.find(
+            (question) => String(question.id) === String(check.id),
+          ),
+          observation: item.analytics?.questions?.[check.id],
+          ...(Object.prototype.hasOwnProperty.call(item.answers, check.id)
+            ? { u: item.answers[check.id], displayU: item.answers[check.id] }
+            : {}),
         })),
       };
     });

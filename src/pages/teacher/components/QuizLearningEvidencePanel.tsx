@@ -18,11 +18,6 @@ interface Props {
   onOpenQuestions?: (ids: string[]) => void;
 }
 
-const confidenceLabels = {
-  sure: "확신",
-  unsure: "헷갈림",
-  unknown: "잘 모르겠음",
-};
 const seconds = (value: number | null | undefined) =>
   typeof value === "number" && Number.isFinite(value)
     ? `${(value / 1000).toFixed(1)}초`
@@ -81,8 +76,7 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
               questionId: detail.id!,
               correct: detail.correct!,
               answer: detail.u,
-              confidence:
-                log.analytics?.questions?.[String(detail.id)]?.confidence,
+              observation: log.analytics?.questions?.[String(detail.id)],
               hintViewed:
                 log.analytics?.questions?.[String(detail.id)]?.hintViewed,
             })),
@@ -90,14 +84,15 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
       }),
     [selectedLogs, questions, selectedUid, semesterId],
   );
-  const questionById = useMemo(
-    () => new Map(questions.map((question) => [String(question.id), question])),
-    [questions],
-  );
   const observedQuestions = useMemo(() => {
     const latest = new Map<
       string,
-      { log: QuizLearningLog; correct: boolean; answer?: string }
+      {
+        log: QuizLearningLog;
+        correct: boolean;
+        answer?: string;
+        originalQuestion?: string;
+      }
     >();
     selectedLogs.forEach((log) =>
       log.details.forEach((detail) => {
@@ -111,6 +106,10 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
           log,
           correct: detail.correct,
           answer: detail.u,
+          originalQuestion:
+            log.questionSnapshots?.find(
+              (question) => String(question.id) === String(detail.id),
+            )?.question || detail.q,
         });
       }),
     );
@@ -130,7 +129,9 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
             표시합니다. 문항이 수정된 경우 첫·최근 답은 최신 문항 버전
             기준입니다. 힌트를 본 정답은 재확인 대상으로 봅니다. 시간은 화면을
             보는 동안의 관찰값이며 속도만으로 찍기나 숙달을 판정하지 않습니다.
-            이전 기록의 분류는 현재 문제 은행을 사용할 수 있습니다.
+            첫·최종 응답 시간은 해당 문항에서 누적한 풀이 시간을 기준으로 하며,
+            평균은 시간이 기록된 문항만 포함합니다. 관찰이 없는 값은 0이
+            아닙니다. 이전 기록의 분류는 현재 문제 은행을 사용할 수 있습니다.
           </InfoHelp>
         </div>
         <label className="flex min-w-0 items-center gap-2 text-sm font-bold text-gray-700">
@@ -229,13 +230,30 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
                       {group.possibleConfusions.join(" · ")}
                     </p>
                   )}
-                  {(group.confidentWrongQuestionCount > 0 ||
-                    group.unsureQuestionCount > 0) && (
-                    <p className="mt-1 text-sm text-gray-600">
-                      확신한 오답 {group.confidentWrongQuestionCount}개 · 확신이
-                      낮은 응답 {group.unsureQuestionCount}개
-                    </p>
-                  )}
+                  <div className="mt-2 text-sm text-gray-600">
+                    {group.behavior.observedQuestionCount === 0 ? (
+                      "풀이 관찰 기록 없음"
+                    ) : (
+                      <>
+                        <p>
+                          관찰 {group.behavior.observedQuestionCount}/
+                          {group.distinctQuestions}문항 · 풀이 시간 합계{" "}
+                          {seconds(group.behavior.activeMs)} · 답 변경{" "}
+                          {group.behavior.answerChangeCount ?? "—"}회 (
+                          {group.behavior.changedQuestionCount ?? "—"}문항) ·
+                          재방문 {group.behavior.revisitCount ?? "—"}회
+                        </p>
+                        <p>
+                          첫 답까지 평균{" "}
+                          {seconds(group.behavior.meanFirstResponseMs)} · 마지막
+                          답까지 평균{" "}
+                          {seconds(group.behavior.meanFinalResponseMs)}
+                          {group.behavior.partialQuestionCount > 0 &&
+                            ` · 부분 수집 ${group.behavior.partialQuestionCount}문항`}
+                        </p>
+                      </>
+                    )}
+                  </div>
                   {(group.hintedQuestionCount > 0 ||
                     group.contentChangedQuestionCount > 0) && (
                     <p className="mt-1 text-sm text-gray-600">
@@ -304,8 +322,7 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
                   <tr>
                     <th>문항</th>
                     <th>최근 응답</th>
-                    <th>확신도</th>
-                    <th>열람</th>
+                    <th>풀이 시간</th>
                     <th>첫 응답</th>
                     <th>최종 응답</th>
                     <th>변경</th>
@@ -320,7 +337,7 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
                       <tr key={id}>
                         <td>
                           <div className="max-w-72 break-words">
-                            {questionById.get(id)?.question || `문항 ${id}`}
+                            {entry.originalQuestion || "당시 원문 미보관"}
                           </div>
                         </td>
                         <td>
@@ -338,11 +355,6 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
                               ? "답안 정보 없음"
                               : entry.answer || "미응답"}
                           </div>
-                        </td>
-                        <td>
-                          {observation?.confidence
-                            ? confidenceLabels[observation.confidence]
-                            : "미수집"}
                         </td>
                         <td>{seconds(observation?.activeMs)}</td>
                         <td>{seconds(observation?.firstResponseMs)}</td>

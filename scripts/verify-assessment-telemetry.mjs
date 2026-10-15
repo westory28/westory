@@ -31,10 +31,7 @@ collector.setVisible(true);
 now = 20000;
 collector.answer("a", "2");
 now = 22000;
-collector.setConfidenceFocused(true);
 now = 25000;
-collector.setConfidence("a", "unsure");
-collector.setConfidenceFocused(false);
 collector.markHintViewed("a");
 now = 26000;
 collector.visit("b");
@@ -44,22 +41,24 @@ now = 32000;
 collector.setRunning(false);
 const snapshot = collector.snapshot();
 assert.deepEqual(snapshot.questions.a, {
-  activeMs: 13000,
+  activeMs: 16000,
   hiddenMs: 10000,
-  confidenceMs: 3000,
   firstResponseMs: 2000,
   finalResponseMs: 6000,
   answerChangeCount: 1,
   revisitCount: 1,
-  confidence: "unsure",
   hintViewed: true,
   quality: "complete",
 });
 assert.equal(snapshot.questions.b.activeMs, 2000);
 assert.equal(snapshot.questions.b.firstResponseMs, null);
 assert.equal(snapshot.questions.b.finalResponseMs, null);
-assert.equal(snapshot.questions.c.activeMs, 0);
-assert.equal(snapshot.questions.c.confidence, null);
+assert.equal(
+  snapshot.questions.c,
+  undefined,
+  "An unvisited question has no observation, not zero time",
+);
+assert.equal(JSON.stringify(snapshot).includes("confidence"), false);
 now = 40000;
 assert.deepEqual(
   collector.snapshot(),
@@ -68,7 +67,13 @@ assert.deepEqual(
 );
 
 const resumed = new AssessmentTelemetryCollector(["a", "b"], {
-  restored: snapshot,
+  restored: {
+    ...snapshot,
+    questions: {
+      ...snapshot.questions,
+      a: { ...snapshot.questions.a, confidence: "unsure", confidenceMs: 500 },
+    },
+  },
   answers: { a: "2" },
   resumed: true,
   now: () => now,
@@ -78,8 +83,13 @@ resumed.setRunning(true);
 now += 1000;
 const restoredSnapshot = resumed.snapshot();
 assert.equal(restoredSnapshot.quality, "partial");
+assert.equal(
+  JSON.stringify(restoredSnapshot).includes("confidence"),
+  false,
+  "Restored legacy self-reports must not be collected again",
+);
 assert.equal(restoredSnapshot.questions.a.quality, "partial");
-assert.equal(restoredSnapshot.questions.a.activeMs, 14000);
+assert.equal(restoredSnapshot.questions.a.activeMs, 17000);
 assert.equal(
   restoredSnapshot.questions.a.finalResponseMs,
   6000,
@@ -121,13 +131,35 @@ assert.equal(
 );
 assert.equal(text.snapshot().questions.short.finalResponseMs, 5000);
 
+const missingEarlierObservation = new AssessmentTelemetryCollector(
+  ["restored"],
+  { answers: { restored: "original" }, resumed: true, now: () => now },
+);
+missingEarlierObservation.visit("restored");
+missingEarlierObservation.setRunning(true);
+now += 2000;
+missingEarlierObservation.answer("restored", "changed");
+assert.equal(
+  missingEarlierObservation.snapshot().questions.restored.firstResponseMs,
+  null,
+  "Unknown original first response must remain unknown after restoring an answer",
+);
+assert.equal(
+  missingEarlierObservation.snapshot().questions.restored.finalResponseMs,
+  2000,
+);
+assert.equal(
+  missingEarlierObservation.snapshot().questions.restored.quality,
+  "partial",
+);
+
 snapshot.questions.a.activeMs = 0;
 assert.equal(
   collector.snapshot().questions.a.activeMs,
-  13000,
+  16000,
   "Snapshots must not expose mutable collector state.",
 );
 assert.equal(JSON.stringify(collector.snapshot()).includes('"answers"'), false);
 console.log(
-  "Assessment telemetry verified: monotonic visible time, hidden time, image wait, confidence time, unchanged review, revisits, text commits, restore quality, unanswered nulls and immutable snapshots.",
+  "Assessment telemetry verified: monotonic visible time, hidden time, image wait, no self-report collection, unchanged review, revisits, text commits, restore quality, unanswered nulls and immutable snapshots.",
 );

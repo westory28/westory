@@ -4,6 +4,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prefer Korean word boundaries across both portals, including body portals. */
+body {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+pre,
+code,
+kbd,
+samp {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
 .desktop-account-actions { display: contents; }
 .mobile-account-actions {
   display: grid;

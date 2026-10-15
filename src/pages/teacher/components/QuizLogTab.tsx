@@ -33,6 +33,7 @@ import StudentWrongNoteModal from "./StudentWrongNoteModal";
 import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
 import type { AssessmentLearningQuestion } from "../../../lib/assessmentLearning";
 import type { AssessmentTelemetrySnapshot } from "../../../lib/assessmentTelemetry";
+import type { AssessmentQuestionSnapshot } from "../../../lib/assessmentLifecycle";
 import QuizLearningEvidencePanel from "./QuizLearningEvidencePanel";
 import InfoHelp from "../../../components/common/InfoHelp";
 
@@ -40,6 +41,7 @@ interface QuizDetail {
   id?: string | number;
   correct?: boolean;
   u?: string;
+  q?: string;
 }
 
 export interface QuizLearningLog {
@@ -58,6 +60,7 @@ export interface QuizLearningLog {
   details: QuizDetail[];
   learningSnapshot?: AssessmentLearningQuestion[];
   analytics?: AssessmentTelemetrySnapshot;
+  questionSnapshots?: AssessmentQuestionSnapshot[];
 }
 type Log = QuizLearningLog;
 
@@ -517,6 +520,9 @@ const parseLogDoc = (id: string, raw: any): Log => {
       ? raw.learningSnapshot
       : undefined,
     analytics: raw.analytics?.version === 1 ? raw.analytics : undefined,
+    questionSnapshots: Array.isArray(raw.questionSnapshots)
+      ? raw.questionSnapshots
+      : undefined,
   };
 };
 

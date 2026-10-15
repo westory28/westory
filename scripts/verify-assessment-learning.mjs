@@ -99,7 +99,7 @@ const needsReview = run(
   },
 );
 assert.equal(needsReview.concepts[0].evidence, "review");
-assert.equal(needsReview.concepts[0].confidentWrongQuestionCount, 1);
+assert.equal("confidentWrongQuestionCount" in needsReview.concepts[0], false);
 assert.deepEqual(needsReview.concepts[0].possibleConfusions, [
   "기관의 역할 혼동",
 ]);
@@ -137,7 +137,7 @@ assert.equal(scoped.excludedAttemptCount, 3);
 assert.equal(run([first], { studentUid: "" }).assessedQuestionCount, 0);
 assert.equal(run([first], { semesterId: "" }).assessedQuestionCount, 0);
 
-// Self-reported uncertainty requires reconfirmation, not a guessed-answer verdict.
+// Legacy self-reports must not influence present-day recommendations.
 const uncertain = run([
   attempt("a", 100, [
     [1, true, "a", "unsure"],
@@ -145,8 +145,8 @@ const uncertain = run([
     [3, true],
   ]),
 ]);
-assert.equal(uncertain.units[0].evidence, "recheck");
-assert.equal(uncertain.units[0].unsureQuestionCount, 1);
+assert.equal(uncertain.units[0].evidence, "positive");
+assert.equal("unsureQuestionCount" in uncertain.units[0], false);
 const correct = run([
   attempt("a", 100, [
     [1, true],
@@ -246,4 +246,66 @@ assert.equal(
   "Current bank must not silently fill intentionally limited historical metadata",
 );
 
-console.log("Assessment learning evidence: 15 regression scenarios passed.");
+// Latest observed behavior is descriptive; old duplicates do not inflate it.
+const facts = attempt("facts", 200, [
+  [1, true],
+  [2, true],
+  [3, true],
+]);
+facts.items[0].observation = {
+  activeMs: 8000,
+  firstResponseMs: 2000,
+  finalResponseMs: 6000,
+  answerChangeCount: 2,
+  revisitCount: 1,
+  quality: "complete",
+};
+facts.items[1].observation = {
+  activeMs: 0,
+  firstResponseMs: null,
+  finalResponseMs: null,
+  answerChangeCount: 0,
+  revisitCount: 0,
+  quality: "partial",
+};
+const earlier = attempt("earlier", 100, [[1, true]]);
+earlier.items[0].observation = {
+  activeMs: 999000,
+  answerChangeCount: 90,
+  quality: "complete",
+};
+const behavior = run([earlier, facts, facts]).units[0].behavior;
+assert.deepEqual(behavior, {
+  observedQuestionCount: 2,
+  partialQuestionCount: 1,
+  activeMs: 8000,
+  responseQuestionCount: 1,
+  meanFirstResponseMs: 2000,
+  meanFinalResponseMs: 6000,
+  changedQuestionCount: 1,
+  answerChangeCount: 2,
+  revisitCount: 1,
+});
+assert.equal(
+  run([facts]).units[0].evidence,
+  "positive",
+  "Duration and answer changes must not classify ability",
+);
+const noObservations = run([first]).units[0].behavior;
+assert.equal(noObservations.observedQuestionCount, 0);
+for (const key of [
+  "activeMs",
+  "meanFirstResponseMs",
+  "meanFinalResponseMs",
+  "changedQuestionCount",
+  "answerChangeCount",
+  "revisitCount",
+])
+  assert.equal(noObservations[key], null, `${key}: missing is not zero`);
+facts.items[0].observation = { activeMs: NaN, answerChangeCount: 10 };
+assert.equal(
+  run([facts]).units[0].behavior.observedQuestionCount,
+  1,
+  "Malformed optional observations are not facts",
+);
+console.log("Assessment learning evidence: 18 regression scenarios passed.");

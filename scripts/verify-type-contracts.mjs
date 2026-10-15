@@ -103,9 +103,10 @@ assert.equal(
 assert.equal(markup.stripQuizPassageMarkup(null), "");
 
 const { cloneMapResourceBlanks } = evaluate(
-  extract("src/pages/teacher/ManageHistoryClassroom.tsx", [
-    "cloneMapResourceBlanks",
-  ]),
+  `${read("src/lib/lessonBlankClip.ts")}\n${extract(
+    "src/pages/teacher/ManageHistoryClassroom.tsx",
+    ["cloneMapResourceBlanks"],
+  )}`,
 );
 const blanks = cloneMapResourceBlanks({
   pdfBlanks: [

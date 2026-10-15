@@ -4,12 +4,16 @@ import {
   type AssessmentLearningSummary,
 } from "../../../lib/assessmentLearning";
 
+const seconds = (value: number | null) =>
+  value === null ? "관찰 없음" : `${(value / 1000).toFixed(1)}초`;
+
 interface QuizLearningResultProps {
   score: number;
   correctCount: number;
   summary: AssessmentLearningSummary;
   labels: Record<string, string>;
   pointNotice: string;
+  missingOriginalQuestionCount?: number;
   onReview: () => void;
   onChooseAssessment: () => void;
   onRetry: () => void;
@@ -22,6 +26,7 @@ export default function QuizLearningResult({
   summary,
   labels,
   pointNotice,
+  missingOriginalQuestionCount = 0,
   onReview,
   onChooseAssessment,
   onRetry,
@@ -32,7 +37,6 @@ export default function QuizLearningResult({
   const groups = [...(hasConcepts ? summary.concepts : summary.units)].sort(
     (left, right) =>
       right.wrongQuestions - left.wrongQuestions ||
-      right.unsureQuestionCount - left.unsureQuestionCount ||
       left.label.localeCompare(right.label, "ko"),
   );
 
@@ -54,6 +58,12 @@ export default function QuizLearningResult({
 
         {pointNotice && (
           <p className="mt-4 text-sm text-gray-600">{pointNotice}</p>
+        )}
+        {missingOriginalQuestionCount > 0 && (
+          <p className="mt-3 text-sm text-gray-600">
+            {missingOriginalQuestionCount}문항은 당시 원문이 보관되지
+            않았습니다.
+          </p>
         )}
 
         <div className="student-quiz-result-section-heading">
@@ -85,8 +95,6 @@ export default function QuizLearningResult({
                   <p className="text-sm text-gray-600">
                     {group.distinctQuestions}문항 · 정답{" "}
                     {group.correctQuestions} · 오답 {group.wrongQuestions}
-                    {group.unsureQuestionCount > 0 &&
-                      ` · 확신이 낮은 답 ${group.unsureQuestionCount}`}
                     {group.hintedQuestionCount > 0 &&
                       ` · 힌트 확인 ${group.hintedQuestionCount}`}
                   </p>
@@ -95,11 +103,38 @@ export default function QuizLearningResult({
                       확인할 내용: {group.possibleConfusions.join(" · ")}
                     </p>
                   )}
-                  {group.confidentWrongQuestionCount > 0 && (
-                    <p className="mt-2 text-sm text-gray-700">
-                      확실하다고 선택한 오답 {group.confidentWrongQuestionCount}
-                      문항의 근거를 다시 확인해 보세요.
-                    </p>
+                  <p className="text-sm text-gray-600">
+                    {group.behavior.observedQuestionCount === 0 ? (
+                      "풀이 관찰 기록 없음"
+                    ) : (
+                      <>
+                        관찰 {group.behavior.observedQuestionCount}/
+                        {group.distinctQuestions}문항 · 풀이{" "}
+                        {seconds(group.behavior.activeMs)}
+                        {group.behavior.answerChangeCount !== null &&
+                          ` · 답 변경 ${group.behavior.answerChangeCount}회`}
+                        {group.behavior.partialQuestionCount > 0 &&
+                          ` · 일부 구간만 기록 ${group.behavior.partialQuestionCount}문항`}
+                      </>
+                    )}
+                  </p>
+                  {group.behavior.observedQuestionCount > 0 && (
+                    <details className="mt-2 text-sm text-gray-600">
+                      <summary className="min-h-11 cursor-pointer py-3">
+                        답안 선택 기록
+                      </summary>
+                      <p>
+                        첫 답까지 평균{" "}
+                        {seconds(group.behavior.meanFirstResponseMs)} · 마지막
+                        답까지 평균{" "}
+                        {seconds(group.behavior.meanFinalResponseMs)}
+                      </p>
+                      <p>
+                        답을 바꾼 문항{" "}
+                        {group.behavior.changedQuestionCount ?? "—"}개 · 재방문{" "}
+                        {group.behavior.revisitCount ?? "—"}회
+                      </p>
+                    </details>
                   )}
                 </div>
                 <div className="student-quiz-evidence-actions">
@@ -165,7 +200,7 @@ export default function QuizLearningResult({
             재응시 기준
             <InfoHelp label="재응시 문항 안내">
               응시 횟수와 대기 시간은 기존 기준을 따릅니다. 다시 응시하면
-              틀리거나 확신이 낮았던 개념의 다른 문항을 우선합니다. 해당 문항이
+              틀렸거나 힌트를 참고한 개념의 다른 문항을 우선합니다. 해당 문항이
               부족하면 다른 개념이나 이전에 푼 문항이 포함될 수 있습니다.
             </InfoHelp>
           </span>

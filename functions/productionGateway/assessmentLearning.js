@@ -60,26 +60,27 @@ const normalizeAnalytics = (value, attempt, nowMs = Date.now(), answers) => {
     if (!safeKey(id) || id.length > 160 || (allowed && !allowed.has(id)) || !object(item)) { partial = true; continue; }
     const activeMs = finiteInteger(item.activeMs, maxMs);
     const hiddenMs = finiteInteger(item.hiddenMs, maxMs);
-    const confidenceMs = finiteInteger(item.confidenceMs ?? 0, maxMs);
     const changes = finiteInteger(item.answerChangeCount, 10_000);
     const revisits = finiteInteger(item.revisitCount, 10_000);
-    if (activeMs === null || hiddenMs === null || confidenceMs === null || changes === null || revisits === null || activeMs + hiddenMs + confidenceMs > maxMs + 1000) { partial = true; continue; }
+    if (activeMs === null || hiddenMs === null || changes === null || revisits === null || activeMs + hiddenMs > maxMs + 1000) { partial = true; continue; }
     const first = item.firstResponseMs === null ? null : finiteInteger(item.firstResponseMs, activeMs);
     const final = item.finalResponseMs === null ? null : finiteInteger(item.finalResponseMs, activeMs);
     const unanswered = answers && !String(answers[id] || "").trim();
-    const validTimes = (item.firstResponseMs === null && item.finalResponseMs === null) || (first !== null && final !== null && first <= final);
-    const quality = item.quality === "complete" && validTimes ? "complete" : "partial";
+    const validTimes = (item.firstResponseMs === null || first !== null)
+      && (item.finalResponseMs === null || final !== null)
+      && (first === null || final === null || first <= final);
+    const quality = item.quality === "complete" && validTimes
+      && (!answers || unanswered || (first !== null && final !== null)) ? "complete" : "partial";
     if (quality === "partial") partial = true;
     questions[id] = {
-      activeMs, hiddenMs, confidenceMs,
+      activeMs, hiddenMs,
       firstResponseMs: unanswered || !validTimes ? null : first,
       finalResponseMs: unanswered || !validTimes ? null : final,
       answerChangeCount: changes, revisitCount: revisits,
-      confidence: !unanswered && ["sure", "unsure", "unknown"].includes(item.confidence) ? item.confidence : null,
       hintViewed: item.hintViewed === true,
       quality,
     };
-    totalMs += activeMs + hiddenMs + confidenceMs;
+    totalMs += activeMs + hiddenMs;
   }
   if (totalMs > maxMs + 1000) return null;
   if (allowed && answers && [...allowed].some(id => String(answers[id] || "").trim() && !questions[id])) partial = true;
@@ -95,8 +96,7 @@ const rankLearningCandidates = (source, priorAttempts) => {
     if (attempt.status !== "SUBMITTED") continue;
     for (const item of attempt.gradingSnapshot || []) {
       const clean = value => String(value ?? "").replace(/\s+/g, "").trim();
-      const confidence = attempt.analytics?.questions?.[item.id]?.confidence;
-      latestByQuestion.set(item.id, { needsReview: clean(attempt.answers?.[item.id]) !== clean(item.answer) || ["unsure", "unknown"].includes(confidence) || attempt.analytics?.questions?.[item.id]?.hintViewed === true,
+      latestByQuestion.set(item.id, { needsReview: clean(attempt.answers?.[item.id]) !== clean(item.answer) || attempt.analytics?.questions?.[item.id]?.hintViewed === true,
         concepts: attempt.learningSnapshot?.find(question => question.id === item.id)?.concepts || [] });
     }
   }
@@ -108,4 +108,60 @@ const rankLearningCandidates = (source, priorAttempts) => {
   }));
 };
 
-module.exports = { normalizeQuestionLearning, questionLearningSnapshot, normalizeAnalytics, rankLearningCandidates };
+// An omitted snapshot is explicit; never truncate source material into a false
+// historical question. Reserve headroom for Firestore field/index overhead.
+const boundQuestionSnapshots = (candidates, questionIds, baseDocument = {}) => {
+  let remaining = Math.max(0, Math.min(128 * 1024, 750_000 - Buffer.byteLength(JSON.stringify(baseDocument), "utf8")));
+  const byId = new Map(candidates.map(item => [String(item.id), item]));
+  const questionSnapshots = [], questionSnapshotOmittedIds = [];
+  for (const id of questionIds) {
+    const snapshot = byId.get(String(id));
+    const size = snapshot ? Buffer.byteLength(JSON.stringify(snapshot), "utf8") + 2 : Infinity;
+    if (size > 32 * 1024 || size > remaining) { questionSnapshotOmittedIds.push(String(id)); continue; }
+    questionSnapshots.push(snapshot);
+    remaining -= size;
+  }
+  return { questionSnapshots, questionSnapshotOmittedIds };
+};
+
+const captureQuestionSnapshots = (documents, questionIds, baseDocument) => {
+  const candidates = [];
+  const selected = new Set(questionIds.map(String));
+  for (const document of documents) {
+    const source = document.data || {};
+    const id = String(source.id ?? document.path.split("/").at(-1));
+    if (!selected.has(id) || typeof source.question !== "string"
+      || !["choice", "ox", "short", "word", "order", "matching"].includes(source.type)) continue;
+    const snapshot = { id, question: source.question, type: source.type, answer: String(source.answer ?? "") };
+    for (const key of ["explanation", "passage", "image", "hint", "unitId", "subUnitId", "refBig", "refMid", "refSmall"])
+      if (typeof source[key] === "string") snapshot[key] = source[key];
+    if (typeof source.hintEnabled === "boolean") snapshot.hintEnabled = source.hintEnabled;
+    if (Array.isArray(source.options) && source.options.every(item => typeof item === "string")) snapshot.options = [...source.options];
+    if (source.type === "order" && !snapshot.options?.length)
+      snapshot.options = snapshot.answer.split("||").map(item => item.trim()).filter(Boolean);
+    if (Array.isArray(source.choiceOptionImages) && source.choiceOptionImages.every(item => item === null || typeof item === "string")) snapshot.choiceOptionImages = [...source.choiceOptionImages];
+    if (source.type === "matching") {
+      const pairs = Array.isArray(source.matchingPairs) && source.matchingPairs.length ? source.matchingPairs
+        : snapshot.answer.split("||").map(item => { const [left, right] = item.split("=>"); return { left, right }; });
+      snapshot.matchingPairs = pairs.filter(pair => typeof pair?.left === "string" && typeof pair?.right === "string")
+        .map(pair => ({ left: pair.left, right: pair.right, ...(typeof pair.rightImage === "string" ? { rightImage: pair.rightImage } : {}) }));
+    }
+    candidates.push(snapshot);
+  }
+  return boundQuestionSnapshots(candidates, questionIds, baseDocument);
+};
+
+const questionPresentation = (snapshots) => snapshots.map(snapshot => {
+  const { answer, explanation, matchingPairs, ...presentation } = snapshot;
+  if (snapshot.type === "order" && presentation.options) presentation.options = [...presentation.options].sort();
+  if (snapshot.type === "matching") {
+    // Separate sorted lists carry the choices without exposing correct pairings.
+    presentation.matchingLeftOptions = (matchingPairs || []).map(pair => pair.left);
+    presentation.matchingRightOptions = (matchingPairs || []).map(pair => ({ right: pair.right, rightImage: pair.rightImage || null }))
+      .sort((a, b) => a.right.localeCompare(b.right));
+  }
+  return presentation;
+});
+
+module.exports = { normalizeQuestionLearning, questionLearningSnapshot, normalizeAnalytics, rankLearningCandidates,
+  captureQuestionSnapshots, boundQuestionSnapshots, questionPresentation };

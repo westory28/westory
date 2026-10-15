@@ -17,6 +17,7 @@
 
 .student-quiz-learning .student-quiz-question-heading,
 .student-quiz-learning .student-quiz-answer-panel {
+  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 
@@ -81,45 +82,6 @@
   color: var(--ws-danger-text);
 }
 
-.student-quiz-confidence {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--ws-border);
-}
-
-.student-quiz-confidence-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-  color: var(--ws-text-muted);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.student-quiz-confidence-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.student-quiz-confidence-options button {
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid var(--ws-border);
-  border-radius: 8px;
-  background: var(--ws-surface);
-  color: var(--ws-text);
-  font-size: 14px;
-}
-
-.student-quiz-confidence-options button[aria-pressed="true"] {
-  border-color: var(--ws-primary);
-  background: var(--ws-primary-soft);
-  color: var(--ws-primary-text);
-  font-weight: 700;
-}
-
 .student-quiz-learning .student-quiz-choice-grid {
   height: auto;
   min-height: 0;
@@ -161,6 +123,7 @@
 .student-quiz-evidence-main,
 .student-quiz-evidence-actions {
   min-width: 0;
+  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 

@@ -1,0 +1,196 @@
+.my-assessment-summary {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  color: #0f172a;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.my-assessment-summary__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.my-assessment-summary h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+.my-assessment-summary h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.my-assessment-summary button {
+  min-height: 44px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.my-assessment-summary button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+.my-assessment-summary__header button,
+.my-assessment-summary__empty button {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+.my-assessment-summary__empty {
+  padding: 32px 0;
+  color: #64748b;
+  font-size: 14px;
+}
+.my-assessment-summary__empty button {
+  margin-top: 12px;
+}
+.my-assessment-summary__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.my-assessment-summary__metrics div {
+  min-width: 0;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+.my-assessment-summary__metrics dt {
+  color: #64748b;
+  font-size: 13px;
+}
+.my-assessment-summary__metrics dd {
+  margin: 8px 0 0;
+  color: #1d4ed8;
+  font-size: 24px;
+  font-weight: 800;
+}
+.my-assessment-summary small {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  margin-left: 4px;
+}
+.my-assessment-summary__distribution {
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.my-assessment-summary ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.my-assessment-summary__distribution li {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.my-assessment-summary__distribution strong {
+  text-align: right;
+}
+.my-assessment-summary__bar {
+  height: 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+.my-assessment-summary__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #3b82f6;
+}
+.my-assessment-summary__note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+.my-assessment-summary__records {
+  margin-top: 24px;
+}
+.my-assessment-summary__records li + li {
+  border-top: 1px solid #f1f5f9;
+}
+.my-assessment-summary__records li > button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 0;
+  text-align: left;
+}
+.my-assessment-summary__records li > button:hover {
+  background: #f8fafc;
+}
+.my-assessment-summary__record-main {
+  flex: 1;
+  min-width: 0;
+}
+.my-assessment-summary__record-main > strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-assessment-summary__record-main > span {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+}
+.my-assessment-summary__record-score {
+  flex-shrink: 0;
+  text-align: right;
+}
+.my-assessment-summary__record-score strong {
+  display: block;
+  color: #1d4ed8;
+  font-size: 17px;
+}
+.my-assessment-summary__record-score > span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+.my-assessment-summary__more {
+  width: 100%;
+  margin-top: 12px;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+@media (max-width: 479px) {
+  .my-assessment-summary {
+    padding: 16px;
+  }
+  .my-assessment-summary h3 {
+    font-size: 18px;
+  }
+  .my-assessment-summary__metrics {
+    gap: 8px;
+  }
+  .my-assessment-summary__metrics div {
+    padding: 12px 8px;
+  }
+  .my-assessment-summary__metrics dt {
+    font-size: 12px;
+  }
+  .my-assessment-summary__metrics dd {
+    font-size: 18px;
+  }
+  .my-assessment-summary__records li > button {
+    gap: 12px;
+  }
+}

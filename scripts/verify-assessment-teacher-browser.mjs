@@ -34,7 +34,7 @@ export const getHttpsCallable=async()=>async()=>({data:{}});
 export const getAssessmentSemesterId=()=> '2026-1';export const refreshPublishedQuizDefinitions=async()=>{};
 export const executeAssessmentManagementCommand=async(command,payload)=>{fixtureState.writes.push({command,payload});if(command==='upsertQuizQuestion'){const q={...payload.question,contentRevision:Number(payload.expectedRevision||0)+1};const i=questions.findIndex(v=>String(v.id)===payload.questionId);if(i<0)questions.push(q);else questions[i]=q;return {contentRevision:q.contentRevision}}return {}};
 `;
-const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {HashRouter} from 'react-router-dom';import ManageQuiz from './src/pages/teacher/ManageQuiz.tsx';import './src/assets/index.css';createRoot(document.getElementById('root')).render(<HashRouter><div className="teacher-layout"><ManageQuiz/></div></HashRouter>);`;
+const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {HashRouter} from 'react-router-dom';import ManageQuiz from './src/pages/teacher/ManageQuiz.tsx';import './src/assets/index.css';import './src/pages/teacher/teacherSettings.css';import QuizVisualEditorFixture from './scripts/fixtures/QuizVisualEditorFixture.tsx';createRoot(document.getElementById('root')).render(<HashRouter><div className="teacher-layout">{new URLSearchParams(location.search).has('editor') ? <QuizVisualEditorFixture/> : <ManageQuiz/>}</div></HashRouter>);`;
 const bundle = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
   bundle: true,

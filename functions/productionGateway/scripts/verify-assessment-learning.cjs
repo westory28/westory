@@ -79,12 +79,10 @@ class MemoryStore {
 const completeItem = (overrides = {}) => ({
   activeMs: 100,
   hiddenMs: 20,
-  confidenceMs: 5,
   firstResponseMs: 40,
   finalResponseMs: 80,
   answerChangeCount: 1,
   revisitCount: 0,
-  confidence: "sure",
   hintViewed: false,
   quality: "complete",
   ...overrides,
@@ -138,7 +136,16 @@ const runNormalizerCases = () => {
     "No response must not become a zero-ms response",
   );
   assert.equal(valid.questions[2].finalResponseMs, null);
-  assert.equal(valid.questions[2].confidence, null);
+  assert.equal("confidence" in valid.questions[2], false);
+  const legacy = learning.normalizeAnalytics(analytics({ 1: completeItem({ confidence: "unsure", confidenceMs: Infinity }) }), boundAttempt, 1000, {1: "a"});
+  assert.equal(JSON.stringify(legacy).includes("confidence"), false, "Legacy self-reports are ignored, not persisted again");
+  const unvisited = learning.normalizeAnalytics(analytics({1: completeItem()}), boundAttempt, 1000, {1: "a"});
+  assert.equal(unvisited.quality, "complete", "An unvisited unanswered question does not imply collection loss");
+  assert.equal(unvisited.questions[2], undefined);
+  const restoredPartial = learning.normalizeAnalytics(analytics({1: completeItem({firstResponseMs: null, finalResponseMs: 80, quality: "partial"})}), boundAttempt, 1000, {1: "a"});
+  assert.equal(restoredPartial.questions[1].firstResponseMs, null);
+  assert.equal(restoredPartial.questions[1].finalResponseMs, 80, "Known final response can survive an unknown original response time");
+  assert.equal(restoredPartial.quality, "partial");
   const foreign = learning.normalizeAnalytics(
     analytics({ 1: completeItem(), other: completeItem() }),
     boundAttempt,
@@ -328,7 +335,8 @@ const runNormalizerCases = () => {
         },
       ])
       .get("2"),
-    0,
+    1,
+    "Legacy uncertainty does not prioritize new questions",
   );
   assert.equal(
     learning
@@ -343,6 +351,43 @@ const runNormalizerCases = () => {
     0,
     "A correct response with a hint still needs an independent question",
   );
+};
+
+const runQuestionSnapshotCases = () => {
+  const doc = (id, value = {}) => ({ path: `quiz_questions/${id}`, data: {id, type: "choice", question: "  당시 발문\n원문 공백  ", options: ["하나", "둘"], answer: "둘", explanation: "당시 해설", passage: "자료", image: "https://example.invalid/source.png", hintEnabled: true, hint: "참고", privateNote: "never expose", ...value} });
+  const documents = [doc("1"), doc("2", {type: "matching", answer: "왕=>조선||장군=>고려", matchingPairs: [{left: "왕", right: "조선"}, {left: "장군", right: "고려", rightImage: "image"}]}), doc("3", {type: "order", options: undefined, answer: "다||가||나"})];
+  const captured = learning.captureQuestionSnapshots(documents, ["1", "2", "3"], {});
+  assert.equal(captured.questionSnapshots[0].question, documents[0].data.question, "Original source must not be trimmed");
+  assert.equal("privateNote" in captured.questionSnapshots[0], false);
+  const presentation = learning.questionPresentation(captured.questionSnapshots);
+  for (const item of presentation) for (const key of ["answer", "explanation", "matchingPairs"]) assert.equal(key in item, false, `${key} cannot be sent before submission`);
+  assert.deepEqual(presentation[1].matchingLeftOptions, ["왕", "장군"]);
+  assert.deepEqual(presentation[1].matchingRightOptions.map(item => item.right), ["고려", "조선"]);
+  assert.deepEqual(presentation[2].options, ["가", "나", "다"]);
+  assert.deepEqual(captured.questionSnapshots[2].options, ["다", "가", "나"]);
+  for (const type of ["choice", "ox", "short", "word", "order", "matching"]) {
+    const input = doc(type, {type, choiceOptionImages: [null, "option-image"], matchingPairs: [{left: "a", right: "b", rightImage: "matching-image"}], answer: type === "matching" ? "a=>b" : "둘"});
+    const bounded = learning.captureQuestionSnapshots([input], [type]);
+    const firstPresentation = learning.questionPresentation(bounded.questionSnapshots);
+    assert.deepEqual(learning.questionPresentation(structuredClone(bounded.questionSnapshots)), firstPresentation, `${type}: restore uses the same presentation`);
+    assert.equal(firstPresentation[0].type, type);
+    assert.deepEqual(firstPresentation[0].choiceOptionImages, [null, "option-image"]);
+    assert.equal(firstPresentation[0].image, input.data.image);
+    assert.equal(firstPresentation[0].passage, input.data.passage);
+    assert.equal(firstPresentation[0].hint, input.data.hint);
+    if (type === "matching") assert.equal(firstPresentation[0].matchingRightOptions[0].rightImage, "matching-image");
+    else assert.deepEqual(firstPresentation[0].options, type === "order" ? [...input.data.options].sort() : input.data.options);
+  }
+  const huge = learning.captureQuestionSnapshots([doc("huge", {passage: "가".repeat(20000)}), ...documents], ["huge", "1"], {});
+  assert.deepEqual(huge.questionSnapshotOmittedIds, ["huge"]);
+  assert.deepEqual(huge.questionSnapshots.map(item => item.id), ["1"], "An oversized item must not prevent another complete snapshot");
+  const manyDocs = Array.from({length: 200}, (_, index) => doc(String(index), {passage: "x".repeat(20000)}));
+  const bounded = learning.captureQuestionSnapshots(manyDocs, manyDocs.map(item => String(item.data.id)), {});
+  assert.ok(Buffer.byteLength(JSON.stringify(bounded.questionSnapshots), "utf8") <= 128 * 1024);
+  assert.ok(bounded.questionSnapshotOmittedIds.length > 0);
+  const fullBase = learning.captureQuestionSnapshots(documents, ["1"], {reserved: "x".repeat(750000)});
+  assert.deepEqual(fullBase.questionSnapshots, []);
+  assert.deepEqual(fullBase.questionSnapshotOmittedIds, ["1"]);
 };
 
 const runLifecycleCases = async () => {
@@ -539,6 +584,12 @@ const runLifecycleCases = async () => {
   ).result;
   const firstId = first.questionIds[0];
   assert.equal(first.questionIds.length, 1);
+  assert.equal(first.questionPresentation[0].question, `합성 문항 ${firstId}`);
+  assert.equal("questionSnapshots" in first, false);
+  assert.equal("answer" in first.questionPresentation[0], false);
+  assert.equal("explanation" in first.questionPresentation[0], false);
+  const originalQuestionSnapshots = structuredClone(store.documents.get(`semester_assessment_attempts/${first.attemptId}`).questionSnapshots);
+  assert.equal(originalQuestionSnapshots[0].answer, "정답");
   const startSnapshot = structuredClone(
     store.documents.get(`semester_assessment_attempts/${first.attemptId}`)
       .learningSnapshot,
@@ -579,6 +630,16 @@ const runLifecycleCases = async () => {
   store.documents.get(
     `years/2026/semesters/2/quiz_questions/q${firstId}`,
   ).concepts = ["나중 분류"];
+  const changedBankQuestion = store.documents.get(`years/2026/semesters/2/quiz_questions/q${firstId}`);
+  changedBankQuestion.question = "응시 시작 뒤 바뀐 발문";
+  changedBankQuestion.answer = "바뀐 정답";
+  changedBankQuestion.explanation = "바뀐 해설";
+  const resumedAttempt = (await execute(student, "startAssessmentAttempt", {definitionId})).result;
+  assert.deepEqual(resumedAttempt.questionPresentation, first.questionPresentation, "Resume uses frozen presentation after bank edits");
+  assert.equal("answer" in resumedAttempt.questionPresentation[0], false);
+  const queriedAttempt = await query.getAssessmentState({auth: student, data: {attemptId: first.attemptId}});
+  assert.deepEqual(queriedAttempt.attempt.questionPresentation, first.questionPresentation);
+  assert.equal("questionSnapshots" in queriedAttempt.attempt, false);
   const submitPayload = {
     attemptId: first.attemptId,
     expectedRevision: 2,
@@ -594,6 +655,10 @@ const runLifecycleCases = async () => {
     `semester_assessment_results/${first.attemptId}`,
   );
   assert.equal(submitted.percent, 0);
+  assert.deepEqual(result.questionSnapshots, originalQuestionSnapshots);
+  assert.deepEqual(submitted.questionSnapshots, originalQuestionSnapshots);
+  assert.equal(submitted.questionSnapshots[0].answer, "정답");
+  changedBankQuestion.answer = "정답";
   assert.equal(result.analytics.questions[firstId].activeMs, 100);
   assert.deepEqual(result.learningSnapshot, startSnapshot);
   assert.deepEqual(
@@ -602,7 +667,10 @@ const runLifecycleCases = async () => {
     result.analytics,
   );
   const rewardsBeforeReplay = rewardApplications;
-  await execute(student, "submitAssessmentAttempt", submitPayload, commandId);
+  const repeatedSubmit = (await execute(student, "submitAssessmentAttempt", submitPayload, commandId)).result;
+  assert.deepEqual(repeatedSubmit.questionSnapshots, originalQuestionSnapshots);
+  const replayDifferentCommand = (await execute(student, "submitAssessmentAttempt", submitPayload)).result;
+  assert.deepEqual(replayDifferentCommand.questionSnapshots, originalQuestionSnapshots, "New replay command returns the immutable result source");
   assert.equal(rewardApplications, rewardsBeforeReplay);
   assert.deepEqual(
     rewardPercents,
@@ -610,11 +678,15 @@ const runLifecycleCases = async () => {
     "Telemetry must not change grading or repeat reward evaluation",
   );
 
+  // Snapshot overflow is optional and must not block start, save or scoring.
+  for (const id of [1, 2, 3, 4]) store.documents.get(`years/2026/semesters/2/quiz_questions/q${id}`).passage = "가".repeat(20000);
   // A retry selects another question while preserving the authorized pool/count.
   const retry = (
     await execute(student, "startAssessmentAttempt", { definitionId })
   ).result;
   assert.equal(retry.questionIds.length, 1);
+  assert.deepEqual(retry.questionPresentation, []);
+  assert.deepEqual(retry.questionSnapshotOmittedIds, retry.questionIds);
   assert.notEqual(retry.questionIds[0], firstId);
   assert.ok(["1", "2", "3", "4"].includes(retry.questionIds[0]));
   nowMs += 10000;
@@ -637,6 +709,9 @@ const runLifecycleCases = async () => {
       .analytics,
     null,
   );
+  assert.deepEqual(invalidSubmitted.questionSnapshots, []);
+  assert.deepEqual(invalidSubmitted.questionSnapshotOmittedIds, retry.questionIds);
+  for (const id of [1, 2, 3, 4]) delete store.documents.get(`years/2026/semesters/2/quiz_questions/q${id}`).passage;
   const oversizedAttempt = (
     await execute(student, "startAssessmentAttempt", { definitionId })
   ).result;
@@ -685,6 +760,10 @@ const runLifecycleCases = async () => {
     await execute(student, "startAssessmentAttempt", { definitionId })
   ).result;
   // Previous attempts have no diagnostic fields and must still submit normally.
+  delete store.documents.get(`semester_assessment_attempts/${old.attemptId}`).questionSnapshots;
+  delete store.documents.get(`semester_assessment_attempts/${old.attemptId}`).questionSnapshotOmittedIds;
+  const legacyQuery = await query.getAssessmentState({auth: student, data: {attemptId: old.attemptId}});
+  assert.equal("questionPresentation" in legacyQuery.attempt, false);
   delete store.documents.get(`semester_assessment_attempts/${old.attemptId}`)
     .learningSnapshot;
   await execute(student, "submitAssessmentAttempt", {
@@ -703,11 +782,13 @@ const runLifecycleCases = async () => {
       .learningSnapshot,
     [],
   );
+  assert.equal("questionSnapshots" in store.documents.get(`semester_assessment_results/${old.attemptId}`), false, "Legacy absence must not be repaired with the current bank");
   assert.deepEqual(rewardPercents, [0, 100, 100, 0]);
 };
 
 (async () => {
   runNormalizerCases();
+  runQuestionSnapshotCases();
   await runLifecycleCases();
   console.log(
     JSON.stringify({
@@ -720,7 +801,10 @@ const runLifecycleCases = async () => {
         "UNANSWERED_AND_MISSING_TIMES_NULL",
         "PARTIAL_OBSERVATION_NOT_COMPLETE",
         "QUESTION_METADATA_NORMALIZATION",
-        "LATEST_CONCEPT_ANSWER_AND_UNCERTAINTY",
+      "FROZEN_QUESTION_SNAPSHOTS_NO_PRE_SUBMIT_ANSWER_OR_PAIRING_LEAK",
+      "OVERSIZED_SNAPSHOT_OMISSION_WITHOUT_TRUNCATION_OR_ANSWER_FAILURE",
+      "SNAPSHOT_RESUME_BANK_EDIT_AND_RESULT_REPLAY_PRESERVATION",
+        "LATEST_CONCEPT_ANSWER_IGNORES_LEGACY_SELF_REPORTS",
         "UNSEEN_WEAK_CONCEPT_THEN_UNSEEN_THEN_WRONG_REPEAT",
         "SAVE_REPLAY_NO_ACCUMULATION",
         "IMMUTABLE_METADATA_SNAPSHOT",

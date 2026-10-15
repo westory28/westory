@@ -42,13 +42,14 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "4f2394e34762c7f07e6bc7b766d38e24e984bcac69bf9c7cf700525b47082d19",
+      "sha256": "829dbdf140c5739cfee4407f6a44d658b4d08ae335444bf38ef4df0d77999cda",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "Preserve current lesson-source metadata in the History Classroom source command.",
         "Restore History Classroom reusable exemption tickets through canonical receipt-protected commands; add student-owned violation lock and preserve pass thresholds in new attempt/result snapshots.",
         "Restrict new History Classroom sources to worksheets; keep old map worksheets byte-for-byte on settings updates, treat omitted prompt/source defaults as equivalent, and reject live map blank writes.",
-        "2026-10-15: Optional bounded local diagnostics travel with existing saves/submissions; frozen learning metadata and unseen concept rechecks preserve grading/reward authority."
+        "2026-10-15: Optional bounded local diagnostics travel with existing saves/submissions; frozen learning metadata and unseen concept rechecks preserve grading/reward authority.",
+        "Freeze question presentation at attempt start, preserve immutable review source on submit/replay, and omit oversized review sources without changing grading or rewards."
       ]
     },
     {
@@ -428,9 +429,11 @@
       "sourceFile": "assessmentLearning.js",
       "file": "assessmentLearning.js",
       "originalSha256": "eda2e5e2924fad5353422a00a0eb42a280e0f5af1c95853481699bdc48b553a5",
-      "sha256": "89ab81ef965332c49226f6af9ec450f08af72d3c4ff3120f24fc5eaf9cc63da6",
+      "sha256": "71b9ac5da8f271251dbb93ea039afd813e365b1a4ff6a7e96f69e9e5968f34e2",
       "changes": [
-        "New diagnostic-only validation, metadata snapshot and recheck ranking module; no production ancestor."
+        "New diagnostic-only validation, metadata snapshot and recheck ranking module; no production ancestor.",
+        "Remove confidence collection and ranking; preserve behavior-only observation bounds and unknown initial response times on resume.",
+        "Bound complete immutable question snapshots with explicit omissions; strip answers, explanations and matching associations from pre-submit presentation."
       ]
     }
   ],

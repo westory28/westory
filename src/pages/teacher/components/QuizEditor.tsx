@@ -19,10 +19,8 @@ import {
   optimizeQuizImageDataUrl,
   optimizeQuizImageFile,
 } from "../../../lib/quizImageCompression";
-import {
-  applyQuizPassageMark,
-  type QuizPassageMarkType,
-} from "../../../lib/quizPassageMarkup";
+import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
+import QuizTextField from "./QuizTextField";
 import QuizLearningMetadataFields, {
   normalizeQuizLearningMetadata,
   validateQuizLearningMetadata,
@@ -237,7 +235,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const optimizingImage = optimizingImageCount > 0;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const passageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const savingQuestionRef = useRef(false);
   const defaultExamPrepFocusKeyRef = useRef("");
   const composerDialogRef = useRef<HTMLDivElement>(null);
@@ -550,27 +547,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (type !== "special") setFormSubUnit(recentNormalSubUnit);
     else setEpSource(recentExamPrepFocus);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const markSelectedPassageText = (markType: QuizPassageMarkType) => {
-    const textarea = passageTextareaRef.current;
-    const selectionStart = textarea?.selectionStart ?? formPassage.length;
-    const selectionEnd = textarea?.selectionEnd ?? formPassage.length;
-    const next = applyQuizPassageMark({
-      value: formPassage,
-      selectionStart,
-      selectionEnd,
-      markType,
-    });
-
-    setFormPassage(next.value);
-    window.requestAnimationFrame(() => {
-      passageTextareaRef.current?.focus();
-      passageTextareaRef.current?.setSelectionRange(
-        next.selectionStart,
-        next.selectionEnd,
-      );
-    });
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1158,7 +1134,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     formType === "choice" && previewChoiceItems.some((item) => item.image);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="quiz-authoring-surface flex h-full min-h-0 flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="quiz-editor-toolbar p-4 border-b bg-gray-50 shrink-0">
         <div>
           {type !== "special" && (
@@ -1593,7 +1569,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       : "새 문제 등록"
                 }
                 tabIndex={-1}
-                className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5"
+                className="quiz-authoring-surface w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -1724,10 +1700,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     </div>
                   )}
 
-                  <input
+                  <QuizTextField
                     lang="ko"
                     inputMode="text"
-                    type="text"
                     placeholder="문제 내용을 입력하세요"
                     aria-label="발문"
                     value={formText}
@@ -1737,73 +1712,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   />
 
                   {supportsQuestionPassage(formType) && (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <label className="text-xs font-black text-slate-600">
-                          {formType === "word"
-                            ? "단답형 본문 글상자"
-                            : "읽기 자료 글상자"}
-                        </label>
-                        <div className="flex flex-wrap items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => markSelectedPassageText("underline")}
-                            title="선택한 글자에 밑줄"
-                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
-                          >
-                            <i className="fas fa-underline mr-1"></i>밑줄
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => markSelectedPassageText("box")}
-                            title="선택한 글자에 네모"
-                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
-                          >
-                            <i className="far fa-square mr-1"></i>네모
-                          </button>
-                          {formType === "word" && (
-                            <button
-                              type="button"
-                              onClick={() => markSelectedPassageText("blank")}
-                              title="선택한 글자를 단답형 빈칸으로 표시"
-                              className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
-                            >
-                              <i className="fas fa-minus mr-1"></i>빈칸
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => markSelectedPassageText("bullet")}
-                            title="선택한 줄에 글머리표"
-                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
-                          >
-                            <i className="fas fa-list-ul mr-1"></i>글머리표
-                          </button>
-                          {formPassage && (
-                            <button
-                              type="button"
-                              onClick={() => setFormPassage("")}
-                              className="px-2 py-1 text-xs font-bold text-slate-400 hover:text-red-500"
-                            >
-                              비우기
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <textarea
-                        lang="ko"
-                        inputMode="text"
-                        ref={passageTextareaRef}
-                        value={formPassage}
-                        onChange={(e) => setFormPassage(e.target.value)}
-                        placeholder={
-                          formType === "word"
-                            ? "단답형 빈칸을 넣을 본문을 입력하세요."
-                            : "자료형 문제의 본문을 입력하세요."
-                        }
-                        className="quiz-compose-field h-28 w-full resize-none rounded border border-slate-200 bg-white p-3 text-base leading-7"
-                      />
-                    </div>
+                    <QuizVisualPassageEditor
+                      label={
+                        formType === "word"
+                          ? "단답형 본문 글상자"
+                          : "읽기 자료 글상자"
+                      }
+                      value={formPassage}
+                      onChange={setFormPassage}
+                      allowBlank={formType === "word"}
+                    />
                   )}
 
                   <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded transition w-fit">
@@ -1863,10 +1781,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                               {index + 1}
                             </span>
                             <div className="min-w-0 flex-1">
-                              <input
+                              <QuizTextField
                                 lang="ko"
                                 inputMode="text"
-                                type="text"
                                 value={option}
                                 onChange={(e) =>
                                   setChoiceOptions((prev) =>
@@ -1958,10 +1875,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   )}
 
                   {formType === "word" && (
-                    <input
+                    <QuizTextField
                       lang="ko"
                       inputMode="text"
-                      type="text"
                       value={wordAnswer}
                       onChange={(e) => setWordAnswer(e.target.value)}
                       onKeyDown={handleVerticalFocus}
@@ -1992,10 +1908,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
                             {index + 1}
                           </span>
-                          <input
+                          <QuizTextField
                             lang="ko"
                             inputMode="text"
-                            type="text"
                             value={item}
                             onChange={(e) =>
                               setOrderItems((prev) =>
@@ -2066,10 +1981,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">
                             {index + 1}
                           </span>
-                          <input
+                          <QuizTextField
                             lang="ko"
                             inputMode="text"
-                            type="text"
                             value={pair.left}
                             onChange={(e) =>
                               setMatchingPairs((prev) =>
@@ -2085,10 +1999,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             className="quiz-compose-field min-w-0 rounded border p-2 text-sm"
                           />
                           <div className="min-w-0 space-y-2">
-                            <input
+                            <QuizTextField
                               lang="ko"
                               inputMode="text"
-                              type="text"
                               value={pair.right}
                               onChange={(e) =>
                                 setMatchingPairs((prev) =>
@@ -2364,10 +2277,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           </div>
                         )}
                         {formType === "word" && (
-                          <input
+                          <QuizTextField
                             lang="ko"
                             inputMode="text"
-                            type="text"
                             value={previewWordAnswer}
                             onChange={(e) =>
                               setPreviewWordAnswer(e.target.value)
