@@ -37,7 +37,6 @@ import {
   inferHistoryClassroomBlankSource,
   isHistoryClassroomDeleted,
   isHistoryClassroomPastDue,
-  mergeHistoryClassroomMapSnapshot,
   normalizeHistoryClassroomAssignment,
   normalizeHistoryClassroomResult,
   reviewHistoryClassroomExemptionRequest,
@@ -55,7 +54,7 @@ import {
   type LessonWorksheetPageImage,
   type LessonWorksheetTextRegion,
 } from "../../lib/lessonWorksheet";
-import { normalizeMapResource, type MapResource } from "../../lib/mapResources";
+import type { MapResource } from "../../lib/mapResources";
 import { normalizeLessonBlankClip } from "../../lib/lessonBlankClip";
 import {
   getHistoryClassroomSourceFields,
@@ -755,7 +754,7 @@ const HistoryClassroomSourceSelect: React.FC<{
   value: string;
   currentLabel?: string;
   stacked?: boolean;
-  sources: MapResource[];
+  sources: HistoryClassroomLessonSource[];
   loading: boolean;
   error: string;
   onChange: (value: string) => void;
@@ -769,41 +768,12 @@ const HistoryClassroomSourceSelect: React.FC<{
   error,
   onChange,
 }) => {
-  const isLesson = value.startsWith("lesson:");
-  const available = sources.filter(
-    (source) => "lessonUnitId" in source === isLesson,
-  );
-  const lessonLevels = isLesson
-    ? getHistoryClassroomLessonSelectLevels(
-        available as HistoryClassroomLessonSource[],
-        value,
-      )
-    : [];
+  const lessonLevels = getHistoryClassroomLessonSelectLevels(sources, value);
   const selectClassName =
     "min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm";
   return (
     <div className="min-w-0 space-y-3">
-      <label className="block" htmlFor={`${id}-type`}>
-        <span className="mb-1 block text-xs font-bold text-gray-500">
-          자료 유형
-        </span>
-        <select
-          id={`${id}-type`}
-          value={isLesson ? "lesson" : "map"}
-          onChange={(event) => {
-            const lesson = event.target.value === "lesson";
-            onChange(
-              sources.find((source) => "lessonUnitId" in source === lesson)
-                ?.id || (lesson ? "lesson:" : ""),
-            );
-          }}
-          className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-        >
-          <option value="lesson">수업 자료</option>
-          <option value="map">지도</option>
-        </select>
-      </label>
-      {isLesson && lessonLevels.length ? (
+      {lessonLevels.length ? (
         <div
           className={`grid min-w-0 gap-3 ${stacked ? "" : "md:grid-cols-3"}`}
         >
@@ -851,7 +821,7 @@ const HistoryClassroomSourceSelect: React.FC<{
       ) : (
         <label className="block" htmlFor={id}>
           <span className="mb-1 block text-xs font-bold text-gray-500">
-            {isLesson ? "수업 자료 목차" : "PDF 지도"}
+            수업 자료 목차
           </span>
           <select
             id={id}
@@ -859,32 +829,26 @@ const HistoryClassroomSourceSelect: React.FC<{
             onChange={(event) => onChange(event.target.value)}
             className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
           >
-            {!available.some((source) => source.id === value) && (
+            {!sources.some((source) => source.id === value) && (
               <option value={value}>
                 {currentLabel ||
-                  (loading && isLesson
-                    ? "수업 자료 불러오는 중…"
-                    : "자료 선택")}
+                  (loading ? "수업 자료 불러오는 중…" : "자료 선택")}
               </option>
             )}
-            {available.map((source) => (
+            {sources.map((source) => (
               <option key={source.id} value={source.id}>
-                {"lessonUnitPath" in source
-                  ? (
-                      source as HistoryClassroomLessonSource
-                    ).lessonUnitPath.join(" › ")
-                  : source.title}
+                {source.lessonUnitPath.join(" › ")}
               </option>
             ))}
           </select>
         </label>
       )}
-      {isLesson && error && (
+      {error && (
         <p role="alert" className="text-sm text-red-600">
           {error}
         </p>
       )}
-      {isLesson && !loading && !error && !available.length && (
+      {!loading && !error && !sources.length && (
         <p className="text-sm text-gray-500">
           빈칸이 저장된 수업 자료가 없습니다.
         </p>
@@ -968,17 +932,12 @@ const AssignmentReasonField: React.FC<{
 const ManageHistoryClassroom: React.FC = () => {
   const { config, userData } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-
-  const [maps, setMaps] = useState<MapResource[]>([]);
   const [lessonSources, setLessonSources] = useState<
     HistoryClassroomLessonSource[]
   >([]);
   const [lessonSourceError, setLessonSourceError] = useState("");
   const [loadingLessonSources, setLoadingLessonSources] = useState(false);
-  const worksheetSources = useMemo(
-    () => [...lessonSources, ...maps],
-    [lessonSources, maps],
-  );
+  const worksheetSources = lessonSources;
   const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
     [],
   );
@@ -1122,7 +1081,6 @@ const ManageHistoryClassroom: React.FC = () => {
   useEffect(() => {
     if (!isCreateModalOpen) pendingAssignmentId.current = "";
   }, [isCreateModalOpen]);
-  const [isMapManagerOpen, setIsMapManagerOpen] = useState(false);
   const [assignmentPage, setAssignmentPage] = useState(1);
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [dashboardStatusFilter, setDashboardStatusFilter] =
@@ -1132,7 +1090,6 @@ const ManageHistoryClassroom: React.FC = () => {
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [refreshingDashboard, setRefreshingDashboard] = useState(false);
   const [expandedAssignmentId, setExpandedAssignmentId] = useState("");
-  const [savingMapBlanks, setSavingMapBlanks] = useState(false);
   const preserveBlankResetRef = React.useRef(false);
   const blankEditorComposingRef = React.useRef(false);
   const blankEditorCommitLockRef = React.useRef(false);
@@ -1192,40 +1149,6 @@ const ManageHistoryClassroom: React.FC = () => {
     const loadData = async () => {
       setRefreshingDashboard(true);
       try {
-        const mapPath = getSemesterCollectionPath(config, "map_resources");
-        const semesterMapSnap = await getDocs(
-          query(collection(db, mapPath), orderBy("sortOrder", "asc")),
-        );
-        const legacyMapSnap = await getDocs(
-          query(collection(db, "map_resources"), orderBy("sortOrder", "asc")),
-        );
-        const mapById = new Map<string, MapResource>();
-        legacyMapSnap.docs.forEach((docSnap) => {
-          mapById.set(
-            docSnap.id,
-            normalizeMapResource(docSnap.id, docSnap.data()),
-          );
-        });
-        semesterMapSnap.docs.forEach((docSnap) => {
-          mapById.set(
-            docSnap.id,
-            normalizeMapResource(docSnap.id, docSnap.data()),
-          );
-        });
-        const loadedMaps = Array.from(mapById.values())
-          .filter(
-            (item) =>
-              item.type === "pdf" && (item.pdfPageImages?.length || 0) > 0,
-          )
-          .sort((a, b) => {
-            if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-            return a.title.localeCompare(b.title, "ko");
-          });
-        setMaps(loadedMaps);
-        if (loadedMaps[0]) {
-          setSelectedMapId((prev) => prev || loadedMaps[0].id);
-        }
-
         const studentSnap = await getDocs(collection(db, "users"));
         const loadedStudents = studentSnap.docs
           .map((docSnap) => {
@@ -1272,12 +1195,7 @@ const ManageHistoryClassroom: React.FC = () => {
         setAssignments(
           assignmentSnap.docs
             .map((docSnap) =>
-              mergeHistoryClassroomMapSnapshot(
-                normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
-                loadedMaps.find(
-                  (map) => map.id === docSnap.data().mapResourceId,
-                ) || null,
-              ),
+              normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
             )
             .filter((assignment) => !isHistoryClassroomDeleted(assignment)),
         );
@@ -1342,7 +1260,10 @@ const ManageHistoryClassroom: React.FC = () => {
     setLessonSources([]);
     void readHistoryClassroomLessonSources(config)
       .then((sources) => {
-        if (!cancelled) setLessonSources(sources);
+        if (!cancelled) {
+          setLessonSources(sources);
+          setSelectedMapId((previous) => previous || sources[0]?.id || "");
+        }
       })
       .catch((error) => {
         console.error(
@@ -1392,6 +1313,7 @@ const ManageHistoryClassroom: React.FC = () => {
   const worksheetSourceMap = useMemo<MapResource | null>(() => {
     if (
       !worksheetSourceAssignment ||
+      worksheetSourceAssignment.sourceType !== "lesson" ||
       getHistoryClassroomSourceId(worksheetSourceAssignment) !== selectedMapId
     ) {
       return null;
@@ -1406,17 +1328,10 @@ const ManageHistoryClassroom: React.FC = () => {
 
     return {
       id: getHistoryClassroomSourceId(worksheetSourceAssignment),
-      title:
-        worksheetSourceAssignment.sourceType === "lesson"
-          ? worksheetSourceAssignment.title
-          : worksheetSourceAssignment.mapTitle || "불러온 지도",
-      ...(worksheetSourceAssignment.sourceType === "lesson"
-        ? {
-            lessonUnitId: worksheetSourceAssignment.lessonUnitId,
-            lessonTitle: worksheetSourceAssignment.lessonTitle,
-            lessonUnitPath: worksheetSourceAssignment.lessonUnitPath,
-          }
-        : {}),
+      title: worksheetSourceAssignment.title,
+      lessonUnitId: worksheetSourceAssignment.lessonUnitId,
+      lessonTitle: worksheetSourceAssignment.lessonTitle,
+      lessonUnitPath: worksheetSourceAssignment.lessonUnitPath,
       category: "",
       description: "",
       type: "pdf",
@@ -1435,12 +1350,7 @@ const ManageHistoryClassroom: React.FC = () => {
     [worksheetSources, selectedMapId, worksheetSourceMap],
   );
 
-  const selectedStoredMap = useMemo(
-    () => maps.find((item) => item.id === selectedMapId) || null,
-    [maps, selectedMapId],
-  );
-
-  const activeWorksheetMap = isMapManagerOpen ? selectedStoredMap : selectedMap;
+  const activeWorksheetMap = selectedMap;
 
   const worksheetPageImages = useMemo(
     () =>
@@ -2018,14 +1928,6 @@ const ManageHistoryClassroom: React.FC = () => {
     return latestByStudentUid;
   }, [editingResults]);
 
-  const editingPreviewMap = useMemo(
-    () =>
-      editingSelectedMap ||
-      maps.find((map) => map.id === editingAssignment?.mapResourceId) ||
-      null,
-    [editingAssignment?.mapResourceId, editingSelectedMap, maps],
-  );
-
   const editingPreviewAssignment = useMemo(() => {
     if (!editingAssignment) return null;
 
@@ -2098,17 +2000,13 @@ const ManageHistoryClassroom: React.FC = () => {
       },
     );
 
-    return mergeHistoryClassroomMapSnapshot(
-      previewAssignment,
-      editingPreviewMap,
-    );
+    return previewAssignment;
   }, [
     editingAssignment,
     editingCooldownMinutes,
     editingDueWindowDays,
     editingIsPublished,
     editingPassThresholdPercent,
-    editingPreviewMap,
     editingSelectedMap,
     editingRefreshSource,
     editingStudents,
@@ -2655,33 +2553,6 @@ const ManageHistoryClassroom: React.FC = () => {
     blankEditorComposingRef.current = false;
   };
 
-  const openMapBlankManager = (mapId?: string) => {
-    const nextMap =
-      maps.find((item) => item.id === mapId) ||
-      maps.find((item) => item.id === selectedMapId) ||
-      maps[0] ||
-      null;
-    if (nextMap) {
-      setSelectedMapId(nextMap.id);
-      setBlanks(cloneMapResourceBlanks(nextMap));
-    }
-    setSelectedBlankId("");
-    setDraftBlank(null);
-    setDraftBlankAnswer("");
-    closeBlankEditor();
-    setFloatingPanelOpen(true);
-    setIsMapManagerOpen(true);
-  };
-
-  const closeMapBlankManager = () => {
-    setIsMapManagerOpen(false);
-    setFloatingPanelOpen(false);
-    setSelectedBlankId("");
-    setDraftBlank(null);
-    setDraftBlankAnswer("");
-    closeBlankEditor();
-  };
-
   const closeExemptionPanel = () => {
     setExemptionPanelOpen(false);
     setHighlightedExemptionRequestId("");
@@ -3026,6 +2897,12 @@ const ManageHistoryClassroom: React.FC = () => {
     assignment: HistoryClassroomAssignment,
     mode: "edit" | "clone" = "edit",
   ) => {
+    if (assignment.sourceType !== "lesson") {
+      alert(
+        "기존 지도 과제는 설정에서 관리할 수 있습니다. 새 과제에는 수업 자료를 선택해 주세요.",
+      );
+      return;
+    }
     preserveBlankResetRef.current = true;
     setSelectedMapId(getHistoryClassroomSourceId(assignment));
     setWorksheetSourceAssignment(assignment);
@@ -3292,11 +3169,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   targetAssignment.id,
                   payload as Partial<HistoryClassroomAssignment>,
                 );
-                return mergeHistoryClassroomMapSnapshot(
-                  normalized,
-                  maps.find((map) => map.id === normalized.mapResourceId) ||
-                    null,
-                );
+                return normalized;
               })()
             : assignment,
         ),
@@ -3460,6 +3333,10 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("자료와 대상 학생을 먼저 선택해 주세요.");
       return;
     }
+    if (!("lessonUnitId" in selectedMap) || !selectedMap.lessonUnitId) {
+      alert("빈칸이 저장된 수업 자료를 선택해 주세요.");
+      return;
+    }
     if (!selectedStudents.length) {
       alert("학생 정보를 찾을 수 없습니다.");
       return;
@@ -3600,11 +3477,7 @@ const ManageHistoryClassroom: React.FC = () => {
           assignmentId,
           payload as Partial<HistoryClassroomAssignment>,
         );
-        const normalized = mergeHistoryClassroomMapSnapshot(
-          normalizedAssignment,
-          maps.find((map) => map.id === normalizedAssignment.mapResourceId) ||
-            null,
-        );
+        const normalized = normalizedAssignment;
         if (existingAssignment) {
           return prev.map((assignment) =>
             assignment.id === assignmentId ? normalized : assignment,
@@ -3667,52 +3540,6 @@ const ManageHistoryClassroom: React.FC = () => {
     }
   };
 
-  const handleSaveMapBlanks = async () => {
-    if (!selectedStoredMap) {
-      alert("저장할 지도를 선택해 주세요.");
-      return;
-    }
-    if (!blanks.length || blanks.some((blank) => !blank.answer.trim())) {
-      alert("빈칸을 추가하고 모든 정답을 입력해 주세요.");
-      return;
-    }
-
-    setSavingMapBlanks(true);
-    try {
-      const payload = normalizeMapResource(selectedStoredMap.id, {
-        ...selectedStoredMap,
-        pdfBlanks: blanks,
-        answerOptions: buildAnswerOptions(blanks),
-      });
-      await executeAssessmentManagementCommand("updateMapResourceBlanks", {
-        semesterId: getAssessmentSemesterId(config),
-        mapResourceId: selectedStoredMap.id,
-        pdfBlanks: payload.pdfBlanks,
-        answerOptions: payload.answerOptions,
-        expectedRevision: await readAssessmentContentRevision(
-          config,
-          "map_resources",
-          selectedStoredMap.id,
-        ),
-        reason: "역사교실 지도 빈칸 저장",
-      });
-      setMaps((prev) =>
-        prev.map((map) => (map.id === selectedStoredMap.id ? payload : map)),
-      );
-      setBlanks(cloneMapResourceBlanks(payload));
-      alert("배포 지도 빈칸과 정답을 저장했습니다.");
-    } catch (error) {
-      console.error("Failed to save map blanks", {
-        mapResourceId: selectedStoredMap.id,
-        ...getFirestoreErrorSummary(error),
-        error,
-      });
-      alert("배포 지도 빈칸 저장에 실패했습니다.");
-    } finally {
-      setSavingMapBlanks(false);
-    }
-  };
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:py-8">
       <section className="mb-5 px-1 py-2">
@@ -3743,13 +3570,7 @@ const ManageHistoryClassroom: React.FC = () => {
                 </span>
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => openMapBlankManager()}
-              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50"
-            >
-              지도 관리
-            </button>
+
             <button
               type="button"
               onClick={openCreateModal}
@@ -5537,15 +5358,6 @@ const ManageHistoryClassroom: React.FC = () => {
                       <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-gray-700">
                         {selectedMap?.title || "자료 미선택"}
                       </span>
-                      {!selectedMapId.startsWith("lesson:") && (
-                        <button
-                          type="button"
-                          onClick={() => openMapBlankManager(selectedMapId)}
-                          className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50"
-                        >
-                          지도 관리에서 수정
-                        </button>
-                      )}
                     </div>
                   </div>
 
@@ -5604,7 +5416,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         ))}
                         {!blanks.length && (
                           <div className="text-sm text-gray-400">
-                            지도에서 영역을 드래그하거나 OCR 단어를 선택해
+                            수업 자료에서 영역을 드래그하거나 OCR 단어를 선택해
                             빈칸을 추가하세요.
                           </div>
                         )}
@@ -5678,10 +5490,10 @@ const ManageHistoryClassroom: React.FC = () => {
                       <div className="mb-4 flex items-start justify-between gap-3">
                         <div>
                           <div className="text-sm font-bold text-gray-700">
-                            지도 선택 영역
+                            수업 자료
                           </div>
                           <div className="mt-1 text-xs text-gray-500">
-                            지도 관리에 저장된 빈칸과 정답 배치를 확인합니다.
+                            수업 자료에 저장된 빈칸과 정답 배치를 확인합니다.
                           </div>
                         </div>
                       </div>
@@ -5779,7 +5591,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         </div>
                       ) : (
                         <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center text-gray-400">
-                          PDF 지도를 먼저 선택해 주세요.
+                          수업 자료를 먼저 선택해 주세요.
                         </div>
                       )}
                     </div>
@@ -5828,118 +5640,6 @@ const ManageHistoryClassroom: React.FC = () => {
                   </section>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isMapManagerOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 px-3 py-5 backdrop-blur-sm">
-          <div className="flex max-h-[94vh] w-full max-w-[min(96vw,92rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-500">
-                  Map Blank Editor
-                </div>
-                <h2 className="mt-1 text-xl font-black text-gray-900">
-                  배포 지도 관리
-                </h2>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleSaveMapBlanks()}
-                  disabled={savingMapBlanks}
-                  className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {savingMapBlanks ? "저장 중..." : "빈칸 저장"}
-                </button>
-                <button
-                  type="button"
-                  onClick={closeMapBlankManager}
-                  className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                >
-                  닫기
-                </button>
-              </div>
-            </div>
-            <div className="grid min-h-0 flex-1 bg-gray-50 lg:grid-cols-[18rem_minmax(0,1fr)]">
-              <aside className="min-h-0 border-r border-gray-200 bg-white p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="text-sm font-black text-gray-900">
-                    지도 목록
-                  </div>
-                  <div className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                    {maps.length}개
-                  </div>
-                </div>
-                <div className="max-h-[calc(94vh-10rem)] space-y-2 overflow-y-auto pr-1">
-                  {maps.map((map) => (
-                    <button
-                      key={map.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedMapId(map.id);
-                        setBlanks(cloneMapResourceBlanks(map));
-                        setSelectedBlankId("");
-                        setDraftBlank(null);
-                        setDraftBlankAnswer("");
-                        closeBlankEditor();
-                      }}
-                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
-                        map.id === selectedMapId
-                          ? "border-blue-200 bg-blue-50 text-blue-800"
-                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      <div className="text-sm font-black">{map.title}</div>
-                      <div className="mt-1 text-xs font-semibold text-gray-500">
-                        빈칸 {map.pdfBlanks?.length || 0}개
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </aside>
-              <section className="min-h-0 overflow-y-auto p-4">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                  <div>
-                    <div className="text-sm font-black text-gray-900">
-                      {selectedStoredMap?.title || "지도 미선택"}
-                    </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      백지도 위에서 영역을 드래그하거나 OCR 글자를 선택해 빈칸을
-                      추가합니다.
-                    </div>
-                  </div>
-                  <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
-                    현재 빈칸 {blanks.length}개
-                  </div>
-                </div>
-                {worksheetPageImages.length > 0 ? (
-                  <div className="mx-auto max-w-[64rem]">
-                    <LessonWorksheetStage
-                      pageImages={worksheetPageImages}
-                      blanks={worksheetBlanks}
-                      textRegions={worksheetTextRegions}
-                      mode="teacher-edit"
-                      teacherTool={worksheetTool}
-                      selectedBlankId={selectedBlankId || null}
-                      pendingBlank={draftBlank}
-                      onSelectBlank={handleSelectBlank}
-                      onDeleteBlank={removeBlank}
-                      onCreateBlankFromSelection={
-                        handleCreateBlankFromSelection
-                      }
-                      annotationEnabled={false}
-                      showPageLabel={false}
-                    />
-                  </div>
-                ) : (
-                  <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-20 text-center text-sm font-semibold text-gray-400">
-                    빈칸을 편집할 PDF 지도를 선택해 주세요.
-                  </div>
-                )}
-              </section>
             </div>
           </div>
         </div>
@@ -6098,22 +5798,6 @@ const ManageHistoryClassroom: React.FC = () => {
                             ? "수업 자료 불러오는 중"
                             : "최신 수업 자료 반영"}
                         </button>
-                      )}
-                      {!editingMapResourceId.startsWith("lesson:") && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openMapBlankManager(
-                                editingMapResourceId ||
-                                  editingAssignment.mapResourceId,
-                              )
-                            }
-                            className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
-                          >
-                            선택한 지도 관리
-                          </button>
-                        </div>
                       )}
                     </div>
 
@@ -6951,66 +6635,6 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       )}
 
-      {isMapManagerOpen && (
-        <div className="teacher-floating-action-above-patch fixed bottom-5 right-5 z-[65] flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-3">
-          {floatingPanelOpen && (
-            <div className="w-[min(18rem,calc(100vw-2.5rem))] space-y-2.5">
-              <div className="rounded-2xl border border-gray-200 bg-white/96 p-3 shadow-2xl backdrop-blur">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
-                    빈칸 목록
-                  </div>
-                  <div className="text-[11px] font-semibold text-gray-500">
-                    {sortedBlanks.length}개
-                  </div>
-                </div>
-                <div className="mt-2.5 flex max-h-28 flex-wrap gap-1.5 overflow-hidden">
-                  {visibleBlankTags.map((blank, index) => (
-                    <button
-                      key={blank.id}
-                      type="button"
-                      onClick={() => handleFocusBlankFromList(blank.id)}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                        selectedBlankId === blank.id
-                          ? "border-blue-300 bg-blue-50 text-blue-700"
-                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      {blank.answer || `빈칸 ${index + 1}`}
-                    </button>
-                  ))}
-                  {sortedBlanks.length > 6 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllBlankTags((prev) => !prev)}
-                      className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
-                    >
-                      {showAllBlankTags
-                        ? "숨기기"
-                        : `더보기 +${sortedBlanks.length - visibleBlankTags.length}`}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setFloatingPanelOpen((prev) => !prev)}
-            aria-label={
-              floatingPanelOpen ? "플로팅 도구 닫기" : "플로팅 도구 열기"
-            }
-            className={`flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl transition duration-200 hover:bg-blue-700 ${
-              floatingPanelOpen ? "scale-90" : "scale-100"
-            }`}
-          >
-            <i
-              className={`fas ${floatingPanelOpen ? "fa-times" : "fa-layer-group"} text-lg`}
-            ></i>
-          </button>
-        </div>
-      )}
       <style>{`
                 .history-assignment-card > div:last-child {
                     display: none;

@@ -277,8 +277,8 @@ const runManagementContentCommands = async () => {
       title: "합성 역사교실 2",
       sourceType: "lesson", lessonUnitId: "unit-one", lessonTitle: "수업자료", lessonUnitPath: ["대단원", "중단원"],
       description: "",
-      mapResourceId: "map-one",
-      mapTitle: "합성 지도",
+      mapResourceId: "",
+      mapTitle: "",
       pdfPageImages: [],
       pdfRegions: [],
       blanks: [{ id: "blank-1", answer: "정답" }],
@@ -316,15 +316,47 @@ const runManagementContentCommands = async () => {
   assert.equal(historyDeleted.result.contentRevision, 2);
   assert.ok(store.snapshot("years/2026/semesters/2/history_classrooms/history-two").data.deletedAt);
 
-  const mapSaved = await execute(admin, "updateMapResourceBlanks", {
+  const mapBefore = clone(store.snapshot("years/2026/semesters/2/map_resources/map-one").data);
+  await assert.rejects(execute(admin, "updateMapResourceBlanks", {
     semesterId,
     mapResourceId: "map-one",
     pdfBlanks: [{ id: "blank-one", page: 1, answer: "정답" }],
     answerOptions: ["정답"],
     expectedRevision: 0,
     reason: "합성 지도 빈칸 수정",
+  }), (error) => error?.details?.reason === "ASSESSMENT_MAP_SOURCE_DISCONNECTED");
+  assert.deepEqual(store.snapshot("years/2026/semesters/2/map_resources/map-one").data, mapBefore);
+
+  const legacyPath = "years/2026/semesters/2/history_classrooms/legacy-map-snapshot";
+  const legacySource = {
+    title: "기존 과제", sourceType: "map", mapResourceId: "map-one", mapTitle: "과거 지도",
+    pdfPageImages: [{ page: 1, width: 800, height: 600, url: "https://example.test/immutable-page.webp" }],
+    pdfRegions: [], blanks: [{ id: "old-blank", answer: "고려" }], answerOptions: ["고려"], timeLimitMinutes: 10,
+  };
+  store.documents.set(legacyPath, clone(legacySource));
+  const legacySaved = await execute(admin, "upsertHistoryClassroomSource", {
+    semesterId, sourceId: "legacy-map-snapshot", source: { ...legacySource, blanks: legacySource.blanks.map((blank) => ({ ...blank, prompt: "", source: "manual" })), timeLimitMinutes: 20 }, expectedRevision: 0, reason: "기존 과제 설정만 수정",
   });
-  assert.equal(mapSaved.result.contentRevision, 1);
+  assert.equal(legacySaved.result.contentRevision, 1);
+  assert.deepEqual(store.snapshot(legacyPath).data.pdfPageImages, legacySource.pdfPageImages);
+  assert.deepEqual(store.snapshot(legacyPath).data.blanks, legacySource.blanks);
+  for (const source of [
+    { ...legacySource, mapResourceId: "another-map" },
+    { ...legacySource, pdfPageImages: [] },
+    { ...legacySource, blanks: [{ id: "old-blank", answer: "바뀐 정답" }] },
+    { ...legacySource, answerOptions: ["바뀐 선택지"] },
+  ]) {
+    await assert.rejects(execute(admin, "upsertHistoryClassroomSource", {
+      semesterId, sourceId: "legacy-map-snapshot", source, expectedRevision: 1, reason: "지도 재연결 시도",
+    }), (error) => error?.details?.reason === "ASSESSMENT_MAP_SOURCE_DISCONNECTED");
+  }
+  await assert.rejects(execute(admin, "upsertHistoryClassroomSource", {
+    semesterId, sourceId: "new-map-assignment", source: legacySource, expectedRevision: 0, reason: "이전 클라이언트에서 지도 과제 생성",
+  }), (error) => error?.details?.reason === "ASSESSMENT_MAP_SOURCE_DISCONNECTED");
+  assert.equal(store.snapshot("years/2026/semesters/2/history_classrooms/new-map-assignment").exists, false);
+  await assert.rejects(execute(admin, "upsertHistoryClassroomSource", {
+    semesterId, sourceId: "hybrid-assignment", source: { ...legacySource, sourceType: "lesson", lessonUnitId: "unit-one" }, expectedRevision: 0, reason: "지도 연결 우회 시도",
+  }), (error) => error?.details?.reason === "ASSESSMENT_LESSON_SOURCE_INVALID");
 
   const originalManifest = clone(store.documents.get(`semester_manifests/${semesterId}`));
   store.documents.set(`semester_manifests/${semesterId}`, {

@@ -42,11 +42,12 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "71db6fa86aa7772d5ccce571bb8df8d0b9d4a33304bb72b6b257166cfa8550ce",
+      "sha256": "a3dfefe3b32dbdebb3d2a090dbeca1b928be434c3b7a4e566bedeb3de2b7a5dd",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "Preserve current lesson-source metadata in the History Classroom source command.",
-        "Restore History Classroom reusable exemption tickets through canonical receipt-protected commands; add student-owned violation lock and preserve pass thresholds in new attempt/result snapshots."
+        "Restore History Classroom reusable exemption tickets through canonical receipt-protected commands; add student-owned violation lock and preserve pass thresholds in new attempt/result snapshots.",
+        "Restrict new History Classroom sources to worksheets; keep old map worksheets byte-for-byte on settings updates, treat omitted prompt/source defaults as equivalent, and reject live map blank writes."
       ]
     },
     {
@@ -217,8 +218,10 @@
       "sourceFile": "mapManagement.js",
       "file": "mapManagement.js",
       "originalSha256": "60cb839a13717c36bc5a70668748102db0c5968cc8435e5783284f086b35aca7",
-      "sha256": "861372c5ba17ce92f4abee4973cac65aa070e4b120cfb5fd97a9a69a9cc2be11",
-      "changes": []
+      "sha256": "d481037e72ae1cb2c931ef881a343c1b5271a1d82218ea219105127f5b2e2b39",
+      "changes": [
+        "Validate logical PDF page dimensions against uploaded image aspect ratio while preserving original region coordinates."
+      ]
     },
     {
       "sourceFile": "mapTagWisReward.js",

@@ -824,22 +824,6 @@ export const summarizeHistoryClassroomAnswers = (
   };
 };
 
-export const mergeHistoryClassroomMapSnapshot = (
-  assignment: HistoryClassroomAssignment,
-  mapResource?: MapResource | null,
-): HistoryClassroomAssignment =>
-  assignment.sourceType === "lesson"
-    ? assignment
-    : {
-        ...assignment,
-        pdfPageImages: assignment.pdfPageImages?.length
-          ? assignment.pdfPageImages
-          : mapResource?.pdfPageImages || [],
-        pdfRegions: assignment.pdfRegions?.length
-          ? assignment.pdfRegions
-          : mapResource?.pdfRegions || [],
-      };
-
 export const getHistoryClassroomAssignedStudentUids = (
   assignment: Pick<
     HistoryClassroomAssignment,

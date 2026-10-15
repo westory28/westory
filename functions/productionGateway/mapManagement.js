@@ -514,8 +514,19 @@ const createMapCommandAdapter = ({ now = Date.now } = {}) => ({
             main.data.kind !== "PDF" ||
             ticket.data.sourceUploadId !== main.data.uploadId ||
             ticket.data.page !== page.page ||
-            ticket.data.width !== page.width ||
-            ticket.data.height !== page.height
+            !Number.isFinite(ticket.data.width) ||
+            !Number.isFinite(ticket.data.height) ||
+            ticket.data.width <= 0 ||
+            ticket.data.height <= 0 ||
+            ticket.data.width * ticket.data.height > 50000000 ||
+            // Saved PDF coordinates use a fixed logical viewport. Raster pages
+            // may be higher resolution, but must preserve that viewport's shape.
+            // Allow at most 1% for integer rounding at either resolution.
+            Math.abs(
+              (page.width * ticket.data.height) /
+                (page.height * ticket.data.width) -
+                1,
+            ) > 0.01
           )
             fail("permission-denied", "MAP_PAGE_SOURCE_INVALID");
         } else if (

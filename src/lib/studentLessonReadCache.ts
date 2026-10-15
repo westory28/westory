@@ -268,22 +268,20 @@ export const readStudentLesson = (config: ConfigLike, unitId: string) =>
 
 export const readStudentMapResources = (config: ConfigLike) =>
   readCached(mapResourcesCache, getScopeKey(config), async () => {
-    const scopedQuery = query(
-      collection(db, getSemesterCollectionPath(config, "map_resources")),
-      orderBy("sortOrder", "asc"),
-    );
-    let snap = await getDocs(scopedQuery);
-
-    if (snap.empty) {
-      const legacyQuery = query(
-        collection(db, "map_resources"),
-        orderBy("sortOrder", "asc"),
+    const [scoped, legacy] = await Promise.all([
+      getDocs(
+        collection(db, getSemesterCollectionPath(config, "map_resources")),
+      ),
+      getDocs(collection(db, "map_resources")),
+    ]);
+    // A first new semester map must not hide the existing reference library.
+    // The semester version remains authoritative for duplicate IDs.
+    const resources = new Map<string, MapResource>();
+    [...legacy.docs, ...scoped.docs].forEach((docSnap) => {
+      resources.set(
+        docSnap.id,
+        normalizeMapResource(docSnap.id, docSnap.data()),
       );
-      snap = await getDocs(legacyQuery);
-    }
-
-    const resources = snap.docs.map((docSnap) =>
-      normalizeMapResource(docSnap.id, docSnap.data()),
-    );
-    return mergeMapResources(resources);
+    });
+    return mergeMapResources([...resources.values()]);
   });

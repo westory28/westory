@@ -370,7 +370,11 @@ try {
       .getByRole("button", { name: "+ 새 역사교실", exact: true })
       .click();
     await assertNewDefaults(page);
-    await page.locator("#history-create-source-type").selectOption("lesson");
+    assert.equal(
+      await page.locator("#history-create-source-type").count(),
+      0,
+      "New assignments offer only lesson worksheets",
+    );
     await page.waitForFunction(
       () =>
         document.querySelectorAll("#history-create-source option").length === 2,
@@ -430,13 +434,12 @@ try {
       path: path.join(evidence, `teacher-create-${viewport.width}.png`),
       fullPage: true,
     });
-    await page.locator("#history-create-source-type").selectOption("map");
     assert.equal(
-      await page.locator("#history-create-source").inputValue(),
-      "map-1",
+      await page
+        .getByRole("button", { name: "지도 관리", exact: true })
+        .count(),
+      0,
     );
-    await page.locator("#history-create-source-type").selectOption("lesson");
-    await page.locator("#history-create-source").selectOption("a");
     await page.getByPlaceholder("이름으로 전체 학생 검색").fill("검증학생");
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     const reasonSelect = page.getByLabel("검증학생 배정 사유", { exact: true });
@@ -543,10 +546,7 @@ try {
     await page
       .getByRole("button", { name: `${longTitle} 설정 수정`, exact: true })
       .click();
-    assert.equal(
-      await page.locator("#history-edit-source-type").inputValue(),
-      "lesson",
-    );
+    assert.equal(await page.locator("#history-edit-source-type").count(), 0);
     assert.equal(await page.locator("#history-edit-source").inputValue(), "a");
     await page.locator("#history-edit-source").scrollIntoViewIfNeeded();
     const editGeometry = await measure(page, "#history-edit-source");
@@ -610,8 +610,30 @@ try {
       "unchanged source preserves the original assignment snapshot",
     );
 
+    // A pre-existing map assignment keeps its own pages and blanks even when
+    // its old live map changes. OCR regions were optional in production.
+    await page.evaluate(
+      ({ assignmentPath, map, scope }) => {
+        Object.assign(window.__fixture.store[assignmentPath], {
+          sourceType: "map",
+          title: map.title,
+          mapTitle: map.title,
+          mapResourceId: "map-1",
+          lessonUnitId: "",
+          lessonTitle: "",
+          lessonUnitPath: [],
+          pdfPageImages: map.pdfPageImages,
+          pdfRegions: [],
+          blanks: map.pdfBlanks,
+          answerOptions: map.pdfBlanks.map((blank) => blank.answer),
+        });
+        window.__fixture.store[`${scope}/map_resources/map-1`].pdfBlanks = [];
+        window.__remount();
+      },
+      { assignmentPath: created.path, map, scope },
+    );
     await page
-      .getByRole("button", { name: `${longTitle} 설정 수정`, exact: true })
+      .getByRole("button", { name: "한반도 지도 설정 수정", exact: true })
       .click();
     assert.equal(
       await page.getByLabel("검증학생 배정 사유", { exact: true }).inputValue(),
@@ -624,7 +646,7 @@ try {
     await page
       .getByLabel("검증학생 배정 사유", { exact: true })
       .selectOption("");
-    await page.locator("#history-edit-source-type").selectOption("map");
+    assert.equal(await page.locator("#history-edit-source-type").count(), 0);
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const mapped = await waitWrite(page, 3);
     assert.equal(
@@ -637,11 +659,13 @@ try {
     assert.equal(mapped.data.lessonUnitId, "");
     assert.deepEqual(mapped.data.lessonUnitPath, []);
     assert.deepEqual(mapped.data.blanks, map.pdfBlanks);
+    assert.deepEqual(mapped.data.pdfPageImages, map.pdfPageImages);
+    assert.deepEqual(mapped.data.pdfRegions, []);
 
     await page
       .getByRole("button", { name: "한반도 지도 설정 수정", exact: true })
       .click();
-    await page.locator("#history-edit-source-type").selectOption("lesson");
+    await page.locator("#history-edit-source").selectOption("chapter");
     assert.equal(await page.locator("#history-edit-source").inputValue(), "b");
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const changed = await waitWrite(page, 4);
@@ -1134,6 +1158,10 @@ try {
       reads: window.__fixture.reads,
       notifications: window.__fixture.notifications,
     }));
+    assert(
+      capture.reads.every((read) => !read.includes("map_resources")),
+      "History classroom never reads a live map resource",
+    );
     reports.push({
       viewport,
       options,

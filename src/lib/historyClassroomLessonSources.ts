@@ -87,24 +87,19 @@ export const getHistoryClassroomSourceId = (
     : assignment.mapResourceId;
 
 export const getHistoryClassroomSourceFields = (resource: MapResource) => {
-  if ("lessonUnitId" in resource) {
-    const lesson = resource as HistoryClassroomLessonSource;
-    return {
-      sourceType: "lesson" as const,
-      lessonUnitId: lesson.lessonUnitId,
-      lessonTitle: lesson.lessonTitle,
-      lessonUnitPath: lesson.lessonUnitPath,
-      mapResourceId: "",
-      mapTitle: "",
-    };
+  if (!("lessonUnitId" in resource) || !resource.lessonUnitId) {
+    throw new Error(
+      "역사교실에는 빈칸이 저장된 수업 자료만 연결할 수 있습니다.",
+    );
   }
+  const lesson = resource as HistoryClassroomLessonSource;
   return {
-    sourceType: "map" as const,
-    lessonUnitId: "",
-    lessonTitle: "",
-    lessonUnitPath: [],
-    mapResourceId: resource.id,
-    mapTitle: resource.title,
+    sourceType: "lesson" as const,
+    lessonUnitId: lesson.lessonUnitId,
+    lessonTitle: lesson.lessonTitle,
+    lessonUnitPath: lesson.lessonUnitPath,
+    mapResourceId: "",
+    mapTitle: "",
   };
 };
 

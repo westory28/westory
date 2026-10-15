@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm run typecheck && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection",
+    "prebuild": "npm run typecheck && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection && npm run verify:history-atlas",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "verify:semester-archive": "node scripts/verify-semester-archive.mjs",
@@ -28,7 +28,8 @@
     "verify:semester-readiness-client": "node scripts/verify-semester-readiness-client.mjs",
     "verify:teacher-patch-note-commands": "node scripts/verify-teacher-patch-note-commands.mjs && node scripts/verify-teacher-patch-note-sync.mjs && node scripts/verify-teacher-patch-memo-controller.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",
@@ -37,6 +38,7 @@
     "@fullcalendar/list": "^6.1.20",
     "@fullcalendar/react": "^6.1.20",
     "chart.js": "^4.5.1",
+    "d3-geo": "^3.1.1",
     "exceljs": "^4.4.0",
     "firebase": "^12.9.0",
     "jszip": "^3.10.2",
@@ -55,6 +57,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.0",
+    "@types/d3-geo": "^3.1.0",
     "@types/node": "^22.14.0",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",

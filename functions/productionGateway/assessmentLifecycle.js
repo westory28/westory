@@ -661,10 +661,35 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const path = `${semesterRoot(payload.semesterId)}/history_classrooms/${payload.sourceId}`;
       const snapshot = await transaction.get(path);
       const currentRevision = assertContentRevision(snapshot, payload.expectedRevision, "History Classroom source");
+      const worksheet = (value) => ({ blanks: value?.blanks || [], pdfPageImages: value?.pdfPageImages || [], pdfRegions: value?.pdfRegions || [] });
+      const isLessonSource = payload.source.sourceType === "lesson";
+      const legacyWorksheet = (value) => ({ ...worksheet(value), blanks: (value?.blanks || []).map((blank) => ({
+        ...blank, prompt: String(blank?.prompt || "").trim(), source: blank?.source === "ocr" ? "ocr" : "manual",
+      })) });
+      if (isLessonSource) {
+        if (!String(payload.source.lessonUnitId || "").trim() || String(payload.source.mapResourceId || "").trim()) {
+          fail("invalid-argument", "역사교실은 학습지 자료만 연결할 수 있습니다.", "ASSESSMENT_LESSON_SOURCE_INVALID");
+        }
+      } else {
+        // Old map assignments retain their own immutable worksheet and results.
+        // Their map ID is archival provenance, never a live source or a template
+        // for creating another assignment through a stale client.
+        if (!snapshot.exists || snapshot.data?.sourceType === "lesson" ||
+            ![undefined, "", "map"].includes(payload.source.sourceType) ||
+            String(payload.source.mapResourceId || "") !== String(snapshot.data?.mapResourceId || "") ||
+            canonicalJson(legacyWorksheet(snapshot.data)) !== canonicalJson(legacyWorksheet(payload.source)) ||
+            canonicalJson(snapshot.data?.answerOptions || []) !== canonicalJson(payload.source.answerOptions || [])) {
+          fail("failed-precondition", "지도 연결이 종료되었습니다. 새 역사교실은 학습지를 선택해 주세요.", "ASSESSMENT_MAP_SOURCE_DISCONNECTED");
+        }
+      }
+      // Normalizing a legacy blank adds optional prompt/source defaults. Keep
+      // its exact stored worksheet bytes when only assignment settings change.
+      const source = isLessonSource ? payload.source : {
+        ...payload.source, ...worksheet(snapshot.data), answerOptions: snapshot.data?.answerOptions || [],
+      };
       const definitionId = `history_classroom:${payload.semesterId}:${payload.sourceId}`;
       const definition = await transaction.get(definitionPath(definitionId));
-      const worksheet = (value) => ({ blanks: value?.blanks || [], pdfPageImages: value?.pdfPageImages || [], pdfRegions: value?.pdfRegions || [] });
-      if (snapshot.exists && canonicalJson(worksheet(snapshot.data)) !== canonicalJson(worksheet(payload.source))) {
+      if (snapshot.exists && canonicalJson(worksheet(snapshot.data)) !== canonicalJson(worksheet(source))) {
         const [attempts, results, legacyResults] = await Promise.all([
           transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: definitionId }),
           transaction.query(RESULT_COLLECTION, { field: "definitionId", operator: "==", value: definitionId }),
@@ -678,7 +703,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       }
       const nextRevision = currentRevision + 1;
       transaction.set(path, {
-        ...payload.source,
+        ...source,
         // Reset permission is owned by reset commands; a stale editor must not
         // remove it or manufacture a new local-lock release marker.
         retryResetByStudentUid: snapshot.data?.retryResetByStudentUid || {},
@@ -695,7 +720,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       if (definition.exists && definition.data?.status === "PUBLISHED")
         transaction.set(definition.path, { status: "PAUSED", revision: Number(definition.data.revision || 0) + 1,
           transitionReason: payload.reason, updatedAt: timestamp, updatedBy: actor.actorUid, commandId }, { merge: true });
-      return { target: { kind: "history-classroom-source", id: payload.sourceId, refs: [path, ...(definition.exists && definition.data?.status === "PUBLISHED" ? [definition.path] : [])] }, sourceHash: sha256(canonicalJson(payload.source)), result: { sourceId: payload.sourceId, contentRevision: nextRevision } };
+      return { target: { kind: "history-classroom-source", id: payload.sourceId, refs: [path, ...(definition.exists && definition.data?.status === "PUBLISHED" ? [definition.path] : [])] }, sourceHash: sha256(canonicalJson(source)), result: { sourceId: payload.sourceId, contentRevision: nextRevision } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.DELETE_HISTORY_CLASSROOM_SOURCE) {
@@ -721,20 +746,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
     if (commandType === ASSESSMENT_COMMAND_TYPES.UPDATE_MAP_RESOURCE_BLANKS) {
       assertTeacherActor(actor);
       await assertAssessmentSemesterWritable(transaction, payload.semesterId);
-      const path = `${semesterRoot(payload.semesterId)}/map_resources/${payload.mapResourceId}`;
-      const snapshot = await transaction.get(path);
-      if (!snapshot.exists) fail("not-found", "Map resource was not found.", "ASSESSMENT_MAP_RESOURCE_NOT_FOUND");
-      const currentRevision = assertContentRevision(snapshot, payload.expectedRevision, "Map resource");
-      const nextRevision = currentRevision + 1;
-      transaction.set(path, {
-        pdfBlanks: payload.pdfBlanks,
-        answerOptions: payload.answerOptions,
-        contentRevision: nextRevision,
-        updatedAt: timestamp,
-        updatedBy: actor.actorUid,
-        updateReason: payload.reason,
-      }, { merge: true });
-      return { target: { kind: "map-resource-blanks", id: payload.mapResourceId, refs: [path] }, sourceHash: sha256(canonicalJson({ pdfBlanks: payload.pdfBlanks, answerOptions: payload.answerOptions })), result: { mapResourceId: payload.mapResourceId, contentRevision: nextRevision } };
+      fail("failed-precondition", "지도 연결이 종료되었습니다. 수업자료에서 학습지 빈칸을 수정해 주세요.", "ASSESSMENT_MAP_SOURCE_DISCONNECTED");
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION) {

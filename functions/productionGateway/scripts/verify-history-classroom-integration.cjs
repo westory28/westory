@@ -46,7 +46,7 @@ const expectCode = (code) => (error) => error.code === code;
     [`semester_manifests/${semesterId}`]: { semesterId, status: "ACTIVE", revision: 1 },
     "users/teacher": { role: "teacher", teacherPortalEnabled: true },
     "semester_classes/class_one": { semesterId, classId: "class_one", grade: "3", classNumber: "2", status: "ACTIVE" },
-    [`${root}/history_classrooms/history-one`]: { title: "합성 역사교실", isPublished: true, targetStudentUids: students,
+    [`${root}/history_classrooms/history-one`]: { title: "합성 역사교실", sourceType: "lesson", lessonUnitId: "unit-one", mapResourceId: "", isPublished: true, targetStudentUids: students,
       blanks: [{ id: "blank-1", answer: "고려" }], passThresholdPercent: 100 },
   };
   for (const uid of students) {

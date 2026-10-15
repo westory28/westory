@@ -30,13 +30,11 @@ import {
   getHistoryClassroomStudentRetryResetMs,
   isHistoryClassroomDeleted,
   isHistoryClassroomPastDue,
-  mergeHistoryClassroomMapSnapshot,
   normalizeHistoryClassroomAssignment,
   summarizeHistoryClassroomAnswers,
   type HistoryClassroomAnswerCheck,
   type HistoryClassroomAssignment,
 } from "../../../lib/historyClassroom";
-import { normalizeMapResource } from "../../../lib/mapResources";
 import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 
 import {
@@ -397,29 +395,10 @@ const HistoryClassroomRunner: React.FC = () => {
         const snap = await getDoc(doc(db, assignmentReadPathRef.current));
         if (!snap.exists())
           throw new Error("역사교실 자료를 찾을 수 없습니다.");
-        let loaded = normalizeHistoryClassroomAssignment(snap.id, snap.data());
-        if (
-          loaded.sourceType !== "lesson" &&
-          loaded.mapResourceId &&
-          (!(loaded.pdfPageImages?.length || 0) ||
-            !(loaded.pdfRegions?.length || 0))
-        ) {
-          let mapSnap = await getDoc(
-            doc(
-              db,
-              getSemesterDocPath(config, "map_resources", loaded.mapResourceId),
-            ),
-          );
-          if (!mapSnap.exists())
-            mapSnap = await getDoc(
-              doc(db, `map_resources/${loaded.mapResourceId}`),
-            );
-          if (mapSnap.exists())
-            loaded = mergeHistoryClassroomMapSnapshot(
-              loaded,
-              normalizeMapResource(mapSnap.id, mapSnap.data()),
-            );
-        }
+        const loaded = normalizeHistoryClassroomAssignment(
+          snap.id,
+          snap.data(),
+        );
         if (isHistoryClassroomDeleted(loaded) || !loaded.isPublished)
           throw new Error("현재 공개된 과제가 아닙니다.");
         if (

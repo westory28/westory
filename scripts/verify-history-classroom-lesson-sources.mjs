@@ -107,7 +107,7 @@ const {
   normalizeHistoryClassroomAssignment,
   normalizeHistoryClassroomResult,
   sanitizeHistoryClassroomAssignmentForWrite,
-  mergeHistoryClassroomMapSnapshot,
+  getHistoryClassroomBlankRenderRect,
   summarizeHistoryClassroomAnswers,
   grantHistoryClassroomExemptions,
   createHistoryClassroomExemptionRequest,
@@ -407,21 +407,66 @@ for (const [input, expected] of [
 }
 assert.equal(oldMap.sourceType, "map");
 assert.equal(getHistoryClassroomSourceId(oldMap), "map-1");
-assert.equal(
-  mergeHistoryClassroomMapSnapshot(oldMap, {
-    pdfPageImages: source.pdfPageImages,
-  }).pdfPageImages.length,
-  2,
-  "Legacy map snapshots still use map fallback",
+assert.throws(
+  () => getHistoryClassroomSourceFields({ id: "map-1", title: "한반도" }),
+  /수업 자료만/,
+  "New assignments cannot select or clone map resources",
 );
-const emptyLesson = { ...assignment, pdfPageImages: [] };
+const detachedMap = normalizeHistoryClassroomAssignment("detached-map", {
+  mapResourceId: "map-1",
+  mapTitle: "이전 지도",
+  pdfPageImages: source.pdfPageImages,
+  blanks: source.pdfBlanks,
+  // Three production map assignments have no stored OCR regions.
+});
+assert.deepEqual(plain(detachedMap.pdfRegions), []);
 assert.equal(
-  mergeHistoryClassroomMapSnapshot(emptyLesson, {
-    pdfPageImages: source.pdfPageImages,
-  }).pdfPageImages.length,
-  0,
-  "Lesson snapshots must never borrow map pages",
+  summarizeHistoryClassroomAnswers(detachedMap, {
+    "teacher-blank-original": "고조선",
+    second: "삼국",
+  }).percent,
+  100,
+  "Legacy snapshot answers remain usable without OCR regions",
 );
+for (const blank of detachedMap.blanks) {
+  const page = detachedMap.pdfPageImages.find(
+    (item) => item.page === blank.page,
+  );
+  const rect = getHistoryClassroomBlankRenderRect(
+    blank,
+    page,
+    detachedMap.pdfRegions,
+  );
+  assert(
+    [rect.leftRatio, rect.topRatio, rect.widthRatio, rect.heightRatio].every(
+      Number.isFinite,
+    ),
+  );
+  assert(
+    rect.widthRatio > 0 && rect.heightRatio > 0,
+    "Stored blank coordinates render without live OCR data",
+  );
+}
+assert.deepEqual(
+  plain(sanitizeHistoryClassroomAssignmentForWrite(detachedMap).pdfPageImages),
+  plain(detachedMap.pdfPageImages),
+);
+assert.deepEqual(
+  plain(sanitizeHistoryClassroomAssignmentForWrite(detachedMap).blanks),
+  plain(detachedMap.blanks),
+);
+for (const filename of [
+  "src/pages/teacher/ManageHistoryClassroom.tsx",
+  "src/pages/student/history-classroom/HistoryClassroomRunner.tsx",
+]) {
+  const code = readFileSync(filename, "utf8");
+  assert(
+    !/map_resources|mergeHistoryClassroomMapSnapshot|updateMapResourceBlanks/u.test(
+      code,
+    ),
+    `${filename}: live map coupling remains`,
+  );
+}
 
 const scope = "years/2031/semesters/2";
 documents = new Map([
