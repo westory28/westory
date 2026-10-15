@@ -62,7 +62,6 @@ import {
   normalizeMyAssessmentRecords,
   savedReviewQuestion,
   formatRecordedScore,
-  readRecordedObservation,
   type MyAssessmentRecord,
   type MyAssessmentDetail,
 } from "./mypage/assessmentRecords";
@@ -181,7 +180,6 @@ interface WrongNoteItem {
   questionAvailable: boolean;
   answerAvailable: boolean;
   userAnswerAvailable: boolean;
-  observation: { label: string; value: string }[];
   unitId: string;
   unitTitle: string;
   bigUnitId: string;
@@ -1386,7 +1384,6 @@ const MyPage: React.FC = () => {
           questionAvailable: question.questionAvailable,
           answerAvailable: question.answerAvailable,
           userAnswerAvailable: question.userAnswerAvailable,
-          observation: readRecordedObservation(log.detail.observation),
           unitId: log.unitId,
           unitTitle:
             log.unitId === "exam_prep"
@@ -1848,7 +1845,6 @@ const MyPage: React.FC = () => {
         questionAvailable: false,
         answerAvailable: false,
         userAnswerAvailable: false,
-        observation: [],
         unitId: attempt.unitId,
         unitTitle: attempt.unitTitle,
         bigUnitId: attempt.bigUnitId,
@@ -3956,23 +3952,6 @@ const MyPage: React.FC = () => {
                         <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-[15px] font-bold leading-7 text-slate-700">
                           해설: {selectedReviewItem.explanation}
                         </div>
-                      )}
-                      {selectedReviewItem.observation.length > 0 && (
-                        <details className="mt-3 rounded-lg bg-white px-3 py-2.5 text-sm text-slate-600">
-                          <summary className="min-h-11 cursor-pointer py-3 font-bold">
-                            풀이 관측 기록
-                          </summary>
-                          <dl className="grid grid-cols-2 gap-3 py-2">
-                            {selectedReviewItem.observation.map((item) => (
-                              <div key={item.label}>
-                                <dt>{item.label}</dt>
-                                <dd className="font-bold text-slate-800">
-                                  {item.value}
-                                </dd>
-                              </div>
-                            ))}
-                          </dl>
-                        </details>
                       )}
                     </article>
                   </div>

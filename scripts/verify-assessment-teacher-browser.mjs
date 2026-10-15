@@ -23,9 +23,11 @@ export const questions=Array.from({length:6},(_,index)=>({id:1001+index,unitId:'
 export const config={year:'2026',semester:'1',currentYear:'2026',currentSemester:'1',schoolName:'합성 검증 학교'};
 export const students=[{id:'synthetic-1',data:()=>({role:'student',studentGrade:'3',studentClass:'1',studentNumber:'1',studentName:'가상학생가'})},{id:'synthetic-2',data:()=>({role:'student',studentGrade:'3',studentClass:'1',studentNumber:'2',studentName:'가상학생나'})}];
 const analytics={version:1,quality:'complete',questions:Object.fromEntries(questions.map(q=>[q.id,{activeMs:22000,hiddenMs:3000,confidenceMs:2000,firstResponseMs:12000,finalResponseMs:18000,answerChangeCount:1,revisitCount:1,confidence:'sure',quality:'complete',hintViewed:q.id===1002}]))};
-export const results=[{id:'synthetic-result',data:()=>({assessmentKind:'QUIZ',semesterId:'2026-1',studentUid:'synthetic-1',definitionId:'quiz:2026-1:mid-1:diagnostic',sourceId:'mid-1',category:'diagnostic',percent:25,submittedAtIso:'2026-10-15T02:00:00Z',learningSnapshot:questions.slice(0,4),answerChecks:questions.slice(0,4).map((q,i)=>({id:String(q.id),correct:i===0})),answers:Object.fromEntries(questions.slice(0,4).map((q,i)=>[q.id,i===0?'왕권 강화':'지방 세력의 독립'])),analytics})}];
+export const results=[{id:'synthetic-result',data:()=>({assessmentKind:'QUIZ',semesterId:'2026-1',studentUid:'synthetic-1',definitionId:'quiz:2026-1:mid-1:diagnostic',sourceId:'mid-1',category:'diagnostic',percent:25,submittedAtIso:'2026-10-15T02:00:00Z',learningSnapshot:questions.slice(0,4).map(q=>({...q,sourceRevision:"1"})),questionSnapshots:questions.slice(0,4),answerChecks:questions.slice(0,4).map((q,i)=>({id:String(q.id),correct:i===0})),answers:Object.fromEntries(questions.slice(0,4).map((q,i)=>[q.id,i===0?'왕권 강화':'지방 세력의 독립'])),analytics})}];
+students.push({id:'synthetic-3',data:()=>({role:'student',studentGrade:'2',studentClass:'1',studentNumber:'3',studentName:'가상학생다'})});
+results.push({id:'synthetic-result-grade2',data:()=>({...results[0].data(),studentUid:'synthetic-3',percent:75,submittedAtIso:'2026-10-15T03:00:00Z',answerChecks:questions.slice(0,4).map((q,i)=>({id:String(q.id),correct:i>0})),answers:Object.fromEntries(questions.slice(0,4).map((q,i)=>[q.id,i>0?'왕권 강화':'지방 세력의 독립']))})});
 export const fixtureState={writes:[],questions};window.assessmentTeacherFixture=fixtureState;
-export const db={};export const useAuth=()=>({config,userData:{role:'teacher',email:'westoria28@gmail.com'},currentUser:{uid:'synthetic-teacher',email:'westoria28@gmail.com'},interfaceConfig:{}});
+export const db={};export const useAuth=()=>({config,userData:new URLSearchParams(location.search).get('scenario')==='readonly'?{role:'staff',staffPermissions:['quiz_read'],email:'synthetic-readonly@example.invalid'}:{role:'teacher',email:'westoria28@gmail.com'},currentUser:{uid:'synthetic-teacher',email:new URLSearchParams(location.search).get('scenario')==='readonly'?'synthetic-readonly@example.invalid':'westoria28@gmail.com'},interfaceConfig:{}});
 export const doc=(_db,...parts)=>({path:parts.join('/')});export const collection=doc;export const where=(field,op,value)=>({field,op,value});export const orderBy=()=>({});export const limit=()=>({});export const query=(ref,...constraints)=>({...ref,constraints});
 export const getDoc=async(ref)=>{if(new URLSearchParams(location.search).get('scenario')==='error')throw new Error('Synthetic read failure');return {exists:()=>true,data:()=>ref.path.includes('curriculum')?{tree}:{}}};
 export const getDocs=async(ref)=>{if(new URLSearchParams(location.search).get('scenario')==='error')throw new Error('Synthetic read failure');let docs=ref.path.endsWith('quiz_questions')?questions.map(q=>({id:String(q.id),data:()=>q})):ref.path==='users'?students:ref.path==='semester_assessment_results'?results:[];if(new URLSearchParams(location.search).get('scenario')==='empty')docs=[];(ref.constraints||[]).forEach(c=>{if(c.field&&c.op==='==')docs=docs.filter(d=>d.data()[c.field]===c.value)});return {docs,empty:!docs.length,size:docs.length,forEach:fn=>docs.forEach(fn)}};
@@ -113,14 +115,14 @@ await new Promise((resolve) =>
 console.log(
   JSON.stringify({
     origin: `http://127.0.0.1:${server.address().port}`,
-    scenarios: ["/?scenario=empty", "/?scenario=error"],
+    scenarios: ["/?scenario=empty", "/?scenario=error", "/?scenario=readonly"],
     checks: [
       "390/768/1280px",
       "full unit titles",
       "bank → derived editor rich content",
       "unchanged derivative rejection",
       "metadata limits",
-      "student evidence and raw observation",
+      "unified filters, charts, student/question details",
       "keyboard modal focus and Escape",
     ],
     productionServices: false,

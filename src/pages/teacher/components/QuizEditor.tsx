@@ -2434,8 +2434,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         }
                       />
                       <span>
-                        원본 #{derivationSource.id}에서 바꾼 발문·자료·보기와
-                        정답·해설의 일치를 확인했습니다.
+                        원본에서 바꾼 발문·자료·보기와 정답·해설의 일치를
+                        확인했습니다.
                       </span>
                     </label>
                   )}

@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import QuizUnitTree from "./components/QuizUnitTree";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import QuizEditor, { type QuizQuestionDraft } from "./components/QuizEditor";
-import QuizLogTab from "./components/QuizLogTab";
 import QuizBankTab from "./components/QuizBankTab";
 import QuizSettingsModal from "./components/QuizSettingsModal";
 import { db } from "../../lib/firebase";
@@ -26,9 +25,6 @@ interface TreeUnit {
 const ManageQuiz: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<"manage" | "log" | "bank">(
-    "manage",
-  );
   const [selectedNode, setSelectedNode] = useState<{
     id: string;
     title: string;
@@ -43,18 +39,23 @@ const ManageQuiz: React.FC = () => {
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
   const [sourceQuestion, setSourceQuestion] =
     useState<QuizQuestionDraft | null>(null);
-  const [bankQuestionIds, setBankQuestionIds] = useState<string[]>([]);
   const canRead = canReadQuizManagement(userData, currentUser?.email || "");
   const canWrite = canWriteQuizManagement(userData, currentUser?.email || "");
+  const requestedTab = searchParams.get("tab");
+  const activeTab =
+    canWrite && !["analysis", "bank", "log"].includes(requestedTab || "")
+      ? "manage"
+      : "analysis";
   const isManageTab = activeTab === "manage";
 
   useEffect(() => {
-    const requestedTab = searchParams.get("tab");
-    if (requestedTab === "log") setActiveTab("log");
-    else if (requestedTab === "bank") setActiveTab("bank");
-    else setActiveTab(canWrite ? "manage" : "log");
     setMobileTreeOpen(false);
-  }, [canWrite, searchParams]);
+    if (requestedTab === "bank" || requestedTab === "log") {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("tab", "analysis");
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [requestedTab, searchParams, setSearchParams]);
 
   useEffect(() => {
     const loadTree = async () => {
@@ -154,8 +155,7 @@ const ManageQuiz: React.FC = () => {
                     },
                   ]
                 : []),
-              { id: "bank", label: "문제 은행", icon: "fa-layer-group" },
-              { id: "log", label: "학습 진단", icon: "fa-chart-simple" },
+              { id: "analysis", label: "평가 분석", icon: "fa-chart-simple" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -163,7 +163,6 @@ const ManageQuiz: React.FC = () => {
                 aria-current={activeTab === tab.id ? "page" : undefined}
                 className={`quiz-workspace-tab${activeTab === tab.id ? " is-active" : ""}`}
                 onClick={() => {
-                  setBankQuestionIds([]);
                   setSourceQuestion(null);
                   setSearchParams({ tab: tab.id });
                 }}
@@ -174,12 +173,6 @@ const ManageQuiz: React.FC = () => {
             ))}
           </nav>
         </header>
-        {!canWrite && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-            읽기 전용 권한입니다. 문제 등록, 수정, 삭제는 관리자만 가능합니다.
-          </div>
-        )}
-
         {canWrite && activeTab === "manage" && (
           <div className="flex min-w-0 flex-col">
             <div className="flex min-w-0 flex-col">
@@ -208,23 +201,11 @@ const ManageQuiz: React.FC = () => {
           </div>
         )}
 
-        {activeTab === "log" && (
-          <div>
-            <QuizLogTab
-              onOpenQuestions={(ids) => {
-                setBankQuestionIds(ids);
-                setSearchParams({ tab: "bank" });
-              }}
-            />
-          </div>
-        )}
-        {activeTab === "bank" && (
+        {activeTab === "analysis" && (
           <div>
             <QuizBankTab
               canEdit={canWrite}
               onDeriveQuestion={openDerivedQuestion}
-              focusedQuestionIds={bankQuestionIds}
-              onClearFocus={() => setBankQuestionIds([])}
             />
           </div>
         )}

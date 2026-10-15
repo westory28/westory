@@ -206,32 +206,3 @@ export const buildAssessmentScoreDistribution = (
   });
   return bands;
 };
-
-export const readRecordedObservation = (value: unknown) => {
-  const data = object(value);
-  if (data.quality !== "complete" && data.quality !== "partial") return [];
-  const fields = [
-    ["activeMs", "문항 열람", "초"],
-    ["hiddenMs", "화면 이탈", "초"],
-    ["firstResponseMs", "첫 응답까지", "초"],
-    ["finalResponseMs", "최종 응답까지", "초"],
-    ["answerChangeCount", "답 변경", "회"],
-    ["revisitCount", "재방문", "회"],
-  ] as const;
-  const rows: { label: string; value: string }[] = fields.flatMap(
-    ([key, label, unit]) => {
-      const raw = data[key];
-      return typeof raw === "number" && Number.isFinite(raw) && raw >= 0
-        ? [
-            {
-              label,
-              value: `${unit === "초" ? Math.round(raw / 1000) : Math.floor(raw)}${unit}`,
-            },
-          ]
-        : [];
-    },
-  );
-  if (rows.length && data.quality === "partial")
-    rows.push({ label: "기록 범위", value: "일부만 기록" });
-  return rows;
-};

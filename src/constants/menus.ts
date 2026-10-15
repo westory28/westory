@@ -285,7 +285,7 @@ const consolidateAssessmentChildren = (item: MenuItem): MenuItem => {
     return (
       path === "/teacher/quiz" &&
       [...params.keys()].every((key) => key === "tab") &&
-      [null, "manage", "log", "bank"].includes(params.get("tab"))
+      [null, "manage", "analysis", "log", "bank"].includes(params.get("tab"))
     );
   };
   const workspace = (item.children || []).filter(isWorkspace);

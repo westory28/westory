@@ -11,10 +11,6 @@ import {
 import "./QuizLearning.css";
 import QuizLearningResult from "./QuizLearningResult";
 import {
-  buildAssessmentLearningSummary,
-  type AssessmentLearningQuestion,
-} from "../../../lib/assessmentLearning";
-import {
   collection,
   doc,
   getDoc,
@@ -116,19 +112,6 @@ interface QuizConfig {
   questionOrder?: AssessmentQuestionOrder;
 }
 
-interface ResultDetail {
-  questionId: number;
-  q: string;
-  u: string | undefined;
-  a: string | number;
-  correct: boolean;
-  exp?: string;
-  image?: string;
-  passage?: string;
-  type?: Question["type"];
-  matchingPairs?: MatchingPair[];
-}
-
 const ORDER_DELIMITER = "||";
 const MATCHING_PAIR_DELIMITER = "=>";
 
@@ -220,16 +203,8 @@ const QuizRunner: React.FC = () => {
   const [quizDeadlineMs, setQuizDeadlineMs] = useState<number | null>(null);
 
   const [score, setScore] = useState(0);
-  const [results, setResults] = useState<ResultDetail[]>([]);
-  const [resultSnapshotOmittedCount, setResultSnapshotOmittedCount] =
-    useState(0);
-  const [resultLearningSnapshot, setResultLearningSnapshot] = useState<
-    AssessmentLearningQuestion[] | undefined
-  >();
-  const [resultTelemetry, setResultTelemetry] = useState<
-    AssessmentTelemetrySnapshot | null | undefined
-  >();
-  const [pointNotice, setPointNotice] = useState("");
+  const [resultCounts, setResultCounts] = useState({ correct: 0, total: 0 });
+  const [assessmentTitle, setAssessmentTitle] = useState("");
   const [finishSubmitting, setFinishSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitConflict, setSubmitConflict] = useState(false);
@@ -979,52 +954,13 @@ const QuizRunner: React.FC = () => {
       submitReason: isTimeout ? "TIMEOUT" : "STUDENT",
       analytics: pendingSubmitAnalyticsRef.current,
     });
-    const serverChecks = new Map(
-      submitted.answerChecks.map((check) => [check.id, check.correct]),
-    );
-    const resultDetails: ResultDetail[] = [];
-    const reviewQuestions = new Map(
-      (submitted.questionSnapshots || []).map((item) => [
-        String(item.id),
-        item,
-      ]),
-    );
-
-    questionList.forEach((question) => {
-      const storedAnswer = answerMap[String(question.id)] || "";
-      const isCorrect = serverChecks.get(String(question.id)) === true;
-      const snapshot = reviewQuestions.get(String(question.id));
-
-      resultDetails.push({
-        questionId: question.id,
-        q: snapshot?.question || question.question,
-        u: storedAnswer,
-        a: snapshot?.answer || "",
-        correct: isCorrect,
-        exp: snapshot?.explanation,
-        image: question.image,
-        passage: question.passage,
-        type: question.type,
-        matchingPairs: snapshot?.matchingPairs || [],
-      });
-    });
-
     setScore(submitted.percent);
-    setResults(resultDetails);
-    setResultSnapshotOmittedCount(
-      submitted.questionSnapshotOmittedIds?.length ??
-        (submitted.questionSnapshots ? 0 : resultDetails.length),
-    );
-    setResultLearningSnapshot(
-      submitted.learningSnapshot || activeAttempt.learningSnapshot,
-    );
-    setResultTelemetry(
-      submitted.analytics === undefined
-        ? pendingSubmitAnalyticsRef.current
-        : submitted.analytics,
-    );
+    setResultCounts({
+      correct: submitted.answerChecks.filter((check) => check.correct === true)
+        .length,
+      total: submitted.answerChecks.length,
+    });
     setFinalizedResultId(submitted.attemptId);
-    setPointNotice("");
     setActiveSubmission((prev) =>
       prev
         ? normalizeQuizSubmissionDoc(prev.id, {
@@ -1054,7 +990,6 @@ const QuizRunner: React.FC = () => {
     return {
       resultId: submitted.attemptId,
       finalScore: submitted.percent,
-      resultDetails,
       reward: submitted.reward,
       replayedSubmission: submitted.replayedSubmission,
     };
@@ -1293,7 +1228,6 @@ const QuizRunner: React.FC = () => {
       setFinishSubmitting(false);
       setSubmitError("");
       setSubmitConflict(false);
-      setPointNotice("");
       setActiveSubmission(null);
       setQuizDeadlineMs(null);
       setServerTimeOffsetMs(0);
@@ -1311,6 +1245,9 @@ const QuizRunner: React.FC = () => {
         setView("intro");
         return;
       }
+      setAssessmentTitle(
+        normalizeStudentText(assessmentState.definition.title),
+      );
       const stateBlockReason =
         assessmentState.status === "PERMISSION"
           ? "현재 학기·학급 배정으로는 이 평가에 응시할 수 없습니다."
@@ -1725,75 +1662,23 @@ const QuizRunner: React.FC = () => {
     pointResult: AssessmentRewardResult | undefined,
     replayedSubmission: boolean,
   ) => {
-    if (!pointResult || pointResult.status === "NOT_RECORDED") {
-      setPointNotice("이전 제출에는 보상 내역이 기록되어 있지 않습니다.");
-      return;
-    }
     if (
-      pointResult.status === "DISABLED" ||
-      pointResult.status === "NOT_ELIGIBLE"
+      !pointResult ||
+      replayedSubmission ||
+      ["NOT_RECORDED", "DISABLED", "NOT_ELIGIBLE", "DUPLICATE"].includes(
+        pointResult.status,
+      )
+    )
+      return;
+    if (
+      pointResult.awarded &&
+      (pointResult.totalAwarded || pointResult.amount)
     ) {
-      setPointNotice(
-        pointResult.blockedMessage ||
-          "이번 문제 풀이에 지급할 위스가 없습니다.",
-      );
-      return;
-    }
-    if (replayedSubmission || pointResult.status === "DUPLICATE") {
-      setPointNotice(
-        pointResult.blockedMessage ||
-          "이번 문제 풀이 위스는 이미 반영되었습니다.",
-      );
-      return;
-    }
-    try {
-      if (
-        pointResult.awarded &&
-        (pointResult.totalAwarded || pointResult.amount)
-      ) {
+      try {
         notifyPointsUpdated();
+      } catch (error) {
+        console.error("Failed to refresh confirmed quiz point reward", error);
       }
-      if ((pointResult.totalAwarded || pointResult.amount) > 0) {
-        const totalAwarded = Number(
-          pointResult.totalAwarded || pointResult.amount || 0,
-        );
-        if (pointResult.bonusAwarded && pointResult.bonusAmount) {
-          setPointNotice(
-            `문제 풀이 위스가 적립되었습니다. 기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스`,
-          );
-          showToast({
-            tone: "success",
-            title: "문제 풀이 완료",
-            message: `기본 +${pointResult.amount}위스, 보너스 +${pointResult.bonusAmount}위스가 반영되었습니다.`,
-          });
-        } else {
-          setPointNotice(
-            `문제 풀이 위스가 적립되었습니다. +${totalAwarded}위스`,
-          );
-          showToast({
-            tone: "success",
-            title: "문제 풀이 완료",
-            message: `+${totalAwarded}위스가 반영되었습니다.`,
-          });
-        }
-      } else if (pointResult.duplicate) {
-        setPointNotice("이번 문제 풀이 위스는 이미 반영되었습니다.");
-        showToast({
-          tone: "info",
-          title: "문제 풀이 위스가 이미 반영되었습니다.",
-        });
-      }
-    } catch (pointError) {
-      console.error(
-        "Failed to display confirmed quiz point reward",
-        pointError,
-      );
-      setPointNotice("문제 풀이 위스를 바로 반영하지 못했습니다.");
-      showToast({
-        tone: "warning",
-        title: "문제 풀이 결과는 저장되었습니다.",
-        message: "위스 반영 상태를 바로 확인하지 못했습니다.",
-      });
     }
   };
 
@@ -1904,11 +1789,10 @@ const QuizRunner: React.FC = () => {
                 </span>
               </div>
 
-              <h1 className="mt-3 break-keep text-2xl font-black leading-tight text-slate-950 sm:mt-4 sm:text-3xl">
-                {title}
-              </h1>
-              <div className="mt-2 flex items-center gap-1 text-sm text-slate-500">
-                <span>풀이 기록</span>
+              <div className="mt-3 flex items-center gap-1 sm:mt-4">
+                <h1 className="break-keep text-2xl font-black leading-tight text-slate-950 sm:text-3xl">
+                  {title}
+                </h1>
                 <InfoHelp label="풀이 기록 수집 안내">
                   문항을 화면에서 본 시간, 첫 답과 마지막 답을 고른 시점, 답
                   변경·재방문·힌트 사용을 답안과 함께 저장합니다. 화면을 벗어난
@@ -2714,49 +2598,64 @@ const QuizRunner: React.FC = () => {
           finalizedResultId,
         )}`
       : "/student/mypage?menu=wrong_note";
-    const learningSummary = buildAssessmentLearningSummary({
-      studentUid: fallbackStudentUid,
-      semesterId: `${assessmentYear}-${assessmentSemester}`,
-      questions: questionBank,
-      attempts: [
-        {
-          id: finalizedResultId,
-          studentUid: fallbackStudentUid,
-          semesterId: `${assessmentYear}-${assessmentSemester}`,
-          submittedAt: Date.now(),
-          items: results.map((result) => ({
-            questionId: result.questionId,
-            correct: result.correct,
-            answer: result.u,
-            observation: resultTelemetry?.questions[String(result.questionId)],
-            hintViewed:
-              resultTelemetry?.questions[String(result.questionId)]
-                ?.hintViewed === true,
-          })),
-          questionMetadata: resultLearningSnapshot,
-        },
-      ],
-    });
+    if (resultCounts.total === 0) {
+      return (
+        <div role="alert" className="mx-auto w-full max-w-2xl p-6">
+          <p className="text-gray-700">
+            제출은 완료되었지만 문항별 채점 결과를 확인할 수 없습니다.
+          </p>
+          <button
+            type="button"
+            className="mt-4 min-h-11 font-bold text-blue-700 underline"
+            onClick={() => navigate(resultReviewUrl)}
+          >
+            저장된 답안 확인
+          </button>
+        </div>
+      );
+    }
+    const unitNames = Array.from(
+      new Set(
+        selectedQuestions
+          .map((question) => {
+            return [
+              question.refMid,
+              question.subUnitId,
+              question.refSmall,
+              question.refBig,
+              question.unitId,
+            ]
+              .map((id) => curriculumLabelsRef.current[id || ""])
+              .find(Boolean);
+          })
+          .filter(Boolean),
+      ),
+    );
+    const resultUnitTitle =
+      curriculumLabelsRef.current[unitId || ""] ||
+      unitNames.join(" · ") ||
+      (!isMockExamCategory(category) ? searchParams.get("title") : "") ||
+      "단원 정보 없음";
 
     return (
       <QuizLearningResult
+        assessmentTitle={
+          assessmentTitle ||
+          (category === "diagnostic"
+            ? "진단평가"
+            : category === "formative"
+              ? "형성평가"
+              : title)
+        }
+        unitTitle={resultUnitTitle}
         score={score}
-        correctCount={results.filter((result) => result.correct).length}
-        summary={learningSummary}
-        labels={curriculumLabelsRef.current}
-        pointNotice={pointNotice}
-        missingOriginalQuestionCount={resultSnapshotOmittedCount}
+        correctCount={resultCounts.correct}
+        totalCount={resultCounts.total}
         onReview={() => navigate(resultReviewUrl)}
-        onChooseAssessment={() => navigate("/student/quiz")}
         onRetry={() => {
           setView("loading");
           void initializeQuiz();
         }}
-        onLesson={(id) =>
-          navigate(
-            `/student/lesson/note?id=${encodeURIComponent(id)}&title=${encodeURIComponent(curriculumLabelsRef.current[id] || "수업 자료")}`,
-          )
-        }
       />
     );
   }

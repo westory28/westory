@@ -22,7 +22,6 @@ const {
   savedReviewQuestion: saved,
   buildAssessmentScoreDistribution: distribution,
   formatRecordedScore,
-  readRecordedObservation,
 } = await import(
   `data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString("base64")}`
 );
@@ -139,27 +138,6 @@ assert.deepEqual(snapshot.options, ["정답", "다른 답"]);
 assert.equal(snapshot.answer, "정답");
 assert.equal(saved({ q: "과거 지문", a: 0, exp: "과거 해설" }).answer, 0);
 assert.equal(saved({ id: "q" }).correctKnown, false);
-assert.deepEqual(readRecordedObservation(undefined), []);
-assert.deepEqual(
-  readRecordedObservation({ activeMs: 0 }),
-  [],
-  "No quality metadata means no observation claim",
-);
-assert.deepEqual(
-  readRecordedObservation({
-    quality: "partial",
-    activeMs: 12500,
-    firstResponseMs: null,
-    answerChangeCount: 0,
-    revisitCount: 1,
-  }),
-  [
-    { label: "문항 열람", value: "13초" },
-    { label: "답 변경", value: "0회" },
-    { label: "재방문", value: "1회" },
-    { label: "기록 범위", value: "일부만 기록" },
-  ],
-);
 const page = await readFile(
   new URL("../src/pages/student/MyPage.tsx", import.meta.url),
   "utf8",
@@ -176,4 +154,7 @@ assert.ok(
   !page.includes("꾸준히 노력하고 있어요") &&
     !page.includes("점수가 빨리 올라요"),
 );
-console.log("MyPage assessment records: 27 regression assertions passed.");
+assert.ok(
+  !page.includes("풀이 관측 기록") && !page.includes("readRecordedObservation"),
+);
+console.log("MyPage assessment records: 25 regression assertions passed.");
