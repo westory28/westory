@@ -948,6 +948,24 @@
     display: block;
   }
 }
+@media (max-width: 1023px) {
+  /* The teacher's floating memo launcher must not cover the map compass. */
+  .teacher-layout:has(.history-atlas-page) {
+    position: relative;
+  }
+  .teacher-layout:has(.history-atlas-page) > button[data-patch-memo-root] {
+    position: absolute;
+    top: calc(
+      var(--space-6, 24px) + env(safe-area-inset-top, 0px) +
+        var(--teacher-header-height, 64px) / 2 - 16px
+    );
+    right: calc(env(safe-area-inset-right, 0px) + 64px);
+    bottom: auto;
+    width: 32px;
+    height: 32px;
+    box-shadow: none;
+  }
+}
 @media (max-width: 639px) {
   .history-atlas__subjects button {
     flex: 1;
