@@ -208,10 +208,10 @@ function placeLabelLayout(
   points: MapPoint[],
   width: number,
   height: number,
-  obstacle: { right: number; bottom: number } | null,
+  obstacle: { left: number; top: number; right: number; bottom: number } | null,
 ) {
   const boxes: { left: number; top: number; right: number; bottom: number }[] =
-    obstacle ? [{ left: 0, top: 0, ...obstacle }] : [];
+    obstacle ? [obstacle] : [];
   const occupied = new Map<string, MapPoint[]>();
   const labelLimit = Math.max(12, Math.floor((width * height) / 7500));
   return [...points]
@@ -235,7 +235,9 @@ function placeLabelLayout(
       }
       const behindCard =
         obstacle &&
+        point.x > obstacle.left - 22 &&
         point.x < obstacle.right + 22 &&
+        point.y > obstacle.top - 22 &&
         point.y < obstacle.bottom + 22;
       const hitVisible = !behindCard && (point.active || !overlaps);
       if (hitVisible) {
@@ -245,7 +247,10 @@ function placeLabelLayout(
       const textWidth = Math.max(24, point.name.length * 14);
       const naturalWidth = Math.max(40, textWidth + (point.active ? 16 : 12));
       const frameLeft =
-        point.active && obstacle && point.x > obstacle.right + 22
+        point.active &&
+        obstacle &&
+        point.y > obstacle.top - 22 &&
+        point.x > obstacle.right + 22
           ? obstacle.right + 12
           : 8;
       const frameTop =
@@ -324,7 +329,8 @@ export default function HistoryAtlas({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const placesButtonRef = useRef<HTMLButtonElement>(null);
   const detailRef = useRef<HTMLElement>(null);
-  const selectionCardRef = useRef<HTMLButtonElement>(null);
+  const overlayRef = useRef<HTMLElement>(null);
+  const focusDetailsAfterListRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const [subject, setSubject] = useState<AtlasSubject>(initialSubject);
   const [unitId, setUnitId] = useState("");
@@ -332,11 +338,9 @@ export default function HistoryAtlas({
   const [regionId, setRegionId] = useState("");
   const [subregionId, setSubregionId] = useState("");
   const [query, setQuery] = useState("");
-  const [mobilePanel, setMobilePanel] = useState<"places" | "detail" | null>(
-    null,
-  );
+  const [mobilePanel, setMobilePanel] = useState<"places" | null>(null);
   const [filterNotice, setFilterNotice] = useState("");
-  const [detailOpen, setDetailOpen] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [listPage, setListPage] = useState(0);
   const [viewBounds, setViewBounds] = useState<AtlasUnit["bounds"] | null>(
     null,
@@ -346,9 +350,7 @@ export default function HistoryAtlas({
   const pendingFocusRef = useRef<string | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [mapWidth, setMapWidth] = useState(640);
-  const [compactOverlayTop, setCompactOverlayTop] = useState<number | null>(
-    null,
-  );
+  const [overlayTop, setOverlayTop] = useState<number | null>(null);
   const [geometry, setGeometry] = useState<{
     subject: AtlasSubject;
     bounds: AtlasUnit["bounds"];
@@ -359,7 +361,6 @@ export default function HistoryAtlas({
   const [transform, setTransform] = useState<AtlasTransform>(ATLAS_IDENTITY);
   const [cameraMoving, setCameraMoving] = useState(false);
   const [motionPaused, setMotionPaused] = useState(false);
-  const [highlightMotion, setHighlightMotion] = useState(true);
   const [moveMode, setMoveMode] = useState(false);
   const transformRef = useRef(transform);
   const movedRef = useRef(false);
@@ -370,7 +371,7 @@ export default function HistoryAtlas({
     pointerId: number;
   } | null>(null);
   const wide = containerWidth >= 900;
-  const mapHeight = wide ? 640 : 400;
+  const mapHeight = wide ? 640 : 480;
   const placesById = useMemo(
     () => new Map(dataset.places.map((place) => [place.id, place])),
     [dataset.places],
@@ -462,19 +463,31 @@ export default function HistoryAtlas({
   );
   const selected =
     entries.find(({ entry }) => entry.id === selectedId) || firstPlace;
-  const availableMapHeight =
-    !wide && selected && compactOverlayTop !== null
-      ? compactOverlayTop
-      : mapHeight - 80;
-  const overlayWidth = Math.min(360, mapWidth - 32);
-  const overlayMaxHeight = mapHeight - 32;
+  const overlayWidth = Math.min(wide ? 320 : 280, mapWidth - 16);
+  const overlayMaxHeight = mapHeight * (wide ? 0.55 : 0.42);
   const overlayObstacle = useMemo(
     () =>
-      wide && detailOpen && selected
-        ? { right: 16 + overlayWidth, bottom: 16 + overlayMaxHeight }
+      detailOpen && selected
+        ? {
+            left: 8,
+            top: overlayTop ?? mapHeight - overlayMaxHeight - 28,
+            right: 8 + overlayWidth,
+            bottom: mapHeight - 28,
+          }
         : null,
-    [wide, detailOpen, !!selected, overlayWidth, overlayMaxHeight],
+    [
+      detailOpen,
+      !!selected,
+      overlayTop,
+      mapHeight,
+      overlayWidth,
+      overlayMaxHeight,
+    ],
   );
+  const availableMapHeight =
+    overlayObstacle && mapWidth < 650
+      ? overlayObstacle.top - 8
+      : mapHeight - 32;
   const visiblePlaces = useMemo(() => {
     const result = new Map<string, LocatedEntry>();
     entries.forEach((item) => {
@@ -677,23 +690,23 @@ export default function HistoryAtlas({
   }, [wide]);
 
   useLayoutEffect(() => {
-    const card = selectionCardRef.current;
+    const card = overlayRef.current;
     const map = mapRef.current;
-    if (wide || !selected || !card || !map) {
-      setCompactOverlayTop(null);
+    if (!detailOpen || !selected || !card || !map) {
+      setOverlayTop(null);
       return;
     }
     const measure = () => {
       if (map.clientWidth <= 0 || card.clientWidth <= 0) return;
       const top = Math.max(0, Math.min(mapHeight, card.offsetTop));
-      setCompactOverlayTop((previous) => (previous === top ? previous : top));
+      setOverlayTop((previous) => (previous === top ? previous : top));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(card);
     observer.observe(map);
     return () => observer.disconnect();
-  }, [wide, selected?.entry.id, mapHeight]);
+  }, [detailOpen, wide, selected?.entry.id, mapHeight]);
 
   useEffect(() => {
     if (detailOpen && selected) {
@@ -726,6 +739,19 @@ export default function HistoryAtlas({
         ?.querySelector<HTMLElement>("[data-panel-title]")
         ?.focus({ preventScroll: true });
   }, [mobilePanel, panelOpen]);
+
+  useEffect(() => {
+    if (panelOpen || !focusDetailsAfterListRef.current) return;
+    focusDetailsAfterListRef.current = false;
+    const frame = requestAnimationFrame(() => {
+      const title = detailRef.current?.querySelector("h2");
+      if (title) {
+        title.tabIndex = -1;
+        title.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [panelOpen]);
 
   const zoom = useCallback(
     (
@@ -794,7 +820,7 @@ export default function HistoryAtlas({
           width: mapWidth,
           height: availableMapHeight,
           mapHeight,
-          overlayRight: overlayObstacle?.right,
+          overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
         },
       ),
       true,
@@ -1020,7 +1046,8 @@ export default function HistoryAtlas({
     setSelectedId(next.entry.id);
     setDetailOpen(true);
     requestPlaceFocus(next.place.id);
-    if (!wide) setMobilePanel("detail");
+    focusDetailsAfterListRef.current = panelOpen;
+    setMobilePanel(null);
   };
   const selectStory = (next: LocatedEntry) => {
     const cleared: string[] = [];
@@ -1055,7 +1082,7 @@ export default function HistoryAtlas({
     setSelectedId(next.entry.id);
     setDetailOpen(true);
     requestPlaceFocus(next.place.id);
-    if (!wide) setMobilePanel("detail");
+    setMobilePanel(null);
   };
   const placeList = (
     <section className="history-atlas__places" aria-label="장소 목록">
@@ -1154,7 +1181,7 @@ export default function HistoryAtlas({
   return (
     <div
       ref={rootRef}
-      className={`history-atlas${wide ? " history-atlas--wide" : ""}${containerWidth >= 1100 ? " history-atlas--large" : ""}${cameraMoving ? " history-atlas--focusing" : ""}${motionPaused ? " history-atlas--paused" : ""}${highlightMotion ? "" : " history-atlas--motion-off"}`}
+      className={`history-atlas${wide ? " history-atlas--wide" : ""}${containerWidth >= 1100 ? " history-atlas--large" : ""}${cameraMoving ? " history-atlas--focusing" : ""}${motionPaused ? " history-atlas--paused" : ""}`}
     >
       <div className="history-atlas__heading">
         <div className="history-atlas__heading-title">
@@ -1195,49 +1222,51 @@ export default function HistoryAtlas({
         </div>
       )}
       <div className="history-atlas__filters">
-        <label htmlFor={`${id}-unit`}>
-          <span>단원</span>
-          <select
-            id={`${id}-unit`}
-            value={unitId}
-            onChange={(event) => {
-              changeScope(event.target.value, eraId);
-            }}
-          >
-            <option value="">전체 단원</option>
-            {subjectUnits.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor={`${id}-era`}>
-          <span>시대</span>
-          <select
-            id={`${id}-era`}
-            value={eraId}
-            onChange={(event) => {
-              changeScope(unitId, event.target.value);
-            }}
-          >
-            <option value="">전체 시대</option>
-            {subjectEras.map((era) => (
-              <option key={era.id} value={era.id}>
-                {era.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <AtlasRegionFilters
-          subject={subject}
-          groupId={regionId}
-          subregionId={subregionId}
-          onChange={(group, subregion) =>
-            changeScope(unitId, eraId, group, subregion)
-          }
-        />
-        <label htmlFor={`${id}-search`}>
+        <div className="atlas-filter-row">
+          <label htmlFor={`${id}-unit`}>
+            <span>단원</span>
+            <select
+              id={`${id}-unit`}
+              value={unitId}
+              onChange={(event) => {
+                changeScope(event.target.value, eraId);
+              }}
+            >
+              <option value="">전체 단원</option>
+              {subjectUnits.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label htmlFor={`${id}-era`}>
+            <span>시대</span>
+            <select
+              id={`${id}-era`}
+              value={eraId}
+              onChange={(event) => {
+                changeScope(unitId, event.target.value);
+              }}
+            >
+              <option value="">전체 시대</option>
+              {subjectEras.map((era) => (
+                <option key={era.id} value={era.id}>
+                  {era.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <AtlasRegionFilters
+            subject={subject}
+            groupId={regionId}
+            subregionId={subregionId}
+            onChange={(group, subregion) =>
+              changeScope(unitId, eraId, group, subregion)
+            }
+          />
+        </div>
+        <label className="atlas-filter-search" htmlFor={`${id}-search`}>
           <span>지명 검색</span>
           <div className="history-atlas__search">
             <input
@@ -1262,35 +1291,6 @@ export default function HistoryAtlas({
       </div>
       <div className="history-atlas__workspace">
         <div className="history-atlas__map-column">
-          <button
-            type="button"
-            className="history-atlas__button history-atlas__motion-toggle"
-            aria-label="위치 강조 애니메이션"
-            aria-pressed={highlightMotion}
-            title={`위치 강조 애니메이션 ${highlightMotion ? "끄기" : "켜기"}`}
-            onClick={() => setHighlightMotion((enabled) => !enabled)}
-          >
-            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-              <circle
-                cx="12"
-                cy="12"
-                r="10"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              />
-              {highlightMotion ? (
-                <path
-                  d="M9 8v8m6-8v8"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                />
-              ) : (
-                <path d="m10 7 7 5-7 5Z" fill="currentColor" />
-              )}
-            </svg>
-          </button>
           <div className="history-atlas__map-toolbar">
             {!wide && (
               <button
@@ -1298,20 +1298,23 @@ export default function HistoryAtlas({
                 type="button"
                 className="history-atlas__button history-atlas__places-trigger"
                 aria-haspopup="dialog"
+                aria-label="장소 목록 열기"
                 aria-expanded={panelOpen}
                 onClick={() => setMobilePanel("places")}
               >
-                장소 {visiblePlaces.length}
+                장소
               </button>
             )}
             <div className="history-atlas__map-actions">
               <button
                 type="button"
                 className="history-atlas__move"
+                aria-label="지도 이동"
+                title="지도 이동"
                 aria-pressed={moveMode}
                 onClick={() => setMoveMode(!moveMode)}
               >
-                지도 이동
+                ↔
               </button>
               <button
                 type="button"
@@ -1337,9 +1340,11 @@ export default function HistoryAtlas({
               <button
                 className="history-atlas__reset"
                 type="button"
+                aria-label="전체 보기"
+                title="전체 보기"
                 onClick={resetView}
               >
-                전체 보기
+                ↺
               </button>
             </div>
           </div>
@@ -1378,7 +1383,10 @@ export default function HistoryAtlas({
               } else if (event.key === "Home") {
                 event.preventDefault();
                 resetView();
-              } else if (event.key === "Escape") setMoveMode(false);
+              } else if (event.key === "Escape") {
+                setMoveMode(false);
+                setDetailOpen(false);
+              }
             }}
             onPointerDown={(event) => {
               if (event.pointerType === "touch" || event.button !== 0) return;
@@ -1463,21 +1471,26 @@ export default function HistoryAtlas({
               }
             }}
           >
-            {wide &&
-              selected &&
+            {selected &&
               (detailOpen ? (
                 <section
+                  ref={overlayRef}
                   id={`${id}-overlay`}
                   className="history-atlas__overlay"
                   aria-label="선택 장소 설명"
                   style={{ width: overlayWidth, maxHeight: overlayMaxHeight }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Escape") return;
+                    event.stopPropagation();
+                    setDetailOpen(false);
+                    mapRef.current?.focus({ preventScroll: true });
+                  }}
                   onPointerDown={(event) => {
                     movedRef.current = false;
                     event.stopPropagation();
                   }}
                 >
                   <div className="history-atlas__overlay-heading">
-                    <span>장소 설명</span>
                     <button
                       type="button"
                       className="history-atlas__button"
@@ -1507,7 +1520,7 @@ export default function HistoryAtlas({
                     requestPlaceFocus(selected.place.id);
                   }}
                 >
-                  선택 장소 설명
+                  {entryName(selected)} · 설명
                 </button>
               ))}
             <svg
@@ -1583,7 +1596,7 @@ export default function HistoryAtlas({
                   overlayObstacle
                     ? mapWidth >= 650
                       ? { left: overlayObstacle.right }
-                      : { top: overlayObstacle.bottom }
+                      : { bottom: mapHeight - overlayObstacle.top }
                     : undefined
                 }
               >
@@ -1623,26 +1636,6 @@ export default function HistoryAtlas({
                 © OpenStreetMap contributors
               </a>
             </div>
-            {!wide && selected && (
-              <button
-                type="button"
-                ref={selectionCardRef}
-                className="history-atlas__selection-card"
-                onPointerDown={(event) => {
-                  movedRef.current = false;
-                  event.stopPropagation();
-                }}
-                onTouchStart={(event) => event.stopPropagation()}
-                onClick={() => setMobilePanel("detail")}
-                aria-haspopup="dialog"
-              >
-                <span>
-                  <small>{selected.entry.period}</small>
-                  <strong>{entryName(selected)}</strong>
-                </span>
-                <span>설명 보기 →</span>
-              </button>
-            )}
             {!wide && !selected && (
               <div
                 className="history-atlas__selection-card history-atlas__empty"
@@ -1706,17 +1699,8 @@ export default function HistoryAtlas({
       >
         <div className="history-atlas__drawer-inner">
           <div className="history-atlas__drawer-heading">
-            {mobilePanel === "detail" && (
-              <button
-                type="button"
-                className="history-atlas__button"
-                onClick={() => setMobilePanel("places")}
-              >
-                ← 장소
-              </button>
-            )}
             <h2 id={`${id}-panel-title`} tabIndex={-1} data-panel-title>
-              {mobilePanel === "detail" ? "장소 설명" : "장소 목록"}
+              장소 목록
             </h2>
             <button
               type="button"
@@ -1727,7 +1711,7 @@ export default function HistoryAtlas({
               ×
             </button>
           </div>
-          {panelOpen && (mobilePanel === "places" ? placeList : placeDetail)}
+          {panelOpen && placeList}
         </div>
       </dialog>
     </div>

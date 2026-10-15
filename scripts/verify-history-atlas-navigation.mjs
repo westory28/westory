@@ -62,6 +62,94 @@ const place = (name) => {
   return item;
 };
 
+// Physical map/popup rectangles for the bottom-left layout. Keep these fixtures
+// independent of the component's viewport calculation: the assertions below
+// check projected geography against the actual card and visible map, not just
+// whether the production branch chose the same numbers as another copy of it.
+// Compact maps are 480px tall (42% card cap); wide maps are 640px (55%).
+// Every card is 8px from the left and 28px above the map bottom. A wide layout
+// can still have a narrow map after its sidebar takes space (the 624px case).
+const popupViewports = [
+  {
+    name: "compact-286",
+    width: 286,
+    mapHeight: 480,
+    popup: { left: 8, top: 250.4, right: 278, bottom: 452 },
+    focus: { height: 242.4 },
+  },
+  {
+    name: "compact-356",
+    width: 356,
+    mapHeight: 480,
+    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
+    focus: { height: 242.4 },
+  },
+  {
+    name: "compact-640",
+    width: 640,
+    mapHeight: 480,
+    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
+    focus: { height: 242.4 },
+  },
+  {
+    name: "compact-649",
+    width: 649,
+    mapHeight: 480,
+    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
+    focus: { height: 242.4 },
+  },
+  {
+    name: "compact-650",
+    width: 650,
+    mapHeight: 480,
+    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
+    focus: { height: 448, overlayRight: 288 },
+  },
+  {
+    name: "compact-720",
+    width: 720,
+    mapHeight: 480,
+    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
+    focus: { height: 448, overlayRight: 288 },
+  },
+  {
+    name: "wide-narrow-map-624",
+    width: 624,
+    mapHeight: 640,
+    popup: { left: 8, top: 260, right: 328, bottom: 612 },
+    focus: { height: 252 },
+  },
+  {
+    name: "wide-920",
+    width: 920,
+    mapHeight: 640,
+    popup: { left: 8, top: 260, right: 328, bottom: 612 },
+    focus: { height: 608, overlayRight: 328 },
+  },
+];
+const intersects = (a, b) =>
+  a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+const assertVisibleSelection = (box, viewport, label) => {
+  const { width, mapHeight, popup, focus } = viewport;
+  assert(
+    Object.values(box).every(Number.isFinite) &&
+      box.left >= 24 - 1e-6 &&
+      box.right <= width - 24 + 1e-6 &&
+      box.top >= 24 - 1e-6 &&
+      box.bottom <= mapHeight - 24 + 1e-6,
+    `${label}/${viewport.name}: selection leaves the physical map, ${JSON.stringify(box)}`,
+  );
+  assert(
+    box.left >= (focus.overlayRight || 0) + 24 - 1e-6 &&
+      box.bottom <= focus.height - 24 + 1e-6,
+    `${label}/${viewport.name}: selection leaves the popup-free area, ${JSON.stringify(box)}`,
+  );
+  assert(
+    !intersects(box, popup),
+    `${label}/${viewport.name}: geography is hidden behind the bottom-left popup`,
+  );
+};
+
 // The globe and world atlas load this layer only. A Korean-layer union would
 // conceal missing world watercourses even though their points remain visible.
 const worldLayer = {
@@ -182,26 +270,21 @@ for (const item of polarPlaces) {
       item.coordinates[1] <= bounds[3],
     `${item.name}: reframed bounds must contain the actual polar coordinate`,
   );
-  for (const width of [390, 624, 690, 900]) {
-    const height = width === 390 ? 400 : 640;
-    const overlayRight = width === 390 ? 0 : 376;
-    const projection = createAtlasProjection("world", bounds, width, height);
+  for (const viewport of popupViewports) {
+    const { width, mapHeight, focus } = viewport;
+    const projection = createAtlasProjection("world", bounds, width, mapHeight);
     const camera = fitAtlasSelection(
       projection,
       { coordinates: item.coordinates, contextBounds: extent },
-      { width, height, overlayRight },
+      { width, mapHeight, ...focus },
     );
     const point = projection(item.coordinates);
     const x = point[0] * camera.scale + camera.x;
     const y = point[1] * camera.scale + camera.y;
-    assert(
-      Number.isFinite(x) &&
-        Number.isFinite(y) &&
-        x >= overlayRight + 24 - 1e-6 &&
-        x <= width - 24 + 1e-6 &&
-        y >= 24 - 1e-6 &&
-        y <= height - 24 + 1e-6,
-      `${item.name} at ${width}px: polar selection must stay visible beside its card`,
+    assertVisibleSelection(
+      { left: x, top: y, right: x, bottom: y },
+      viewport,
+      `${item.name}: polar selection`,
     );
     polarCameraCases += 1;
   }
@@ -223,11 +306,15 @@ for (const name of ["나일강", "창장강", "아마존강", "한강", "백두�
       : []),
   ];
   for (const baseBounds of initialBounds)
-    for (const width of [624, 690, 900]) {
-      const height = 640,
-        overlayRight = 376;
+    for (const viewport of popupViewports) {
+      const { width, mapHeight, focus } = viewport;
       const bounds = includeAtlasContextBounds(baseBounds, extent);
-      const projection = createAtlasProjection(subject, bounds, width, height);
+      const projection = createAtlasProjection(
+        subject,
+        bounds,
+        width,
+        mapHeight,
+      );
       const originalProjection = [
         projection.scale(),
         ...projection.translate(),
@@ -236,7 +323,7 @@ for (const name of ["나일강", "창장강", "아마존강", "한강", "백두�
       const camera = fitAtlasSelection(
         projection,
         { coordinates, contextBounds: extent, geometry: river },
-        { width, height, overlayRight },
+        { width, mapHeight, ...focus },
       );
       const object = river || {
         type: "MultiPoint",
@@ -254,12 +341,10 @@ for (const name of ["나일강", "창장강", "아마존강", "한강", "백두�
           x * camera.scale + camera.x,
           y * camera.scale + camera.y,
         ]);
-      assert(
-        left >= overlayRight + 24 - 1e-6 &&
-          right <= width - 24 + 1e-6 &&
-          top >= 24 - 1e-6 &&
-          bottom <= height - 24 + 1e-6,
-        `${name} at ${width}px: the full selection must remain beside the card and inside the viewport, got ${JSON.stringify({ left, top, right, bottom, camera })}`,
+      assertVisibleSelection(
+        { left, top, right, bottom },
+        viewport,
+        `${name}: full watercourse or regional context`,
       );
       assert(
         camera.scale >= 0.5 &&
@@ -275,11 +360,11 @@ for (const name of ["나일강", "창장강", "아마존강", "한강", "백두�
       cameraCases += 1;
     }
 }
-// The mobile card leaves only its upper part free, while the projection still
-// occupies the full 400px map. Pan limits must use that full map height or
-// southern places (including Jeju and Cape Town) are clamped under the card.
-let compactCameraCases = 0;
-const compactPlacesChecked = new Set();
+// Keep the actual 480/640px projection height even when only the area above or
+// beside the popup is available. Using the shortened focus height for pan limits
+// previously clamped southern locations (Jeju and Cape Town) under the card.
+let popupCameraCases = 0;
+const popupPlacesChecked = new Set();
 for (const subject of ["korea", "world"]) {
   const subjectUnits = new Set(
     dataset.units
@@ -309,9 +394,8 @@ for (const subject of ["korea", "world"]) {
       reframeAtlasSelectionBounds(subject, coordinates, baseBounds, baseBounds),
       extent,
     );
-    for (const width of [286, 356, 720]) {
-      const mapHeight = 400;
-      const availableHeight = 180;
+    for (const viewport of popupViewports) {
+      const { width, mapHeight, focus, popup } = viewport;
       const projection = createAtlasProjection(
         subject,
         bounds,
@@ -321,35 +405,38 @@ for (const subject of ["korea", "world"]) {
       const camera = fitAtlasSelection(
         projection,
         { coordinates, contextBounds: extent, geometry: river },
-        { width, height: availableHeight, mapHeight },
+        { width, mapHeight, ...focus },
       );
       const point = projection(coordinates);
       const x = point[0] * camera.scale + camera.x;
       const y = point[1] * camera.scale + camera.y;
+      assertVisibleSelection(
+        { left: x, top: y, right: x, bottom: y },
+        viewport,
+        `${subject}/${item.name}: selected point`,
+      );
       assert(
-        Number.isFinite(x) &&
-          Number.isFinite(y) &&
-          x >= 24 - 1e-6 &&
-          x <= width - 24 + 1e-6 &&
-          y >= 24 - 1e-6 &&
-          y <= availableHeight - 24 + 1e-6,
-        `${subject}/${item.name} at ${width}px: selected point must stay above the mobile card, got ${JSON.stringify({ x, y, camera })}`,
+        !intersects(
+          { left: x - 22, top: y - 22, right: x + 22, bottom: y + 22 },
+          popup,
+        ),
+        `${subject}/${item.name}/${viewport.name}: the selected 44px hit target must not fall behind the popup`,
       );
       assert(
         camera.scale >= 0.5 &&
           camera.scale <= 12 &&
           Object.values(camera).every(Number.isFinite),
-        `${subject}/${item.name}: compact camera remains finite and bounded`,
+        `${subject}/${item.name}: popup camera remains finite and bounded`,
       );
-      compactCameraCases += 1;
+      popupCameraCases += 1;
     }
-    compactPlacesChecked.add(item.name);
+    popupPlacesChecked.add(item.name);
   }
 }
 for (const name of ["제주도", "상하이", "케이프타운", "포토시", "북극해"]) {
   assert(
-    compactPlacesChecked.has(name),
-    `${name}: compact regression must include the real extreme-position place`,
+    popupPlacesChecked.has(name),
+    `${name}: popup regression must include the real extreme-position place`,
   );
 }
 const profile = getAtlasPlaceProfile(place("백두산"));
@@ -382,5 +469,5 @@ assert(
   "Globe terrain must remain separately small",
 );
 console.log(
-  `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} real-data camera fits, ${polarCameraCases} polar camera fits, ${compactCameraCases} compact camera fits above the mobile card, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,
+  `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} full-geometry camera fits, ${polarCameraCases} polar camera fits, ${popupCameraCases} real-place camera fits across ${popupViewports.length} bottom-left popup layouts, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,
 );

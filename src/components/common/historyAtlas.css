@@ -179,39 +179,25 @@
 .history-atlas__map-toolbar {
   position: absolute;
   right: 8px;
-  bottom: 32px;
+  top: 8px;
+  left: 8px;
   z-index: 6;
   max-width: calc(100% - 16px);
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--ws-border, #e5e7eb);
-  border-radius: 12px;
-  background: var(--ws-surface, #ffffff);
-}
-.history-atlas__motion-toggle {
-  position: absolute;
-  z-index: 6;
-  top: 12px;
-  right: 12px;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 8px;
-}
-.history-atlas__motion-toggle[aria-pressed="true"] {
-  color: var(--ws-primary-text, #1e3a8a);
-  background: var(--ws-primary-soft, #eff6ff);
-  border-color: var(--ws-border-blue, #dbeafe);
+  pointer-events: none;
 }
 .history-atlas__zoom {
   display: grid;
   place-items: center;
-  min-width: 52px;
+  min-width: 48px;
+  height: 36px;
+  background: var(--ws-surface, #ffffff);
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
   color: var(--ws-text, #1f2937);
   font-size: 14px;
   font-weight: 700;
@@ -219,16 +205,22 @@
 }
 .history-atlas__map-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   margin-left: auto;
 }
+.history-atlas__map-toolbar button {
+  pointer-events: auto;
+  height: 36px;
+  min-height: 36px;
+  padding: 4px 8px;
+}
 .history-atlas__map-actions button {
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 36px;
+  min-height: 36px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 8px;
-  padding: 8px;
+  padding: 4px;
   background: var(--ws-surface, #ffffff);
   color: var(--ws-text, #1f2937);
   font-size: 14px;
@@ -436,28 +428,12 @@
   text-shadow: none;
   animation: atlas-label-emphasis 2400ms ease-in-out infinite;
 }
-/* Selection emphasis is explicitly enabled by the user request, independently
-   of reduced camera motion. The local toggle keeps a visible static selection. */
+/* Selection emphasis stays enabled; hidden maps pause without changing selection. */
 .history-atlas.history-atlas--paused .history-atlas__point::before,
 .history-atlas.history-atlas--paused .history-atlas__point::after,
 .history-atlas.history-atlas--paused .history-atlas__point-label,
 .history-atlas.history-atlas--paused .history-atlas__river-glow {
   animation-play-state: paused;
-}
-.history-atlas--motion-off .history-atlas__point.is-active::before,
-.history-atlas--motion-off .history-atlas__point.is-active::after,
-.history-atlas--motion-off .history-atlas__river-glow {
-  animation: none;
-  opacity: 0.35;
-}
-.history-atlas--motion-off .history-atlas__point.is-active::after {
-  transform: scale(1.45);
-}
-.history-atlas--motion-off
-  .history-atlas__label-anchor.is-active
-  .history-atlas__point-label {
-  animation: none;
-  opacity: 1;
 }
 .history-atlas__minor-dots {
   fill: var(--ws-primary, #2563eb);
@@ -489,9 +465,6 @@
 .history-atlas__attribution a {
   color: inherit;
   text-decoration: underline;
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__selection-card {
-  bottom: 144px;
 }
 .history-atlas__north {
   position: absolute;
@@ -602,15 +575,23 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-top: 8px;
+  padding: 8px 12px 12px;
+}
+.history-atlas__overlay .atlas-place-details__header {
+  position: sticky;
+  top: -8px;
+  z-index: 2;
+  margin: -8px -12px 0;
+  padding: 8px 40px 4px 12px;
+  background: var(--ws-surface, #ffffff);
 }
 .history-atlas__side-panel .history-atlas__place-list {
   flex: 1;
 }
 .history-atlas__overlay {
   position: absolute;
-  left: 16px;
-  top: 16px;
+  left: 8px;
+  bottom: 28px;
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -623,29 +604,38 @@
   user-select: text;
 }
 .history-atlas__overlay-heading {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px 0 16px;
+  padding: 0;
   flex-shrink: 0;
   color: var(--ws-text-muted, #6b7280);
   font-size: 14px;
   font-weight: 500;
 }
 .history-atlas__overlay-heading button {
-  width: 44px;
+  width: 28px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0;
   font-size: 24px !important;
   border: 0;
 }
 .history-atlas__reopen {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  left: 8px;
+  bottom: 28px;
   z-index: 4;
+  min-height: 32px;
+  max-width: calc(100% - 16px);
+  padding: 4px 8px;
 }
-.history-atlas__map--detail .history-atlas__north {
-  left: auto;
-  right: 12px;
+.history-atlas__north {
+  top: 52px;
 }
 .history-atlas__period {
   display: block;
@@ -964,39 +954,6 @@
 .history-atlas--large .history-atlas__workspace {
   grid-template-columns: minmax(0, 1fr) 300px;
 }
-.history-atlas--wide .history-atlas__filters {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-.history-atlas__places-trigger {
-  margin-left: auto;
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__map-toolbar {
-  left: 8px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__map-actions {
-  display: contents;
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__places-trigger {
-  order: 0;
-  margin-left: 0;
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__move {
-  order: 1;
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__reset {
-  order: 2;
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__zoom-out {
-  order: 3;
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__zoom {
-  order: 4;
-}
-.history-atlas:not(.history-atlas--wide) .history-atlas__zoom-in {
-  order: 5;
-}
 @media (pointer: fine) and (min-width: 960px) {
   .history-atlas__map-actions .history-atlas__move {
     display: none;
@@ -1005,16 +962,6 @@
 @media (any-pointer: coarse) {
   .history-atlas__map-actions .history-atlas__move {
     display: block;
-  }
-}
-@media (min-width: 640px) {
-  .history-atlas__filters {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .history-atlas:not(.history-atlas--wide)
-    .history-atlas__filters
-    > label:last-child {
-    grid-column: 1 / -1;
   }
 }
 @media (max-width: 639px) {
@@ -1029,10 +976,4 @@
   .history-atlas-return {
     padding: 12px 16px;
   }
-}
-
-.history-atlas:not(.history-atlas--wide)
-  .history-atlas__filters
-  > label:last-child {
-  grid-column: 1 / -1;
 }

@@ -1,4 +1,12 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import type {
   AtlasDataset,
   AtlasEntry,
@@ -34,6 +42,141 @@ const sentences = (text: string) =>
     .split(/(?<=[.!?])\s+/u)
     .filter(Boolean);
 
+/** Keep explanatory text outside the scrolling map popup. */
+function AtlasDetailChip({
+  children,
+  title,
+  description,
+  pressed,
+  onSelect,
+}: {
+  children: ReactNode;
+  title: string;
+  description: string;
+  pressed?: boolean;
+  onSelect: () => void;
+}) {
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const tooltip = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [open, setOpen] = useState(false);
+  const cancelClose = () => clearTimeout(closeTimer.current);
+  const close = () => {
+    cancelClose();
+    setOpen(false);
+  };
+  const show = () => {
+    cancelClose();
+    setOpen(true);
+  };
+  const leave = () => {
+    if (document.activeElement === button.current) return;
+    cancelClose();
+    closeTimer.current = setTimeout(close, 120);
+  };
+
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+  useEffect(() => {
+    if (!open) return;
+    const position = () => {
+      const anchor = button.current;
+      const popup = tooltip.current;
+      if (!anchor || !popup) return;
+      const bounds = anchor.getBoundingClientRect();
+      popup.style.left = "0px";
+      popup.style.top = "0px";
+      const origin = popup.getBoundingClientRect();
+      const left = Math.max(
+        12,
+        Math.min(bounds.left, window.innerWidth - origin.width - 12),
+      );
+      const top =
+        bounds.bottom + origin.height + 8 <= window.innerHeight - 12
+          ? bounds.bottom + 8
+          : Math.max(12, bounds.top - origin.height - 8);
+      popup.style.left = `${left - origin.left}px`;
+      popup.style.top = `${top - origin.top}px`;
+      popup.style.visibility = "visible";
+    };
+    position();
+    const observer = new ResizeObserver(position);
+    if (tooltip.current) observer.observe(tooltip.current);
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [open, title, description]);
+
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !button.current?.contains(target) &&
+        !tooltip.current?.contains(target)
+      )
+        close();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape, true);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape, true);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        aria-pressed={pressed}
+        aria-describedby={open ? id : undefined}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== "touch") show();
+        }}
+        onPointerLeave={leave}
+        onFocus={show}
+        onBlur={close}
+        onClick={() => {
+          close();
+          onSelect();
+        }}
+      >
+        {children}
+      </button>
+      {open &&
+        createPortal(
+          <div
+            id={id}
+            ref={tooltip}
+            className="atlas-place-details__tooltip"
+            role="tooltip"
+            style={{ visibility: "hidden" }}
+            onPointerEnter={cancelClose}
+            onPointerLeave={leave}
+          >
+            <strong>{title}</strong>
+            <span>{description}</span>
+          </div>,
+          button.current?.closest("dialog") ||
+            document.fullscreenElement ||
+            document.body,
+        )}
+    </>
+  );
+}
+
 /** The same reading structure is used on the flat atlas and the globe. */
 export default function AtlasPlaceDetails({
   dataset,
@@ -43,6 +186,47 @@ export default function AtlasPlaceDetails({
   onSelectEntry,
 }: AtlasPlaceDetailsProps) {
   const [expandedPlace, setExpandedPlace] = useState<string | null>(null);
+  const contextSection = useRef<HTMLElement>(null);
+  const [selectedRelation, setSelectedRelation] = useState<{
+    placeId: string;
+    subject?: AtlasSubject;
+    reason: string;
+    sources: AtlasProfileSource[];
+  } | null>(null);
+  const activeRelation =
+    selectedRelation?.placeId === place.id &&
+    selectedRelation.subject === subject
+      ? selectedRelation
+      : null;
+  useEffect(() => {
+    setSelectedRelation((relation) =>
+      relation?.placeId === place.id && relation.subject === subject
+        ? relation
+        : null,
+    );
+  }, [place.id, subject]);
+  const selectEntry = (entryId: string) => {
+    onSelectEntry(entryId);
+    requestAnimationFrame(() => {
+      const section = contextSection.current;
+      if (!section) return;
+      let container = section.parentElement;
+      while (container && container !== document.body) {
+        if (
+          container.scrollHeight > container.clientHeight &&
+          /auto|scroll/u.test(getComputedStyle(container).overflowY)
+        ) {
+          container.scrollTo({
+            top: 0,
+            behavior: "instant",
+          });
+          break;
+        }
+        container = container.parentElement;
+      }
+      section.focus({ preventScroll: true });
+    });
+  };
   const placeEntries = useMemo(
     () =>
       dataset.entries.filter(
@@ -124,6 +308,7 @@ export default function AtlasPlaceDetails({
     ...new Map<string, AtlasProfileSource>(
       [
         ...(activeEntry.historicalStory?.sources || []),
+        ...(activeRelation?.sources || []),
         ...related.flatMap((relation) => relation.sources),
         ...profile.sources,
       ].map((source) => [
@@ -196,7 +381,11 @@ export default function AtlasPlaceDetails({
         )}
       </header>
 
-      <section className="atlas-place-details__context">
+      <section
+        className="atlas-place-details__context"
+        ref={contextSection}
+        tabIndex={-1}
+      >
         <div className="atlas-place-details__section-heading">
           <h3>{activeGroup.length ? "역사 속 이 장소" : "장소 개요"}</h3>
           {activeGroup.length > 0 && <span>{activeEntry.period}</span>}
@@ -206,6 +395,11 @@ export default function AtlasPlaceDetails({
             ? getAtlasHistoricalSummary(activeEntry)
             : profile.definition}
         </p>
+        {activeRelation && (
+          <p className="atlas-place-details__relation-context">
+            {activeRelation.reason}
+          </p>
+        )}
         {entry.nameNote && (
           <p className="atlas-place-details__name-note">{entry.nameNote}</p>
         )}
@@ -241,21 +435,35 @@ export default function AtlasPlaceDetails({
               const item =
                 group.find((candidate) => candidate.id === entry.id) ||
                 group[0];
+              const samePeriod = stories.filter(
+                (story) => story[0].period === item.period,
+              );
+              const identifier =
+                samePeriod.length > 1
+                  ? item.displayName &&
+                    samePeriod.every(
+                      (story) =>
+                        story === group ||
+                        story[0].displayName !== item.displayName,
+                    )
+                    ? item.displayName
+                    : String(samePeriod.indexOf(group) + 1)
+                  : "";
               return (
-                <button
-                  type="button"
+                <AtlasDetailChip
                   key={item.id}
-                  aria-pressed={group === activeGroup}
-                  onClick={() => onSelectEntry(item.id)}
+                  pressed={group === activeGroup}
+                  title={
+                    item.historicalStory?.title ||
+                    item.displayName ||
+                    place.name
+                  }
+                  description={getAtlasHistoricalSummary(item)}
+                  onSelect={() => selectEntry(item.id)}
                 >
                   {item.period}
-                  {item.historicalStory
-                    ? ` · ${item.historicalStory.title}`
-                    : ""}
-                  {item.displayName && item.displayName !== place.name
-                    ? ` · ${item.displayName}`
-                    : ""}
-                </button>
+                  {identifier ? ` · ${identifier}` : ""}
+                </AtlasDetailChip>
               );
             })}
             {stories.length > 6 && (
@@ -298,13 +506,14 @@ export default function AtlasPlaceDetails({
                   (item) => item.displayName === name && item.id !== entry.id,
                 );
               return story ? (
-                <button
-                  type="button"
+                <AtlasDetailChip
                   key={name}
-                  onClick={() => onSelectEntry(story.id)}
+                  title={story.historicalStory?.title || name}
+                  description={getAtlasHistoricalSummary(story)}
+                  onSelect={() => selectEntry(story.id)}
                 >
-                  {name} →
-                </button>
+                  {name}
+                </AtlasDetailChip>
               ) : (
                 <span key={name}>{name}</span>
               );
@@ -317,22 +526,32 @@ export default function AtlasPlaceDetails({
         <section className="atlas-place-details__related">
           <h3>함께 볼 장소</h3>
           <div>
-            {related.map(({ entry: item, reason }) => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => onSelectEntry(item.id)}
-              >
-                <strong>
-                  {item.displayName ||
-                    dataset.places.find(
-                      (candidate) => candidate.id === item.placeId,
-                    )?.name}{" "}
-                  →
-                </strong>
-                <span>{reason}</span>
-              </button>
-            ))}
+            {related.map(({ entry: item, reason, sources }) => {
+              const name =
+                item.displayName ||
+                dataset.places.find(
+                  (candidate) => candidate.id === item.placeId,
+                )?.name ||
+                item.placeId;
+              return (
+                <AtlasDetailChip
+                  key={item.id}
+                  title={name}
+                  description={reason}
+                  onSelect={() => {
+                    setSelectedRelation({
+                      placeId: item.placeId,
+                      subject,
+                      reason,
+                      sources,
+                    });
+                    selectEntry(item.id);
+                  }}
+                >
+                  {name}
+                </AtlasDetailChip>
+              );
+            })}
           </div>
         </section>
       )}

@@ -1,8 +1,8 @@
 .atlas-region-filter {
   display: flex;
-  flex: 1 1 160px;
+  flex: 1 0 72px;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
 }
 .atlas-region-filter__heading {
@@ -22,20 +22,110 @@
   margin-block: -4px;
 }
 
-/* Borders remain distinct even when a responsive filter row wraps. */
-:is(.history-atlas__filters, .history-globe__filters)
+/* Keep the map filters in one compact row in both renderers. */
+:is(.history-atlas, .history-globe)
+  :is(.history-atlas__filters, .history-globe__filters) {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+:is(.history-atlas, .history-globe) .atlas-filter-row {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 0;
+  align-items: flex-end;
+}
+:is(.history-atlas, .history-globe)
+  .atlas-filter-row
   > :is(label, .atlas-region-filter) {
   box-sizing: border-box;
-  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 72px;
+  gap: 4px;
+  padding: 0 8px;
   border-left: 1px solid var(--ws-border, #e5e7eb);
 }
-
-@media (max-width: 767px) {
-  .history-globe__filters {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+:is(.history-atlas, .history-globe) .atlas-filter-row > :first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+:is(.history-atlas, .history-globe) .atlas-filter-row > :last-child {
+  padding-right: 0;
+}
+:is(.history-atlas, .history-globe)
+  :is(.history-atlas__filters, .history-globe__filters)
+  > .atlas-filter-search {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 1 240px;
+  min-width: 0;
+}
+:is(.history-atlas, .history-globe) .atlas-filter-row label,
+:is(.history-atlas, .history-globe) .atlas-filter-row > label > span,
+:is(.history-atlas, .history-globe) .atlas-filter-search > span {
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+:is(.history-atlas, .history-globe) .atlas-region-filter__heading {
+  height: 20px;
+  min-height: 20px;
+}
+:is(.history-atlas, .history-globe)
+  :is(.history-atlas__filters, .history-globe__filters)
+  :is(input, select) {
+  height: 36px;
+  min-height: 36px;
+  padding: 4px 8px;
+  font-size: 14px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+}
+.history-atlas__filters .history-atlas__search input {
+  padding-right: 32px;
+}
+.history-atlas__filters .history-atlas__search button {
+  width: 32px;
+  height: 36px;
+  min-height: 0;
+  padding: 0;
+}
+.history-atlas:not(.history-atlas--wide) .history-atlas__filters,
+.history-globe:not(.is-wide) .history-globe__filters {
+  flex-wrap: wrap;
+}
+:is(.history-atlas:not(.history-atlas--wide), .history-globe:not(.is-wide))
+  .atlas-filter-row {
+  flex-basis: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+:is(.history-atlas:not(.history-atlas--wide), .history-globe:not(.is-wide))
+  .atlas-filter-search {
+  flex-basis: 100%;
+}
+@media (max-width: 479px) {
+  :is(.history-atlas, .history-globe)
+    .atlas-filter-row
+    > :is(label, .atlas-region-filter) {
+    padding-inline: 4px;
   }
-  .history-globe__filters .history-globe__search {
-    grid-column: 1 / -1;
+  :is(.history-atlas, .history-globe) .atlas-filter-row > :first-child {
+    padding-left: 0;
+  }
+  :is(.history-atlas, .history-globe) .atlas-filter-row > :last-child {
+    padding-right: 0;
+  }
+  :is(.history-atlas, .history-globe)
+    :is(.history-atlas__filters, .history-globe__filters)
+    select {
+    padding-inline: 4px;
   }
 }

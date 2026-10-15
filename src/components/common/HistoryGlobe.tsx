@@ -169,7 +169,6 @@ export default function HistoryGlobe({
   const [riverError, setRiverError] = useState(false);
   const [riverAttempt, setRiverAttempt] = useState(0);
   const [view, setView] = useState<GlobeView>(GLOBE_INITIAL_VIEW);
-  const [highlightMotion, setHighlightMotion] = useState(true);
   const [motionPaused, setMotionPaused] = useState(false);
   const viewRef = useRef(view);
   const pointers = useRef(new Map<number, Pointer>());
@@ -466,7 +465,8 @@ export default function HistoryGlobe({
       const projection = geoOrthographic()
         .translate([
           width / 2,
-          height * (selected && panel === "detail" ? (wide ? 0.4 : 0.3) : 0.5),
+          // Keep the selected point above the lower-left description popup.
+          height * (selected && panel === "detail" ? 0.3 : 0.5),
         ])
         .scale(Math.min(width, height) * 0.44 * camera.zoom)
         .rotate([-camera.longitude, -camera.latitude, camera.roll])
@@ -821,6 +821,7 @@ export default function HistoryGlobe({
       // target without inserting an extra title or a new item in the Tab order.
       const title = detailRef.current?.querySelector<HTMLElement>("h2");
       if (!title) return;
+      detailRef.current!.scrollTop = 0;
       title.tabIndex = -1;
       title.focus({ preventScroll: true });
     } else if (pendingPanelFocus.current === "list" && panel === "list") {
@@ -1025,7 +1026,7 @@ export default function HistoryGlobe({
   );
   return (
     <section
-      className={`history-globe${wide ? " is-wide" : ""}${motionPaused ? " is-motion-paused" : ""}${highlightMotion ? "" : " is-motion-off"}`}
+      className={`history-globe${wide ? " is-wide" : ""}${motionPaused ? " is-motion-paused" : ""}`}
       ref={rootRef}
     >
       <header className="history-globe__header">
@@ -1082,98 +1083,100 @@ export default function HistoryGlobe({
       </header>
       {navigation}
       <div className="history-globe__filters">
-        {navigation ? (
-          <label htmlFor={id + "-subject"}>
-            과목
-            <select
-              id={id + "-subject"}
-              value={subject}
-              onChange={(event) =>
-                changeSubject(event.target.value as AtlasSubject)
-              }
+        <div className="atlas-filter-row">
+          {navigation ? (
+            <label htmlFor={id + "-subject"}>
+              과목
+              <select
+                id={id + "-subject"}
+                value={subject}
+                onChange={(event) =>
+                  changeSubject(event.target.value as AtlasSubject)
+                }
+              >
+                <option value="korea">한국사</option>
+                <option value="world">세계사</option>
+              </select>
+            </label>
+          ) : (
+            <div
+              className="history-globe__subjects"
+              role="group"
+              aria-label="역사 과목"
             >
-              <option value="korea">한국사</option>
-              <option value="world">세계사</option>
+              {(["korea", "world"] as const).map((value) => (
+                <button
+                  key={value}
+                  aria-pressed={subject === value}
+                  onClick={() => changeSubject(value)}
+                >
+                  {ATLAS_SUBJECT_LABELS[value]}
+                </button>
+              ))}
+            </div>
+          )}
+          <label htmlFor={id + "-unit"}>
+            단원
+            <select
+              id={id + "-unit"}
+              value={unitId}
+              onChange={(event) => {
+                setUnitId(event.target.value);
+                setSelectedId(null);
+                setPanel("list");
+                setPage(0);
+                setNotice("");
+              }}
+            >
+              <option value="">전체 단원</option>
+              {dataset.units
+                .filter((unit) => unit.subject === subject)
+                .map((unit) => (
+                  <option key={unit.id} value={unit.id}>
+                    {unit.title}
+                  </option>
+                ))}
             </select>
           </label>
-        ) : (
-          <div
-            className="history-globe__subjects"
-            role="group"
-            aria-label="역사 과목"
-          >
-            {(["korea", "world"] as const).map((value) => (
-              <button
-                key={value}
-                aria-pressed={subject === value}
-                onClick={() => changeSubject(value)}
-              >
-                {ATLAS_SUBJECT_LABELS[value]}
-              </button>
-            ))}
-          </div>
-        )}
-        <label htmlFor={id + "-unit"}>
-          단원
-          <select
-            id={id + "-unit"}
-            value={unitId}
-            onChange={(event) => {
-              setUnitId(event.target.value);
+          <label htmlFor={id + "-era"}>
+            시대
+            <select
+              id={id + "-era"}
+              value={eraId}
+              onChange={(event) => {
+                setEraId(event.target.value);
+                setSelectedId(null);
+                setPanel("list");
+                setPage(0);
+                setNotice("");
+              }}
+            >
+              <option value="">전체 시대</option>
+              {dataset.eras
+                ?.filter((era) => era.subject === subject)
+                .map((era) => (
+                  <option key={era.id} value={era.id}>
+                    {era.title}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <AtlasRegionFilters
+            subject={subject}
+            groupId={regionId}
+            subregionId={subregionId}
+            onChange={(group, subregion) => {
+              setRegionId(group);
+              setSubregionId(subregion);
               setSelectedId(null);
               setPanel("list");
               setPage(0);
               setNotice("");
             }}
-          >
-            <option value="">전체 단원</option>
-            {dataset.units
-              .filter((unit) => unit.subject === subject)
-              .map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.title}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label htmlFor={id + "-era"}>
-          시대
-          <select
-            id={id + "-era"}
-            value={eraId}
-            onChange={(event) => {
-              setEraId(event.target.value);
-              setSelectedId(null);
-              setPanel("list");
-              setPage(0);
-              setNotice("");
-            }}
-          >
-            <option value="">전체 시대</option>
-            {dataset.eras
-              ?.filter((era) => era.subject === subject)
-              .map((era) => (
-                <option key={era.id} value={era.id}>
-                  {era.title}
-                </option>
-              ))}
-          </select>
-        </label>
-        <AtlasRegionFilters
-          subject={subject}
-          groupId={regionId}
-          subregionId={subregionId}
-          onChange={(group, subregion) => {
-            setRegionId(group);
-            setSubregionId(subregion);
-            setSelectedId(null);
-            setPanel("list");
-            setPage(0);
-            setNotice("");
-          }}
-        />
-        <label className="history-globe__search" htmlFor={id + "-search"}>
-          지명 검색
+          />
+        </div>
+        <label className="atlas-filter-search" htmlFor={id + "-search"}>
+          <span>지명 검색</span>
           <input
             type="search"
             aria-label="지명 검색"
@@ -1254,40 +1257,6 @@ export default function HistoryGlobe({
             ))}
           </svg>
           <div className="history-globe__controls">
-            <button
-              type="button"
-              className="history-globe__motion-toggle"
-              aria-label="위치 강조 애니메이션"
-              aria-pressed={highlightMotion}
-              title={`위치 강조 애니메이션 ${highlightMotion ? "끄기" : "켜기"}`}
-              onClick={() => setHighlightMotion((enabled) => !enabled)}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="24"
-                height="24"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                />
-                {highlightMotion ? (
-                  <path
-                    d="M9 8v8m6-8v8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                  />
-                ) : (
-                  <path d="m10 7 7 5-7 5Z" fill="currentColor" />
-                )}
-              </svg>
-            </button>
             {!wide && (
               <button
                 className="history-globe__list-toggle"
@@ -1299,46 +1268,64 @@ export default function HistoryGlobe({
                 장소 {filtered.length.toLocaleString()}
               </button>
             )}
-            <span className="history-globe__control-spacer" />
-            <button
-              aria-label="지구본 축소"
-              disabled={view.zoom <= 1}
-              onClick={() =>
-                setCamera({
-                  ...viewRef.current,
-                  zoom: viewRef.current.zoom / 1.3,
-                })
-              }
-            >
-              −
-            </button>
-            <button
-              aria-label="지구본 확대"
-              disabled={view.zoom >= GLOBE_MAX_ZOOM}
-              onClick={() =>
-                setCamera({
-                  ...viewRef.current,
-                  zoom: viewRef.current.zoom * 1.3,
-                })
-              }
-            >
-              +
-            </button>
-            <output
-              ref={zoomRef}
-              className="history-globe__zoom"
-              aria-label="지도 확대 배율"
-            >
-              {Math.round(view.zoom * 100)}%
-            </output>
-            <button
-              aria-label="북쪽을 위로"
-              title="북쪽을 위로"
-              onClick={() => setCamera({ ...viewRef.current, roll: 0 })}
-            >
-              N ↑
-            </button>
-            <button onClick={() => setCamera(GLOBE_INITIAL_VIEW)}>전체</button>
+            <div className="history-globe__control-cluster">
+              <div
+                className="history-globe__zoom-controls"
+                role="group"
+                aria-label="지구본 확대·축소"
+              >
+                <button
+                  aria-label="지구본 축소"
+                  disabled={view.zoom <= 1}
+                  onClick={() =>
+                    setCamera({
+                      ...viewRef.current,
+                      zoom: viewRef.current.zoom / 1.3,
+                    })
+                  }
+                >
+                  −
+                </button>
+                <output
+                  ref={zoomRef}
+                  className="history-globe__zoom"
+                  aria-label="지도 확대 배율"
+                >
+                  {Math.round(view.zoom * 100)}%
+                </output>
+                <button
+                  aria-label="지구본 확대"
+                  disabled={view.zoom >= GLOBE_MAX_ZOOM}
+                  onClick={() =>
+                    setCamera({
+                      ...viewRef.current,
+                      zoom: viewRef.current.zoom * 1.3,
+                    })
+                  }
+                >
+                  +
+                </button>
+              </div>
+              <div
+                className="history-globe__view-controls"
+                role="group"
+                aria-label="지구본 방향과 전체 보기"
+              >
+                <button
+                  aria-label="북쪽을 위로"
+                  title="북쪽을 위로"
+                  onClick={() => setCamera({ ...viewRef.current, roll: 0 })}
+                >
+                  N ↑
+                </button>
+                <button
+                  aria-label="지구본 전체 보기"
+                  onClick={() => setCamera(GLOBE_INITIAL_VIEW)}
+                >
+                  전체
+                </button>
+              </div>
+            </div>
           </div>
           {!land && !landError && (
             <div className="history-globe__loading" role="status">
