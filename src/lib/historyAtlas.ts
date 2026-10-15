@@ -9,7 +9,7 @@ export interface AtlasSource {
 export interface AtlasCitation {
   sourceId: string;
   pdfPage: number;
-  printedPage: string;
+  printedPage?: string;
 }
 
 export interface AtlasPlace {
@@ -17,7 +17,9 @@ export interface AtlasPlace {
   name: string;
   modernName?: string;
   aliases?: string[];
-  coordinates: [number, number];
+  /** Null keeps an evidenced name searchable without inventing a location. */
+  coordinates: [number, number] | null;
+  kind?: "settlement" | "site" | "region" | "country" | "water" | "mountain";
   locationNote?: string;
 }
 
@@ -37,9 +39,21 @@ export interface AtlasEntry {
   title: string;
   period: string;
   summary: string;
+  /** Empty for source map labels that have no individual historical explanation. */
   significance: string;
   citations: AtlasCitation[];
   relatedPlaceIds?: string[];
+  /** Overlapping periods (e.g. Unified Silla and North–South States) are intentional. */
+  eraIds?: string[];
+  displayName?: string;
+  nameNote?: string;
+  relatedEntryIds?: string[];
+}
+
+export interface AtlasEra {
+  id: string;
+  subject: AtlasSubject;
+  title: string;
 }
 
 export interface AtlasDataset {
@@ -47,6 +61,7 @@ export interface AtlasDataset {
   units: AtlasUnit[];
   places: AtlasPlace[];
   entries: AtlasEntry[];
+  eras?: AtlasEra[];
 }
 
 export const ATLAS_SUBJECT_LABELS: Record<AtlasSubject, string> = {
@@ -73,6 +88,8 @@ export const matchesAtlasSearch = (
     [
       entry.title,
       entry.period,
+      entry.displayName || "",
+      entry.nameNote || "",
       place.name,
       place.modernName || "",
       ...(place.aliases || []),

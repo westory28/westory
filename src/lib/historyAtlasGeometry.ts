@@ -35,20 +35,32 @@ async function readGeometry(url: string): Promise<GeoPermissibleObjects> {
 /** Hash-addressed local assets load once per subject, never per pan or selection. */
 export function loadAtlasGeometry(
   subject: AtlasSubject,
+  bounds?: AtlasUnit["bounds"],
 ): Promise<AtlasGeometry> {
-  const cached = geometryCache.get(subject);
+  // Korean history includes overseas missions and independence movements.
+  // Do not draw a pin against the empty part of the clipped regional asset.
+  const layer: AtlasSubject =
+    subject === "korea" &&
+    (!bounds ||
+      (bounds[0] >= 90 &&
+        bounds[1] >= 10 &&
+        bounds[2] <= 160 &&
+        bounds[3] <= 65))
+      ? "korea"
+      : "world";
+  const cached = geometryCache.get(layer);
   if (cached) return cached;
   const urls =
-    subject === "korea"
+    layer === "korea"
       ? [koreaLandUrl, koreaRiversUrl]
       : [worldLandUrl, worldRiversUrl];
   const promise = Promise.all(urls.map(readGeometry))
     .then(([land, rivers]) => ({ land, rivers }))
     .catch((error) => {
-      geometryCache.delete(subject);
+      geometryCache.delete(layer);
       throw error;
     });
-  geometryCache.set(subject, promise);
+  geometryCache.set(layer, promise);
   return promise;
 }
 

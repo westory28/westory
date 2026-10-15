@@ -1,8 +1,19 @@
-import type { AtlasDataset } from "../lib/historyAtlas";
+import type { AtlasDataset, AtlasPlace } from "../lib/historyAtlas";
+import { historyAtlasEras, originalAtlasEntryEras } from "./historyAtlasEras";
+import {
+  koreaExpansionEntries,
+  koreaExpansionPlaces,
+  koreaPlaceUpdates,
+} from "./historyAtlasKoreaExpansion";
+import {
+  worldExpansionEntries,
+  worldExpansionPlaces,
+  worldPlaceUpdates,
+} from "./historyAtlasWorldExpansion";
 
 // Original summaries of the supplied textbooks; source PDFs and extracted text are not shipped.
 // Coordinates are representative locations, not reconstructed historical boundaries.
-export const historyAtlasDataset: AtlasDataset = {
+const originalHistoryAtlasDataset: AtlasDataset = {
   sources: [
     {
       id: "history1",
@@ -134,7 +145,7 @@ export const historyAtlasDataset: AtlasDataset = {
       id: "pyongyang",
       name: "평양",
       modernName: "평양",
-      aliases: ["평양성", "서경"],
+      aliases: ["서경"],
       coordinates: [125.75, 39.03],
       locationNote:
         "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
@@ -675,6 +686,8 @@ export const historyAtlasDataset: AtlasDataset = {
       id: "k-gongju",
       unitId: "korea-ancient",
       placeId: "gongju",
+      displayName: "웅진",
+      nameNote: "웅진은 오늘날 공주 지역에 있던 백제의 수도이다.",
       title: "위기 속에 옮긴 백제의 수도",
       period: "475년 이후",
       summary:
@@ -694,6 +707,9 @@ export const historyAtlasDataset: AtlasDataset = {
       id: "k-buyeo",
       unitId: "korea-ancient",
       placeId: "buyeo",
+      displayName: "사비",
+      nameNote:
+        "사비는 오늘날 충남 부여 지역의 옛 이름이다. 고대 국가 부여와 구분한다.",
       title: "사비에서 추진한 백제의 재정비",
       period: "538년 이후",
       summary:
@@ -732,6 +748,8 @@ export const historyAtlasDataset: AtlasDataset = {
       id: "k-gyeongju",
       unitId: "korea-north-south",
       placeId: "gyeongju",
+      displayName: "금성(경주)",
+      nameNote: "여기서 금성은 신라의 수도인 경주를 가리킨다.",
       title: "통일 신라의 수도와 지방 운영",
       period: "7~8세기",
       summary:
@@ -802,11 +820,13 @@ export const historyAtlasDataset: AtlasDataset = {
         },
       ],
       relatedPlaceIds: ["gyeongju", "wando", "baghdad"],
+      relatedEntryIds: ["kr-entry-10a66d5a6536"],
     },
     {
       id: "k-kaesong",
       unitId: "korea-goryeo",
       placeId: "kaesong",
+      displayName: "송악(개성)",
       title: "송악에서 시작된 고려의 통합",
       period: "918~936년",
       summary:
@@ -1291,6 +1311,9 @@ export const historyAtlasDataset: AtlasDataset = {
       id: "w-nara",
       unitId: "world-religions",
       placeId: "nara",
+      displayName: "헤이조쿄(나라)",
+      nameNote:
+        "헤이조쿄는 나라 시대의 수도명이다. 이후 옮긴 헤이안쿄는 교토 지역으로 서로 다른 장소이다.",
       title: "동아시아 문화를 받아들인 수도",
       period: "8세기",
       summary:
@@ -1353,6 +1376,10 @@ export const historyAtlasDataset: AtlasDataset = {
       id: "w-constantinople",
       unitId: "world-religions",
       placeId: "istanbul",
+      displayName: "콘스탄티노폴리스",
+      nameNote:
+        "비잔티움 제국의 수도를 가리키는 이름이다. 같은 도시의 오스만 시대 설명은 이스탄불에서 볼 수 있다.",
+      relatedEntryIds: ["w-istanbul"],
       title: "유럽과 아시아를 잇는 비잔티움의 수도",
       period: "6세기 중심",
       summary:
@@ -1428,6 +1455,10 @@ export const historyAtlasDataset: AtlasDataset = {
       id: "w-istanbul",
       unitId: "world-exchange",
       placeId: "istanbul",
+      displayName: "이스탄불",
+      nameNote:
+        "교과서는 오스만 제국의 정복 뒤 이 도시가 이스탄불로 불렸다고 설명한다. 비잔티움 시대에는 콘스탄티노폴리스가 수도명이었다.",
+      relatedEntryIds: ["w-constantinople"],
       title: "오스만 제국의 수도가 되다",
       period: "1453년 이후",
       summary:
@@ -1576,6 +1607,7 @@ export const historyAtlasDataset: AtlasDataset = {
       id: "w-tokyo",
       unitId: "world-nations",
       placeId: "tokyo",
+      displayName: "도쿄",
       title: "메이지 유신과 도시의 변화",
       period: "1868년 이후",
       summary:
@@ -1702,5 +1734,41 @@ export const historyAtlasDataset: AtlasDataset = {
       ],
       relatedPlaceIds: ["bandung"],
     },
+  ],
+};
+
+const places = new Map<string, AtlasPlace>();
+for (const place of [
+  ...originalHistoryAtlasDataset.places,
+  ...koreaExpansionPlaces,
+  ...worldExpansionPlaces,
+]) {
+  if (places.has(place.id))
+    throw new Error(`Duplicate atlas place: ${place.id}`);
+  places.set(place.id, place);
+}
+for (const update of [...koreaPlaceUpdates, ...worldPlaceUpdates]) {
+  const current = places.get(update.id);
+  if (!current) throw new Error(`Unknown atlas place update: ${update.id}`);
+  places.set(update.id, {
+    ...current,
+    ...update,
+    aliases: [
+      ...new Set([...(current.aliases || []), ...(update.aliases || [])]),
+    ],
+  });
+}
+
+export const historyAtlasDataset: AtlasDataset = {
+  ...originalHistoryAtlasDataset,
+  places: [...places.values()],
+  eras: historyAtlasEras,
+  entries: [
+    ...originalHistoryAtlasDataset.entries.map((entry) => ({
+      ...entry,
+      eraIds: originalAtlasEntryEras[entry.id] || [],
+    })),
+    ...koreaExpansionEntries,
+    ...worldExpansionEntries,
   ],
 };

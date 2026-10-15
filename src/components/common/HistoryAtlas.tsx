@@ -12,6 +12,7 @@ import {
   ATLAS_SUBJECT_BOUNDS,
   ATLAS_SUBJECT_LABELS,
   matchesAtlasSearch,
+  normalizeAtlasSearch,
   type AtlasDataset,
   type AtlasEntry,
   type AtlasPlace,
@@ -29,6 +30,7 @@ import {
   type AtlasGeometry,
   type AtlasTransform,
 } from "../../lib/historyAtlasGeometry";
+import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import "./historyAtlas.css";
 
 interface HistoryAtlasProps {
@@ -37,10 +39,47 @@ interface HistoryAtlasProps {
   toolbar?: ReactNode;
 }
 
-type LocatedEntry = { entry: AtlasEntry; place: AtlasPlace };
-type MapPoint = { place: AtlasPlace; x: number; y: number; active: boolean };
+type LocatedEntry = {
+  entry: AtlasEntry;
+  place: AtlasPlace;
+  search: { names: string[]; aliases: string[]; text: string };
+};
+type MapPoint = {
+  place: AtlasPlace;
+  name: string;
+  x: number;
+  y: number;
+  active: boolean;
+};
+const PAGE_SIZE = 40;
+const entryName = ({ entry, place }: LocatedEntry) =>
+  entry.displayName || place.name;
+const locationStatus = (place: AtlasPlace) =>
+  place.kind === "country" || place.kind === "region"
+    ? "영역 자료"
+    : "위치 미확정";
+const searchRank = (item: LocatedEntry, normalized: string) => {
+  if (!normalized) return 0;
+  const { names, aliases } = item.search;
+  if (names.includes(normalized)) return 0;
+  if (aliases.includes(normalized)) return 1;
+  return names.some((value) => value.startsWith(normalized)) ? 2 : 3;
+};
+const searchEntries = (items: LocatedEntry[], query: string) => {
+  const normalized = normalizeAtlasSearch(query);
+  if (!normalized) return items;
+  return items
+    .filter((item) => item.search.text.includes(normalized))
+    .sort((a, b) => searchRank(a, normalized) - searchRank(b, normalized));
+};
 
-function AtlasHelp() {
+function AtlasHelp({
+  label = "지도 조작과 지형 정보",
+  children,
+}: {
+  label?: string;
+  children?: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
   const id = useId();
@@ -74,7 +113,7 @@ function AtlasHelp() {
       <button
         type="button"
         className="history-atlas__help-button"
-        aria-label="지도 조작과 지형 정보"
+        aria-label={label}
         aria-expanded={open}
         aria-controls={id}
         aria-describedby={open ? id : undefined}
@@ -85,21 +124,54 @@ function AtlasHelp() {
       </button>
       {open && (
         <span className="history-atlas__tooltip" id={id} role="tooltip">
-          <strong>지도 조작</strong>
-          <span>
-            마우스로 끌어 이동하고, Ctrl 또는 ⌘와 휠로 확대합니다. 터치 화면은
-            두 손가락을 사용하거나 ‘지도 이동’을 켜세요.
-          </span>
-          <span>
-            지도에 키보드 초점을 두고 방향키로 이동, +·−로 확대·축소, Home으로
-            전체를 봅니다. 겹치는 지명은 확대하거나 장소 목록에서 선택하세요.
-          </span>
-          <strong>지형과 위치</strong>
-          <span>
-            Natural Earth의 현대 자연지형을 단순화해 표시하며 국경은 표시하지
-            않습니다. 지점은 도시 중심 또는 설명에 표시한 추정 위치입니다.
-            한국사는 메르카토르, 세계사는 내추럴 어스 투영을 사용합니다.
-          </span>
+          {children || (
+            <>
+              <strong>지도 조작</strong>
+              <span>
+                마우스로 끌어 이동하고, Ctrl 또는 ⌘와 휠로 확대합니다. 터치
+                화면은 두 손가락을 사용하거나 ‘지도 이동’을 켜세요.
+              </span>
+              <span>
+                지도에 키보드 초점을 두고 방향키로 이동, +·−로 확대·축소,
+                Home으로 전체를 봅니다. 겹치는 지명은 확대하거나 장소 목록에서
+                선택하세요.
+              </span>
+              <strong>지형과 위치</strong>
+              <span>
+                Natural Earth의 현대 자연지형을 단순화해 표시하며 국경은
+                표시하지 않습니다. 지점은 도시 중심 또는 설명에 표시한 추정
+                위치입니다. 한국사는 메르카토르, 세계사는 내추럴 어스 투영을
+                사용합니다.
+              </span>
+              <span>
+                지형:{" "}
+                <a
+                  href="https://www.naturalearthdata.com/about/terms-of-use/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Natural Earth
+                </a>
+                . 지명 좌표 일부:{" "}
+                <a
+                  href="https://www.geonames.org/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  GeoNames
+                </a>{" "}
+                (
+                <a
+                  href="https://creativecommons.org/licenses/by/4.0/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  CC BY 4.0
+                </a>
+                , 지명 대조·대표점 가공).
+              </span>
+            </>
+          )}
         </span>
       )}
     </span>
@@ -124,26 +196,59 @@ const AtlasBackground = memo(function AtlasBackground({
   );
 });
 
-function placeLabelLayout(points: MapPoint[], width: number, height: number) {
+function placeLabelLayout(
+  points: MapPoint[],
+  width: number,
+  height: number,
+  obstacle: { right: number; bottom: number } | null,
+) {
   const boxes: { left: number; top: number; right: number; bottom: number }[] =
-    [];
-  const accepted: MapPoint[] = [];
+    obstacle ? [{ left: 0, top: 0, ...obstacle }] : [];
+  const occupied = new Map<string, MapPoint[]>();
+  const labelLimit = Math.max(12, Math.floor((width * height) / 7500));
   return [...points]
     .sort((a, b) => Number(b.active) - Number(a.active))
     .map((point) => {
-      const hitVisible =
-        point.active ||
-        !accepted.some(
-          (other) => Math.hypot(point.x - other.x, point.y - other.y) < 32,
-        );
-      if (hitVisible) accepted.push(point);
-      const naturalWidth = Math.max(40, point.place.name.length * 14 + 12);
+      const cellX = Math.floor(point.x / 44);
+      const cellY = Math.floor(point.y / 44);
+      let overlaps = false;
+      for (let x = cellX - 1; x <= cellX + 1; x++) {
+        for (let y = cellY - 1; y <= cellY + 1; y++) {
+          if (
+            occupied
+              .get(`${x}:${y}`)
+              ?.some(
+                (other) =>
+                  Math.hypot(point.x - other.x, point.y - other.y) < 44,
+              )
+          )
+            overlaps = true;
+        }
+      }
+      const behindCard =
+        obstacle &&
+        point.x < obstacle.right + 22 &&
+        point.y < obstacle.bottom + 22;
+      const hitVisible = !behindCard && (point.active || !overlaps);
+      if (hitVisible) {
+        const key = `${cellX}:${cellY}`;
+        occupied.set(key, [...(occupied.get(key) || []), point]);
+      }
+      const naturalWidth = Math.max(40, point.name.length * 14 + 12);
+      const frameLeft =
+        point.active && obstacle && point.x > obstacle.right + 22
+          ? obstacle.right + 12
+          : 8;
+      const frameTop =
+        point.active && obstacle && point.y > obstacle.bottom + 22
+          ? obstacle.bottom + 12
+          : 8;
       const labelWidth = point.active
-        ? Math.min(naturalWidth, Math.max(1, width - 16))
+        ? Math.min(naturalWidth, Math.max(1, width - frameLeft - 8))
         : naturalWidth;
       const labelHeight = Math.ceil(naturalWidth / labelWidth) * 24;
       const rightSide = point.x + labelWidth + 14 <= width - 8;
-      const fitsLeft = point.x - labelWidth - 14 >= 8;
+      const fitsLeft = point.x - labelWidth - 14 >= frameLeft;
       const centered = point.active && !rightSide && !fitsLeft;
       let left = centered
         ? point.x - labelWidth / 2
@@ -156,8 +261,8 @@ function placeLabelLayout(points: MapPoint[], width: number, height: number) {
           : point.y - labelHeight - 14
         : point.y - labelHeight / 2;
       if (point.active) {
-        left = Math.max(8, Math.min(width - labelWidth - 8, left));
-        top = Math.max(8, Math.min(height - labelHeight - 8, top));
+        left = Math.max(frameLeft, Math.min(width - labelWidth - 8, left));
+        top = Math.max(frameTop, Math.min(height - labelHeight - 8, top));
       }
       const box = {
         left,
@@ -167,6 +272,7 @@ function placeLabelLayout(points: MapPoint[], width: number, height: number) {
       };
       const labelVisible =
         hitVisible &&
+        (point.active || boxes.length < labelLimit) &&
         box.left >= 4 &&
         box.right <= width - 4 &&
         box.top >= 4 &&
@@ -202,9 +308,23 @@ export default function HistoryAtlas({
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const placesButtonRef = useRef<HTMLButtonElement>(null);
+  const detailRef = useRef<HTMLElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [subject, setSubject] = useState<AtlasSubject>("korea");
   const [unitId, setUnitId] = useState("");
+  const [eraId, setEraId] = useState("");
   const [query, setQuery] = useState("");
+  const [mobilePanel, setMobilePanel] = useState<"places" | "detail" | null>(
+    null,
+  );
+  const [filterNotice, setFilterNotice] = useState("");
+  const [detailOpen, setDetailOpen] = useState(true);
+  const [listPage, setListPage] = useState(0);
+  const [viewBounds, setViewBounds] = useState<AtlasUnit["bounds"] | null>(
+    null,
+  );
   const [selectedId, setSelectedId] = useState("");
   const [focusRevision, setFocusRevision] = useState(0);
   const pendingFocusRef = useRef<string | null>(null);
@@ -212,6 +332,7 @@ export default function HistoryAtlas({
   const [mapWidth, setMapWidth] = useState(640);
   const [geometry, setGeometry] = useState<{
     subject: AtlasSubject;
+    bounds: AtlasUnit["bounds"];
     data: AtlasGeometry;
   } | null>(null);
   const [geometryError, setGeometryError] = useState(false);
@@ -226,8 +347,8 @@ export default function HistoryAtlas({
     start: AtlasTransform;
     pointerId: number;
   } | null>(null);
-  const wide = containerWidth >= 960;
-  const mapHeight = wide ? 520 : 360;
+  const wide = containerWidth >= 900;
+  const mapHeight = wide ? 640 : 400;
   const placesById = useMemo(
     () => new Map(dataset.places.map((place) => [place.id, place])),
     [dataset.places],
@@ -245,57 +366,94 @@ export default function HistoryAtlas({
     [dataset.units, subject],
   );
   const selectedUnit = subjectUnits.find((unit) => unit.id === unitId);
-  const bounds = useMemo(() => {
-    const result: AtlasUnit["bounds"] = [
-      ...(selectedUnit?.bounds || ATLAS_SUBJECT_BOUNDS[subject]),
-    ];
-    // An imported story must remain reachable even when it sits just outside a
-    // curriculum editor's region. Search itself never changes the projection.
-    dataset.entries.forEach((entry) => {
-      if (
-        unitsById.get(entry.unitId)?.subject !== subject ||
-        (unitId && entry.unitId !== unitId)
-      )
-        return;
-      const coordinates = placesById.get(entry.placeId)?.coordinates;
-      if (!coordinates) return;
-      const [longitude, latitude] = coordinates;
-      result[0] = Math.max(-180, Math.min(result[0], longitude - 0.5));
-      result[1] = Math.max(-80, Math.min(result[1], latitude - 0.5));
-      result[2] = Math.min(180, Math.max(result[2], longitude + 0.5));
-      result[3] = Math.min(80, Math.max(result[3], latitude + 0.5));
-    });
-    return result;
-  }, [dataset.entries, placesById, selectedUnit, subject, unitId, unitsById]);
-  const scopeEntries = useMemo(
+  const subjectEras = useMemo(
+    () => (dataset.eras || []).filter((era) => era.subject === subject),
+    [dataset.eras, subject],
+  );
+  const baseBounds = selectedUnit?.bounds || ATLAS_SUBJECT_BOUNDS[subject];
+  const bounds = viewBounds || baseBounds;
+  const allEntries = useMemo(
     () =>
       dataset.entries.flatMap((entry): LocatedEntry[] => {
         const place = placesById.get(entry.placeId);
-        if (!place || unitsById.get(entry.unitId)?.subject !== subject)
-          return [];
-        if (unitId && entry.unitId !== unitId) return [];
-        return [{ entry, place }];
+        if (!place || !unitsById.has(entry.unitId)) return [];
+        const names = [entry.displayName || "", place.name].map(
+          normalizeAtlasSearch,
+        );
+        const aliases = [place.modernName || "", ...(place.aliases || [])].map(
+          normalizeAtlasSearch,
+        );
+        const text = [
+          ...names,
+          ...aliases,
+          ...[entry.title, entry.period, entry.nameNote || ""].map(
+            normalizeAtlasSearch,
+          ),
+        ].join("\0");
+        return [{ entry, place, search: { names, aliases, text } }];
       }),
-    [dataset.entries, placesById, unitsById, subject, unitId],
+    [dataset.entries, placesById, unitsById],
+  );
+  const subjectEntries = useMemo(
+    () =>
+      allEntries.filter(
+        ({ entry }) => unitsById.get(entry.unitId)?.subject === subject,
+      ),
+    [allEntries, unitsById, subject],
+  );
+  const entriesById = useMemo(
+    () => new Map(allEntries.map((item) => [item.entry.id, item])),
+    [allEntries],
+  );
+  const entriesByPlace = useMemo(() => {
+    const result = new Map<string, LocatedEntry[]>();
+    subjectEntries.forEach((item) => {
+      const group = result.get(item.place.id);
+      if (group) group.push(item);
+      else result.set(item.place.id, [item]);
+    });
+    return result;
+  }, [subjectEntries]);
+  const scopeEntries = useMemo(
+    () =>
+      subjectEntries.filter(
+        ({ entry }) =>
+          (!unitId || entry.unitId === unitId) &&
+          (!eraId || entry.eraIds?.includes(eraId)),
+      ),
+    [subjectEntries, unitId, eraId],
   );
   const entries = useMemo(
-    () =>
-      scopeEntries.filter(({ entry, place }) =>
-        matchesAtlasSearch(entry, place, query),
-      ),
+    () => searchEntries(scopeEntries, query),
     [scopeEntries, query],
   );
   const selected =
     entries.find(({ entry }) => entry.id === selectedId) || entries[0];
-  const visiblePlaces = useMemo(
+  const overlayWidth = Math.min(360, mapWidth - 32);
+  const overlayMaxHeight = mapWidth >= 650 ? mapHeight - 32 : mapHeight - 144;
+  const overlayObstacle = useMemo(
     () =>
-      Array.from(
-        new Map(entries.map(({ place }) => [place.id, place])).values(),
-      ),
-    [entries],
+      wide && detailOpen && selected
+        ? { right: 16 + overlayWidth, bottom: 16 + overlayMaxHeight }
+        : null,
+    [wide, detailOpen, !!selected, overlayWidth, overlayMaxHeight],
+  );
+  const visiblePlaces = useMemo(() => {
+    const result = new Map<string, LocatedEntry>();
+    entries.forEach((item) => {
+      if (!result.has(item.place.id) || item.entry.id === selected?.entry.id)
+        result.set(item.place.id, item);
+    });
+    return Array.from(result.values());
+  }, [entries, selected?.entry.id]);
+  const pageCount = Math.max(1, Math.ceil(visiblePlaces.length / PAGE_SIZE));
+  const currentPage = Math.min(listPage, pageCount - 1);
+  const pagePlaces = visiblePlaces.slice(
+    currentPage * PAGE_SIZE,
+    (currentPage + 1) * PAGE_SIZE,
   );
   const samePlaceEntries = selected
-    ? entries.filter(({ place }) => place.id === selected.place.id)
+    ? entriesByPlace.get(selected.place.id) || []
     : [];
   const projection = useMemo(
     () => createAtlasProjection(subject, bounds, mapWidth, mapHeight),
@@ -303,22 +461,30 @@ export default function HistoryAtlas({
   );
   const paths = useMemo(
     () =>
-      geometry?.subject === subject
+      geometry?.subject === subject && geometry.bounds === bounds
         ? createAtlasPaths(geometry.data, projection)
         : null,
-    [geometry, subject, projection],
+    [geometry, subject, bounds, projection],
   );
   const mapPoints = useMemo(() => {
     const points: MapPoint[] = [];
-    visiblePlaces.forEach((place) => {
+    visiblePlaces.forEach((item) => {
+      const { place } = item;
+      if (!place.coordinates) return;
       const position = projection(place.coordinates);
       if (!position) return;
       const x = position[0] * transform.scale + transform.x;
       const y = position[1] * transform.scale + transform.y;
       if (x < 0 || x > mapWidth || y < 0 || y > mapHeight) return;
-      points.push({ place, x, y, active: selected?.place.id === place.id });
+      points.push({
+        place,
+        name: entryName(item),
+        x,
+        y,
+        active: selected?.place.id === place.id,
+      });
     });
-    return placeLabelLayout(points, mapWidth, mapHeight);
+    return placeLabelLayout(points, mapWidth, mapHeight, overlayObstacle);
   }, [
     visiblePlaces,
     projection,
@@ -326,7 +492,16 @@ export default function HistoryAtlas({
     mapWidth,
     mapHeight,
     selected?.place.id,
+    overlayObstacle,
   ]);
+  const minorDotsPath = useMemo(
+    () =>
+      mapPoints
+        .filter((point) => !point.hitVisible)
+        .map(({ x, y }) => `M${x - 2},${y}a2,2 0 1,0 4,0a2,2 0 1,0 -4,0`)
+        .join(""),
+    [mapPoints],
+  );
 
   const updateTransform = useCallback((value: AtlasTransform) => {
     transformRef.current = value;
@@ -361,9 +536,9 @@ export default function HistoryAtlas({
   useEffect(() => {
     let disposed = false;
     setGeometryError(false);
-    loadAtlasGeometry(subject)
+    loadAtlasGeometry(subject, bounds)
       .then((data) => {
-        if (!disposed) setGeometry({ subject, data });
+        if (!disposed) setGeometry({ subject, bounds, data });
       })
       .catch(() => {
         if (!disposed) setGeometryError(true);
@@ -371,12 +546,67 @@ export default function HistoryAtlas({
     return () => {
       disposed = true;
     };
-  }, [subject, geometryAttempt]);
+  }, [subject, bounds, geometryAttempt]);
 
   useEffect(() => {
     resetMap();
     setMoveMode(false);
-  }, [subject, unitId, mapWidth, mapHeight, resetMap]);
+  }, [subject, bounds, mapWidth, mapHeight, resetMap]);
+
+  useEffect(() => {
+    setListPage(0);
+  }, [subject, unitId, eraId, query]);
+
+  useEffect(() => {
+    const index = visiblePlaces.findIndex(
+      ({ place }) => place.id === selected?.place.id,
+    );
+    if (index >= 0) setListPage(Math.floor(index / PAGE_SIZE));
+  }, [selected?.place.id, visiblePlaces]);
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [currentPage]);
+
+  useEffect(() => {
+    detailRef.current?.scrollTo({ top: 0 });
+  }, [selected?.entry.id]);
+
+  useEffect(() => {
+    if (wide) setMobilePanel(null);
+  }, [wide]);
+
+  useEffect(() => {
+    if (wide && detailOpen && selected) {
+      pendingFocusRef.current = selected.place.id;
+      setFocusRevision((value) => value + 1);
+    }
+  }, [wide, detailOpen, subject, mapWidth, mapHeight]);
+
+  const panelOpen = mobilePanel !== null && !wide;
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog || !panelOpen) return;
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    dialog.showModal();
+    const unlock = acquirePageScrollLock();
+    return () => {
+      dialog.close();
+      unlock();
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+      else placesButtonRef.current?.focus({ preventScroll: true });
+    };
+  }, [panelOpen]);
+
+  useEffect(() => {
+    if (panelOpen)
+      dialogRef.current
+        ?.querySelector<HTMLElement>("[data-panel-title]")
+        ?.focus({ preventScroll: true });
+  }, [mobilePanel, panelOpen]);
 
   const zoom = useCallback(
     (
@@ -391,25 +621,64 @@ export default function HistoryAtlas({
   );
 
   useEffect(() => {
-    if (!selected || (!query.trim() && !pendingFocusRef.current)) return;
+    if (!selected || !pendingFocusRef.current) return;
     if (
       pendingFocusRef.current &&
       pendingFocusRef.current !== selected.place.id
     )
       return;
-    pendingFocusRef.current = null;
     // Persist the actual filtered selection, so removing a query cannot restore
     // an older fallback entry while leaving the camera at the search result.
     if (selectedId !== selected.entry.id) setSelectedId(selected.entry.id);
-    const point = projection(selected.place.coordinates);
+    const coordinates = selected.place.coordinates;
+    if (!coordinates) {
+      pendingFocusRef.current = null;
+      return;
+    }
+    const [lon, lat] = coordinates;
+    const contains = (extent: AtlasUnit["bounds"]) =>
+      lon >= extent[0] &&
+      lon <= extent[2] &&
+      lat >= extent[1] &&
+      lat <= extent[3];
+    if (!contains(bounds)) {
+      if (contains(baseBounds)) setViewBounds(null);
+      else {
+        const halfWidth = Math.min(
+          20,
+          Math.max(4, (baseBounds[2] - baseBounds[0]) / 2),
+        );
+        const halfHeight = Math.min(
+          16,
+          Math.max(4, (baseBounds[3] - baseBounds[1]) / 2),
+        );
+        setViewBounds([
+          Math.max(-180, lon - halfWidth),
+          Math.max(-80, lat - halfHeight),
+          Math.min(180, lon + halfWidth),
+          Math.min(80, lat + halfHeight),
+        ]);
+      }
+      return;
+    }
+    pendingFocusRef.current = null;
+    const point = projection(coordinates);
     if (!point) return;
     const current = transformRef.current;
+    const targetX =
+      overlayObstacle && mapWidth >= 650
+        ? (overlayObstacle.right + mapWidth) / 2
+        : mapWidth / 2;
+    const targetY =
+      overlayObstacle && mapWidth < 650
+        ? (overlayObstacle.bottom + mapHeight) / 2
+        : mapHeight / 2;
     updateTransform(
       constrainAtlasTransform(
         {
           scale: current.scale,
-          x: mapWidth / 2 - point[0] * current.scale,
-          y: mapHeight / 2 - point[1] * current.scale,
+          x: targetX - point[0] * current.scale,
+          y: targetY - point[1] * current.scale,
         },
         mapWidth,
         mapHeight,
@@ -422,6 +691,9 @@ export default function HistoryAtlas({
     selected?.entry.id,
     selectedId,
     projection,
+    bounds,
+    baseBounds,
+    overlayObstacle,
     mapWidth,
     mapHeight,
     updateTransform,
@@ -452,6 +724,13 @@ export default function HistoryAtlas({
       };
     };
     const begin = (event: TouchEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".history-atlas__overlay")
+      ) {
+        touch = null;
+        return;
+      }
       if (event.touches.length === 0) return;
       movedRef.current = false;
       if (event.touches.length > 1 || moveMode) {
@@ -503,6 +782,11 @@ export default function HistoryAtlas({
       }
     };
     const wheel = (event: WheelEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".history-atlas__overlay")
+      )
+        return;
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       const rect = node.getBoundingClientRect();
@@ -529,68 +813,334 @@ export default function HistoryAtlas({
     pendingFocusRef.current = placeId;
     setFocusRevision((value) => value + 1);
   };
-  const changeQuery = (value: string) => {
-    const matches = scopeEntries.filter(({ entry, place }) =>
-      matchesAtlasSearch(entry, place, value),
+  const resetView = () => {
+    setDetailOpen(false);
+    setViewBounds(null);
+    pendingFocusRef.current = null;
+    resetMap();
+  };
+  const clearFilters = () => {
+    setViewBounds(null);
+    setUnitId("");
+    setEraId("");
+    setQuery("");
+    setFilterNotice("");
+    setSelectedId("");
+    pendingFocusRef.current = null;
+  };
+  const changeScope = (nextUnitId: string, nextEraId: string) => {
+    if (nextUnitId !== unitId) setViewBounds(null);
+    setUnitId(nextUnitId);
+    setEraId(nextEraId);
+    setFilterNotice("");
+    const matches = searchEntries(
+      subjectEntries.filter(
+        ({ entry }) =>
+          (!nextUnitId || entry.unitId === nextUnitId) &&
+          (!nextEraId || entry.eraIds?.includes(nextEraId)),
+      ),
+      query,
     );
     const next =
       matches.find(({ entry }) => entry.id === selected?.entry.id) ||
-      matches.find(({ entry }) => entry.id === selectedId) ||
+      matches[0];
+    setSelectedId(next?.entry.id || "");
+    pendingFocusRef.current = null;
+    if (next) requestPlaceFocus(next.place.id);
+    if (next) setDetailOpen(true);
+  };
+  const changeQuery = (value: string) => {
+    const matches = searchEntries(scopeEntries, value);
+    const normalized = normalizeAtlasSearch(value);
+    const bestRank = matches[0] ? searchRank(matches[0], normalized) : 0;
+    const next =
+      matches.find(
+        (item) =>
+          item.entry.id === selected?.entry.id &&
+          searchRank(item, normalized) === bestRank,
+      ) ||
+      matches.find(
+        (item) =>
+          item.entry.id === selectedId &&
+          searchRank(item, normalized) === bestRank,
+      ) ||
       matches[0];
     setQuery(value);
+    setFilterNotice("");
     pendingFocusRef.current = null;
     if (next) {
+      setDetailOpen(true);
       setSelectedId(next.entry.id);
       requestPlaceFocus(next.place.id);
     }
   };
-  const focusPlace = (placeId: string) => {
+  const focusPlace = (placeId: string, focusMap = true) => {
     const next =
       entries.find(
         ({ entry, place }) =>
           place.id === placeId && entry.id === selected?.entry.id,
       ) || entries.find(({ place }) => place.id === placeId);
     if (!next) return;
+    setFilterNotice("");
     setSelectedId(next.entry.id);
-    requestPlaceFocus(next.place.id);
+    setDetailOpen(true);
+    if (focusMap || wide) requestPlaceFocus(next.place.id);
+    if (!wide) setMobilePanel("detail");
   };
-  const selectRelated = (placeId: string) => {
-    const current = scopeEntries.find(({ place }) => place.id === placeId);
-    if (current) {
-      setQuery("");
-      setSelectedId(current.entry.id);
-      requestPlaceFocus(placeId);
-      return;
+  const selectStory = (next: LocatedEntry) => {
+    const cleared: string[] = [];
+    const nextSubject = unitsById.get(next.entry.unitId)?.subject || subject;
+    const subjectChanged = nextSubject !== subject;
+    if (subjectChanged) {
+      setSubject(nextSubject);
+      setViewBounds(null);
     }
-    const next = dataset.entries.find(
-      (entry) =>
-        entry.placeId === placeId &&
-        unitsById.get(entry.unitId)?.subject === subject,
+    if (unitId && next.entry.unitId !== unitId) {
+      setUnitId("");
+      setViewBounds(null);
+      cleared.push("단원");
+    }
+    if (eraId && (subjectChanged || !next.entry.eraIds?.includes(eraId))) {
+      setEraId("");
+      cleared.push("시대");
+    }
+    if (
+      query &&
+      (subjectChanged || !matchesAtlasSearch(next.entry, next.place, query))
+    ) {
+      setQuery("");
+      cleared.push("검색");
+    }
+    setFilterNotice(
+      subjectChanged
+        ? `${entryName(next)} 이야기로 이동하며 ${ATLAS_SUBJECT_LABELS[nextSubject]}로 전환했습니다.${cleared.length ? ` ${cleared.join("·")} 조건을 해제했습니다.` : ""}`
+        : cleared.length
+          ? `${entryName(next)} 이야기로 이동하며 ${cleared.join("·")} 조건을 해제했습니다.`
+          : "",
     );
-    if (!next) return;
-    setQuery("");
-    setUnitId(next.unitId);
-    setSelectedId(next.id);
-    requestPlaceFocus(placeId);
+    setSelectedId(next.entry.id);
+    setDetailOpen(true);
+    requestPlaceFocus(next.place.id);
+    if (!wide) setMobilePanel("detail");
   };
-  const relatedPlaces = selected
-    ? (selected.entry.relatedPlaceIds || []).flatMap((placeId) => {
-        const place = placesById.get(placeId);
-        return place &&
-          dataset.entries.some(
-            (entry) =>
-              entry.placeId === placeId &&
-              unitsById.get(entry.unitId)?.subject === subject,
-          )
-          ? [place]
-          : [];
-      })
-    : [];
+  const relatedStories = useMemo(() => {
+    if (!selected) return [];
+    const result = new Map<string, LocatedEntry>();
+    (selected.entry.relatedEntryIds || []).forEach((entryId) => {
+      const item = entriesById.get(entryId);
+      if (item) result.set(item.entry.id, item);
+    });
+    (selected.entry.relatedPlaceIds || []).forEach((placeId) => {
+      if (Array.from(result.values()).some((item) => item.place.id === placeId))
+        return;
+      const item =
+        scopeEntries.find((item) => item.place.id === placeId) ||
+        entriesByPlace.get(placeId)?.[0] ||
+        allEntries.find((item) => item.place.id === placeId);
+      if (item) result.set(item.entry.id, item);
+    });
+    return Array.from(result.values());
+  }, [selected, entriesById, entriesByPlace, scopeEntries, allEntries]);
+  const locationExplanation = selected
+    ? selected.place.locationNote ||
+      (!selected.place.coordinates
+        ? "위치가 확정되지 않아 지도에 핀을 표시하지 않습니다."
+        : ["region", "country", "water", "mountain"].includes(
+              selected.place.kind || "",
+            )
+          ? "표시는 지명의 대표 위치이며 영역이나 경계를 뜻하지 않습니다."
+          : "")
+    : "";
+
+  const placeList = (
+    <section className="history-atlas__places" aria-label="장소 목록">
+      <div className="history-atlas__places-heading">
+        <h2>장소</h2>
+        <span>{visiblePlaces.length}곳</span>
+      </div>
+      {visiblePlaces.length ? (
+        <>
+          <div className="history-atlas__place-list" ref={listRef}>
+            {pagePlaces.map((item) => (
+              <button
+                type="button"
+                key={item.place.id}
+                aria-pressed={selected?.place.id === item.place.id}
+                onClick={() => focusPlace(item.place.id)}
+              >
+                <span>{entryName(item)}</span>
+                <small>
+                  {item.entry.period}
+                  {!item.place.coordinates
+                    ? ` · ${locationStatus(item.place)}`
+                    : ""}
+                </small>
+              </button>
+            ))}
+          </div>
+          {pageCount > 1 && (
+            <nav
+              className="history-atlas__pagination"
+              aria-label="장소 목록 페이지"
+            >
+              <button
+                type="button"
+                className="history-atlas__button"
+                aria-label="이전 장소 페이지"
+                disabled={currentPage === 0}
+                onClick={() => setListPage(currentPage - 1)}
+              >
+                이전
+              </button>
+              <span>
+                {currentPage + 1} / {pageCount}
+              </span>
+              <button
+                type="button"
+                className="history-atlas__button"
+                aria-label="다음 장소 페이지"
+                disabled={currentPage + 1 >= pageCount}
+                onClick={() => setListPage(currentPage + 1)}
+              >
+                다음
+              </button>
+            </nav>
+          )}
+        </>
+      ) : (
+        <div className="history-atlas__empty">
+          <p>선택한 단원·시대·검색어에 맞는 장소가 없습니다.</p>
+          <button
+            type="button"
+            className="history-atlas__button"
+            onClick={clearFilters}
+          >
+            필터 초기화
+          </button>
+        </div>
+      )}
+    </section>
+  );
+
+  const placeDetail = (
+    <section
+      ref={detailRef}
+      className="history-atlas__detail"
+      aria-label="장소 설명"
+    >
+      {filterNotice && (
+        <p className="history-atlas__filter-notice" role="status">
+          {filterNotice}
+        </p>
+      )}
+      {selected ? (
+        <>
+          <div className="history-atlas__detail-heading">
+            <span className="history-atlas__period">
+              {selected.entry.period}
+            </span>
+            <div className="history-atlas__place-title">
+              <h2>{entryName(selected)}</h2>
+              {locationExplanation && (
+                <AtlasHelp label={`${entryName(selected)} 위치 정보`}>
+                  <span>{locationExplanation}</span>
+                </AtlasHelp>
+              )}
+            </div>
+            {selected.entry.nameNote ? (
+              <p>{selected.entry.nameNote}</p>
+            ) : (
+              selected.place.modernName &&
+              selected.place.modernName !== entryName(selected) && (
+                <p>현재 {selected.place.modernName}</p>
+              )
+            )}
+            {!selected.place.coordinates && (
+              <span className="history-atlas__location-status">
+                {locationStatus(selected.place)}
+              </span>
+            )}
+          </div>
+          <div className="history-atlas__story">
+            <h3>{selected.entry.title}</h3>
+            <p>{selected.entry.summary}</p>
+            {selected.entry.significance.trim() && (
+              <>
+                <h3>역사적 의미</h3>
+                <p>{selected.entry.significance}</p>
+              </>
+            )}
+          </div>
+          {samePlaceEntries.length > 1 && (
+            <div
+              className="history-atlas__story-choices"
+              role="group"
+              aria-label="같은 장소의 시대별 이야기"
+            >
+              <h3 className="history-atlas__story-choices-label">
+                시대별 이야기
+              </h3>
+              {samePlaceEntries.map((item) => (
+                <button
+                  type="button"
+                  key={item.entry.id}
+                  aria-pressed={item.entry.id === selected.entry.id}
+                  onClick={() => selectStory(item)}
+                >
+                  {item.entry.period} · {entryName(item)}
+                </button>
+              ))}
+            </div>
+          )}
+          {relatedStories.length > 0 && (
+            <div className="history-atlas__related">
+              <h3>함께 볼 장소</h3>
+              <div>
+                {relatedStories.map((item) => (
+                  <button
+                    key={item.entry.id}
+                    type="button"
+                    onClick={() => selectStory(item)}
+                  >
+                    {entryName(item)}
+                    <span aria-hidden="true"> →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <details className="history-atlas__sources" key={selected.entry.id}>
+            <summary>교과서 근거 · {selected.entry.citations.length}곳</summary>
+            <ul>
+              {selected.entry.citations.map((citation, index) => {
+                const source = sourcesById.get(citation.sourceId);
+                const printedPage = citation.printedPage?.trim();
+                return (
+                  <li key={`${citation.sourceId}-${citation.pdfPage}-${index}`}>
+                    <strong>{source?.title || citation.sourceId}</strong>
+                    {source?.edition && <span>{source.edition}</span>}
+                    <span>
+                      {printedPage ? `본문 ${printedPage}쪽 · ` : ""}
+                      PDF {citation.pdfPage}쪽
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        </>
+      ) : (
+        <p className="history-atlas__empty">
+          선택한 조건에 맞는 장소가 없습니다.
+        </p>
+      )}
+    </section>
+  );
 
   return (
     <div
       ref={rootRef}
-      className={`history-atlas${wide ? " history-atlas--wide" : ""}`}
+      className={`history-atlas${wide ? " history-atlas--wide" : ""}${containerWidth >= 1100 ? " history-atlas--large" : ""}`}
     >
       <div className="history-atlas__heading">
         <div className="history-atlas__heading-title">
@@ -622,8 +1172,12 @@ export default function HistoryAtlas({
             aria-pressed={subject === value}
             onClick={() => {
               setSubject(value);
+              setDetailOpen(true);
+              setViewBounds(null);
               setUnitId("");
+              setEraId("");
               setQuery("");
+              setFilterNotice("");
               setSelectedId("");
               pendingFocusRef.current = null;
             }}
@@ -639,15 +1193,30 @@ export default function HistoryAtlas({
             id={`${id}-unit`}
             value={unitId}
             onChange={(event) => {
-              setUnitId(event.target.value);
-              setSelectedId("");
-              pendingFocusRef.current = null;
+              changeScope(event.target.value, eraId);
             }}
           >
             <option value="">전체 단원</option>
             {subjectUnits.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor={`${id}-era`}>
+          <span>시대</span>
+          <select
+            id={`${id}-era`}
+            value={eraId}
+            onChange={(event) => {
+              changeScope(unitId, event.target.value);
+            }}
+          >
+            <option value="">전체 시대</option>
+            {subjectEras.map((era) => (
+              <option key={era.id} value={era.id}>
+                {era.title}
               </option>
             ))}
           </select>
@@ -680,6 +1249,18 @@ export default function HistoryAtlas({
             <span className="history-atlas__map-period">
               {selectedUnit?.period || ATLAS_SUBJECT_LABELS[subject]}
             </span>
+            {!wide && (
+              <button
+                ref={placesButtonRef}
+                type="button"
+                className="history-atlas__button history-atlas__places-trigger"
+                aria-haspopup="dialog"
+                aria-expanded={panelOpen}
+                onClick={() => setMobilePanel("places")}
+              >
+                장소 {visiblePlaces.length}
+              </button>
+            )}
             <div className="history-atlas__map-actions">
               <button
                 type="button"
@@ -705,14 +1286,14 @@ export default function HistoryAtlas({
               >
                 +
               </button>
-              <button type="button" onClick={resetMap}>
+              <button type="button" onClick={resetView}>
                 전체 보기
               </button>
             </div>
           </div>
           <div
             ref={mapRef}
-            className={`history-atlas__map${moveMode ? " history-atlas__map--move" : ""}`}
+            className={`history-atlas__map${moveMode ? " history-atlas__map--move" : ""}${overlayObstacle ? " history-atlas__map--detail" : ""}`}
             style={{ height: mapHeight }}
             role="region"
             aria-label={`${ATLAS_SUBJECT_LABELS[subject]} 지도. 방향키로 이동, 더하기와 빼기로 확대·축소, Home으로 전체 보기`}
@@ -744,7 +1325,7 @@ export default function HistoryAtlas({
                 zoom(1 / 1.4);
               } else if (event.key === "Home") {
                 event.preventDefault();
-                resetMap();
+                resetView();
               } else if (event.key === "Escape") setMoveMode(false);
             }}
             onPointerDown={(event) => {
@@ -802,6 +1383,53 @@ export default function HistoryAtlas({
               }
             }}
           >
+            {wide &&
+              selected &&
+              (detailOpen ? (
+                <section
+                  id={`${id}-overlay`}
+                  className="history-atlas__overlay"
+                  aria-label="선택 장소 설명"
+                  style={{ width: overlayWidth, maxHeight: overlayMaxHeight }}
+                  onPointerDown={(event) => {
+                    movedRef.current = false;
+                    event.stopPropagation();
+                  }}
+                >
+                  <div className="history-atlas__overlay-heading">
+                    <span>장소 설명</span>
+                    <button
+                      type="button"
+                      className="history-atlas__button"
+                      aria-label="장소 설명 닫기"
+                      onClick={() => {
+                        setDetailOpen(false);
+                        mapRef.current?.focus({ preventScroll: true });
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {placeDetail}
+                </section>
+              ) : (
+                <button
+                  type="button"
+                  className="history-atlas__button history-atlas__reopen"
+                  aria-expanded={false}
+                  aria-controls={`${id}-overlay`}
+                  onPointerDown={(event) => {
+                    movedRef.current = false;
+                    event.stopPropagation();
+                  }}
+                  onClick={() => {
+                    setDetailOpen(true);
+                    requestPlaceFocus(selected.place.id);
+                  }}
+                >
+                  선택 장소 설명
+                </button>
+              ))}
             <svg
               width="100%"
               height="100%"
@@ -809,6 +1437,9 @@ export default function HistoryAtlas({
               aria-hidden="true"
             >
               <AtlasBackground paths={paths} transform={transform} />
+              {paths && (
+                <path className="history-atlas__minor-dots" d={minorDotsPath} />
+              )}
             </svg>
             {paths &&
               mapPoints.map((point) =>
@@ -818,15 +1449,9 @@ export default function HistoryAtlas({
                     type="button"
                     className={`history-atlas__point${point.active ? " is-active" : ""}`}
                     style={{ left: point.x, top: point.y }}
-                    aria-label={`${point.place.name} 설명 보기`}
+                    aria-label={`${point.name} 설명 보기`}
                     aria-pressed={point.active}
-                    onClick={() => {
-                      if (selected?.place.id === point.place.id) return;
-                      const entry = entries.find(
-                        ({ place }) => place.id === point.place.id,
-                      );
-                      if (entry) setSelectedId(entry.entry.id);
-                    }}
+                    onClick={() => focusPlace(point.place.id, false)}
                   >
                     <span className="history-atlas__dot" />
                     {point.labelVisible && (
@@ -843,23 +1468,23 @@ export default function HistoryAtlas({
                               : "right",
                         }}
                       >
-                        {point.place.name}
+                        {point.name}
                       </span>
                     )}
                   </button>
-                ) : (
-                  <span
-                    key={point.place.id}
-                    className="history-atlas__minor-dot"
-                    aria-hidden="true"
-                    style={{ left: point.x, top: point.y }}
-                  />
-                ),
+                ) : null,
               )}
             {!paths && (
               <div
                 className="history-atlas__map-state"
                 role={geometryError ? "alert" : "status"}
+                style={
+                  overlayObstacle
+                    ? mapWidth >= 650
+                      ? { left: overlayObstacle.right }
+                      : { top: overlayObstacle.bottom }
+                    : undefined
+                }
               >
                 {geometryError ? (
                   <>
@@ -880,153 +1505,109 @@ export default function HistoryAtlas({
             <span className="history-atlas__north" aria-hidden="true">
               ↑<span>북</span>
             </span>
-          </div>
-          <div className="history-atlas__places">
-            <div className="history-atlas__places-heading">
-              <h2>장소</h2>
-              <span>{visiblePlaces.length}곳</span>
-            </div>
-            {visiblePlaces.length ? (
-              <>
-                <select
-                  className="history-atlas__place-select"
-                  aria-label="지도에서 찾을 장소"
-                  value={selected?.place.id || ""}
-                  onChange={(event) => focusPlace(event.target.value)}
-                >
-                  {visiblePlaces.map((place) => (
-                    <option key={place.id} value={place.id}>
-                      {place.name}
-                      {place.modernName && place.modernName !== place.name
-                        ? ` · ${place.modernName}`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-                <div
-                  className="history-atlas__place-list"
-                  role="group"
-                  aria-label="장소 목록"
-                >
-                  {visiblePlaces.map((place) => (
-                    <button
-                      type="button"
-                      key={place.id}
-                      aria-pressed={selected?.place.id === place.id}
-                      onClick={() => focusPlace(place.id)}
-                    >
-                      <span>{place.name}</span>
-                      {place.modernName && place.modernName !== place.name && (
-                        <small>{place.modernName}</small>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="history-atlas__empty">
-                <p>검색 결과가 없습니다.</p>
+            {!wide && selected && (
+              <button
+                type="button"
+                className="history-atlas__selection-card"
+                onPointerDown={(event) => {
+                  movedRef.current = false;
+                  event.stopPropagation();
+                }}
+                onTouchStart={(event) => event.stopPropagation()}
+                onClick={() => setMobilePanel("detail")}
+                aria-haspopup="dialog"
+              >
+                <span>
+                  <small>{selected.entry.period}</small>
+                  <strong>{entryName(selected)}</strong>
+                </span>
+                <span>설명 보기 →</span>
+              </button>
+            )}
+            {!wide && !selected && (
+              <div
+                className="history-atlas__selection-card history-atlas__empty"
+                role="status"
+              >
+                <p>조건에 맞는 장소가 없습니다.</p>
                 <button
                   type="button"
                   className="history-atlas__button"
-                  onClick={() => changeQuery("")}
+                  onClick={clearFilters}
                 >
-                  검색 지우기
+                  필터 초기화
                 </button>
               </div>
             )}
           </div>
         </div>
-        <section className="history-atlas__detail" aria-label="장소 설명">
-          {selected ? (
-            <>
-              <div className="history-atlas__detail-heading">
-                <span className="history-atlas__period">
-                  {selected.entry.period}
-                </span>
-                <h2>{selected.place.name}</h2>
-                {selected.place.modernName &&
-                  selected.place.modernName !== selected.place.name && (
-                    <p>현재 {selected.place.modernName}</p>
-                  )}
-              </div>
-              {samePlaceEntries.length > 1 && (
-                <label
-                  className="history-atlas__story-select"
-                  htmlFor={`${id}-story`}
-                >
-                  <span>시대별 이야기</span>
-                  <select
-                    id={`${id}-story`}
-                    value={selected.entry.id}
-                    onChange={(event) => setSelectedId(event.target.value)}
-                  >
-                    {samePlaceEntries.map(({ entry }) => (
-                      <option key={entry.id} value={entry.id}>
-                        {entry.period} · {entry.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <div className="history-atlas__story">
-                <h3>{selected.entry.title}</h3>
-                <p>{selected.entry.summary}</p>
-                <h3>역사적 의미</h3>
-                <p>{selected.entry.significance}</p>
-              </div>
-              {selected.place.locationNote && (
-                <p className="history-atlas__location-note">
-                  <strong>위치</strong> {selected.place.locationNote}
-                </p>
-              )}
-              {relatedPlaces.length > 0 && (
-                <div className="history-atlas__related">
-                  <h3>함께 볼 장소</h3>
-                  <div>
-                    {relatedPlaces.map((place) => (
-                      <button
-                        key={place.id}
-                        type="button"
-                        onClick={() => selectRelated(place.id)}
-                      >
-                        {place.name}
-                        <span aria-hidden="true"> →</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <details className="history-atlas__sources">
-                <summary>
-                  교과서 근거 · {selected.entry.citations.length}곳
-                </summary>
-                <ul>
-                  {selected.entry.citations.map((citation, index) => {
-                    const source = sourcesById.get(citation.sourceId);
-                    return (
-                      <li
-                        key={`${citation.sourceId}-${citation.pdfPage}-${index}`}
-                      >
-                        <strong>{source?.title || citation.sourceId}</strong>
-                        {source?.edition && <span>{source.edition}</span>}
-                        <span>
-                          본문 {citation.printedPage}쪽 · PDF {citation.pdfPage}
-                          쪽
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </details>
-            </>
-          ) : (
-            <p className="history-atlas__empty">
-              선택한 조건에 맞는 장소가 없습니다.
-            </p>
-          )}
-        </section>
+        {wide && (
+          <aside className="history-atlas__side-panel" aria-label="장소 탐색">
+            {placeList}
+          </aside>
+        )}
       </div>
+      <dialog
+        ref={dialogRef}
+        className="history-atlas__drawer"
+        aria-labelledby={`${id}-panel-title`}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const controls = Array.from(
+            event.currentTarget.querySelectorAll<HTMLElement>(
+              "button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex]:not([tabindex='-1'])",
+            ),
+          ).filter((element) => element.getClientRects().length > 0);
+          if (!controls.length) {
+            event.preventDefault();
+            return;
+          }
+          const index = controls.indexOf(document.activeElement as HTMLElement);
+          if (event.shiftKey && index <= 0) {
+            event.preventDefault();
+            controls[controls.length - 1].focus();
+          } else if (
+            !event.shiftKey &&
+            (index < 0 || index === controls.length - 1)
+          ) {
+            event.preventDefault();
+            controls[0].focus();
+          }
+        }}
+        onCancel={(event) => {
+          event.preventDefault();
+          setMobilePanel(null);
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setMobilePanel(null);
+        }}
+      >
+        <div className="history-atlas__drawer-inner">
+          <div className="history-atlas__drawer-heading">
+            {mobilePanel === "detail" && (
+              <button
+                type="button"
+                className="history-atlas__button"
+                onClick={() => setMobilePanel("places")}
+              >
+                ← 장소
+              </button>
+            )}
+            <h2 id={`${id}-panel-title`} tabIndex={-1} data-panel-title>
+              {mobilePanel === "detail" ? "장소 설명" : "장소 목록"}
+            </h2>
+            <button
+              type="button"
+              className="history-atlas__button"
+              aria-label="장소 패널 닫기"
+              onClick={() => setMobilePanel(null)}
+            >
+              ×
+            </button>
+          </div>
+          {panelOpen && (mobilePanel === "places" ? placeList : placeDetail)}
+        </div>
+      </dialog>
     </div>
   );
 }
