@@ -29,7 +29,7 @@
     "verify:teacher-patch-note-commands": "node scripts/verify-teacher-patch-note-commands.mjs && node scripts/verify-teacher-patch-note-sync.mjs && node scripts/verify-teacher-patch-memo-controller.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
-    "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs"
+    "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs && node scripts/verify-history-atlas-regions.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",

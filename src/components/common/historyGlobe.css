@@ -401,6 +401,9 @@
   .history-globe__filters label {
     flex-basis: calc(50% - 8px);
   }
+  .history-globe__filters > .atlas-region-filter {
+    flex-basis: calc(50% - 8px);
+  }
   .history-globe__filters .history-globe__search {
     flex-basis: 100%;
   }

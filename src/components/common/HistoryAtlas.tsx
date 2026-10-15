@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -36,6 +37,8 @@ import {
 } from "../../lib/historyAtlasGeometry";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import AtlasPlaceDetails from "./AtlasPlaceDetails";
+import AtlasRegionFilters from "./AtlasRegionFilters";
+import { matchesAtlasRegion } from "../../lib/historyAtlasRegions";
 import InfoHelp from "./InfoHelp";
 import { atlasRiverCreditItems } from "./AtlasRiverCredits";
 import {
@@ -241,7 +244,8 @@ function placeLabelLayout(
         const key = `${cellX}:${cellY}`;
         occupied.set(key, [...(occupied.get(key) || []), point]);
       }
-      const naturalWidth = Math.max(40, point.name.length * 14 + 12);
+      const textWidth = Math.max(24, point.name.length * 14);
+      const naturalWidth = Math.max(40, textWidth + (point.active ? 16 : 12));
       const frameLeft =
         point.active && obstacle && point.x > obstacle.right + 22
           ? obstacle.right + 12
@@ -253,7 +257,9 @@ function placeLabelLayout(
       const labelWidth = point.active
         ? Math.min(naturalWidth, Math.max(1, width - frameLeft - 8))
         : naturalWidth;
-      const labelHeight = Math.ceil(naturalWidth / labelWidth) * 24;
+      const labelHeight = point.active
+        ? Math.ceil(textWidth / Math.max(1, labelWidth - 16)) * 24 + 8
+        : Math.ceil(naturalWidth / labelWidth) * 24;
       const rightSide = point.x + labelWidth + 14 <= width - 8;
       const fitsLeft = point.x - labelWidth - 14 >= frameLeft;
       const centered = point.active && !rightSide && !fitsLeft;
@@ -318,10 +324,13 @@ export default function HistoryAtlas({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const placesButtonRef = useRef<HTMLButtonElement>(null);
   const detailRef = useRef<HTMLElement>(null);
+  const selectionCardRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [subject, setSubject] = useState<AtlasSubject>("korea");
   const [unitId, setUnitId] = useState("");
   const [eraId, setEraId] = useState("");
+  const [regionId, setRegionId] = useState("");
+  const [subregionId, setSubregionId] = useState("");
   const [query, setQuery] = useState("");
   const [mobilePanel, setMobilePanel] = useState<"places" | "detail" | null>(
     null,
@@ -337,6 +346,9 @@ export default function HistoryAtlas({
   const pendingFocusRef = useRef<string | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [mapWidth, setMapWidth] = useState(640);
+  const [compactOverlayTop, setCompactOverlayTop] = useState<number | null>(
+    null,
+  );
   const [geometry, setGeometry] = useState<{
     subject: AtlasSubject;
     bounds: AtlasUnit["bounds"];
@@ -422,11 +434,12 @@ export default function HistoryAtlas({
   const scopeEntries = useMemo(
     () =>
       subjectEntries.filter(
-        ({ entry }) =>
+        ({ entry, place }) =>
           (!unitId || entry.unitId === unitId) &&
-          (!eraId || entry.eraIds?.includes(eraId)),
+          (!eraId || entry.eraIds?.includes(eraId)) &&
+          matchesAtlasRegion(place, subject, regionId, subregionId),
       ),
-    [subjectEntries, unitId, eraId],
+    [subjectEntries, subject, unitId, eraId, regionId, subregionId],
   );
   const entries = useMemo(
     () => searchEntries(scopeEntries, query),
@@ -434,6 +447,10 @@ export default function HistoryAtlas({
   );
   const selected =
     entries.find(({ entry }) => entry.id === selectedId) || entries[0];
+  const availableMapHeight =
+    !wide && selected && compactOverlayTop !== null
+      ? compactOverlayTop
+      : mapHeight;
   const overlayWidth = Math.min(360, mapWidth - 32);
   const overlayMaxHeight = mapHeight - 32;
   const overlayObstacle = useMemo(
@@ -520,13 +537,19 @@ export default function HistoryAtlas({
         active: selected?.place.id === place.id,
       });
     });
-    return placeLabelLayout(points, mapWidth, mapHeight, overlayObstacle);
+    return placeLabelLayout(
+      points,
+      mapWidth,
+      availableMapHeight,
+      overlayObstacle,
+    );
   }, [
     visiblePlaces,
     projection,
     transform,
     mapWidth,
     mapHeight,
+    availableMapHeight,
     selected?.place.id,
     overlayObstacle,
     riversByPlace,
@@ -616,7 +639,7 @@ export default function HistoryAtlas({
 
   useEffect(() => {
     setListPage(0);
-  }, [subject, unitId, eraId, query]);
+  }, [subject, unitId, eraId, regionId, subregionId, query]);
 
   useEffect(() => {
     const index = visiblePlaces.findIndex(
@@ -637,12 +660,31 @@ export default function HistoryAtlas({
     if (wide) setMobilePanel(null);
   }, [wide]);
 
+  useLayoutEffect(() => {
+    const card = selectionCardRef.current;
+    const map = mapRef.current;
+    if (wide || !selected || !card || !map) {
+      setCompactOverlayTop(null);
+      return;
+    }
+    const measure = () => {
+      if (map.clientWidth <= 0 || card.clientWidth <= 0) return;
+      const top = Math.max(0, Math.min(mapHeight, card.offsetTop));
+      setCompactOverlayTop((previous) => (previous === top ? previous : top));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(card);
+    observer.observe(map);
+    return () => observer.disconnect();
+  }, [wide, selected?.entry.id, mapHeight]);
+
   useEffect(() => {
-    if (wide && detailOpen && selected) {
+    if (detailOpen && selected) {
       pendingFocusRef.current = selected.place.id;
       setFocusRevision((value) => value + 1);
     }
-  }, [wide, detailOpen, subject, mapWidth, mapHeight]);
+  }, [wide, detailOpen, subject, mapWidth, mapHeight, availableMapHeight]);
 
   const panelOpen = mobilePanel !== null && !wide;
   useEffect(() => {
@@ -734,7 +776,7 @@ export default function HistoryAtlas({
         },
         {
           width: mapWidth,
-          height: mapHeight,
+          height: availableMapHeight,
           overlayRight: overlayObstacle?.right,
         },
       ),
@@ -752,6 +794,7 @@ export default function HistoryAtlas({
     overlayObstacle,
     mapWidth,
     mapHeight,
+    availableMapHeight,
     updateTransform,
     selectedRiver,
     geometry,
@@ -882,27 +925,41 @@ export default function HistoryAtlas({
     setViewBounds(null);
     setUnitId("");
     setEraId("");
+    setRegionId("");
+    setSubregionId("");
     setQuery("");
     setFilterNotice("");
     setSelectedId("");
     pendingFocusRef.current = null;
   };
-  const changeScope = (nextUnitId: string, nextEraId: string) => {
+  const changeScope = (
+    nextUnitId: string,
+    nextEraId: string,
+    nextRegionId = regionId,
+    nextSubregionId = subregionId,
+  ) => {
     if (nextUnitId !== unitId) setViewBounds(null);
+    const regionChanged =
+      nextRegionId !== regionId || nextSubregionId !== subregionId;
+    if (regionChanged) setListPage(0);
     setUnitId(nextUnitId);
     setEraId(nextEraId);
+    setRegionId(nextRegionId);
+    setSubregionId(nextSubregionId);
     setFilterNotice("");
     const matches = searchEntries(
       subjectEntries.filter(
-        ({ entry }) =>
+        ({ entry, place }) =>
           (!nextUnitId || entry.unitId === nextUnitId) &&
-          (!nextEraId || entry.eraIds?.includes(nextEraId)),
+          (!nextEraId || entry.eraIds?.includes(nextEraId)) &&
+          matchesAtlasRegion(place, subject, nextRegionId, nextSubregionId),
       ),
       query,
     );
-    const next =
-      matches.find(({ entry }) => entry.id === selected?.entry.id) ||
-      matches[0];
+    const next = regionChanged
+      ? matches[0]
+      : matches.find(({ entry }) => entry.id === selected?.entry.id) ||
+        matches[0];
     setSelectedId(next?.entry.id || "");
     pendingFocusRef.current = null;
     if (next) requestPlaceFocus(next.place.id);
@@ -962,6 +1019,15 @@ export default function HistoryAtlas({
     if (eraId && (subjectChanged || !next.entry.eraIds?.includes(eraId))) {
       setEraId("");
       cleared.push("시대");
+    }
+    if (
+      subjectChanged ||
+      (regionId &&
+        !matchesAtlasRegion(next.place, subject, regionId, subregionId))
+    ) {
+      setRegionId("");
+      setSubregionId("");
+      if (regionId) cleared.push("지역");
     }
     if (
       query &&
@@ -1039,7 +1105,7 @@ export default function HistoryAtlas({
         </>
       ) : (
         <div className="history-atlas__empty">
-          <p>선택한 단원·시대·검색어에 맞는 장소가 없습니다.</p>
+          <p>선택한 조건에 맞는 장소가 없습니다.</p>
           <button
             type="button"
             className="history-atlas__button"
@@ -1120,6 +1186,8 @@ export default function HistoryAtlas({
               setViewBounds(null);
               setUnitId("");
               setEraId("");
+              setRegionId("");
+              setSubregionId("");
               setQuery("");
               setFilterNotice("");
               setSelectedId("");
@@ -1165,6 +1233,14 @@ export default function HistoryAtlas({
             ))}
           </select>
         </label>
+        <AtlasRegionFilters
+          subject={subject}
+          groupId={regionId}
+          subregionId={subregionId}
+          onChange={(group, subregion) =>
+            changeScope(unitId, eraId, group, subregion)
+          }
+        />
         <label htmlFor={`${id}-search`}>
           <span>지명 검색</span>
           <div className="history-atlas__search">
@@ -1473,6 +1549,7 @@ export default function HistoryAtlas({
             {!wide && selected && (
               <button
                 type="button"
+                ref={selectionCardRef}
                 className="history-atlas__selection-card"
                 onPointerDown={(event) => {
                   movedRef.current = false;

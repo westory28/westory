@@ -41,6 +41,8 @@ import {
 } from "../../lib/historyAtlasRivers";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import AtlasPlaceDetails from "./AtlasPlaceDetails";
+import AtlasRegionFilters from "./AtlasRegionFilters";
+import { matchesAtlasRegion } from "../../lib/historyAtlasRegions";
 import InfoHelp from "./InfoHelp";
 import { atlasRiverCreditItems } from "./AtlasRiverCredits";
 import landUrl from "../../data/atlas/land-globe.json?url";
@@ -71,6 +73,7 @@ const GLOBE_COLORS = {
   "--ws-surface": "#ffffff",
   "--ws-text-soft": "#9ca3af",
   "--ws-primary": "#2563eb",
+  "--ws-primary-text": "#1e3a8a",
   "--ws-text": "#1f2937",
 } as const;
 const grid = geoGraticule10();
@@ -106,6 +109,8 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
   const [subject, setSubject] = useState<AtlasSubject>("world");
   const [unitId, setUnitId] = useState("");
   const [eraId, setEraId] = useState("");
+  const [regionId, setRegionId] = useState("");
+  const [subregionId, setSubregionId] = useState("");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -178,6 +183,7 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
         item.subject === subject &&
         (!unitId || item.entry.unitId === unitId) &&
         (!eraId || item.entry.eraIds?.includes(eraId)) &&
+        matchesAtlasRegion(item.place, subject, regionId, subregionId) &&
         (!normalized || item.search.includes(normalized)),
     );
     if (normalized) {
@@ -197,7 +203,7 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
       if (!unique.has(item.place.id)) unique.set(item.place.id, item);
     }
     return [...unique.values()];
-  }, [items, subject, unitId, eraId, query]);
+  }, [items, subject, unitId, eraId, regionId, subregionId, query]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const pageItems = filtered.slice(
@@ -206,11 +212,13 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
   );
   const mapItems = useMemo(() => {
     const result = filtered.filter((item) => item.place.coordinates);
-    if (
-      selected?.place.coordinates &&
-      !result.some((item) => item.place.id === selected.place.id)
-    )
-      result.push(selected);
+    if (selected?.place.coordinates) {
+      const index = result.findIndex(
+        (item) => item.place.id === selected.place.id,
+      );
+      if (index < 0) result.push(selected);
+      else result[index] = selected;
+    }
     return result;
   }, [filtered, selected]);
   const selectedRiver = useMemo(
@@ -507,38 +515,50 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
         0,
         Math.max(4, Math.min(18, Math.floor(width / 60))),
       );
-      const boxes: { x: number; y: number; w: number }[] = [];
-      context.font = "500 14px 'Noto Sans KR', sans-serif";
+      const boxes: { x: number; y: number; w: number; h: number }[] = [];
       context.textBaseline = "middle";
       for (const point of labels) {
         const label = nameOf(point.item);
+        const activeLabel = point.item.place.id === selected?.place.id;
+        context.font = `${activeLabel ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
         const textWidth = Math.min(
           width - 32,
           context.measureText(label).width,
         );
         const x = Math.min(width - textWidth - 12, Math.max(12, point.x + 10));
-        const activeLabel = point.item.place.id === selected?.place.id;
         const naturalY = point.y < 100 ? point.y + 22 : point.y - 18;
         const y = activeLabel
           ? Math.max(80, Math.min(height - 80, naturalY))
           : naturalY;
+        const labelHeight = activeLabel ? 32 : 22;
         if (
           y < 80 ||
           y > height - 68 ||
           boxes.some(
             (box) =>
-              Math.abs(box.y - y) < 22 &&
+              Math.abs(box.y - y) < (box.h + labelHeight) / 2 &&
               x < box.x + box.w + 12 &&
               x + textWidth > box.x - 12,
           )
         )
           continue;
-        boxes.push({ x, y, w: textWidth });
-        context.strokeStyle = color("--ws-surface");
-        context.lineWidth = 4;
-        context.lineJoin = "round";
-        context.strokeText(label, x, y, textWidth);
-        context.fillStyle = color("--ws-text");
+        boxes.push({ x, y, w: textWidth, h: labelHeight });
+        if (activeLabel) {
+          context.beginPath();
+          context.roundRect(x - 8, y - 16, textWidth + 16, 32, 8);
+          context.fillStyle = color("--ws-primary-soft");
+          context.fill();
+          context.strokeStyle = color("--ws-primary");
+          context.lineWidth = 1;
+          context.stroke();
+          context.fillStyle = color("--ws-primary-text");
+        } else {
+          context.strokeStyle = color("--ws-surface");
+          context.lineWidth = 4;
+          context.lineJoin = "round";
+          context.strokeText(label, x, y, textWidth);
+          context.fillStyle = color("--ws-text");
+        }
         context.fillText(label, x, y, textWidth);
       }
     };
@@ -549,22 +569,41 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
     (entryId: string) => {
       const next = itemsById.get(entryId);
       if (!next) return;
-      const outside =
-        next.subject !== subject ||
-        (unitId && next.entry.unitId !== unitId) ||
-        (eraId && !next.entry.eraIds?.includes(eraId)) ||
-        query;
-      if (outside) {
+      const subjectChanged = next.subject !== subject;
+      const cleared: string[] = [];
+      if (subjectChanged) {
         setSubject(next.subject);
+      }
+      if (unitId && (subjectChanged || next.entry.unitId !== unitId)) {
         setUnitId("");
+        cleared.push("단원");
+      }
+      if (eraId && (subjectChanged || !next.entry.eraIds?.includes(eraId))) {
         setEraId("");
+        cleared.push("시대");
+      }
+      if (
+        subjectChanged ||
+        (regionId &&
+          !matchesAtlasRegion(next.place, subject, regionId, subregionId))
+      ) {
+        setRegionId("");
+        setSubregionId("");
+        if (regionId) cleared.push("지역");
+      }
+      if (
+        query &&
+        (subjectChanged || !next.search.includes(normalizeAtlasSearch(query)))
+      ) {
         setQuery("");
+        cleared.push("검색");
+      }
+      if (subjectChanged || cleared.length) {
         setPage(0);
         setNotice(
-          next.subject !== subject
-            ? ATLAS_SUBJECT_LABELS[next.subject] +
-                "로 이동하고 검색·단원·시대 조건을 해제했습니다."
-            : "선택한 이야기를 보기 위해 검색·단원·시대 조건을 해제했습니다.",
+          subjectChanged
+            ? `${ATLAS_SUBJECT_LABELS[next.subject]}로 이동했습니다.${cleared.length ? ` ${cleared.join("·")} 조건을 해제했습니다.` : ""}`
+            : `선택한 이야기를 보기 위해 ${cleared.join("·")} 조건을 해제했습니다.`,
         );
       } else setNotice("");
       pendingPanelFocus.current = "detail";
@@ -573,7 +612,16 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
       if (next.place.coordinates)
         setCamera(focusGlobeView(viewRef.current, next.place.coordinates));
     },
-    [itemsById, subject, unitId, eraId, query, setCamera],
+    [
+      itemsById,
+      subject,
+      unitId,
+      eraId,
+      regionId,
+      subregionId,
+      query,
+      setCamera,
+    ],
   );
   const chooseFromList = (entryId: string) => {
     const item = itemsById.get(entryId);
@@ -588,6 +636,8 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
   const resetFilters = () => {
     setUnitId("");
     setEraId("");
+    setRegionId("");
+    setSubregionId("");
     setQuery("");
     setPage(0);
     setSelectedId(null);
@@ -961,6 +1011,19 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
               ))}
           </select>
         </label>
+        <AtlasRegionFilters
+          subject={subject}
+          groupId={regionId}
+          subregionId={subregionId}
+          onChange={(group, subregion) => {
+            setRegionId(group);
+            setSubregionId(subregion);
+            setSelectedId(null);
+            setPanel("list");
+            setPage(0);
+            setNotice("");
+          }}
+        />
         <label className="history-globe__search" htmlFor={id + "-search"}>
           지명 검색
           <input

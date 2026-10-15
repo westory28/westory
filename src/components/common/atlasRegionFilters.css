@@ -1,0 +1,23 @@
+.atlas-region-filter {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.atlas-region-filter__heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+}
+.atlas-region-filter .atlas-region-filter__label {
+  display: block;
+  flex: 0 1 auto;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.atlas-region-filter__heading .ws-info-help {
+  margin-block: -4px;
+}
