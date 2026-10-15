@@ -81,6 +81,41 @@ const profileSnapshot = (uid, profile, enrollment, semesterClass) => ({
   studentClass: String(semesterClass.classNumber || profile.studentClass || profile.class || ""),
   studentNumber: String(enrollment.studentNumber || profile.studentNumber || profile.number || ""),
 });
+// A reader lives for one transaction attempt only. Reuse its query snapshots and
+// batch concurrent validation reads without changing the enrollment authority.
+// All recipient validation completes before this command stages any writes.
+const createGrantReader = (transaction) => {
+  const documents = new Map();
+  let pending = [];
+  const read = (path) => {
+    if (documents.has(path)) return documents.get(path);
+    const promise = new Promise((resolve, reject) => {
+      pending.push({ path, resolve, reject });
+      if (pending.length !== 1) return;
+      Promise.resolve().then(async () => {
+        const batch = pending;
+        pending = [];
+        try {
+          const snapshots = await transaction.getAll(batch.map((entry) => entry.path));
+          batch.forEach((entry, index) => entry.resolve(snapshots[index]));
+        } catch (error) {
+          batch.forEach((entry) => entry.reject(error));
+        }
+      });
+    });
+    documents.set(path, promise);
+    return promise;
+  };
+  return {
+    get: read,
+    getAll: (paths) => Promise.all(paths.map(read)),
+    query: async (...args) => {
+      const snapshots = await transaction.query(...args);
+      snapshots.forEach((snapshot) => documents.set(snapshot.path, Promise.resolve(snapshot)));
+      return snapshots;
+    },
+  };
+};
 const thresholdFor = (source) => {
   const value = source.passThresholdPercent == null || source.passThresholdPercent === "" ? Number.NaN : Number(source.passThresholdPercent);
   return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 80;
@@ -125,13 +160,14 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
   const { semesterId } = payload;
   const studentCommand = commandType === COMMAND_TYPES.CREATE_HISTORY_CLASSROOM_EXEMPTION_REQUEST;
   if (studentCommand) helpers.assertStudentActor(actor); else helpers.assertTeacherActor(actor);
-  await helpers.assertAssessmentSemesterWritable(transaction, semesterId);
+  const reader = commandType === COMMAND_TYPES.GRANT_HISTORY_CLASSROOM_EXEMPTIONS ? createGrantReader(transaction) : transaction;
+  await helpers.assertAssessmentSemesterWritable(reader, semesterId);
   const response = (kind, key, refs, result) => ({ target: { kind, id: key, refs }, sourceHash: hash(JSON.stringify(payload)), result });
 
   if (commandType === COMMAND_TYPES.GRANT_HISTORY_CLASSROOM_EXEMPTIONS) {
     const [enrollmentRows, classRows] = await Promise.all([
-      transaction.query("semester_enrollments", { field: "semesterId", operator: "==", value: semesterId }),
-      transaction.query("semester_classes", { field: "semesterId", operator: "==", value: semesterId }),
+      reader.query("semester_enrollments", { field: "semesterId", operator: "==", value: semesterId }),
+      reader.query("semester_classes", { field: "semesterId", operator: "==", value: semesterId }),
     ]);
     const classes = new Map(classRows.filter((row) => row.data?.status === "ACTIVE").map((row) => [row.data.classId || row.path.split("/").at(-1), row.data]));
     const matchingClass = (value, classId) => (!payload.classId || payload.classId === classId || payload.classId === `${value.grade}-${value.classNumber}`) &&
@@ -141,15 +177,16 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
     if (!enrollments.length || enrollments.length > 100 ||
         (payload.recipientUids.length && payload.recipientUids.some((uid) => !enrollments.some((row) => row.data.studentUid === uid))))
       fail("failed-precondition", "선택한 학생의 현재 학급 정보를 다시 확인해 주세요.", "HISTORY_EXEMPTION_ENROLLMENT_INVALID");
-    const recipients = [];
-    for (const row of enrollments) {
+    const recipients = (await Promise.all(enrollments.map(async (row) => {
       const uid = row.data.studentUid;
-      const active = await helpers.assertActiveEnrollment(transaction, semesterId, uid, [row.data.classId]);
-      if (active.enrollmentId !== (row.data.enrollmentId || row.path.split("/").at(-1))) continue;
-      const profile = await transaction.get(`users/${uid}`);
+      const [active, profile] = await Promise.all([
+        helpers.assertActiveEnrollment(reader, semesterId, uid, [row.data.classId]),
+        reader.get(`users/${uid}`),
+      ]);
+      if (active.enrollmentId !== (row.data.enrollmentId || row.path.split("/").at(-1))) return null;
       if (!profile.exists || profile.data?.role !== "student") fail("failed-precondition", "학생 계정을 다시 확인해 주세요.");
-      recipients.push({ uid, profile: profileSnapshot(uid, profile.data, active, classes.get(active.classId)), enrollment: active });
-    }
+      return { uid, profile: profileSnapshot(uid, profile.data, active, classes.get(active.classId)), enrollment: active };
+    }))).filter(Boolean);
     if (!recipients.length) fail("failed-precondition", "면제권을 부여할 활성 학생이 없습니다.");
     const exemptionIds = recipients.map(({ uid }) => `exemption_${hash(`${commandId}\n${uid}`)}`);
     const refs = exemptionIds.map((id) => ticketPath(semesterId, id));

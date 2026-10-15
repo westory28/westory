@@ -49,6 +49,44 @@ const authenticatedStatus = (auth, commandType, commandId) =>
 const get = async (path) => (await db.doc(path).get()).data();
 const count = async (path) => (await db.collection(path).get()).size;
 const expectCode = (code) => (error) => error.code === code;
+const probeGrant = async (payload, failedBatch = 0) => {
+  const rollback = new Error("Rollback synthetic grant probe.");
+  const readFailure = new Error("Synthetic batch read failure.");
+  const metrics = { readCalls: 0, readDocuments: 0, batches: 0, writes: 0, createdCount: 0, elapsedMs: 0 };
+  let timeout;
+  const operation = store.runTransaction(async (transaction) => {
+    const started = performance.now();
+    const measured = {
+      ...transaction,
+      get: async (path) => { metrics.readCalls += 1; metrics.readDocuments += 1; return transaction.get(path); },
+      getAll: async (paths) => {
+        metrics.readCalls += 1; metrics.readDocuments += paths.length; metrics.batches += 1;
+        if (metrics.batches === failedBatch) throw readFailure;
+        return transaction.getAll(paths);
+      },
+      query: async (...args) => {
+        metrics.readCalls += 1;
+        const rows = await transaction.query(...args);
+        metrics.readDocuments += rows.length;
+        return rows;
+      },
+      create: (...args) => { metrics.writes += 1; return transaction.create(...args); },
+    };
+    const result = await adapter.apply({ transaction: measured, commandId: randomUUID(),
+      commandType: "grantHistoryClassroomExemptions", payload: assessment.normalizeAssessmentPayload("grantHistoryClassroomExemptions", payload),
+      actor: { actorUid: teacher.uid, actorRole: "teacher" }, timestamp: FieldValue.serverTimestamp() });
+    metrics.createdCount = result.result.createdCount;
+    metrics.elapsedMs = Math.round((performance.now() - started) * 10) / 10;
+    throw rollback; // Timing probes must not create additional tickets.
+  });
+  try {
+    await assert.rejects(Promise.race([operation, new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("Grant reads did not settle.")), 10_000);
+    })]), (error) => error === (failedBatch ? readFailure : rollback));
+  } finally { clearTimeout(timeout); }
+  if (failedBatch) assert.equal(metrics.writes, 0, "a failed batch must reject every pending reader before any write");
+  return metrics;
+};
 
 (async () => {
   const batch = db.batch();
@@ -87,6 +125,19 @@ const expectCode = (code) => (error) => error.code === code;
 
   const grantId = randomUUID();
   const grantPayload = { semesterId, recipientUids: students.slice(0, 32), classId: "3-2", targetGrade: "3", targetClass: "2", reason: "합성 현장체험" };
+  const singleProbe = await probeGrant({ ...grantPayload, recipientUids: [students[0]] });
+  const classProbes = [];
+  for (let run = 0; run < 3; run += 1) classProbes.push(await probeGrant(grantPayload));
+  const fullClassProbe = await probeGrant({ ...grantPayload, recipientUids: [] });
+  console.log(`GRANT_READ_BENCHMARK ${JSON.stringify({ single: singleProbe, selected32: classProbes, whole34: fullClassProbe })}`);
+  for (const [probe, expectedCount] of [[singleProbe, 1], ...classProbes.map((probe) => [probe, 32]), [fullClassProbe, 34]]) {
+    assert.equal(probe.createdCount, expectedCount);
+    assert.equal(probe.writes, expectedCount);
+    assert.ok(probe.readCalls <= 4, `class grant must use a constant read budget, received ${probe.readCalls}`);
+  }
+  await probeGrant(grantPayload, 1);
+  await probeGrant(grantPayload, 2);
+  assert.equal(await count(`${root}/history_classroom_exemptions`), 0, "performance/error probes must leave no grants");
   const grantEnvelope = { commandId: grantId, commandType: "grantHistoryClassroomExemptions", payload: grantPayload };
   await assert.rejects(production.executeCommand.run({ auth: teacher, data: grantEnvelope }),
     (error) => error.details?.reason === "SESSION_PROOF_INVALID");
@@ -117,6 +168,26 @@ const expectCode = (code) => (error) => error.code === code;
   await assert.rejects(execute(student(), "grantHistoryClassroomExemptions", grantPayload), expectCode("permission-denied"));
   await assert.rejects(execute(teacher, "grantHistoryClassroomExemptions", { ...grantPayload, recipientUids: [students[0], "inactive"] }), expectCode("failed-precondition"));
   assert.equal(await count(`${root}/history_classroom_exemptions`), 32, "invalid mixed batch must not partly grant");
+  const firstSlot = db.doc(`semester_enrollment_slots/${enrollment.buildEnrollmentSlotId(semesterId, students[0])}`);
+  await firstSlot.update({ activeEnrollmentId: "" });
+  await assert.rejects(executeAuthenticated(teacher, "grantHistoryClassroomExemptions", grantPayload),
+    (error) => error.details?.reason === "ASSESSMENT_ENROLLMENT_REQUIRED");
+  await firstSlot.update({ activeEnrollmentId: `enrollment_${students[1]}` });
+  await assert.rejects(executeAuthenticated(teacher, "grantHistoryClassroomExemptions", grantPayload),
+    (error) => error.details?.reason === "ASSESSMENT_ENROLLMENT_INVALID");
+  await firstSlot.update({ activeEnrollmentId: `enrollment_${students[0]}` });
+  await db.doc(`users/${students[0]}`).update({ role: "teacher" });
+  await assert.rejects(executeAuthenticated(teacher, "grantHistoryClassroomExemptions", grantPayload), expectCode("failed-precondition"));
+  await db.doc(`users/${students[0]}`).update({ role: "student" });
+  await db.doc("semester_classes/class_one").update({ status: "ARCHIVED" });
+  await assert.rejects(executeAuthenticated(teacher, "grantHistoryClassroomExemptions", grantPayload),
+    (error) => error.details?.reason === "HISTORY_EXEMPTION_ENROLLMENT_INVALID");
+  await db.doc("semester_classes/class_one").update({ status: "ACTIVE" });
+  await db.doc("site_settings/semester_active").update({ revision: 2 });
+  await assert.rejects(executeAuthenticated(teacher, "grantHistoryClassroomExemptions", grantPayload),
+    (error) => error.details?.reason === "ASSESSMENT_SEMESTER_NOT_ACTIVE");
+  await db.doc("site_settings/semester_active").update({ revision: 1 });
+  assert.equal(await count(`${root}/history_classroom_exemptions`), 32, "fresh transaction checks must reject inconsistent slot/profile/class/semester without partial grants");
   console.log("PASS actual callable: 10-minute teacher authentication, general session, proof/expiry/revocation/capability fences, class grant/replay/status/atomic batch checks.");
 
   const requestPayload = { semesterId, assignmentId: "history-one", exemptionId: ticketFor(students[0]), memo: "합성 요청" };

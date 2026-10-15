@@ -418,9 +418,10 @@
       "sourceFile": null,
       "file": "historyClassroomExemptions.js",
       "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "sha256": "25343d546fa6fd7102989ea841efcb928b128dd169615c50bb11d530c35f6639",
+      "sha256": "ee5668f5ec7f9f4b625028982ac2d3d52a8d079899eefac511be1cbcdac83667",
       "changes": [
-        "New canonical adapter, not restored legacy code: active semester/enrollment/class validated reusable grants, requests, reviews, and atomic compatible/canonical exemption results."
+        "New canonical adapter, not restored legacy code: active semester/enrollment/class validated reusable grants, requests, reviews, and atomic compatible/canonical exemption results.",
+        "Batch and reuse transaction-local grant validation reads while retaining canonical semester, enrollment-slot, profile and class checks; preserve atomic receipt-protected writes."
       ]
     },
     {
