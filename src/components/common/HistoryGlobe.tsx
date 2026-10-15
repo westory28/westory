@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import {
   geoCentroid,
@@ -93,11 +94,24 @@ function loadLand() {
 }
 const nameOf = (item: Item) => item.entry.displayName || item.place.name;
 
-export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
+interface HistoryGlobeProps {
+  dataset: AtlasDataset;
+  initialSubject?: AtlasSubject;
+  navigation?: ReactNode;
+  onOpenOriginals?: () => void;
+}
+
+export default function HistoryGlobe({
+  dataset,
+  initialSubject = "world",
+  navigation,
+  onOpenOriginals,
+}: HistoryGlobeProps) {
   const id = useId();
   const rootRef = useRef<HTMLElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const labelsRef = useRef<SVGSVGElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
   const riverHaloRef = useRef<SVGPathElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -106,7 +120,7 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
   const pendingPanelFocus = useRef<"detail" | "list" | null>(null);
   const [wide, setWide] = useState(false);
   const [size, setSize] = useState({ width: 600, height: 400 });
-  const [subject, setSubject] = useState<AtlasSubject>("world");
+  const [subject, setSubject] = useState<AtlasSubject>(initialSubject);
   const [unitId, setUnitId] = useState("");
   const [eraId, setEraId] = useState("");
   const [regionId, setRegionId] = useState("");
@@ -225,14 +239,6 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
     () => (selected && rivers ? findAtlasRiver(selected.place, rivers) : null),
     [selected, rivers],
   );
-  const verifiedRiverPlaceIds = useMemo(() => {
-    if (!rivers) return new Set<string>();
-    return new Set(
-      dataset.places
-        .filter((place) => findAtlasRiver(place, rivers))
-        .map((place) => place.id),
-    );
-  }, [dataset.places, rivers]);
   const displayedPlace = useMemo(
     () =>
       selected && selectedRiver
@@ -516,7 +522,13 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
         Math.max(4, Math.min(18, Math.floor(width / 60))),
       );
       const boxes: { x: number; y: number; w: number; h: number }[] = [];
-      context.textBaseline = "middle";
+      // Keep labels above both animated halo layers without another bitmap or
+      // a render loop. Reuse this small SVG pool on the existing draw schedule.
+      const labelNodes = labelsRef.current?.children;
+      if (!labelNodes) return;
+      for (const node of labelNodes)
+        (node as SVGGElement).style.display = "none";
+      let labelIndex = 0;
       for (const point of labels) {
         const label = nameOf(point.item);
         const activeLabel = point.item.place.id === selected?.place.id;
@@ -543,23 +555,16 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
         )
           continue;
         boxes.push({ x, y, w: textWidth, h: labelHeight });
-        if (activeLabel) {
-          context.beginPath();
-          context.roundRect(x - 8, y - 16, textWidth + 16, 32, 8);
-          context.fillStyle = color("--ws-primary-soft");
-          context.fill();
-          context.strokeStyle = color("--ws-primary");
-          context.lineWidth = 1;
-          context.stroke();
-          context.fillStyle = color("--ws-primary-text");
-        } else {
-          context.strokeStyle = color("--ws-surface");
-          context.lineWidth = 4;
-          context.lineJoin = "round";
-          context.strokeText(label, x, y, textWidth);
-          context.fillStyle = color("--ws-text");
-        }
-        context.fillText(label, x, y, textWidth);
+        const group = labelNodes[labelIndex++] as SVGGElement;
+        const background = group.children[0] as SVGRectElement;
+        const text = group.children[1] as SVGTextElement;
+        group.style.display = "";
+        group.classList.toggle("is-active", activeLabel);
+        group.setAttribute("transform", `translate(${x},${y})`);
+        background.style.display = activeLabel ? "" : "none";
+        background.setAttribute("width", String(textWidth + 16));
+        text.textContent = label;
+        text.setAttribute("textLength", String(textWidth));
       }
     };
     requestDraw();
@@ -833,13 +838,6 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
                 onClick={() => chooseFromList(item.entry.id)}
               >
                 <strong>{nameOf(item)}</strong>
-                <span>
-                  {item.entry.period}
-                  {!item.place.coordinates &&
-                  !verifiedRiverPlaceIds.has(item.place.id)
-                    ? " · 위치 미확정"
-                    : ""}
-                </span>
               </button>
             ))}
           </div>
@@ -898,7 +896,7 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
       ref={rootRef}
     >
       <header className="history-globe__header">
-        <h1>지구본</h1>
+        <h1>{navigation ? "역사 지도" : "지구본"}</h1>
         <InfoHelp
           label="지구본 조작과 지형 정보"
           sections={[
@@ -948,23 +946,48 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
             },
           ]}
         />
+        {onOpenOriginals && (
+          <button
+            className="history-globe__originals"
+            onClick={onOpenOriginals}
+          >
+            기존 지도 자료
+          </button>
+        )}
       </header>
+      {navigation}
       <div className="history-globe__filters">
-        <div
-          className="history-globe__subjects"
-          role="group"
-          aria-label="역사 과목"
-        >
-          {(["korea", "world"] as const).map((value) => (
-            <button
-              key={value}
-              aria-pressed={subject === value}
-              onClick={() => changeSubject(value)}
+        {navigation ? (
+          <label htmlFor={id + "-subject"}>
+            과목
+            <select
+              id={id + "-subject"}
+              value={subject}
+              onChange={(event) =>
+                changeSubject(event.target.value as AtlasSubject)
+              }
             >
-              {ATLAS_SUBJECT_LABELS[value]}
-            </button>
-          ))}
-        </div>
+              <option value="korea">한국사</option>
+              <option value="world">세계사</option>
+            </select>
+          </label>
+        ) : (
+          <div
+            className="history-globe__subjects"
+            role="group"
+            aria-label="역사 과목"
+          >
+            {(["korea", "world"] as const).map((value) => (
+              <button
+                key={value}
+                aria-pressed={subject === value}
+                onClick={() => changeSubject(value)}
+              >
+                {ATLAS_SUBJECT_LABELS[value]}
+              </button>
+            ))}
+          </div>
+        )}
         <label htmlFor={id + "-unit"}>
           단원
           <select
@@ -1079,6 +1102,23 @@ export default function HistoryGlobe({ dataset }: { dataset: AtlasDataset }) {
           >
             <span />
           </div>
+          <svg
+            ref={labelsRef}
+            className="history-globe__labels"
+            width={size.width}
+            height={size.height}
+            aria-hidden="true"
+          >
+            {Array.from({ length: 18 }, (_, index) => (
+              <g key={index} style={{ display: "none" }}>
+                <rect x={-8} y={-16} height={32} rx={8} />
+                <text
+                  dominantBaseline="central"
+                  lengthAdjust="spacingAndGlyphs"
+                />
+              </g>
+            ))}
+          </svg>
           <div className="history-globe__controls">
             {!wide && (
               <button

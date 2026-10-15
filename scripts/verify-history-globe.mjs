@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
+import React from "react";
 import { geoOrthographic, geoArea, geoContains } from "d3-geo";
 const cache = new Map();
 const load = (filename) => {
@@ -177,41 +178,249 @@ assert(geoContains(land, [127, 37]), "Korean land retained");
 assert(!geoContains(land, [-140, 0]), "Pacific is not filled as land");
 const { MENUS, sanitizeMenuConfig } = load("src/constants/menus.ts");
 for (const portal of ["student", "teacher"]) {
-  const expected = "/" + portal + "/lesson/globe";
+  const legacyUrl = "/" + portal + "/lesson/globe";
+  const mapsUrl = "/" + portal + "/lesson/maps";
   assert.equal(
     MENUS[portal]
       .flatMap((item) => item.children || [])
-      .filter((item) => item.url === expected).length,
-    1,
-    "Separate globe menu",
+      .filter((item) => item.url === legacyUrl).length,
+    0,
+    "Globe is a map tab, not a separate sidebar item",
   );
   const old = JSON.parse(JSON.stringify(MENUS));
-  old[portal].forEach((item) => {
-    if (item.children)
-      item.children = item.children.filter((child) => child.url !== expected);
-  });
+  const lessonMenu = old[portal].find((item) =>
+    item.children?.some((child) => child.url === mapsUrl),
+  );
+  lessonMenu.children.push({ name: "기존 지구본", url: legacyUrl });
+  lessonMenu.children.find((child) => child.url === mapsUrl).hidden = true;
+  const migratedChildren = sanitizeMenuConfig(old)[portal].flatMap(
+    (item) => item.children || [],
+  );
   assert(
-    sanitizeMenuConfig(old)
-      [portal].flatMap((item) => item.children || [])
-      .some((item) => item.url === expected),
-    "Saved older menus receive new globe menu",
+    !migratedChildren.some((item) => item.url === legacyUrl),
+    "Saved menus shed the obsolete globe item",
+  );
+  assert.equal(
+    migratedChildren.filter((item) => item.url === mapsUrl).length,
+    1,
+  );
+  assert.equal(
+    migratedChildren.find((item) => item.url === mapsUrl).hidden,
+    true,
+    "Existing map visibility is preserved",
   );
 }
 const { canAccessTeacherPath } = load("src/lib/permissions.ts");
-assert(
-  canAccessTeacherPath("/teacher/lesson/globe", {
-    role: "staff",
-    teacherPortalEnabled: true,
-    staffPermissions: ["lesson_read"],
-  }),
+for (const pathname of ["/teacher/lesson/globe", "/teacher/lesson/maps"]) {
+  assert(
+    canAccessTeacherPath(pathname, {
+      role: "staff",
+      teacherPortalEnabled: true,
+      staffPermissions: ["lesson_read"],
+    }),
+  );
+  assert(
+    !canAccessTeacherPath(pathname, {
+      role: "staff",
+      teacherPortalEnabled: true,
+      staffPermissions: ["quiz_read"],
+    }),
+  );
+}
+const { getStudentRouteAccess } = load("src/lib/studentMenuAccess.ts");
+for (const view of ["korea", "world", "globe"]) {
+  const target = { pathname: "/student/lesson/maps", search: `?view=${view}` };
+  assert(getStudentRouteAccess(target, { showLesson: true }, MENUS).allowed);
+  assert(!getStudentRouteAccess(target, { showLesson: false }, MENUS).allowed);
+  const hidden = JSON.parse(JSON.stringify(MENUS));
+  hidden.student
+    .flatMap((item) => item.children || [])
+    .find((item) => item.url === target.pathname).hidden = true;
+  assert(
+    !getStudentRouteAccess(
+      target,
+      { showLesson: true },
+      sanitizeMenuConfig(hidden),
+    ).allowed,
+    "All map tabs respect hidden-map access",
+  );
+}
+
+// Exercise the real wrapper with a small router adapter. The child maps are
+// boundaries here: this checks actual navigation handlers without a DOM/canvas.
+let location = {
+  pathname: "/student/lesson/maps",
+  search: "",
+  key: "start",
+  state: null,
+};
+let history = [{ ...location }];
+let cursor = 0;
+let sequence = 0;
+const Atlas = () => null;
+const Globe = () => null;
+let lazyRegistrations = 0;
+const wrapperExports = {};
+const dependencies = {
+  react: { ...React, default: React },
+  "react-router-dom": {
+    useLocation: () => location,
+    useSearchParams: () => [
+      new URLSearchParams(location.search),
+      (next, options = {}) => {
+        location = {
+          ...location,
+          search: `?${next.toString()}`,
+          key: `route-${++sequence}`,
+          state: options.state ?? null,
+        };
+        if (options.replace) history[cursor] = { ...location };
+        else {
+          history = history.slice(0, cursor + 1);
+          history.push({ ...location });
+          cursor += 1;
+        }
+      },
+    ],
+  },
+  "../../lib/lazyWithRetry": {
+    lazyWithRetry: (importer, key) => {
+      assert.equal(typeof importer, "function");
+      assert.equal(key, "history-maps-globe");
+      lazyRegistrations += 1;
+      return Globe;
+    },
+  },
+  "./HistoryAtlas": { default: Atlas },
+  "./LoadingState": { InlineLoading: () => null },
+};
+const wrapperSource = readFileSync(
+  "src/components/common/HistoryMaps.tsx",
+  "utf8",
 );
-assert(
-  !canAccessTeacherPath("/teacher/lesson/globe", {
-    role: "staff",
-    teacherPortalEnabled: true,
-    staffPermissions: ["quiz_read"],
-  }),
+vm.runInNewContext(
+  ts.transpileModule(wrapperSource, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.React,
+    },
+  }).outputText,
+  {
+    exports: wrapperExports,
+    URLSearchParams,
+    require: (name) => {
+      assert(
+        Object.hasOwn(dependencies, name),
+        `Unexpected eager map dependency: ${name}`,
+      );
+      return dependencies[name];
+    },
+  },
 );
+const onOpenOriginals = () => {};
+const renderMaps = () =>
+  wrapperExports.default({ dataset: {}, onOpenOriginals });
+const contentOf = (element) =>
+  element.type === React.Suspense ? element.props.children : element;
+const press = (element, label) =>
+  contentOf(element)
+    .props.navigation.props.children.find(
+      (button) => button.props.children === label,
+    )
+    .props.onClick();
+let rendered = renderMaps();
+assert.equal(lazyRegistrations, 1);
+assert.equal(rendered.type, Atlas, "Initial map never mounts the globe");
+assert.equal(rendered.props.initialSubject, "korea");
+assert.equal(rendered.props.onOpenOriginals, onOpenOriginals);
+press(rendered, "세계사");
+rendered = renderMaps();
+assert.equal(rendered.props.initialSubject, "world");
+const worldKey = rendered.key;
+press(rendered, "지구본");
+rendered = renderMaps();
+assert.equal(
+  rendered.type,
+  React.Suspense,
+  "The globe has a lazy loading boundary",
+);
+assert.equal(contentOf(rendered).type, Globe);
+assert.equal(contentOf(rendered).props.initialSubject, "world");
+assert.equal(contentOf(rendered).props.onOpenOriginals, onOpenOriginals);
+assert(
+  rendered.props.fallback.props.children[0],
+  "Tab navigation remains available during loading",
+);
+location = { ...history[--cursor] };
+rendered = renderMaps();
+assert.equal(
+  rendered.props.initialSubject,
+  "world",
+  "Back restores the subject from the URL",
+);
+assert.equal(rendered.key, worldKey);
+location = { ...history[++cursor] };
+assert.equal(contentOf(renderMaps()).type, Globe, "Forward restores the globe");
+press(renderMaps(), "한국사");
+rendered = renderMaps();
+const koreanKey = rendered.key;
+const historyLength = history.length;
+rendered.props.onSubjectChange("world");
+rendered = renderMaps();
+assert.equal(rendered.props.initialSubject, "world");
+assert.equal(
+  rendered.key,
+  koreanKey,
+  "Related cross-subject stories retain their mounted selection",
+);
+assert.equal(
+  history.length,
+  historyLength,
+  "A story switch replaces the URL without adding a tab navigation",
+);
+assert.equal(
+  contentOf(rendered).props.navigation.props.children.find(
+    (button) => button.props.children === "세계사",
+  ).props["aria-pressed"],
+  true,
+);
+location = { ...location, state: null, key: "refreshed" };
+assert.equal(
+  renderMaps().props.initialSubject,
+  "world",
+  "Refresh derives the selected subject from the URL",
+);
+location = {
+  ...location,
+  search: "?view=globe",
+  state: null,
+  key: "legacy-globe",
+};
+assert.equal(
+  contentOf(renderMaps()).props.initialSubject,
+  "world",
+  "A legacy globe link defaults to world history",
+);
+location = { ...location, search: "?view=invalid", key: "invalid-view" };
+assert.equal(
+  renderMaps().props.initialSubject,
+  "korea",
+  "Invalid view values have a safe default",
+);
+const appSource = readFileSync("src/App.tsx", "utf8");
+for (const portal of ["student", "teacher"]) {
+  assert(
+    appSource.includes(`to="/${portal}/lesson/maps?view=globe"`),
+    "Legacy route redirects to the map tab",
+  );
+  assert(
+    !appSource.includes(
+      `import("./pages/${portal}/${portal === "student" ? "lesson/" : ""}Globe")`,
+    ),
+    "Legacy routes cannot eagerly load a separate globe page",
+  );
+}
 const source = readFileSync("src/components/common/HistoryGlobe.tsx", "utf8");
 assert(source.includes('addEventListener("wheel", wheel, { passive: false })'));
 assert(

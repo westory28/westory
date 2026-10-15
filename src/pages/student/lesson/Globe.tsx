@@ -1,12 +1,6 @@
 import React from "react";
-import HistoryGlobe from "../../../components/common/HistoryGlobe";
-import PortalWorkspace from "../../../components/common/PortalWorkspace";
-import { historyAtlasDataset } from "../../../data/historyAtlasContent";
+import { Navigate } from "react-router-dom";
 
 export default function StudentGlobe() {
-  return (
-    <PortalWorkspace as="main" className="history-globe-page">
-      <HistoryGlobe dataset={historyAtlasDataset} />
-    </PortalWorkspace>
-  );
+  return <Navigate to="/student/lesson/maps?view=globe" replace />;
 }

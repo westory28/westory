@@ -52,6 +52,9 @@ interface HistoryAtlasProps {
   dataset: AtlasDataset;
   onOpenOriginals?: () => void;
   toolbar?: ReactNode;
+  initialSubject?: AtlasSubject;
+  navigation?: ReactNode;
+  onSubjectChange?: (subject: AtlasSubject) => void;
 }
 
 type LocatedEntry = {
@@ -69,10 +72,6 @@ type MapPoint = {
 const PAGE_SIZE = 40;
 const entryName = ({ entry, place }: LocatedEntry) =>
   entry.displayName || place.name;
-const locationStatus = (place: AtlasPlace) =>
-  place.kind === "country" || place.kind === "region"
-    ? "영역 자료"
-    : "위치 미확정";
 const searchRank = (item: LocatedEntry, normalized: string) => {
   if (!normalized) return 0;
   const { names, aliases } = item.search;
@@ -317,6 +316,9 @@ export default function HistoryAtlas({
   dataset,
   onOpenOriginals,
   toolbar,
+  initialSubject = "korea",
+  navigation,
+  onSubjectChange,
 }: HistoryAtlasProps) {
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -326,7 +328,7 @@ export default function HistoryAtlas({
   const detailRef = useRef<HTMLElement>(null);
   const selectionCardRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const [subject, setSubject] = useState<AtlasSubject>("korea");
+  const [subject, setSubject] = useState<AtlasSubject>(initialSubject);
   const [unitId, setUnitId] = useState("");
   const [eraId, setEraId] = useState("");
   const [regionId, setRegionId] = useState("");
@@ -1009,6 +1011,7 @@ export default function HistoryAtlas({
     const subjectChanged = nextSubject !== subject;
     if (subjectChanged) {
       setSubject(nextSubject);
+      onSubjectChange?.(nextSubject);
       setViewBounds(null);
     }
     if (unitId && next.entry.unitId !== unitId) {
@@ -1065,12 +1068,6 @@ export default function HistoryAtlas({
                 onClick={() => focusPlace(item.place.id)}
               >
                 <span>{entryName(item)}</span>
-                <small>
-                  {item.entry.period}
-                  {!item.place.coordinates && !riversByPlace.has(item.place.id)
-                    ? ` · ${locationStatus(item.place)}`
-                    : ""}
-                </small>
               </button>
             ))}
           </div>
@@ -1170,34 +1167,37 @@ export default function HistoryAtlas({
           )}
         </div>
       </div>
-      <div
-        className="history-atlas__subjects"
-        role="group"
-        aria-label="역사 과목"
-      >
-        {(["korea", "world"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={subject === value}
-            onClick={() => {
-              setSubject(value);
-              setDetailOpen(true);
-              setViewBounds(null);
-              setUnitId("");
-              setEraId("");
-              setRegionId("");
-              setSubregionId("");
-              setQuery("");
-              setFilterNotice("");
-              setSelectedId("");
-              pendingFocusRef.current = null;
-            }}
-          >
-            {ATLAS_SUBJECT_LABELS[value]}
-          </button>
-        ))}
-      </div>
+      {navigation ?? (
+        <div
+          className="history-atlas__subjects"
+          role="group"
+          aria-label="역사 과목"
+        >
+          {(["korea", "world"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={subject === value}
+              onClick={() => {
+                setSubject(value);
+                onSubjectChange?.(value);
+                setDetailOpen(true);
+                setViewBounds(null);
+                setUnitId("");
+                setEraId("");
+                setRegionId("");
+                setSubregionId("");
+                setQuery("");
+                setFilterNotice("");
+                setSelectedId("");
+                pendingFocusRef.current = null;
+              }}
+            >
+              {ATLAS_SUBJECT_LABELS[value]}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="history-atlas__filters">
         <label htmlFor={`${id}-unit`}>
           <span>단원</span>
@@ -1478,24 +1478,34 @@ export default function HistoryAtlas({
                     onClick={() => focusPlace(point.place.id)}
                   >
                     <span className="history-atlas__dot" />
-                    {point.labelVisible && (
-                      <span
-                        className="history-atlas__point-label"
-                        style={{
-                          left: point.labelLeft,
-                          top: point.labelTop,
-                          width: point.labelWidth,
-                          textAlign: point.centered
-                            ? "center"
-                            : point.rightSide
-                              ? "left"
-                              : "right",
-                        }}
-                      >
-                        {point.name}
-                      </span>
-                    )}
                   </button>
+                ) : null,
+              )}
+            {paths &&
+              mapPoints.map((point) =>
+                point.hitVisible && point.labelVisible ? (
+                  <span
+                    key={point.place.id}
+                    className={`history-atlas__label-anchor${point.active ? " is-active" : ""}`}
+                    style={{ left: point.x, top: point.y }}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className="history-atlas__point-label"
+                      style={{
+                        left: point.labelLeft,
+                        top: point.labelTop,
+                        width: point.labelWidth,
+                        textAlign: point.centered
+                          ? "center"
+                          : point.rightSide
+                            ? "left"
+                            : "right",
+                      }}
+                    >
+                      {point.name}
+                    </span>
+                  </span>
                 ) : null,
               )}
             {!paths && (

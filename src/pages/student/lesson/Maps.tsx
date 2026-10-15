@@ -1,5 +1,5 @@
 import React, { Suspense, useState } from "react";
-import HistoryAtlas from "../../../components/common/HistoryAtlas";
+import HistoryMaps from "../../../components/common/HistoryMaps";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import { historyAtlasDataset } from "../../../data/historyAtlasContent";
@@ -20,7 +20,7 @@ export default function StudentMaps() {
           className="history-atlas-page"
           footerActive={!showOriginals}
         >
-          <HistoryAtlas
+          <HistoryMaps
             dataset={historyAtlasDataset}
             onOpenOriginals={() => setShowOriginals(true)}
           />

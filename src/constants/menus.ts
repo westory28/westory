@@ -31,7 +31,6 @@ export const MENUS: MenuConfig = {
         { name: "수업 자료", url: "/student/lesson/note" },
         { name: "역사 사전", url: "/student/lesson/history-dictionary" },
         { name: "지도", url: "/student/lesson/maps" },
-        { name: "지구본", url: "/student/lesson/globe" },
         { name: "싱크 클라우드", url: "/student/lesson/think-cloud" },
       ],
     },
@@ -91,7 +90,6 @@ export const MENUS: MenuConfig = {
         { name: "수업 자료", url: "/teacher/lesson" },
         { name: "역사 사전 관리", url: "/teacher/lesson/history-dictionary" },
         { name: "지도", url: "/teacher/lesson/maps" },
-        { name: "지구본", url: "/teacher/lesson/globe" },
         { name: "사료 창고", url: "/teacher/lesson/source-archive" },
         { name: "싱크 클라우드 관리", url: "/teacher/lesson/think-cloud" },
       ],
@@ -156,6 +154,8 @@ const toSafeText = (value: unknown) =>
 const LEGACY_MENU_URL_PREFIXES = [
   "/student/quiz/history2",
   "/teacher/quiz/history2",
+  "/student/lesson/globe",
+  "/teacher/lesson/globe",
 ];
 
 const getLegacyCanonicalUrl = (pathOnly: string) => {

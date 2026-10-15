@@ -105,6 +105,7 @@
   min-height: 48px;
   min-width: 96px;
   border: 0;
+  border-radius: 0;
   border-bottom: 3px solid transparent;
   background: transparent;
   padding: 8px 16px;
@@ -232,6 +233,8 @@
   cursor: grabbing;
 }
 .history-atlas__map > svg {
+  position: relative;
+  z-index: 0;
   display: block;
   pointer-events: none;
 }
@@ -272,7 +275,7 @@
   box-shadow: 0 0 0 1px var(--ws-primary, #2563eb);
 }
 .history-atlas__point.is-active {
-  z-index: 3;
+  z-index: 1;
 }
 .history-atlas__point.is-active .history-atlas__dot {
   width: 16px;
@@ -317,7 +320,8 @@
 .history-atlas--focusing .history-atlas__geography {
   transition: transform 300ms ease-out;
 }
-.history-atlas--focusing .history-atlas__point {
+.history-atlas--focusing .history-atlas__point,
+.history-atlas--focusing .history-atlas__label-anchor {
   transition:
     left 300ms ease-out,
     top 300ms ease-out;
@@ -353,9 +357,21 @@
     opacity: 0.35;
   }
   .history-atlas--focusing .history-atlas__geography,
-  .history-atlas--focusing .history-atlas__point {
+  .history-atlas--focusing .history-atlas__point,
+  .history-atlas--focusing .history-atlas__label-anchor {
     transition: none;
   }
+}
+.history-atlas__label-anchor {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+}
+.history-atlas__label-anchor.is-active {
+  z-index: 3;
 }
 .history-atlas__point-label {
   position: absolute;
@@ -372,7 +388,7 @@
     1px 0 0 var(--atlas-land),
     -1px 0 0 var(--atlas-land);
 }
-.history-atlas__point.is-active .history-atlas__point-label {
+.history-atlas__label-anchor.is-active .history-atlas__point-label {
   color: var(--ws-primary-text, #1e3a8a);
   background: var(--ws-primary-soft, #eff6ff);
   padding: 4px 8px;
@@ -473,11 +489,14 @@
   overscroll-behavior: contain;
 }
 .history-atlas__place-list button {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  min-height: 56px;
+  min-height: 44px;
   flex-shrink: 0;
   padding: 8px 12px;
   text-align: left;
@@ -490,10 +509,8 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.history-atlas__place-list button small {
-  color: var(--ws-text-muted, #6b7280);
-  font-size: 14px;
-  font-weight: 400;
+.history-atlas .history-atlas__place-list button:focus-visible {
+  outline-offset: -3px;
 }
 .history-atlas__place-list button[aria-pressed="true"] {
   background: var(--ws-primary-soft, #eff6ff);
