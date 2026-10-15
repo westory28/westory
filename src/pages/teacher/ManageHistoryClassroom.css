@@ -179,7 +179,7 @@
 
 .history-attempt-table {
   position: relative;
-  --history-row-actions: 200px;
+  --history-row-actions: 216px;
 }
 
 .history-attempt-table tr {
