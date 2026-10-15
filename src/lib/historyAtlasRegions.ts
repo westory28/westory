@@ -1,6 +1,8 @@
 import type { AtlasPlace, AtlasSubject } from "./historyAtlas";
 import { koreaAtlasRegionIdsByPlace } from "../data/historyAtlasKoreaRegions";
 import { worldAtlasRegionIdsByPlace } from "../data/historyAtlasWorldRegions";
+import { atlasKoreaRestoredRegionOverrides } from "../data/historyAtlasKoreaRestoration";
+import { atlasLandformRegionOverrides } from "../data/historyAtlasLandformRestoration";
 
 export interface AtlasRegionOption {
   id: string;
@@ -113,8 +115,10 @@ export function getAtlasPlaceRegionIds(
 ): readonly string[] {
   const ids =
     subject === "korea"
-      ? koreaAtlasRegionIdsByPlace[place.id]
-      : worldAtlasRegionIdsByPlace[place.id];
+      ? atlasKoreaRestoredRegionOverrides[place.id] ||
+        koreaAtlasRegionIdsByPlace[place.id]
+      : atlasLandformRegionOverrides[place.id] ||
+        worldAtlasRegionIdsByPlace[place.id];
   return ids?.length ? ids : ["unclassified"];
 }
 

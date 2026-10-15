@@ -2,6 +2,10 @@ import type { AtlasDataset, AtlasPlace } from "../lib/historyAtlas";
 import { addAtlasHistoricalStories } from "../lib/historyAtlasStories";
 import { buildAtlasMapDataset } from "../lib/historyAtlasMapDataset";
 import { profileHistoricalStories } from "./historyAtlasProfileStories";
+import { atlasWorldRestoredHistoricalStories } from "./historyAtlasWorldRestoration";
+import { atlasLandformHistoricalStories } from "./historyAtlasLandformRestoration";
+import { atlasKoreaRestoredHistoricalStories } from "./historyAtlasKoreaRestoration";
+import { atlasWorldAdditionalHistoricalStories } from "./historyAtlasWorldRestorationAdditional";
 import {
   koreaHistoricalStories,
   koreaHistoricalEntryCorrections,
@@ -1795,6 +1799,10 @@ export const historyAtlasSourceDataset: AtlasDataset =
       ...koreaHistoricalStories,
       ...worldHistoricalStories,
       ...profileHistoricalStories,
+      ...atlasWorldRestoredHistoricalStories,
+      ...atlasLandformHistoricalStories,
+      ...atlasKoreaRestoredHistoricalStories,
+      ...atlasWorldAdditionalHistoricalStories,
     ],
   );
 

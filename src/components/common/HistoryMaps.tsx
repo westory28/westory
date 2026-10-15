@@ -38,11 +38,7 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
     if (view === nextView) return;
     const next = new URLSearchParams(searchParams);
     next.set("view", nextView);
-    if (nextView === "globe" && view !== "globe") {
-      next.set("subject", view);
-    } else {
-      next.delete("subject");
-    }
+    next.delete("subject");
     setSearchParams(next, { state: null });
   };
   const navigation = (
@@ -77,7 +73,11 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
         <HistoryGlobe
           dataset={dataset}
           initialSubject={
-            searchParams.get("subject") === "korea" ? "korea" : "world"
+            searchParams.get("subject") === "korea"
+              ? "korea"
+              : searchParams.get("subject") === "world"
+                ? "world"
+                : "all"
           }
           navigation={navigation}
         />

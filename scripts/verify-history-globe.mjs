@@ -434,7 +434,7 @@ assert.equal(
   "The globe has a lazy loading boundary",
 );
 assert.equal(contentOf(rendered).type, Globe);
-assert.equal(contentOf(rendered).props.initialSubject, "world");
+assert.equal(contentOf(rendered).props.initialSubject, "all");
 assert.equal(contentOf(rendered).props.onOpenOriginals, undefined);
 assert(
   rendered.props.fallback.props.children[0],
@@ -487,9 +487,17 @@ location = {
 };
 assert.equal(
   contentOf(renderMaps()).props.initialSubject,
-  "world",
-  "A legacy globe link defaults to world history",
+  "all",
+  "A globe link defaults to both history subjects",
 );
+for (const subject of ["korea", "world"]) {
+  location = { ...location, search: `?view=globe&subject=${subject}` };
+  assert.equal(
+    contentOf(renderMaps()).props.initialSubject,
+    subject,
+    "An explicit subject URL retains its requested filter",
+  );
+}
 location = { ...location, search: "?view=invalid", key: "invalid-view" };
 assert.equal(
   renderMaps().props.initialSubject,
@@ -667,27 +675,19 @@ const globeAst = ts.createSourceFile(
   ts.ScriptKind.TSX,
 );
 let regionHandler, chooseEntryHandler;
+const globeDeclarations = new Map();
 const visitGlobe = (node) => {
-  if (
-    ts.isJsxSelfClosingElement(node) &&
-    node.tagName.getText(globeAst) === "AtlasRegionFilters"
-  ) {
-    regionHandler = node.attributes.properties
-      .find(
-        (property) =>
-          ts.isJsxAttribute(property) &&
-          property.name.getText(globeAst) === "onChange",
-      )
-      .initializer.expression.getText(globeAst);
-  }
-  if (
-    ts.isVariableDeclaration(node) &&
-    node.name.getText(globeAst) === "chooseEntry"
-  )
-    chooseEntryHandler = node.initializer.arguments[0].getText(globeAst);
+  if (ts.isVariableDeclaration(node) && node.initializer)
+    globeDeclarations.set(node.name.getText(globeAst), node.initializer);
+  if (ts.isFunctionDeclaration(node) && node.name)
+    globeDeclarations.set(node.name.text, node);
   ts.forEachChild(node, visitGlobe);
 };
 visitGlobe(globeAst);
+regionHandler = globeDeclarations.get("changeRegion").getText(globeAst);
+chooseEntryHandler = globeDeclarations
+  .get("chooseEntry")
+  .arguments[0].getText(globeAst);
 assert(regionHandler && chooseEntryHandler);
 const testItems = regionFixtures[0].coordinates.map((coordinates, index) => ({
   entry: {
@@ -718,7 +718,7 @@ for (const empty of [false, true]) {
       size: { width: 356, height: 480 },
       fitGlobeRegionCamera,
       GLOBE_INITIAL_VIEW: m.GLOBE_INITIAL_VIEW,
-      matchesAtlasRegion: () => true,
+      matchesGlobeRegion: () => true,
       ...Object.fromEntries(
         [
           "RegionId",
@@ -817,6 +817,328 @@ assert(
   Math.abs(selectionState.camera.latitude - testItems[0].place.coordinates[1]) <
     1e-9,
 );
+// Exercise the production all-subject filtering with the actual curated dataset.
+function evaluateGlobe(expression, dependencies = {}) {
+  const exports = {};
+  vm.runInNewContext(
+    ts.transpileModule(`exports.run = ${expression}`, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText,
+    { exports, ...dependencies },
+  );
+  return exports.run;
+}
+const atlasModel = load("src/lib/historyAtlas.ts");
+const regionModel = load("src/lib/historyAtlasRegions.ts");
+const dataset = load("src/data/historyAtlasContent.ts").historyAtlasDataset;
+const itemFactory = evaluateGlobe(
+  globeDeclarations.get("items").arguments[0].getText(globeAst),
+  {
+    dataset,
+    units: new Map(dataset.units.map((unit) => [unit.id, unit])),
+    ...atlasModel,
+  },
+);
+const actualItems = itemFactory();
+const matchesGlobeRegion = evaluateGlobe(
+  globeDeclarations.get("matchesGlobeRegion").getText(globeAst),
+  regionModel,
+);
+const nameOf = evaluateGlobe(globeDeclarations.get("nameOf").getText(globeAst));
+const filterItems = (overrides = {}) =>
+  evaluateGlobe(
+    globeDeclarations.get("filtered").arguments[0].getText(globeAst),
+    {
+      items: actualItems,
+      subject: "all",
+      unitId: "",
+      eraId: "",
+      regionId: "",
+      subregionId: "",
+      query: "",
+      matchesGlobeRegion,
+      nameOf,
+      koreanNames: new Intl.Collator("ko-KR", { numeric: true }),
+      ...atlasModel,
+      ...overrides,
+    },
+  )();
+const allItems = filterItems();
+assert.equal(
+  allItems.length,
+  new Set(actualItems.map((item) => item.place.id)).size,
+  "All subjects retain exactly one row per shared place",
+);
+assert(
+  allItems.some((item) => item.subject === "korea") &&
+    allItems.some((item) => item.subject === "world"),
+);
+for (const subject of ["korea", "world"]) {
+  const scoped = filterItems({ subject });
+  assert(scoped.every((item) => item.subject === subject));
+  for (const option of subject === "korea"
+    ? regionModel.ATLAS_KOREA_PROVINCES
+    : regionModel.ATLAS_WORLD_REGION_GROUPS) {
+    const expected = filterItems({ subject, regionId: option.id })
+      .map((item) => item.place.id)
+      .sort();
+    const combined = filterItems({ regionId: `${subject}:${option.id}` })
+      .map((item) => item.place.id)
+      .sort();
+    equal(combined, JSON.parse(JSON.stringify(expected)));
+  }
+}
+const andong = actualItems.find((item) => item.place.name === "안동");
+assert(andong, "Andong has a curated historical place");
+assert.equal(
+  nameOf(andong),
+  "안동",
+  "The browse name must not be replaced by the historical name Gochang",
+);
+assert(
+  filterItems({ query: "안동" }).some(
+    (item) => item.place.id === andong.place.id,
+  ),
+);
+assert(
+  filterItems({ query: "고창" }).some(
+    (item) => item.place.id === andong.place.id,
+  ),
+  "The historical name is still searchable",
+);
+const koreaStory = actualItems.find((item) => item.subject === "korea");
+const worldStory = actualItems.find((item) => item.subject === "world");
+const allSelectionState = {};
+const selectFromAll = evaluateGlobe(chooseEntryHandler, {
+  ...atlasModel,
+  matchesGlobeRegion,
+  itemsById: new Map(
+    [koreaStory, worldStory].map((item) => [item.entry.id, item]),
+  ),
+  subject: "all",
+  unitId: "",
+  eraId: "",
+  regionId: "",
+  subregionId: "",
+  query: "",
+  pendingPanelFocus: { current: null },
+  viewRef,
+  focusGlobeView: m.focusGlobeView,
+  ...Object.fromEntries(
+    [
+      "Subject",
+      "UnitId",
+      "EraId",
+      "RegionId",
+      "SubregionId",
+      "Query",
+      "Notice",
+      "Page",
+      "SelectedId",
+      "SelectionRevision",
+      "Panel",
+      "PanelOpen",
+      "Camera",
+    ].map((key) => [
+      `set${key}`,
+      (value) => {
+        allSelectionState[key] = typeof value === "function" ? value(0) : value;
+      },
+    ]),
+  ),
+});
+selectFromAll(koreaStory.entry.id);
+selectFromAll(worldStory.entry.id);
+assert.equal(
+  allSelectionState.Subject,
+  undefined,
+  "Switching stories across subjects preserves All",
+);
+assert.equal(allSelectionState.SelectedId, worldStory.entry.id);
+assert.equal(
+  filterItems({
+    items: [koreaStory, { ...worldStory, place: koreaStory.place }],
+  }).length,
+  1,
+  "A place with Korean and world history entries still has one row",
+);
+let selectedShapeEntry;
+const endPointerExpression = globeDeclarations
+  .get("endPointer")
+  .getText(globeAst);
+for (const moved of [false, true]) {
+  selectedShapeEntry = undefined;
+  evaluateGlobe(endPointerExpression, {
+    gesture: { current: { moved, multiple: false } },
+    pointers: { current: new Map([[1, { x: 100, y: 100 }]]) },
+    localPointer: () => ({ x: 100, y: 100 }),
+    drawnPoints: { current: [] },
+    nearestGlobePoint: m.nearestGlobePoint,
+    hitGeography: { current: () => worldStory },
+    chooseEntry: (id) => {
+      selectedShapeEntry = id;
+    },
+    commitView() {},
+  })({ pointerId: 1, currentTarget: { hasPointerCapture: () => false } });
+  assert.equal(
+    selectedShapeEntry,
+    moved ? undefined : worldStory.entry.id,
+    "Only a deliberate click selects terrain; dragging never opens a story",
+  );
+}
+
+// Canvas hit testing uses the production callback, with a deterministic path
+// adapter for the M/L/Z coordinates emitted by d3's orthographic geoPath.
+let hitExpression;
+function visitHit(node) {
+  if (
+    ts.isBinaryExpression(node) &&
+    node.left.getText(globeAst) === "hitGeography.current"
+  )
+    hitExpression = node.right.getText(globeAst);
+  ts.forEachChild(node, visitHit);
+}
+visitHit(globeAst);
+assert(hitExpression);
+class TestPath {
+  constructor(path) {
+    this.parts = [];
+    let current;
+    for (const command of path.match(/[MLZ][^MLZ]*/g) || []) {
+      if (command[0] === "Z") {
+        current.push(current[0]);
+        continue;
+      }
+      const values = command.slice(1).split(",").map(Number);
+      if (command[0] === "M") {
+        current = [];
+        this.parts.push(current);
+      }
+      current.push(values);
+    }
+  }
+}
+const hitContext = {
+  lineWidth: 0,
+  save() {},
+  restore() {},
+  setTransform() {},
+  isPointInStroke(path, x, y) {
+    return path.parts.some((points) =>
+      points.slice(1).some(([bx, by], i) => {
+        const [ax, ay] = points[i],
+          dx = bx - ax,
+          dy = by - ay;
+        const t = Math.max(
+          0,
+          Math.min(
+            1,
+            ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1),
+          ),
+        );
+        return (
+          Math.hypot(x - ax - t * dx, y - ay - t * dy) <= this.lineWidth / 2
+        );
+      }),
+    );
+  },
+  isPointInPath(path, x, y) {
+    let inside = false;
+    for (const points of path.parts)
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const [xi, yi] = points[i],
+          [xj, yj] = points[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
+          inside = !inside;
+      }
+    return inside;
+  },
+};
+const riverModel = load("src/lib/historyAtlasRivers.ts");
+const landformModel = load("src/lib/historyAtlasLandforms.ts");
+const riverAsset = JSON.parse(
+  readFileSync("src/data/atlas/rivers-world.json", "utf8"),
+);
+const yellowPlace = {
+  id: "yellow-river-fixture",
+  name: "황허강",
+  kind: "water",
+  coordinates: [112, 36],
+};
+const gobiPlace = {
+  id: "kr-fe954fbe1cc0",
+  name: "고비 사막",
+  kind: "desert",
+  coordinates: [106.0126, 43.1336],
+};
+const yellow = riverModel.findAtlasRiver(yellowPlace, riverAsset);
+const gobi = landformModel.findAtlasLandform(gobiPlace, geography);
+assert(yellow && gobi);
+const hitItems = [
+  {
+    item: { entry: { id: "yellow" }, place: yellowPlace },
+    shape: yellow,
+    area: false,
+  },
+  {
+    item: { entry: { id: "gobi" }, place: gobiPlace },
+    shape: gobi,
+    area: true,
+  },
+];
+const projection = geoOrthographic()
+  .translate([350, 270])
+  .scale(480)
+  .rotate([-108, -36, 0])
+  .clipAngle(90);
+const pickShape = evaluateGlobe(hitExpression, {
+  ...d3Geography,
+  context: hitContext,
+  projection,
+  selectableGeography: hitItems,
+  Path2D: TestPath,
+});
+const riverLines = yellow.features.flatMap((feature) =>
+  feature.geometry.type === "LineString"
+    ? [feature.geometry.coordinates]
+    : feature.geometry.coordinates,
+);
+let riverHits = 0;
+for (const line of riverLines)
+  for (
+    let i = 0;
+    i < line.length;
+    i += Math.max(1, Math.floor(line.length / 8))
+  ) {
+    const xy = projection(line[i]);
+    assert.equal(
+      pickShape(...xy)?.entry.id,
+      "yellow",
+      "Upper, middle and lower river strokes are clickable",
+    );
+    riverHits += 1;
+  }
+assert(riverHits > 12);
+assert.equal(
+  pickShape(...projection(gobiPlace.coordinates))?.entry.id,
+  "gobi",
+  "The real desert area opens its place",
+);
+assert.equal(
+  pickShape(...projection([90, 10])),
+  undefined,
+  "Unmatched terrain is not invented as an interactive historical place",
+);
+projection.rotate([72, 36, 0]);
+assert.equal(
+  pickShape(...projection(gobiPlace.coordinates)),
+  undefined,
+  "Backside terrain cannot be clicked through the sphere",
+);
+
 console.log(
-  `History globe projection, hemisphere, interaction, compass, ${regionCameraCases} region camera fits, actual filter/tag handlers, pixel-budget, assets, menu migration and access checks passed.`,
+  `History globe projection, hemisphere, interaction, compass, ${regionCameraCases} region camera fits, actual all-subject filter/tag and river/desert hit handlers, pixel-budget, assets, menu migration and access checks passed.`,
 );

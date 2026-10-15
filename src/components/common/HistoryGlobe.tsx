@@ -47,11 +47,17 @@ import {
   findAtlasRiver,
   type AtlasRiverCollection,
 } from "../../lib/historyAtlasRivers";
+import { findAtlasLandform } from "../../lib/historyAtlasLandforms";
+import type { MultiPolygon } from "geojson";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import AtlasPlaceDetails from "./AtlasPlaceDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
 import AtlasCompass from "./AtlasCompass";
-import { matchesAtlasRegion } from "../../lib/historyAtlasRegions";
+import {
+  ATLAS_KOREA_PROVINCES,
+  ATLAS_WORLD_REGION_GROUPS,
+  matchesAtlasRegion,
+} from "../../lib/historyAtlasRegions";
 import InfoHelp from "./InfoHelp";
 import {
   atlasRiverCreditItems,
@@ -75,11 +81,12 @@ type Item = {
   search: string;
 };
 type Point = { item: Item; x: number; y: number };
+type GlobeSubject = "all" | AtlasSubject;
 type GlobeGeography = {
   borders: GeoPermissibleObjects;
   disputedBorders: GeoPermissibleObjects;
   rivers: GeoPermissibleObjects;
-  deserts: GeoPermissibleObjects;
+  deserts: MultiPolygon;
   labels: {
     name: string;
     kind: "ocean" | "desert" | "terrain" | "river" | "country";
@@ -127,8 +134,25 @@ function loadLand() {
       });
   return landPromise;
 }
-const nameOf = (item: Item) => item.entry.displayName || item.place.name;
+// The common place name remains searchable and visible across historical eras.
+// Period-specific names belong in the selected story, not the browse list.
+const nameOf = (item: Item) => item.place.name;
 const koreanNames = new Intl.Collator("ko-KR", { numeric: true });
+function matchesGlobeRegion(
+  item: Item,
+  subject: GlobeSubject,
+  groupId: string,
+  subregionId = "",
+) {
+  if (!groupId) return true;
+  if (subject !== "all")
+    return matchesAtlasRegion(item.place, subject, groupId, subregionId);
+  const [regionSubject, regionGroup] = groupId.split(":");
+  return (
+    item.subject === regionSubject &&
+    matchesAtlasRegion(item.place, item.subject, regionGroup, subregionId)
+  );
+}
 let geographyPromise: Promise<GlobeGeography> | undefined;
 function loadGeography() {
   if (!geographyPromise)
@@ -146,13 +170,13 @@ function loadGeography() {
 
 interface HistoryGlobeProps {
   dataset: AtlasDataset;
-  initialSubject?: AtlasSubject;
+  initialSubject?: GlobeSubject;
   navigation?: ReactNode;
 }
 
 export default function HistoryGlobe({
   dataset,
-  initialSubject = "world",
+  initialSubject = "all",
   navigation,
 }: HistoryGlobeProps) {
   const id = useId();
@@ -171,7 +195,7 @@ export default function HistoryGlobe({
   const pendingPanelFocus = useRef<"detail" | "list" | null>(null);
   const [wide, setWide] = useState(false);
   const [size, setSize] = useState({ width: 600, height: 400 });
-  const [subject, setSubject] = useState<AtlasSubject>(initialSubject);
+  const [subject, setSubject] = useState<GlobeSubject>(initialSubject);
   const [unitId, setUnitId] = useState("");
   const [eraId, setEraId] = useState("");
   const [regionId, setRegionId] = useState("");
@@ -196,6 +220,9 @@ export default function HistoryGlobe({
   const pointers = useRef(new Map<number, Pointer>());
   const gesture = useRef<Gesture | null>(null);
   const drawnPoints = useRef<Point[]>([]);
+  const hitGeography = useRef<(x: number, y: number) => Item | undefined>(
+    () => undefined,
+  );
   const drawRef = useRef<() => void>(() => {});
   const raf = useRef<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -255,10 +282,10 @@ export default function HistoryGlobe({
     const normalized = normalizeAtlasSearch(query);
     const result = items.filter(
       (item) =>
-        item.subject === subject &&
+        (subject === "all" || item.subject === subject) &&
         (!unitId || item.entry.unitId === unitId) &&
         (!eraId || item.entry.eraIds?.includes(eraId)) &&
-        matchesAtlasRegion(item.place, subject, regionId, subregionId) &&
+        matchesGlobeRegion(item, subject, regionId, subregionId) &&
         (!normalized || item.search.includes(normalized)),
     );
     if (normalized) {
@@ -303,6 +330,27 @@ export default function HistoryGlobe({
   const selectedRiver = useMemo(
     () => (selected && rivers ? findAtlasRiver(selected.place, rivers) : null),
     [selected, rivers],
+  );
+  const selectedLandform = useMemo(
+    () =>
+      selected && geography
+        ? findAtlasLandform(selected.place, geography)
+        : null,
+    [selected, geography],
+  );
+  const selectedShape = selectedRiver || selectedLandform;
+  const selectableGeography = useMemo(
+    () =>
+      filtered.flatMap((item) => {
+        const river = rivers ? findAtlasRiver(item.place, rivers) : null;
+        const area = geography
+          ? findAtlasLandform(item.place, geography)
+          : null;
+        return river || area
+          ? [{ item, shape: (river || area)!, area: !!area }]
+          : [];
+      }),
+    [filtered, rivers, geography],
   );
   const displayedPlace = useMemo(
     () =>
@@ -381,7 +429,6 @@ export default function HistoryGlobe({
     };
   }, [loadAttempt]);
   useEffect(() => {
-    if (selected?.place.kind !== "water") return;
     let active = true;
     setRiverError(false);
     loadAtlasRiverGeometry("world")
@@ -394,10 +441,10 @@ export default function HistoryGlobe({
     return () => {
       active = false;
     };
-  }, [selected?.place.id, selected?.place.kind, riverAttempt]);
+  }, [riverAttempt]);
   useEffect(() => {
-    if (!selectedRiver || !mapRef.current) return;
-    const center = geoCentroid(selectedRiver);
+    if (!selectedShape || !mapRef.current) return;
+    const center = geoCentroid(selectedShape);
     if (!center.every(Number.isFinite)) return;
     const width = mapRef.current.clientWidth,
       height = mapRef.current.clientHeight;
@@ -408,7 +455,7 @@ export default function HistoryGlobe({
       .rotate([-center[0], -center[1], 0])
       .clipAngle(90);
     const [[left, top], [right, bottom]] =
-      geoPath(projection).bounds(selectedRiver);
+      geoPath(projection).bounds(selectedShape);
     const scale = Math.min(
       (width - 80) / Math.max(0.01, right - left),
       (height - 160) / Math.max(0.01, bottom - top),
@@ -419,7 +466,7 @@ export default function HistoryGlobe({
       roll: 0,
       zoom: Math.min(GLOBE_MAX_ZOOM, scale / (Math.min(width, height) * 0.44)),
     });
-  }, [selectedRiver, selectionRevision, setCamera]);
+  }, [selectedShape, selectionRevision, setCamera]);
   useEffect(() => {
     const root = rootRef.current,
       map = mapRef.current;
@@ -553,9 +600,25 @@ export default function HistoryGlobe({
         context.stroke();
         context.globalAlpha = 1;
       }
-      if (selectedRiver) {
+      // Draw the same verified courses that are used for hit testing. The
+      // overview layer alone omits small rivers and cannot identify a place.
+      for (const feature of selectableGeography) {
+        if (feature.area) continue;
         context.beginPath();
-        path(selectedRiver);
+        path(feature.shape);
+        context.strokeStyle = color("--ws-primary");
+        context.globalAlpha = 0.45;
+        context.lineWidth = 1.3;
+        context.stroke();
+      }
+      context.globalAlpha = 1;
+      if (selectedShape) {
+        context.beginPath();
+        path(selectedShape);
+        if (selectedLandform) {
+          context.fillStyle = color("--ws-primary-soft");
+          context.fill();
+        }
         context.strokeStyle = color("--ws-primary");
         context.lineWidth = 3;
         context.lineCap = "round";
@@ -564,8 +627,38 @@ export default function HistoryGlobe({
       }
       riverHaloRef.current?.setAttribute(
         "d",
-        selectedRiver ? geoPath(projection).digits(1)(selectedRiver) || "" : "",
+        selectedShape ? geoPath(projection).digits(1)(selectedShape) || "" : "",
       );
+      // Build projected, hemisphere-clipped paths only on a click, not while
+      // dragging. CSS-pixel coordinates stay independent of canvas DPR.
+      hitGeography.current = (x, y) => {
+        const projected = geoPath(projection);
+        context.save();
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.lineWidth = 14;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        try {
+          // River strokes take priority where a river crosses a desert.
+          for (const area of [false, true]) {
+            for (const feature of selectableGeography) {
+              if (feature.area !== area) continue;
+              const shape = projected(feature.shape);
+              if (!shape) continue;
+              const target = new Path2D(shape);
+              if (
+                area
+                  ? context.isPointInPath(target, x, y)
+                  : context.isPointInStroke(target, x, y)
+              )
+                return feature.item;
+            }
+          }
+        } finally {
+          context.restore();
+        }
+        return undefined;
+      };
       const points: Point[] = [];
       const addPoint = (item: Item, coordinates: [number, number] | null) => {
         if (!coordinates || !isGlobePointVisible(coordinates, camera)) return;
@@ -575,7 +668,7 @@ export default function HistoryGlobe({
         points.push({ item, x: xy[0], y: xy[1] });
       };
       for (const item of mapItems) {
-        if (selectedRiver && item.place.id === selected?.place.id) continue;
+        if (selectedShape && item.place.id === selected?.place.id) continue;
         addPoint(
           item,
           item.place.id === ATLAS_DOKDO_ID
@@ -585,8 +678,8 @@ export default function HistoryGlobe({
       }
       // A verified river has a course, not an arbitrary city-style point. Its
       // geographical centroid anchors only the label, including null-point data.
-      if (selected && selectedRiver)
-        addPoint(selected, geoCentroid(selectedRiver));
+      if (selected && selectedShape)
+        addPoint(selected, geoCentroid(selectedShape));
       const occupied = new Set<string>();
       const rendered: Point[] = [];
       const ordered = [...points].sort(
@@ -604,7 +697,7 @@ export default function HistoryGlobe({
         occupied.add(cell);
         rendered.push(point);
         const active = point.item.place.id === selected?.place.id;
-        if (active && selectedRiver) continue;
+        if (active && selectedShape) continue;
         context.beginPath();
         context.arc(
           point.x,
@@ -626,7 +719,7 @@ export default function HistoryGlobe({
       );
       const halo = haloRef.current;
       if (halo) {
-        halo.hidden = !active || !!selectedRiver;
+        halo.hidden = !active || !!selectedShape;
         if (active) {
           halo.style.left = active.x + "px";
           halo.style.top = active.y + "px";
@@ -771,6 +864,9 @@ export default function HistoryGlobe({
     requestDraw,
     selected,
     selectedRiver,
+    selectedShape,
+    selectedLandform,
+    selectableGeography,
     size,
     panel,
     wide,
@@ -780,7 +876,7 @@ export default function HistoryGlobe({
     (entryId: string) => {
       const next = itemsById.get(entryId);
       if (!next) return;
-      const subjectChanged = next.subject !== subject;
+      const subjectChanged = subject !== "all" && next.subject !== subject;
       const cleared: string[] = [];
       if (subjectChanged) {
         setSubject(next.subject);
@@ -795,8 +891,7 @@ export default function HistoryGlobe({
       }
       if (
         subjectChanged ||
-        (regionId &&
-          !matchesAtlasRegion(next.place, subject, regionId, subregionId))
+        (regionId && !matchesGlobeRegion(next, subject, regionId, subregionId))
       ) {
         setRegionId("");
         setSubregionId("");
@@ -859,14 +954,44 @@ export default function HistoryGlobe({
     setPanel("list");
     setNotice("");
   };
-  const changeSubject = (next: AtlasSubject) => {
+  const changeSubject = (next: GlobeSubject) => {
     setSubject(next);
     resetFilters();
     setCamera(
-      next === "world"
+      next !== "korea"
         ? GLOBE_INITIAL_VIEW
         : { longitude: 127, latitude: 36, roll: 0, zoom: 2 },
     );
+  };
+  const changeRegion = (group: string, subregion: string) => {
+    setRegionId(group);
+    setSubregionId(subregion);
+    setSelectedId(null);
+    setPanel("list");
+    setPage(0);
+    setNotice("");
+    setQuery("");
+    const coordinates = [
+      ...new Map(
+        items
+          .filter(
+            (item) =>
+              (subject === "all" || item.subject === subject) &&
+              (!unitId || item.entry.unitId === unitId) &&
+              (!eraId || item.entry.eraIds?.includes(eraId)) &&
+              matchesGlobeRegion(item, subject, group, subregion),
+          )
+          .flatMap(({ place }) =>
+            place.coordinates ? [[place.id, place.coordinates] as const] : [],
+          ),
+      ).values(),
+    ];
+    const next = group
+      ? fitGlobeRegionCamera(coordinates, size.width, size.height)
+      : subject !== "korea"
+        ? GLOBE_INITIAL_VIEW
+        : { longitude: 127, latitude: 36, roll: 0, zoom: 2 };
+    if (next) setCamera(next);
   };
   const returnToList = () => {
     const index = filtered.findIndex(
@@ -981,6 +1106,9 @@ export default function HistoryGlobe({
       const hit = nearestGlobePoint(drawnPoints.current, pointer.x, pointer.y);
       if (hit) {
         chooseEntry(hit.item.entry.id);
+      } else {
+        const feature = hitGeography.current(pointer.x, pointer.y);
+        if (feature) chooseEntry(feature.entry.id);
       }
     }
     if (pointers.current.size) startGesture(original || undefined);
@@ -1169,9 +1297,10 @@ export default function HistoryGlobe({
                 id={id + "-subject"}
                 value={subject}
                 onChange={(event) =>
-                  changeSubject(event.target.value as AtlasSubject)
+                  changeSubject(event.target.value as GlobeSubject)
                 }
               >
+                <option value="all">전체</option>
                 <option value="korea">한국사</option>
                 <option value="world">세계사</option>
               </select>
@@ -1182,13 +1311,13 @@ export default function HistoryGlobe({
               role="group"
               aria-label="역사 과목"
             >
-              {(["korea", "world"] as const).map((value) => (
+              {(["all", "korea", "world"] as const).map((value) => (
                 <button
                   key={value}
                   aria-pressed={subject === value}
                   onClick={() => changeSubject(value)}
                 >
-                  {ATLAS_SUBJECT_LABELS[value]}
+                  {value === "all" ? "전체" : ATLAS_SUBJECT_LABELS[value]}
                 </button>
               ))}
             </div>
@@ -1208,9 +1337,12 @@ export default function HistoryGlobe({
             >
               <option value="">전체 단원</option>
               {dataset.units
-                .filter((unit) => unit.subject === subject)
+                .filter((unit) => subject === "all" || unit.subject === subject)
                 .map((unit) => (
                   <option key={unit.id} value={unit.id}>
+                    {subject === "all"
+                      ? `${ATLAS_SUBJECT_LABELS[unit.subject]} · `
+                      : ""}
                     {unit.title}
                   </option>
                 ))}
@@ -1231,56 +1363,75 @@ export default function HistoryGlobe({
             >
               <option value="">전체 시대</option>
               {dataset.eras
-                ?.filter((era) => era.subject === subject)
+                ?.filter((era) => subject === "all" || era.subject === subject)
                 .map((era) => (
                   <option key={era.id} value={era.id}>
+                    {subject === "all"
+                      ? `${ATLAS_SUBJECT_LABELS[era.subject]} · `
+                      : ""}
                     {era.title}
                   </option>
                 ))}
             </select>
           </label>
-          <AtlasRegionFilters
-            subject={subject}
-            groupId={regionId}
-            subregionId={subregionId}
-            onChange={(group, subregion) => {
-              setRegionId(group);
-              setSubregionId(subregion);
-              setSelectedId(null);
-              setPanel("list");
-              setPage(0);
-              setNotice("");
-              setQuery("");
-              const coordinates = [
-                ...new Map(
-                  items
-                    .filter(
-                      (item) =>
-                        item.subject === subject &&
-                        (!unitId || item.entry.unitId === unitId) &&
-                        (!eraId || item.entry.eraIds?.includes(eraId)) &&
-                        matchesAtlasRegion(
-                          item.place,
-                          subject,
-                          group,
-                          subregion,
-                        ),
-                    )
-                    .flatMap(({ place }) =>
-                      place.coordinates
-                        ? [[place.id, place.coordinates] as const]
-                        : [],
-                    ),
-                ).values(),
-              ];
-              const next = group
-                ? fitGlobeRegionCamera(coordinates, size.width, size.height)
-                : subject === "world"
-                  ? GLOBE_INITIAL_VIEW
-                  : { longitude: 127, latitude: 36, roll: 0, zoom: 2 };
-              if (next) setCamera(next);
-            }}
-          />
+          {subject === "all" ? (
+            <>
+              <label htmlFor={id + "-region"}>
+                지역
+                <select
+                  id={id + "-region"}
+                  value={regionId}
+                  onChange={(event) => changeRegion(event.target.value, "")}
+                >
+                  <option value="">전체 지역</option>
+                  <optgroup label="한국사 · 8도">
+                    {ATLAS_KOREA_PROVINCES.map((region) => (
+                      <option key={region.id} value={`korea:${region.id}`}>
+                        한국사 · {region.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="세계사 · 권역">
+                    {ATLAS_WORLD_REGION_GROUPS.map((region) => (
+                      <option key={region.id} value={`world:${region.id}`}>
+                        세계사 · {region.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </label>
+              {ATLAS_WORLD_REGION_GROUPS.find(
+                (region) => regionId === `world:${region.id}`,
+              )?.children.length ? (
+                <label htmlFor={id + "-subregion"}>
+                  세부 지역
+                  <select
+                    id={id + "-subregion"}
+                    value={subregionId}
+                    onChange={(event) =>
+                      changeRegion(regionId, event.target.value)
+                    }
+                  >
+                    <option value="">전체 세부 지역</option>
+                    {ATLAS_WORLD_REGION_GROUPS.find(
+                      (region) => regionId === `world:${region.id}`,
+                    )?.children.map((region) => (
+                      <option key={region.id} value={region.id}>
+                        {region.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </>
+          ) : (
+            <AtlasRegionFilters
+              subject={subject}
+              groupId={regionId}
+              subregionId={subregionId}
+              onChange={changeRegion}
+            />
+          )}
         </div>
         <label className="atlas-filter-search" htmlFor={id + "-search"}>
           <span>지명 검색</span>

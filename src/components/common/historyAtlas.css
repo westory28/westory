@@ -986,3 +986,24 @@
     padding: 12px 16px;
   }
 }
+.history-atlas__landform {
+  fill: rgb(203 153 81 / 18%);
+  stroke: rgb(161 110 48 / 40%);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: visiblePainted;
+  cursor: pointer;
+}
+.history-atlas__landform.is-active {
+  fill: rgb(203 153 81 / 28%);
+  stroke: var(--ws-primary, #2563eb);
+  stroke-width: 2;
+}
+.history-atlas__river-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+  cursor: pointer;
+}

@@ -55,6 +55,14 @@ export const atlasMapContextOnlyAliases: Record<string, string[]> = {
  * Their source ledger remains available; these alone cannot justify a map pin.
  */
 export const atlasMapExcludedEntries: Record<string, string> = {
+  "world-exp-world-940724b5425a-1":
+    "윈강 석굴의 같은 조성 맥락을 고대로 분류한 개요이다. 공식 근거를 붙인 5~6세기 이야기로 대체한다.",
+  "world-exp-world-9e8d217233bd-5":
+    "룽먼 석굴의 불교 미술 개요는 공식 근거를 붙인 5~8세기 이야기와 중복된다.",
+  "world-exp-world-231991299b29-1":
+    "보로부두르의 불교 전파 개요는 기존 8~9세기 조성 이야기와 중복된다.",
+  "world-exp-world-119cdcf6ee4c-5":
+    "아크로폴리스의 건축 개요는 기존 기원전 5세기 아테네 이야기와 중복된다.",
   "kr-entry-2557f78c117d":
     "의림지를 삼한의 농업 자료로 제시한다는 캡션이며 개별 역사 설명이 없다.",
   "world-exp-world-5b3e89fd66c7-1":

@@ -36,11 +36,17 @@ const names: Record<string, string[]> = {
   우수리강: ["Ussuri"],
   랴오허강: ["Liao He", "Liao"],
   쑹화강: ["Songhua", "Sungari"],
-  황허강: ["Huang He", "Yellow"],
-  창장강: ["Chang Jiang", "Yangtze"],
+  // Natural Earth names the upper/middle course “Huang” (10m rivernum 66),
+  // while only the lower course also carries “Yellow” (rivernum 95).
+  // All three source features are needed; selecting Yellow alone drops most
+  // of the river, including its headwaters and the Ordos bend.
+  황허강: ["Huang", "Huang He", "Yellow"],
+  창장강: ["Chang Jiang", "Yangtze", "Jinsha", "Tongtian"],
   나일강: ["Nile", "White Nile", "Blue Nile"],
-  티그리스강: ["Tigris"],
-  유프라테스강: ["Euphrates"],
+  // FAO identifies the Turkish names Dicle and Firat as these same rivers;
+  // selecting only the English lower-course names omits the Turkish reaches.
+  티그리스강: ["Tigris", "Dicle"],
+  유프라테스강: ["Euphrates", "Firat"],
   아마존강: ["Amazonas", "Amazon", "Solimões"],
   파라나강: ["Paraná", "Parana"],
   매켄지강: ["Mackenzie"],
@@ -154,7 +160,7 @@ export function atlasRiverPath(
 export function atlasFocusExtent(
   place: AtlasPlace,
   subject: AtlasSubject,
-  river?: AtlasRiverCollection | null,
+  river?: GeoPermissibleObjects | null,
 ): AtlasUnit["bounds"] | null {
   const point = place.coordinates || (river ? geoCentroid(river) : null);
   if (!point || !point.every(Number.isFinite)) return null;

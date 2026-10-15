@@ -9,7 +9,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
-import { geoCentroid } from "d3-geo";
+import { geoCentroid, geoPath } from "d3-geo";
 import {
   ATLAS_SUBJECT_BOUNDS,
   ATLAS_SUBJECT_LABELS,
@@ -51,6 +51,10 @@ import {
   atlasRiverPath,
   findAtlasRiver,
 } from "../../lib/historyAtlasRivers";
+import {
+  findAtlasLandform,
+  loadAtlasLandformGeometry,
+} from "../../lib/historyAtlasLandforms";
 import "./historyAtlas.css";
 import {
   ATLAS_DOKDO_COORDINATES,
@@ -80,8 +84,8 @@ type MapPoint = {
   priority?: boolean;
 };
 const PAGE_SIZE = 40;
-const entryName = ({ entry, place }: LocatedEntry) =>
-  entry.displayName || place.name;
+// Keep a city's identity stable while its historical names change by era.
+const entryName = ({ place }: LocatedEntry) => place.name;
 const searchRank = (item: LocatedEntry, normalized: string) => {
   if (!normalized) return 0;
   const { names, aliases } = item.search;
@@ -408,6 +412,9 @@ export default function HistoryAtlas({
     data: AtlasGeometry;
   } | null>(null);
   const [geometryError, setGeometryError] = useState(false);
+  const [landformGeometry, setLandformGeometry] = useState<Awaited<
+    ReturnType<typeof loadAtlasLandformGeometry>
+  > | null>(null);
   const [geometryAttempt, setGeometryAttempt] = useState(0);
   const [transform, setTransform] = useState<AtlasTransform>(ATLAS_IDENTITY);
   const [cameraMoving, setCameraMoving] = useState(false);
@@ -584,27 +591,60 @@ export default function HistoryAtlas({
   const selectedRiver = selected
     ? riversByPlace.get(selected.place.id) || null
     : null;
+  const landformsByPlace = useMemo(() => {
+    const result = new Map<
+      string,
+      NonNullable<ReturnType<typeof findAtlasLandform>>
+    >();
+    if (!landformGeometry) return result;
+    for (const { place } of visiblePlaces) {
+      const area = findAtlasLandform(place, landformGeometry);
+      if (area) result.set(place.id, area);
+    }
+    return result;
+  }, [visiblePlaces, landformGeometry]);
+  const selectedLandform = selected
+    ? landformsByPlace.get(selected.place.id) || null
+    : null;
+  const selectedShape = selectedRiver || selectedLandform;
+  const landformPaths = useMemo(() => {
+    const path = geoPath(projection).digits(1);
+    return [...landformsByPlace].map(([placeId, area]) => ({
+      placeId,
+      path: path(area) || "",
+    }));
+  }, [landformsByPlace, projection]);
+  const riverPaths = useMemo(
+    () =>
+      [...riversByPlace].map(([placeId, river]) => ({
+        placeId,
+        path: atlasRiverPath(river, projection),
+      })),
+    [riversByPlace, projection],
+  );
   const selectedRiverPath = useMemo(
     () => atlasRiverPath(selectedRiver, projection),
     [selectedRiver, projection],
   );
   const displayedPlace = useMemo(
     () =>
-      selected && selectedRiver
+      selected && selectedShape
         ? {
             ...selected.place,
-            coordinates: geoCentroid(selectedRiver) as [number, number],
-            locationNote:
-              "확인된 현대 수계의 물줄기를 선으로 표시한다. 지도 축척에 맞춰 작은 굴곡은 단순화했다.",
+            coordinates: geoCentroid(selectedShape) as [number, number],
+            locationNote: selectedLandform
+              ? "현대 자연지형의 분포를 면으로 표시한다. 경계는 지도 축척에 맞춰 단순화한 것이다."
+              : "확인된 현대 수계의 물줄기를 선으로 표시한다. 지도 축척에 맞춰 작은 굴곡은 단순화했다.",
           }
         : selected?.place,
-    [selected?.place, selectedRiver],
+    [selected?.place, selectedShape, selectedLandform],
   );
   const mapPoints = useMemo(() => {
     const points: MapPoint[] = [];
     mapPlaces.forEach((item) => {
       const { place } = item;
-      const river = riversByPlace.get(place.id);
+      const river =
+        riversByPlace.get(place.id) || landformsByPlace.get(place.id);
       const coordinates =
         place.id === ATLAS_DOKDO_ID
           ? ATLAS_DOKDO_COORDINATES
@@ -642,6 +682,7 @@ export default function HistoryAtlas({
     selected?.place.id,
     overlayObstacle,
     riversByPlace,
+    landformsByPlace,
   ]);
   const minorDotsPath = useMemo(
     () =>
@@ -719,6 +760,20 @@ export default function HistoryAtlas({
       disposed = true;
     };
   }, [subject, bounds, geometryAttempt]);
+
+  useEffect(() => {
+    let disposed = false;
+    loadAtlasLandformGeometry()
+      .then((data) => {
+        if (!disposed) setLandformGeometry(data);
+      })
+      .catch(() => {
+        if (!disposed) setGeometryError(true);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [geometryAttempt]);
 
   useEffect(() => {
     resetMap();
@@ -839,8 +894,9 @@ export default function HistoryAtlas({
       (geometry?.subject !== subject || geometry.bounds !== bounds)
     )
       return;
-    const coordinates = selectedRiver
-      ? geoCentroid(selectedRiver)
+    if (selected.place.kind === "desert" && !landformGeometry) return;
+    const coordinates = selectedShape
+      ? geoCentroid(selectedShape)
       : selected.place.coordinates;
     if (!coordinates) {
       pendingFocusRef.current = null;
@@ -859,7 +915,7 @@ export default function HistoryAtlas({
     const contextExtent = atlasFocusExtent(
       selected.place,
       subject,
-      selectedRiver,
+      selectedShape,
     );
     const contextBounds = includeAtlasContextBounds(bounds, contextExtent);
     if (contextBounds !== bounds) {
@@ -873,7 +929,7 @@ export default function HistoryAtlas({
         {
           coordinates: coordinates as [number, number],
           contextBounds: contextExtent,
-          geometry: selectedRiver,
+          geometry: selectedShape,
         },
         {
           width: mapWidth,
@@ -898,7 +954,8 @@ export default function HistoryAtlas({
     mapHeight,
     availableMapHeight,
     updateTransform,
-    selectedRiver,
+    selectedShape,
+    landformGeometry,
     geometry,
     subject,
   ]);
@@ -1619,6 +1676,30 @@ export default function HistoryAtlas({
                 transform={transform}
                 selectedRiver={selectedRiverPath}
               />
+              {paths && (
+                <g
+                  transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}
+                >
+                  {landformPaths.map(({ placeId, path }) => (
+                    <path
+                      key={placeId}
+                      data-place-id={placeId}
+                      className={`history-atlas__landform${selected?.place.id === placeId ? " is-active" : ""}`}
+                      d={path}
+                      onClick={() => focusPlace(placeId)}
+                    />
+                  ))}
+                  {riverPaths.map(({ placeId, path }) => (
+                    <path
+                      key={placeId}
+                      data-place-id={placeId}
+                      className="history-atlas__river-hit"
+                      d={path}
+                      onClick={() => focusPlace(placeId)}
+                    />
+                  ))}
+                </g>
+              )}
               {paths && (
                 <path
                   className="history-atlas__minor-dots"

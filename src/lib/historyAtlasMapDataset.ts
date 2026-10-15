@@ -1,5 +1,8 @@
 import type { AtlasDataset, AtlasEntry, AtlasPlace } from "./historyAtlas";
-import { getAtlasHistoricalSummary } from "./historyAtlasStories";
+import {
+  getAtlasHistoricalSummary,
+  type AtlasHistoricalStory,
+} from "./historyAtlasStories";
 import {
   atlasMapContextLinks,
   atlasMapContextOnlyAliases,
@@ -9,6 +12,45 @@ import {
   atlasMapPlaceOverrides,
   atlasMapRelationEntryTargets,
 } from "../data/historyAtlasMapCuration";
+import {
+  atlasLandformPlaceOverrides,
+  atlasLandformLocationEvidence,
+} from "../data/historyAtlasLandformRestoration";
+import {
+  atlasKoreaRestoredPlaceOverrides,
+  atlasKoreaRestoredLocationEvidence,
+  atlasKoreaRestoredStoryRelations,
+} from "../data/historyAtlasKoreaRestoration";
+import {
+  atlasWorldAdditionalPlaceOverrides,
+  atlasWorldAdditionalLocationEvidence,
+} from "../data/historyAtlasWorldRestorationAdditional";
+
+const mapPlaceOverrides = {
+  ...atlasMapPlaceOverrides,
+  ...atlasLandformPlaceOverrides,
+  ...atlasKoreaRestoredPlaceOverrides,
+  ...atlasWorldAdditionalPlaceOverrides,
+};
+const mapLocationEvidence: Record<string, AtlasHistoricalStory["sources"]> = {
+  ...atlasMapLocationEvidence,
+  ...atlasLandformLocationEvidence,
+  ...atlasWorldAdditionalLocationEvidence,
+  ...Object.fromEntries(
+    Object.entries(atlasKoreaRestoredLocationEvidence).map(([id, evidence]) => [
+      id,
+      [
+        { title: evidence.title, url: evidence.url },
+        {
+          title: evidence.coordinateTitle || `${evidence.title} · 위치 근거`,
+          url: evidence.coordinateUrl,
+          license: evidence.license,
+          licenseUrl: evidence.licenseUrl,
+        },
+      ],
+    ]),
+  ),
+};
 
 export type AtlasMapExclusionReason =
   | "country-or-region"
@@ -54,7 +96,7 @@ export const buildAtlasMapDataset = (source: AtlasDataset) => {
   });
   const audit: AtlasMapPlaceAudit[] = [];
   const places = source.places.flatMap((original) => {
-    const place = { ...original, ...atlasMapPlaceOverrides[original.id] };
+    const place = { ...original, ...mapPlaceOverrides[original.id] };
     if (atlasMapContextOnlyAliases[place.id])
       place.aliases = place.aliases?.filter(
         (alias) => !atlasMapContextOnlyAliases[place.id].includes(alias),
@@ -115,6 +157,7 @@ export const buildAtlasMapDataset = (source: AtlasDataset) => {
     const related = [
       ...(originalStory.related || []),
       ...(atlasMapContextLinks[originalStory.id] || []),
+      ...(atlasKoreaRestoredStoryRelations[originalStory.id] || []),
     ].flatMap((originalLink) => {
       if (
         atlasMapExcludedRelationTargets[originalStory.id]?.includes(
@@ -144,10 +187,7 @@ export const buildAtlasMapDataset = (source: AtlasDataset) => {
       ).filter((id) => storyPlaceIds.includes(id));
       return fromPlaceIds.length ? [{ ...link, fromPlaceIds }] : [];
     });
-    const extraSources =
-      atlasMapLocationEvidence[
-        entry.placeId as keyof typeof atlasMapLocationEvidence
-      ] || [];
+    const extraSources = mapLocationEvidence[entry.placeId] || [];
     return {
       ...entry,
       relatedPlaceIds: entry.relatedPlaceIds?.filter(inSubject),

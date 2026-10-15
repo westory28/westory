@@ -267,8 +267,12 @@ for (const width of [286, 356, 640, 920]) {
     land: null,
     geography: null,
     selectedRiver: null,
+    selectedShape: null,
+    selectedLandform: null,
+    selectableGeography: [],
+    hitGeography: { current: () => undefined },
     grid: geography.geoGraticule10(),
-    nameOf: (item) => item.entry.displayName || item.place.name,
+    nameOf: (item) => item.place.name,
   };
   evaluate(sphere.draw, dependencies)();
   assert(drawnPoints.current.some((point) => point.item.place.id === dokdoId));

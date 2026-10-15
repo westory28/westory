@@ -28,6 +28,7 @@ export interface AtlasPlace {
     | "country"
     | "water"
     | "mountain"
+    | "desert"
     | "island";
   locationNote?: string;
 }

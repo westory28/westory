@@ -87,8 +87,10 @@ assert.equal(
 );
 assert.equal(new Set(audit.map((row) => row.placeId)).size, audit.length);
 assert(source.places.length >= 2500, "The full source ledger must survive");
-assert(dataset.places.length >= 100 && dataset.places.length < 500);
-assert(dataset.entries.length < source.entries.length / 2);
+// Map eligibility is evidence-based; there is no arbitrary place-count cap.
+assert(
+  dataset.places.length >= 100 && dataset.places.length <= source.places.length,
+);
 for (const place of dataset.places) {
   assert(finitePoint(place), `${place.id}: unclickable map place`);
   assert(place.locationNote?.trim(), `${place.id}: no coordinate provenance`);
@@ -450,6 +452,51 @@ for (const id of [
   "world-72e73261214b",
 ])
   assert(places.has(id), `Core historical place was lost: ${id}`);
+
+// Textbook restoration regressions: retain each identifiable capital/site,
+// without replacing it by the corresponding dynasty's territorial label.
+const balhaeCapitals = [
+  "sanggyeong",
+  "kr-8ced6b94e17d",
+  "kr-46ab0f59d5f6",
+  "kr-c27023f3c34a",
+  "kr-0a314eeac193",
+];
+for (const id of balhaeCapitals) {
+  assert(finitePoint(places.get(id)), `${id}: missing Balhae capital`);
+  assert(
+    getAtlasHistoryEntries(dataset, id, "korea").some((entry) =>
+      entry.eraIds.includes("k-balhae"),
+    ),
+  );
+}
+for (const id of [
+  "andong",
+  "hansando",
+  "kr-a34472ffacdf",
+  "kr-f8f6a36df2ea",
+  "kr-361994b9d007",
+]) {
+  assert(
+    finitePoint(places.get(id)),
+    `${id}: restored Korean place disappeared`,
+  );
+  assert(getAtlasHistoryEntries(dataset, id, "korea").length);
+}
+assert.equal(places.get("andong").name, "안동");
+for (const id of ["kr-fe954fbe1cc0", "world-9e21644b4935"]) {
+  assert.equal(places.get(id)?.kind, "desert");
+  assert(getAtlasHistoryEntries(dataset, id, "world").length);
+}
+assert(
+  matchesAtlasRegion(
+    places.get("kr-fe954fbe1cc0"),
+    "world",
+    "asia",
+    "asia-east",
+  ),
+);
+
 const provinces = ATLAS_KOREA_PROVINCES.map((province) => ({
   ...province,
   places: dataset.places
@@ -546,7 +593,7 @@ writeFileSync(
         `| ${province.title} | ${province.places.length} | ${province.places.join(", ") || "없음"} |`,
     ),
     "",
-    "낙동강처럼 두 지역에 걸친 곳은 중복 집계한다. 개성·벽란도는 기존 조선 팔도 분류에서 경기도에 속한다. 황해도 분류에는 좌표와 개별 역사 설명을 함께 충족하는 장소가 없어 0곳이며, 분류 수를 채우기 위한 추정 좌표나 사건을 만들지 않았다.",
+    "낙동강처럼 두 지역에 걸친 곳은 중복 집계한다. 개성·벽란도는 조선 팔도 분류에서 경기도에 속한다. 복원 장소의 등록 주소와 역사적 소재지를 대조한 지역 분류를 적용한다.",
     "",
     "## 위치 연결과 검증",
     "",
@@ -556,7 +603,7 @@ writeFileSync(
     "- 모든 entry·관련 연결의 실제 좌표, 과목 경계, 원본 불변, 잘못된 targetEntryId의 대체 선택 방지, 시설 재도입 방지, 평서형 문체를 자동 검사했다.",
     "- 선별된 설명과 시대가 맞지 않는 전주(후백제)→광주, 강화도조약→부산, 공산 전투→경주, 서경 천도 운동→개경, 강화 천도→개경 관계는 지도용 데이터에서 제외했다. 원본 관계는 보존하며, 제외한 이유가 정방향·역방향 연결에 다시 나타나지 않는지 전수 검사했다.",
     "- 철원의 고려 건국→송악은 919년 천도 이야기로, 인천상륙작전·부산 피란→서울은 6·25전쟁 피해 이야기로 정확히 연결했다.",
-    "- source 장부의 원래 지명·인용·미확정 위치 자료는 historyAtlasSourceDataset에 그대로 보존한다. 지도 밖 자료의 추가 좌표 검증은 이번 선별 범위에 포함하지 않는다.",
+    "- source 장부의 원래 지명·인용·미확정 위치 자료는 historyAtlasSourceDataset에 보존한다. 새로 검증한 유적·도시·지형의 좌표와 역사 설명은 Restoration 모듈에 별도 기록한다.",
     "",
     "출처: [국사편찬위원회 귀주대첩](https://contents.history.go.kr/mobile/kc/view.do?levelId=kc_i200400), [GeoNames 구성 정주지](https://www.geonames.org/1875107/kusong-si.html), [한국민족문화대백과사전 태봉](https://encykorea.aks.ac.kr/Article/E0058942).",
     "",
