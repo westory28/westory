@@ -585,11 +585,11 @@ export const grantHistoryClassroomExemptions = async (
     exemptionIds: string[];
   }>("grantHistoryClassroomExemptions", {
     semesterId: `${year}-${semester}`,
-    recipientUids: Array.from(new Set(input.recipientUids || [])),
-    classId: input.classId || "",
-    targetGrade: input.targetGrade || "",
-    targetClass: input.targetClass || "",
-    reason: input.reason,
+    recipientUids: Array.from(new Set(input.recipientUids || [])).sort(),
+    classId: (input.classId || "").trim(),
+    targetGrade: (input.targetGrade || "").trim(),
+    targetClass: (input.targetClass || "").trim(),
+    reason: input.reason.trim(),
   });
 };
 

@@ -195,7 +195,11 @@ export const executeAssessmentManagementCommand=async(commandType,payload)=>{
   await setDoc({path:key},{retryResetByStudentUid:{[payload.studentUid]:serverTimestamp()},updatedAt:serverTimestamp()},{merge:true});
   return {};
  }
- if(commandType==='grantHistoryClassroomExemptions') return {createdCount:payload.recipientUids.length,exemptionIds:payload.recipientUids.map(uid=>'exemption-'+uid)};
+ if(commandType==='grantHistoryClassroomExemptions') {
+  if(fixture.pauseGrant){fixture.pauseGrant=false;await new Promise(resolve=>fixture.releaseGrant=resolve);}
+  if(fixture.failNextGrant){fixture.failNextGrant=false;throw Object.assign(new Error('INTERNAL'),{code:'functions/internal'});}
+  return {createdCount:payload.recipientUids.length,exemptionIds:payload.recipientUids.map(uid=>'exemption-'+uid)};
+ }
  throw new Error('Unexpected command '+commandType);
 };
 export const executeStudentAssessmentCommand=async()=>{throw new Error('Student mutation is outside this teacher fixture');};
@@ -212,6 +216,7 @@ const bundle = await build({
     resolveDir: root,
   },
   bundle: true,
+  outfile: "fixture.js",
   write: false,
   format: "esm",
   platform: "browser",
@@ -242,6 +247,7 @@ const css = (
     ),
   )
 )
+  .concat(bundle.outputFiles.filter((file) => file.path.endsWith(".css")).map((file) => file.text))
   .join("\n")
   .replaceAll(/@import[^;]+;/g, "")
   .replaceAll(/@tailwind[^;]+;/g, "");
@@ -260,7 +266,7 @@ const server = http.createServer((req, res) => {
   );
   res.end(
     route === "/fixture.js"
-      ? bundle.outputFiles[0].text
+      ? bundle.outputFiles.find((file) => file.path.endsWith(".js")).text
       : route === "/tailwind.js"
         ? tailwind
         : route === "/worksheet.svg"
@@ -1096,6 +1102,19 @@ try {
     assert.equal(refreshed.data.blanks[0].left, created.data.blanks[0].left);
     assert.equal(refreshed.data.blanks[0].top, created.data.blanks[0].top);
 
+    await page.evaluate(() => {
+      for (let index = 1; index <= 30; index++) {
+        const suffix = String(index).padStart(2, "0");
+        window.__fixture.store[`users/class-grant-${suffix}`] = {
+          role: "student",
+          name: `학급검증${suffix}`,
+          grade: "3",
+          class: "2",
+          number: String(40 + index),
+        };
+      }
+      window.__remount();
+    });
     await page
       .getByRole("button", { name: "면제권 관리", exact: true })
       .click();
@@ -1108,6 +1127,10 @@ try {
     await page
       .getByRole("button", { name: "추가학생 제외", exact: true })
       .click();
+    await page
+      .getByRole("button", { name: "학급검증30 제외", exact: true })
+      .click();
+    await exemptionModal.getByText("부여 대상 32명 · 제외 2명", { exact: true }).waitFor();
     assert.equal(
       await page
         .getByRole("button", { name: "전출학생 제외", exact: true })
@@ -1123,23 +1146,46 @@ try {
     await exemptionModal
       .getByPlaceholder("예: 학교 행사, 공결, 상담 등")
       .fill("학급 활동 참여");
-    await exemptionModal
+    await page.evaluate(() => {
+      window.__fixture.pauseGrant = true;
+      window.__fixture.failNextGrant = true;
+    });
+    const grantButton = exemptionModal
       .getByRole("button", { name: "면제권 부여", exact: true })
-      .last()
-      .click();
+      .last();
+    // Dispatch both events in one turn, before React's disabled state commits.
+    await grantButton.evaluate((button) => {
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
     await page.waitForFunction(() =>
       window.__fixture.commands.some(
         (command) => command.commandType === "grantHistoryClassroomExemptions",
       ),
     );
+    assert.equal(
+      await page.evaluate(() => window.__fixture.commands.filter(command => command.commandType === "grantHistoryClassroomExemptions").length),
+      1,
+      "Repeated clicks issue one class grant while the first request is pending",
+    );
+    assert(await exemptionModal.getByRole("button", { name: "부여 중", exact: true }).isDisabled());
+    await page.evaluate(() => window.__fixture.releaseGrant());
+    await grantButton.waitFor();
+    assert.equal(await exemptionModal.getByPlaceholder("예: 학교 행사, 공결, 상담 등").inputValue(), "학급 활동 참여");
+    await exemptionModal.getByText("부여 대상 32명 · 제외 2명", { exact: true }).waitFor();
+    assert(alerts.includes("서버 처리 결과를 확인하지 못했습니다. 잠시 후 같은 내용으로 다시 시도해 주세요."));
+    const failedGrant = await page.evaluate(() => window.__fixture.commands.at(-1));
+    await grantButton.click();
+    await page.waitForFunction(() => window.__fixture.commands.filter(command => command.commandType === "grantHistoryClassroomExemptions").length === 2);
     const granted = await page.evaluate(() => window.__fixture.commands.at(-1));
+    assert.deepEqual(granted, failedGrant, "Explicit retry preserves the 32 recipients, exclusions, semester and reason");
     assert.equal(granted.payload.semesterId, "2026-2");
     assert.equal(granted.payload.classId, "3-2");
     assert.deepEqual(granted.payload.recipientUids, [
-      "student-1",
-      "student-2",
-      "student-3",
-    ]);
+      ...Array.from({ length: 29 }, (_, index) => `class-grant-${String(index + 1).padStart(2, "0")}`),
+      "student-1", "student-2", "student-3",
+    ].sort());
+    await page.waitForFunction(() => document.querySelector('textarea[placeholder="예: 학교 행사, 공결, 상담 등"]')?.value === "");
     await page.screenshot({
       path: path.join(evidence, `teacher-exemption-${viewport.width}.png`),
       fullPage: true,
@@ -1149,7 +1195,8 @@ try {
       alerts.every(
         (message) =>
           message === "역사교실 과제를 저장했습니다." ||
-          message === "3명에게 면제권을 부여했습니다.",
+          message === "32명에게 면제권을 부여했습니다." ||
+          message === "서버 처리 결과를 확인하지 못했습니다. 잠시 후 같은 내용으로 다시 시도해 주세요.",
       ),
       `unexpected alert: ${alerts.join(", ")}`,
     );

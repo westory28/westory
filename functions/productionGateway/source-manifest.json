@@ -241,8 +241,10 @@
       "sourceFile": "routineContentWrites.json",
       "file": "routineContentWrites.json",
       "originalSha256": "edb30ba0f1bd8014d6a85331c7e084dae0edb7289a010064be6515d4b3faea52",
-      "sha256": "edb30ba0f1bd8014d6a85331c7e084dae0edb7289a010064be6515d4b3faea52",
-      "changes": []
+      "sha256": "6ab371dbee78f4faced3bb72c612b0fa84caa009c9586328277c855988b5e656",
+      "changes": [
+        "2026-10-15: exemption grant/review/revoke use the existing routine teacher session policy; actor, semester and enrollment checks remain enforced."
+      ]
     },
     {
       "sourceFile": "schoolBanners.js",

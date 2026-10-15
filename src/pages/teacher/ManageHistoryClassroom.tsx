@@ -644,6 +644,13 @@ const getHistoryClassroomErrorMessage = (error: unknown, fallback: string) => {
     return "연결을 확인한 뒤 다시 시도해 주세요. 같은 요청은 중복 처리되지 않습니다.";
   }
   if (
+    ["functions/internal", "functions/unknown", "functions/cancelled"].includes(
+      code,
+    )
+  ) {
+    return "서버 처리 결과를 확인하지 못했습니다. 잠시 후 같은 내용으로 다시 시도해 주세요.";
+  }
+  if (
     [
       "functions/invalid-argument",
       "functions/failed-precondition",
@@ -978,6 +985,7 @@ const ManageHistoryClassroom: React.FC = () => {
   ] = useState<string[]>([]);
   const [exemptionReason, setExemptionReason] = useState("");
   const [grantingExemption, setGrantingExemption] = useState(false);
+  const grantingExemptionRef = React.useRef(false);
   const [revokingExemptionStudentKey, setRevokingExemptionStudentKey] =
     useState("");
   const [resettingGrantedExemptions, setResettingGrantedExemptions] =
@@ -2575,6 +2583,7 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const handleGrantExemptions = async () => {
+    if (grantingExemptionRef.current) return;
     const reason = exemptionReason.trim();
     const targetStudents =
       exemptionGrantMode === "class"
@@ -2602,6 +2611,7 @@ const ManageHistoryClassroom: React.FC = () => {
       return;
     }
 
+    grantingExemptionRef.current = true;
     setGrantingExemption(true);
     try {
       const result = await grantHistoryClassroomExemptions(config, {
@@ -2625,6 +2635,7 @@ const ManageHistoryClassroom: React.FC = () => {
         getHistoryClassroomErrorMessage(error, "면제권 부여에 실패했습니다."),
       );
     } finally {
+      grantingExemptionRef.current = false;
       setGrantingExemption(false);
     }
   };
