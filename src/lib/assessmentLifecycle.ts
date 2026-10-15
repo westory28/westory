@@ -85,7 +85,11 @@ const stableStringify = (value: unknown): string => {
 const pendingKey = (commandType: string, payload: unknown) =>
   `westory:w6a:${auth.currentUser?.uid || ""}:${commandType}:${stableStringify(payload)}`;
 
+const pendingCommandIds = new Map<string, string>();
+
 const readPendingCommandId = (key: string) => {
+  const remembered = pendingCommandIds.get(key);
+  if (remembered) return remembered;
   try {
     return window.sessionStorage.getItem(key) || "";
   } catch {
@@ -94,14 +98,16 @@ const readPendingCommandId = (key: string) => {
 };
 
 const rememberPendingCommandId = (key: string, commandId: string) => {
+  pendingCommandIds.set(key, commandId);
   try {
     window.sessionStorage.setItem(key, commandId);
   } catch {
-    // The in-flight call remains receipt protected even without browser storage.
+    // Explicit retries in this page retain their ID even if storage is blocked.
   }
 };
 
 const forgetPendingCommandId = (key: string) => {
+  pendingCommandIds.delete(key);
   try {
     window.sessionStorage.removeItem(key);
   } catch {
@@ -158,6 +164,19 @@ export const executeStudentAssessmentCommand = async <T>(
     await assertOwner();
     const response = await execute({ commandId, commandType, payload });
     await assertOwner();
+    if (
+      response.data?.status !== "SUCCEEDED" ||
+      response.data.commandId !== commandId ||
+      response.data.commandType !== commandType ||
+      response.data.result == null
+    ) {
+      throw Object.assign(
+        new Error(
+          "처리 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.",
+        ),
+        { code: "functions/unknown" },
+      );
+    }
     forgetPendingCommandId(key);
     if (commandType === "submitAssessmentAttempt" && response.data.replayed) {
       return { ...response.data.result, replayedSubmission: true };
@@ -170,13 +189,23 @@ export const executeStudentAssessmentCommand = async <T>(
     }
     const getStatus = await getHttpsCallable<
       { commandId: string; commandType: string },
-      { status: string; result: T | null }
+      {
+        commandId: string;
+        commandType: string;
+        status: string;
+        result: T | null;
+      }
     >("getCommandStatus");
     try {
       await assertOwner();
       const status = await getStatus({ commandId, commandType });
       await assertOwner();
-      if (status.data.status === "SUCCEEDED" && status.data.result) {
+      if (
+        status.data?.status === "SUCCEEDED" &&
+        status.data.commandId === commandId &&
+        status.data.commandType === commandType &&
+        status.data.result != null
+      ) {
         forgetPendingCommandId(key);
         if (commandType === "submitAssessmentAttempt") {
           return { ...status.data.result, replayedSubmission: true };
@@ -194,7 +223,14 @@ export const executeAssessmentManagementCommand = async <T>(
   commandType: string,
   payload: Record<string, unknown>,
 ): Promise<T> => {
-  await ensureSensitiveOperation();
+  // Match the server's routine classroom policy. These commands still verify
+  // the current session, teacher role, semester and enrollment on the server.
+  const routineExemptionCommand = [
+    "grantHistoryClassroomExemptions",
+    "revokeHistoryClassroomExemptions",
+    "reviewHistoryClassroomExemptionRequest",
+  ].includes(commandType);
+  if (!routineExemptionCommand) await ensureSensitiveOperation();
   return executeStudentAssessmentCommand<T>(commandType, payload);
 };
 

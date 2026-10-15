@@ -514,11 +514,11 @@ assert.ok(
 const grant = await grantHistoryClassroomExemptions(
   { year: "2031", semester: "2" },
   {
-    recipientUids: ["student-a", "student-b", "student-a"],
-    classId: "3-2",
-    targetGrade: "3",
-    targetClass: "2",
-    reason: "학급 활동",
+    recipientUids: ["student-b", "student-a", "student-a"],
+    classId: " 3-2 ",
+    targetGrade: " 3 ",
+    targetClass: " 2 ",
+    reason: " 학급 활동 ",
   },
 );
 assert.equal(grant.createdCount, 2);
@@ -537,6 +537,16 @@ assert.deepEqual(
     },
   },
   "Grant exact selected students through the receipt-protected canonical gateway",
+);
+const firstGrantPayload = commands.at(-1).payload;
+await grantHistoryClassroomExemptions(
+  { year: "2031", semester: "2" },
+  { ...firstGrantPayload, recipientUids: ["student-a", "student-b"] },
+);
+assert.deepEqual(
+  commands.at(-1).payload,
+  firstGrantPayload,
+  "Recipient ordering must not create a different retry identity",
 );
 await createHistoryClassroomExemptionRequest(
   { year: "2031", semester: "2" },

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolve, dirname } from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
@@ -176,6 +177,87 @@ assert(
 );
 assert(geoContains(land, [127, 37]), "Korean land retained");
 assert(!geoContains(land, [-140, 0]), "Pacific is not filled as land");
+const geographyAsset = readFileSync(
+  "src/data/atlas/globe-geography.json",
+  "utf8",
+);
+const geography = JSON.parse(geographyAsset);
+const geographySource = JSON.parse(
+  readFileSync("src/data/atlas/globe-geography-source.json", "utf8"),
+);
+assert.equal(
+  createHash("sha256").update(geographyAsset).digest("hex"),
+  geographySource.assetSha256,
+  "Geography matches its source manifest",
+);
+assert(
+  geographyAsset.length < 512 * 1024,
+  "Globe geography remains a bounded lazy asset",
+);
+assert.equal(geographySource.license, "Public domain");
+assert(
+  Object.values(geographySource.sources).every(
+    (source) =>
+      source.url.includes(geographySource.revision) &&
+      source.sha256.length === 64,
+  ),
+  "All source geometries have pinned revisions and hashes",
+);
+assert(
+  geography.borders.coordinates.length > 200,
+  "Modern country boundaries cover the globe",
+);
+assert(
+  geography.disputedBorders.coordinates.length > 0,
+  "Disputed and control lines remain separate from ordinary boundaries",
+);
+assert(
+  geography.rivers.coordinates.length > 100,
+  "Base waterways remain available without selecting a river",
+);
+assert(
+  geoContains(geography.deserts, [15, 24]),
+  "Sahara desert is in northern Africa",
+);
+assert(
+  geoContains(geography.deserts, [106, 43]),
+  "Gobi desert is in interior Asia",
+);
+assert(
+  !geoContains(geography.deserts, [-140, 0]),
+  "Desert winding does not fill the oceans",
+);
+for (const name of [
+  "북태평양",
+  "남태평양",
+  "북대서양",
+  "남대서양",
+  "인도양",
+  "사하라 사막",
+  "고비 사막",
+  "대한민국",
+  "동해",
+]) {
+  assert(
+    geography.labels.some((label) => label.name === name),
+    `${name} has a Korean geography label`,
+  );
+}
+assert(
+  geography.labels.find((label) => label.name === "남극해").coordinates[1] <
+    -60,
+  "Polar label stays in the Southern Ocean, not its off-polygon spherical centroid",
+);
+assert(
+  geography.labels.every(
+    (label) =>
+      /[가-힣]/u.test(label.name) &&
+      label.coordinates.every(Number.isFinite) &&
+      Math.abs(label.coordinates[0]) <= 180 &&
+      Math.abs(label.coordinates[1]) <= 90,
+  ),
+  "Every geographic label uses a Korean name and valid coordinates",
+);
 const { MENUS, sanitizeMenuConfig } = load("src/constants/menus.ts");
 for (const portal of ["student", "teacher"]) {
   const legacyUrl = "/" + portal + "/lesson/globe";
@@ -318,9 +400,7 @@ vm.runInNewContext(
     },
   },
 );
-const onOpenOriginals = () => {};
-const renderMaps = () =>
-  wrapperExports.default({ dataset: {}, onOpenOriginals });
+const renderMaps = () => wrapperExports.default({ dataset: {} });
 const contentOf = (element) =>
   element.type === React.Suspense ? element.props.children : element;
 const press = (element, label) =>
@@ -333,7 +413,7 @@ let rendered = renderMaps();
 assert.equal(lazyRegistrations, 1);
 assert.equal(rendered.type, Atlas, "Initial map never mounts the globe");
 assert.equal(rendered.props.initialSubject, "korea");
-assert.equal(rendered.props.onOpenOriginals, onOpenOriginals);
+assert.equal(rendered.props.onOpenOriginals, undefined);
 press(rendered, "세계사");
 rendered = renderMaps();
 assert.equal(rendered.props.initialSubject, "world");
@@ -347,7 +427,7 @@ assert.equal(
 );
 assert.equal(contentOf(rendered).type, Globe);
 assert.equal(contentOf(rendered).props.initialSubject, "world");
-assert.equal(contentOf(rendered).props.onOpenOriginals, onOpenOriginals);
+assert.equal(contentOf(rendered).props.onOpenOriginals, undefined);
 assert(
   rendered.props.fallback.props.children[0],
   "Tab navigation remains available during loading",
@@ -409,6 +489,23 @@ assert.equal(
   "Invalid view values have a safe default",
 );
 const appSource = readFileSync("src/App.tsx", "utf8");
+for (const wrapperPath of [
+  "src/pages/student/lesson/Maps.tsx",
+  "src/pages/teacher/ManageMaps.tsx",
+]) {
+  const portalWrapperSource = readFileSync(wrapperPath, "utf8");
+  assert(
+    !portalWrapperSource.includes("MapResources") &&
+      !portalWrapperSource.includes("onOpenOriginals"),
+    "Both map portals remove the retired original-resource entry",
+  );
+  assert(
+    portalWrapperSource.includes(
+      "<HistoryMaps dataset={historyAtlasDataset} />",
+    ),
+    "Both portals retain the shared atlas and globe navigation",
+  );
+}
 for (const portal of ["student", "teacher"]) {
   assert(
     appSource.includes(`to="/${portal}/lesson/maps?view=globe"`),

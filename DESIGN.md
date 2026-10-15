@@ -406,6 +406,10 @@ Optional help uses a circular 16px information glyph beside its heading or main 
 
 ### Atlas and globe revision (2026-10-15)
 
+- 지도 완성도 보완: 한국사·세계사 지도 안의 중복 과목 헤더를 없애고 지도 위에 44px 확대·축소 제어와 14px 배율(100% 기준)을 겹쳐 놓는다. 지도와 목록은 기존 16px 여백으로 분리하고 각각 12px 모서리·기본 border를 쓴다. 필터는 기존 border와 12px 내부 여백으로 구분한다. 모든 장소 목록은 표시되는 한국어 지명의 가나다순이다. 지도 영역 휠은 즉시 확대하되 설명·목록·제어 영역은 제외한다.
+- 한국사 점 선택은 약 3도×3도 주변을 확대하며, 강은 전체 물줄기를 포함한다. 선택점은 2400ms 주기로 28px 링 두 개가 1→1.8배로 퍼지고 0.65→0으로 사라진다. 선택 지명 배지는 같은 주기의 얕은 primary 테두리 강조를 사용한다. 숨김/화면 밖에서는 멈추고 동작 감소에서는 정지 표시한다.
+- 지구본 설명은 지도 내부 최대 320px 카드이며 좁은 화면에서는 16px 여백을 둔 하단 팝업으로 표시한다. 현대 국가 경계와 기본 하천은 Natural Earth 자료를 사용하고 역사적 국경과 구분한다. 사막은 기존 accent-soft/accent-text, 해양은 primary-text, 하천은 primary 역할을 재사용한다. 출처는 도움말에 유지한다. 기존 지도 자료로 이동하는 진입은 제거한다.
+
 - Shared student/teacher place details lead with a real place definition, then concise labeled geographic facts, the selected historical context, related names and collapsed sources. Keep body 16px/400, place title 20px/700, section label 14px/700, and existing 8/12/16/24px spacing. Period choices use 12px/500 text, 4px vertical and 8px horizontal padding, 28px minimum visible height and 4px gaps; group duplicate periods and initially show at most six choices. On coarse pointers use at least 36px height. This explicit compact-choice request supersedes the earlier 44px period-chip contract; other controls remain 44px.
 - Information marks use a 20px SVG viewbox with an inset circle and centered stem/dot, never a font glyph touching a border. Help content uses short labeled rows or lists separated by 8px, with a 14px body and a 320px maximum width bounded by the viewport.
 - A selected point uses a restrained primary-color halo with a 2400ms ease-in-out opacity/scale cycle (0.25–0.65 opacity, 1–1.45 scale), plus a 2px outline and always-visible name. Selected rivers use a 10px soft outer stroke and 3px solid inner stroke; animate only the outer opacity. Pause when hidden/offscreen; reduced motion keeps a static halo. No strobe or decorative whole-screen glow.

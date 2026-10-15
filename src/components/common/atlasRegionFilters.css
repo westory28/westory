@@ -21,3 +21,21 @@
 .atlas-region-filter__heading .ws-info-help {
   margin-block: -4px;
 }
+
+/* Borders remain distinct even when a responsive filter row wraps. */
+:is(.history-atlas__filters, .history-globe__filters)
+  > :is(label, .atlas-region-filter) {
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-left: 1px solid var(--ws-border, #e5e7eb);
+}
+
+@media (max-width: 767px) {
+  .history-globe__filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .history-globe__filters .history-globe__search {
+    grid-column: 1 / -1;
+  }
+}

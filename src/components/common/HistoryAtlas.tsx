@@ -50,7 +50,6 @@ import "./historyAtlas.css";
 
 interface HistoryAtlasProps {
   dataset: AtlasDataset;
-  onOpenOriginals?: () => void;
   toolbar?: ReactNode;
   initialSubject?: AtlasSubject;
   navigation?: ReactNode;
@@ -101,7 +100,7 @@ function AtlasHelp() {
             },
             {
               label: "확대·축소",
-              content: "+·− 버튼 · Ctrl/⌘+휠 · 두 손가락 벌리기",
+              content: "+·− 버튼 · 마우스 휠 · 두 손가락 벌리기",
             },
             {
               label: "키보드",
@@ -314,7 +313,6 @@ function placeLabelLayout(
 /** One local atlas renderer is shared by the teacher and student reading views. */
 export default function HistoryAtlas({
   dataset,
-  onOpenOriginals,
   toolbar,
   initialSubject = "korea",
   navigation,
@@ -447,12 +445,26 @@ export default function HistoryAtlas({
     () => searchEntries(scopeEntries, query),
     [scopeEntries, query],
   );
+  const firstPlace = useMemo(
+    () =>
+      entries.reduce<LocatedEntry | undefined>(
+        (first, item) =>
+          !first ||
+          entryName(item).localeCompare(entryName(first), "ko", {
+            numeric: true,
+          }) < 0
+            ? item
+            : first,
+        undefined,
+      ),
+    [entries],
+  );
   const selected =
-    entries.find(({ entry }) => entry.id === selectedId) || entries[0];
+    entries.find(({ entry }) => entry.id === selectedId) || firstPlace;
   const availableMapHeight =
     !wide && selected && compactOverlayTop !== null
       ? compactOverlayTop
-      : mapHeight;
+      : mapHeight - 80;
   const overlayWidth = Math.min(360, mapWidth - 32);
   const overlayMaxHeight = mapHeight - 32;
   const overlayObstacle = useMemo(
@@ -468,7 +480,9 @@ export default function HistoryAtlas({
       if (!result.has(item.place.id) || item.entry.id === selected?.entry.id)
         result.set(item.place.id, item);
     });
-    return Array.from(result.values());
+    return Array.from(result.values()).sort((a, b) =>
+      entryName(a).localeCompare(entryName(b), "ko", { numeric: true }),
+    );
   }, [entries, selected?.entry.id]);
   const pageCount = Math.max(1, Math.ceil(visiblePlaces.length / PAGE_SIZE));
   const currentPage = Math.min(listPage, pageCount - 1);
@@ -564,7 +578,6 @@ export default function HistoryAtlas({
         .join(""),
     [mapPoints],
   );
-
   const updateTransform = useCallback(
     (value: AtlasTransform, animate = false) => {
       setCameraMoving(animate);
@@ -779,6 +792,7 @@ export default function HistoryAtlas({
         {
           width: mapWidth,
           height: availableMapHeight,
+          mapHeight,
           overlayRight: overlayObstacle?.right,
         },
       ),
@@ -891,10 +905,12 @@ export default function HistoryAtlas({
         event.target.closest(".history-atlas__overlay")
       )
         return;
-      if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       const rect = node.getBoundingClientRect();
-      zoom(Math.exp(-event.deltaY * 0.003), [
+      const delta =
+        event.deltaY *
+        (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? mapHeight : 1);
+      zoom(Math.exp(-Math.max(-240, Math.min(240, delta)) * 0.003), [
         event.clientX - rect.left,
         event.clientY - rect.top,
       ]);
@@ -1154,18 +1170,7 @@ export default function HistoryAtlas({
           <h1>역사 지도</h1>
           <AtlasHelp />
         </div>
-        <div className="history-atlas__actions">
-          {toolbar}
-          {onOpenOriginals && (
-            <button
-              type="button"
-              className="history-atlas__button"
-              onClick={onOpenOriginals}
-            >
-              기존 지도 자료
-            </button>
-          )}
-        </div>
+        <div className="history-atlas__actions">{toolbar}</div>
       </div>
       {navigation ?? (
         <div
@@ -1247,6 +1252,7 @@ export default function HistoryAtlas({
             <input
               id={`${id}-search`}
               type="search"
+              aria-label="지명 검색"
               value={query}
               placeholder="지명 또는 옛 이름"
               onChange={(event) => changeQuery(event.target.value)}
@@ -1266,9 +1272,6 @@ export default function HistoryAtlas({
       <div className="history-atlas__workspace">
         <div className="history-atlas__map-column">
           <div className="history-atlas__map-toolbar">
-            <span className="history-atlas__map-period">
-              {selectedUnit?.period || ATLAS_SUBJECT_LABELS[subject]}
-            </span>
             {!wide && (
               <button
                 ref={placesButtonRef}
@@ -1293,20 +1296,29 @@ export default function HistoryAtlas({
               <button
                 type="button"
                 aria-label="지도 축소"
+                className="history-atlas__zoom-out"
                 disabled={transform.scale <= 0.5}
                 onClick={() => zoom(1 / 1.4)}
               >
                 −
               </button>
+              <output className="history-atlas__zoom" aria-label="지도 배율">
+                {Math.round(transform.scale * 100)}%
+              </output>
               <button
                 type="button"
                 aria-label="지도 확대"
+                className="history-atlas__zoom-in"
                 disabled={transform.scale >= ATLAS_MAX_ZOOM}
                 onClick={() => zoom(1.4)}
               >
                 +
               </button>
-              <button type="button" onClick={resetView}>
+              <button
+                className="history-atlas__reset"
+                type="button"
+                onClick={resetView}
+              >
                 전체 보기
               </button>
             </div>
@@ -1400,6 +1412,34 @@ export default function HistoryAtlas({
                 event.preventDefault();
                 event.stopPropagation();
                 movedRef.current = false;
+                return;
+              }
+              // A small dot may sit inside a nearby marker's 44px hit area.
+              // Resolve the closest visible point before that button handles it.
+              if (
+                event.detail === 0 ||
+                !(event.target instanceof Element) ||
+                event.target.closest(
+                  ".history-atlas__overlay, .history-atlas__selection-card, .history-atlas__reopen, .history-atlas__point-label, .history-atlas__attribution",
+                )
+              )
+                return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              const x = event.clientX - rect.left;
+              const y = event.clientY - rect.top;
+              let nearest: MapPoint | undefined;
+              let distance = 12;
+              for (const point of mapPoints) {
+                const nextDistance = Math.hypot(point.x - x, point.y - y);
+                if (nextDistance < distance) {
+                  nearest = point;
+                  distance = nextDistance;
+                }
+              }
+              if (nearest) {
+                event.preventDefault();
+                event.stopPropagation();
+                focusPlace(nearest.place.id);
               }
             }}
           >
@@ -1454,7 +1494,7 @@ export default function HistoryAtlas({
               width="100%"
               height="100%"
               viewBox={`0 0 ${mapWidth} ${mapHeight}`}
-              aria-hidden="true"
+              aria-label="지도에 표시된 장소"
             >
               <AtlasBackground
                 paths={paths}
@@ -1462,7 +1502,11 @@ export default function HistoryAtlas({
                 selectedRiver={selectedRiverPath}
               />
               {paths && (
-                <path className="history-atlas__minor-dots" d={minorDotsPath} />
+                <path
+                  className="history-atlas__minor-dots"
+                  d={minorDotsPath}
+                  aria-hidden="true"
+                />
               )}
             </svg>
             {paths &&
@@ -1490,8 +1534,11 @@ export default function HistoryAtlas({
                     style={{ left: point.x, top: point.y }}
                     aria-hidden="true"
                   >
-                    <span
+                    <button
+                      type="button"
+                      tabIndex={-1}
                       className="history-atlas__point-label"
+                      onClick={() => focusPlace(point.place.id)}
                       style={{
                         left: point.labelLeft,
                         top: point.labelTop,
@@ -1504,7 +1551,7 @@ export default function HistoryAtlas({
                       }}
                     >
                       {point.name}
-                    </span>
+                    </button>
                   </span>
                 ) : null,
               )}

@@ -1,8 +1,10 @@
-import type { AtlasPlace } from "./historyAtlas";
+import type { AtlasEntry, AtlasPlace } from "./historyAtlas";
 import {
   historyAtlasPlaceProfiles,
   type AtlasPlaceProfile,
 } from "../data/historyAtlasPlaceProfiles";
+import { historyAtlasReferenceDefinitions } from "../data/historyAtlasReferenceDefinitions";
+import { historyAtlasEncyclopediaDefinitions } from "../data/historyAtlasEncyclopediaDefinitions";
 
 export type {
   AtlasPlaceProfile,
@@ -21,6 +23,48 @@ const profilesByName = new Map(
     profile.names.map((name) => [normalizeName(name), profile] as const),
   ),
 );
+const referenceDefinitionsById = new Map(
+  historyAtlasReferenceDefinitions.map(([id, title, revision, definition]) => [
+    id,
+    {
+      definition,
+      facts: [],
+      sources: [
+        {
+          title: `위키백과 기여자 · ${title} (본문 발췌·요약)`,
+          url: `https://ko.wikipedia.org/w/index.php?oldid=${revision}`,
+          license: "CC BY-SA 4.0 · 변경: 발음 표기 생략·문장 요약",
+          licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/deed.ko",
+        },
+      ],
+      quality: "reference" as const,
+    },
+  ]),
+);
+const encyclopediaDefinitionsById = new Map<string, AtlasPlaceProfile>(
+  historyAtlasEncyclopediaDefinitions.map(
+    ([id, title, article, definition]) => [
+      id,
+      {
+        definition,
+        facts: [],
+        sources: [
+          {
+            title: `한국학중앙연구원 한국민족문화대백과사전 · ${title}`,
+            url: `https://encykorea.aks.ac.kr/Article/${article}`,
+          },
+        ],
+        quality: "reference",
+      },
+    ],
+  ),
+);
+
+/** Source captions belong in the citation disclosure, not in the explanation. */
+export const isAtlasSourceContext = (text: string): boolean =>
+  /(?:지도|교과서|자료|사진|본문|주석|단원).*(?:등장|표시|소개|제시)|(?:다루는|보여 주는|설명하는).*(?:지도|자료|사진)|지명으로 (?:표시|등장)/u.test(
+    text,
+  );
 
 export const getAtlasPlaceKindLabel = (place: AtlasPlace): string => {
   if (place.kind === "water") {
@@ -47,7 +91,10 @@ export const getAtlasPlaceKindLabel = (place: AtlasPlace): string => {
 /** Metadata-only fallback never turns an unverified pin into a modern address,
  * nor a search keyword (e.g. 자금성 on 베이징) into a place's identity.
  */
-export const getAtlasPlaceProfile = (place: AtlasPlace): AtlasPlaceProfile => {
+export const getAtlasPlaceProfile = (
+  place: AtlasPlace,
+  entries: AtlasEntry[] = [],
+): AtlasPlaceProfile => {
   const profile =
     profilesById.get(place.id) || profilesByName.get(normalizeName(place.name));
   if (profile) {
@@ -61,6 +108,25 @@ export const getAtlasPlaceProfile = (place: AtlasPlace): AtlasPlaceProfile => {
       quality: "verified",
     };
   }
+
+  const explainedEntry = entries.find(
+    (entry) =>
+      entry.placeId === place.id && !isAtlasSourceContext(entry.summary),
+  );
+  if (explainedEntry) {
+    return {
+      definition: explainedEntry.summary,
+      facts: [],
+      sources: [],
+      textbookCitations: explainedEntry.citations,
+      quality: "verified",
+    };
+  }
+
+  const referenceDefinition =
+    encyclopediaDefinitionsById.get(place.id) ||
+    referenceDefinitionsById.get(place.id);
+  if (referenceDefinition) return referenceDefinition;
 
   const kind = getAtlasPlaceKindLabel(place);
   const modernName = place.modernName?.trim();

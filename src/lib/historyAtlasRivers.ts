@@ -160,12 +160,12 @@ export function atlasFocusExtent(
   if (!point || !point.every(Number.isFinite)) return null;
   const korean =
     point[0] >= 123 && point[0] <= 132 && point[1] >= 32 && point[1] <= 44;
-  const minWidth = korean ? 9 : 18;
-  const minHeight = korean ? 10 : 14;
+  const minWidth = subject === "korea" ? 3 : 18;
+  const minHeight = subject === "korea" ? 3 : 14;
   const [[west, south], [east, north]] = river
     ? geoBounds(river)
     : [point, point];
-  if (korean) {
+  if (korean && subject !== "korea") {
     // Keep both Koreas visible even when the selected place is near an edge.
     return [
       Math.min(123.5, west - 0.5),

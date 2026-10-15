@@ -1,47 +1,12 @@
-import React, { Suspense, useState } from "react";
+import React from "react";
 import HistoryMaps from "../../../components/common/HistoryMaps";
-import { InlineLoading } from "../../../components/common/LoadingState";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import { historyAtlasDataset } from "../../../data/historyAtlasContent";
-import { lazyWithRetry } from "../../../lib/lazyWithRetry";
-
-const OriginalMapResources = lazyWithRetry(
-  () => import("./MapResources"),
-  "student-original-map-resources",
-);
 
 export default function StudentMaps() {
-  const [showOriginals, setShowOriginals] = useState(false);
   return (
-    <>
-      <div hidden={showOriginals}>
-        <PortalWorkspace
-          as="main"
-          className="history-atlas-page"
-          footerActive={!showOriginals}
-        >
-          <HistoryMaps
-            dataset={historyAtlasDataset}
-            onOpenOriginals={() => setShowOriginals(true)}
-          />
-        </PortalWorkspace>
-      </div>
-      {showOriginals && (
-        <>
-          <div className="history-atlas-return">
-            <button type="button" onClick={() => setShowOriginals(false)}>
-              <i className="fas fa-arrow-left" aria-hidden="true" /> 학습지도
-            </button>
-          </div>
-          <Suspense
-            fallback={
-              <InlineLoading message="원본 지도를 불러오는 중입니다." />
-            }
-          >
-            <OriginalMapResources />
-          </Suspense>
-        </>
-      )}
-    </>
+    <PortalWorkspace as="main" className="history-atlas-page">
+      <HistoryMaps dataset={historyAtlasDataset} />
+    </PortalWorkspace>
   );
 }
