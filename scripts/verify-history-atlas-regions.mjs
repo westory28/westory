@@ -217,7 +217,12 @@ for (const province of ATLAS_KOREA_PROVINCES) {
   const filtered = koreanEntries.filter((entry) =>
     matchesAtlasRegion(places.get(entry.placeId), "korea", province.id),
   );
-  assert(filtered.every((entry) => entry.citations.length));
+  assert(
+    filtered.every(
+      (entry) =>
+        entry.citations.length || entry.historicalStory?.sources.length,
+    ),
+  );
 }
 assert.equal(
   JSON.stringify(dataset),

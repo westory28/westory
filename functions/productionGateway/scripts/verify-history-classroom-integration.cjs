@@ -123,6 +123,49 @@ const probeGrant = async (payload, failedBatch = 0) => {
     title: "합성 역사교실", sourceId: "history-one", durationSeconds: 600, maxAttempts: 5, cooldownMinutes: 0, opensAt: "", closesAt: "", assignedClassIds: ["3-2"] });
   await execute(teacher, "transitionAssessmentDefinition", { definitionId, expectedRevision: created.result.definition.revision, targetStatus: "PUBLISHED", reason: "합성 검증" });
 
+  const authoredId = "history_classroom:2026-2:history-authored";
+  const authoredSource = { title: "조선의 건국", sourceType: "lesson", lessonUnitId: "unit-one", mapResourceId: "",
+    isPublished: true, targetStudentUids: students.slice(0, 2), targetStudentReasons: Object.fromEntries(students.slice(0, 2).map(uid => [uid, "지각"])),
+    blanks: Array.from({ length: 28 }, (_, index) => ({ id: `blank-${index + 1}`, answer: `정답 ${index + 1}` })),
+    timeLimitMinutes: 10, cooldownMinutes: 5, passThresholdPercent: 90, dueWindowDays: null, dueAt: null, publishedAt: "2026-10-15T00:00:00.000Z" };
+  const sourceSaveId = randomUUID();
+  const sourceSavePayload = { semesterId, sourceId: "history-authored", source: authoredSource, expectedRevision: 0, reason: "합성 신규 저장" };
+  await assert.rejects(executeAuthenticated(student(), "upsertHistoryClassroomSource", sourceSavePayload), expectCode("permission-denied"));
+  assert.equal(await get(`${root}/history_classrooms/history-authored`), undefined);
+  const authoredSave = await executeAuthenticated(teacher, "upsertHistoryClassroomSource", sourceSavePayload, sourceSaveId);
+  assert.equal(authoredSave.result.contentRevision, 1);
+  assert.equal((await authenticatedStatus(teacher, "upsertHistoryClassroomSource", sourceSaveId)).result.contentRevision, 1);
+  assert.equal((await executeAuthenticated(teacher, "upsertHistoryClassroomSource", sourceSavePayload, sourceSaveId)).replayed, true);
+  const authoredPayload = { definitionId: authoredId, semesterId, assessmentKind: "HISTORY_CLASSROOM", sourceId: "history-authored",
+    title: authoredSource.title, durationSeconds: 600, maxAttempts: 20, cooldownMinutes: 5, opensAt: "", closesAt: "", assignedClassIds: [], expectedSourceRevision: 1 };
+  await assert.rejects(executeAuthenticated(teacher, "createAssessmentDefinition", { ...authoredPayload, expectedSourceRevision: 0 }),
+    (error) => error.details?.reason === "ASSESSMENT_SOURCE_REVISION_CONFLICT");
+  assert.equal(await get(`semester_assessment_definitions/${authoredId}`), undefined);
+  await executeAuthenticated(teacher, "createAssessmentDefinition", authoredPayload);
+  await executeAuthenticated(teacher, "updateAssessmentDefinition", { ...authoredPayload, expectedRevision: 1, reason: "합성 설정 확인" });
+  await assert.rejects(executeAuthenticated(teacher, "transitionAssessmentDefinition", { definitionId: authoredId,
+    expectedRevision: 2, expectedSourceRevision: 0, targetStatus: "PUBLISHED", reason: "합성 충돌" }),
+    (error) => error.details?.reason === "ASSESSMENT_SOURCE_REVISION_CONFLICT");
+  assert.equal((await get(`semester_assessment_definitions/${authoredId}`)).status, "DRAFT");
+  await executeAuthenticated(teacher, "transitionAssessmentDefinition", { definitionId: authoredId,
+    expectedRevision: 2, expectedSourceRevision: 1, targetStatus: "PUBLISHED", reason: "합성 공개" });
+  const authoredDefinition = await get(`semester_assessment_definitions/${authoredId}`);
+  assert.equal(authoredDefinition.status, "PUBLISHED");
+  assert.equal(authoredDefinition.durationSeconds, 600);
+  assert.equal(authoredDefinition.cooldownMinutes, 5);
+  assert.equal(authoredDefinition.itemCount, 28);
+  assert.equal(authoredDefinition.closesAt, "");
+  assert.equal(authoredDefinition.sourceContentRevision, 1);
+  assert.equal("expectedSourceRevision" in authoredDefinition, false);
+  assert.deepEqual(authoredDefinition.assignedStudentUids, students.slice(0, 2));
+  assert.equal((await get(`${root}/history_classrooms/history-authored`)).passThresholdPercent, 90);
+  const authoredStart = await executeAuthenticated(student(), "startAssessmentAttempt", { definitionId: authoredId });
+  assert.equal((await get(`semester_assessment_attempts/${authoredStart.result.attemptId}`)).passThresholdPercent, 90);
+  assert.equal(authoredStart.result.questionIds.length, 28);
+  await assert.rejects(executeAuthenticated(student(students[2]), "startAssessmentAttempt", { definitionId: authoredId }),
+    (error) => error.details?.reason === "ASSESSMENT_STUDENT_NOT_ASSIGNED");
+  console.log("PASS actual callable source/create/update/publish/start: 10-minute-old teacher session, 28 blanks, 2 target students, 90% pass, 600 seconds, 5-minute retry, no due period; CAS/session/role guards retained");
+
   const grantId = randomUUID();
   const grantPayload = { semesterId, recipientUids: students.slice(0, 32), classId: "3-2", targetGrade: "3", targetClass: "2", reason: "합성 현장체험" };
   const singleProbe = await probeGrant({ ...grantPayload, recipientUids: [students[0]] });

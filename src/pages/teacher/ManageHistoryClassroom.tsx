@@ -1,4 +1,5 @@
 import NumericInput from "../../components/common/NumericInput";
+import "./ManageHistoryClassroom.css";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -157,6 +158,14 @@ type DashboardIconName =
   | "plus"
   | "refresh"
   | "trash"
+  | "close"
+  | "eye"
+  | "hidden"
+  | "ticket"
+  | "save"
+  | "clock"
+  | "chevronLeft"
+  | "chevronRight"
   | "chevronDown"
   | "chevronUp";
 
@@ -177,6 +186,39 @@ const DashboardIcon = ({
     strokeLinejoin: "round" as const,
     "aria-hidden": true,
   };
+
+  if (["close", "eye", "hidden", "ticket", "save", "clock"].includes(name)) {
+    return (
+      <svg {...commonProps}>
+        {name === "close" && <path d="m6 6 12 12M18 6 6 18" />}
+        {(name === "eye" || name === "hidden") && (
+          <>
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+            <circle cx="12" cy="12" r="3" />
+            {name === "hidden" && <path d="m3 3 18 18" />}
+          </>
+        )}
+        {name === "ticket" && (
+          <>
+            <path d="M3 5h18v5a2 2 0 0 0 0 4v5H3v-5a2 2 0 0 0 0-4Z" />
+            <path d="M15 5v3m0 3v2m0 3v3" />
+          </>
+        )}
+        {name === "save" && (
+          <>
+            <path d="M5 3h12l4 4v14H3V3Z" />
+            <path d="M7 3v6h10V3M7 21v-8h10v8" />
+          </>
+        )}
+        {name === "clock" && (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </>
+        )}
+      </svg>
+    );
+  }
 
   if (name === "calendar") {
     return (
@@ -272,7 +314,17 @@ const DashboardIcon = ({
   }
   return (
     <svg {...commonProps}>
-      <path d={name === "chevronUp" ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} />
+      <path
+        d={
+          name === "chevronLeft"
+            ? "m15 6-6 6 6 6"
+            : name === "chevronRight"
+              ? "m9 6 6 6-6 6"
+              : name === "chevronUp"
+                ? "m6 15 6-6 6 6"
+                : "m6 9 6 6 6-6"
+        }
+      />
     </svg>
   );
 };
@@ -637,6 +689,22 @@ const getFirestoreErrorSummary = (error: unknown) => ({
 
 const getHistoryClassroomErrorMessage = (error: unknown, fallback: string) => {
   const { code, message } = getFirestoreErrorSummary(error);
+  const failure = error as {
+    details?: { reason?: unknown };
+    customData?: { details?: { reason?: unknown } };
+  } | null;
+  const reason = String(
+    failure?.details?.reason || failure?.customData?.details?.reason || "",
+  );
+  if (
+    code === "functions/aborted" ||
+    [
+      "ASSESSMENT_SOURCE_REVISION_CONFLICT",
+      "ASSESSMENT_REVISION_CONFLICT",
+    ].includes(reason)
+  ) {
+    return "다른 변경이 먼저 반영되었습니다. 입력 내용을 보관한 뒤 최신 과제를 확인해 주세요.";
+  }
   if (code === "functions/unauthenticated") {
     return "로그인 상태를 확인한 뒤 다시 시도해 주세요.";
   }
@@ -874,7 +942,7 @@ const AssignmentReasonField: React.FC<{
 }> = ({ id, studentName, value, explicitOther, showError, onChange }) => {
   const other =
     explicitOther || (!!value && !ASSIGNMENT_REASONS.includes(value));
-  const invalid = showError && other && !value.trim();
+  const invalid = showError && !value.trim();
   return (
     <div className="space-y-2">
       <label className="block" htmlFor={id}>
@@ -885,6 +953,7 @@ const AssignmentReasonField: React.FC<{
           id={id}
           aria-label={`${studentName} 배정 사유`}
           value={other ? OTHER_ASSIGNMENT_REASON : value}
+          aria-invalid={invalid}
           onChange={(event) => {
             const nextOther = event.target.value === OTHER_ASSIGNMENT_REASON;
             onChange(
@@ -903,6 +972,11 @@ const AssignmentReasonField: React.FC<{
           <option value={OTHER_ASSIGNMENT_REASON}>기타</option>
         </select>
       </label>
+      {invalid && !other && (
+        <p role="alert" className="text-sm text-red-600">
+          배정 사유를 선택해 주세요.
+        </p>
+      )}
       {other && (
         <label className="block" htmlFor={`${id}-other`}>
           <span className="mb-1 block text-xs font-bold text-gray-500">
@@ -935,6 +1009,71 @@ const AssignmentReasonField: React.FC<{
     </div>
   );
 };
+
+const HistoryActionButton: React.FC<
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    icon: DashboardIconName;
+    label: string;
+  }
+> = ({ icon, label, className = "", children, ...props }) => (
+  <button
+    type="button"
+    {...props}
+    aria-label={props["aria-label"] || label}
+    title={props.title || label}
+    className={`history-action-button ${className}`}
+  >
+    <DashboardIcon name={icon} />
+    <span className="history-action-label">{label}</span>
+    {children}
+  </button>
+);
+
+const AssignedStudentRow: React.FC<{
+  student: StudentOption;
+  id: string;
+  reason: string;
+  invalid: boolean;
+  onReasonChange: (reason: string) => void;
+  onRemove: () => void;
+}> = ({ student, id, reason, invalid, onReasonChange, onRemove }) => (
+  <div>
+    <div className="history-student-row">
+      <div
+        className="history-student-info"
+        title={`${student.grade}-${student.className} ${student.number}번 ${student.name}`}
+      >
+        <span className="text-gray-500">
+          {student.grade}-{student.className} {student.number}번
+        </span>
+        <span className="history-student-name">{student.name}</span>
+      </div>
+      <input
+        id={`${id}-other`}
+        className="history-student-reason"
+        aria-label={`${student.name} 배정 사유`}
+        title={reason || "사유 미입력"}
+        list="history-assignment-reasons"
+        value={reason}
+        placeholder="사유 미입력"
+        aria-invalid={invalid}
+        aria-describedby={invalid ? `${id}-error` : undefined}
+        onChange={(event) => onReasonChange(event.target.value)}
+      />
+      <HistoryActionButton
+        icon="trash"
+        label={`${student.name} 배정 삭제`}
+        onClick={onRemove}
+        className="history-student-remove text-red-500 hover:bg-red-50 rounded-xl"
+      />
+    </div>
+    {invalid && (
+      <p id={`${id}-error`} role="alert" className="mt-1 text-sm text-red-600">
+        배정 사유를 입력해 주세요.
+      </p>
+    )}
+  </div>
+);
 
 const ManageHistoryClassroom: React.FC = () => {
   const { config, userData } = useAuth();
@@ -1022,11 +1161,21 @@ const ManageHistoryClassroom: React.FC = () => {
   const [blanks, setBlanks] = useState<HistoryClassroomBlank[]>([]);
   const [otherReasonUids, setOtherReasonUids] = useState<string[]>([]);
   const [showReasonErrors, setShowReasonErrors] = useState(false);
+  const [newStudentReason, setNewStudentReason] = useState("");
+  const [newStudentReasonOther, setNewStudentReasonOther] = useState(false);
+  const [newStudentReasonError, setNewStudentReasonError] = useState(false);
+  const [editingNewStudentReason, setEditingNewStudentReason] = useState("");
+  const [editingNewStudentReasonOther, setEditingNewStudentReasonOther] =
+    useState(false);
+  const [editingNewStudentReasonError, setEditingNewStudentReasonError] =
+    useState(false);
   const [editingOtherReasonUids, setEditingOtherReasonUids] = useState<
     string[]
   >([]);
   const [showEditingReasonErrors, setShowEditingReasonErrors] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = React.useRef(false);
+  const savingEditRef = React.useRef(false);
   const [selectedBlankId, setSelectedBlankId] = useState("");
   const [draftBlank, setDraftBlank] = useState<any>(null);
   const [draftBlankAnswer, setDraftBlankAnswer] = useState("");
@@ -2457,6 +2606,9 @@ const ManageHistoryClassroom: React.FC = () => {
     setStudentReasons({});
     setOtherReasonUids([]);
     setShowReasonErrors(false);
+    setNewStudentReason("");
+    setNewStudentReasonOther(false);
+    setNewStudentReasonError(false);
     setSelectedBlankId("");
     setDraftBlank(null);
     setDraftBlankAnswer("");
@@ -2900,6 +3052,9 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingStudentReasons(assignment.targetStudentReasons || {});
     setEditingOtherReasonUids([]);
     setShowEditingReasonErrors(false);
+    setEditingNewStudentReason("");
+    setEditingNewStudentReasonOther(false);
+    setEditingNewStudentReasonError(false);
     setEditingIsPublished(assignment.isPublished);
     setPreviewOpen(false);
   };
@@ -2942,6 +3097,9 @@ const ManageHistoryClassroom: React.FC = () => {
     setStudentReasons(assignment.targetStudentReasons || {});
     setOtherReasonUids([]);
     setShowReasonErrors(false);
+    setNewStudentReason("");
+    setNewStudentReasonOther(false);
+    setNewStudentReasonError(false);
     setBlanks(assignment.blanks);
     setSelectedBlankId("");
     setDraftBlank(null);
@@ -2982,6 +3140,9 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingStudentReasons({});
     setEditingOtherReasonUids([]);
     setShowEditingReasonErrors(false);
+    setEditingNewStudentReason("");
+    setEditingNewStudentReasonOther(false);
+    setEditingNewStudentReasonError(false);
     setEditingIsPublished(true);
     setSavingEdit(false);
     setDeletingAssignment(false);
@@ -3030,7 +3191,12 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const handleSaveAssignmentEdit = async () => {
-    if (resettingAttemptRef.current || refreshingEditingSource) return;
+    if (
+      savingEditRef.current ||
+      resettingAttemptRef.current ||
+      refreshingEditingSource
+    )
+      return;
     const targetAssignment = assignments.find(
       (assignment) => assignment.id === editingAssignmentId,
     );
@@ -3084,6 +3250,7 @@ const ManageHistoryClassroom: React.FC = () => {
       return;
     }
 
+    savingEditRef.current = true;
     setSavingEdit(true);
     try {
       const resolvedDueWindowDays =
@@ -3152,6 +3319,7 @@ const ManageHistoryClassroom: React.FC = () => {
         Number(targetAssignment.contentRevision || 0),
       );
       payload.contentRevision = saved.contentRevision;
+      Object.assign(payload, saved.publicationWindow);
       if (editingIsPublished && !targetAssignment.isPublished) {
         void createManagedNotifications(config, {
           recipientUids: updatedStudents.map((student) => student.uid),
@@ -3205,6 +3373,8 @@ const ManageHistoryClassroom: React.FC = () => {
       alert(
         getHistoryClassroomErrorMessage(error, "역사교실 수정에 실패했습니다."),
       );
+    } finally {
+      savingEditRef.current = false;
       setSavingEdit(false);
     }
   };
@@ -3340,6 +3510,7 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (savingRef.current) return;
     if (!selectedMap || !selectedStudentUids.length) {
       alert("자료와 대상 학생을 먼저 선택해 주세요.");
       return;
@@ -3380,6 +3551,7 @@ const ManageHistoryClassroom: React.FC = () => {
       return;
     }
 
+    savingRef.current = true;
     setSaving(true);
     let assignmentId = "";
     try {
@@ -3463,6 +3635,7 @@ const ManageHistoryClassroom: React.FC = () => {
         Number(existingAssignment?.contentRevision || 0),
       );
       payload.contentRevision = saved.contentRevision;
+      Object.assign(payload, saved.publicationWindow);
       if (nextIsPublished && !existingAssignment?.isPublished) {
         void createManagedNotifications(config, {
           recipientUids: selectedStudents.map((student) => student.uid),
@@ -3512,6 +3685,9 @@ const ManageHistoryClassroom: React.FC = () => {
       setStudentReasons({});
       setOtherReasonUids([]);
       setShowReasonErrors(false);
+      setNewStudentReason("");
+      setNewStudentReasonOther(false);
+      setNewStudentReasonError(false);
       setBlanks([]);
       setSelectedBlankId("");
       setDraftBlank(null);
@@ -3545,16 +3721,123 @@ const ManageHistoryClassroom: React.FC = () => {
         ...getFirestoreErrorSummary(error),
         error,
       });
-      alert("역사교실 과제 저장에 실패했습니다.");
+      alert(
+        getHistoryClassroomErrorMessage(
+          error,
+          "역사교실 과제 저장에 실패했습니다.",
+        ),
+      );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
+  const addAssignmentStudent = (uid: string, editing = false) => {
+    const reason = (
+      editing ? editingNewStudentReason : newStudentReason
+    ).trim();
+    if (!reason) {
+      (editing ? setEditingNewStudentReasonError : setNewStudentReasonError)(
+        true,
+      );
+      const prefix = editing
+        ? "history-edit-add-reason"
+        : "history-create-add-reason";
+      document.getElementById(prefix)?.focus();
+      return false;
+    }
+    if (editing) {
+      setEditingStudentUids((previous) =>
+        previous.includes(uid) ? previous : [...previous, uid],
+      );
+      setEditingStudentReasons((previous) => ({ ...previous, [uid]: reason }));
+      setEditingOtherReasonUids((previous) => [...new Set([...previous, uid])]);
+    } else {
+      setSelectedStudentUids((previous) =>
+        previous.includes(uid) ? previous : [...previous, uid],
+      );
+      setStudentReasons((previous) => ({ ...previous, [uid]: reason }));
+      setOtherReasonUids((previous) => [...new Set([...previous, uid])]);
+    }
+    return true;
+  };
+
+  const activeModalId = isCreateModalOpen
+    ? "history-create-dialog"
+    : editingAssignment
+      ? "history-edit-dialog"
+      : exemptionPanelOpen
+        ? "history-exemption-dialog"
+        : "";
+  const closeActiveModalRef = React.useRef<() => void>(() => {});
+  closeActiveModalRef.current = () => {
+    if (isCreateModalOpen) {
+      if (!savingRef.current) setIsCreateModalOpen(false);
+    } else if (editingAssignment) {
+      if (reviewResultId) setReviewResultId("");
+      else if (previewOpen) setPreviewOpen(false);
+      else if (!savingEditRef.current) closeAssignmentEditor();
+    } else if (!grantingExemptionRef.current) {
+      closeExemptionPanel();
+    }
+  };
+  useEffect(() => {
+    if (!activeModalId) return;
+    const modal = document.getElementById(activeModalId);
+    if (!modal) return;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    modal.focus({ preventScroll: true });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeActiveModalRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        modal.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) {
+        event.preventDefault();
+        modal.focus();
+      } else if (
+        event.shiftKey &&
+        (document.activeElement === first || document.activeElement === modal)
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    };
+  }, [activeModalId]);
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:py-8">
-      <section className="mb-5 px-1 py-2">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="history-classroom mx-auto max-w-7xl px-4 py-5 sm:py-8">
+      <datalist id="history-assignment-reasons">
+        {ASSIGNMENT_REASONS.map((reason) => (
+          <option key={reason} value={reason} />
+        ))}
+      </datalist>
+      <section className="history-dashboard mb-5 px-1 py-2">
+        <div className="history-heading flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
               <DashboardIcon name="calendar" className="h-6 w-6" />
@@ -3563,43 +3846,41 @@ const ManageHistoryClassroom: React.FC = () => {
               <h1 className="text-2xl font-black text-gray-900">
                 역사교실 제출 현황 대시보드
               </h1>
-              <p className="mt-2 text-sm leading-6 text-gray-600">
-                날짜별로 과제와 학생 제출 현황을 한눈에 확인하세요.
-              </p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <HistoryActionButton
+              icon="ticket"
+              label="면제권 관리"
               type="button"
               onClick={() => openExemptionPanel("grant")}
               className="inline-flex h-11 items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-100"
             >
-              면제권 관리
               {pendingExemptionRequestCount > 0 && (
                 <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-black text-white">
                   {pendingExemptionRequestCount}
                 </span>
               )}
-            </button>
+            </HistoryActionButton>
 
-            <button
+            <HistoryActionButton
+              icon="plus"
+              label="+ 새 역사교실"
               type="button"
               onClick={openCreateModal}
               className="h-11 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
-            >
-              + 새 역사교실
-            </button>
+            ></HistoryActionButton>
           </div>
         </div>
       </section>
 
-      <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-3 shadow-sm xl:p-3.5">
-        <div className="grid gap-2 md:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)_auto] md:items-center lg:grid-cols-[12.5rem_minmax(14rem,1fr)_auto_auto] xl:grid-cols-[15rem_minmax(12rem,18rem)_auto_auto] xl:justify-between xl:gap-2.5">
-          <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-700 xl:h-12 xl:px-4">
+      <section className="history-dashboard mb-5 rounded-3xl border border-gray-200 bg-white p-3 shadow-sm xl:p-3.5">
+        <div className="history-filters">
+          <div className="history-date-label flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-700 xl:h-12 xl:px-4">
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
             {dashboardDateRangeLabel}
           </div>
-          <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 md:col-span-2 lg:col-span-1 xl:h-12 xl:px-4">
+          <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 xl:h-12 xl:px-4">
             <input
               lang="ko"
               inputMode="text"
@@ -3610,7 +3891,7 @@ const ManageHistoryClassroom: React.FC = () => {
             />
             <DashboardIcon name="search" className="h-5 w-5 text-gray-400" />
           </div>
-          <div className="flex flex-nowrap gap-1.5 md:col-span-2 lg:col-span-1 xl:gap-2">
+          <div className="history-filter-actions">
             {[
               ["all", "전체"],
               ["published", "공개"],
@@ -3619,7 +3900,17 @@ const ManageHistoryClassroom: React.FC = () => {
               ["passed", "통과"],
             ].map(([value, label]) => (
               <React.Fragment key={value}>
-                <button
+                <HistoryActionButton
+                  icon={
+                    {
+                      all: "clipboard",
+                      published: "eye",
+                      private: "hidden",
+                      pending: "clock",
+                      passed: "check",
+                    }[value] as DashboardIconName
+                  }
+                  label={String(label)}
                   type="button"
                   onClick={() =>
                     setDashboardStatusFilter(value as DashboardStatusFilter)
@@ -3633,9 +3924,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           ? "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
                           : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                   }`}
-                >
-                  {label}
-                </button>
+                ></HistoryActionButton>
                 {value === "all" && (
                   <button
                     type="button"
@@ -3645,7 +3934,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     disabled={refreshingDashboard}
                     aria-label="새로고침"
                     title="새로고침"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 xl:h-10 xl:w-10"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <DashboardIcon
                       name="refresh"
@@ -3656,7 +3945,7 @@ const ManageHistoryClassroom: React.FC = () => {
               </React.Fragment>
             ))}
           </div>
-          <label className="flex h-11 items-center gap-2 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-600 xl:h-12 xl:gap-3 xl:px-4">
+          <label className="history-sort-label flex h-11 items-center gap-2 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-600 xl:h-12 xl:gap-3 xl:px-4">
             정렬 기준
             <select
               value={dashboardSortOrder}
@@ -3697,15 +3986,17 @@ const ManageHistoryClassroom: React.FC = () => {
             <span className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
               부여 기록 {activeExemptionCount}건
             </span>
-            <button
+            <HistoryActionButton
+              icon="refresh"
+              label={loadingExemptions ? "새로고침 중" : "새로고침"}
               type="button"
               onClick={() => void loadExemptionData()}
               disabled={loadingExemptions}
               className="h-10 rounded-2xl border border-gray-200 bg-white px-4 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              {loadingExemptions ? "새로고침 중" : "새로고침"}
-            </button>
-            <button
+            ></HistoryActionButton>
+            <HistoryActionButton
+              icon="ticket"
+              label={exemptionPanelOpen ? "패널 닫기" : "면제권 관리 열기"}
               type="button"
               onClick={() =>
                 exemptionPanelOpen
@@ -3713,9 +4004,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   : setExemptionPanelOpen(true)
               }
               className="h-10 rounded-2xl bg-blue-600 px-4 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              {exemptionPanelOpen ? "패널 닫기" : "면제권 관리 열기"}
-            </button>
+            ></HistoryActionButton>
           </div>
         </div>
 
@@ -3727,7 +4016,9 @@ const ManageHistoryClassroom: React.FC = () => {
                   ["students", "학생별 부여"],
                   ["class", "학급 단위 부여"],
                 ].map(([value, label]) => (
-                  <button
+                  <HistoryActionButton
+                    icon={value === "class" ? "users" : "plus"}
+                    label={String(label)}
                     key={value}
                     type="button"
                     onClick={() =>
@@ -3738,9 +4029,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         ? "border-blue-600 bg-blue-600 text-white"
                         : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                     }`}
-                  >
-                    {label}
-                  </button>
+                  ></HistoryActionButton>
                 ))}
               </div>
 
@@ -3871,14 +4160,14 @@ const ManageHistoryClassroom: React.FC = () => {
                   className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                 />
               </label>
-              <button
+              <HistoryActionButton
+                icon="ticket"
+                label={grantingExemption ? "부여 중" : "면제권 부여"}
                 type="button"
                 onClick={() => void handleGrantExemptions()}
                 disabled={grantingExemption}
                 className="mt-3 h-11 w-full rounded-2xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {grantingExemption ? "부여 중" : "면제권 부여"}
-              </button>
+              ></HistoryActionButton>
             </div>
 
             <div className="space-y-4">
@@ -3934,7 +4223,9 @@ const ManageHistoryClassroom: React.FC = () => {
                         )}
                         {isPending ? (
                           <div className="mt-3 flex flex-wrap justify-end gap-2">
-                            <button
+                            <HistoryActionButton
+                              icon="close"
+                              label="반려"
                               type="button"
                               onClick={() =>
                                 void handleReviewExemptionRequest(
@@ -3946,10 +4237,10 @@ const ManageHistoryClassroom: React.FC = () => {
                                 reviewingExemptionRequestId === request.id
                               }
                               className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                            >
-                              반려
-                            </button>
-                            <button
+                            ></HistoryActionButton>
+                            <HistoryActionButton
+                              icon="check"
+                              label="승인"
                               type="button"
                               onClick={() =>
                                 void handleReviewExemptionRequest(
@@ -3961,9 +4252,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 reviewingExemptionRequestId === request.id
                               }
                               className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                            >
-                              승인
-                            </button>
+                            ></HistoryActionButton>
                           </div>
                         ) : (
                           <div className="mt-2 text-xs font-semibold text-gray-400">
@@ -4034,7 +4323,7 @@ const ManageHistoryClassroom: React.FC = () => {
       </section>
 
       <section
-        className={`relative space-y-8 ${
+        className={`history-dashboard relative space-y-8 ${
           pagedAssignmentGroups.length
             ? "before:pointer-events-none before:absolute before:bottom-0 before:left-1.5 before:top-2 before:w-px before:bg-gray-200"
             : ""
@@ -4043,9 +4332,9 @@ const ManageHistoryClassroom: React.FC = () => {
         {pagedAssignmentGroups.map((group) => (
           <div
             key={group.dateKey}
-            className="relative flex w-full flex-col gap-3 lg:flex-row lg:items-start"
+            className="history-timeline-group relative flex w-full flex-col gap-3 lg:flex-row lg:items-start"
           >
-            <div className="relative w-full shrink-0 pl-5 lg:w-32 lg:pl-0">
+            <div className="history-timeline-date relative w-full shrink-0 pl-5 lg:w-32 lg:pl-0">
               <div className="relative z-10">
                 <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
                 <div className="ml-6">
@@ -4071,7 +4360,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       )
                     }
                   >
-                    <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start">
+                    <div className="history-card-heading flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="min-w-0 break-keep text-lg font-black leading-tight text-gray-900">
@@ -4099,7 +4388,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           · 재도전 제한 {row.assignment.cooldownMinutes}분
                         </div>
                       </div>
-                      <div className="-mr-1 flex max-w-full flex-nowrap items-center justify-start gap-1.5 overflow-x-auto pb-1 pr-1 lg:max-w-none lg:shrink-0 lg:justify-end lg:overflow-visible lg:pb-0 lg:pr-0">
+                      <div className="history-card-status -mr-1 flex max-w-full flex-nowrap items-center justify-start gap-1.5 overflow-x-auto pb-1 pr-1 lg:max-w-none lg:shrink-0 lg:justify-end lg:overflow-visible lg:pb-0 lg:pr-0">
                         {[
                           [
                             "통과",
@@ -4251,16 +4540,16 @@ const ManageHistoryClassroom: React.FC = () => {
               {assignmentPage} / {totalAssignmentPages}페이지
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <HistoryActionButton
+                icon="chevronLeft"
+                label="이전"
                 type="button"
                 onClick={() =>
                   setAssignmentPage((current) => Math.max(1, current - 1))
                 }
                 disabled={assignmentPage <= 1}
                 className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                이전
-              </button>
+              ></HistoryActionButton>
               {Array.from(
                 { length: totalAssignmentPages },
                 (_, index) => index + 1,
@@ -4278,7 +4567,9 @@ const ManageHistoryClassroom: React.FC = () => {
                   {page}
                 </button>
               ))}
-              <button
+              <HistoryActionButton
+                icon="chevronRight"
+                label="다음"
                 type="button"
                 onClick={() =>
                   setAssignmentPage((current) =>
@@ -4287,18 +4578,22 @@ const ManageHistoryClassroom: React.FC = () => {
                 }
                 disabled={assignmentPage >= totalAssignmentPages}
                 className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                다음
-              </button>
+              ></HistoryActionButton>
             </div>
           </div>
         )}
       </section>
-
       {exemptionPanelOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-3 py-5 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-[min(96vw,72rem)] overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <aside className="hidden w-56 shrink-0 border-r border-slate-200 bg-slate-50 p-4 md:block">
+          <div
+            id="history-exemption-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-exemption-title"
+            tabIndex={-1}
+            className="history-modal flex max-h-[92vh] w-full max-w-[min(96vw,72rem)] overflow-hidden rounded-3xl bg-white shadow-2xl"
+          >
+            <aside className="history-exemption-sidebar hidden w-56 shrink-0 border-r border-slate-200 bg-slate-50 p-4 md:block">
               <div className="mb-4 px-2">
                 <div className="text-xs font-black uppercase tracking-[0.18em] text-blue-500">
                   Exemption
@@ -4340,33 +4635,36 @@ const ManageHistoryClassroom: React.FC = () => {
               ))}
             </aside>
 
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="history-exemption-content flex min-w-0 flex-1 flex-col">
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900">
+                  <h2
+                    id="history-exemption-title"
+                    className="text-xl font-black text-slate-900"
+                  >
                     면제권 관리
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
+                  <HistoryActionButton
+                    icon="refresh"
+                    label={loadingExemptions ? "새로고침 중" : "새로고침"}
                     type="button"
                     onClick={() => void loadExemptionData()}
                     disabled={loadingExemptions}
                     className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    {loadingExemptions ? "새로고침 중" : "새로고침"}
-                  </button>
-                  <button
+                  ></HistoryActionButton>
+                  <HistoryActionButton
+                    icon="close"
+                    label="닫기"
                     type="button"
                     onClick={closeExemptionPanel}
                     className="h-10 rounded-xl bg-blue-600 px-4 text-xs font-black text-white hover:bg-blue-700"
-                  >
-                    닫기
-                  </button>
+                  ></HistoryActionButton>
                 </div>
               </div>
 
-              <div className="flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-3 md:hidden">
+              <div className="history-exemption-tabs flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-3 md:hidden">
                 {[
                   ["grant", "면제권 부여"],
                   [
@@ -4375,7 +4673,15 @@ const ManageHistoryClassroom: React.FC = () => {
                   ],
                   ["granted", `부여된 면제권 ${activeExemptionCount}`],
                 ].map(([value, label]) => (
-                  <button
+                  <HistoryActionButton
+                    icon={
+                      value === "grant"
+                        ? "plus"
+                        : value === "requests"
+                          ? "clipboard"
+                          : "ticket"
+                    }
+                    label={String(label)}
                     key={value}
                     type="button"
                     onClick={() =>
@@ -4386,13 +4692,11 @@ const ManageHistoryClassroom: React.FC = () => {
                         ? "bg-blue-600 text-white"
                         : "border border-slate-200 bg-white text-slate-700"
                     }`}
-                  >
-                    {label}
-                  </button>
+                  ></HistoryActionButton>
                 ))}
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto bg-white p-5">
+              <div className="history-modal-padding min-h-0 flex-1 overflow-y-auto bg-white p-5">
                 {exemptionLoadError && (
                   <div
                     role="alert"
@@ -4408,7 +4712,9 @@ const ManageHistoryClassroom: React.FC = () => {
                         ["students", "학생별 부여"],
                         ["class", "학급 단위 부여"],
                       ].map(([value, label]) => (
-                        <button
+                        <HistoryActionButton
+                          icon={value === "class" ? "users" : "plus"}
+                          label={String(label)}
                           key={value}
                           type="button"
                           onClick={() =>
@@ -4419,9 +4725,7 @@ const ManageHistoryClassroom: React.FC = () => {
                               ? "border-blue-600 bg-blue-600 text-white"
                               : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                           }`}
-                        >
-                          {label}
-                        </button>
+                        ></HistoryActionButton>
                       ))}
                     </div>
 
@@ -4618,14 +4922,14 @@ const ManageHistoryClassroom: React.FC = () => {
                         className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                       />
                     </label>
-                    <button
+                    <HistoryActionButton
+                      icon="ticket"
+                      label={grantingExemption ? "부여 중" : "면제권 부여"}
                       type="button"
                       onClick={() => void handleGrantExemptions()}
                       disabled={grantingExemption}
                       className="mt-3 h-11 w-full rounded-2xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {grantingExemption ? "부여 중" : "면제권 부여"}
-                    </button>
+                    ></HistoryActionButton>
                   </div>
                 )}
 
@@ -4708,7 +5012,9 @@ const ManageHistoryClassroom: React.FC = () => {
                               <div className="flex items-center justify-end gap-1.5">
                                 {isPending ? (
                                   <>
-                                    <button
+                                    <HistoryActionButton
+                                      icon="close"
+                                      label="반려"
                                       type="button"
                                       onClick={() =>
                                         void handleReviewExemptionRequest(
@@ -4718,10 +5024,10 @@ const ManageHistoryClassroom: React.FC = () => {
                                       }
                                       disabled={reviewing}
                                       className="h-8 rounded-lg border border-rose-200 bg-white px-2.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                                    >
-                                      반려
-                                    </button>
-                                    <button
+                                    ></HistoryActionButton>
+                                    <HistoryActionButton
+                                      icon="check"
+                                      label="승인"
                                       type="button"
                                       onClick={() =>
                                         void handleReviewExemptionRequest(
@@ -4731,9 +5037,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                       }
                                       disabled={reviewing}
                                       className="h-8 rounded-lg bg-blue-600 px-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                                    >
-                                      승인
-                                    </button>
+                                    ></HistoryActionButton>
                                   </>
                                 ) : (
                                   <span className="truncate text-[11px] font-semibold text-slate-400">
@@ -4810,7 +5114,9 @@ const ManageHistoryClassroom: React.FC = () => {
                           placeholder="학생 이름 검색"
                           className="h-9 w-36 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                         />
-                        <button
+                        <HistoryActionButton
+                          icon="trash"
+                          label="초기화"
                           type="button"
                           onClick={() => void handleResetGrantedExemptions()}
                           disabled={
@@ -4819,9 +5125,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           }
                           className="h-8 rounded-full border border-rose-100 bg-rose-50 px-3 text-xs font-black text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-100 disabled:text-slate-400"
                           title={`보유 면제권 ${resettableGrantedExemptionIds.length}개 회수`}
-                        >
-                          초기화
-                        </button>
+                        ></HistoryActionButton>
                       </div>
                       <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
                         총 {activeExemptionCount}개 · 표시{" "}
@@ -4996,29 +5300,39 @@ const ManageHistoryClassroom: React.FC = () => {
 
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-3 py-5 backdrop-blur-sm">
-          <div className="flex max-h-[94vh] w-full max-w-[min(96vw,96rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+          <div
+            id="history-create-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-create-title"
+            tabIndex={-1}
+            className="history-modal flex max-h-[94vh] w-full max-w-[min(96vw,96rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+          >
+            <div className="history-modal-header flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-500">
                   New History Classroom
                 </div>
-                <h2 className="mt-1 text-xl font-black text-gray-900">
+                <h2
+                  id="history-create-title"
+                  className="mt-1 text-xl font-black text-gray-900"
+                >
                   {worksheetEditingAssignmentId
                     ? "역사교실 자료 수정"
                     : "새 역사교실 등록"}
                 </h2>
               </div>
-              <button
+              <HistoryActionButton
+                icon="close"
+                label="닫기"
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
                 className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-              >
-                닫기
-              </button>
+              ></HistoryActionButton>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 p-4">
               <div className="mx-auto max-w-6xl space-y-4">
-                <section className="grid gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
+                <section className="history-create-grid grid gap-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
                   <div className="min-w-0 md:col-span-2 xl:col-span-2">
                     <HistoryClassroomSourceSelect
                       id="history-create-source"
@@ -5043,7 +5357,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     />
                   </div>
 
-                  <div className="grid gap-3 md:col-span-2 md:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
+                  <div className="history-number-fields grid gap-3 md:col-span-2 md:grid-cols-2 xl:col-span-2 xl:grid-cols-4">
                     <div>
                       <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                         제한 시간(분)
@@ -5112,7 +5426,19 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
 
                   <div className="space-y-3 md:col-span-2 xl:col-span-2">
-                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(5.75rem,1.2fr)] gap-2 lg:grid-cols-4 lg:gap-3">
+                    <AssignmentReasonField
+                      id="history-create-add-reason"
+                      studentName="추가할 학생"
+                      value={newStudentReason}
+                      explicitOther={newStudentReasonOther}
+                      showError={newStudentReasonError}
+                      onChange={(value, other) => {
+                        setNewStudentReason(value);
+                        setNewStudentReasonOther(other);
+                        setNewStudentReasonError(false);
+                      }}
+                    />
+                    <div className="history-student-picker grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(5.75rem,1.2fr)] gap-2 lg:grid-cols-4 lg:gap-3">
                       <select
                         aria-label="대상 학년"
                         value={targetGrade}
@@ -5196,15 +5522,12 @@ const ManageHistoryClassroom: React.FC = () => {
                                   key={student.uid}
                                   type="button"
                                   onClick={() => {
+                                    if (!addAssignmentStudent(student.uid))
+                                      return;
                                     setTargetGrade(student.grade || "");
                                     setTargetClass(student.className || "");
                                     setTargetNumber(student.number || "");
                                     setTargetStudentUid(student.uid);
-                                    setSelectedStudentUids((prev) =>
-                                      prev.includes(student.uid)
-                                        ? prev
-                                        : [...prev, student.uid],
-                                    );
                                     setTargetStudentSearch("");
                                   }}
                                   className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-blue-50"
@@ -5248,7 +5571,9 @@ const ManageHistoryClassroom: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                    <button
+                    <HistoryActionButton
+                      icon="plus"
+                      label="학생 추가"
                       type="button"
                       onClick={() => {
                         if (
@@ -5256,10 +5581,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           selectedStudentUids.includes(targetStudentUid)
                         )
                           return;
-                        setSelectedStudentUids((prev) => [
-                          ...prev,
-                          targetStudentUid,
-                        ]);
+                        if (!addAssignmentStudent(targetStudentUid)) return;
                         setTargetStudentUid("");
                         setTargetStudentSearch("");
                       }}
@@ -5268,9 +5590,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         selectedStudentUids.includes(targetStudentUid)
                       }
                       className="h-11 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      학생 추가
-                    </button>
+                    ></HistoryActionButton>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 bg-white p-3 md:col-span-2 xl:col-span-2">
@@ -5284,56 +5604,35 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
                     <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                       {selectedStudents.map((student) => (
-                        <div
+                        <AssignedStudentRow
                           key={student.uid}
-                          className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
-                        >
-                          <div className="mb-2 flex items-center justify-between gap-3">
-                            <div className="min-w-0 text-sm font-bold text-gray-900">
-                              <span className="mr-2 rounded-full bg-white px-2 py-1 text-[11px] text-gray-600">
-                                {student.grade}-{student.className}{" "}
-                                {student.number}번
-                              </span>
-                              {student.name}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSelectedStudentUids((prev) =>
-                                  prev.filter((uid) => uid !== student.uid),
-                                )
-                              }
-                              className="shrink-0 text-[11px] font-bold text-red-500"
-                            >
-                              삭제
-                            </button>
-                          </div>
-                          <AssignmentReasonField
-                            id={`history-create-reason-${student.uid}`}
-                            studentName={student.name}
-                            value={studentReasons[student.uid] || ""}
-                            explicitOther={otherReasonUids.includes(
-                              student.uid,
-                            )}
-                            showError={showReasonErrors}
-                            onChange={(reason, other) => {
-                              setStudentReasons((prev) => ({
-                                ...prev,
-                                [student.uid]: reason,
-                              }));
-                              setOtherReasonUids((prev) =>
-                                other
-                                  ? [...new Set([...prev, student.uid])]
-                                  : prev.filter((uid) => uid !== student.uid),
-                              );
-                            }}
-                          />
-                        </div>
+                          student={student}
+                          id={`history-create-reason-${student.uid}`}
+                          reason={studentReasons[student.uid] || ""}
+                          invalid={
+                            showReasonErrors &&
+                            otherReasonUids.includes(student.uid) &&
+                            !String(studentReasons[student.uid] || "").trim()
+                          }
+                          onReasonChange={(reason) => {
+                            setStudentReasons((prev) => ({
+                              ...prev,
+                              [student.uid]: reason,
+                            }));
+                            setOtherReasonUids((prev) => [
+                              ...new Set([...prev, student.uid]),
+                            ]);
+                          }}
+                          onRemove={() =>
+                            setSelectedStudentUids((prev) =>
+                              prev.filter((uid) => uid !== student.uid),
+                            )
+                          }
+                        />
                       ))}
                       {!selectedStudents.length && (
                         <div className="text-sm text-gray-400">
-                          학생을 선택해서 추가하면 여기에 반별로 묶여
-                          표시됩니다.
+                          배정 학생이 없습니다.
                         </div>
                       )}
                     </div>
@@ -5399,16 +5698,16 @@ const ManageHistoryClassroom: React.FC = () => {
                               <span>
                                 빈칸 {index + 1} / p.{blank.page}
                               </span>
-                              <button
+                              <HistoryActionButton
+                                icon="trash"
+                                label="삭제"
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   removeBlank(blank.id);
                                 }}
                                 className="text-red-500"
-                              >
-                                삭제
-                              </button>
+                              ></HistoryActionButton>
                             </div>
                             <input
                               lang="ko"
@@ -5437,7 +5736,9 @@ const ManageHistoryClassroom: React.FC = () => {
 
                   <div className="flex flex-col gap-2 md:col-span-2 sm:flex-row sm:justify-end xl:col-span-3">
                     {worksheetEditingAssignmentId && (
-                      <button
+                      <HistoryActionButton
+                        icon="close"
+                        label="수정 취소"
                         type="button"
                         onClick={() => {
                           setWorksheetEditingAssignmentId("");
@@ -5466,6 +5767,9 @@ const ManageHistoryClassroom: React.FC = () => {
                           setStudentReasons({});
                           setOtherReasonUids([]);
                           setShowReasonErrors(false);
+                          setNewStudentReason("");
+                          setNewStudentReasonOther(false);
+                          setNewStudentReasonError(false);
                           setBlanks([]);
                           setSelectedBlankId("");
                           setDraftBlank(null);
@@ -5476,22 +5780,22 @@ const ManageHistoryClassroom: React.FC = () => {
                           setShowAllBlankTags(false);
                         }}
                         className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 sm:w-auto"
-                      >
-                        수정 취소
-                      </button>
+                      ></HistoryActionButton>
                     )}
-                    <button
+                    <HistoryActionButton
+                      icon="save"
+                      label={
+                        saving
+                          ? "저장 중..."
+                          : worksheetEditingAssignmentId
+                            ? "역사교실 수정 저장"
+                            : "역사교실 저장"
+                      }
                       type="button"
                       onClick={() => void handleSave()}
                       disabled={saving}
                       className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60 sm:w-auto"
-                    >
-                      {saving
-                        ? "저장 중..."
-                        : worksheetEditingAssignmentId
-                          ? "역사교실 수정 저장"
-                          : "역사교실 저장"}
-                    </button>
+                    ></HistoryActionButton>
                   </div>
                 </section>
 
@@ -5516,7 +5820,9 @@ const ManageHistoryClassroom: React.FC = () => {
                               Tool
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
-                              <button
+                              <HistoryActionButton
+                                icon="edit"
+                                label="텍스트 박스"
                                 type="button"
                                 onClick={() => setWorksheetTool("box")}
                                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
@@ -5524,10 +5830,10 @@ const ManageHistoryClassroom: React.FC = () => {
                                     ? "bg-blue-600 text-white shadow-sm"
                                     : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                                 }`}
-                              >
-                                텍스트 박스
-                              </button>
-                              <button
+                              ></HistoryActionButton>
+                              <HistoryActionButton
+                                icon="search"
+                                label="OCR 선택"
                                 type="button"
                                 onClick={() => setWorksheetTool("ocr")}
                                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
@@ -5535,9 +5841,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                     ? "bg-blue-600 text-white shadow-sm"
                                     : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                                 }`}
-                              >
-                                OCR 선택
-                              </button>
+                              ></HistoryActionButton>
                             </div>
                           </div>
 
@@ -5659,35 +5963,43 @@ const ManageHistoryClassroom: React.FC = () => {
       {editingAssignment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-4 py-6">
           <div
-            className={`relative flex h-[calc(100dvh-3rem)] max-h-[94vh] w-full flex-col overflow-hidden overscroll-contain rounded-3xl bg-white shadow-2xl transition-[max-width] ${
+            id="history-edit-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-edit-title"
+            tabIndex={-1}
+            className={`history-modal relative flex h-[calc(100dvh-3rem)] max-h-[94vh] w-full flex-col overflow-hidden overscroll-contain rounded-3xl bg-white shadow-2xl transition-[max-width] ${
               previewOpen
                 ? "max-w-[min(96vw,92rem)]"
                 : "max-w-[min(96vw,72rem)]"
             }`}
           >
-            <div className="shrink-0 flex items-center justify-between border-b border-gray-200 px-6 py-4">
+            <div className="history-modal-header shrink-0 flex items-center justify-between gap-3 border-b border-gray-200 px-6 py-4">
               <div>
                 <div className="text-xs font-bold text-orange-500">
                   {editingAssignment.title}
                 </div>
-                <div className="text-xl font-black text-gray-900">
+                <h2
+                  id="history-edit-title"
+                  className="text-xl font-black text-gray-900"
+                >
                   역사교실 설정 수정
-                </div>
+                </h2>
               </div>
-              <button
+              <HistoryActionButton
+                icon="close"
+                label="닫기"
                 type="button"
                 onClick={closeAssignmentEditor}
                 className="shrink-0 text-sm font-bold text-gray-500 hover:text-gray-700"
-              >
-                닫기
-              </button>
+              ></HistoryActionButton>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:overflow-hidden">
-              <div className="grid min-h-full grid-cols-1 gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,0.82fr)_minmax(24rem,1.18fr)] xl:grid-cols-[minmax(0,0.78fr)_minmax(29rem,1.22fr)]">
-                <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain px-6 py-5 [-webkit-overflow-scrolling:touch]">
+            <div className="history-edit-body min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="history-edit-grid grid min-h-full min-w-0 grid-cols-1 gap-0">
+                <div className="history-edit-settings history-modal-padding min-h-0 min-w-0 overflow-y-auto overscroll-contain px-6 py-5 [-webkit-overflow-scrolling:touch]">
                   <div className="space-y-4">
-                    <div className="grid gap-3 md:grid-cols-4">
+                    <div className="history-number-fields grid gap-3 md:grid-cols-4">
                       <div>
                         <label className="mb-1 block whitespace-nowrap text-[11px] font-bold text-gray-500">
                           제한 시간(분)
@@ -5799,16 +6111,18 @@ const ManageHistoryClassroom: React.FC = () => {
                           </div>
                         )}
                       {editingMapResourceId.startsWith("lesson:") && (
-                        <button
+                        <HistoryActionButton
+                          icon="refresh"
+                          label={
+                            refreshingEditingSource
+                              ? "수업 자료 불러오는 중"
+                              : "최신 수업 자료 반영"
+                          }
                           type="button"
                           onClick={() => void handleRefreshEditingLesson()}
                           disabled={refreshingEditingSource || savingEdit}
                           className="mt-3 min-h-11 rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-60"
-                        >
-                          {refreshingEditingSource
-                            ? "수업 자료 불러오는 중"
-                            : "최신 수업 자료 반영"}
-                        </button>
+                        ></HistoryActionButton>
                       )}
                     </div>
 
@@ -5826,7 +6140,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 return !current;
                               });
                             }}
-                            className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold transition ${
+                            className={`flex h-11 w-11 items-center justify-center rounded-full border text-xs font-bold transition ${
                               editingStudentSearchOpen
                                 ? "border-blue-600 bg-blue-600 text-white"
                                 : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
@@ -5846,6 +6160,18 @@ const ManageHistoryClassroom: React.FC = () => {
                       </div>
                       {editingStudentSearchOpen && (
                         <div className="mb-3 space-y-2">
+                          <AssignmentReasonField
+                            id="history-edit-add-reason"
+                            studentName="추가할 학생"
+                            value={editingNewStudentReason}
+                            explicitOther={editingNewStudentReasonOther}
+                            showError={editingNewStudentReasonError}
+                            onChange={(value, other) => {
+                              setEditingNewStudentReason(value);
+                              setEditingNewStudentReasonOther(other);
+                              setEditingNewStudentReasonError(false);
+                            }}
+                          />
                           <input
                             lang="ko"
                             inputMode="text"
@@ -5866,11 +6192,13 @@ const ManageHistoryClassroom: React.FC = () => {
                                       key={student.uid}
                                       type="button"
                                       onClick={() => {
-                                        setEditingStudentUids((prev) =>
-                                          prev.includes(student.uid)
-                                            ? prev
-                                            : [...prev, student.uid],
-                                        );
+                                        if (
+                                          !addAssignmentStudent(
+                                            student.uid,
+                                            true,
+                                          )
+                                        )
+                                          return;
                                         setEditingStudentSearch("");
                                       }}
                                       className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-blue-50"
@@ -5896,56 +6224,38 @@ const ManageHistoryClassroom: React.FC = () => {
                       )}
                       <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                         {editingStudents.map((student) => (
-                          <div
+                          <AssignedStudentRow
                             key={student.uid}
-                            className="rounded-2xl bg-white px-3 py-2"
-                          >
-                            <div className="mb-2 flex items-center justify-between gap-3">
-                              <div className="min-w-0 text-sm font-bold text-gray-900">
-                                <span className="mr-2 rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-600">
-                                  {student.grade}-{student.className}{" "}
-                                  {student.number}번
-                                </span>
-                                {student.name}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingStudentUids((prev) =>
-                                    prev.filter((uid) => uid !== student.uid),
-                                  );
-                                  setEditingStudentReasons((prev) => {
-                                    const next = { ...prev };
-                                    delete next[student.uid];
-                                    return next;
-                                  });
-                                }}
-                                className="shrink-0 text-[11px] font-bold text-red-500"
-                              >
-                                삭제
-                              </button>
-                            </div>
-                            <AssignmentReasonField
-                              id={`history-edit-reason-${student.uid}`}
-                              studentName={student.name}
-                              value={editingStudentReasons[student.uid] || ""}
-                              explicitOther={editingOtherReasonUids.includes(
-                                student.uid,
-                              )}
-                              showError={showEditingReasonErrors}
-                              onChange={(reason, other) => {
-                                setEditingStudentReasons((prev) => ({
-                                  ...prev,
-                                  [student.uid]: reason,
-                                }));
-                                setEditingOtherReasonUids((prev) =>
-                                  other
-                                    ? [...new Set([...prev, student.uid])]
-                                    : prev.filter((uid) => uid !== student.uid),
-                                );
-                              }}
-                            />
-                          </div>
+                            student={student}
+                            id={`history-edit-reason-${student.uid}`}
+                            reason={editingStudentReasons[student.uid] || ""}
+                            invalid={
+                              showEditingReasonErrors &&
+                              editingOtherReasonUids.includes(student.uid) &&
+                              !String(
+                                editingStudentReasons[student.uid] || "",
+                              ).trim()
+                            }
+                            onReasonChange={(reason) => {
+                              setEditingStudentReasons((prev) => ({
+                                ...prev,
+                                [student.uid]: reason,
+                              }));
+                              setEditingOtherReasonUids((prev) => [
+                                ...new Set([...prev, student.uid]),
+                              ]);
+                            }}
+                            onRemove={() => {
+                              setEditingStudentUids((prev) =>
+                                prev.filter((uid) => uid !== student.uid),
+                              );
+                              setEditingStudentReasons((prev) => {
+                                const next = { ...prev };
+                                delete next[student.uid];
+                                return next;
+                              });
+                            }}
+                          />
                         ))}
                         {!editingStudents.length && (
                           <div className="text-sm text-gray-400">
@@ -5957,10 +6267,10 @@ const ManageHistoryClassroom: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex min-h-0 min-w-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5 lg:h-full lg:overflow-hidden lg:border-l lg:border-t-0 lg:px-5">
+                <div className="history-edit-results flex min-h-0 min-w-0 flex-col overflow-visible border-t border-gray-200 bg-gray-50 px-5 py-5">
                   <section
                     aria-label="응시 현황 및 제출 내역"
-                    className="flex min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-3.5 lg:flex-1"
+                    className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-3.5"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="text-sm font-bold text-gray-700">
@@ -5982,7 +6292,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         미응시 {editingAttemptStatusCounts.overdueAbsent}
                       </span>
                     </div>
-                    <div className="mt-3 min-h-0 overflow-auto overscroll-contain lg:flex-1">
+                    <div className="history-results-table mt-3 min-h-0 min-w-0 overflow-auto overscroll-contain">
                       <table className="w-full min-w-[32rem] table-fixed whitespace-nowrap text-left text-xs">
                         <colgroup>
                           <col className="w-10" />
@@ -6138,16 +6448,17 @@ const ManageHistoryClassroom: React.FC = () => {
                                           deletingAssignment ||
                                           !savedStudent
                                         }
-                                        className="group flex min-h-[44px] w-full items-center justify-center text-xs font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="history-action-button group w-full text-xs font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                         title={
                                           !savedStudent
                                             ? "학생 배정을 먼저 저장해 주세요."
-                                            : undefined
+                                            : `${row.student.name} 재응시 제한 리셋`
                                         }
                                       >
+                                        <DashboardIcon name="refresh" />
                                         <span
                                           data-history-reset-label="true"
-                                          className="flex h-7 items-center rounded-lg border border-blue-200 bg-blue-50 px-2 group-hover:bg-blue-100"
+                                          className="history-action-label flex h-7 items-center rounded-lg border border-blue-200 bg-blue-50 px-2 group-hover:bg-blue-100"
                                         >
                                           {resettingAttemptUid ===
                                           row.student.uid
@@ -6185,7 +6496,9 @@ const ManageHistoryClassroom: React.FC = () => {
                                                 result.status,
                                               )}
                                             </span>
-                                            <button
+                                            <HistoryActionButton
+                                              icon="eye"
+                                              label="자료 보기"
                                               type="button"
                                               onClick={() => {
                                                 setPreviewOpen(false);
@@ -6193,9 +6506,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                               }}
                                               className="min-h-[44px] shrink-0 px-2 font-bold text-blue-700 hover:text-blue-900"
                                               aria-label={`${row.student.name} 제출 자료 확인`}
-                                            >
-                                              자료 보기
-                                            </button>
+                                            ></HistoryActionButton>
                                           </li>
                                         ))}
                                       </ol>
@@ -6223,8 +6534,8 @@ const ManageHistoryClassroom: React.FC = () => {
               </div>
             </div>
 
-            <div className="shrink-0 border-t border-gray-200 bg-white/95 px-6 py-4 backdrop-blur">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="history-modal-padding shrink-0 min-w-0 border-t border-gray-200 bg-white/95 px-6 py-4 backdrop-blur">
+              <div className="history-edit-footer flex min-w-0 flex-col gap-3">
                 <label className="inline-flex items-center gap-3 self-start rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5">
                   <button
                     type="button"
@@ -6252,25 +6563,27 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
                   </div>
                 </label>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                  <HistoryActionButton
+                    icon="trash"
+                    label={deletingAssignment ? "삭제 중..." : "과제 삭제"}
                     type="button"
                     onClick={() => void handleDeleteAssignment()}
                     disabled={
                       savingEdit || deletingAssignment || !!resettingAttemptUid
                     }
                     className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {deletingAssignment ? "삭제 중..." : "과제 삭제"}
-                  </button>
-                  <button
+                  ></HistoryActionButton>
+                  <HistoryActionButton
+                    icon="close"
+                    label="취소"
                     type="button"
                     onClick={closeAssignmentEditor}
                     className="rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                  >
-                    취소
-                  </button>
-                  <button
+                  ></HistoryActionButton>
+                  <HistoryActionButton
+                    icon="eye"
+                    label={previewOpen ? "미리보기 닫기" : "미리보기"}
                     type="button"
                     onClick={() => {
                       if (previewOpen) {
@@ -6283,10 +6596,10 @@ const ManageHistoryClassroom: React.FC = () => {
                       setPreviewOpen(true);
                     }}
                     className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 hover:bg-blue-100"
-                  >
-                    {previewOpen ? "미리보기 닫기" : "미리보기"}
-                  </button>
-                  <button
+                  ></HistoryActionButton>
+                  <HistoryActionButton
+                    icon="save"
+                    label={savingEdit ? "저장 중..." : "설정 저장"}
                     type="button"
                     onClick={() => void handleSaveAssignmentEdit()}
                     disabled={
@@ -6296,9 +6609,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       !!resettingAttemptUid
                     }
                     className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
-                  >
-                    {savingEdit ? "저장 중..." : "설정 저장"}
-                  </button>
+                  ></HistoryActionButton>
                 </div>
               </div>
             </div>
@@ -6319,13 +6630,13 @@ const ManageHistoryClassroom: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <button
+                  <HistoryActionButton
+                    icon="chevronLeft"
+                    label="설정으로 돌아가기"
                     type="button"
                     onClick={() => setPreviewOpen(false)}
                     className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                  >
-                    설정으로 돌아가기
-                  </button>
+                  ></HistoryActionButton>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
                   <HistoryClassroomAssignmentView
@@ -6355,13 +6666,13 @@ const ManageHistoryClassroom: React.FC = () => {
                       {reviewResult.percent}%
                     </div>
                   </div>
-                  <button
+                  <HistoryActionButton
+                    icon="close"
+                    label="닫기"
                     type="button"
                     onClick={() => setReviewResultId("")}
                     className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                  >
-                    닫기
-                  </button>
+                  ></HistoryActionButton>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
                   <HistoryClassroomAssignmentView
@@ -6393,7 +6704,9 @@ const ManageHistoryClassroom: React.FC = () => {
               </div>
             </div>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
-              <button
+              <HistoryActionButton
+                icon="edit"
+                label="텍스트 박스"
                 type="button"
                 onClick={() => setWorksheetTool("box")}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
@@ -6401,10 +6714,10 @@ const ManageHistoryClassroom: React.FC = () => {
                     ? "bg-blue-600 text-white shadow-sm"
                     : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                 }`}
-              >
-                텍스트 박스
-              </button>
-              <button
+              ></HistoryActionButton>
+              <HistoryActionButton
+                icon="search"
+                label="OCR 선택"
                 type="button"
                 onClick={() => setWorksheetTool("ocr")}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
@@ -6412,9 +6725,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     ? "bg-blue-600 text-white shadow-sm"
                     : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                 }`}
-              >
-                OCR 선택
-              </button>
+              ></HistoryActionButton>
             </div>
             <div className="mt-2 text-[11px] leading-4 text-gray-500">
               {worksheetTool === "box"
@@ -6467,13 +6778,13 @@ const ManageHistoryClassroom: React.FC = () => {
                 <div className="text-sm font-bold text-amber-900">
                   새 빈칸 초안
                 </div>
-                <button
+                <HistoryActionButton
+                  icon="close"
+                  label="취소"
                   type="button"
                   onClick={handleCancelDraftBlank}
                   className="text-xs font-bold text-gray-500"
-                >
-                  취소
-                </button>
+                ></HistoryActionButton>
               </div>
               <div className="text-xs text-gray-500">
                 p.{draftBlank.page} 영역을 선택했습니다.
@@ -6488,13 +6799,13 @@ const ManageHistoryClassroom: React.FC = () => {
                 placeholder="정답을 입력해 주세요"
                 autoFocus
               />
-              <button
+              <HistoryActionButton
+                icon="plus"
+                label="빈칸 추가"
                 type="button"
                 onClick={handleConfirmDraftBlank}
                 className="w-full rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-bold text-white hover:bg-amber-600"
-              >
-                빈칸 추가
-              </button>
+              ></HistoryActionButton>
             </div>
           ) : selectedBlank ? (
             <div className="space-y-2.5 rounded-2xl border border-blue-100 bg-white/98 p-3 shadow-2xl backdrop-blur">
@@ -6502,13 +6813,13 @@ const ManageHistoryClassroom: React.FC = () => {
                 <div className="text-sm font-bold text-blue-900">
                   선택한 빈칸
                 </div>
-                <button
+                <HistoryActionButton
+                  icon="trash"
+                  label="삭제"
                   type="button"
                   onClick={() => removeBlank(selectedBlank.id)}
                   className="text-xs font-bold text-red-600"
-                >
-                  삭제
-                </button>
+                ></HistoryActionButton>
               </div>
               <div className="text-xs text-gray-500">
                 p.{selectedBlank.page}
@@ -6562,7 +6873,9 @@ const ManageHistoryClassroom: React.FC = () => {
                       : "선택한 빈칸 저장"}
                   </h3>
                 </div>
-                <button
+                <HistoryActionButton
+                  icon="close"
+                  label="닫기"
                   type="button"
                   onClick={
                     blankEditorMode === "create"
@@ -6570,9 +6883,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       : closeBlankEditor
                   }
                   className="inline-flex h-10 items-center justify-center rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  닫기
-                </button>
+                ></HistoryActionButton>
               </div>
 
               <div className="max-h-[calc(90vh-8rem)] overflow-y-auto px-5 py-5">
@@ -6614,15 +6925,17 @@ const ManageHistoryClassroom: React.FC = () => {
 
               <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
                 {blankEditorMode === "edit" && selectedBlank && (
-                  <button
+                  <HistoryActionButton
+                    icon="trash"
+                    label="삭제"
                     type="button"
                     onClick={() => removeBlank(selectedBlank.id)}
                     className="mr-auto rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-100"
-                  >
-                    삭제
-                  </button>
+                  ></HistoryActionButton>
                 )}
-                <button
+                <HistoryActionButton
+                  icon="close"
+                  label="취소"
                   type="button"
                   onClick={
                     blankEditorMode === "create"
@@ -6630,16 +6943,14 @@ const ManageHistoryClassroom: React.FC = () => {
                       : closeBlankEditor
                   }
                   className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  취소
-                </button>
-                <button
+                ></HistoryActionButton>
+                <HistoryActionButton
+                  icon="save"
+                  label={blankEditorMode === "create" ? "등록" : "저장"}
                   type="button"
                   onClick={handleSubmitBlankEditor}
                   className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-                >
-                  {blankEditorMode === "create" ? "등록" : "저장"}
-                </button>
+                ></HistoryActionButton>
               </div>
             </div>
           </div>

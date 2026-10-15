@@ -1,5 +1,5 @@
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 import { type SystemConfig } from "../types";
 import {
   getSemesterCollectionPath,
@@ -20,6 +20,29 @@ import { runWisOperation } from "./wisEconomyClient";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 type Data = Record<string, any>;
+const historySourceConflict = () =>
+  Object.assign(
+    new Error(
+      "다른 변경이 먼저 반영되었습니다. 입력 내용을 보관한 뒤 최신 과제를 확인해 주세요.",
+    ),
+    {
+      code: "functions/aborted",
+      details: { reason: "ASSESSMENT_SOURCE_REVISION_CONFLICT" },
+    },
+  );
+type PendingHistorySource = {
+  intent: string;
+  writeExpectedRevision: number;
+  contentRevision: number;
+  fingerprint: string | null;
+  sourceIntent: Data;
+};
+// Only a confirmed source written by this auth User may advance a failed save.
+// A reload has no witness and must resolve a conflict instead of guessing.
+const pendingHistorySources = new WeakMap<
+  object,
+  Map<string, PendingHistorySource>
+>();
 export interface AssessmentReleaseItem {
   definitionId: string;
   title: string;
@@ -184,6 +207,9 @@ const historyPayload = (config: ConfigLike, sourceId: string, data: Data) => ({
   opensAt: "",
   closesAt: asIso(data.dueAt),
   assignedClassIds: [],
+  ...(data.contentRevision !== undefined
+    ? { expectedSourceRevision: Number(data.contentRevision) }
+    : {}),
 });
 const buildItem = async (
   config: ConfigLike,
@@ -347,21 +373,49 @@ export const saveAssessmentDefinition = async (
   payload: Data,
   published: boolean,
   preview?: AssessmentReleaseItem,
+  assertOwner?: () => Promise<void>,
 ) => {
+  const execute = async (commandType: string, data: Data) => {
+    await assertOwner?.();
+    return executeAssessmentManagementCommand<Data>(commandType, data);
+  };
   let current = await readDefinition(payload.definitionId);
   if (preview && Number(current?.revision || 0) !== preview.expectedRevision)
     throw new Error("평가가 변경되었습니다. 다시 확인해 주세요.");
+  if (
+    current?.status === "PUBLISHED" &&
+    payload.expectedSourceRevision !== undefined
+  ) {
+    if (current.sourceContentRevision === undefined) {
+      // Legacy definitions have no recorded source revision. Read their current
+      // source before pausing; a later source save also advances definition.revision,
+      // so the pause command's existing CAS still rejects an intervening edit.
+      const legacySource = await getDoc(
+        doc(
+          db,
+          getSemesterDocPath(config, "history_classrooms", payload.sourceId),
+        ),
+      );
+      if (
+        !legacySource.exists() ||
+        Number(legacySource.data()?.contentRevision || 0) !==
+          payload.expectedSourceRevision
+      )
+        throw historySourceConflict();
+    } else if (
+      current.sourceContentRevision !== payload.expectedSourceRevision
+    ) {
+      throw historySourceConflict();
+    }
+  }
   if (!published) {
     if (current?.status === "PUBLISHED") {
-      await executeAssessmentManagementCommand(
-        "transitionAssessmentDefinition",
-        {
-          definitionId: payload.definitionId,
-          expectedRevision: current.revision,
-          targetStatus: "PAUSED",
-          reason: "학생 응시 일시 중지",
-        },
-      );
+      await execute("transitionAssessmentDefinition", {
+        definitionId: payload.definitionId,
+        expectedRevision: current.revision,
+        targetStatus: "PAUSED",
+        reason: "학생 응시 일시 중지",
+      });
       current = await readDefinition(payload.definitionId);
     }
     // Unpublished History sources intentionally cannot become definitions.
@@ -380,30 +434,21 @@ export const saveAssessmentDefinition = async (
   if (preview && source.sourceHash !== preview.sourceHash)
     throw new Error("평가 문항이 바뀌었습니다. 다시 확인해 주세요.");
   if (current?.status === "PUBLISHED") {
-    const paused = await executeAssessmentManagementCommand<Data>(
-      "transitionAssessmentDefinition",
-      {
-        definitionId: payload.definitionId,
-        expectedRevision: current.revision,
-        targetStatus: "PAUSED",
-        reason: "평가 변경 적용",
-      },
-    );
+    const paused = await execute("transitionAssessmentDefinition", {
+      definitionId: payload.definitionId,
+      expectedRevision: current.revision,
+      targetStatus: "PAUSED",
+      reason: "평가 변경 적용",
+    });
     current = { ...current, ...paused };
   }
   const result = current
-    ? await executeAssessmentManagementCommand<Data>(
-        "updateAssessmentDefinition",
-        {
-          ...payload,
-          expectedRevision: current.revision,
-          reason: "평가 운영 설정 변경",
-        },
-      )
-    : await executeAssessmentManagementCommand<Data>(
-        "createAssessmentDefinition",
-        payload,
-      );
+    ? await execute("updateAssessmentDefinition", {
+        ...payload,
+        expectedRevision: current.revision,
+        reason: "평가 운영 설정 변경",
+      })
+    : await execute("createAssessmentDefinition", payload);
   const saved = result.definition || result;
   if (saved.sourceHash !== source.sourceHash)
     throw new Error("저장 중 평가 문항이 바뀌었습니다. 다시 저장해 주세요.");
@@ -413,15 +458,15 @@ export const saveAssessmentDefinition = async (
       "평가 문항이 바뀌어 공개하지 않았습니다. 다시 저장해 주세요.",
     );
   if (published && saved.status !== "PUBLISHED")
-    return executeAssessmentManagementCommand<Data>(
-      "transitionAssessmentDefinition",
-      {
-        definitionId: payload.definitionId,
-        expectedRevision: saved.revision,
-        targetStatus: "PUBLISHED",
-        reason: "학생 응시 공개",
-      },
-    );
+    return execute("transitionAssessmentDefinition", {
+      definitionId: payload.definitionId,
+      expectedRevision: saved.revision,
+      targetStatus: "PUBLISHED",
+      reason: "학생 응시 공개",
+      ...(payload.expectedSourceRevision !== undefined
+        ? { expectedSourceRevision: payload.expectedSourceRevision }
+        : {}),
+    });
   return saved;
 };
 
@@ -452,11 +497,14 @@ export const syncHistoryAssessmentDefinition = async (
   config: ConfigLike,
   sourceId: string,
   data: Data,
+  assertOwner?: () => Promise<void>,
 ) =>
   saveAssessmentDefinition(
     config,
     historyPayload(config, sourceId, data),
     data.isPublished === true,
+    undefined,
+    assertOwner,
   );
 
 export const refreshPublishedQuizDefinitions = async (
@@ -517,17 +565,88 @@ export const saveHistoryAssessmentSource = async (
   sourceId: string,
   payload: Data,
   expectedRevision: number,
-) =>
-  runWisOperation(
+) => {
+  const owner = auth.currentUser;
+  if (!owner)
+    throw Object.assign(new Error("로그인 상태를 확인해 주세요."), {
+      code: "functions/unauthenticated",
+    });
+  const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
+  const assertOwner = async () => {
+    const currentEpoch = Number(
+      (await owner.getIdTokenResult()).claims.auth_time,
+    );
+    if (
+      auth.currentUser !== owner ||
+      !Number.isFinite(epoch) ||
+      currentEpoch !== epoch
+    ) {
+      throw Object.assign(
+        new Error("로그인 계정이 바뀌었습니다. 다시 확인해 주세요."),
+        { code: "functions/unauthenticated" },
+      );
+    }
+  };
+  await assertOwner();
+  const source = toAssessmentHistorySource(payload);
+  // The editor regenerates these derived dates on each click. Keep the same
+  // source receipt when retrying an otherwise unchanged save/publication.
+  const intentSource = { ...source };
+  if ("dueWindowDays" in intentSource) {
+    delete intentSource.publishedAt;
+    delete intentSource.dueAt;
+  }
+  const pending =
+    pendingHistorySources.get(owner) || new Map<string, PendingHistorySource>();
+  pendingHistorySources.set(owner, pending);
+  const pendingKey = JSON.stringify([
+    epoch,
+    getAssessmentSemesterId(config),
+    sourceId,
+    expectedRevision,
+  ]);
+  const intent = assessmentCanonicalJson(intentSource);
+  const prior = pending.get(pendingKey);
+  let writeExpectedRevision = expectedRevision;
+  if (prior) {
+    writeExpectedRevision = prior.writeExpectedRevision;
+    if (prior.intent !== intent) {
+      const snapshot = await getDoc(
+        doc(db, getSemesterDocPath(config, "history_classrooms", sourceId)),
+      );
+      await assertOwner();
+      const current = snapshot.data();
+      const canonical = current ? toAssessmentHistorySource(current) : {};
+      const matches =
+        prior.fingerprint !== null
+          ? assessmentCanonicalJson(canonical) === prior.fingerprint
+          : Object.entries(prior.sourceIntent).every(
+              ([key, value]) =>
+                key === "retryResetByStudentUid" ||
+                assessmentCanonicalJson(canonical[key]) ===
+                  assessmentCanonicalJson(value),
+            );
+      if (
+        !snapshot.exists() ||
+        !current ||
+        Number(current.contentRevision || 0) !== prior.contentRevision ||
+        !matches
+      )
+        throw historySourceConflict();
+      writeExpectedRevision = prior.contentRevision;
+    }
+  }
+  return runWisOperation(
     [
       "history-source-save",
       getAssessmentSemesterId(config),
       sourceId,
-      expectedRevision,
-      toAssessmentHistorySource(payload),
+      writeExpectedRevision,
+      intentSource,
     ],
-    true,
+    false,
     async (step) => {
+      await assertOwner();
       // The source command validates first, then pauses admission and changes the
       // worksheet atomically. A refused edit must leave its publication intact.
       const saved = await step("source", async () => ({
@@ -535,15 +654,68 @@ export const saveHistoryAssessmentSource = async (
         payload: {
           semesterId: getAssessmentSemesterId(config),
           sourceId,
-          source: toAssessmentHistorySource(payload),
-          expectedRevision,
+          source,
+          expectedRevision: writeExpectedRevision,
           reason: "교사 역사교실 과제 저장",
         },
       }));
-      await syncHistoryAssessmentDefinition(config, sourceId, payload);
-      return saved as { contentRevision: number };
+      await assertOwner();
+      // Preserve a confirmed receipt even if the following canonical read fails.
+      // A changed retry must verify both its revision and original source intent.
+      const witness = pending.get(pendingKey);
+      pending.set(pendingKey, {
+        intent,
+        writeExpectedRevision,
+        contentRevision: Number(saved.contentRevision),
+        sourceIntent: intentSource,
+        fingerprint:
+          witness && witness.contentRevision === saved.contentRevision
+            ? witness.fingerprint
+            : null,
+      });
+      const committed = await getDoc(
+        doc(db, getSemesterDocPath(config, "history_classrooms", sourceId)),
+      );
+      const committedSource = committed.data();
+      await assertOwner();
+      if (
+        !committed.exists() ||
+        !committedSource ||
+        Number(committedSource?.contentRevision || 0) !==
+          saved.contentRevision ||
+        committedSource?.isPublished !== source.isPublished
+      ) {
+        throw historySourceConflict();
+      }
+      pending.set(pendingKey, {
+        intent,
+        writeExpectedRevision,
+        contentRevision: Number(saved.contentRevision),
+        sourceIntent: intentSource,
+        fingerprint: assessmentCanonicalJson(
+          toAssessmentHistorySource(committedSource),
+        ),
+      });
+      // Use the first committed publication window, including after response
+      // loss, and never publish a source changed by another editor meanwhile.
+      await syncHistoryAssessmentDefinition(
+        config,
+        sourceId,
+        committedSource,
+        assertOwner,
+      );
+      await assertOwner();
+      pending.delete(pendingKey);
+      return {
+        contentRevision: Number(saved.contentRevision),
+        publicationWindow: {
+          publishedAt: asIso(committedSource.publishedAt) || null,
+          dueAt: asIso(committedSource.dueAt) || null,
+        },
+      };
     },
   );
+};
 
 export const deleteHistoryAssessmentSource = async (
   config: ConfigLike,

@@ -217,9 +217,12 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION
     || commandType === ASSESSMENT_COMMAND_TYPES.UPDATE_ASSESSMENT_DEFINITION
   ) {
-    const definitionKeys = ["definitionId", "semesterId", "assessmentKind", "title", "sourceId", "category", "examRound", "questionCount", "durationSeconds", "maxAttempts", "cooldownMinutes", "opensAt", "closesAt", "assignedClassIds", "legacyConfigKey", "presentationSettings", "expectedRevision", "reason"];
+    const definitionKeys = ["definitionId", "semesterId", "assessmentKind", "title", "sourceId", "category", "examRound", "questionCount", "durationSeconds", "maxAttempts", "cooldownMinutes", "opensAt", "closesAt", "assignedClassIds", "legacyConfigKey", "presentationSettings", "expectedRevision", "expectedSourceRevision", "reason"];
     if (commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION) definitionKeys.push("cutoverPlanId", "cutoverOperationKey");
     assertAllowedKeys(payload, definitionKeys, "assessment definition payload");
+    if (payload.expectedSourceRevision !== undefined && payload.assessmentKind !== "HISTORY_CLASSROOM") {
+      fail("invalid-argument", "expectedSourceRevision is only supported for History Classroom.", "ASSESSMENT_PAYLOAD_INVALID");
+    }
     if (commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION && Boolean(payload.cutoverPlanId) !== Boolean(payload.cutoverOperationKey)) {
       fail("invalid-argument", "cutoverPlanId and cutoverOperationKey must be provided together.", "ASSESSMENT_PAYLOAD_INVALID");
     }
@@ -238,6 +241,9 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       definitionId: normalizeDefinitionId(payload.definitionId),
       semesterId: normalizeSemesterId(payload.semesterId),
       assessmentKind: normalizeKind(payload.assessmentKind),
+      ...(payload.expectedSourceRevision !== undefined
+        ? { expectedSourceRevision: nonNegativeInteger(payload.expectedSourceRevision, "expectedSourceRevision") }
+        : {}),
       title: text(payload.title, "title", 200),
       sourceId: text(payload.sourceId, "sourceId", 180),
       category: optionalText(payload.category, "category", 80),
@@ -269,13 +275,19 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     };
   }
   if (commandType === ASSESSMENT_COMMAND_TYPES.TRANSITION_ASSESSMENT_DEFINITION) {
-    assertAllowedKeys(payload, ["definitionId", "expectedRevision", "targetStatus", "reason"], "transitionAssessmentDefinition payload");
+    assertAllowedKeys(payload, ["definitionId", "expectedRevision", "expectedSourceRevision", "targetStatus", "reason"], "transitionAssessmentDefinition payload");
     if (!["PUBLISHED", "PAUSED", "CLOSED"].includes(payload.targetStatus)) {
       fail("invalid-argument", "targetStatus is invalid.", "ASSESSMENT_STATUS_INVALID");
+    }
+    if (payload.expectedSourceRevision !== undefined && payload.targetStatus !== "PUBLISHED") {
+      fail("invalid-argument", "expectedSourceRevision is only supported when publishing.", "ASSESSMENT_PAYLOAD_INVALID");
     }
     return {
       definitionId: normalizeDefinitionId(payload.definitionId),
       expectedRevision: positiveInteger(payload.expectedRevision, "expectedRevision"),
+      ...(payload.expectedSourceRevision !== undefined
+        ? { expectedSourceRevision: nonNegativeInteger(payload.expectedSourceRevision, "expectedSourceRevision") }
+        : {}),
       targetStatus: payload.targetStatus,
       reason: text(payload.reason, "reason", 300),
     };
@@ -464,6 +476,10 @@ const loadDefinitionSource = async (transaction, payload) => {
   if (!snapshot.exists || snapshot.data?.deletedAt || snapshot.data?.isPublished !== true) {
     fail("failed-precondition", "The canonical History Classroom assignment is unavailable.", "ASSESSMENT_SOURCE_UNAVAILABLE");
   }
+  const sourceContentRevision = Number(snapshot.data?.contentRevision || 0);
+  if (payload.expectedSourceRevision !== undefined && payload.expectedSourceRevision !== sourceContentRevision) {
+    fail("aborted", "다른 변경이 먼저 반영되었습니다. 최신 과제를 확인해 주세요.", "ASSESSMENT_SOURCE_REVISION_CONFLICT");
+  }
   const answerKey = collectHistoryAnswerKey(snapshot.data);
   if (!answerKey.length) {
     fail("failed-precondition", "The History Classroom answer key is empty.", "ASSESSMENT_SOURCE_EMPTY");
@@ -475,7 +491,7 @@ const loadDefinitionSource = async (transaction, payload) => {
       : [];
   const threshold = snapshot.data.passThresholdPercent == null || snapshot.data.passThresholdPercent === "" ? Number.NaN : Number(snapshot.data.passThresholdPercent);
   const passThresholdPercent = Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : 80;
-  return { itemCount: answerKey.length, answerKey, assignedStudentUids, passThresholdPercent, sourceHash: sha256(canonicalJson({ answerKey, assignedStudentUids })) };
+  return { itemCount: answerKey.length, answerKey, assignedStudentUids, passThresholdPercent, sourceContentRevision, sourceHash: sha256(canonicalJson({ answerKey, assignedStudentUids })) };
 };
 
 const resolveAssignedClassIds = async (transaction, semesterId, requestedIds) => {
@@ -773,14 +789,16 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         payload.semesterId,
         payload.assignedClassIds,
       );
+      const { expectedSourceRevision: _expectedSourceRevision, ...definitionPayload } = payload;
       const definition = {
         schemaVersion: ASSESSMENT_SCHEMA_VERSION,
         policyVersion: ASSESSMENT_POLICY_VERSION,
-        ...payload,
+        ...definitionPayload,
         assignedClassIds,
         status: "DRAFT",
         revision: 1,
         sourceHash: source.sourceHash,
+        ...(payload.assessmentKind === "HISTORY_CLASSROOM" ? { sourceContentRevision: source.sourceContentRevision } : {}),
         itemCount: source.itemCount,
         assignedStudentUids: source.assignedStudentUids,
         createdBy: actor.actorUid,
@@ -822,12 +840,13 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         payload.assignedClassIds,
       );
       const revision = payload.expectedRevision + 1;
-      const { expectedRevision: _expectedRevision, reason, ...definitionUpdate } = payload;
+      const { expectedRevision: _expectedRevision, expectedSourceRevision: _expectedSourceRevision, reason, ...definitionUpdate } = payload;
       transaction.set(path, {
         ...definitionUpdate,
         assignedClassIds,
         revision,
         sourceHash: source.sourceHash,
+        ...(payload.assessmentKind === "HISTORY_CLASSROOM" ? { sourceContentRevision: source.sourceContentRevision } : {}),
         itemCount: source.itemCount,
         assignedStudentUids: source.assignedStudentUids,
         updatedBy: actor.actorUid,
@@ -854,6 +873,15 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       assertAssessmentDefinitionSemesterWritable(manifest, current.semesterId);
       if (Number(current.revision || 0) !== payload.expectedRevision) fail("aborted", "Assessment definition revision changed.", "ASSESSMENT_REVISION_CONFLICT");
       if (!transitionAllowed(current.status, payload.targetStatus)) fail("failed-precondition", "Assessment definition transition is invalid.", "ASSESSMENT_TRANSITION_INVALID");
+      if (payload.expectedSourceRevision !== undefined) {
+        if (current.assessmentKind !== "HISTORY_CLASSROOM") {
+          fail("invalid-argument", "expectedSourceRevision is only supported for History Classroom.", "ASSESSMENT_PAYLOAD_INVALID");
+        }
+        const source = await loadDefinitionSource(transaction, { ...current, expectedSourceRevision: payload.expectedSourceRevision });
+        if (current.sourceContentRevision !== payload.expectedSourceRevision || current.sourceHash !== source.sourceHash) {
+          fail("aborted", "과제가 바뀌어 공개하지 않았습니다. 최신 과제를 확인해 주세요.", "ASSESSMENT_SOURCE_REVISION_CONFLICT");
+        }
+      }
       const revision = payload.expectedRevision + 1;
       transaction.set(path, { status: payload.targetStatus, revision, transitionReason: payload.reason, updatedBy: actor.actorUid, updatedAt: timestamp, commandId }, { merge: true });
       return { target: { kind: "assessment-definition", id: payload.definitionId, refs: [path] }, sourceHash: current.sourceHash || null, result: { definitionId: payload.definitionId, status: payload.targetStatus, revision } };

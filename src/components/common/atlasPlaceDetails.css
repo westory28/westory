@@ -70,10 +70,10 @@
   margin-top: 8px;
 }
 .atlas-place-details .atlas-place-details__chips button {
-  min-height: 28px;
+  min-height: 44px;
   padding: 4px 8px;
   font:
-    500 12px/1.5 "Noto Sans KR",
+    500 14px/1.5 "Noto Sans KR",
     sans-serif;
   color: var(--ws-text, #1f2937);
   border: 1px solid var(--ws-border, #e5e7eb);
@@ -161,6 +161,21 @@
   border-top: 1px solid var(--ws-border, #e5e7eb);
   font-size: 14px;
 }
+.atlas-place-details__related > div {
+  display: grid;
+}
+.atlas-place-details__related button {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+.atlas-place-details__related button strong {
+  font-weight: 700;
+}
+.atlas-place-details__related button span {
+  font-weight: 400;
+  color: var(--ws-text, #1f2937);
+}
 .atlas-place-details__sources summary {
   min-height: 44px;
   padding: 12px 0;
@@ -204,7 +219,7 @@
 }
 @media (pointer: coarse) {
   .atlas-place-details .atlas-place-details__chips button {
-    min-height: 36px;
+    min-height: 44px;
   }
 }
 .atlas-place-details__header {

@@ -79,18 +79,24 @@ for (const method of ['getAssessmentState','saveAssessmentProgress','startAssess
 }
 handler = async (_name, payload) => ({ ...payload, status: 'SUCCEEDED', replayed: false, result: { revision: 2 } });
 assert.equal((await exports.executeAssessmentManagementCommand('transitionAssessmentDefinition', { definitionId: 'quiz:2026-2:unit:formative', expectedRevision: 1, targetStatus: 'PUBLISHED' })).revision, 2);
-assert.equal(sensitive, 1);
+assert.equal(sensitive, 0);
 
 // Routine exemption work must reach the canonical session/teacher checks even
 // when the optional high-risk App Check / reauthentication setup is unavailable.
 sensitiveFailure = new Error('운영 인증 설정을 확인해야 합니다.');
 const grantPayload = { semesterId: '2026-2', recipientUids: ['student-a'], reason: '학급 활동' };
-for (const commandType of ['grantHistoryClassroomExemptions', 'revokeHistoryClassroomExemptions', 'reviewHistoryClassroomExemptionRequest']) {
+const routineClassroomCommands = ['grantHistoryClassroomExemptions', 'revokeHistoryClassroomExemptions', 'reviewHistoryClassroomExemptionRequest',
+  'upsertHistoryClassroomSource', 'createAssessmentDefinition', 'updateAssessmentDefinition', 'transitionAssessmentDefinition'];
+const serverRoutine = JSON.parse(readFileSync('functions/productionGateway/routineContentWrites.json', 'utf8')).commands;
+for (const commandType of routineClassroomCommands) {
+  assert.ok(serverRoutine.includes(commandType), `${commandType} must have the same general-session server policy`);
   const before = sensitive;
   assert.equal((await exports.executeAssessmentManagementCommand(commandType, grantPayload)).revision, 2);
   assert.equal(sensitive, before, `${commandType} uses the routine classroom session policy`);
 }
-await assert.rejects(exports.executeAssessmentManagementCommand('transitionAssessmentDefinition', { definitionId: 'protected' }), /운영 인증 설정/);
+for (const commandType of ['deleteHistoryClassroomSource', 'resetAssessmentAttempt', 'resetAssessmentAttemptsByClassV2']) {
+  await assert.rejects(exports.executeAssessmentManagementCommand(commandType, { definitionId: 'protected' }), /운영 인증 설정/);
+}
 sensitiveFailure = null;
 
 // A lost class-grant response must reuse its receipt even without storage.
