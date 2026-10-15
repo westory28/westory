@@ -30,19 +30,6 @@ const historySourceConflict = () =>
       details: { reason: "ASSESSMENT_SOURCE_REVISION_CONFLICT" },
     },
   );
-type PendingHistorySource = {
-  intent: string;
-  writeExpectedRevision: number;
-  contentRevision: number;
-  fingerprint: string | null;
-  sourceIntent: Data;
-};
-// Only a confirmed source written by this auth User may advance a failed save.
-// A reload has no witness and must resolve a conflict instead of guessing.
-const pendingHistorySources = new WeakMap<
-  object,
-  Map<string, PendingHistorySource>
->();
 export interface AssessmentReleaseItem {
   definitionId: string;
   title: string;
@@ -596,121 +583,35 @@ export const saveHistoryAssessmentSource = async (
     delete intentSource.publishedAt;
     delete intentSource.dueAt;
   }
-  const pending =
-    pendingHistorySources.get(owner) || new Map<string, PendingHistorySource>();
-  pendingHistorySources.set(owner, pending);
-  const pendingKey = JSON.stringify([
-    epoch,
-    getAssessmentSemesterId(config),
-    sourceId,
-    expectedRevision,
-  ]);
-  const intent = assessmentCanonicalJson(intentSource);
-  const prior = pending.get(pendingKey);
-  let writeExpectedRevision = expectedRevision;
-  if (prior) {
-    writeExpectedRevision = prior.writeExpectedRevision;
-    if (prior.intent !== intent) {
-      const snapshot = await getDoc(
-        doc(db, getSemesterDocPath(config, "history_classrooms", sourceId)),
-      );
-      await assertOwner();
-      const current = snapshot.data();
-      const canonical = current ? toAssessmentHistorySource(current) : {};
-      const matches =
-        prior.fingerprint !== null
-          ? assessmentCanonicalJson(canonical) === prior.fingerprint
-          : Object.entries(prior.sourceIntent).every(
-              ([key, value]) =>
-                key === "retryResetByStudentUid" ||
-                assessmentCanonicalJson(canonical[key]) ===
-                  assessmentCanonicalJson(value),
-            );
-      if (
-        !snapshot.exists() ||
-        !current ||
-        Number(current.contentRevision || 0) !== prior.contentRevision ||
-        !matches
-      )
-        throw historySourceConflict();
-      writeExpectedRevision = prior.contentRevision;
-    }
-  }
   return runWisOperation(
     [
-      "history-source-save",
+      "history-assignment-save",
       getAssessmentSemesterId(config),
       sourceId,
-      writeExpectedRevision,
+      expectedRevision,
       intentSource,
     ],
     false,
     async (step) => {
       await assertOwner();
-      // The source command validates first, then pauses admission and changes the
-      // worksheet atomically. A refused edit must leave its publication intact.
-      const saved = await step("source", async () => ({
-        commandType: "upsertHistoryClassroomSource",
+      // The source, canonical definition and publication commit together. The
+      // stable step receipt also retains the first committed publication dates.
+      const saved = await step("assignment", async () => ({
+        commandType: "saveHistoryClassroomAssignment",
         payload: {
           semesterId: getAssessmentSemesterId(config),
           sourceId,
           source,
-          expectedRevision: writeExpectedRevision,
+          expectedRevision,
           reason: "교사 역사교실 과제 저장",
         },
       }));
       await assertOwner();
-      // Preserve a confirmed receipt even if the following canonical read fails.
-      // A changed retry must verify both its revision and original source intent.
-      const witness = pending.get(pendingKey);
-      pending.set(pendingKey, {
-        intent,
-        writeExpectedRevision,
-        contentRevision: Number(saved.contentRevision),
-        sourceIntent: intentSource,
-        fingerprint:
-          witness && witness.contentRevision === saved.contentRevision
-            ? witness.fingerprint
-            : null,
-      });
-      const committed = await getDoc(
-        doc(db, getSemesterDocPath(config, "history_classrooms", sourceId)),
-      );
-      const committedSource = committed.data();
-      await assertOwner();
-      if (
-        !committed.exists() ||
-        !committedSource ||
-        Number(committedSource?.contentRevision || 0) !==
-          saved.contentRevision ||
-        committedSource?.isPublished !== source.isPublished
-      ) {
-        throw historySourceConflict();
-      }
-      pending.set(pendingKey, {
-        intent,
-        writeExpectedRevision,
-        contentRevision: Number(saved.contentRevision),
-        sourceIntent: intentSource,
-        fingerprint: assessmentCanonicalJson(
-          toAssessmentHistorySource(committedSource),
-        ),
-      });
-      // Use the first committed publication window, including after response
-      // loss, and never publish a source changed by another editor meanwhile.
-      await syncHistoryAssessmentDefinition(
-        config,
-        sourceId,
-        committedSource,
-        assertOwner,
-      );
-      await assertOwner();
-      pending.delete(pendingKey);
       return {
         contentRevision: Number(saved.contentRevision),
         publicationWindow: {
-          publishedAt: asIso(committedSource.publishedAt) || null,
-          dueAt: asIso(committedSource.dueAt) || null,
+          publishedAt: saved.publicationWindow.publishedAt as string | null,
+          dueAt: saved.publicationWindow.dueAt as string | null,
         },
       };
     },

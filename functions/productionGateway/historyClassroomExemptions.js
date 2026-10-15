@@ -8,6 +8,7 @@ const COMMAND_TYPES = Object.freeze({
   REVOKE_HISTORY_CLASSROOM_EXEMPTIONS: "revokeHistoryClassroomExemptions",
   CREATE_HISTORY_CLASSROOM_EXEMPTION_REQUEST: "createHistoryClassroomExemptionRequest",
   REVIEW_HISTORY_CLASSROOM_EXEMPTION_REQUEST: "reviewHistoryClassroomExemptionRequest",
+  APPLY_HISTORY_CLASSROOM_EXEMPTION: "applyHistoryClassroomExemption",
 });
 const fail = (code, message, reason = "HISTORY_EXEMPTION_INVALID") => {
   throw new HttpsError(code, message, { reason });
@@ -36,6 +37,7 @@ const normalizePayload = (type, payload) => {
     [COMMAND_TYPES.REVOKE_HISTORY_CLASSROOM_EXEMPTIONS]: ["exemptionIds"],
     [COMMAND_TYPES.CREATE_HISTORY_CLASSROOM_EXEMPTION_REQUEST]: ["assignmentId", "exemptionId", "memo"],
     [COMMAND_TYPES.REVIEW_HISTORY_CLASSROOM_EXEMPTION_REQUEST]: ["requestId", "approved", "reviewReason"],
+    [COMMAND_TYPES.APPLY_HISTORY_CLASSROOM_EXEMPTION]: ["assignmentId", "studentUid", "exemptionId"],
   }[type];
   if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
       Object.keys(payload).some((key) => !["semesterId", ...fields].includes(key)))
@@ -54,6 +56,8 @@ const normalizePayload = (type, payload) => {
     return { semesterId, exemptionIds: ids(payload.exemptionIds, "exemptionIds") };
   if (type === COMMAND_TYPES.CREATE_HISTORY_CLASSROOM_EXEMPTION_REQUEST)
     return { semesterId, assignmentId: id(payload.assignmentId, "assignmentId"), exemptionId: id(payload.exemptionId, "exemptionId"), memo: text(payload.memo, "memo", 240, true) };
+  if (type === COMMAND_TYPES.APPLY_HISTORY_CLASSROOM_EXEMPTION)
+    return { semesterId, assignmentId: id(payload.assignmentId, "assignmentId"), studentUid: id(payload.studentUid, "studentUid"), exemptionId: id(payload.exemptionId, "exemptionId") };
   if (typeof payload.approved !== "boolean") fail("invalid-argument", "approved is invalid.");
   return { semesterId, requestId: id(payload.requestId, "requestId"), approved: payload.approved, reviewReason: text(payload.reviewReason, "reviewReason", 240, true) };
 };
@@ -153,7 +157,36 @@ const assertAssignment = async (transaction, semesterId, assignmentId, uid, help
   const semesterClass = await transaction.get(`semester_classes/${enrollment.classId}`);
   if (!semesterClass.exists || semesterClass.data?.semesterId !== semesterId || semesterClass.data?.status !== "ACTIVE")
     fail("failed-precondition", "학생의 현재 학급 정보를 확인해 주세요.", "HISTORY_EXEMPTION_ENROLLMENT_INVALID");
-  return { source: source.data, definition: definition.data, definitionId, enrollment };
+  return { source: source.data, definition: definition.data, definitionId, enrollment, semesterClass: semesterClass.data };
+};
+
+const prepareCompletion = async (transaction, semesterId, assignmentId, uid, assignment) => {
+  await assertNotPassed(transaction, semesterId, assignmentId, uid, assignment);
+  const resultId = resultIdFor(semesterId, assignmentId, uid);
+  const canonicalRef = `semester_assessment_results/${resultId}`;
+  const legacyRef = `${root(semesterId)}/history_classroom_results/${resultId}`;
+  const [canonical, legacy, attempts] = await Promise.all([transaction.get(canonicalRef), transaction.get(legacyRef),
+    transaction.query("semester_assessment_attempts", { field: "definitionId", operator: "==", value: assignment.definitionId })]);
+  if (canonical.exists || legacy.exists) fail("already-exists", "이미 면제 처리된 역사교실입니다.");
+  return { assignment, resultId, canonicalRef, legacyRef,
+    attempts: attempts.filter((row) => row.data?.studentUid === uid && row.data?.resetAt == null && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(row.data.status)) };
+};
+const writeCompletion = (transaction, approval, current, requestId, actor, timestamp, now, audit = {}) => {
+  const { assignment, resultId, canonicalRef, legacyRef, attempts } = approval;
+  const total = Array.isArray(assignment.source.blanks) ? assignment.source.blanks.length : 0;
+  const result = { resultId, semesterId: current.semesterId, definitionId: assignment.definitionId, assessmentKind: "HISTORY_CLASSROOM",
+    studentUid: current.uid, uid: current.uid, enrollmentId: assignment.enrollment.enrollmentId, classId: assignment.enrollment.classId,
+    assignmentId: current.assignmentId, assignmentTitle: assignment.source.title || current.assignmentTitle || "역사교실",
+    studentName: current.studentName || "학생", studentGrade: current.studentGrade || "", studentClass: current.studentClass || "", studentNumber: current.studentNumber || "",
+    completionSource: "exemption", exemptionId: current.exemptionId, exemptionRequestId: requestId, ...audit,
+    status: "passed", passed: true, score: total, total, percent: 100, passThresholdPercent: thresholdFor(assignment.source),
+    answers: {}, answerChecks: [], approvedByUid: actor.actorUid, approvedAt: timestamp, submittedAt: timestamp,
+    submittedAtIso: now().toISOString(), createdAt: timestamp, updatedAt: timestamp,
+    reward: { status: "NOT_ELIGIBLE", awarded: false, duplicate: false, amount: 0, bonusAwarded: false, bonusAmount: 0, totalAwarded: 0,
+      blockedReason: "exemption", blockedMessage: "면제권 사용에는 보상이 지급되지 않습니다.", ledgerEntryIds: [] } };
+  transaction.create(canonicalRef, result);
+  transaction.create(legacyRef, result);
+  for (const attempt of attempts) transaction.set(attempt.path, { status: "LOCKED", lockReason: "EXEMPTION", revision: Number(attempt.data.revision || 0) + 1, updatedAt: timestamp }, { merge: true });
 };
 
 const apply = async ({ transaction, commandId, commandType, payload, actor, timestamp, helpers }) => {
@@ -232,6 +265,42 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
       revision: Number(ticket.data.revision || 0) + 1, updatedAt: timestamp }, { merge: true });
     return response("history-exemption-request", requestId, [requestRef, ticketRef], { requestId, status: "pending" });
   }
+  if (commandType === COMMAND_TYPES.APPLY_HISTORY_CLASSROOM_EXEMPTION) {
+    if (!["teacher", "admin"].includes(actor.actorRole)) fail("permission-denied", "교사만 면제권을 사용할 수 있습니다.");
+    const { assignmentId, studentUid, exemptionId } = payload;
+    const assignment = await assertAssignment(transaction, semesterId, assignmentId, studentUid, helpers);
+    const milliseconds = (value) => value?.toMillis?.() || (typeof value === "string" ? Date.parse(value) : 0);
+    const nowMs = helpers.now().getTime();
+    if ((milliseconds(assignment.definition.opensAt) && nowMs < milliseconds(assignment.definition.opensAt)) ||
+        [assignment.definition.closesAt, assignment.source.dueAt].some(value => milliseconds(value) && nowMs > milliseconds(value)))
+      fail("failed-precondition", "응시 기간이 아닌 역사교실에는 면제권을 사용할 수 없습니다.", "HISTORY_EXEMPTION_WINDOW_CLOSED");
+    const ticketRef = ticketPath(semesterId, exemptionId);
+    const [ticket, profile, requests] = await Promise.all([transaction.get(ticketRef), transaction.get(`users/${studentUid}`),
+      transaction.query(`${root(semesterId)}/history_classroom_exemption_requests`, { field: "uid", operator: "==", value: studentUid })]);
+    if (!profile.exists || profile.data?.role !== "student") fail("failed-precondition", "학생 계정을 다시 확인해 주세요.");
+    if (!ticket.exists || ticketOwner(ticket.data) !== studentUid) fail("permission-denied", "해당 학생의 면제권만 사용할 수 있습니다.");
+    if (ticket.data.semesterId !== undefined && ticket.data.semesterId !== semesterId)
+      fail("failed-precondition", "면제권의 학기 정보를 확인해 주세요.", "HISTORY_EXEMPTION_SEMESTER_MISMATCH");
+    if (ticketStatus(ticket.data) !== "available") fail("failed-precondition", "사용 가능한 면제권을 선택해 주세요.", "HISTORY_EXEMPTION_NOT_AVAILABLE");
+    assertTicketAssignment(ticket.data, assignmentId, helpers.now);
+    if (requests.some(row => row.data?.assignmentId === assignmentId && ["pending", "requested"].includes(row.data?.status)))
+      fail("failed-precondition", "학생이 신청한 면제권 사용 요청을 먼저 검토해 주세요.", "HISTORY_EXEMPTION_REQUEST_PENDING");
+    const approval = await prepareCompletion(transaction, semesterId, assignmentId, studentUid, assignment);
+    const requestId = `exemption_direct_${hash(`${semesterId}\n${assignmentId}\n${studentUid}`)}`;
+    const requestRef = requestPath(semesterId, requestId);
+    const audit = { origin: "teacher_direct", initiatedByUid: actor.actorUid };
+    const current = { ...profileSnapshot(studentUid, profile.data, assignment.enrollment, assignment.semesterClass), semesterId, assignmentId, exemptionId };
+    transaction.set(ticketRef, { status: "used", ...(ticket.data.state !== undefined ? { state: "used" } : {}), ...audit,
+      requestedAssignmentId: "", pendingRequestId: "", exemptionRequestId: requestId, usedAssignmentId: assignmentId,
+      usedRequestId: requestId, usedByUid: studentUid, usedAt: timestamp, revision: Number(ticket.data.revision || 0) + 1, updatedAt: timestamp }, { merge: true });
+    transaction.create(requestRef, { ...current, ...audit, status: "approved", revision: 1,
+      assignmentTitle: assignment.source.title || "역사교실", exemptionReason: ticket.data.reason || "", memo: "",
+      reviewReason: "교사 직접 사용", reviewedByUid: actor.actorUid, reviewedAt: timestamp,
+      resultId: approval.resultId, createdAt: timestamp, updatedAt: timestamp });
+    writeCompletion(transaction, approval, current, requestId, actor, timestamp, helpers.now, audit);
+    return response("history-exemption-direct", requestId, [requestRef, ticketRef, approval.canonicalRef, approval.legacyRef, ...approval.attempts.map(row => row.path)],
+      { studentUid, assignmentId, exemptionId, resultId: approval.resultId, status: "approved", origin: "teacher_direct" });
+  }
   const requestRef = requestPath(semesterId, payload.requestId);
   const request = await transaction.get(requestRef);
   if (!request.exists) fail("not-found", "면제권 사용 요청을 찾을 수 없습니다.");
@@ -250,15 +319,9 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
   if (payload.approved) {
     const assignment = await assertAssignment(transaction, semesterId, id(current.assignmentId, "assignmentId"), current.uid, helpers);
     assertTicketAssignment(ticket.data, current.assignmentId, helpers.now);
-    await assertNotPassed(transaction, semesterId, current.assignmentId, current.uid, assignment);
-    resultId = resultIdFor(semesterId, current.assignmentId, current.uid);
-    const canonicalRef = `semester_assessment_results/${resultId}`;
-    const legacyRef = `${root(semesterId)}/history_classroom_results/${resultId}`;
-    const [canonical, legacy, attempts] = await Promise.all([transaction.get(canonicalRef), transaction.get(legacyRef),
-      transaction.query("semester_assessment_attempts", { field: "definitionId", operator: "==", value: assignment.definitionId })]);
-    if (canonical.exists || legacy.exists) fail("already-exists", "이미 면제 처리된 역사교실입니다.");
-    approval = { assignment, canonicalRef, legacyRef, attempts: attempts.filter((row) => row.data?.studentUid === current.uid && row.data?.resetAt == null && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(row.data.status)) };
-    refs.push(canonicalRef, legacyRef, ...approval.attempts.map((row) => row.path));
+    approval = await prepareCompletion(transaction, semesterId, current.assignmentId, current.uid, assignment);
+    resultId = approval.resultId;
+    refs.push(approval.canonicalRef, approval.legacyRef, ...approval.attempts.map((row) => row.path));
   }
   // All validation and reads precede the writes, including approval's result.
   transaction.set(ticketRef, { status: payload.approved ? "used" : "available", requestedAssignmentId: "", pendingRequestId: "",
@@ -268,21 +331,7 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
   transaction.set(requestRef, { status: targetStatus, reviewReason: payload.reviewReason, reviewedByUid: actor.actorUid, reviewedAt: timestamp,
     revision: Number(current.revision || 0) + 1, resultId, updatedAt: timestamp }, { merge: true });
   if (approval) {
-    const { assignment, canonicalRef, legacyRef, attempts } = approval;
-    const total = Array.isArray(assignment.source.blanks) ? assignment.source.blanks.length : 0;
-    const result = { resultId, semesterId, definitionId: assignment.definitionId, assessmentKind: "HISTORY_CLASSROOM",
-      studentUid: current.uid, uid: current.uid, enrollmentId: assignment.enrollment.enrollmentId, classId: assignment.enrollment.classId,
-      assignmentId: current.assignmentId, assignmentTitle: assignment.source.title || current.assignmentTitle || "역사교실",
-      studentName: current.studentName || "학생", studentGrade: current.studentGrade || "", studentClass: current.studentClass || "", studentNumber: current.studentNumber || "",
-      completionSource: "exemption", exemptionId: current.exemptionId, exemptionRequestId: payload.requestId,
-      status: "passed", passed: true, score: total, total, percent: 100, passThresholdPercent: thresholdFor(assignment.source),
-      answers: {}, answerChecks: [], approvedByUid: actor.actorUid, approvedAt: timestamp, submittedAt: timestamp,
-      submittedAtIso: helpers.now().toISOString(), createdAt: timestamp, updatedAt: timestamp,
-      reward: { status: "NOT_ELIGIBLE", awarded: false, duplicate: false, amount: 0, bonusAwarded: false, bonusAmount: 0, totalAwarded: 0,
-        blockedReason: "exemption", blockedMessage: "면제권 사용에는 보상이 지급되지 않습니다.", ledgerEntryIds: [] } };
-    transaction.create(canonicalRef, result);
-    transaction.create(legacyRef, result);
-    for (const attempt of attempts) transaction.set(attempt.path, { status: "LOCKED", lockReason: "EXEMPTION", revision: Number(attempt.data.revision || 0) + 1, updatedAt: timestamp }, { merge: true });
+    writeCompletion(transaction, approval, { ...current, semesterId }, payload.requestId, actor, timestamp, helpers.now);
   }
   return response("history-exemption-review", payload.requestId, refs, { requestId: payload.requestId, status: targetStatus, resultId });
 };

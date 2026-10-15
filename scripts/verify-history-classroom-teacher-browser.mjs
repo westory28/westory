@@ -1,7 +1,8 @@
 /** Exercises the actual teacher component with an in-memory Firestore boundary.
  * No live Firebase reads, writes, notifications, or callable requests are made.
  * Manual browser QA: node scripts/verify-history-classroom-teacher-browser.mjs --serve --port=4176
- * Scenarios: /?scenario=dashboard, new, failure, or edit. Use the app's controls
+ * Scenarios: /?scenario=dashboard, new, failure, edit, attempts, ticket,
+ * no-ticket, exempted, or exemption-failure. Use the app's controls
  * to open forms; the fixture toolbar only seeds scenarios and arms one failure.
  * --serve never imports Playwright, starts a browser, or downloads assets.
  */
@@ -172,6 +173,9 @@ const syntheticStudents = Array.from({ length: 34 }, (_, index) => ({
 for (const student of syntheticStudents) {
   serveStore[`users/${student.uid}`] = { role: "student", name: student.name, grade: "3", class: "2", number: student.number };
 }
+serveStore["users/synthetic-other-class"] = {
+  role: "student", name: "합성다른학급긴이름학생", grade: "2", class: "3", number: "1",
+};
 const assignedStudents = syntheticStudents.slice(0, 24);
 const seededAssignmentPath = `${scope}/history_classrooms/synthetic-long-assignment`;
 serveStore[seededAssignmentPath] = {
@@ -199,10 +203,80 @@ serveStore[seededAssignmentPath] = {
   updatedAt: { seconds: 1792022400, nanoseconds: 0 },
   publishedAt: { seconds: 1792022400, nanoseconds: 0 }, dueAt: null,
 };
+const attemptsStore = structuredClone(serveStore);
+Object.assign(attemptsStore[seededAssignmentPath], {
+  targetStudentUids: syntheticStudents.map((student) => student.uid),
+  targetStudentNames: syntheticStudents.map((student) => student.name),
+  targetStudentName: syntheticStudents.map((student) => student.name).join(", "),
+  targetStudentNumber: syntheticStudents.map((student) => student.number).join(", "),
+  targetStudentAccessMap: Object.fromEntries(syntheticStudents.map((student) => [student.uid, true])),
+  targetStudentReasons: Object.fromEntries(syntheticStudents.map((student, index) => [student.uid,
+    index % 3 === 0 ? "지각" : index % 3 === 1 ? "수업 태도" : "합성 검증용 개별 사유"])),
+});
+const fixtureAssignmentId = seededAssignmentPath.split("/").at(-1);
+const fixtureTimestamp = { seconds: 1792022400, nanoseconds: 0 };
+const syntheticTicket = (student, status = "available") => ({
+  uid: student.uid, studentName: student.name, studentGrade: "3", studentClass: "2",
+  studentNumber: student.number, reason: "합성 수업 활동 참여", status,
+  grantedByUid: "teacher-fixture", grantScope: "student", createdAt: fixtureTimestamp,
+  updatedAt: fixtureTimestamp, ...(status === "used" ? { usedAssignmentId: fixtureAssignmentId,
+    usedByUid: "teacher-fixture", usedAt: fixtureTimestamp } : {}),
+});
+const syntheticResult = (student, status, exemption = false) => ({
+  assignmentId: fixtureAssignmentId, assignmentTitle: longTitle, uid: student.uid,
+  studentName: student.name, studentGrade: "3", studentClass: "2", studentNumber: student.number,
+  status, passed: status === "passed", percent: status === "passed" ? 100 : 50,
+  score: status === "passed" ? 2 : 1, total: 2, passThresholdPercent: 90,
+  answers: exemption ? {} : { "saved-ocr": "고조선", "saved-manual": "삼국 시대" }, answerChecks: [],
+  completionSource: exemption ? "exemption" : "attempt", createdAt: fixtureTimestamp,
+  ...(exemption ? { exemptionId: `synthetic-ticket-${student.uid}`, approvedByUid: "teacher-fixture", approvedAt: fixtureTimestamp } : {}),
+});
+for (const [index, student] of syntheticStudents.entries()) {
+  if (index === 0 || index === 3 || (index >= 6 && index % 2 === 0)) {
+    attemptsStore[`${scope}/history_classroom_exemptions/synthetic-ticket-${student.uid}`] = syntheticTicket(student);
+  }
+  if (index === 2) {
+    attemptsStore[`${scope}/history_classroom_exemptions/synthetic-ticket-${student.uid}`] = syntheticTicket(student, "used");
+    attemptsStore[`${scope}/history_classroom_results/synthetic-exempt-${student.uid}`] = syntheticResult(student, "passed", true);
+  } else if (index === 4 || index === 5 || index >= 8 && index % 3 === 0) {
+    attemptsStore[`${scope}/history_classroom_results/synthetic-attempt-${student.uid}`] = syntheticResult(student, index === 5 ? "passed" : "failed");
+  }
+}
+const pendingStudent = syntheticStudents[6];
+const pendingRequestId = "synthetic-pending-request";
+attemptsStore[`${scope}/history_classroom_exemptions/synthetic-requested-${pendingStudent.uid}`] = {
+  ...syntheticTicket(pendingStudent, "requested"), pendingRequestId,
+  exemptionRequestId: pendingRequestId, requestedAssignmentId: fixtureAssignmentId,
+};
+attemptsStore[`${scope}/history_classroom_exemption_requests/${pendingRequestId}`] = {
+  uid: pendingStudent.uid, studentName: pendingStudent.name, studentGrade: "3", studentClass: "2",
+  studentNumber: pendingStudent.number, assignmentId: fixtureAssignmentId, assignmentTitle: longTitle,
+  exemptionId: `synthetic-requested-${pendingStudent.uid}`, exemptionReason: "합성 대기 요청",
+  status: "pending", requestedAt: fixtureTimestamp, createdAt: fixtureTimestamp, updatedAt: fixtureTimestamp,
+};
+const restrictedStudent = syntheticStudents[7];
+attemptsStore[`${scope}/history_classroom_exemptions/synthetic-other-assignment-${restrictedStudent.uid}`] = {
+  ...syntheticTicket(restrictedStudent), assignmentId: "synthetic-other-assignment",
+  createdAt: { ...fixtureTimestamp, seconds: fixtureTimestamp.seconds + 1 },
+};
+attemptsStore[`${scope}/history_classroom_exemptions/synthetic-ticket-${restrictedStudent.uid}`] = syntheticTicket(restrictedStudent);
+const legacyTicketStudent = syntheticStudents[8];
+attemptsStore[`${scope}/history_classroom_exemptions/synthetic-legacy-used-${legacyTicketStudent.uid}`] = {
+  ...syntheticTicket(legacyTicketStudent, "active"), state: "consumed", usedAt: fixtureTimestamp,
+  usedAssignmentId: "synthetic-other-assignment", usedByUid: legacyTicketStudent.uid,
+  createdAt: { ...fixtureTimestamp, seconds: fixtureTimestamp.seconds + 1 },
+};
 const mock = `
-const fixture=window.__fixture={store:${JSON.stringify(serveOnly ? serveStore : store)},writes:[],successfulWrites:[],failedWrites:[],notifications:[],reads:[],alerts:[],commands:[]};
 const serveMode=${serveOnly};
-fixture.scenario=serveMode ? new URLSearchParams(window.location.search).get('scenario') || 'dashboard' : 'automated';
+const scenario=serveMode ? new URLSearchParams(window.location.search).get('scenario') || 'dashboard' : 'automated';
+const attemptScenario=['attempts','ticket','no-ticket','exempted','exemption-failure'].includes(scenario);
+const fixture=window.__fixture={store:attemptScenario?${JSON.stringify(attemptsStore)}:${JSON.stringify(serveOnly ? serveStore : store)},writes:[],successfulWrites:[],failedWrites:[],notifications:[],reads:[],alerts:[],commands:[],commandResults:[],failedCommands:[],scenario};
+if(serveMode && ['no-ticket','exempted'].includes(scenario)) delete fixture.store[${JSON.stringify(`${scope}/history_classroom_exemptions/synthetic-ticket-${syntheticStudents[0].uid}`)}];
+if(serveMode && scenario==='exempted') {
+ fixture.store[${JSON.stringify(`${scope}/history_classroom_exemptions/synthetic-ticket-${syntheticStudents[0].uid}`)}]=${JSON.stringify(syntheticTicket(syntheticStudents[0], "used"))};
+ fixture.store[${JSON.stringify(`${scope}/history_classroom_results/synthetic-exempt-${syntheticStudents[0].uid}`)}]=${JSON.stringify(syntheticResult(syntheticStudents[0], "passed", true))};
+}
+if(serveMode && scenario==='exemption-failure') fixture.failNextExemption=true;
 if(serveMode && ['new','failure'].includes(fixture.scenario)) delete fixture.store[${JSON.stringify(seededAssignmentPath)}];
 if(serveMode && fixture.scenario==='failure') fixture.failNextWrite=true;
 const changed=()=>window.dispatchEvent(new CustomEvent('fixture-change'));
@@ -238,26 +312,61 @@ export const getAssessmentSemesterId=()=> '2026-2';
 export const buildAssessmentDefinitionId=(semesterId,kind,sourceId)=>kind.toLowerCase()+':'+semesterId+':'+sourceId;
 export const readAssessmentContentRevision=async()=>0;
 export const saveHistoryAssessmentSource=async(_config,sourceId,payload,expectedRevision)=>{
+ const commandType='saveHistoryClassroomAssignment';
+ const source=structuredClone(payload);for(const key of ['id','contentRevision','createdAt','updatedAt','deletedAt','deletedByUid'])delete source[key];
+ const commandPayload={semesterId:'2026-2',sourceId,source,expectedRevision,reason:'교사 역사교실 과제 저장'};
+ fixture.commands.push({commandType,payload:commandPayload});changed();
+ try {
  const reference={path:${JSON.stringify(scope)}+'/history_classrooms/'+sourceId};
  const fields=Object.keys(payload).filter(key=>key!=='retryResetByStudentUid');
  await setDoc(reference,payload,{mergeFields:fields});
- return {contentRevision:expectedRevision+1};
+ fixture.store[reference.path].contentRevision=expectedRevision+1;
+ const asIso=value=>value?.seconds!==undefined?new Date(value.seconds*1000).toISOString():typeof value==='string'?value:null;
+ const result={contentRevision:expectedRevision+1,publicationWindow:{publishedAt:asIso(payload.publishedAt),dueAt:asIso(payload.dueAt)}};
+ fixture.commandResults.push({commandType,payload:commandPayload,result});changed();return result;
+ } catch(error) {fixture.failedCommands.push({commandType,payload:commandPayload,code:error?.code||'error',message:String(error?.message||error)});changed();throw error;}
 };
 export const deleteHistoryAssessmentSource=async()=>{throw new Error('Deletion is outside this fixture');};
 export const executeAssessmentManagementCommand=async(commandType,payload)=>{
  fixture.commands.push({commandType,payload:structuredClone(payload)});changed();
+ const completed=result=>{fixture.commandResults.push({commandType,payload:structuredClone(payload),result:structuredClone(result)});changed();return result;};
+ try {
  if(commandType==='resetAssessmentAttempt'){
   const id=payload.definitionId.split(':').at(-1);
   const key=Object.keys(fixture.store).find(key=>key.endsWith('/history_classrooms/'+id)||key==='history_classrooms/'+id);
   await setDoc({path:key},{retryResetByStudentUid:{[payload.studentUid]:serverTimestamp()},updatedAt:serverTimestamp()},{merge:true});
-  return {};
+  return completed({});
  }
  if(commandType==='grantHistoryClassroomExemptions') {
   if(fixture.pauseGrant){fixture.pauseGrant=false;await new Promise(resolve=>fixture.releaseGrant=resolve);}
   if(fixture.failNextGrant){fixture.failNextGrant=false;throw Object.assign(new Error('INTERNAL'),{code:'functions/internal'});}
-  return {createdCount:payload.recipientUids.length,exemptionIds:payload.recipientUids.map(uid=>'exemption-'+uid)};
+  return completed({createdCount:payload.recipientUids.length,exemptionIds:payload.recipientUids.map(uid=>'exemption-'+uid)});
+ }
+ if(commandType==='applyHistoryClassroomExemption') {
+  if(fixture.pauseExemption){fixture.pauseExemption=false;await new Promise(resolve=>{fixture.releaseExemption=()=>{delete fixture.releaseExemption;changed();resolve();};changed();});}
+  const fail=message=>{throw Object.assign(new Error(message),{code:'functions/failed-precondition'});};
+  if(fixture.failNextExemption){fixture.failNextExemption=false;throw Object.assign(new Error('합성 면제 처리 오류입니다. 다시 시도해 주세요.'),{code:'functions/unavailable'});}
+  const sourcePath=${JSON.stringify(scope)}+'/history_classrooms/'+payload.assignmentId;
+  const ticketPath=${JSON.stringify(scope)}+'/history_classroom_exemptions/'+payload.exemptionId;
+  const source=fixture.store[sourcePath],ticket=fixture.store[ticketPath];
+  if(!source?.isPublished||!source.targetStudentUids?.includes(payload.studentUid))fail('공개된 과제에 배정된 학생만 면제할 수 있습니다.');
+  if(!ticket||ticket.uid!==payload.studentUid||!['available','active'].includes(ticket.status)||ticket.usedAt||ticket.usedAssignmentId||ticket.usedByUid||['used','consumed','requested','pending','revoked'].includes(ticket.state))fail('사용 가능한 면제권이 없습니다.');
+  if(ticket.assignmentId&&ticket.assignmentId!==payload.assignmentId)fail('이 과제에서 사용할 수 없는 면제권입니다.');
+  if(Object.entries(fixture.store).some(([key,value])=>key.includes('/history_classroom_exemption_requests/')&&value.uid===payload.studentUid&&value.assignmentId===payload.assignmentId&&['pending','requested'].includes(value.status)))fail('대기 중인 면제권 사용 요청을 먼저 검토해 주세요.');
+  if(Object.entries(fixture.store).some(([key,value])=>key.includes('/history_classroom_results/')&&value.uid===payload.studentUid&&value.assignmentId===payload.assignmentId&&(value.passed||value.completionSource==='exemption')))fail('이미 통과하거나 면제된 과제입니다.');
+  const resultId='synthetic-direct-exemption-'+payload.assignmentId+'-'+payload.studentUid;
+  const resultPath=${JSON.stringify(scope)}+'/history_classroom_results/'+resultId;
+  const requestId='synthetic-direct-request-'+payload.assignmentId+'-'+payload.studentUid;
+  const timestamp=serverTimestamp();
+  const result={resultId,definitionId:'history_classroom:'+payload.semesterId+':'+payload.assignmentId,semesterId:payload.semesterId,assignmentId:payload.assignmentId,assignmentTitle:source.title,uid:payload.studentUid,studentUid:payload.studentUid,studentName:ticket.studentName,studentGrade:'3',studentClass:'2',studentNumber:ticket.studentNumber,status:'passed',passed:true,score:source.blanks.length,total:source.blanks.length,percent:100,passThresholdPercent:source.passThresholdPercent,completionSource:'exemption',exemptionId:payload.exemptionId,exemptionRequestId:requestId,origin:'teacher_direct',initiatedByUid:'teacher-fixture',approvedByUid:'teacher-fixture',approvedAt:timestamp,createdAt:timestamp,updatedAt:timestamp,answers:{},answerChecks:[],reward:{status:'NOT_ELIGIBLE',awarded:false,totalAwarded:0}};
+  fixture.store[ticketPath]={...ticket,status:'used',usedAssignmentId:payload.assignmentId,usedByUid:payload.studentUid,usedAt:timestamp,origin:'teacher_direct',initiatedByUid:'teacher-fixture',exemptionRequestId:requestId};
+  fixture.store[resultPath]=result;
+  fixture.store['semester_assessment_results/'+resultId]=structuredClone(result);
+  fixture.store[${JSON.stringify(scope)}+'/history_classroom_exemption_requests/'+requestId]={...result,status:'approved',reviewedByUid:'teacher-fixture',reviewedAt:timestamp};
+  return completed({studentUid:payload.studentUid,assignmentId:payload.assignmentId,exemptionId:payload.exemptionId,resultId,status:'approved',origin:'teacher_direct'});
  }
  throw new Error('Unexpected command '+commandType);
+ } catch(error) {fixture.failedCommands.push({commandType,payload:structuredClone(payload),code:error?.code||'error',message:String(error?.message||error)});changed();throw error;}
 };
 export const executeStudentAssessmentCommand=async()=>{throw new Error('Student mutation is outside this teacher fixture');};
 `;
@@ -320,6 +429,7 @@ const fixtureShellCss = `
 #fixture-toolbar a,#fixture-toolbar button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;text-decoration:none}
 #fixture-toolbar a[aria-current]{background:#eff6ff;color:#2563eb;border-color:#2563eb}
 #fixture-toolbar button:focus-visible,#fixture-toolbar a:focus-visible,#fixture-records summary:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+#fixture-release-exemption:not(:disabled){position:fixed;right:12px;bottom:12px;z-index:2147483600;max-width:calc(100vw - 24px);background:#1d4ed8;color:#fff;border-color:#1d4ed8;box-shadow:0 4px 18px #0003}
 #fixture-status{flex-basis:100%;overflow-wrap:anywhere;color:#475569}
 #fixture-records{margin:16px;padding:12px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;min-width:0}
 #fixture-records summary{min-height:44px;cursor:pointer;font-weight:700;color:#334155}
@@ -335,8 +445,16 @@ const fixtureControls = `
     <a href="/?scenario=new" data-scenario="new">신규 등록</a>
     <a href="/?scenario=failure" data-scenario="failure">저장 실패·재시도</a>
     <a href="/?scenario=edit" data-scenario="edit">편집</a>
+    <a href="/?scenario=attempts" data-scenario="attempts">응시 현황 34명</a>
+    <a href="/?scenario=ticket" data-scenario="ticket">면제권 보유</a>
+    <a href="/?scenario=no-ticket" data-scenario="no-ticket">면제권 없음</a>
+    <a href="/?scenario=exempted" data-scenario="exempted">면제 완료</a>
+    <a href="/?scenario=exemption-failure" data-scenario="exemption-failure">면제 실패·재시도</a>
   </nav>
   <button type="button" id="fixture-fail-once">다음 저장 1회 실패</button>
+  <button type="button" id="fixture-fail-exemption-once">다음 면제 1회 실패</button>
+  <button type="button" id="fixture-pause-exemption">다음 면제 처리 대기</button>
+  <button type="button" id="fixture-release-exemption" disabled>대기 처리 완료</button>
   <button type="button" id="fixture-clear-records">QA 기록 지우기</button>
   <span id="fixture-status" role="status" aria-live="polite"></span>
 </div>`;
@@ -344,16 +462,25 @@ const fixtureRecords = `<details id="fixture-records"><summary id="fixture-recor
 const fixtureUiScript = `
 const updateFixtureRecords=()=>{
  const fixture=window.__fixture;if(!fixture)return;
- const data={scenario:fixture.scenario,writeAttempts:fixture.writes.length,successfulWrites:fixture.successfulWrites.length,failedWrites:fixture.failedWrites.length,notifications:fixture.notifications.length,notificationRecipients:fixture.notifications.reduce((sum,item)=>sum+(item.recipientUids?.length||0),0),failNextWrite:!!fixture.failNextWrite,lastWritePath:fixture.writes.at(-1)?.path||null,payload:fixture.writes.at(-1)?.data||null,writes:fixture.writes,notificationPayloads:fixture.notifications,alerts:fixture.alerts,commands:fixture.commands};
- document.getElementById('fixture-records-summary').textContent='QA 기록 · 저장 시도 '+data.writeAttempts+' / 성공 '+data.successfulWrites+' / 실패 '+data.failedWrites+' · 알림 '+data.notifications+'회';
+ const rows=Object.entries(fixture.store);
+ const exemptions=rows.filter(([key])=>key.includes('/history_classroom_exemptions/')).map(([path,data])=>({path,...data}));
+ const results=rows.filter(([key])=>key.includes('/history_classroom_results/')).map(([path,data])=>({path,...data}));
+ const requests=rows.filter(([key])=>key.includes('/history_classroom_exemption_requests/')).map(([path,data])=>({path,...data}));
+ const data={scenario:fixture.scenario,writeAttempts:fixture.writes.length,successfulWrites:fixture.successfulWrites.length,failedWrites:fixture.failedWrites.length,commandAttempts:fixture.commands.length,sourceSaveCommands:fixture.commands.filter(item=>item.commandType==='saveHistoryClassroomAssignment').length,directExemptionCommands:fixture.commands.filter(item=>item.commandType==='applyHistoryClassroomExemption').length,successfulCommands:fixture.commandResults.length,failedCommands:fixture.failedCommands.length,notifications:fixture.notifications.length,notificationRecipients:fixture.notifications.reduce((sum,item)=>sum+(item.recipientUids?.length||0),0),failNextWrite:!!fixture.failNextWrite,failNextExemption:!!fixture.failNextExemption,pauseExemption:!!fixture.pauseExemption,exemptionWaiting:!!fixture.releaseExemption,lastWritePath:fixture.writes.at(-1)?.path||null,payload:fixture.writes.at(-1)?.data||null,writes:fixture.writes,notificationPayloads:fixture.notifications,alerts:fixture.alerts,commands:fixture.commands,commandResults:fixture.commandResults,commandFailures:fixture.failedCommands,exemptions,results,requests};
+ document.getElementById('fixture-records-summary').textContent='QA 기록 · 저장 '+data.writeAttempts+'회 · 명령 '+data.commandAttempts+'회 / 성공 '+data.successfulCommands+' / 실패 '+data.failedCommands+' · 알림 '+data.notifications+'회';
  document.getElementById('fixture-records-json').textContent=JSON.stringify(data,null,2);
- const hint=['new','failure'].includes(fixture.scenario)?'앱의 새 역사교실 버튼으로 등록을 시작하세요.':'긴 제목 과제 1개 · 합성 학생 34명 · 배정 24명. 앱의 행 수정 버튼으로 편집하세요.';
- document.getElementById('fixture-status').textContent=(fixture.failNextWrite?'다음 저장은 합성 오류로 1회 실패합니다. ':'')+hint+(fixture.alerts.length?' 최근 메시지: '+fixture.alerts.at(-1):'');
+ const attemptScenario=['attempts','ticket','no-ticket','exempted','exemption-failure'].includes(fixture.scenario);
+ const hint=['new','failure'].includes(fixture.scenario)?'앱의 새 역사교실 버튼으로 등록을 시작하세요.':attemptScenario?'합성 학생 34명 배정. 01번: '+(fixture.scenario==='no-ticket'?'면제권 없음':fixture.scenario==='exempted'?'면제 완료':'면제권 보유')+' · 02번: 면제권 없음 · 03번: 면제 완료 · 04번: 면제권 보유 · 05번: 미통과 · 06번: 통과 · 07번: 면제 요청 대기(별도 보유권도 있음). 앱의 행 수정 버튼으로 응시 현황을 확인하세요.':'긴 제목 과제 1개 · 합성 학생 34명 · 배정 24명. 앱의 행 수정 버튼으로 편집하세요.';
+ document.getElementById('fixture-status').textContent=(fixture.failNextWrite?'다음 저장 1회 실패. ':'')+(fixture.failNextExemption?'다음 면제 1회 실패. ':'')+(fixture.pauseExemption?'다음 면제는 완료 버튼을 누를 때까지 대기합니다. ':'')+(fixture.releaseExemption?'면제 명령 대기 중. ':'')+hint+(fixture.alerts.length?' 최근 메시지: '+fixture.alerts.at(-1):'');
+ document.getElementById('fixture-release-exemption').disabled=!fixture.releaseExemption;
  document.querySelectorAll('[data-scenario]').forEach(link=>{if(link.dataset.scenario===fixture.scenario)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
 };
 window.addEventListener('fixture-change',updateFixtureRecords);
 document.getElementById('fixture-fail-once').addEventListener('click',()=>{if(window.__fixture){window.__fixture.failNextWrite=true;updateFixtureRecords();}});
-document.getElementById('fixture-clear-records').addEventListener('click',()=>{const fixture=window.__fixture;if(!fixture)return;for(const key of ['writes','successfulWrites','failedWrites','notifications','alerts','commands'])fixture[key].length=0;updateFixtureRecords();});
+document.getElementById('fixture-fail-exemption-once').addEventListener('click',()=>{if(window.__fixture){window.__fixture.failNextExemption=true;updateFixtureRecords();}});
+document.getElementById('fixture-pause-exemption').addEventListener('click',()=>{if(window.__fixture){window.__fixture.pauseExemption=true;updateFixtureRecords();}});
+document.getElementById('fixture-release-exemption').addEventListener('click',()=>{window.__fixture?.releaseExemption?.();updateFixtureRecords();});
+document.getElementById('fixture-clear-records').addEventListener('click',()=>{const fixture=window.__fixture;if(!fixture)return;for(const key of ['writes','successfulWrites','failedWrites','notifications','alerts','commands','commandResults','failedCommands'])fixture[key].length=0;updateFixtureRecords();});
 `;
 const fixtureBody = serveOnly
   ? `<div id="fixture-shell"><aside id="fixture-sidebar" aria-label="합성 교사 사이드바"><strong>Westory</strong><p>교사 포털 · 합성 화면</p><p>대시보드</p><p>수업 관리</p><p aria-current="page">역사교실</p><p>학생 관리</p><p>설정</p><p>가로 폭 224px</p></aside><div id="fixture-main">${fixtureControls}<div id="root"></div>${fixtureRecords}</div></div><script>${fixtureUiScript}</script>`
@@ -392,7 +519,7 @@ await new Promise((resolve, reject) => {
 if (serveOnly) {
   const base = `http://127.0.0.1:${server.address().port}`;
   console.log(`History Classroom fixture ready (HTTP server only; synthetic data; external requests blocked): ${base}/?scenario=dashboard`);
-  console.log(`Scenarios: ${base}/?scenario=new | ${base}/?scenario=failure | ${base}/?scenario=edit`);
+  console.log(`Scenarios: ${['new','failure','edit','attempts','ticket','no-ticket','exempted','exemption-failure'].map(scenario => base + '/?scenario=' + scenario).join(' | ')}`);
   console.log("Use the app's new/edit controls; inspect the QA records panel for payloads and synthetic write/notification counts. Restart this server after source changes.");
   await new Promise((resolve) => {
     const stop = () => { server.closeAllConnections(); server.close(resolve); };
@@ -572,46 +699,44 @@ try {
         .count(),
       0,
     );
-    await page.getByPlaceholder("이름으로 전체 학생 검색").fill("검증학생");
+    await page.getByLabel("전체 학생 이름 검색", { exact: true }).fill("검증학생");
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     assert.equal(await page.getByLabel("검증학생 배정 사유", { exact: true }).count(), 0, "A student is not added without a reason");
-    await page.getByText("배정 사유를 선택해 주세요.", { exact: true }).waitFor();
-    const reasonSelect = page.getByLabel("추가할 학생 배정 사유", { exact: true });
-    assert.deepEqual(await reasonSelect.locator("option").allTextContents(), [
-      "사유 선택",
+    await page.getByText("배정 사유를 입력해 주세요.", { exact: true }).waitFor();
+    const reasonInput = page.getByLabel("추가할 학생 배정 사유", { exact: true });
+    assert.equal(await reasonInput.getAttribute("list"), "history-assignment-reasons");
+    assert.deepEqual(await page.locator("#history-assignment-reasons option").evaluateAll((options) => options.map((option) => option.value)), [
       "1인 1역 및 청소 안함",
       "지각",
       "수업 태도",
       "교사 지시 불이행",
-      "기타",
     ]);
-    await reasonSelect.selectOption("__other__");
+    await reasonInput.fill("   ");
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     assert.equal(
       await page.evaluate(() => window.__fixture.writes.length),
       0,
-      "Explicit other requires a reason",
+      "Whitespace does not satisfy the required reason",
     );
     assert(
       await page
-        .getByText("기타 사유를 입력해 주세요.", { exact: true })
+        .getByText("배정 사유를 입력해 주세요.", { exact: true })
         .isVisible(),
     );
     await page.screenshot({
       path: path.join(
         evidence,
-        `teacher-create-other-required-${viewport.width}.png`,
+        `teacher-create-reason-required-${viewport.width}.png`,
       ),
       fullPage: true,
     });
-    await page
-      .getByLabel("추가할 학생 기타 사유", { exact: true })
-      .fill("교사가 작성한 세부 사유");
-    await reasonSelect.selectOption("지각");
+    await reasonInput.fill("교사가 작성한 세부 사유");
+    assert.equal(await reasonInput.inputValue(), "교사가 작성한 세부 사유");
+    await reasonInput.fill("지각");
     assert.equal(
       await page.getByLabel("추가할 학생 기타 사유", { exact: true }).count(),
       0,
-      "Standard reasons do not show a free text field",
+      "Preset and custom reasons share the same input",
     );
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     const assignedReason = page.getByLabel("검증학생 배정 사유", { exact: true });
@@ -911,35 +1036,30 @@ try {
       "any passed result remains completed",
     );
     assert.deepEqual(await panel.getByRole("columnheader").allTextContents(), [
-      "학년",
-      "반",
-      "번호",
-      "이름",
-      "점수",
-      "상태",
-      "리셋",
+      "학생",
+      "응시 결과",
+      "관리",
     ]);
     for (const row of [pending, cancelled, passed]) {
       const geometry = await row.boundingBox();
       assert(
-        geometry.height >= 44 && geometry.height <= 52,
-        `compact one-line student row: ${JSON.stringify(geometry)}`,
+        geometry.height >= 44 && geometry.height <= 80,
+        `compact responsive student row: ${JSON.stringify(geometry)}`,
       );
     }
     for (const row of [pending, cancelled]) {
       const reset = row.getByRole("button", { name: /재응시 제한 리셋$/ });
       const geometry = await reset.evaluate((el) => {
         const hit = el.getBoundingClientRect();
-        const visual = el.querySelector("span").getBoundingClientRect();
-        return { hitHeight: hit.height, visualHeight: visual.height };
+        return { hitHeight: hit.height, borderWidth: parseFloat(getComputedStyle(el).borderTopWidth), nestedControls: el.querySelectorAll("button,input,select").length };
       });
       assert(
         geometry.hitHeight >= 44,
         "compact reset retains a 44px touch area",
       );
       assert(
-        Math.abs(geometry.visualHeight - 28) < 1,
-        `reset visual height is 28px: ${JSON.stringify(geometry)}`,
+        geometry.borderWidth > 0 && geometry.nestedControls === 0,
+        `reset is one bordered button: ${JSON.stringify(geometry)}`,
       );
     }
     await cancelled.click();
@@ -1165,8 +1285,8 @@ try {
     await page
       .getByRole("button", { name: "배정 학생 추가", exact: true })
       .click();
-    await page.getByLabel("추가할 학생 배정 사유", { exact: true }).selectOption("수업 태도");
-    await page.getByPlaceholder("학년 반 번호 또는 이름 검색").fill("추가학생");
+    await page.getByLabel("추가할 학생 배정 사유", { exact: true }).fill("수업 태도");
+    await page.getByLabel("전체 학생 이름 검색", { exact: true }).fill("추가학생");
     await page.getByRole("button", { name: /추가학생.*3-2/ }).click();
     const unsavedReset = page
       .getByRole("row", { name: "추가학생 응시 현황", exact: true })

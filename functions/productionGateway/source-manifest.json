@@ -42,7 +42,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "5289acfd2e555ccc0fd3ee985efb2dda385bc9d202ebd99cb992a7d31e50d594",
+      "sha256": "2ce5a336cb91167f83f4d9ae3aa5cb298cc35a583212a2cdd013b5e5feae3379",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "Preserve current lesson-source metadata in the History Classroom source command.",
@@ -50,7 +50,8 @@
         "Restrict new History Classroom sources to worksheets; keep old map worksheets byte-for-byte on settings updates, treat omitted prompt/source defaults as equivalent, and reject live map blank writes.",
         "2026-10-15: Optional bounded local diagnostics travel with existing saves/submissions; frozen learning metadata and unseen concept rechecks preserve grading/reward authority.",
         "Freeze question presentation at attempt start, preserve immutable review source on submit/replay, and omit oversized review sources without changing grading or rewards.",
-        "2026-10-15: Guard History Classroom definition create/update/publication with the committed source revision and retain the prepared revision for concurrent-edit safety."
+        "2026-10-15: Guard History Classroom definition create/update/publication with the committed source revision and retain the prepared revision for concurrent-edit safety.",
+        "2026-10-15: atomic History Classroom save and audited teacher-direct exemption."
       ]
     },
     {
@@ -162,10 +163,11 @@
       "sourceFile": "index.js",
       "file": "productionSource.js",
       "originalSha256": "b1e4d2e8137f26f789f1037850e668c5194b5089421225d1ee275b6869b672cf",
-      "sha256": "87d8b25eb6db82c91118d9474bb7b51a7eed1f22a957b642a4715c1a938a0e01",
+      "sha256": "772963d4cd7d70439e8e3fbdfed9317cb909cd7253e5b695f83858c324527e4f",
       "changes": [
         "Reuse the root initialized Firebase Admin app.",
-        "Lesson core-point record and completion catalog now exclude deleted/foreign-class sources and require an active writable semester, enrollment and classroom."
+        "Lesson core-point record and completion catalog now exclude deleted/foreign-class sources and require an active writable semester, enrollment and classroom.",
+        "2026-10-15: atomic History Classroom save and audited teacher-direct exemption."
       ]
     },
     {
@@ -244,9 +246,10 @@
       "sourceFile": "routineContentWrites.json",
       "file": "routineContentWrites.json",
       "originalSha256": "edb30ba0f1bd8014d6a85331c7e084dae0edb7289a010064be6515d4b3faea52",
-      "sha256": "6ab371dbee78f4faced3bb72c612b0fa84caa009c9586328277c855988b5e656",
+      "sha256": "b0bb332809fef09f0d8133484617c89ad330d821d1a895ccfc5414b0488388ed",
       "changes": [
-        "2026-10-15: exemption grant/review/revoke use the existing routine teacher session policy; actor, semester and enrollment checks remain enforced."
+        "2026-10-15: exemption grant/review/revoke use the existing routine teacher session policy; actor, semester and enrollment checks remain enforced.",
+        "2026-10-15: atomic History Classroom save and audited teacher-direct exemption."
       ]
     },
     {
@@ -420,10 +423,11 @@
       "sourceFile": null,
       "file": "historyClassroomExemptions.js",
       "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "sha256": "ee5668f5ec7f9f4b625028982ac2d3d52a8d079899eefac511be1cbcdac83667",
+      "sha256": "6a12b9551cc8914109171beb4c28867dca551d2239728d0b944a95351f5836fd",
       "changes": [
         "New canonical adapter, not restored legacy code: active semester/enrollment/class validated reusable grants, requests, reviews, and atomic compatible/canonical exemption results.",
-        "Batch and reuse transaction-local grant validation reads while retaining canonical semester, enrollment-slot, profile and class checks; preserve atomic receipt-protected writes."
+        "Batch and reuse transaction-local grant validation reads while retaining canonical semester, enrollment-slot, profile and class checks; preserve atomic receipt-protected writes.",
+        "2026-10-15: atomic History Classroom save and audited teacher-direct exemption."
       ]
     },
     {

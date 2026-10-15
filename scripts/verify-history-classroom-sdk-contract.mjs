@@ -47,6 +47,8 @@ const requests = [];
 const serverErrors = [];
 const receipts = new Map();
 let ticketWrites = 0;
+let saveWrites = 0;
+let dropSaveResponse = false;
 let dropGrantResponse = false;
 let failStatus = false;
 let rejectSession = false;
@@ -120,27 +122,6 @@ const server = http.createServer(async (request, response) => {
       },
       "The real session helper injects the validated proof",
     );
-    if (["upsertHistoryClassroomSource", "createAssessmentDefinition", "updateAssessmentDefinition", "transitionAssessmentDefinition"].includes(data.commandType)) {
-      assert.equal(name, "executeCommand");
-      const normalized = normalizeAssessmentPayload(data.commandType, data.payload);
-      if (data.commandType === "upsertHistoryClassroomSource") {
-        assert.equal(normalized.source.blanks.length, 28);
-        assert.equal(normalized.source.targetStudentUids.length, 2);
-        assert.equal(normalized.source.passThresholdPercent, 90);
-        assert.equal(normalized.source.timeLimitMinutes, 10);
-        assert.equal(normalized.source.cooldownMinutes, 5);
-        assert.equal(normalized.source.publishedAt, "2099-01-01T00:00:00.000Z");
-        assert.equal(normalized.source.dueAt, null);
-        assert.equal("createdAt" in normalized.source, false);
-        assert.equal("updatedAt" in normalized.source, false);
-        return reply(response, 400, { error: { status: "FAILED_PRECONDITION", message: "Synthetic source boundary reached",
-          details: { reason: "TEST_SOURCE_BOUNDARY" } } });
-      }
-      assert.equal(normalized.expectedSourceRevision, 1);
-      return reply(response, 200, { result: { commandId: data.commandId, commandType: data.commandType, status: "SUCCEEDED", replayed: false,
-        result: { definitionId: normalized.definitionId, revision: 2 } } });
-    }
-    assert.equal(data.commandType, "grantHistoryClassroomExemptions");
     if (name === "getCommandStatus") {
       if (failStatus)
         return reply(response, 503, {
@@ -155,6 +136,39 @@ const server = http.createServer(async (request, response) => {
         },
       });
     }
+    if (["saveHistoryClassroomAssignment", "createAssessmentDefinition", "updateAssessmentDefinition", "transitionAssessmentDefinition", "applyHistoryClassroomExemption"].includes(data.commandType)) {
+      assert.equal(name, "executeCommand");
+      const normalized = normalizeAssessmentPayload(data.commandType, data.payload);
+      if (data.commandType === "applyHistoryClassroomExemption") {
+        assert.deepEqual(normalized, { semesterId: "2026-2", assignmentId: "sdk-source", studentUid: "synthetic-student", exemptionId: "synthetic-ticket" });
+        return reply(response, 200, { result: { commandId: data.commandId, commandType: data.commandType, status: "SUCCEEDED", replayed: false,
+          result: { ...normalized, resultId: "exemption-synthetic", status: "approved", origin: "teacher_direct" } } });
+      }
+      if (data.commandType === "saveHistoryClassroomAssignment") {
+        assert.equal(normalized.source.blanks.length, 28);
+        assert.equal(normalized.source.targetStudentUids.length, 2);
+        assert.equal(normalized.source.passThresholdPercent, 90);
+        assert.equal(normalized.source.timeLimitMinutes, 10);
+        assert.equal(normalized.source.cooldownMinutes, 5);
+        assert.equal(normalized.source.publishedAt, "2099-01-01T00:00:00.000Z");
+        assert.equal(normalized.source.dueAt, "2099-01-02T00:00:00.000Z");
+        assert.equal(normalized.source.dueWindowDays, 1);
+        assert.equal("createdAt" in normalized.source, false);
+        assert.equal("updatedAt" in normalized.source, false);
+        if (!receipts.has(data.commandId)) {
+          saveWrites += 1;
+          receipts.set(data.commandId, { commandId: data.commandId, commandType: data.commandType, status: "SUCCEEDED", replayed: false,
+            result: { sourceId: normalized.sourceId, contentRevision: 1, definitionId: `history_classroom:2026-2:${normalized.sourceId}`, status: "PUBLISHED",
+              publicationWindow: { publishedAt: normalized.source.publishedAt, dueAt: normalized.source.dueAt } } });
+        }
+        if (dropSaveResponse) { dropSaveResponse = false; response.destroy(); return; }
+        return reply(response, 200, { result: receipts.get(data.commandId) });
+      }
+      assert.equal(normalized.expectedSourceRevision, 1);
+      return reply(response, 200, { result: { commandId: data.commandId, commandType: data.commandType, status: "SUCCEEDED", replayed: false,
+        result: { definitionId: normalized.definitionId, revision: 2 } } });
+    }
+    assert.equal(data.commandType, "grantHistoryClassroomExemptions");
     assert.equal(name, "executeCommand");
     assert.match(data.commandId, /^[a-f0-9-]{36}$/);
     const previous = receipts.get(data.commandId);
@@ -234,7 +248,7 @@ try {
   const bundle = await build({
     stdin: {
       contents: `
-        export { grantHistoryClassroomExemptions } from "./src/lib/historyClassroom";
+        export { grantHistoryClassroomExemptions, applyHistoryClassroomExemption } from "./src/lib/historyClassroom";
         export { sanitizeHistoryClassroomAssignmentForWrite } from "./src/lib/historyClassroom";
         export { saveHistoryAssessmentSource, toAssessmentHistorySource } from "./src/lib/assessmentRelease";
         export { executeAssessmentManagementCommand } from "./src/lib/assessmentLifecycle";
@@ -381,16 +395,38 @@ try {
 
   const sourcePayload = api.sanitizeHistoryClassroomAssignmentForWrite({
     title: "조선의 건국", sourceType: "lesson", lessonUnitId: "lesson-unit", lessonTitle: "조선의 건국",
-    isPublished: true, timeLimitMinutes: 10, cooldownMinutes: 5, passThresholdPercent: 90, dueWindowDays: null,
+    isPublished: true, timeLimitMinutes: 10, cooldownMinutes: 5, passThresholdPercent: 90, dueWindowDays: 1,
     targetStudentUids: selected.slice(0, 2), targetStudentReasons: Object.fromEntries(selected.slice(0, 2).map((id) => [id, "지각"])),
     blanks: Array.from({ length: 28 }, (_, index) => ({ id: `blank-${index + 1}`, answer: `정답 ${index + 1}` })),
     createdAt: api.serverTimestamp(), updatedAt: api.serverTimestamp(),
-    publishedAt: api.Timestamp.fromDate(new Date("2099-01-01T00:00:00.000Z")), dueAt: null,
+    publishedAt: api.Timestamp.fromDate(new Date("2099-01-01T00:00:00.000Z")), dueAt: api.Timestamp.fromDate(new Date("2099-01-02T00:00:00.000Z")),
   });
   assert.equal(api.toAssessmentHistorySource(sourcePayload).publishedAt, "2099-01-01T00:00:00.000Z");
-  await assert.rejects(api.saveHistoryAssessmentSource(config, "sdk-source", sourcePayload, 0),
-    (error) => error.details?.reason === "TEST_SOURCE_BOUNDARY",
-    "Real source planner must serialize Timestamp/sentinels and reach the server with a 10-minute-old authenticated session");
+  const beforeSave = requests.length;
+  const saved = await api.saveHistoryAssessmentSource(config, "sdk-source", sourcePayload, 0);
+  assert.deepEqual(requests.slice(beforeSave).map(({ name }) => name), ["openApplicationSession", "executeCommand"]);
+  assert.equal(saved.contentRevision, 1);
+  assert.equal(saved.publicationWindow.publishedAt, "2099-01-01T00:00:00.000Z");
+  assert.equal(saved.publicationWindow.dueAt, "2099-01-02T00:00:00.000Z");
+  assert.equal(saveWrites, 1);
+  dropSaveResponse = true;
+  failStatus = true;
+  await assert.rejects(api.saveHistoryAssessmentSource(config, "sdk-retry", sourcePayload, 0));
+  const uncertainSave = requests.findLast(({ name }) => name === "executeCommand").data;
+  assert.equal(saveWrites, 2);
+  failStatus = false;
+  const recoveredSave = await api.saveHistoryAssessmentSource(config, "sdk-retry", { ...sourcePayload,
+    publishedAt: api.Timestamp.fromDate(new Date("2099-01-02T00:00:00.000Z")),
+    dueAt: api.Timestamp.fromDate(new Date("2099-01-03T00:00:00.000Z")) }, 0);
+  const saveRetry = requests.findLast(({ name }) => name === "executeCommand").data;
+  assert.equal(saveRetry.commandId, uncertainSave.commandId);
+  assert.deepEqual(saveRetry.payload, uncertainSave.payload);
+  assert.equal(saveWrites, 2);
+  assert.equal(recoveredSave.publicationWindow.publishedAt, "2099-01-01T00:00:00.000Z");
+  assert.equal(recoveredSave.publicationWindow.dueAt, "2099-01-02T00:00:00.000Z", "Retry must not extend the original one-day deadline");
+  const direct = await api.applyHistoryClassroomExemption(config, { assignmentId: "sdk-source", studentUid: "synthetic-student", exemptionId: "synthetic-ticket" });
+  assert.equal(direct.origin, "teacher_direct");
+  assert.equal(direct.status, "approved");
   const definitionPayload = { definitionId: "history_classroom:2026-2:sdk-source", semesterId: "2026-2", assessmentKind: "HISTORY_CLASSROOM",
     sourceId: "sdk-source", title: "조선의 건국", durationSeconds: 600, cooldownMinutes: 5, maxAttempts: 20,
     assignedClassIds: [], opensAt: "", closesAt: "", expectedSourceRevision: 1 };
@@ -422,7 +458,7 @@ try {
     "Synthetic HTTP boundary accepted every real SDK request",
   );
   console.log(
-    "PASS History Classroom SDK contract: real client/session/archive aliases/Auth/Functions SDK, class grants/receipt recovery, 28-blank source Timestamp serialization, create/update/publish without stale-auth step-up and expired-session rejection; loopback HTTP only",
+    "PASS History Classroom SDK contract: real client/session/archive aliases/Auth/Functions SDK, class grants/receipt recovery, atomic 1-command save + original-date receipt retry, 28-blank Timestamp serialization, teacher direct exemption, create/update/publish without stale-auth step-up and expired-session rejection; loopback HTTP only",
   );
 } finally {
   if (api?.app) await api.deleteApp(api.app);

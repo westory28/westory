@@ -12082,6 +12082,9 @@ const authorizeCommandGatewayActor = async ({
     const isStudentCommand =
       assessmentLifecycle.STUDENT_COMMAND_TYPES.has(commandType);
     const role = String(profile.role || "student").trim() || "student";
+    if (commandType === assessmentLifecycle.ASSESSMENT_COMMAND_TYPES.APPLY_HISTORY_CLASSROOM_EXEMPTION && !["teacher", "admin"].includes(role)) {
+      throw new HttpsError("permission-denied", "교사만 면제권을 사용할 수 있습니다.", { reason: "ASSESSMENT_MANAGE_REQUIRED" });
+    }
     if (isStudentCommand) {
       if (role !== "student") {
         throw new HttpsError(

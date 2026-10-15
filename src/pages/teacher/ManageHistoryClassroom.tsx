@@ -27,6 +27,7 @@ import {
   saveHistoryAssessmentSource,
 } from "../../lib/assessmentRelease";
 import {
+  applyHistoryClassroomExemption,
   buildAnswerOptions,
   buildHistoryClassroomPublishWindow,
   formatHistoryClassroomRemainingWindow,
@@ -114,6 +115,7 @@ interface HistoryClassroomExemption {
   number: string;
   reason: string;
   status: string;
+  assignmentId: string;
   createdAt: unknown;
   expiresAt: unknown;
   requestId: string;
@@ -127,6 +129,7 @@ interface HistoryClassroomExemptionRequest {
   className: string;
   number: string;
   assignmentTitle: string;
+  assignmentId: string;
   reason: string;
   status: ExemptionRequestStatus;
   createdAt: unknown;
@@ -545,12 +548,28 @@ const normalizeExemptionRequestStatus = (
   return "pending";
 };
 
+const getHistoryExemptionStatus = (data: Record<string, unknown>) => {
+  if (data.usedAt || data.usedAssignmentId || data.usedByUid) return "used";
+  if (data.revokedAt) return "revoked";
+  const statuses = [data.status, data.state].filter(Boolean).map(String);
+  if (statuses.some((status) => ["used", "consumed"].includes(status)))
+    return "used";
+  if (statuses.some((status) => ["requested", "pending"].includes(status)))
+    return "requested";
+  if (statuses.includes("revoked")) return "revoked";
+  return statuses.every((status) => ["available", "active"].includes(status))
+    ? "available"
+    : "invalid";
+};
+
 const normalizeHistoryClassroomExemption = (
   id: string,
   data: Record<string, unknown>,
 ): HistoryClassroomExemption => ({
   id,
-  uid: String(data.uid || data.studentUid || "").trim(),
+  uid: String(
+    data.uid || data.studentUid || data.ownerUid || data.recipientUid || "",
+  ).trim(),
   studentName: String(data.studentName || data.name || "").trim(),
   grade: String(data.grade || data.studentGrade || "").trim(),
   className: String(
@@ -558,7 +577,8 @@ const normalizeHistoryClassroomExemption = (
   ).trim(),
   number: String(data.number || data.studentNumber || "").trim(),
   reason: String(data.reason || data.memo || "").trim(),
-  status: String(data.status || "active").trim() || "active",
+  status: getHistoryExemptionStatus(data),
+  assignmentId: String(data.assignmentId || "").trim(),
   createdAt: data.createdAt || data.grantedAt || null,
   expiresAt: data.expiresAt || null,
   requestId: String(data.requestId || "").trim(),
@@ -577,6 +597,7 @@ const normalizeHistoryClassroomExemptionRequest = (
   ).trim(),
   number: String(data.number || data.studentNumber || "").trim(),
   assignmentTitle: String(data.assignmentTitle || "").trim(),
+  assignmentId: String(data.assignmentId || "").trim(),
   reason: String(data.reason || data.exemptionReason || data.memo || "").trim(),
   status: normalizeExemptionRequestStatus(data.status || data.reviewStatus),
   createdAt: data.createdAt || data.requestedAt || null,
@@ -938,13 +959,55 @@ const AssignmentReasonField: React.FC<{
   value: string;
   explicitOther: boolean;
   showError: boolean;
+  compact?: boolean;
   onChange: (value: string, other: boolean) => void;
-}> = ({ id, studentName, value, explicitOther, showError, onChange }) => {
+}> = ({
+  id,
+  studentName,
+  value,
+  explicitOther,
+  showError,
+  compact = false,
+  onChange,
+}) => {
   const other =
     explicitOther || (!!value && !ASSIGNMENT_REASONS.includes(value));
   const invalid = showError && !value.trim();
+  if (compact) {
+    return (
+      <div className="history-entry-reason min-w-0">
+        <input
+          id={id}
+          aria-label={`${studentName} 배정 사유`}
+          title={value || "배정 사유 선택 또는 직접 입력"}
+          list="history-assignment-reasons"
+          value={value}
+          placeholder="배정 사유"
+          required
+          aria-invalid={invalid}
+          aria-describedby={invalid ? `${id}-error` : undefined}
+          onChange={(event) =>
+            onChange(
+              event.target.value,
+              !ASSIGNMENT_REASONS.includes(event.target.value),
+            )
+          }
+          className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-2 py-2 text-xs"
+        />
+        {invalid && (
+          <p
+            id={`${id}-error`}
+            role="alert"
+            className="mt-1 text-sm text-red-600"
+          >
+            배정 사유를 입력해 주세요.
+          </p>
+        )}
+      </div>
+    );
+  }
   return (
-    <div className="space-y-2">
+    <div className="history-entry-reason min-w-0 space-y-2">
       <label className="block" htmlFor={id}>
         <span className="mb-1 block text-xs font-bold text-gray-500">
           배정 사유
@@ -954,6 +1017,7 @@ const AssignmentReasonField: React.FC<{
           aria-label={`${studentName} 배정 사유`}
           value={other ? OTHER_ASSIGNMENT_REASON : value}
           aria-invalid={invalid}
+          title={value || "배정 사유 선택"}
           onChange={(event) => {
             const nextOther = event.target.value === OTHER_ASSIGNMENT_REASON;
             onChange(
@@ -1028,6 +1092,206 @@ const HistoryActionButton: React.FC<
     {children}
   </button>
 );
+
+const AssignmentStudentPicker: React.FC<{
+  id: string;
+  students: StudentOption[];
+  selectedUids: string[];
+  initialGrade: string;
+  initialClass: string;
+  reason: string;
+  reasonOther: boolean;
+  reasonError: boolean;
+  onReasonChange: (value: string, other: boolean) => void;
+  onAdd: (student: StudentOption) => boolean;
+}> = ({
+  id,
+  students,
+  selectedUids,
+  initialGrade,
+  initialClass,
+  reason,
+  reasonOther,
+  reasonError,
+  onReasonChange,
+  onAdd,
+}) => {
+  const [grade, setGrade] = useState(initialGrade);
+  const [className, setClassName] = useState(initialClass);
+  const [number, setNumber] = useState("");
+  const [studentUid, setStudentUid] = useState("");
+  const [search, setSearch] = useState("");
+  const options = (values: string[]) =>
+    Array.from(new Set(values.filter(Boolean))).sort(compareSchoolValues);
+  const gradeOptions = options(students.map((student) => student.grade));
+  const gradeStudents = students.filter(
+    (student) => !grade || student.grade === grade,
+  );
+  const classOptions = options(
+    gradeStudents.map((student) => student.className),
+  );
+  const classStudents = gradeStudents.filter(
+    (student) => !className || student.className === className,
+  );
+  const numberOptions = options(classStudents.map((student) => student.number));
+  const availableStudents = classStudents.filter(
+    (student) =>
+      !selectedUids.includes(student.uid) &&
+      (!number || student.number === number),
+  );
+  const selected =
+    availableStudents.find((student) => student.uid === studentUid) ||
+    (number && availableStudents.length === 1 ? availableStudents[0] : null);
+  const searchResults = search.trim()
+    ? students
+        .filter(
+          (student) =>
+            !selectedUids.includes(student.uid) &&
+            buildStudentSearchText(student).includes(
+              search.trim().toLocaleLowerCase("ko-KR"),
+            ),
+        )
+        .slice(0, 8)
+    : [];
+  const addStudent = (student: StudentOption) => {
+    if (!onAdd(student)) return;
+    setGrade(student.grade);
+    setClassName(student.className);
+    setNumber("");
+    setStudentUid("");
+    setSearch("");
+  };
+  return (
+    <div className="history-student-entry">
+      <div className="history-student-entry-grid">
+        <div className="history-student-fields">
+          <select
+            aria-label="대상 학년"
+            title="대상 학년"
+            value={grade}
+            onChange={(event) => {
+              setGrade(event.target.value);
+              setClassName("");
+              setNumber("");
+              setStudentUid("");
+            }}
+          >
+            <option value="">학년</option>
+            {grade && !gradeOptions.includes(grade) && (
+              <option value={grade}>{grade}</option>
+            )}
+            {gradeOptions.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="대상 학급"
+            title="대상 학급"
+            value={className}
+            onChange={(event) => {
+              setClassName(event.target.value);
+              setNumber("");
+              setStudentUid("");
+            }}
+          >
+            <option value="">반</option>
+            {className && !classOptions.includes(className) && (
+              <option value={className}>{className}</option>
+            )}
+            {classOptions.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="대상 번호"
+            title="대상 번호"
+            value={number}
+            onChange={(event) => {
+              setNumber(event.target.value);
+              setStudentUid("");
+            }}
+          >
+            <option value="">번호</option>
+            {numberOptions.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="대상 학생"
+            title={selected?.name || "대상 학생"}
+            value={selected?.uid || ""}
+            onChange={(event) => setStudentUid(event.target.value)}
+          >
+            <option value="">이름</option>
+            {availableStudents.map((student) => (
+              <option key={student.uid} value={student.uid}>
+                {student.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <AssignmentReasonField
+          id={id}
+          studentName="추가할 학생"
+          value={reason}
+          explicitOther={reasonOther}
+          showError={reasonError}
+          compact
+          onChange={onReasonChange}
+        />
+        <div className="history-student-search-group">
+          <input
+            className="history-student-search"
+            aria-label="전체 학생 이름 검색"
+            lang="ko"
+            inputMode="text"
+            placeholder="전체 이름 검색"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <HistoryActionButton
+            icon="plus"
+            label="학생 추가"
+            disabled={!selected}
+            onClick={() => {
+              if (selected) addStudent(selected);
+            }}
+            className="h-11 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </div>
+      </div>
+      {search.trim() && (
+        <div className="mt-2 rounded-xl border border-gray-200 bg-white p-2">
+          {searchResults.length ? (
+            searchResults.map((student) => (
+              <button
+                key={student.uid}
+                type="button"
+                onClick={() => addStudent(student)}
+                className="flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-lg px-2 text-left text-sm hover:bg-blue-50"
+              >
+                <span className="font-bold text-gray-900">{student.name}</span>
+                <span className="shrink-0 text-xs text-gray-500">
+                  {student.grade}-{student.className} {student.number}번
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-2 py-3 text-sm text-gray-500">
+              검색 결과가 없습니다.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AssignedStudentRow: React.FC<{
   student: StudentOption;
@@ -1151,9 +1415,6 @@ const ManageHistoryClassroom: React.FC = () => {
   const [targetClass, setTargetClass] = useState(
     NEW_ASSIGNMENT_DEFAULTS.targetClass,
   );
-  const [targetNumber, setTargetNumber] = useState("");
-  const [targetStudentUid, setTargetStudentUid] = useState("");
-  const [targetStudentSearch, setTargetStudentSearch] = useState("");
   const [selectedStudentUids, setSelectedStudentUids] = useState<string[]>([]);
   const [studentReasons, setStudentReasons] = useState<Record<string, string>>(
     {},
@@ -1212,7 +1473,6 @@ const ManageHistoryClassroom: React.FC = () => {
   const [editingStudentUids, setEditingStudentUids] = useState<string[]>([]);
   const [editingStudentSearchOpen, setEditingStudentSearchOpen] =
     useState(false);
-  const [editingStudentSearch, setEditingStudentSearch] = useState("");
   const [editingStudentReasons, setEditingStudentReasons] = useState<
     Record<string, string>
   >({});
@@ -1221,6 +1481,14 @@ const ManageHistoryClassroom: React.FC = () => {
   const [deletingAssignment, setDeletingAssignment] = useState(false);
   const [resettingAttemptUid, setResettingAttemptUid] = useState("");
   const resettingAttemptRef = React.useRef(false);
+  const applyingExemptionRef = React.useRef(false);
+  const [applyingExemptionUid, setApplyingExemptionUid] = useState("");
+  const [appliedExemptionKeys, setAppliedExemptionKeys] = useState<string[]>(
+    [],
+  );
+  const [directExemptionFeedback, setDirectExemptionFeedback] = useState<
+    Record<string, string>
+  >({});
   const pendingAssignmentId = React.useRef("");
   const assignmentCollectionPathsRef = React.useRef<Record<string, string>>({});
   const [expandedAttemptUids, setExpandedAttemptUids] = useState<string[]>([]);
@@ -1566,35 +1834,6 @@ const ManageHistoryClassroom: React.FC = () => {
     [sortedBlanks],
   );
 
-  const classFilteredStudents = useMemo(
-    () =>
-      students.filter(
-        (student) =>
-          (!targetGrade || student.grade === targetGrade) &&
-          (!targetClass || student.className === targetClass),
-      ),
-    [students, targetClass, targetGrade],
-  );
-
-  const numberFilteredStudents = useMemo(
-    () =>
-      classFilteredStudents.filter(
-        (student) => !targetNumber || student.number === targetNumber,
-      ),
-    [classFilteredStudents, targetNumber],
-  );
-
-  const searchedStudents = useMemo(() => {
-    const keyword = targetStudentSearch.trim().toLocaleLowerCase("ko-KR");
-    if (!keyword) return [];
-    return students
-      .filter((student) => {
-        if (selectedStudentUids.includes(student.uid)) return false;
-        return buildStudentSearchText(student).includes(keyword);
-      })
-      .slice(0, 8);
-  }, [selectedStudentUids, students, targetStudentSearch]);
-
   const selectedStudents = useMemo(
     () =>
       selectedStudentUids
@@ -1614,31 +1853,6 @@ const ManageHistoryClassroom: React.FC = () => {
         new Set(students.map((student) => student.grade).filter(Boolean)),
       ).sort(compareSchoolValues),
     [students],
-  );
-
-  const classOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          students
-            .filter((student) => !targetGrade || student.grade === targetGrade)
-            .map((student) => student.className)
-            .filter(Boolean),
-        ),
-      ).sort(compareSchoolValues),
-    [students, targetGrade],
-  );
-
-  const numberOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          classFilteredStudents
-            .map((student) => student.number)
-            .filter(Boolean),
-        ),
-      ).sort(compareSchoolValues),
-    [classFilteredStudents],
   );
 
   const exemptionSelectedStudents = useMemo(
@@ -1947,15 +2161,6 @@ const ManageHistoryClassroom: React.FC = () => {
     grantedExemptionStudentRows.length,
   ]);
 
-  const targetStudentPreview = useMemo(
-    () =>
-      students.find((student) => student.uid === targetStudentUid) ||
-      (targetNumber && numberFilteredStudents.length === 1
-        ? numberFilteredStudents[0]
-        : null),
-    [numberFilteredStudents, students, targetNumber, targetStudentUid],
-  );
-
   const editingAssignment = useMemo(
     () =>
       assignments.find((assignment) => assignment.id === editingAssignmentId) ||
@@ -1976,18 +2181,6 @@ const ManageHistoryClassroom: React.FC = () => {
         .filter((student): student is StudentOption => !!student),
     [editingStudentUids, students],
   );
-
-  const searchedEditingStudents = useMemo(() => {
-    const keyword = editingStudentSearch.trim().toLocaleLowerCase("ko-KR");
-    if (!keyword) return [];
-    return students
-      .filter(
-        (student) =>
-          !editingStudentUids.includes(student.uid) &&
-          buildStudentSearchText(student).includes(keyword),
-      )
-      .slice(0, 8);
-  }, [editingStudentSearch, editingStudentUids, students]);
 
   const assignmentStudentsById = useMemo(() => {
     const resolved = new Map<string, StudentOption[]>();
@@ -2207,6 +2400,21 @@ const ManageHistoryClassroom: React.FC = () => {
 
     return editingStudents.map((student) => {
       const studentResults = editingResultsByStudentUid.get(student.uid) || [];
+      if (
+        appliedExemptionKeys.includes(
+          `${editingPreviewAssignment.id}:${student.uid}`,
+        ) ||
+        studentResults.some((result) => result.completionSource === "exemption")
+      ) {
+        return {
+          student,
+          statusKey: "completed" as const,
+          statusLabel: "면제 완료",
+          detailLabel: "면제권 1장 사용",
+          toneClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+          canResetAttempt: false,
+        };
+      }
       const latestResult =
         studentResults.find(
           (result) => result.status === "passed" || result.passed,
@@ -2274,6 +2482,7 @@ const ManageHistoryClassroom: React.FC = () => {
       };
     });
   }, [
+    appliedExemptionKeys,
     editingLatestResultsByStudentUid,
     editingResultsByStudentUid,
     editingPreviewAssignment,
@@ -2599,9 +2808,6 @@ const ManageHistoryClassroom: React.FC = () => {
     setPassThresholdPercent(NEW_ASSIGNMENT_DEFAULTS.passThresholdPercent);
     setTargetGrade(NEW_ASSIGNMENT_DEFAULTS.targetGrade);
     setTargetClass(NEW_ASSIGNMENT_DEFAULTS.targetClass);
-    setTargetNumber("");
-    setTargetStudentUid("");
-    setTargetStudentSearch("");
     setSelectedStudentUids([]);
     setStudentReasons({});
     setOtherReasonUids([]);
@@ -2655,26 +2861,6 @@ const ManageHistoryClassroom: React.FC = () => {
       setShowAllBlankTags(false);
     }
   }, [showAllBlankTags, sortedBlanks.length]);
-
-  useEffect(() => {
-    if (!numberFilteredStudents.length) {
-      setTargetStudentUid("");
-      return;
-    }
-
-    if (
-      numberFilteredStudents.some((student) => student.uid === targetStudentUid)
-    ) {
-      return;
-    }
-
-    if (numberFilteredStudents.length === 1) {
-      setTargetStudentUid(numberFilteredStudents[0].uid);
-      return;
-    }
-
-    setTargetStudentUid("");
-  }, [numberFilteredStudents, targetStudentUid]);
 
   const handleCreateBlankFromSelection = (
     page: number,
@@ -3048,7 +3234,6 @@ const ManageHistoryClassroom: React.FC = () => {
           : [],
     );
     setEditingStudentSearchOpen(false);
-    setEditingStudentSearch("");
     setEditingStudentReasons(assignment.targetStudentReasons || {});
     setEditingOtherReasonUids([]);
     setShowEditingReasonErrors(false);
@@ -3084,9 +3269,6 @@ const ManageHistoryClassroom: React.FC = () => {
     setPassThresholdPercent(assignment.passThresholdPercent);
     setTargetGrade(assignment.targetGrade);
     setTargetClass(assignment.targetClass);
-    setTargetNumber("");
-    setTargetStudentUid("");
-    setTargetStudentSearch("");
     setSelectedStudentUids(
       assignment.targetStudentUids.length
         ? assignment.targetStudentUids
@@ -3136,7 +3318,6 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingPassThresholdPercent(80);
     setEditingStudentUids([]);
     setEditingStudentSearchOpen(false);
-    setEditingStudentSearch("");
     setEditingStudentReasons({});
     setEditingOtherReasonUids([]);
     setShowEditingReasonErrors(false);
@@ -3194,6 +3375,7 @@ const ManageHistoryClassroom: React.FC = () => {
     if (
       savingEditRef.current ||
       resettingAttemptRef.current ||
+      applyingExemptionRef.current ||
       refreshingEditingSource
     )
       return;
@@ -3379,6 +3561,109 @@ const ManageHistoryClassroom: React.FC = () => {
     }
   };
 
+  const getAvailableStudentExemptions = (
+    studentUid: string,
+    assignmentId: string,
+  ) =>
+    exemptions.filter(
+      (exemption) =>
+        exemption.uid === studentUid &&
+        ["available", "active"].includes(exemption.status) &&
+        (!exemption.assignmentId || exemption.assignmentId === assignmentId) &&
+        (!getTimestampMs(exemption.expiresAt) ||
+          getTimestampMs(exemption.expiresAt)! > Date.now()),
+    );
+
+  const handleApplyStudentExemption = async (student: StudentOption) => {
+    const assignment = assignments.find(
+      (item) => item.id === editingAssignmentId,
+    );
+    if (
+      !assignment ||
+      applyingExemptionRef.current ||
+      savingEditRef.current ||
+      resettingAttemptRef.current ||
+      deletingAssignment
+    )
+      return;
+    const exemption = getAvailableStudentExemptions(
+      student.uid,
+      assignment.id,
+    )[0];
+    if (
+      !exemption ||
+      !getHistoryClassroomAssignedStudentUids(assignment).includes(student.uid)
+    )
+      return;
+    const key = `${assignment.id}:${student.uid}`;
+    if (appliedExemptionKeys.includes(key)) return;
+    applyingExemptionRef.current = true;
+    setApplyingExemptionUid(student.uid);
+    setDirectExemptionFeedback((previous) => ({ ...previous, [key]: "" }));
+    try {
+      const applied = await applyHistoryClassroomExemption(config, {
+        assignmentId: assignment.id,
+        studentUid: student.uid,
+        exemptionId: exemption.id,
+      });
+      setAppliedExemptionKeys((previous) => [...new Set([...previous, key])]);
+      setExemptions((previous) =>
+        previous.map((item) =>
+          item.id === applied.exemptionId ? { ...item, status: "used" } : item,
+        ),
+      );
+      setDirectExemptionFeedback((previous) => ({
+        ...previous,
+        [key]: "면제권 1장을 사용했습니다.",
+      }));
+      try {
+        const resultSnapshot = await getDoc(
+          doc(
+            db,
+            getSemesterCollectionPath(config, "history_classroom_results"),
+            applied.resultId,
+          ),
+        );
+        if (resultSnapshot.exists()) {
+          const result = normalizeHistoryClassroomResult(
+            resultSnapshot.id,
+            resultSnapshot.data(),
+          );
+          setResultsByAssignment((previous) => ({
+            ...previous,
+            [assignment.id]: [
+              result,
+              ...(previous[assignment.id] || []).filter(
+                (item) => item.id !== result.id,
+              ),
+            ],
+          }));
+        }
+        await loadExemptionData();
+      } catch (error) {
+        console.error(
+          "Failed to refresh applied history classroom exemption",
+          error,
+        );
+        setDirectExemptionFeedback((previous) => ({
+          ...previous,
+          [key]: "면제 처리되었습니다. 제출 내역은 새로고침해 주세요.",
+        }));
+      }
+    } catch (error) {
+      setDirectExemptionFeedback((previous) => ({
+        ...previous,
+        [key]: getHistoryClassroomErrorMessage(
+          error,
+          "면제권을 사용하지 못했습니다. 다시 시도해 주세요.",
+        ),
+      }));
+    } finally {
+      applyingExemptionRef.current = false;
+      setApplyingExemptionUid("");
+    }
+  };
+
   const handleResetStudentAttemptCooldown = async (student: StudentOption) => {
     const targetAssignment = assignments.find(
       (assignment) => assignment.id === editingAssignmentId,
@@ -3387,6 +3672,7 @@ const ManageHistoryClassroom: React.FC = () => {
       !targetAssignment ||
       !student.uid ||
       resettingAttemptRef.current ||
+      applyingExemptionRef.current ||
       savingEdit ||
       deletingAssignment
     )
@@ -3459,7 +3745,7 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const handleDeleteAssignment = async () => {
-    if (resettingAttemptRef.current) return;
+    if (resettingAttemptRef.current || applyingExemptionRef.current) return;
     const targetAssignment = assignments.find(
       (assignment) => assignment.id === editingAssignmentId,
     );
@@ -3605,8 +3891,8 @@ const ManageHistoryClassroom: React.FC = () => {
         cooldownMinutes,
         dueWindowDays: resolvedDueWindowDays,
         passThresholdPercent,
-        targetGrade: targetGrade || selectedStudents[0]?.grade || "",
-        targetClass: targetClass || selectedStudents[0]?.className || "",
+        targetGrade: selectedStudents[0]?.grade || "",
+        targetClass: selectedStudents[0]?.className || "",
         targetStudentUid: selectedStudents[0]?.uid || "",
         targetStudentUids: selectedStudents.map((student) => student.uid),
         targetStudentName: selectedStudents
@@ -3678,9 +3964,6 @@ const ManageHistoryClassroom: React.FC = () => {
       setPassThresholdPercent(NEW_ASSIGNMENT_DEFAULTS.passThresholdPercent);
       setTargetGrade(NEW_ASSIGNMENT_DEFAULTS.targetGrade);
       setTargetClass(NEW_ASSIGNMENT_DEFAULTS.targetClass);
-      setTargetNumber("");
-      setTargetStudentUid("");
-      setTargetStudentSearch("");
       setSelectedStudentUids([]);
       setStudentReasons({});
       setOtherReasonUids([]);
@@ -5425,172 +5708,28 @@ const ManageHistoryClassroom: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-3 md:col-span-2 xl:col-span-2">
-                    <AssignmentReasonField
+                  <div className="min-w-0 md:col-span-2 xl:col-span-2">
+                    <AssignmentStudentPicker
                       id="history-create-add-reason"
-                      studentName="추가할 학생"
-                      value={newStudentReason}
-                      explicitOther={newStudentReasonOther}
-                      showError={newStudentReasonError}
-                      onChange={(value, other) => {
+                      students={students}
+                      selectedUids={selectedStudentUids}
+                      initialGrade={targetGrade}
+                      initialClass={targetClass}
+                      reason={newStudentReason}
+                      reasonOther={newStudentReasonOther}
+                      reasonError={newStudentReasonError}
+                      onReasonChange={(value, other) => {
                         setNewStudentReason(value);
                         setNewStudentReasonOther(other);
                         setNewStudentReasonError(false);
                       }}
+                      onAdd={(student) => {
+                        if (!addAssignmentStudent(student.uid)) return false;
+                        setTargetGrade(student.grade);
+                        setTargetClass(student.className);
+                        return true;
+                      }}
                     />
-                    <div className="history-student-picker grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(5.75rem,1.2fr)] gap-2 lg:grid-cols-4 lg:gap-3">
-                      <select
-                        aria-label="대상 학년"
-                        value={targetGrade}
-                        onChange={(e) => {
-                          setTargetGrade(e.target.value);
-                          setTargetClass("");
-                          setTargetNumber("");
-                          setTargetStudentUid("");
-                          setTargetStudentSearch("");
-                        }}
-                        className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-                      >
-                        <option value="">학년 선택</option>
-                        {targetGrade && !gradeOptions.includes(targetGrade) && (
-                          <option value={targetGrade}>{targetGrade}</option>
-                        )}
-                        {gradeOptions.map((grade) => (
-                          <option key={grade} value={grade}>
-                            {grade}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        aria-label="대상 학급"
-                        value={targetClass}
-                        onChange={(e) => {
-                          setTargetClass(e.target.value);
-                          setTargetNumber("");
-                          setTargetStudentUid("");
-                          setTargetStudentSearch("");
-                        }}
-                        className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-                      >
-                        <option value="">학급 선택</option>
-                        {targetClass && !classOptions.includes(targetClass) && (
-                          <option value={targetClass}>{targetClass}</option>
-                        )}
-                        {classOptions.map((className) => (
-                          <option key={className} value={className}>
-                            {className}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={targetNumber}
-                        onChange={(e) => {
-                          setTargetNumber(e.target.value);
-                          setTargetStudentUid("");
-                          setTargetStudentSearch("");
-                        }}
-                        className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-                      >
-                        <option value="">번호 선택</option>
-                        {numberOptions.map((number) => (
-                          <option key={number} value={number}>
-                            {number}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 px-3 text-center text-sm font-bold text-gray-700">
-                        <span className="block w-full truncate whitespace-nowrap">
-                          {targetStudentPreview?.name || "학생 이름"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <input
-                        lang="ko"
-                        inputMode="text"
-                        value={targetStudentSearch}
-                        onChange={(e) => setTargetStudentSearch(e.target.value)}
-                        placeholder="이름으로 전체 학생 검색"
-                        className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-                      />
-                      {targetStudentSearch.trim() && (
-                        <div className="max-h-48 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2">
-                          {searchedStudents.length > 0 ? (
-                            <div className="space-y-1">
-                              {searchedStudents.map((student) => (
-                                <button
-                                  key={student.uid}
-                                  type="button"
-                                  onClick={() => {
-                                    if (!addAssignmentStudent(student.uid))
-                                      return;
-                                    setTargetGrade(student.grade || "");
-                                    setTargetClass(student.className || "");
-                                    setTargetNumber(student.number || "");
-                                    setTargetStudentUid(student.uid);
-                                    setTargetStudentSearch("");
-                                  }}
-                                  className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-blue-50"
-                                >
-                                  <span className="min-w-0 truncate font-bold text-gray-900">
-                                    {student.name}
-                                  </span>
-                                  <span className="shrink-0 text-xs font-semibold text-gray-500">
-                                    {student.grade}-{student.className}{" "}
-                                    {student.number}번
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="px-3 py-4 text-center text-sm font-semibold text-gray-400">
-                              검색 결과가 없습니다.
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <select
-                      value={targetStudentUid}
-                      onChange={(e) => {
-                        setTargetStudentUid(e.target.value);
-                        setTargetStudentSearch("");
-                      }}
-                      className="h-11 w-full min-w-0 rounded-xl border border-gray-300 px-3 text-sm"
-                      title={
-                        targetStudentPreview
-                          ? `${targetStudentPreview.grade}-${targetStudentPreview.className} ${targetStudentPreview.number}번 ${targetStudentPreview.name}`
-                          : "학생 선택"
-                      }
-                    >
-                      <option value="">학생 선택</option>
-                      {numberFilteredStudents.map((student) => (
-                        <option key={student.uid} value={student.uid}>
-                          {student.grade}-{student.className} {student.number}번{" "}
-                          {student.name}
-                        </option>
-                      ))}
-                    </select>
-                    <HistoryActionButton
-                      icon="plus"
-                      label="학생 추가"
-                      type="button"
-                      onClick={() => {
-                        if (
-                          !targetStudentUid ||
-                          selectedStudentUids.includes(targetStudentUid)
-                        )
-                          return;
-                        if (!addAssignmentStudent(targetStudentUid)) return;
-                        setTargetStudentUid("");
-                        setTargetStudentSearch("");
-                      }}
-                      disabled={
-                        !targetStudentUid ||
-                        selectedStudentUids.includes(targetStudentUid)
-                      }
-                      className="h-11 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    ></HistoryActionButton>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 bg-white p-3 md:col-span-2 xl:col-span-2">
@@ -5602,7 +5741,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         {selectedStudents.length}명
                       </div>
                     </div>
-                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    <div className="space-y-2">
                       {selectedStudents.map((student) => (
                         <AssignedStudentRow
                           key={student.uid}
@@ -5760,9 +5899,6 @@ const ManageHistoryClassroom: React.FC = () => {
                           );
                           setTargetGrade(NEW_ASSIGNMENT_DEFAULTS.targetGrade);
                           setTargetClass(NEW_ASSIGNMENT_DEFAULTS.targetClass);
-                          setTargetNumber("");
-                          setTargetStudentUid("");
-                          setTargetStudentSearch("");
                           setSelectedStudentUids([]);
                           setStudentReasons({});
                           setOtherReasonUids([]);
@@ -5997,7 +6133,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
             <div className="history-edit-body min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
               <div className="history-edit-grid grid min-h-full min-w-0 grid-cols-1 gap-0">
-                <div className="history-edit-settings history-modal-padding min-h-0 min-w-0 overflow-y-auto overscroll-contain px-6 py-5 [-webkit-overflow-scrolling:touch]">
+                <div className="history-edit-settings history-modal-padding min-w-0 px-6 py-5">
                   <div className="space-y-4">
                     <div className="history-number-fields grid gap-3 md:grid-cols-4">
                       <div>
@@ -6136,7 +6272,6 @@ const ManageHistoryClassroom: React.FC = () => {
                             type="button"
                             onClick={() => {
                               setEditingStudentSearchOpen((current) => {
-                                if (current) setEditingStudentSearch("");
                                 return !current;
                               });
                             }}
@@ -6159,70 +6294,34 @@ const ManageHistoryClassroom: React.FC = () => {
                         </div>
                       </div>
                       {editingStudentSearchOpen && (
-                        <div className="mb-3 space-y-2">
-                          <AssignmentReasonField
+                        <div className="mb-3">
+                          <AssignmentStudentPicker
                             id="history-edit-add-reason"
-                            studentName="추가할 학생"
-                            value={editingNewStudentReason}
-                            explicitOther={editingNewStudentReasonOther}
-                            showError={editingNewStudentReasonError}
-                            onChange={(value, other) => {
+                            students={students}
+                            selectedUids={editingStudentUids}
+                            initialGrade={
+                              editingAssignment.targetGrade ||
+                              NEW_ASSIGNMENT_DEFAULTS.targetGrade
+                            }
+                            initialClass={
+                              editingAssignment.targetClass ||
+                              NEW_ASSIGNMENT_DEFAULTS.targetClass
+                            }
+                            reason={editingNewStudentReason}
+                            reasonOther={editingNewStudentReasonOther}
+                            reasonError={editingNewStudentReasonError}
+                            onReasonChange={(value, other) => {
                               setEditingNewStudentReason(value);
                               setEditingNewStudentReasonOther(other);
                               setEditingNewStudentReasonError(false);
                             }}
-                          />
-                          <input
-                            lang="ko"
-                            inputMode="text"
-                            value={editingStudentSearch}
-                            onChange={(event) =>
-                              setEditingStudentSearch(event.target.value)
+                            onAdd={(student) =>
+                              addAssignmentStudent(student.uid, true)
                             }
-                            placeholder="학년 반 번호 또는 이름 검색"
-                            className="h-10 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                            autoFocus
                           />
-                          {editingStudentSearch.trim() && (
-                            <div className="max-h-44 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2">
-                              {searchedEditingStudents.length > 0 ? (
-                                <div className="space-y-1">
-                                  {searchedEditingStudents.map((student) => (
-                                    <button
-                                      key={student.uid}
-                                      type="button"
-                                      onClick={() => {
-                                        if (
-                                          !addAssignmentStudent(
-                                            student.uid,
-                                            true,
-                                          )
-                                        )
-                                          return;
-                                        setEditingStudentSearch("");
-                                      }}
-                                      className="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-blue-50"
-                                    >
-                                      <span className="min-w-0 truncate font-bold text-gray-900">
-                                        {student.name}
-                                      </span>
-                                      <span className="shrink-0 text-xs font-semibold text-gray-500">
-                                        {student.grade}-{student.className}{" "}
-                                        {student.number}번
-                                      </span>
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="px-3 py-4 text-center text-sm font-semibold text-gray-400">
-                                  검색 결과가 없습니다.
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       )}
-                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      <div className="space-y-2">
                         {editingStudents.map((student) => (
                           <AssignedStudentRow
                             key={student.uid}
@@ -6292,28 +6391,11 @@ const ManageHistoryClassroom: React.FC = () => {
                         미응시 {editingAttemptStatusCounts.overdueAbsent}
                       </span>
                     </div>
-                    <div className="history-results-table mt-3 min-h-0 min-w-0 overflow-auto overscroll-contain">
-                      <table className="w-full min-w-[32rem] table-fixed whitespace-nowrap text-left text-xs">
-                        <colgroup>
-                          <col className="w-10" />
-                          <col className="w-10" />
-                          <col className="w-10" />
-                          <col />
-                          <col className="w-16" />
-                          <col className="w-24" />
-                          <col className="w-16" />
-                        </colgroup>
-                        <thead className="sticky top-0 z-10 bg-gray-50 text-gray-500">
+                    <div className="history-results-table mt-3 min-w-0">
+                      <table className="history-attempt-table text-left text-xs">
+                        <thead className="bg-gray-50 text-gray-500">
                           <tr>
-                            {[
-                              "학년",
-                              "반",
-                              "번호",
-                              "이름",
-                              "점수",
-                              "상태",
-                              "리셋",
-                            ].map((label) => (
+                            {["학생", "응시 결과", "관리"].map((label) => (
                               <th
                                 key={label}
                                 scope="col"
@@ -6345,6 +6427,42 @@ const ManageHistoryClassroom: React.FC = () => {
                             const historyId = `history-attempt-details-${row.student.uid}`;
                             const feedback =
                               attemptResetFeedback[row.student.uid];
+                            const directFeedback =
+                              directExemptionFeedback[
+                                `${editingAssignment.id}:${row.student.uid}`
+                              ];
+                            const availableExemptions =
+                              getAvailableStudentExemptions(
+                                row.student.uid,
+                                editingAssignment.id,
+                              );
+                            const completed =
+                              !row.canResetAttempt ||
+                              studentResults.some(
+                                (result) =>
+                                  result.passed || result.status === "passed",
+                              );
+                            const pendingRequest = exemptionRequests.some(
+                              (request) =>
+                                request.uid === row.student.uid &&
+                                request.assignmentId === editingAssignment.id &&
+                                request.status === "pending",
+                            );
+                            const exemptionDisabledReason = !savedStudent
+                              ? "학생 배정을 먼저 저장해 주세요."
+                              : completed
+                                ? "이미 통과하거나 면제된 학생입니다."
+                                : !editingAssignment.isPublished
+                                  ? "과제를 공개한 뒤 사용할 수 있습니다."
+                                  : isHistoryClassroomPastDue(editingAssignment)
+                                    ? "응시 기간이 지났습니다."
+                                    : pendingRequest
+                                      ? "면제권 사용 요청을 먼저 검토해 주세요."
+                                      : exemptionLoadError
+                                        ? exemptionLoadError
+                                        : !availableExemptions.length
+                                          ? "사용 가능한 면제권이 없습니다."
+                                          : "";
                             const toggleHistory = () => {
                               if (!studentResults.length) return;
                               setExpandedAttemptUids((prev) =>
@@ -6381,39 +6499,31 @@ const ManageHistoryClassroom: React.FC = () => {
                                       toggleHistory();
                                     }
                                   }}
-                                  className={`h-12 border-b border-gray-100 text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${studentResults.length ? "cursor-pointer hover:bg-blue-50/50" : ""}`}
+                                  className={`history-attempt-row border-b border-gray-100 text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${studentResults.length ? "cursor-pointer hover:bg-blue-50/50" : ""}`}
                                 >
-                                  <td className="px-2 py-0.5">
-                                    {row.student.grade || "-"}
-                                  </td>
-                                  <td className="px-2 py-0.5">
-                                    {row.student.className || "-"}
-                                  </td>
-                                  <td className="px-2 py-0.5">
-                                    {row.student.number || "-"}
-                                  </td>
                                   <th
                                     scope="row"
-                                    className="truncate px-2 py-0.5 font-bold text-gray-900"
-                                    title={row.student.name}
+                                    className="history-attempt-student px-2 py-1 font-bold text-gray-900"
                                   >
-                                    {studentResults.length > 0 && (
-                                      <span
-                                        aria-hidden="true"
-                                        className="mr-1 text-gray-400"
-                                      >
-                                        {expanded ? "▾" : "▸"}
-                                      </span>
-                                    )}
-                                    {row.student.name}
+                                    <span className="history-attempt-number text-gray-500">
+                                      {row.student.grade || "-"}-
+                                      {row.student.className || "-"}{" "}
+                                      {row.student.number || "-"}번
+                                    </span>
+                                    <span className="history-attempt-name">
+                                      {studentResults.length > 0 && (
+                                        <span
+                                          aria-hidden="true"
+                                          className="mr-1 text-gray-400"
+                                        >
+                                          {expanded ? "▾" : "▸"}
+                                        </span>
+                                      )}
+                                      {row.student.name}
+                                    </span>
                                   </th>
-                                  <td className="px-2 py-0.5 font-semibold">
-                                    {latestResult
-                                      ? `${latestResult.percent}%`
-                                      : "-"}
-                                  </td>
                                   <td
-                                    className="px-2 py-0.5"
+                                    className="history-attempt-result px-2 py-1"
                                     title={feedback || row.detailLabel}
                                   >
                                     <span
@@ -6425,17 +6535,30 @@ const ManageHistoryClassroom: React.FC = () => {
                                           : "해제됨"
                                         : row.statusLabel}
                                     </span>
+                                    {latestResult &&
+                                      row.statusLabel !== "면제 완료" && (
+                                        <span className="font-semibold">
+                                          {latestResult.percent}%
+                                        </span>
+                                      )}
                                     {feedback && (
                                       <span role="status" className="sr-only">
                                         {feedback}
                                       </span>
                                     )}
                                   </td>
-                                  <td className="px-1 py-0.5">
+                                  <td className="history-attempt-actions px-1 py-1">
                                     {row.canResetAttempt && (
-                                      <button
-                                        type="button"
+                                      <HistoryActionButton
+                                        icon="refresh"
+                                        label={
+                                          resettingAttemptUid ===
+                                          row.student.uid
+                                            ? "처리 중"
+                                            : "리셋"
+                                        }
                                         aria-label={`${row.student.name} 재응시 제한 리셋`}
+                                        data-history-reset-label="true"
                                         onClick={(event) => {
                                           event.stopPropagation();
                                           void handleResetStudentAttemptCooldown(
@@ -6444,35 +6567,71 @@ const ManageHistoryClassroom: React.FC = () => {
                                         }}
                                         disabled={
                                           !!resettingAttemptUid ||
+                                          !!applyingExemptionUid ||
                                           savingEdit ||
                                           deletingAssignment ||
                                           !savedStudent
                                         }
-                                        className="history-action-button group w-full text-xs font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                         title={
                                           !savedStudent
                                             ? "학생 배정을 먼저 저장해 주세요."
                                             : `${row.student.name} 재응시 제한 리셋`
                                         }
-                                      >
-                                        <DashboardIcon name="refresh" />
-                                        <span
-                                          data-history-reset-label="true"
-                                          className="history-action-label flex h-7 items-center rounded-lg border border-blue-200 bg-blue-50 px-2 group-hover:bg-blue-100"
-                                        >
-                                          {resettingAttemptUid ===
+                                        className="rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                      />
+                                    )}
+                                    {!completed && (
+                                      <HistoryActionButton
+                                        icon="ticket"
+                                        label={
+                                          applyingExemptionUid ===
                                           row.student.uid
                                             ? "처리 중"
-                                            : "리셋"}
-                                        </span>
-                                      </button>
+                                            : "면제권 사용"
+                                        }
+                                        aria-label={`${row.student.name} 면제권 1장 사용${availableExemptions.length ? ` · 보유 ${availableExemptions.length}장` : ""}`}
+                                        title={
+                                          exemptionDisabledReason ||
+                                          `${row.student.name} 면제권 1장 사용 · 보유 ${availableExemptions.length}장`
+                                        }
+                                        disabled={
+                                          !!exemptionDisabledReason ||
+                                          loadingExemptions ||
+                                          !!applyingExemptionUid ||
+                                          !!resettingAttemptUid ||
+                                          savingEdit ||
+                                          deletingAssignment
+                                        }
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          void handleApplyStudentExemption(
+                                            row.student,
+                                          );
+                                        }}
+                                        className="rounded-xl border border-blue-200 bg-white px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                      />
                                     )}
                                   </td>
                                 </tr>
-                                {studentResults.length > 0 && (
-                                  <tr hidden={!expanded} id={historyId}>
+                                {directFeedback && (
+                                  <tr className="history-attempt-feedback">
                                     <td
-                                      colSpan={7}
+                                      colSpan={3}
+                                      role="status"
+                                      className="px-2 py-2 text-xs text-blue-700"
+                                    >
+                                      {directFeedback}
+                                    </td>
+                                  </tr>
+                                )}
+                                {studentResults.length > 0 && (
+                                  <tr
+                                    hidden={!expanded}
+                                    id={historyId}
+                                    className="history-attempt-details"
+                                  >
+                                    <td
+                                      colSpan={3}
                                       className="border-b border-gray-200 bg-gray-50 px-3 py-2"
                                     >
                                       <div className="mb-1 text-[11px] font-bold text-gray-500">
@@ -6482,7 +6641,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                         {studentResults.map((result) => (
                                           <li
                                             key={result.id}
-                                            className="flex min-h-[44px] items-center justify-between gap-3 border-t border-gray-200/70"
+                                            className="flex min-h-[44px] flex-wrap items-center justify-between gap-2 border-t border-gray-200/70"
                                           >
                                             <span className="text-gray-500">
                                               {formatResultSubmittedAtLabel(
@@ -6519,7 +6678,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           {!editingAttemptStatusRows.length && (
                             <tr>
                               <td
-                                colSpan={7}
+                                colSpan={3}
                                 className="py-6 text-center text-gray-400"
                               >
                                 배정된 학생이 없습니다.
@@ -6570,7 +6729,10 @@ const ManageHistoryClassroom: React.FC = () => {
                     type="button"
                     onClick={() => void handleDeleteAssignment()}
                     disabled={
-                      savingEdit || deletingAssignment || !!resettingAttemptUid
+                      savingEdit ||
+                      deletingAssignment ||
+                      !!resettingAttemptUid ||
+                      !!applyingExemptionUid
                     }
                     className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                   ></HistoryActionButton>
@@ -6606,6 +6768,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       savingEdit ||
                       refreshingEditingSource ||
                       deletingAssignment ||
+                      !!applyingExemptionUid ||
                       !!resettingAttemptUid
                     }
                     className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"

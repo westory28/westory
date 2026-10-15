@@ -613,6 +613,26 @@ export const reviewHistoryClassroomExemptionRequest = async (
   );
 };
 
+export const applyHistoryClassroomExemption = async (
+  config: Pick<SystemConfig, "year" | "semester"> | null | undefined,
+  input: { assignmentId: string; studentUid: string; exemptionId: string },
+) => {
+  const { year, semester } = getYearSemester(config);
+  return executeAssessmentManagementCommand<{
+    studentUid: string;
+    assignmentId: string;
+    exemptionId: string;
+    resultId: string;
+    status: "approved";
+    origin: "teacher_direct";
+  }>("applyHistoryClassroomExemption", {
+    semesterId: `${year}-${semester}`,
+    assignmentId: input.assignmentId,
+    studentUid: input.studentUid,
+    exemptionId: input.exemptionId,
+  });
+};
+
 export const revokeHistoryClassroomExemptions = async (
   config: Pick<SystemConfig, "year" | "semester"> | null | undefined,
   exemptionIds: string[],

@@ -31,6 +31,7 @@ const ASSESSMENT_COMMAND_TYPES = Object.freeze({
   UPSERT_QUIZ_QUESTION: "upsertQuizQuestion",
   DELETE_QUIZ_QUESTION: "deleteQuizQuestion",
   UPSERT_HISTORY_CLASSROOM_SOURCE: "upsertHistoryClassroomSource",
+  SAVE_HISTORY_CLASSROOM_ASSIGNMENT: "saveHistoryClassroomAssignment",
   DELETE_HISTORY_CLASSROOM_SOURCE: "deleteHistoryClassroomSource",
   UPDATE_MAP_RESOURCE_BLANKS: "updateMapResourceBlanks",
 });
@@ -356,7 +357,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       reason: text(payload.reason, "reason", 300),
     };
   }
-  if (commandType === ASSESSMENT_COMMAND_TYPES.UPSERT_HISTORY_CLASSROOM_SOURCE) {
+  if ([ASSESSMENT_COMMAND_TYPES.UPSERT_HISTORY_CLASSROOM_SOURCE, ASSESSMENT_COMMAND_TYPES.SAVE_HISTORY_CLASSROOM_ASSIGNMENT].includes(commandType)) {
     assertAllowedKeys(payload, ["semesterId", "sourceId", "source", "expectedRevision", "reason"], "upsertHistoryClassroomSource payload");
     return {
       semesterId: normalizeSemesterId(payload.semesterId),
@@ -677,12 +678,14 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       return { target: { kind: "quiz-question-delete", id: payload.questionId, refs: [path] }, sourceHash: null, result: { questionId: payload.questionId, deleted: true } };
     }
 
-    if (commandType === ASSESSMENT_COMMAND_TYPES.UPSERT_HISTORY_CLASSROOM_SOURCE) {
+    if ([ASSESSMENT_COMMAND_TYPES.UPSERT_HISTORY_CLASSROOM_SOURCE, ASSESSMENT_COMMAND_TYPES.SAVE_HISTORY_CLASSROOM_ASSIGNMENT].includes(commandType)) {
       assertTeacherActor(actor);
       await assertAssessmentSemesterWritable(transaction, payload.semesterId);
       const path = `${semesterRoot(payload.semesterId)}/history_classrooms/${payload.sourceId}`;
-      const snapshot = await transaction.get(path);
+      const definitionId = `history_classroom:${payload.semesterId}:${payload.sourceId}`;
+      const [snapshot, definition] = await transaction.getAll([path, definitionPath(definitionId)]);
       const currentRevision = assertContentRevision(snapshot, payload.expectedRevision, "History Classroom source");
+      const atomicSave = commandType === ASSESSMENT_COMMAND_TYPES.SAVE_HISTORY_CLASSROOM_ASSIGNMENT;
       const worksheet = (value) => ({ blanks: value?.blanks || [], pdfPageImages: value?.pdfPageImages || [], pdfRegions: value?.pdfRegions || [] });
       const isLessonSource = payload.source.sourceType === "lesson";
       const legacyWorksheet = (value) => ({ ...worksheet(value), blanks: (value?.blanks || []).map((blank) => ({
@@ -709,8 +712,6 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const source = isLessonSource ? payload.source : {
         ...payload.source, ...worksheet(snapshot.data), answerOptions: snapshot.data?.answerOptions || [],
       };
-      const definitionId = `history_classroom:${payload.semesterId}:${payload.sourceId}`;
-      const definition = await transaction.get(definitionPath(definitionId));
       if (snapshot.exists && canonicalJson(worksheet(snapshot.data)) !== canonicalJson(worksheet(source))) {
         const [attempts, results, legacyResults] = await Promise.all([
           transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: definitionId }),
@@ -724,6 +725,33 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
           fail("failed-precondition", "학생이 응시 중인 학습지는 변경할 수 없습니다. 제출 또는 응시 초기화 후 다시 저장해 주세요.", "ASSESSMENT_SOURCE_IN_USE");
       }
       const nextRevision = currentRevision + 1;
+      let savedDefinition = null;
+      if (atomicSave) {
+        if (typeof source.isPublished !== "boolean") fail("invalid-argument", "isPublished is invalid.", "ASSESSMENT_PAYLOAD_INVALID");
+        if (definition.exists && (definition.data?.semesterId !== payload.semesterId || definition.data?.sourceId !== payload.sourceId || definition.data?.assessmentKind !== "HISTORY_CLASSROOM"))
+          fail("failed-precondition", "Assessment definition identity cannot be changed.", "ASSESSMENT_IDENTITY_IMMUTABLE");
+        if (definition.data?.status === "CLOSED") fail("failed-precondition", "A closed assessment definition cannot be edited.", "ASSESSMENT_DEFINITION_CLOSED");
+        if (source.isPublished) {
+          const settings = normalizeAssessmentPayload(ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION, {
+            definitionId, semesterId: payload.semesterId, assessmentKind: "HISTORY_CLASSROOM", sourceId: payload.sourceId,
+            title: String(source.title || "역사교실"), durationSeconds: Math.max(60, Number(source.timeLimitMinutes) * 60 || 3600),
+            maxAttempts: 20, cooldownMinutes: Math.max(0, Number(source.cooldownMinutes) || 0), opensAt: "", closesAt: source.dueAt || "", assignedClassIds: [],
+          });
+          const answerKey = collectHistoryAnswerKey(source);
+          if (!answerKey.length) fail("failed-precondition", "The History Classroom answer key is empty.", "ASSESSMENT_SOURCE_EMPTY");
+          const assignedStudentUids = Array.isArray(source.targetStudentUids)
+            ? source.targetStudentUids.map(uid => String(uid || "").trim()).filter(Boolean)
+            : source.targetStudentUid ? [String(source.targetStudentUid).trim()] : [];
+          savedDefinition = { ...settings, schemaVersion: ASSESSMENT_SCHEMA_VERSION, policyVersion: ASSESSMENT_POLICY_VERSION,
+            status: "PUBLISHED", revision: Number(definition.data?.revision || 0) + 1, sourceContentRevision: nextRevision,
+            sourceHash: sha256(canonicalJson({ answerKey, assignedStudentUids })), itemCount: answerKey.length, assignedStudentUids,
+            updatedBy: actor.actorUid, updatedAt: timestamp, updateReason: payload.reason, transitionReason: payload.reason, commandId,
+            ...(definition.exists ? {} : { createdAt: timestamp, createdBy: actor.actorUid }) };
+        }
+        // Reject malformed editor dates before either source or definition changes.
+        normalizeIso(source.publishedAt, "publishedAt");
+        normalizeIso(source.dueAt, "dueAt");
+      }
       transaction.set(path, {
         ...source,
         // Reset permission is owned by reset commands; a stale editor must not
@@ -739,10 +767,14 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       }, { merge: false });
       // Publication changes only after every source guard passes. The client
       // refreshes the definition snapshot and republishes the accepted source.
-      if (definition.exists && definition.data?.status === "PUBLISHED")
+      if (savedDefinition) transaction.set(definitionPath(definitionId), savedDefinition, { merge: definition.exists });
+      else if (definition.exists && definition.data?.status === "PUBLISHED")
         transaction.set(definition.path, { status: "PAUSED", revision: Number(definition.data.revision || 0) + 1,
           transitionReason: payload.reason, updatedAt: timestamp, updatedBy: actor.actorUid, commandId }, { merge: true });
-      return { target: { kind: "history-classroom-source", id: payload.sourceId, refs: [path, ...(definition.exists && definition.data?.status === "PUBLISHED" ? [definition.path] : [])] }, sourceHash: sha256(canonicalJson(source)), result: { sourceId: payload.sourceId, contentRevision: nextRevision } };
+      return { target: { kind: "history-classroom-source", id: payload.sourceId, refs: [path, ...(savedDefinition || (definition.exists && definition.data?.status === "PUBLISHED") ? [definitionPath(definitionId)] : [])] }, sourceHash: sha256(canonicalJson(source)), result: { sourceId: payload.sourceId, contentRevision: nextRevision,
+        ...(atomicSave ? { definitionId, status: savedDefinition?.status || (definition.data?.status === "PUBLISHED" ? "PAUSED" : definition.data?.status || "DRAFT"),
+          definitionRevision: savedDefinition?.revision || Number(definition.data?.revision || 0) + (definition.data?.status === "PUBLISHED" ? 1 : 0),
+          publicationWindow: { publishedAt: source.publishedAt || null, dueAt: source.dueAt || null } } : {}) } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.DELETE_HISTORY_CLASSROOM_SOURCE) {

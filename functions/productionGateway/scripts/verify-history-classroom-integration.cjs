@@ -166,6 +166,62 @@ const probeGrant = async (payload, failedBatch = 0) => {
     (error) => error.details?.reason === "ASSESSMENT_STUDENT_NOT_ASSIGNED");
   console.log("PASS actual callable source/create/update/publish/start: 10-minute-old teacher session, 28 blanks, 2 target students, 90% pass, 600 seconds, 5-minute retry, no due period; CAS/session/role guards retained");
 
+  const saveMetrics = { previous: [], atomic: [] };
+  for (let index = 0; index < 3; index += 1) {
+    for (const mode of ["previous", "atomic"]) {
+      const sourceId = `benchmark-${mode}-${index}`;
+      const definitionId = `history_classroom:${semesterId}:${sourceId}`;
+      const savePayload = { ...sourceSavePayload, sourceId };
+      let commands = 0;
+      const call = async (type, payload) => { commands += 1; return executeAuthenticated(teacher, type, payload); };
+      const started = performance.now();
+      if (mode === "previous") {
+        await call("upsertHistoryClassroomSource", savePayload);
+        const created = await call("createAssessmentDefinition", { ...authoredPayload, definitionId, sourceId });
+        await call("transitionAssessmentDefinition", { definitionId, expectedRevision: created.result.definition.revision,
+          expectedSourceRevision: 1, targetStatus: "PUBLISHED", reason: "합성 이전 저장" });
+      } else {
+        const saved = await call("saveHistoryClassroomAssignment", savePayload);
+        assert.equal(saved.result.contentRevision, 1);
+        assert.equal(saved.result.status, "PUBLISHED");
+      }
+      saveMetrics[mode].push({ commands, elapsedMs: Math.round((performance.now() - started) * 10) / 10 });
+      assert.equal(commands, mode === "previous" ? 3 : 1);
+      assert.equal((await get(`semester_assessment_definitions/${definitionId}`)).status, "PUBLISHED");
+    }
+  }
+  console.log(`ASSIGNMENT_SAVE_BENCHMARK ${JSON.stringify(saveMetrics)}`);
+  const atomicPayload = { ...sourceSavePayload, sourceId: "atomic-replay" };
+  const atomicId = randomUUID();
+  await assert.rejects(executeAuthenticated(student(), "saveHistoryClassroomAssignment", atomicPayload), expectCode("permission-denied"));
+  const [atomicSaved, atomicReplay] = await Promise.all([
+    executeAuthenticated(teacher, "saveHistoryClassroomAssignment", atomicPayload, atomicId),
+    executeAuthenticated(teacher, "saveHistoryClassroomAssignment", atomicPayload, atomicId),
+  ]);
+  assert.equal(atomicSaved.result.contentRevision, 1);
+  assert.equal(atomicReplay.result.contentRevision, 1);
+  assert.deepEqual((await authenticatedStatus(teacher, "saveHistoryClassroomAssignment", atomicId)).result, atomicSaved.result);
+  const atomicDefinitionRef = `semester_assessment_definitions/history_classroom:${semesterId}:atomic-replay`;
+  assert.equal((await get(atomicDefinitionRef)).revision, 1);
+  const originalAtomicDefinition = await get(atomicDefinitionRef);
+  const originalAtomicSource = await get(`${root}/history_classrooms/atomic-replay`);
+  for (const source of [{ ...authoredSource, blanks: [] }, { ...authoredSource, timeLimitMinutes: 1000 }, { ...authoredSource, dueAt: "bad-date" }]) {
+    await assert.rejects(executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...atomicPayload, source, expectedRevision: 1 }));
+    assert.deepEqual(await get(`${root}/history_classrooms/atomic-replay`), originalAtomicSource);
+    assert.deepEqual(await get(atomicDefinitionRef), originalAtomicDefinition);
+  }
+  const competing = await Promise.allSettled([
+    executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...atomicPayload, expectedRevision: 1, source: { ...authoredSource, timeLimitMinutes: 20 } }),
+    executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...atomicPayload, expectedRevision: 1, source: { ...authoredSource, timeLimitMinutes: 30 } }),
+  ]);
+  assert.equal(competing.filter(result => result.status === "fulfilled").length, 1);
+  const competedSource = await get(`${root}/history_classrooms/atomic-replay`);
+  const competedDefinition = await get(atomicDefinitionRef);
+  assert.equal(competedSource.contentRevision, 2);
+  assert.equal(competedDefinition.sourceContentRevision, 2);
+  assert.equal(competedDefinition.durationSeconds, competedSource.timeLimitMinutes * 60);
+  console.log("PASS atomic save: role guard, same-command replay/status, full rollback, competing revisions preserve matched source+definition");
+
   const grantId = randomUUID();
   const grantPayload = { semesterId, recipientUids: students.slice(0, 32), classId: "3-2", targetGrade: "3", targetClass: "2", reason: "합성 현장체험" };
   const singleProbe = await probeGrant({ ...grantPayload, recipientUids: [students[0]] });
@@ -323,8 +379,115 @@ const probeGrant = async (payload, failedBatch = 0) => {
   assert.ok(edited.retryResetByStudentUid[runner.uid]?.toMillis());
   assert.equal(edited.retryResetByStudentUid.forged, undefined, "editor cannot manufacture a reset marker");
   assert.equal((await get(`semester_assessment_definitions/${definitionId}`)).status, "PAUSED", "accepted source and publication pause commit together");
+  const directSourceId = "direct-history";
+  const directDefinitionId = `history_classroom:${semesterId}:${directSourceId}`;
+  const directSource = { ...authoredSource, targetStudentUids: students.slice(0, 12) };
+  await executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...sourceSavePayload, sourceId: directSourceId, source: directSource });
+  const directTicket = (index, variant = "a") => `direct-ticket-${index}-${variant}`;
+  const directTicketRef = (index, variant = "a") => `${root}/history_classroom_exemptions/${directTicket(index, variant)}`;
+  const directPayload = (index, variant = "a") => ({ semesterId, assignmentId: directSourceId, studentUid: students[index], exemptionId: directTicket(index, variant) });
+  const directSeed = db.batch();
+  for (let index = 0; index < 13; index += 1) {
+    for (const variant of ["a", "b"]) directSeed.set(db.doc(directTicketRef(index, variant)), {
+      uid: students[index], semesterId, status: "available", revision: 1, studentName: "오래된 발급 이름", reason: "합성 보유 면제권" });
+  }
+  await directSeed.commit();
+  const applyDirect = (index, variant = "a", id = randomUUID(), auth = teacher) =>
+    executeAuthenticated(auth, "applyHistoryClassroomExemption", directPayload(index, variant), id);
+  await assert.rejects(applyDirect(0, "a", randomUUID(), student()), expectCode("permission-denied"));
+  await db.doc("users/teacher").update({ staffPermissions: [] });
+  await assert.rejects(applyDirect(0), (error) => error.details?.reason === "ASSESSMENT_MANAGE_REQUIRED");
+  await db.doc("users/teacher").update({ staffPermissions: ["quiz_read"] });
+  await db.doc(`users/${students[10]}`).update({ teacherPortalEnabled: true, staffPermissions: ["quiz_read"] });
+  await assert.rejects(applyDirect(0, "a", randomUUID(), student(students[10])), expectCode("permission-denied"));
+  await db.doc(`users/${students[10]}`).update({ teacherPortalEnabled: false, staffPermissions: [] });
+  await assert.rejects(executeAuthenticated(teacher, "applyHistoryClassroomExemption", { ...directPayload(0), exemptionId: directTicket(1) }), expectCode("permission-denied"));
+  await assert.rejects(applyDirect(12), expectCode("permission-denied"));
+  for (const update of [{ status: "used" }, { status: "revoked" }, { status: "requested" }, { semesterId: "2025-2" },
+    { expiresAt: Timestamp.fromMillis(Date.now() - 1000) }, { assignmentId: "another-assignment" }]) {
+    const ref = db.doc(directTicketRef(2));
+    await ref.set({ uid: students[2], semesterId, status: "available", revision: 1, ...update });
+    await assert.rejects(applyDirect(2));
+    assert.deepEqual(await get(directTicketRef(2)), { uid: students[2], semesterId, status: "available", revision: 1, ...update });
+  }
+  await db.doc(directTicketRef(2)).set({ uid: students[2], status: "available", revision: 1 }); // legacy ticket without a semester field remains valid.
+  await db.doc(`${root}/history_classrooms/${directSourceId}`).update({ dueAt: "2000-01-01T00:00:00.000Z" });
+  await assert.rejects(applyDirect(2), (error) => error.details?.reason === "HISTORY_EXEMPTION_WINDOW_CLOSED");
+  await db.doc(`${root}/history_classrooms/${directSourceId}`).update({ dueAt: null });
+  await db.doc(`semester_assessment_definitions/${directDefinitionId}`).update({ opensAt: "2099-01-01T00:00:00.000Z" });
+  await assert.rejects(applyDirect(2), (error) => error.details?.reason === "HISTORY_EXEMPTION_WINDOW_CLOSED");
+  await db.doc(`semester_assessment_definitions/${directDefinitionId}`).update({ opensAt: "" });
+  const pending = await executeAuthenticated(student(students[5]), "createHistoryClassroomExemptionRequest", {
+    semesterId, assignmentId: directSourceId, exemptionId: directTicket(5), memo: "합성 기존 요청" });
+  await assert.rejects(applyDirect(5, "b"), (error) => error.details?.reason === "HISTORY_EXEMPTION_REQUEST_PENDING");
+  assert.equal((await get(directTicketRef(5, "b"))).status, "available");
+  assert.equal((await get(`${root}/history_classroom_exemption_requests/${pending.result.requestId}`)).status, "pending");
+  await db.doc(`${root}/history_classroom_results/direct-legacy-passed`).set({ uid: students[6], assignmentId: directSourceId, status: "passed", passed: true });
+  await assert.rejects(applyDirect(6), (error) => error.details?.reason === "HISTORY_EXEMPTION_ALREADY_PASSED");
+  const directAttempt = await executeAuthenticated(student(), "startAssessmentAttempt", { definitionId: directDefinitionId });
+  const directCommandId = randomUUID();
+  const [directResult, directReplay] = await Promise.all([applyDirect(0, "a", directCommandId), applyDirect(0, "a", directCommandId)]);
+  assert.equal(directResult.result.resultId, directReplay.result.resultId);
+  assert.deepEqual((await authenticatedStatus(teacher, "applyHistoryClassroomExemption", directCommandId)).result, directResult.result);
+  const directCanonical = await get(`semester_assessment_results/${directResult.result.resultId}`);
+  const directLegacy = await get(`${root}/history_classroom_results/${directResult.result.resultId}`);
+  assert.deepEqual(directCanonical, directLegacy);
+  assert.equal(directCanonical.origin, "teacher_direct");
+  assert.equal(directCanonical.initiatedByUid, teacher.uid);
+  assert.equal(directCanonical.studentName, `합성 ${students[0]}`);
+  assert.equal(directCanonical.completionSource, "exemption");
+  assert.equal(directCanonical.reward.totalAwarded, 0);
+  assert.equal((await get(directTicketRef(0))).status, "used");
+  assert.equal((await get(directTicketRef(0, "b"))).status, "available");
+  const directAudit = await get(`${root}/history_classroom_exemption_requests/${directCanonical.exemptionRequestId}`);
+  assert.equal(directAudit.origin, "teacher_direct");
+  assert.equal(directAudit.initiatedByUid, teacher.uid);
+  assert.equal(directAudit.requestedAt, undefined, "A direct teacher action must not impersonate a student request");
+  assert.equal((await get(`semester_assessment_attempts/${directAttempt.result.attemptId}`)).lockReason, "EXEMPTION");
+  await assert.rejects(executeAuthenticated(student(), "startAssessmentAttempt", { definitionId: directDefinitionId }),
+    (error) => error.details?.reason === "ASSESSMENT_ALREADY_EXEMPTED");
+  await assert.rejects(applyDirect(0, "b"), (error) => error.details?.reason === "HISTORY_EXEMPTION_ALREADY_PASSED");
+  const directRace = await Promise.allSettled([applyDirect(1), applyDirect(1, "b")]);
+  assert.equal(directRace.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal((await Promise.all([get(directTicketRef(1)), get(directTicketRef(1, "b"))])).filter(ticket => ticket.status === "used").length, 1);
+  await applyDirect(2);
+  await db.doc(`semester_enrollment_slots/${enrollment.buildEnrollmentSlotId(semesterId, students[3])}`).update({ activeEnrollmentId: "missing" });
+  await assert.rejects(applyDirect(3), (error) => error.details?.reason === "ASSESSMENT_ENROLLMENT_INVALID");
+  assert.equal((await get(directTicketRef(3))).status, "available");
+  await db.doc(`semester_enrollment_slots/${enrollment.buildEnrollmentSlotId(semesterId, students[3])}`).update({ activeEnrollmentId: `enrollment_${students[3]}` });
+  const administrator = { uid: "direct-admin", token: { email: "westoria28@gmail.com", auth_time: authTime } };
+  await db.doc(`application_sessions/${administrator.uid}/sessions/${authTime}`).set({ ...seed[`application_sessions/${teacher.uid}/sessions/${authTime}`],
+    uid: administrator.uid, email: administrator.token.email });
+  await applyDirect(3, "a", randomUUID(), administrator);
+  const secondDirectSourceId = "direct-history-second";
+  await executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...sourceSavePayload, sourceId: secondDirectSourceId, source: directSource });
+  const crossAssignment = await Promise.allSettled([applyDirect(7),
+    executeAuthenticated(teacher, "applyHistoryClassroomExemption", { ...directPayload(7), assignmentId: secondDirectSourceId })]);
+  assert.equal(crossAssignment.filter(result => result.status === "fulfilled").length, 1, "One ticket cannot complete two assignments concurrently");
+  const crossSuccess = crossAssignment.find(result => result.status === "fulfilled").value.result;
+  assert.equal((await get(directTicketRef(7))).usedAssignmentId, crossSuccess.assignmentId);
+  const crossResults = await db.collection("semester_assessment_results").where("studentUid", "==", students[7]).get();
+  assert.equal(crossResults.docs.filter(doc => [directSourceId, secondDirectSourceId].includes(doc.data().assignmentId)).length, 1);
+  const requestRace = await Promise.allSettled([
+    executeAuthenticated(student(students[8]), "createHistoryClassroomExemptionRequest", {
+      semesterId, assignmentId: directSourceId, exemptionId: directTicket(8), memo: "합성 동시 요청" }),
+    applyDirect(8, "b"),
+  ]);
+  assert.equal(requestRace.filter(result => result.status === "fulfilled").length, 1, "A student request and teacher direct action cannot both reserve/consume tickets for one assignment");
+  const requestTicket = await get(directTicketRef(8)), teacherTicket = await get(directTicketRef(8, "b"));
+  if (requestRace[0].status === "fulfilled") {
+    assert.equal(requestTicket.status, "requested");
+    assert.equal(teacherTicket.status, "available");
+  } else {
+    assert.equal(requestTicket.status, "available");
+    assert.equal(teacherTicket.status, "used");
+  }
+  console.log("PASS concurrent same-ticket/different-assignment and student-request/teacher-direct races each permit exactly one outcome");
+  console.log("PASS teacher direct exemptions: available/legacy ticket, role/capability/target/owner/semester/expiry/window/pending guards, fixed-result concurrency, receipt/status, no rewards, active-attempt lock and no student-request impersonation");
   await db.doc(`semester_manifests/${semesterId}`).update({ status: "ARCHIVED" });
   await assert.rejects(execute(teacher, "grantHistoryClassroomExemptions", grantPayload), expectCode("failed-precondition"));
+  await assert.rejects(applyDirect(4), expectCode("failed-precondition"));
+  await assert.rejects(executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...sourceSavePayload, sourceId: "archived-save" }), expectCode("failed-precondition"));
   await assert.rejects(core.getStatus({ auth: runner, data: { commandId: lockCommandId, commandType: "lockHistoryClassroomAttempt" } }), expectCode("permission-denied"));
   console.log("PASS history classroom emulator: 32/34 class grant, receipt replay, ownership, atomic rejection, request/revoke/approve/reject, exemption/result atomicity, no exemption reward, offline resume/deadline, violation lock, teacher reset, submitted-result preservation, archive fence");
 })().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => { await db.terminate(); await deleteApp(app); });
