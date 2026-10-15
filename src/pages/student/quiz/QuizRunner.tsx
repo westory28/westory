@@ -11,6 +11,10 @@ import {
 import "./QuizLearning.css";
 import QuizLearningResult from "./QuizLearningResult";
 import {
+  loadQuizScoreComparison,
+  type QuizScoreComparison,
+} from "../../../lib/quizScoreComparison";
+import {
   collection,
   doc,
   getDoc,
@@ -202,7 +206,12 @@ const QuizRunner: React.FC = () => {
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [quizDeadlineMs, setQuizDeadlineMs] = useState<number | null>(null);
 
+  const [openHintQuestionId, setOpenHintQuestionId] = useState<number | null>(
+    null,
+  );
   const [score, setScore] = useState(0);
+  const [scoreComparison, setScoreComparison] =
+    useState<QuizScoreComparison | null>(null);
   const [resultCounts, setResultCounts] = useState({ correct: 0, total: 0 });
   const [assessmentTitle, setAssessmentTitle] = useState("");
   const [finishSubmitting, setFinishSubmitting] = useState(false);
@@ -1070,6 +1079,50 @@ const QuizRunner: React.FC = () => {
   persistQuizProgressRef.current = persistQuizProgress;
 
   useEffect(() => {
+    setOpenHintQuestionId(null);
+  }, [currentIndex]);
+
+  useEffect(() => {
+    let active = true;
+    setScoreComparison(null);
+    if (
+      view !== "result" ||
+      !finalizedResultId ||
+      !fallbackStudentUid ||
+      !canonicalAttempt?.definitionId ||
+      resultCounts.total === 0
+    )
+      return;
+    void loadQuizScoreComparison({
+      config,
+      studentUid: fallbackStudentUid,
+      semesterId: `${assessmentYear}-${assessmentSemester}`,
+      definitionId: canonicalAttempt.definitionId,
+      currentAttemptId: finalizedResultId,
+      currentScorePercent: score,
+    })
+      .then((comparison) => {
+        if (active) setScoreComparison(comparison);
+      })
+      .catch(() => {
+        // Optional prior-score reads must never block the saved result or actions.
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    view,
+    finalizedResultId,
+    fallbackStudentUid,
+    canonicalAttempt?.definitionId,
+    config,
+    assessmentYear,
+    assessmentSemester,
+    score,
+    resultCounts.total,
+  ]);
+
+  useEffect(() => {
     observe((collector) => {
       collector.setRunning(
         view === "quiz" && !finishSubmitting && !waitingForQuestionImages,
@@ -1221,6 +1274,7 @@ const QuizRunner: React.FC = () => {
 
     try {
       setView("loading");
+      setOpenHintQuestionId(null);
       setErrorMsg(null);
       setBlockReason(null);
       setResumeNotice("");
@@ -1935,56 +1989,47 @@ const QuizRunner: React.FC = () => {
         : assessmentCategoryLabel;
 
     return (
-      <div className="student-quiz-runner student-quiz-learning mx-auto flex max-w-6xl animate-fadeIn flex-col px-3 py-3 sm:px-4 lg:max-w-7xl">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 shadow-sm">
-              <i className="fas fa-file-signature shrink-0 text-[11px]"></i>
-              <span
-                className="student-quiz-context-title min-w-0 break-words"
-                title={assessmentBadgeLabel}
-              >
-                {assessmentBadgeLabel}
-              </span>
-            </div>
+      <div className="student-quiz-runner student-quiz-learning">
+        <header className="student-quiz-topbar">
+          <p
+            className="student-quiz-context-title"
+            title={assessmentBadgeLabel}
+          >
+            {assessmentBadgeLabel}
+          </p>
+          <div
+            className={`student-quiz-timer ${timeLeft <= 60 ? "student-quiz-timer-urgent" : ""}`}
+            aria-label="평가 남은 시간"
+          >
+            <span>남은 시간</span>
+            <strong>
+              {Math.floor(timeLeft / 60)
+                .toString()
+                .padStart(2, "0")}
+              :
+              {Math.floor(timeLeft % 60)
+                .toString()
+                .padStart(2, "0")}
+            </strong>
           </div>
-          <div className="flex items-center gap-2">
-            {canUseHints && (
-              <div className="shrink-0 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
-                힌트 {hintUsedCount}/{maxHintUses}
-              </div>
-            )}
-            <div
-              aria-label="평가 남은 시간"
-              className="flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm"
-            >
-              <i className="fas fa-stopwatch text-red-500"></i>
-              <span className="min-w-12 whitespace-nowrap text-center font-mono text-lg font-bold text-gray-700">
-                {Math.floor(timeLeft / 60)
-                  .toString()
-                  .padStart(2, "0")}
-                :
-                {Math.floor(timeLeft % 60)
-                  .toString()
-                  .padStart(2, "0")}
-              </span>
-            </div>
-          </div>
-        </div>
+        </header>
 
         <nav
           ref={questionNavRef}
-          className="mb-3 shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm"
+          className="student-quiz-navigation"
           aria-label="문항 이동"
         >
-          <div className="student-quiz-progress-summary mb-2 flex items-center justify-between gap-2 text-sm text-gray-500">
+          <div className="student-quiz-progress-summary">
             <div>
-              <p className="font-bold">
-                현재 {currentIndex + 1}번 ·{" "}
-                <span className="text-blue-600">{answeredQuestionCount}</span>/
-                {selectedQuestions.length} 입력
+              <p className="student-quiz-progress-count">
+                <strong>{answeredQuestionCount}</strong> /{" "}
+                {selectedQuestions.length}문제 완료
               </p>
-              <p role="status" aria-live="polite" className="text-xs">
+              <p
+                role="status"
+                aria-live="polite"
+                className="student-quiz-save-status"
+              >
                 {saveStatus === "saving"
                   ? "답안 저장 중"
                   : saveStatus === "pending"
@@ -2007,11 +2052,11 @@ const QuizRunner: React.FC = () => {
                   )
                 }
               >
-                미완성 {incompleteIndexes.length}개 보기
+                미완성 {incompleteIndexes.length}개
               </button>
             )}
           </div>
-          <div className="student-quiz-progress-scroll -mx-1 overflow-x-auto px-1 pb-0.5">
+          <div className="student-quiz-progress-scroll">
             <div className="student-quiz-progress-items">
               {selectedQuestions.map((item, index) => {
                 const answered = isQuestionAnswered(item);
@@ -2026,15 +2071,7 @@ const QuizRunner: React.FC = () => {
                     aria-label={`${index + 1}번 문제${
                       answered ? " 답안 입력됨" : " 미입력"
                     }`}
-                    className={`student-quiz-progress-item flex items-center justify-center rounded-md border text-sm font-bold leading-none transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
-                      active
-                        ? answered
-                          ? "border-blue-600 bg-blue-600 text-white shadow-sm"
-                          : "border-blue-500 bg-white text-blue-700 shadow-sm"
-                        : answered
-                          ? "border-blue-300 bg-blue-100 text-blue-700 hover:border-blue-400 hover:bg-blue-200"
-                          : "border-gray-200 bg-gray-100 text-gray-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-                    }`}
+                    className={`student-quiz-progress-item ${active ? "is-current" : ""} ${answered ? "is-answered" : ""}`}
                   >
                     {index + 1}
                     {answered && (
@@ -2066,57 +2103,70 @@ const QuizRunner: React.FC = () => {
           )}
         </nav>
 
-        <div className="student-quiz-shell flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="student-quiz-shell">
           <fieldset
             disabled={finishSubmitting}
             className={`student-quiz-body-split min-h-0 flex-1 ${
               hasQuestionSupportPanel ? "student-quiz-body-has-support" : ""
             }`}
           >
-            <section className="student-quiz-question-panel min-h-0 rounded-xl border border-gray-100 bg-slate-50/70 p-4">
-              <div className="mb-4">
-                <div className="mb-2 text-xs font-black text-blue-600">
-                  {currentIndex + 1}번 문제
-                </div>
-                <h2
-                  ref={questionHeadingRef}
-                  tabIndex={-1}
-                  className="student-quiz-question-heading break-words text-lg font-bold leading-relaxed text-gray-900 md:text-xl"
-                >
-                  {question.question}
-                </h2>
-              </div>
-
-              {!!(canUseHints && question.hintEnabled && question.hint) && (
-                <div className="mb-4">
+            <section className="student-quiz-question-panel">
+              <div className="student-quiz-question-toolbar">
+                <span className="student-quiz-question-number">
+                  문제 {currentIndex + 1}
+                </span>
+                {!!(canUseHints && question.hintEnabled && question.hint) && (
                   <button
                     type="button"
-                    onClick={() => revealHint(question)}
+                    className="student-quiz-hint-toggle"
+                    onClick={() => {
+                      if (openHintQuestionId === question.id) {
+                        setOpenHintQuestionId(null);
+                      } else {
+                        if (!revealedHints[question.id]) revealHint(question);
+                        setOpenHintQuestionId(question.id);
+                      }
+                    }}
                     disabled={
-                      !!revealedHints[question.id] ||
+                      !revealedHints[question.id] &&
                       hintUsedCount >= maxHintUses
                     }
-                    className={`min-h-11 rounded-lg px-3 py-2 text-sm font-bold transition ${
-                      revealedHints[question.id]
-                        ? "bg-amber-100 text-amber-700"
-                        : hintUsedCount >= maxHintUses
-                          ? "cursor-not-allowed bg-gray-100 text-gray-400"
-                          : "bg-amber-500 text-white hover:bg-amber-600"
-                    }`}
+                    aria-expanded={openHintQuestionId === question.id}
+                    aria-controls={`quiz-hint-${question.id}`}
+                    aria-label={`${openHintQuestionId === question.id ? "힌트 닫기" : "힌트 보기"}${revealedHints[question.id] ? "" : `, 남은 ${Math.max(0, maxHintUses - hintUsedCount)}회`}`}
                   >
-                    {revealedHints[question.id] ? "힌트 확인됨" : "힌트 보기"}
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      aria-hidden="true"
+                    >
+                      <path d="M9 18h6M10 21h4M8.5 14.5a6 6 0 1 1 7 0c-.9.6-1.5 1.5-1.5 2.5h-4c0-1-.6-1.9-1.5-2.5Z" />
+                    </svg>
+                    힌트
                   </button>
-                  {revealedHints[question.id] && (
-                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                      <i className="fas fa-lightbulb mr-2"></i>
-                      {question.hint}
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
+              <h2
+                ref={questionHeadingRef}
+                tabIndex={-1}
+                className="student-quiz-question-heading"
+              >
+                {question.question}
+              </h2>
+              {openHintQuestionId === question.id &&
+                revealedHints[question.id] && (
+                  <div
+                    id={`quiz-hint-${question.id}`}
+                    className="student-quiz-hint-content"
+                  >
+                    {question.hint}
+                  </div>
+                )}
 
               {hasQuestionSupportPanel && (
-                <div className="student-quiz-support-panel flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-white p-2 text-center">
+                <div className="student-quiz-support-panel">
                   {question.image && (
                     <div
                       className={`flex min-h-0 items-center justify-center ${
@@ -2141,15 +2191,15 @@ const QuizRunner: React.FC = () => {
                     <QuizPassage
                       value={passageText}
                       surface="white"
-                      size="large"
-                      className="shrink-0 text-left"
+                      size="default"
+                      className="student-quiz-passage"
                     />
                   )}
                 </div>
               )}
 
               {question.type === "order" && (
-                <div className="mt-4 rounded-xl border border-dashed border-blue-300 bg-blue-50 p-3">
+                <div className="student-quiz-order-selection">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="text-xs font-bold text-gray-600">
                       선택한 순서
@@ -2193,13 +2243,10 @@ const QuizRunner: React.FC = () => {
             </section>
 
             <section
-              className="student-quiz-answer-panel min-h-0 rounded-xl border border-gray-100 bg-white p-4"
+              className="student-quiz-answer-panel"
               aria-labelledby="quiz-answer-label"
             >
-              <div
-                id="quiz-answer-label"
-                className="mb-3 text-xs font-black text-blue-600"
-              >
+              <div id="quiz-answer-label" className="student-quiz-answer-label">
                 {answerPanelLabel}
               </div>
 
@@ -2207,8 +2254,8 @@ const QuizRunner: React.FC = () => {
                 <div
                   className={
                     hasChoiceOptionImages
-                      ? "student-quiz-choice-grid grid min-h-[16rem] grid-cols-2 auto-rows-fr gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
-                      : "min-h-0 space-y-2 overflow-y-auto pr-1"
+                      ? "student-quiz-choice-grid"
+                      : "student-quiz-choice-list"
                   }
                 >
                   {question.options?.map((option, index) => {
@@ -2224,19 +2271,7 @@ const QuizRunner: React.FC = () => {
                         key={`${question.id}-choice-${index}`}
                         onClick={() => handleAnswer(option)}
                         aria-pressed={selected}
-                        className={
-                          hasChoiceOptionImages
-                            ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left transition ${
-                                selected
-                                  ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
-                                  : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                              }`
-                            : `flex w-full cursor-pointer items-start rounded-xl border-2 px-3 py-2.5 text-left text-base leading-relaxed transition ${
-                                selected
-                                  ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
-                                  : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                              }`
-                        }
+                        className={`student-quiz-choice ${hasChoiceOptionImages ? "student-quiz-image-choice" : ""} ${selected ? "is-selected" : ""}`}
                       >
                         {hasChoiceOptionImages ? (
                           <>
@@ -2314,14 +2349,14 @@ const QuizRunner: React.FC = () => {
               )}
 
               {question.type === "ox" && (
-                <div className="grid gap-3">
+                <div className="student-quiz-ox-options">
                   {["O", "X"].map((option) => (
                     <button
                       key={option}
                       type="button"
                       onClick={() => handleAnswer(option)}
                       aria-pressed={currentAnswer === option}
-                      className={`rounded-xl border-2 p-6 text-center text-xl font-bold transition ${
+                      className={`student-quiz-ox-option rounded-lg border p-6 text-center text-xl font-bold ${
                         currentAnswer === option
                           ? "border-blue-500 bg-blue-50 text-blue-800"
                           : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
@@ -2346,7 +2381,7 @@ const QuizRunner: React.FC = () => {
                       collector.commitAnswer(String(question.id)),
                     )
                   }
-                  className="w-full rounded-xl border-2 border-gray-200 bg-white p-3 text-center text-lg font-bold outline-none transition focus:border-blue-500"
+                  className="student-quiz-text-answer"
                   placeholder="정답을 입력하세요"
                 />
               )}
@@ -2362,7 +2397,7 @@ const QuizRunner: React.FC = () => {
                         onClick={() => appendOrderSelection(option)}
                         disabled={selected}
                         aria-pressed={selected}
-                        className={`flex min-h-12 items-center gap-2 rounded-lg border-2 px-3 py-2 text-left text-sm font-bold transition ${
+                        className={`student-quiz-order-option flex min-h-12 items-center gap-2 rounded-lg border px-3 py-2 text-left text-base ${
                           selected
                             ? "cursor-not-allowed border-blue-200 bg-blue-50 text-blue-700 opacity-75"
                             : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
@@ -2426,7 +2461,7 @@ const QuizRunner: React.FC = () => {
                               type="button"
                               onClick={() => setMatchingActiveLeft(pair.left)}
                               aria-pressed={matchingActiveLeft === pair.left}
-                              className={`relative z-20 w-full rounded-xl border-2 p-4 text-left transition ${
+                              className={`student-quiz-matching-option relative z-20 w-full rounded-lg border p-4 text-left ${
                                 matchingActiveLeft === pair.left
                                   ? "border-blue-500 bg-blue-50 text-blue-800"
                                   : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
@@ -2460,7 +2495,7 @@ const QuizRunner: React.FC = () => {
                               type="button"
                               onClick={() => handleMatchingRightSelect(right)}
                               disabled={!matchingActiveLeft}
-                              className={`relative z-20 flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
+                              className={`student-quiz-matching-option relative z-20 flex w-full items-center gap-3 rounded-lg border p-3 text-left ${
                                 used
                                   ? "border-blue-500 bg-blue-50 font-bold text-blue-700"
                                   : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
@@ -2551,16 +2586,12 @@ const QuizRunner: React.FC = () => {
             </div>
           )}
 
-          <div className="student-quiz-actions mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-gray-100 pt-3">
+          <div className="student-quiz-actions">
             <button
               type="button"
               onClick={prevQuestion}
               disabled={currentIndex === 0 || finishSubmitting}
-              className={`flex items-center rounded-xl px-5 py-2.5 font-bold shadow-sm transition ${
-                currentIndex === 0
-                  ? "cursor-not-allowed bg-gray-100 text-gray-400"
-                  : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-              }`}
+              className="student-quiz-secondary-action"
             >
               <i className="fas fa-arrow-left mr-2"></i>
               이전 문제
@@ -2569,11 +2600,7 @@ const QuizRunner: React.FC = () => {
               type="button"
               onClick={() => void nextQuestion()}
               disabled={finishSubmitting}
-              className={`flex items-center rounded-xl px-7 py-2.5 font-bold text-white shadow-lg transition disabled:opacity-60 ${
-                currentIndex === selectedQuestions.length - 1
-                  ? "bg-blue-600 hover:bg-blue-700"
-                  : "bg-gray-800 hover:bg-gray-900"
-              }`}
+              className="student-quiz-primary-action"
             >
               {currentIndex === selectedQuestions.length - 1
                 ? finishSubmitting
@@ -2651,6 +2678,7 @@ const QuizRunner: React.FC = () => {
         score={score}
         correctCount={resultCounts.correct}
         totalCount={resultCounts.total}
+        comparison={scoreComparison}
         onReview={() => navigate(resultReviewUrl)}
         onRetry={() => {
           setView("loading");

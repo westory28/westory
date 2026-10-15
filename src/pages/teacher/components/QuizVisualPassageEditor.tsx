@@ -20,7 +20,6 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   label?: string;
-  placeholder?: string;
   allowBlank?: boolean;
 }
 interface Snapshot {
@@ -33,7 +32,6 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
   value,
   onChange,
   label = "지문",
-  placeholder = "자료의 본문을 입력하세요.",
   allowBlank = false,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -238,7 +236,6 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
         lang="ko"
         inputMode="text"
         className="quiz-visual-content quiz-compose-field"
-        data-placeholder={placeholder}
         onInput={captureInput}
         onPaste={paste}
         onDrop={(event) => event.preventDefault()}

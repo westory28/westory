@@ -8,9 +8,20 @@ const QuizTextField: React.FC<
   useLayoutEffect(() => {
     if (!ref.current) return;
     const resize = () => {
-      if (!ref.current) return;
-      ref.current.style.height = "auto";
-      ref.current.style.height = `${Math.min(Math.max(ref.current.scrollHeight, 44), 240)}px`;
+      const field = ref.current;
+      if (!field) return;
+      field.style.height = "auto";
+      field.style.overflowY = "hidden";
+      const style = window.getComputedStyle(field);
+      const pixels = (value: string) => Number.parseFloat(value) || 0;
+      // scrollHeight includes padding but not the border of a border-box field.
+      const adjustment =
+        style.boxSizing === "border-box"
+          ? pixels(style.borderTopWidth) + pixels(style.borderBottomWidth)
+          : -pixels(style.paddingTop) - pixels(style.paddingBottom);
+      const naturalHeight = field.scrollHeight + adjustment;
+      field.style.height = `${Math.min(Math.max(naturalHeight, 44), 240)}px`;
+      field.style.overflowY = naturalHeight > 240 ? "auto" : "hidden";
     };
     resize();
     let width = ref.current.clientWidth;

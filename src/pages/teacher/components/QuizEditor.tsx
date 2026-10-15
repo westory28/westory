@@ -28,6 +28,7 @@ import QuizLearningMetadataFields, {
 } from "./QuizLearningMetadataFields";
 import { useQuizDialog } from "./useQuizDialog";
 import { hasQuizDerivationContentChange } from "./quizDerivation";
+import "./QuizWorkspace.css";
 
 interface TreeUnit {
   id: string;
@@ -179,6 +180,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   );
   const [answerReviewed, setAnswerReviewed] = useState(false);
   const [formError, setFormError] = useState("");
+  const formErrorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (formError) formErrorRef.current?.focus();
+  }, [formError]);
   const [epFilter, setEpFilter] = useState<CascadingFilter>(
     EMPTY_CASCADING_FILTER,
   );
@@ -213,6 +218,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [hintText, setHintText] = useState("");
 
   const [previewOpen, setPreviewOpen] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (previewOpen) previewRef.current?.focus();
+  }, [previewOpen]);
   const [previewChoiceAnswer, setPreviewChoiceAnswer] = useState("");
   const [previewOxAnswer, setPreviewOxAnswer] = useState("");
   const [previewWordAnswer, setPreviewWordAnswer] = useState("");
@@ -1134,13 +1143,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     formType === "choice" && previewChoiceItems.some((item) => item.image);
 
   return (
-    <div className="quiz-authoring-surface flex h-full min-h-0 flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="quiz-editor-toolbar p-4 border-b bg-gray-50 shrink-0">
+    <div className="quiz-authoring-surface quiz-registration-workspace flex h-full min-h-0 flex-col">
+      <div className="quiz-editor-toolbar quiz-registration-heading">
         <div>
           {type !== "special" && (
-            <div className="text-xs text-gray-500 font-bold mb-1">
-              {parentTitle} &gt; {node.title}
-            </div>
+            <div className="text-sm text-gray-500 mb-1">{parentTitle}</div>
           )}
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-gray-800">
@@ -1162,7 +1169,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
           <button
             type="button"
             onClick={openCreateComposer}
-            className="bg-blue-600 text-white font-bold px-4 py-2.5 rounded-full shadow hover:bg-blue-700 transition flex items-center gap-2"
+            className="quiz-authoring-primary"
           >
             <i className="fas fa-plus"></i>
             <span>문제 등록</span>
@@ -1569,27 +1576,20 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       : "새 문제 등록"
                 }
                 tabIndex={-1}
-                className="quiz-authoring-surface w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5"
+                className="quiz-authoring-surface quiz-composer-dialog"
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="quiz-composer-header">
                   <div>
-                    <h3 className="font-bold text-gray-800 text-lg flex items-center">
-                      <i
-                        className={`fas ${editingQuestionId ? "fa-pen" : "fa-plus-circle"} text-blue-500 mr-2`}
-                      ></i>
+                    <h3 className="font-bold text-gray-800 text-lg">
                       {editingQuestionId
                         ? "문제 수정"
                         : derivationSource
                           ? "파생 문항 만들기"
                           : "새 문제 등록"}
                     </h3>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                      <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 font-bold">
-                        중단원: {node.title}
-                      </span>
-                      <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 font-bold">
-                        {categoryLabel}
-                      </span>
+                    <div className="quiz-composer-context">
+                      <span>{categoryLabel}</span>
+                      <span>{node.title}</span>
                     </div>
                   </div>
                   <button
@@ -1598,512 +1598,572 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     className="min-h-11 min-w-11 text-gray-500 hover:text-gray-700"
                     aria-label="문제 편집 닫기"
                   >
-                    <i className="fas fa-times text-lg"></i>
+                    <span aria-hidden="true">×</span>
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  <div
-                    className={`grid gap-3 ${type === "normal" ? "grid-cols-2" : "grid-cols-1"}`}
+                <div className="quiz-composer-body">
+                  <section
+                    className="quiz-composer-section"
+                    aria-label="문항과 자료"
                   >
-                    <select
-                      value={formType}
-                      aria-label="문항 유형"
-                      onChange={(e) =>
-                        handleTypeChange(e.target.value as QuestionType)
-                      }
-                      onKeyDown={handleVerticalFocus}
-                      className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
-                    >
-                      <option value="choice">객관식</option>
-                      <option value="ox">O/X</option>
-                      <option value="word">단답형</option>
-                      <option value="order">순서 나열형</option>
-                      <option value="matching">단어 연결하기</option>
-                    </select>
-                    {type === "normal" && (
-                      <select
-                        value={formSubUnit}
-                        aria-label="소단원"
-                        onChange={(e) => setFormSubUnit(e.target.value)}
-                        onKeyDown={handleVerticalFocus}
-                        className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
-                      >
-                        <option value="">소단원 전체</option>
-                        {normalSubUnits.map((sub) => (
-                          <option key={sub.id} value={sub.id}>
-                            {sub.title}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="quiz-composer-fields">
+                      <label className="quiz-composer-field">
+                        <span>문항 유형</span>
+                        <select
+                          value={formType}
+                          aria-label="문항 유형"
+                          onChange={(e) =>
+                            handleTypeChange(e.target.value as QuestionType)
+                          }
+                          onKeyDown={handleVerticalFocus}
+                          className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
+                        >
+                          <option value="choice">객관식</option>
+                          <option value="ox">O/X</option>
+                          <option value="word">단답형</option>
+                          <option value="order">순서 나열형</option>
+                          <option value="matching">단어 연결하기</option>
+                        </select>
+                      </label>
+                      {type === "normal" && (
+                        <label className="quiz-composer-field">
+                          <span>소단원</span>
+                          <select
+                            value={formSubUnit}
+                            aria-label="소단원"
+                            onChange={(e) => setFormSubUnit(e.target.value)}
+                            onKeyDown={handleVerticalFocus}
+                            className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
+                          >
+                            <option value="">소단원 전체</option>
+                            {normalSubUnits.map((sub) => (
+                              <option key={sub.id} value={sub.id}>
+                                {sub.title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
+
+                    {type === "special" && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label className="quiz-composer-field">
+                          <span>대단원</span>
+                          <select
+                            value={epSource.big}
+                            onChange={(e) =>
+                              setEpSource({
+                                big: e.target.value,
+                                mid: "",
+                                small: "",
+                              })
+                            }
+                            onKeyDown={handleVerticalFocus}
+                            className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                          >
+                            <option value="">대단원 선택</option>
+                            {allBigUnits.map((big) => (
+                              <option key={big.id} value={big.id}>
+                                {big.title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="quiz-composer-field">
+                          <span>중단원</span>
+                          <select
+                            value={epSource.mid}
+                            onChange={(e) =>
+                              setEpSource((prev) => ({
+                                ...prev,
+                                mid: e.target.value,
+                                small: "",
+                              }))
+                            }
+                            onKeyDown={handleVerticalFocus}
+                            className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                          >
+                            <option value="">중단원 선택</option>
+                            {sourceMidUnits.map((mid) => (
+                              <option key={mid.id} value={mid.id}>
+                                {mid.title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="quiz-composer-field">
+                          <span>소단원</span>
+                          <select
+                            value={epSource.small}
+                            onChange={(e) =>
+                              setEpSource((prev) => ({
+                                ...prev,
+                                small: e.target.value,
+                              }))
+                            }
+                            onKeyDown={handleVerticalFocus}
+                            className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                          >
+                            <option value="">소단원 선택</option>
+                            {sourceSmallUnits.map((small) => (
+                              <option key={small.id} value={small.id}>
+                                {small.title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
                     )}
-                  </div>
 
-                  {type === "special" && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-blue-50 p-2 rounded border border-blue-100">
-                      <select
-                        value={epSource.big}
-                        onChange={(e) =>
-                          setEpSource({
-                            big: e.target.value,
-                            mid: "",
-                            small: "",
-                          })
-                        }
+                    <label className="quiz-composer-field">
+                      <span>발문</span>
+                      <QuizTextField
+                        lang="ko"
+                        inputMode="text"
+                        aria-label="발문"
+                        value={formText}
+                        onChange={(e) => setFormText(e.target.value)}
                         onKeyDown={handleVerticalFocus}
-                        className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
-                      >
-                        <option value="">대단원 선택</option>
-                        {allBigUnits.map((big) => (
-                          <option key={big.id} value={big.id}>
-                            {big.title}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={epSource.mid}
-                        onChange={(e) =>
-                          setEpSource((prev) => ({
-                            ...prev,
-                            mid: e.target.value,
-                            small: "",
-                          }))
-                        }
-                        onKeyDown={handleVerticalFocus}
-                        className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
-                      >
-                        <option value="">중단원 선택</option>
-                        {sourceMidUnits.map((mid) => (
-                          <option key={mid.id} value={mid.id}>
-                            {mid.title}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={epSource.small}
-                        onChange={(e) =>
-                          setEpSource((prev) => ({
-                            ...prev,
-                            small: e.target.value,
-                          }))
-                        }
-                        onKeyDown={handleVerticalFocus}
-                        className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
-                      >
-                        <option value="">소단원 선택</option>
-                        {sourceSmallUnits.map((small) => (
-                          <option key={small.id} value={small.id}>
-                            {small.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  <QuizTextField
-                    lang="ko"
-                    inputMode="text"
-                    placeholder="문제 내용을 입력하세요"
-                    aria-label="발문"
-                    value={formText}
-                    onChange={(e) => setFormText(e.target.value)}
-                    onKeyDown={handleVerticalFocus}
-                    className="quiz-compose-field w-full border p-2 rounded text-sm"
-                  />
-
-                  {supportsQuestionPassage(formType) && (
-                    <QuizVisualPassageEditor
-                      label={
-                        formType === "word"
-                          ? "단답형 본문 글상자"
-                          : "읽기 자료 글상자"
-                      }
-                      value={formPassage}
-                      onChange={setFormPassage}
-                      allowBlank={formType === "word"}
-                    />
-                  )}
-
-                  <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded transition w-fit">
-                    <i className="fas fa-image"></i> 이미지 첨부
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      ref={fileInputRef}
-                      onChange={handleImageSelect}
-                    />
-                  </label>
-                  {optimizingImage && (
-                    <p className="text-xs font-bold text-blue-600">
-                      이미지 용량을 줄이는 중...
-                    </p>
-                  )}
-                  {formImage && (
-                    <div className="relative border rounded p-2 bg-gray-50">
-                      <img
-                        src={formImage}
-                        alt="문항 첨부 이미지"
-                        className="max-h-44 mx-auto rounded"
+                        className="quiz-compose-field w-full border p-2 rounded text-sm"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setFormImage(null)}
-                        className="absolute top-2 right-2 text-xs px-2 py-1 rounded bg-white border text-gray-500 hover:text-red-500"
-                      >
-                        제거
-                      </button>
-                    </div>
-                  )}
+                    </label>
 
-                  {formType === "choice" && (
-                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-gray-600">
-                          객관식 보기
-                        </p>
+                    {supportsQuestionPassage(formType) && (
+                      <QuizVisualPassageEditor
+                        label={
+                          formType === "word"
+                            ? "단답형 본문 글상자"
+                            : "읽기 자료 글상자"
+                        }
+                        value={formPassage}
+                        onChange={setFormPassage}
+                        allowBlank={formType === "word"}
+                      />
+                    )}
+
+                    <label className="quiz-attachment-button">
+                      이미지 첨부
+                      <input
+                        type="file"
+                        className="sr-only"
+                        accept="image/*"
+                        aria-label="문항 이미지 첨부"
+                        ref={fileInputRef}
+                        onChange={handleImageSelect}
+                      />
+                    </label>
+                    {optimizingImage && (
+                      <p className="text-xs font-bold text-blue-600">
+                        이미지 용량을 줄이는 중...
+                      </p>
+                    )}
+                    {formImage && (
+                      <div className="relative border rounded p-2 bg-gray-50">
+                        <img
+                          src={formImage}
+                          alt="문항 첨부 이미지"
+                          className="max-h-44 mx-auto rounded"
+                        />
                         <button
                           type="button"
-                          onClick={addChoiceOption}
-                          className="text-xs font-bold text-blue-600 hover:text-blue-700"
+                          onClick={() => setFormImage(null)}
+                          className="quiz-authoring-button absolute top-2 right-2"
                         >
-                          <i className="fas fa-plus mr-1"></i>보기 추가
+                          제거
                         </button>
                       </div>
-                      {choiceOptions.map((option, index) => {
-                        const optionImage = choiceOptionImages[index];
-                        return (
-                          <div
-                            key={`choice-option-${index}`}
-                            className="flex items-start gap-2"
+                    )}
+                  </section>
+
+                  <section
+                    className="quiz-composer-section"
+                    aria-label="보기와 정답"
+                  >
+                    {formType === "choice" && (
+                      <div className="quiz-answer-editor">
+                        <div className="quiz-composer-section-heading">
+                          <h4>보기와 정답</h4>
+                          <button
+                            type="button"
+                            onClick={addChoiceOption}
+                            className="quiz-authoring-button"
                           >
-                            <span className="mt-1 w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
+                            보기 추가
+                          </button>
+                        </div>
+                        {choiceOptions.map((option, index) => {
+                          const optionImage = choiceOptionImages[index];
+                          return (
+                            <div
+                              key={`choice-option-${index}`}
+                              className="quiz-choice-row"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setChoiceAnswerIndex(index)}
+                                aria-label={`${index + 1}번 보기 정답 선택`}
+                                aria-pressed={choiceAnswerIndex === index}
+                                className="quiz-choice-answer"
+                              >
+                                {index + 1}
+                                {choiceAnswerIndex === index && (
+                                  <span>정답</span>
+                                )}
+                              </button>
+                              <div className="quiz-choice-content">
+                                <QuizTextField
+                                  lang="ko"
+                                  inputMode="text"
+                                  value={option}
+                                  onChange={(e) =>
+                                    setChoiceOptions((prev) =>
+                                      prev.map((opt, i) =>
+                                        i === index ? e.target.value : opt,
+                                      ),
+                                    )
+                                  }
+                                  onKeyDown={handleVerticalFocus}
+                                  aria-label={`${index + 1}번 보기`}
+                                  className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
+                                />
+                                {optionImage && (
+                                  <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
+                                    <img
+                                      src={optionImage}
+                                      alt={`${index + 1}번 보기 이미지`}
+                                      className="h-16 w-20 shrink-0 rounded border border-gray-100 object-contain"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setChoiceOptionImages((prev) =>
+                                          normalizeChoiceOptionImages(
+                                            prev,
+                                            choiceOptions.length,
+                                          ).map((image, imageIndex) =>
+                                            imageIndex === index ? null : image,
+                                          ),
+                                        )
+                                      }
+                                      className="quiz-authoring-button"
+                                    >
+                                      이미지 제거
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="quiz-choice-actions">
+                                <label
+                                  className="quiz-attachment-button"
+                                  title={`${index + 1}번 보기 이미지 첨부`}
+                                >
+                                  이미지
+                                  <input
+                                    type="file"
+                                    className="sr-only"
+                                    accept="image/*"
+                                    aria-label={`${index + 1}번 보기 이미지 첨부`}
+                                    onChange={(e) =>
+                                      handleChoiceOptionImageSelect(index, e)
+                                    }
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => removeChoiceOption(index)}
+                                  aria-label={`${index + 1}번 보기 삭제`}
+                                  disabled={choiceOptions.length <= 2}
+                                  className="quiz-authoring-button quiz-authoring-danger"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {formType === "ox" && (
+                      <div>
+                        <h4 className="quiz-composer-label">정답</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(["O", "X"] as const).map((value) => (
+                            <button
+                              key={value}
+                              type="button"
+                              aria-pressed={oxAnswer === value}
+                              aria-label={`${value} 정답 선택`}
+                              onClick={() => setOxAnswer(value)}
+                              onKeyDown={handleVerticalFocus}
+                              className={`quiz-compose-field py-3 rounded-lg border-2 font-bold transition ${oxAnswer === value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-500 hover:border-blue-300"}`}
+                            >
+                              {value}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {formType === "word" && (
+                      <label className="quiz-composer-field">
+                        <span>정답</span>
+                        <QuizTextField
+                          lang="ko"
+                          inputMode="text"
+                          value={wordAnswer}
+                          onChange={(e) => setWordAnswer(e.target.value)}
+                          onKeyDown={handleVerticalFocus}
+                          aria-label="단답형 정답"
+                          className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
+                        />
+                      </label>
+                    )}
+
+                    {formType === "order" && (
+                      <div className="quiz-answer-editor">
+                        <div className="quiz-composer-section-heading">
+                          <h4>순서 항목 (위에서 아래 순서가 정답)</h4>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOrderItems((prev) => [...prev, ""])
+                            }
+                            className="quiz-authoring-button"
+                          >
+                            항목 추가
+                          </button>
+                        </div>
+                        {orderItems.map((item, index) => (
+                          <div
+                            key={`order-item-${index}`}
+                            className="quiz-order-row"
+                          >
+                            <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
                               {index + 1}
                             </span>
-                            <div className="min-w-0 flex-1">
+                            <QuizTextField
+                              lang="ko"
+                              inputMode="text"
+                              value={item}
+                              aria-label={`${index + 1}번 순서 항목`}
+                              onChange={(e) =>
+                                setOrderItems((prev) =>
+                                  prev.map((v, i) =>
+                                    i === index ? e.target.value : v,
+                                  ),
+                                )
+                              }
+                              onKeyDown={handleVerticalFocus}
+                              className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white"
+                            />
+                            <div className="quiz-order-actions">
+                              <button
+                                type="button"
+                                onClick={() => moveOrderItem(index, "up")}
+                                aria-label={`${index + 1}번 항목 위로 이동`}
+                                title="위로 이동"
+                                disabled={index === 0}
+                                className="quiz-authoring-button"
+                              >
+                                <span aria-hidden="true">↑</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveOrderItem(index, "down")}
+                                aria-label={`${index + 1}번 항목 아래로 이동`}
+                                title="아래로 이동"
+                                disabled={index === orderItems.length - 1}
+                                className="quiz-authoring-button"
+                              >
+                                <span aria-hidden="true">↓</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeOrderItem(index)}
+                                disabled={orderItems.length <= 2}
+                                aria-label={`${index + 1}번 항목 삭제`}
+                                title={
+                                  orderItems.length <= 2
+                                    ? "순서 항목은 최소 2개 필요합니다."
+                                    : "항목 삭제"
+                                }
+                                className="quiz-authoring-button quiz-authoring-danger"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {formType === "matching" && (
+                      <div className="quiz-answer-editor">
+                        <div className="quiz-composer-section-heading">
+                          <h4>단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)</h4>
+                          <button
+                            type="button"
+                            onClick={addMatchingPair}
+                            className="quiz-authoring-button"
+                          >
+                            쌍 추가
+                          </button>
+                        </div>
+                        {matchingPairs.map((pair, index) => (
+                          <div
+                            key={`matching-pair-${index}`}
+                            className="quiz-matching-row"
+                          >
+                            <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">
+                              {index + 1}
+                            </span>
+                            <QuizTextField
+                              lang="ko"
+                              inputMode="text"
+                              value={pair.left}
+                              aria-label={`${index + 1}번 왼쪽 단서`}
+                              onChange={(e) =>
+                                setMatchingPairs((prev) =>
+                                  prev.map((item, pairIndex) =>
+                                    pairIndex === index
+                                      ? { ...item, left: e.target.value }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              onKeyDown={handleVerticalFocus}
+                              placeholder="왼쪽 단서"
+                              className="quiz-compose-field min-w-0 rounded border p-2 text-sm"
+                            />
+                            <div className="min-w-0 space-y-2">
                               <QuizTextField
                                 lang="ko"
                                 inputMode="text"
-                                value={option}
+                                value={pair.right}
+                                aria-label={`${index + 1}번 오른쪽 정답`}
                                 onChange={(e) =>
-                                  setChoiceOptions((prev) =>
-                                    prev.map((opt, i) =>
-                                      i === index ? e.target.value : opt,
+                                  setMatchingPairs((prev) =>
+                                    prev.map((item, pairIndex) =>
+                                      pairIndex === index
+                                        ? { ...item, right: e.target.value }
+                                        : item,
                                     ),
                                   )
                                 }
                                 onKeyDown={handleVerticalFocus}
-                                placeholder={`${index + 1}번 보기`}
-                                className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
+                                placeholder="오른쪽 단어"
+                                className="quiz-compose-field w-full rounded border p-2 text-sm"
                               />
-                              {optionImage && (
-                                <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
+                              <label className="quiz-attachment-button">
+                                오른쪽 이미지
+                                <input
+                                  type="file"
+                                  className="sr-only"
+                                  accept="image/*"
+                                  aria-label={`${index + 1}번 오른쪽 이미지 첨부`}
+                                  onChange={(e) =>
+                                    handleMatchingImageSelect(index, e)
+                                  }
+                                />
+                              </label>
+                              {pair.rightImage && (
+                                <div className="flex flex-wrap items-center gap-2">
                                   <img
-                                    src={optionImage}
-                                    alt={`${index + 1}번 보기 이미지`}
-                                    className="h-16 w-20 shrink-0 rounded border border-gray-100 object-contain"
+                                    src={pair.rightImage}
+                                    alt="오른쪽 보기 이미지"
+                                    className="h-16 max-w-[120px] rounded border border-gray-200 object-contain"
                                   />
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      setChoiceOptionImages((prev) =>
-                                        normalizeChoiceOptionImages(
-                                          prev,
-                                          choiceOptions.length,
-                                        ).map((image, imageIndex) =>
-                                          imageIndex === index ? null : image,
+                                      setMatchingPairs((prev) =>
+                                        prev.map((item, pairIndex) =>
+                                          pairIndex === index
+                                            ? { ...item, rightImage: null }
+                                            : item,
                                         ),
                                       )
                                     }
-                                    className="text-xs font-bold text-gray-500 hover:text-red-500"
+                                    aria-label={`${index + 1}번 오른쪽 이미지 제거`}
+                                    className="quiz-authoring-button quiz-authoring-danger"
                                   >
                                     이미지 제거
                                   </button>
                                 </div>
                               )}
                             </div>
-                            <label
-                              className="mt-1 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded border border-blue-100 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
-                              title={`${index + 1}번 보기 이미지 첨부`}
-                            >
-                              <i className="fas fa-image text-xs"></i>
-                              <input
-                                type="file"
-                                className="hidden"
-                                accept="image/*"
-                                aria-label={`${index + 1}번 보기 이미지 첨부`}
-                                onChange={(e) =>
-                                  handleChoiceOptionImageSelect(index, e)
-                                }
-                              />
-                            </label>
                             <button
                               type="button"
-                              onClick={() => setChoiceAnswerIndex(index)}
-                              className={`mt-1 text-xs px-2 py-1 rounded border ${choiceAnswerIndex === index ? "border-blue-500 bg-blue-100 text-blue-700 font-bold" : "border-gray-300 text-gray-500"}`}
+                              onClick={() => removeMatchingPair(index)}
+                              disabled={matchingPairs.length <= 2}
+                              aria-label={`${index + 1}번 연결 쌍 삭제`}
+                              className="quiz-authoring-button quiz-authoring-danger"
                             >
-                              정답
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeChoiceOption(index)}
-                              aria-label={`${index + 1}번 보기 삭제`}
-                              className="mt-1 text-gray-400 hover:text-red-500 px-1"
-                            >
-                              <i className="fas fa-times"></i>
+                              삭제
                             </button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {formType === "ox" && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {(["O", "X"] as const).map((value) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setOxAnswer(value)}
-                          onKeyDown={handleVerticalFocus}
-                          className={`quiz-compose-field py-3 rounded-lg border-2 font-bold transition ${oxAnswer === value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-500 hover:border-blue-300"}`}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {formType === "word" && (
-                    <QuizTextField
-                      lang="ko"
-                      inputMode="text"
-                      value={wordAnswer}
-                      onChange={(e) => setWordAnswer(e.target.value)}
-                      onKeyDown={handleVerticalFocus}
-                      placeholder="단답형 정답 입력"
-                      className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
-                    />
-                  )}
-
-                  {formType === "order" && (
-                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-gray-600">
-                          순서 항목 (위에서 아래 순서가 정답)
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setOrderItems((prev) => [...prev, ""])}
-                          className="text-xs font-bold text-blue-600 hover:text-blue-700"
-                        >
-                          <i className="fas fa-plus mr-1"></i>항목 추가
-                        </button>
+                        ))}
                       </div>
-                      {orderItems.map((item, index) => (
-                        <div
-                          key={`order-item-${index}`}
-                          className="flex items-center gap-2"
-                        >
-                          <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
-                            {index + 1}
-                          </span>
-                          <QuizTextField
-                            lang="ko"
-                            inputMode="text"
-                            value={item}
-                            onChange={(e) =>
-                              setOrderItems((prev) =>
-                                prev.map((v, i) =>
-                                  i === index ? e.target.value : v,
-                                ),
-                              )
-                            }
-                            onKeyDown={handleVerticalFocus}
-                            className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => moveOrderItem(index, "up")}
-                            aria-label={`${index + 1}번 항목 위로 이동`}
-                            title="위로 이동"
-                            className="text-gray-400 hover:text-blue-600 px-1"
-                          >
-                            <i className="fas fa-arrow-up"></i>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveOrderItem(index, "down")}
-                            aria-label={`${index + 1}번 항목 아래로 이동`}
-                            title="아래로 이동"
-                            className="text-gray-400 hover:text-blue-600 px-1"
-                          >
-                            <i className="fas fa-arrow-down"></i>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeOrderItem(index)}
-                            disabled={orderItems.length <= 2}
-                            aria-label={`${index + 1}번 항목 삭제`}
-                            title={
-                              orderItems.length <= 2
-                                ? "순서 항목은 최소 2개 필요합니다."
-                                : "항목 삭제"
-                            }
-                            className="px-1 text-gray-400 hover:text-red-500 disabled:cursor-not-allowed disabled:text-gray-300"
-                          >
-                            <i className="fas fa-times"></i>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                    )}
+                  </section>
 
-                  {formType === "matching" && (
-                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-gray-600">
-                          단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)
-                        </p>
-                        <button
-                          type="button"
-                          onClick={addMatchingPair}
-                          className="text-xs font-bold text-blue-600 hover:text-blue-700"
-                        >
-                          <i className="fas fa-plus mr-1"></i>쌍 추가
-                        </button>
-                      </div>
-                      {matchingPairs.map((pair, index) => (
-                        <div
-                          key={`matching-pair-${index}`}
-                          className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_28px] gap-2 rounded-lg border border-gray-200 bg-white p-2"
-                        >
-                          <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">
-                            {index + 1}
-                          </span>
-                          <QuizTextField
-                            lang="ko"
-                            inputMode="text"
-                            value={pair.left}
-                            onChange={(e) =>
-                              setMatchingPairs((prev) =>
-                                prev.map((item, pairIndex) =>
-                                  pairIndex === index
-                                    ? { ...item, left: e.target.value }
-                                    : item,
-                                ),
-                              )
-                            }
-                            onKeyDown={handleVerticalFocus}
-                            placeholder="왼쪽 단서"
-                            className="quiz-compose-field min-w-0 rounded border p-2 text-sm"
-                          />
-                          <div className="min-w-0 space-y-2">
-                            <QuizTextField
-                              lang="ko"
-                              inputMode="text"
-                              value={pair.right}
-                              onChange={(e) =>
-                                setMatchingPairs((prev) =>
-                                  prev.map((item, pairIndex) =>
-                                    pairIndex === index
-                                      ? { ...item, right: e.target.value }
-                                      : item,
-                                  ),
-                                )
-                              }
-                              onKeyDown={handleVerticalFocus}
-                              placeholder="오른쪽 단어"
-                              className="quiz-compose-field w-full rounded border p-2 text-sm"
-                            />
-                            <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">
-                              <i className="fas fa-image"></i> 우측 그림
-                              <input
-                                type="file"
-                                className="hidden"
-                                accept="image/*"
-                                onChange={(e) =>
-                                  handleMatchingImageSelect(index, e)
-                                }
-                              />
-                            </label>
-                            {pair.rightImage && (
-                              <div className="relative w-fit">
-                                <img
-                                  src={pair.rightImage}
-                                  alt="오른쪽 보기 이미지"
-                                  className="h-16 max-w-[120px] rounded border border-gray-200 object-contain"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setMatchingPairs((prev) =>
-                                      prev.map((item, pairIndex) =>
-                                        pairIndex === index
-                                          ? { ...item, rightImage: null }
-                                          : item,
-                                      ),
-                                    )
-                                  }
-                                  className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border bg-white text-[10px] text-gray-500 hover:text-red-500"
-                                >
-                                  <i className="fas fa-times"></i>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeMatchingPair(index)}
-                            className="mt-1 text-gray-400 hover:text-red-500"
-                          >
-                            <i className="fas fa-times"></i>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <textarea
-                    lang="ko"
-                    inputMode="text"
-                    placeholder="해설 (선택)"
-                    value={formExp}
-                    onChange={(e) => setFormExp(e.target.value)}
-                    onKeyDown={handleVerticalFocus}
-                    className="quiz-compose-field w-full border p-2 rounded text-sm h-16 resize-none"
-                  />
-
-                  <div className="border border-gray-200 rounded-lg p-3 bg-amber-50">
-                    <label className="inline-flex items-center gap-2 text-sm font-bold text-amber-800 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={hintEnabled}
-                        onChange={(e) => setHintEnabled(e.target.checked)}
-                      />
-                      힌트 제공
-                    </label>
-                    {hintEnabled && (
+                  <section
+                    className="quiz-composer-section"
+                    aria-label="해설과 힌트"
+                  >
+                    <label className="quiz-composer-field">
+                      <span>해설</span>
                       <textarea
                         lang="ko"
                         inputMode="text"
-                        placeholder="학생에게 보여줄 힌트를 입력하세요"
-                        value={hintText}
-                        onChange={(e) => setHintText(e.target.value)}
+                        aria-label="해설"
+                        value={formExp}
+                        onChange={(e) => setFormExp(e.target.value)}
                         onKeyDown={handleVerticalFocus}
-                        className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                        className="quiz-compose-field w-full border p-2 rounded text-sm h-16 resize-none"
                       />
-                    )}
-                  </div>
+                    </label>
+
+                    <div className="quiz-hint-field">
+                      <label className="inline-flex min-h-11 items-center gap-2 text-sm font-bold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hintEnabled}
+                          onChange={(e) => setHintEnabled(e.target.checked)}
+                        />
+                        힌트 제공
+                      </label>
+                      {hintEnabled && (
+                        <textarea
+                          lang="ko"
+                          inputMode="text"
+                          aria-label="힌트"
+                          value={hintText}
+                          onChange={(e) => setHintText(e.target.value)}
+                          onKeyDown={handleVerticalFocus}
+                          className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                        />
+                      )}
+                    </div>
+                  </section>
 
                   {previewOpen && (
-                    <div className="border border-blue-200 rounded-xl p-4 bg-blue-50 space-y-3">
-                      <div className="text-sm font-bold text-blue-800">
+                    <div
+                      ref={previewRef}
+                      tabIndex={-1}
+                      role="region"
+                      aria-label="학생 화면 미리보기"
+                      className="quiz-composer-section quiz-composer-preview"
+                    >
+                      <div className="quiz-composer-label">
                         학생 화면 미리보기
                       </div>
                       <div className="bg-white rounded-lg border border-blue-100 p-4">
                         <h4 className="font-bold text-gray-800 mb-4">
-                          {formText || "문제 문구를 입력하면 여기 표시됩니다."}
+                          {formText}
                         </h4>
                         {formType === "choice" ? (
                           <div
@@ -2403,26 +2463,28 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     </div>
                   )}
 
-                  <QuizLearningMetadataFields
-                    value={metadata}
-                    onChange={setMetadata}
-                    options={
-                      formType === "choice"
-                        ? getChoiceOptionItems(
-                            choiceOptions,
-                            choiceOptionImages,
-                          ).map((item) => item.text)
-                        : []
-                    }
-                    units={treeData.flatMap((big) =>
-                      (big.children || []).flatMap((mid) =>
-                        (mid.children || []).map((small) => ({
-                          id: small.id,
-                          title: `${mid.title} · ${small.title}`,
-                        })),
-                      ),
-                    )}
-                  />
+                  <div className="quiz-composer-section quiz-composer-metadata">
+                    <QuizLearningMetadataFields
+                      value={metadata}
+                      onChange={setMetadata}
+                      options={
+                        formType === "choice"
+                          ? getChoiceOptionItems(
+                              choiceOptions,
+                              choiceOptionImages,
+                            ).map((item) => item.text)
+                          : []
+                      }
+                      units={treeData.flatMap((big) =>
+                        (big.children || []).flatMap((mid) =>
+                          (mid.children || []).map((small) => ({
+                            id: small.id,
+                            title: `${mid.title} · ${small.title}`,
+                          })),
+                        ),
+                      )}
+                    />
+                  </div>
                   {derivationSource && (
                     <label className="flex min-h-11 items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
                       <input
@@ -2441,27 +2503,38 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   )}
                   {formError && (
                     <p
+                      ref={formErrorRef}
+                      tabIndex={-1}
                       role="alert"
                       className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700"
                     >
                       {formError}
                     </p>
                   )}
-                  <div
-                    className={`grid gap-2 ${editingQuestionId ? "grid-cols-3" : "grid-cols-2"}`}
+                </div>
+                <div className="quiz-composer-footer">
+                  <button
+                    type="button"
+                    onClick={openPreview}
+                    aria-expanded={previewOpen}
+                    className="quiz-authoring-button"
                   >
+                    {previewOpen ? "미리보기 닫기" : "미리보기"}
+                  </button>
+                  <div className="quiz-composer-footer-actions">
                     <button
                       type="button"
-                      onClick={openPreview}
-                      className={`font-bold py-2 rounded transition border ${previewOpen ? "bg-white text-blue-700 border-blue-500" : "bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-700"}`}
+                      onClick={closeComposer}
+                      disabled={savingQuestion}
+                      className="quiz-authoring-button"
                     >
-                      {previewOpen ? "미리보기 닫기" : "미리보기"}
+                      취소
                     </button>
                     <button
                       type="button"
                       onClick={() => void handleAdd()}
                       disabled={savingQuestion || optimizingImage}
-                      className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300"
+                      className="quiz-authoring-primary"
                     >
                       {optimizingImage
                         ? "이미지 줄이는 중..."
@@ -2471,15 +2544,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             ? "수정 저장"
                             : "등록"}
                     </button>
-                    {editingQuestionId && (
-                      <button
-                        type="button"
-                        onClick={closeComposer}
-                        className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition"
-                      >
-                        취소
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
