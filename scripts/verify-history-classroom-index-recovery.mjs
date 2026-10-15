@@ -37,8 +37,12 @@ try {
   await fs.writeFile(tailwindCache, tailwind);
 }
 const mock = `export const db={};export const config={year:'2026',semester:'2'};export const useAuth=()=>({config,currentUser:{uid:'student-1'},userData:{uid:'student-1',role:'student'}});export const collection=(_db,path)=>({path});export const doc=(_db,...parts)=>({path:parts.join('/')});export const where=(key,op,value)=>({key,op,value});export const query=(ref,...constraints)=>({...ref,constraints});
+export const readCanonicalHistoryResults=async()=>window.__data.canonicalResults||[];
+export const executeStudentAssessmentCommand=async(commandType,input)=>{window.__exemptionCalls=(window.__exemptionCalls||[]).concat([{name:commandType,input}]);return {};};
+export const executeAssessmentManagementCommand=executeStudentAssessmentCommand;
+export const lockHistoryClassroomAttempt=async(input)=>{window.__lockCalls=(window.__lockCalls||[]).concat([input]);if(window.__holdLockOnce){window.__holdLockOnce=false;await new Promise(resolve=>{window.__resolveLock=resolve;});}return {attemptId:input.attemptId,status:window.__lockStatus||'LOCKED',revision:2};};
 const rows=path=>path==='history_classrooms'?(window.__data.legacyAssignments||[]):path.endsWith('/history_classrooms')?window.__data.assignments:path.endsWith('/history_classroom_results')?window.__data.results:path.endsWith('/history_classroom_exemptions')?(window.__data.exemptions||[]):path.endsWith('/history_classroom_exemption_requests')?(window.__data.requests||[]):[];
-export const getDocs=async(ref)=>{const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
+export const getDocs=async(ref)=>{if(window.__data.readError&&ref.path.endsWith('/history_classrooms'))throw {code:'unavailable'};const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
 const listeners=new Map();window.__listeners=listeners;
 const snapshot=(path,value)=>({id:path.split('/').at(-1),exists:()=>!!value,data:()=>value});
 window.__emit=(path,value)=>listeners.get(path)?.next(snapshot(path,value));window.__deny=path=>listeners.get(path)?.error({code:'permission-denied'});
@@ -67,7 +71,7 @@ const output = await build({
         build.onResolve(
           {
             filter:
-              /^firebase\/firestore$|(?:lib\/|^\.\/)(?:firebase)$|contexts\/AuthContext$/,
+              /^firebase\/firestore$|(?:lib\/|^\.\/)(?:firebase|studentAssessmentResults|assessmentLifecycle)$|contexts\/AuthContext$/,
           },
           () => ({ path: "mock", namespace: "fixture" }),
         );
@@ -170,6 +174,16 @@ const scenarios = [
   { name: "closed-pending", recovery: true },
   { name: "cooldown-pending", assignment: { dueAt: null }, recovery: true },
   { name: "closed-no-pending", draft: null },
+  {
+    name: "violation-never-recovers-submission",
+    assignment: { dueAt: null },
+    draft: {
+      ...draft,
+      attemptId: draft.resultId,
+      pendingViolation: "VISIBILITY_HIDDEN",
+    },
+    syncViolation: true,
+  },
   {
     name: "wrong-user-key",
     key: "westoryHistoryClassroomAttempt:assignment-1:student-2",
@@ -332,6 +346,14 @@ try {
           `${scenario.name} must not unlock recovery`,
         );
         await assertBlocked(page, `${scenario.name} stays closed`);
+        if (scenario.syncViolation) {
+          assert.deepEqual(
+            await page.evaluate(() => window.__lockCalls),
+            [{ attemptId: draft.resultId, reason: "VISIBILITY_HIDDEN" }],
+            "a queued offline violation syncs even when the student returns to the list",
+          );
+          await page.getByText("교사 확인 필요", { exact: true }).waitFor();
+        }
       }
       assert.deepEqual(errors, []);
       reports.push({
@@ -419,7 +441,13 @@ try {
         ? "history_classrooms"
         : "years/2026/semesters/2/history_classrooms") + "/assignment-1";
     assert.deepEqual(
-      await page.evaluate(() => [...window.__listeners.keys()]),
+      await page.evaluate(() =>
+        [...window.__listeners.keys()].filter(
+          (path) =>
+            path.includes("/history_classrooms/") ||
+            path.startsWith("history_classrooms/"),
+        ),
+      ),
       [path],
       "subscribe only at the actual assigned source path",
     );
@@ -904,8 +932,7 @@ try {
           {
             name: "createHistoryClassroomExemptionRequest",
             input: {
-              year: "2026",
-              semester: "2",
+              semesterId: "2026-2",
               assignmentId: "assignment-1",
               exemptionId: "exemption-1",
               memo: "",
@@ -948,6 +975,130 @@ try {
       reports.push({ scenario: "exemption-" + mode, width, passed: true });
       await page.close();
     }
+  }
+  {
+    const page = await browser.newPage({
+      viewport: { width: 768, height: 1024 },
+    });
+    await page.addInitScript(
+      ({ assignment }) => {
+        window.__data = {
+          assignments: [{ ...assignment, dueAt: null }],
+          results: [],
+          readError: true,
+        };
+      },
+      { assignment },
+    );
+    const url = `http://127.0.0.1:${server.address().port}`;
+    await page.route("**/*", (route) =>
+      route.request().url().startsWith(url) ? route.continue() : route.abort(),
+    );
+    await page.goto(url);
+    await page.getByRole("alert").waitFor();
+    assert.equal(
+      await page.getByText("공개된 역사교실 과제가 없습니다.").count(),
+      0,
+      "failed reads must not masquerade as an empty classroom",
+    );
+    await page.evaluate(() => {
+      window.__data.readError = false;
+    });
+    await page.getByRole("button", { name: "다시 불러오기" }).click();
+    await page.locator("article").waitFor();
+    await page.evaluate(
+      ({ ownResult }) => {
+        window.__data.exemptions = [
+          {
+            id: "live-ticket",
+            uid: "student-1",
+            status: "used",
+            usedAssignmentId: "assignment-1",
+          },
+        ];
+        window.__data.results = [ownResult];
+        window.__data.canonicalResults = [
+          { ...ownResult, sourceAvailable: true },
+        ];
+        window.__emit(
+          "years/2026/semesters/2/history_classroom_exemptions",
+          {},
+        );
+      },
+      { ownResult },
+    );
+    await page
+      .locator("article")
+      .getByText("통과 완료", { exact: true })
+      .waitFor();
+    assert.match(
+      await page.locator("article").textContent(),
+      /시도 1회/,
+      "canonical and compatibility results with the same id must count once",
+    );
+    reports.push({
+      scenario: "read-failure-retry-and-live-exemption",
+      passed: true,
+    });
+    await page.close();
+  }
+  {
+    const page = await browser.newPage({
+      viewport: { width: 768, height: 1024 },
+    });
+    await page.addInitScript(
+      ({ assignment, draft, ownResult }) => {
+        window.__data = {
+          assignments: [{ ...assignment, dueAt: null }],
+          results: [
+            { ...ownResult, passed: false, status: "failed", percent: 0 },
+          ],
+        };
+        window.__holdLockOnce = true;
+        window.__lockStatus = "SUBMITTED";
+        localStorage.setItem(
+          "westoryHistoryClassroomAttempt:assignment-1:student-1",
+          JSON.stringify({
+            ...draft,
+            attemptId: draft.resultId,
+            pendingViolation: "NAVIGATION",
+          }),
+        );
+      },
+      { assignment, draft, ownResult },
+    );
+    const url = `http://127.0.0.1:${server.address().port}`;
+    await page.route("**/*", (route) =>
+      route.request().url().startsWith(url) ? route.continue() : route.abort(),
+    );
+    await page.goto(url);
+    await page.getByText("교사 확인 필요", { exact: true }).waitFor();
+    await page.evaluate(() =>
+      window.__emit("years/2026/semesters/2/history_classrooms/assignment-1", {
+        ...window.__data.assignments[0],
+      }),
+    );
+    await page.evaluate(() => window.__resolveLock());
+    await page
+      .getByText("교사 확인 필요", { exact: true })
+      .waitFor({ state: "hidden" });
+    assert.equal(
+      await page.evaluate(() =>
+        localStorage.getItem(
+          "westoryHistoryClassroomAttempt:assignment-1:student-1",
+        ),
+      ),
+      null,
+    );
+    assert(
+      (await page.evaluate(() => window.__lockCalls.length)) <= 2,
+      "settled lock sync must not enter a reload loop",
+    );
+    reports.push({
+      scenario: "submitted-response-survives-assignment-refresh",
+      passed: true,
+    });
+    await page.close();
   }
   console.log(
     `History classroom index recovery: ${reports.length} cases passed.`,

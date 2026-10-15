@@ -6,6 +6,7 @@ import ts from "typescript";
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const reads = [];
+const commands = [];
 let documents = new Map();
 let collections = new Map();
 const firestore = {
@@ -24,6 +25,15 @@ const firestore = {
       docs: (collections.get(path) || []).map((data) => ({ data: () => data })),
     };
   },
+};
+const serverReads = [];
+firestore.getDocFromServer = async (path) => {
+  serverReads.push(path);
+  return firestore.getDoc(path);
+};
+firestore.getDocsFromServer = async (path) => {
+  serverReads.push(path);
+  return firestore.getDocs(path);
 };
 const cache = new Map();
 const load = (filename) => {
@@ -50,6 +60,31 @@ const load = (filename) => {
             },
           };
         if (name === "firebase/firestore") return firestore;
+        if (name === "./assessmentLifecycle")
+          return {
+            executeAssessmentManagementCommand: async (
+              commandType,
+              payload,
+            ) => {
+              commands.push({
+                actor: "teacher",
+                commandType,
+                payload: plain(payload),
+              });
+              return {
+                createdCount: payload.recipientUids?.length,
+                exemptionIds: ["token-1"],
+              };
+            },
+            executeStudentAssessmentCommand: async (commandType, payload) => {
+              commands.push({
+                actor: "student",
+                commandType,
+                payload: plain(payload),
+              });
+              return { requestId: "request-1" };
+            },
+          };
         assert.ok(name.startsWith("."), `Unexpected dependency ${name}`);
         return load(resolve(dirname(path), `${name}.ts`));
       },
@@ -74,6 +109,10 @@ const {
   sanitizeHistoryClassroomAssignmentForWrite,
   mergeHistoryClassroomMapSnapshot,
   summarizeHistoryClassroomAnswers,
+  grantHistoryClassroomExemptions,
+  createHistoryClassroomExemptionRequest,
+  reviewHistoryClassroomExemptionRequest,
+  revokeHistoryClassroomExemptions,
 } = load("src/lib/historyClassroom.ts");
 
 const tree = [
@@ -153,6 +192,17 @@ const legacy = [
   lesson("removed"),
 ];
 const sources = buildHistoryClassroomLessonSources(tree, scoped, legacy);
+const duplicateSources = buildHistoryClassroomLessonSources(
+  tree,
+  [lesson("earlier", "첫 자료"), lesson("earlier", "중복 자료")],
+  [lesson("later", "첫 구 자료"), lesson("later", "중복 구 자료")],
+);
+assert.equal(duplicateSources[0].pdfBlanks[0].answer, "첫 구 자료");
+assert.equal(
+  duplicateSources[1].pdfBlanks[0].answer,
+  "첫 자료",
+  "Match the lesson editor's first matching document per unit and scope",
+);
 assert.deepEqual(
   plain(sources.map((source) => source.lessonUnitId)),
   ["later", "earlier"],
@@ -408,6 +458,58 @@ assert.deepEqual(
   plain(sources),
   "Missing scoped curriculum falls back to legacy",
 );
+
+await readHistoryClassroomLessonSources({ year: "2031", semester: "2" }, true);
+assert.ok(
+  serverReads.includes(`${scope}/lessons`) &&
+    serverReads.includes("curriculum/tree"),
+  "Explicit refresh reads the server, including the legacy fallback",
+);
+
+const grant = await grantHistoryClassroomExemptions(
+  { year: "2031", semester: "2" },
+  {
+    recipientUids: ["student-a", "student-b", "student-a"],
+    classId: "3-2",
+    targetGrade: "3",
+    targetClass: "2",
+    reason: "학급 활동",
+  },
+);
+assert.equal(grant.createdCount, 2);
+assert.deepEqual(
+  commands.at(-1),
+  {
+    actor: "teacher",
+    commandType: "grantHistoryClassroomExemptions",
+    payload: {
+      semesterId: "2031-2",
+      recipientUids: ["student-a", "student-b"],
+      classId: "3-2",
+      targetGrade: "3",
+      targetClass: "2",
+      reason: "학급 활동",
+    },
+  },
+  "Grant exact selected students through the receipt-protected canonical gateway",
+);
+await createHistoryClassroomExemptionRequest(
+  { year: "2031", semester: "2" },
+  { assignmentId: "assignment", exemptionId: "token-1" },
+);
+assert.equal(commands.at(-1).actor, "student");
+assert.equal(commands.at(-1).payload.semesterId, "2031-2");
+await reviewHistoryClassroomExemptionRequest(
+  { year: "2031", semester: "2" },
+  { requestId: "request-1", approved: true },
+);
+assert.equal(commands.at(-1).actor, "teacher");
+assert.equal(commands.at(-1).payload.approved, true);
+await revokeHistoryClassroomExemptions({ year: "2031", semester: "2" }, [
+  "token-1",
+  "token-1",
+]);
+assert.deepEqual(commands.at(-1).payload.exemptionIds, ["token-1"]);
 
 console.log(
   "History classroom lesson source checks passed (curriculum, scope, legacy, coordinates, snapshot roundtrip, map compatibility, scoring).",

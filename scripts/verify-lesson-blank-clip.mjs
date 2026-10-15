@@ -567,6 +567,7 @@ console.log(
 
 const history = compile("src/lib/historyClassroom.ts", {
   "./firebase": {},
+  "./assessmentLifecycle": {},
   "./semesterScope": {},
   "./lessonWorksheet": worksheet,
   "./lessonBlankClip": clipModule,

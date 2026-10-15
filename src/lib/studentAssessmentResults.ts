@@ -21,6 +21,8 @@ import {
 type ConfigLike = Parameters<typeof getYearSemester>[0];
 type Result = {
   id: string;
+  resultId?: string;
+  uid?: string;
   attemptId: string;
   definitionId: string;
   semesterId: string;
@@ -33,6 +35,11 @@ type Result = {
   submittedAtIso: string;
   submissionRef: string;
   answers: Record<string, string>;
+  passed?: boolean;
+  passThresholdPercent?: number;
+  completionSource?: "attempt" | "exemption";
+  exemptionId?: string;
+  exemptionRequestId?: string;
 };
 
 // Read immutable, owner-scoped results and submitted answers. Attempts contain
@@ -57,14 +64,33 @@ export const readStudentAssessmentResults = async (
       if (
         result.studentUid !== uid ||
         result.semesterId !== scope ||
-        result.attemptId !== item.id ||
-        result.submissionRef !== `semester_assessment_submissions/${item.id}` ||
         !Number.isFinite(result.percent) ||
         result.percent < 0 ||
         result.percent > 100
       ) {
         throw new Error("평가 결과를 확인할 수 없습니다.");
       }
+      // Approved tickets are completion records, not fabricated exam attempts.
+      if (result.completionSource === "exemption") {
+        if (
+          result.assessmentKind !== "HISTORY_CLASSROOM" ||
+          result.resultId !== item.id ||
+          !/^exemption_[a-f0-9]{64}$/.test(item.id) ||
+          result.uid !== uid ||
+          !result.definitionId.startsWith(`history_classroom:${scope}:`) ||
+          !result.exemptionId ||
+          !result.exemptionRequestId ||
+          result.passed !== true ||
+          result.percent !== 100
+        )
+          throw new Error("면제 처리 결과를 확인할 수 없습니다.");
+        return { ...result, answers: {} };
+      }
+      if (
+        result.attemptId !== item.id ||
+        result.submissionRef !== `semester_assessment_submissions/${item.id}`
+      )
+        throw new Error("평가 결과를 확인할 수 없습니다.");
       const submitted = await getDoc(doc(db, result.submissionRef));
       const data = submitted.data();
       if (
@@ -147,7 +173,18 @@ export const readCanonicalHistoryResults = async (
         if (snap?.exists())
           source = normalizeHistoryClassroomAssignment(snap.id, snap.data());
       }
-      const passed = !!source && result.percent >= source.passThresholdPercent;
+      const threshold =
+        typeof result.passThresholdPercent === "number" &&
+        Number.isFinite(result.passThresholdPercent) &&
+        result.passThresholdPercent >= 0 &&
+        result.passThresholdPercent <= 100
+          ? result.passThresholdPercent
+          : source?.passThresholdPercent;
+      const passed =
+        result.completionSource === "exemption" ||
+        (typeof result.passed === "boolean"
+          ? result.passed
+          : threshold !== undefined && result.percent >= threshold);
       const checks = source
         ? summarizeHistoryClassroomAnswers(source, result.answers).checks.map(
             (check) => ({
@@ -168,7 +205,10 @@ export const readCanonicalHistoryResults = async (
           total: result.total,
           percent: result.percent,
           passed,
-          passThresholdPercent: source?.passThresholdPercent,
+          passThresholdPercent: threshold,
+          completionSource: result.completionSource,
+          exemptionId: result.exemptionId,
+          exemptionRequestId: result.exemptionRequestId,
           status: passed ? "passed" : "failed",
           answerChecks: checks,
           createdAt: Timestamp.fromDate(new Date(result.submittedAtIso)),

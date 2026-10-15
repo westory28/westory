@@ -3,7 +3,7 @@
 This directory preserves the dependency closure of the existing `executeCommand`
 deployment in `history-quiz-yongsin`. The older root entry cannot reconstruct these
 commands safely. Its command exports attached to the root entry are limited to
-`executeCommand` and `executeLessonCorePointCommand`; other nested callable
+`executeCommand`, `getCommandStatus` and `executeLessonCorePointCommand`; other nested callable
 exports are not deployment targets.
 
 `wisEconomyQuery.js` separately restores the live `getWisEconomyState` source,
@@ -25,6 +25,12 @@ The captured `executeCommand` revision was `executecommand-00005-duy`, with sour
 generation `1789562589700121`. Core-point business logic was also compared with
 `executeLessonCorePointCommand/function-source.zip`, generation `1789221980929986`,
 revision `executelessoncorepointcommand-00002-hin`.
+
+The status callable was verified on 2026-10-15 at `getcommandstatus-00003-huv`,
+source generation `1789562589666007`. Its `commandGateway.js` and actor
+authorization match this closure exactly. Keep `getCommandStatus` deployed with
+`executeCommand` when command names or student command classifications change,
+so a lost response can be recovered from its receipt without a new mutation.
 
 `source-manifest.json` records the original file hashes and reviewed local hashes.
 The entry is renamed to `productionSource.js` and avoids duplicate Admin SDK

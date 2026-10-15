@@ -1,5 +1,8 @@
 import type { SystemConfig } from "../types";
-import { getHttpsCallable } from "./firebase";
+import {
+  executeAssessmentManagementCommand,
+  executeStudentAssessmentCommand,
+} from "./assessmentLifecycle";
 import type { MapResource } from "./mapResources";
 import { getYearSemester } from "./semesterScope";
 import {
@@ -555,16 +558,15 @@ export const createHistoryClassroomExemptionRequest = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
+  return executeStudentAssessmentCommand(
     "createHistoryClassroomExemptionRequest",
+    {
+      semesterId: `${year}-${semester}`,
+      assignmentId: input.assignmentId,
+      exemptionId: input.exemptionId,
+      memo: input.memo || "",
+    },
   );
-  await callable({
-    year,
-    semester,
-    assignmentId: input.assignmentId,
-    exemptionId: input.exemptionId,
-    memo: input.memo || "",
-  });
 };
 
 export const grantHistoryClassroomExemptions = async (
@@ -578,10 +580,11 @@ export const grantHistoryClassroomExemptions = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("grantHistoryClassroomExemptions");
-  await callable({
-    year,
-    semester,
+  return executeAssessmentManagementCommand<{
+    createdCount: number;
+    exemptionIds: string[];
+  }>("grantHistoryClassroomExemptions", {
+    semesterId: `${year}-${semester}`,
     recipientUids: Array.from(new Set(input.recipientUids || [])),
     classId: input.classId || "",
     targetGrade: input.targetGrade || "",
@@ -599,16 +602,29 @@ export const reviewHistoryClassroomExemptionRequest = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
+  return executeAssessmentManagementCommand(
     "reviewHistoryClassroomExemptionRequest",
+    {
+      semesterId: `${year}-${semester}`,
+      requestId: input.requestId,
+      approved: input.approved,
+      reviewReason: input.reviewReason || "",
+    },
   );
-  await callable({
-    year,
-    semester,
-    requestId: input.requestId,
-    approved: input.approved,
-    reviewReason: input.reviewReason || "",
-  });
+};
+
+export const revokeHistoryClassroomExemptions = async (
+  config: Pick<SystemConfig, "year" | "semester"> | null | undefined,
+  exemptionIds: string[],
+) => {
+  const { year, semester } = getYearSemester(config);
+  return executeAssessmentManagementCommand(
+    "revokeHistoryClassroomExemptions",
+    {
+      semesterId: `${year}-${semester}`,
+      exemptionIds: Array.from(new Set(exemptionIds)),
+    },
+  );
 };
 
 export const sanitizeHistoryClassroomAssignmentForWrite = (

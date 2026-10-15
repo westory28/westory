@@ -24,7 +24,7 @@ try {
 }
 const evidence = path.join(
   root,
-  ".superloopy/sessions/history-lesson-worksheets/evidence",
+  ".superloopy/sessions/history-classroom-stabilization/evidence",
 );
 await fs.mkdir(evidence, { recursive: true });
 const cache = path.join(os.tmpdir(), "westory-tailwind-fixture.js");
@@ -49,6 +49,7 @@ const assignment = {
   cooldownMinutes: 10,
   timeLimitMinutes: 1,
   passThresholdPercent: 80,
+  answerOptions: ["고조선", "백제"],
   pdfPageImages: [1, 3].map((page) => ({
     page,
     imageUrl: "/worksheet.svg",
@@ -99,7 +100,7 @@ const persist=()=>localStorage.setItem('runnerFixtureBackend',JSON.stringify(fix
 window.__persistBackend=persist;
 export const config={year:'2026',semester:'2'};
 export const db={};
-export const useAuth=()=>({config,userData:{uid:'student-1',role:'student',name:'검증학생',grade:'1',class:'2',number:'3'}});
+const userData={uid:'student-1',role:'student',name:'검증학생',grade:'1',class:'2',number:'3'}; export const useAuth=()=>({config,userData});
 export const useAppToast=()=>({showToast:()=>{}});
 const reference=(...parts)=>({path:parts.flatMap(p=>typeof p==='string'?[p]:p?.path?[p.path]:[]).join('/')});
 export const collection=(_db,...parts)=>reference(...parts);
@@ -121,13 +122,44 @@ fixture.calls.push(structuredClone(input));persist();
 const failure=fixture.failures.shift();if(failure){persist();const error=new Error(typeof failure==='string'?failure:failure.message);error.code=typeof failure==='string'?failure:failure.code;throw error;}
 if(!navigator.onLine){const error=new Error('network unavailable');error.code='functions/unavailable';throw error;}
 let result=fixture.results[input.resultId];
-if(!result){const checks=fixture.assignment.blanks.map((b,i)=>({blankId:b.id,blankNumber:i+1,page:b.page,studentAnswer:input.answers[b.id]||'',correctAnswer:b.answer,correct:!fixture.forceZero&&(input.answers[b.id]||'').replace(/\s/g,'')===b.answer.replace(/\s/g,'')}));const score=checks.filter(c=>c.correct).length,percent=Math.round(score/checks.length*100),passed=input.status!=='cancelled'&&percent>=80;result=fixture.results[input.resultId]={assignmentId:input.assignmentId,uid:'student-1',resultId:input.resultId,score,total:checks.length,percent,passed,passThresholdPercent:fixture.forceZero?90:fixture.assignment.passThresholdPercent,status:input.status==='cancelled'?'cancelled':passed?'passed':'failed',answerChecks:checks,createdAt:{seconds:Date.now()/1000}};persist();}
+if(!result){const checks=fixture.assignment.blanks.map((b,i)=>({blankId:b.id,blankNumber:i+1,page:b.page,studentAnswer:input.answers[b.id]||'',correctAnswer:b.answer,correct:!fixture.forceZero&&(input.answers[b.id]||'').replace(/\\s/g,'')===b.answer.replace(/\\s/g,'')}));const score=checks.filter(c=>c.correct).length,percent=Math.round(score/checks.length*100),passed=input.status!=='cancelled'&&percent>=80;result=fixture.results[input.resultId]={assignmentId:input.assignmentId,uid:'student-1',resultId:input.resultId,score,total:checks.length,percent,passed,passThresholdPercent:fixture.forceZero?90:fixture.assignment.passThresholdPercent,status:input.status==='cancelled'?'cancelled':passed?'passed':'failed',answerChecks:checks,createdAt:{seconds:Date.now()/1000}};persist();}
 if(fixture.loseNextResponse){fixture.loseNextResponse=false;persist();return new Promise(()=>{});}return {data:result};};
 export const notifyPointsUpdated=()=>{};
 export const notifyHistoryClassroomSubmitted=async()=>{};
 export const claimPointActivityReward=async(input)=>{fixture.points.push(input);persist();return {awarded:false,amount:0};};
 export const buildHistoryClassroomRewardSourceId=id=>'history:'+id;
 export const emitSessionActivity=()=>{};
+
+export const buildAssessmentDefinitionId=(semester,kind,id)=>kind.toLowerCase()+':'+semester+':'+id;
+export const executeAssessmentManagementCommand=async()=>{throw new Error('Unexpected management write');};
+export const executeStudentAssessmentCommand=async()=>{throw new Error('Unexpected generic write');};
+const failure=(code='functions/unavailable')=>Object.assign(new Error(code),{code});
+const online=()=>{if(!navigator.onLine)throw failure();};
+const record=(kind,input)=>{fixture.calls.push({kind,...structuredClone(input)});persist();};
+export const getAssessmentState=async()=>{online();return {status:fixture.attempt?fixture.attempt.status==='SUBMITTED'?'SUBMITTED':'RECOVERABLE':'READY',definition:{definitionId:'history_classroom:2026-2:assignment-1'},attempt:fixture.attempt||null,serverNowIso:new Date().toISOString()};};
+export const startAssessmentAttempt=async(input)=>{online();record('start',input);if(fixture.attempt)return fixture.attempt;fixture.attempt={attemptId:fixture.nextAttemptId||'attempt-1',definitionId:input.definitionId,semesterId:'2026-2',assessmentKind:'HISTORY_CLASSROOM',attemptNumber:1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:fixture.assignment.blanks.map(b=>b.id),startedAtIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+60000).toISOString(),lastSavedAtIso:new Date().toISOString(),resultRef:''};persist();return fixture.attempt;};
+export const saveAssessmentProgress=async(input)=>{
+ online();record('save',input);const key=JSON.stringify(input);fixture.saves||={};if(fixture.saves[key])return fixture.saves[key];
+ if(fixture.failSave){fixture.failSave=false;persist();throw failure();}
+ if(Date.now()>Date.parse(fixture.attempt.deadlineAtIso))throw Object.assign(failure('functions/deadline-exceeded'),{details:{reason:'ASSESSMENT_DEADLINE_EXPIRED'}});
+ if(input.expectedRevision!==fixture.attempt.revision)throw Object.assign(failure('functions/aborted'),{details:{reason:'ASSESSMENT_ATTEMPT_REVISION_CONFLICT'}});
+ fixture.attempt={...fixture.attempt,status:'IN_PROGRESS',revision:fixture.attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,lastSavedAtIso:new Date().toISOString()};
+ const result=fixture.saves[key]={...fixture.attempt,savedAtIso:fixture.attempt.lastSavedAtIso};persist();
+ if(fixture.loseSaveResponse){fixture.loseSaveResponse=false;persist();throw failure();}return result;
+};
+export const submitAssessmentAttempt=async(input)=>{
+ online();record('submit',input);const existing=fixture.results[input.attemptId];if(existing)return {...existing,replayedSubmission:true};
+ const fail=fixture.failures.shift();if(fail){persist();throw failure(fail);}
+ if(input.expectedRevision!==fixture.attempt.revision)throw Object.assign(failure('functions/aborted'),{details:{reason:'ASSESSMENT_ATTEMPT_REVISION_CONFLICT'}});
+ const answerChecks=fixture.assignment.blanks.map(b=>({id:b.id,correct:(input.answers[b.id]||'').replace(/\\s/g,'')===b.answer.replace(/\\s/g,'')}));
+ const score=answerChecks.filter(b=>b.correct).length,total=answerChecks.length;
+ const result=fixture.results[input.attemptId]={studentUid:'student-1',attemptId:input.attemptId,semesterId:'2026-2',score,total,percent:Math.round(score/total*100),passed:Math.round(score/total*100)>=(fixture.serverThreshold??fixture.assignment.passThresholdPercent),passThresholdPercent:fixture.serverThreshold??fixture.assignment.passThresholdPercent,answerChecks,status:'SUBMITTED',revision:fixture.attempt.revision+1,resultRef:scope+'/assessment_results/'+input.attemptId,replayedSubmission:false};
+ fixture.attempt={...fixture.attempt,status:'SUBMITTED',revision:result.revision,answers:input.answers,resultRef:result.resultRef};persist();
+ if(fixture.loseSubmitResponse){fixture.loseSubmitResponse=false;persist();throw failure();}return result;
+};
+export const lockHistoryClassroomAttempt=async(input)=>{online();record('lock',input);const a=fixture.attempt;if(a.status!=='SUBMITTED')a.status='LOCKED';persist();return {attemptId:a.attemptId,status:a.status,revision:a.revision};};
+export const isAssessmentRevisionConflict=error=>error?.details?.reason==='ASSESSMENT_ATTEMPT_REVISION_CONFLICT';
+
 `;
 const entry = JSON.stringify(
   path
@@ -167,7 +199,7 @@ const bundle = await build({
         build.onResolve(
           {
             filter:
-              /^firebase\/firestore$|(?:lib\/|^\.\/)(?:firebase|notifications|points|appEvents|sessionActivity)$|contexts\/AuthContext$|common\/AppToastProvider$/,
+              /^firebase\/firestore$|(?:lib\/|^\.\/)(?:firebase|notifications|points|appEvents|sessionActivity|assessmentLifecycle)$|contexts\/AuthContext$|common\/AppToastProvider$/,
           },
           () => ({ path: "mock", namespace: "mock" }),
         );
@@ -232,17 +264,25 @@ const advance = async (page, ms) => {
   await page.clock.runFor(ms);
 };
 const getCalls = (page) => page.evaluate(() => window.__fixture.calls);
-async function open(label, width = 768, query = "") {
+const callsOf = async (page, kind) =>
+  (await getCalls(page)).filter((call) => call.kind === kind);
+const firstInput = (page) => page.locator('input[placeholder="첫 빈칸"]');
+const submit = (page) =>
+  page.getByRole("button", { name: /^(제출하기|다시 제출)$/ }).click();
+async function open(
+  label,
+  width = 800,
+  height = 1280,
+  query = "",
+  start = true,
+) {
   const context = await browser.newContext({
-    viewport: { width, height: 1024 },
+    viewport: { width, height },
     hasTouch: true,
   });
   const page = await context.newPage();
   const errors = [];
-  page.on("pageerror", (error) => {
-    errors.push(error.message);
-    console.error(error.message);
-  });
+  page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/*", (route) =>
     route
       .request()
@@ -252,8 +292,17 @@ async function open(label, width = 768, query = "") {
       : route.abort(),
   );
   await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);
-  await page.locator('input[placeholder="첫 빈칸"]').waitFor();
+  await page.getByRole("button", { name: "응시 시작", exact: true }).waitFor();
+  assert.equal(
+    (await getCalls(page)).length,
+    0,
+    "opening the assignment is read-only",
+  );
   await page.clock.install({ time: Date.now() });
+  if (start) {
+    await page.getByRole("button", { name: "응시 시작", exact: true }).click();
+    await page.getByRole("button", { name: "제출하기", exact: true }).waitFor();
+  }
   return { label, page, context, errors };
 }
 async function finish(test) {
@@ -264,495 +313,240 @@ async function finish(test) {
   });
   reports.push({
     label: test.label,
-    ...(await test.page.evaluate(() => ({
-      calls: window.__fixture.calls,
-      directWrites: window.__fixture.directWrites,
-      results: window.__fixture.results,
-      points: window.__fixture.points,
-    }))),
+    calls: await getCalls(test.page),
     errors: test.errors,
   });
   await test.context.close();
-  console.log(test.label + ": passed");
+  console.log(`${test.label}: passed`);
 }
-const fillFirst = (page) =>
-  page.locator('input[placeholder="첫 빈칸"]').fill("고조선");
-const submit = (page) =>
-  page
-    .getByRole("button", { name: /^(제출|제출하기|답안 제출|다시 제출)$/ })
-    .click();
+const visibility = (page, state) =>
+  page.evaluate((state) => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: state,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, state);
 try {
-  for (const width of [390, 768, 1280]) {
-    for (const mode of ["mixed", "empty", "correct", "cancelled"]) {
-      const t = await open(
-        `compact-result-${mode}-${width}`,
-        width,
-        ["mixed", "empty"].includes(mode) ? "?resultCase=long" : "",
-      );
-      if (mode === "mixed") {
-        await t.page.evaluate(() => {
-          for (let index = 0; index < 3; index++)
-            window.__changeAnswer("internal-blank-" + index, "고조선");
-          window.__changeAnswer("internal-blank-3", "학생오입력숨김");
-        });
-      } else if (mode === "correct") {
-        await fillFirst(t.page);
-        await t.page.getByRole("button", { name: "다음", exact: true }).click();
-        await t.page.locator('input[placeholder="둘째 빈칸"]').fill("백제");
-      }
-      if (mode === "cancelled") {
-        await t.page.evaluate(() => {
-          const link = document.createElement("a");
-          link.href = "/#/student/history-classroom";
-          link.textContent = "검증 나가기";
-          document.body.appendChild(link);
-        });
-        await t.page.getByRole("link", { name: "검증 나가기" }).click();
-        await t.page
-          .getByRole("button", { name: "나가기", exact: true })
-          .click();
-        await advance(t.page, 100);
-        assert.equal((await getCalls(t.page))[0].status, "cancelled");
-        assert.equal(
-          await t.page.getByRole("dialog", { name: /^(통과|미통과)$/ }).count(),
-          0,
-          "cancelled attempt keeps its exit flow",
-        );
-      } else {
-        await submit(t.page);
-        const dialog = t.page.getByRole("dialog", {
-          name: mode === "correct" ? "통과" : "미통과",
-          exact: true,
-        });
-        await dialog.waitFor();
-        const expectedScore = mode === "mixed" ? 3 : mode === "correct" ? 2 : 0;
-        const expectedTotal = mode === "correct" ? 2 : 46;
-        assert.equal(
-          await dialog.getByLabel("정답 수", { exact: true }).textContent(),
-          `${expectedScore}/${expectedTotal}문제`,
-        );
-        const missed = dialog
-          .getByRole("region", { name: "못 쓴 답들", exact: true })
-          .locator("p");
-        const savedResult = await t.page.evaluate(
-          () => Object.values(window.__fixture.results)[0],
-        );
-        const expectedAnswers = [
-          ...new Set(
-            savedResult.answerChecks
-              .filter((check) => !check.correct)
-              .map((check) => check.correctAnswer.trim())
-              .filter(Boolean),
-          ),
-        ];
-        assert.equal(
-          await missed.textContent(),
-          expectedAnswers.join(", ") || "없음",
-          "one deduplicated answer list includes blanks and wrong input",
-        );
-        assert.equal(
-          await missed.locator("*").count(),
-          0,
-          "no individual wrong-question cards",
-        );
-        const content = await dialog.textContent();
-        assert(
-          !content.includes("internal-blank-") &&
-            !content.includes("학생오입력숨김") &&
-            !content.includes("학생 입력값"),
-          "no internal ids or wrong input exposed",
-        );
-        const geometry = await dialog.evaluate((el) => {
-          const panel = el.firstElementChild,
-            r = panel.getBoundingClientRect();
-          return {
-            left: r.left,
-            right: r.right,
-            top: r.top,
-            bottom: r.bottom,
-            width: innerWidth,
-            height: innerHeight,
-            overflow: panel.scrollWidth > panel.clientWidth + 1,
-          };
-        });
-        assert(
-          geometry.left >= 0 &&
-            geometry.right <= width &&
-            !geometry.overflow &&
-            geometry.top >= 0 &&
-            geometry.bottom <= geometry.height,
-          JSON.stringify(geometry),
-        );
-        if (mode === "mixed")
-          assert(
-            await dialog
-              .getByText("7% · 통과 기준 90%", { exact: true })
-              .isVisible(),
-          );
-        if (mode === "empty")
-          assert.equal(
-            expectedAnswers.filter((answer) => answer === "백제").length,
-            1,
-          );
-        assert(
-          (
-            await dialog
-              .getByRole("button", { name: "확인", exact: true })
-              .boundingBox()
-          ).height >= 44,
-        );
-      }
-      await finish(t);
-    }
-  }
-  // Offline keeps editing and pauses the deadline; normal reload restores page,
-  // answer and deadline even after the old eight-second rotation window.
-  for (const width of [390, 768, 1280]) {
-    const t = await open(`offline-reload-${width}`, width);
-    assert.equal(
-      (await draft(t.page)).hintUseCount,
-      0,
-      "new attempt starts with no hints used",
-    );
-    assert.equal(await t.page.evaluate(() => window.__useHint()), true);
-    assert.equal(
-      (await draft(t.page)).hintUseCount,
-      1,
-      "hint use is persisted synchronously",
-    );
-    await fillFirst(t.page);
-    await advance(t.page, 1000);
-    await t.context.setOffline(true);
-    await advance(t.page, 1000);
-    const before = await draft(t.page);
-    assert(before.offlineStartedAt);
-    assert.equal(await t.page.evaluate(() => window.__useHint()), true);
-    assert.equal(
-      (await draft(t.page)).hintUseCount,
-      2,
-      "offline hint use stays with the attempt",
-    );
-    await t.page.locator('input[placeholder="첫 빈칸"]').fill("고조선 보존");
-    await advance(t.page, 15000);
-    assert.equal(
-      (await getCalls(t.page)).length,
-      0,
-      "offline must not cancel or submit",
-    );
-    await t.context.setOffline(false);
-    await advance(t.page, 100);
-    const after = await draft(t.page);
+  for (const [width, height] of [
+    [390, 844],
+    [768, 1024],
+    [1280, 800],
+    [800, 1280],
+    [1280, 400],
+  ]) {
+    const t = await open(`tablet-${width}x${height}`, width, height);
+    const accordion = t.page.getByRole("button", { name: /^단어 목록/ });
+    assert.equal(await accordion.getAttribute("aria-expanded"), "false");
+    await accordion.click();
+    assert.equal(await accordion.getAttribute("aria-expanded"), "true");
     assert(
-      after.deadlineMs - before.deadlineMs >= 15000,
-      "offline time is credited back",
+      await t.page
+        .getByRole("region", { name: "단어 목록", exact: true })
+        .getByText("고조선", { exact: true })
+        .isVisible(),
     );
-    await t.page.reload();
-    await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
+    await accordion.click();
+    assert(
+      await t.page
+        .getByRole("timer", { name: "남은 시간", exact: true })
+        .isVisible(),
+    );
+    const geometry = await t.page.evaluate(() => ({
+      overflow: document.documentElement.scrollWidth > innerWidth + 1,
+      toolbar: document
+        .querySelector("[data-history-toolbar]")
+        .getBoundingClientRect()
+        .toJSON(),
+      submit: [...document.querySelectorAll("button")]
+        .find((b) => b.textContent === "제출하기")
+        .getBoundingClientRect()
+        .toJSON(),
+    }));
+    assert.equal(geometry.overflow, false, JSON.stringify(geometry));
+    assert(geometry.submit.height >= 44 && geometry.submit.right <= width);
+    await t.page.screenshot({
+      path: path.join(evidence, `runner-active-${width}x${height}.png`),
+      fullPage: true,
+    });
+    await firstInput(t.page).fill("고조선");
+    await submit(t.page);
+    const dialog = t.page.getByRole("dialog", { name: "미통과", exact: true });
+    await dialog.waitFor();
     assert.equal(
-      await t.page.locator('input[placeholder="첫 빈칸"]').inputValue(),
-      "고조선 보존",
+      await dialog.getByLabel("정답 수", { exact: true }).textContent(),
+      "1/2문제",
     );
+    assert(await dialog.getByText("백제", { exact: true }).isVisible());
+    assert(
+      await dialog.evaluate((el) => el.contains(document.activeElement)),
+      "result takes focus away from keyboard input",
+    );
+    await dialog.getByRole("button", { name: "확인", exact: true }).focus();
+    await t.page.keyboard.press("Tab");
     assert.equal(
-      (await draft(t.page)).resultId,
-      before.resultId,
-      "same attempt survives normal reload",
+      await t.page.evaluate(() => document.activeElement.textContent),
+      "닫기",
     );
-    assert.equal(
-      (await draft(t.page)).hintUseCount,
-      2,
-      "same attempt restores hints after offline/reload",
+    await t.page.keyboard.press("Escape");
+    assert.equal(await dialog.count(), 0);
+    await t.page
+      .getByRole("button", { name: "결과 보기", exact: true })
+      .click();
+    await dialog.waitFor();
+    const panel = await dialog.evaluate((el) =>
+      el.firstElementChild.getBoundingClientRect().toJSON(),
     );
-    assert.equal(await t.page.evaluate(() => window.__hintCount), 2);
-    assert.deepEqual(
-      await t.page.evaluate(() => [
-        window.__useHint(),
-        window.__useHint(),
-        window.__useHint(),
-      ]),
-      [true, false, false],
-      "rapid calls cannot exceed three uses before React rerenders",
-    );
-    assert.equal((await draft(t.page)).hintUseCount, 3);
-    await t.page.reload();
-    await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
-    assert.equal(await t.page.evaluate(() => window.__hintCount), 3);
-    assert.equal(
-      await t.page.evaluate(() => window.__useHint()),
-      false,
-      "refresh does not replenish hints",
+    assert(
+      panel.top >= 0 &&
+        panel.bottom <= height &&
+        panel.left >= 0 &&
+        panel.right <= width,
+      JSON.stringify(panel),
     );
     await finish(t);
   }
   {
-    const t = await open("offline-submit-online");
-    await fillFirst(t.page);
+    const t = await open("offline-expiry-reconnect");
+    await firstInput(t.page).fill("고조선");
+    await advance(t.page, 1100);
+    const deadline = (await draft(t.page)).deadlineMs;
     await t.context.setOffline(true);
-    await advance(t.page, 100);
-    await submit(t.page);
-    await advance(t.page, 100);
-    const saved = await draft(t.page);
-    assert.equal(saved.pendingSubmission.answers["blank-a"], "고조선");
+    await advance(t.page, 1000);
+    await firstInput(t.page).fill("백제");
+    await advance(t.page, 65000);
     assert.equal(
-      await t.page.evaluate(() => window.__useHint()),
-      false,
-      "queued submissions cannot consume hints",
+      (await draft(t.page)).deadlineMs,
+      deadline,
+      "offline never extends the deadline",
     );
-    assert.equal((await getCalls(t.page)).length, 0);
+    assert.equal((await draft(t.page)).pendingSubmission.reason, "time-limit");
+    assert.equal((await callsOf(t.page, "lock")).length, 0);
+    assert.equal((await callsOf(t.page, "submit")).length, 0);
+    assert.equal(await firstInput(t.page).isEditable(), false);
+    assert.equal(
+      await t.page
+        .getByRole("timer", { name: "남은 시간", exact: true })
+        .textContent(),
+      "00:00",
+    );
     await t.context.setOffline(false);
-    await advance(t.page, 100);
+    await advance(t.page, 1000);
     await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    assert.equal((await getCalls(t.page)).length, 1);
+    const calls = await callsOf(t.page, "submit");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].answers["blank-a"], "백제");
+    assert.equal(calls[0].submitReason, "TIMEOUT");
+    await finish(t);
+  }
+  {
+    const t = await open("network-interruption-reload");
+    await firstInput(t.page).fill("고조선 보존");
+    await t.context.setOffline(true);
+    await advance(t.page, 12000);
+    const before = await draft(t.page);
+    await t.context.setOffline(false);
+    await t.page.reload();
+    await t.page
+      .getByRole("button", { name: "제출하기", exact: true })
+      .waitFor();
+    assert.equal(await firstInput(t.page).inputValue(), "고조선 보존");
+    assert.equal((await draft(t.page)).deadlineMs, before.deadlineMs);
+    assert.equal((await callsOf(t.page, "start")).length, 1);
+    assert.equal((await callsOf(t.page, "lock")).length, 0);
+    await finish(t);
+  }
+  {
+    const t = await open("blur-rotation-transient-visibility");
+    await t.page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await advance(t.page, 4000);
+    await visibility(t.page, "hidden");
+    await advance(t.page, 500);
+    await visibility(t.page, "visible");
+    await t.page.evaluate(() =>
+      window.dispatchEvent(new Event("orientationchange")),
+    );
+    await visibility(t.page, "hidden");
+    await advance(t.page, 4000);
+    await visibility(t.page, "visible");
+    assert.equal((await callsOf(t.page, "lock")).length, 0);
+    assert.equal(await firstInput(t.page).isDisabled(), false);
+    await finish(t);
+  }
+  for (const offline of [false, true]) {
+    const t = await open(`tab-switch-${offline ? "offline" : "online"}`);
+    if (offline) await t.context.setOffline(true);
+    await visibility(t.page, "hidden");
+    await advance(t.page, 3500);
+    assert.equal((await draft(t.page)).pendingViolation, "VISIBILITY_HIDDEN");
+    await visibility(t.page, "visible");
+    assert(
+      await t.page
+        .getByRole("heading", {
+          name: "응시 화면 이탈로 재응시가 제한되었습니다.",
+        })
+        .isVisible(),
+    );
+    if (offline) {
+      assert.equal((await callsOf(t.page, "lock")).length, 0);
+      await t.context.setOffline(false);
+      await advance(t.page, 100);
+    }
+    assert.equal((await callsOf(t.page, "lock")).length, 1);
+    await t.page.reload();
+    await t.page
+      .getByRole("button", { name: "다시 확인", exact: true })
+      .waitFor();
+    assert.equal(
+      (await callsOf(t.page, "start")).length,
+      1,
+      "locked attempt cannot start again",
+    );
+    await finish(t);
+  }
+  {
+    const t = await open("suspended-background-timer");
+    await visibility(t.page, "hidden");
+    await t.page.clock.setSystemTime(Date.now() + 10000);
+    await visibility(t.page, "visible");
+    assert.equal((await draft(t.page)).pendingViolation, "VISIBILITY_HIDDEN");
+    await finish(t);
+  }
+  {
+    const t = await open("lost-autosave-response");
+    await t.page.evaluate(() => {
+      window.__fixture.loseSaveResponse = true;
+    });
+    await firstInput(t.page).fill("고조선");
+    await advance(t.page, 1000);
+    assert((await draft(t.page)).pendingProgress);
+    await firstInput(t.page).fill("고조선 수정");
+    await advance(t.page, 1000);
+    await submit(t.page);
+    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
+    assert.equal(
+      (await callsOf(t.page, "submit"))[0].answers["blank-a"],
+      "고조선 수정",
+    );
     assert.equal(await draft(t.page), null);
     await finish(t);
   }
   {
-    const t = await open("timeout-latest-answers-retry");
-    await fillFirst(t.page);
-    await t.page.getByRole("button", { name: "다음", exact: true }).click();
-    await t.page.locator('input[placeholder="둘째 빈칸"]').fill("백제");
+    const t = await open("lost-submit-response-reload");
+    await firstInput(t.page).fill("고조선");
     await t.page.evaluate(() => {
-      window.__fixture.failures = ["functions/unavailable"];
-    });
-    await advance(t.page, 61000);
-    await advance(t.page, 3000);
-    await t.page.getByRole("dialog", { name: "통과", exact: true }).waitFor();
-    const calls = await getCalls(t.page);
-    assert.equal(calls.length, 2);
-    assert.equal(calls[0].resultId, calls[1].resultId);
-    assert.deepEqual(calls[1].answers, {
-      "blank-a": "고조선",
-      "blank-b": "백제",
-    });
-    assert.equal(
-      (await t.page.evaluate(() => window.__fixture.directWrites)).length,
-      0,
-    );
-    await finish(t);
-  }
-  {
-    const t = await open("lost-response-idempotent");
-    await fillFirst(t.page);
-    await t.page.evaluate(() => {
-      window.__fixture.loseNextResponse = true;
+      window.__fixture.loseSubmitResponse = true;
     });
     await submit(t.page);
-    await advance(t.page, 23000);
-    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    const calls = await getCalls(t.page);
-    assert.equal(calls.length, 2);
-    assert.equal(calls[0].resultId, calls[1].resultId);
-    assert.equal(
-      await t.page.evaluate(() => Object.keys(window.__fixture.results).length),
-      1,
-    );
-    assert.equal(
-      (await t.page.evaluate(() => window.__fixture.directWrites)).length,
-      0,
-    );
-    await finish(t);
-  }
-  {
-    const t = await open("pending-reload-and-zero-score");
-    await fillFirst(t.page);
-    await t.page.evaluate(() => {
-      window.__fixture.failures = ["functions/permission-denied"];
-      window.__fixture.forceZero = true;
-      window.__persistBackend();
-    });
-    await submit(t.page);
-    await advance(t.page, 100);
-    const saved = await draft(t.page);
-    assert(saved.pendingSubmission);
-    await t.page.reload();
-    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    const calls = await getCalls(t.page);
-    assert.equal(calls.length, 2);
-    assert.equal(calls[0].resultId, calls[1].resultId);
-    assert(
-      await t.page.getByText("0/2문제", { exact: true }).isVisible(),
-      "zero server score must not fall back to local score",
-    );
-    assert(
-      await t.page.getByText("0% · 통과 기준 90%", { exact: true }).isVisible(),
-      "server pass threshold is used with its score",
-    );
-    await finish(t);
-  }
-  {
-    const t = await open("saved-response-reload");
-    await fillFirst(t.page);
-    await t.page.evaluate(() => {
-      window.__fixture.loseNextResponse = true;
-    });
-    await submit(t.page);
-    await advance(t.page, 100);
     assert((await draft(t.page)).pendingSubmission);
     await t.page.reload();
     await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    assert.equal(
-      (await getCalls(t.page)).length,
-      1,
-      "confirmed server result is restored without a second attempt",
-    );
-    assert.equal(await draft(t.page), null);
-    assert.equal(
-      await t.page.evaluate(() => window.__fixture.points.length),
-      1,
-      "recovered submission claims the same idempotent reward",
-    );
-    await finish(t);
-  }
-  for (const mode of ["hidden", "unassigned", "deleted"]) {
-    const t = await open(`saved-result-after-${mode}`);
-    await fillFirst(t.page);
-    await t.page.evaluate(() => {
-      window.__fixture.loseNextResponse = true;
-    });
-    await submit(t.page);
-    await advance(t.page, 100);
-    await t.page.evaluate((mode) => {
-      if (mode === "hidden") window.__fixture.assignment.isPublished = false;
-      if (mode === "unassigned") {
-        window.__fixture.assignment.targetStudentUid = "other";
-        window.__fixture.assignment.targetStudentUids = ["other"];
-      }
-      if (mode === "deleted") {
-        window.__fixture.assignment.isDeleted = true;
-        window.__fixture.denyAssignmentRead = true;
-      }
-      window.__persistBackend();
-    }, mode);
-    await t.page.reload();
-    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    assert.equal(
-      (await getCalls(t.page)).length,
-      1,
-      "confirmed own result survives revoked source access without resubmitting",
-    );
-    assert.equal(await draft(t.page), null);
-    await finish(t);
-  }
-  for (const mismatch of ["uid", "assignmentId"]) {
-    const t = await open(`result-ownership-${mismatch}`);
-    await fillFirst(t.page);
-    await t.page.evaluate(() => {
-      window.__fixture.loseNextResponse = true;
-    });
-    await submit(t.page);
-    await advance(t.page, 100);
-    await t.page.evaluate((mismatch) => {
-      const saved = Object.values(window.__fixture.results)[0];
-      saved[mismatch] = "other";
-      window.__fixture.assignment.isPublished = false;
-      window.__persistBackend();
-    }, mismatch);
-    await t.page.reload();
-    await t.page
-      .getByText("아직 공개되지 않은 과제입니다.", { exact: true })
-      .waitFor();
-    assert.equal(
-      await t.page.getByRole("dialog").count(),
-      0,
-      "another student or assignment result cannot open the recovery path",
-    );
-    assert.equal((await getCalls(t.page)).length, 1);
+    assert.equal((await callsOf(t.page, "submit")).length, 1);
+    assert.equal((await callsOf(t.page, "start")).length, 1);
     await finish(t);
   }
   {
-    const t = await open("due-window-offline-retry", 768, "?due=1");
-    await fillFirst(t.page);
-    await t.context.setOffline(true);
-    await advance(t.page, 8000);
-    assert.equal((await getCalls(t.page)).length, 0);
-    await t.page.evaluate(() => {
-      window.__fixture.failures = ["functions/unavailable"];
-    });
-    await t.context.setOffline(false);
-    await advance(t.page, 100);
-    assert.equal((await draft(t.page)).pendingSubmission.reason, "due-window");
-    await advance(t.page, 3000);
-    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    const calls = await getCalls(t.page);
-    assert.equal(calls.length, 2);
-    assert.equal(calls[0].resultId, calls[1].resultId);
-    assert.equal(calls[1].answers["blank-a"], "고조선");
-    await finish(t);
-  }
-  {
-    const t = await open("double-submit");
-    await fillFirst(t.page);
-    const button = t.page.getByRole("button", {
-      name: /^(제출|제출하기|답안 제출)$/,
-    });
-    await button.evaluate((el) => {
-      el.click();
-      el.click();
-    });
-    await advance(t.page, 100);
-    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    assert.equal((await getCalls(t.page)).length, 1);
-    await finish(t);
-  }
-  {
-    const t = await open("server-rejection-no-legacy");
-    await fillFirst(t.page);
-    await t.page.evaluate(() => {
-      window.__fixture.failures = [
-        {
-          code: "functions/not-found",
-          message: "History classroom assignment does not exist.",
-        },
-      ];
-    });
-    await submit(t.page);
-    await advance(t.page, 5000);
-    assert.equal(
-      (await getCalls(t.page)).length,
-      1,
-      "server rejection is not automatically repeated",
-    );
-    assert.equal(
-      await t.page.evaluate(() => window.__fixture.directWrites.length),
-      0,
-      "missing assignment cannot fall back to an unvalidated client result",
-    );
-    assert(
-      (await draft(t.page)).pendingSubmission,
-      "rejected answer is still retained",
-    );
-    assert(
-      await t.page
-        .getByRole("button", { name: "다시 제출", exact: true })
-        .isEnabled(),
-    );
-    await finish(t);
-  }
-  {
-    const t = await open("legacy-callable-absent");
-    await fillFirst(t.page);
-    await t.page.evaluate(() => {
-      window.__fixture.failures = ["functions/not-found"];
-    });
-    await submit(t.page);
-    await advance(t.page, 100);
-    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    const writes = await t.page.evaluate(() => window.__fixture.directWrites);
-    assert.equal(
-      writes.length,
-      1,
-      "known absent callable retains the legacy deployment path",
-    );
-    assert(
-      writes[0].path.startsWith(
-        "years/2026/semesters/2/history_classroom_results/",
-      ),
-    );
-    assert.equal(writes[0].data.answers["blank-a"], "고조선");
-    await finish(t);
-  }
-  {
-    const t = await open("confirmed-exit-cancels");
-    await fillFirst(t.page);
+    const t = await open("manual-navigation-lock");
     await t.page.evaluate(() => {
       const link = document.createElement("a");
       link.href = "/#/student/history-classroom";
@@ -760,166 +554,273 @@ try {
       document.body.appendChild(link);
     });
     await t.page.getByRole("link", { name: "검증 나가기" }).click();
-    await t.page
-      .getByRole("dialog", { name: "역사교실을 나가시겠습니까?" })
-      .waitFor();
     await t.page.getByRole("button", { name: "나가기", exact: true }).click();
-    await advance(t.page, 100);
-    const calls = await getCalls(t.page);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].status, "cancelled");
-    assert.equal(await draft(t.page), null);
+    assert.equal((await callsOf(t.page, "lock"))[0].reason, "NAVIGATION");
+    assert.equal((await callsOf(t.page, "submit")).length, 0);
     await finish(t);
   }
-  for (const mode of ["scoped", "legacy"]) {
-    const t = await open(`teacher-reset-open-cooldown-${mode}`);
-    await fillFirst(t.page);
+  {
+    const t = await open("keyboard-preserves-scale", 1280, 800);
+    await firstInput(t.page).focus();
+    const before = await firstInput(t.page).boundingBox();
+    await t.page.setViewportSize({ width: 1280, height: 400 });
+    await advance(t.page, 100);
+    const after = await firstInput(t.page).boundingBox();
+    assert(
+      Math.abs(after.width - before.width) < 1,
+      "opening keyboard must not shrink the worksheet",
+    );
+    const canvas = await t.page
+      .locator("[data-history-viewport]")
+      .boundingBox();
+    assert(
+      after.y >= canvas.y && after.y + after.height <= canvas.y + canvas.height,
+    );
+    assert(
+      await t.page
+        .getByRole("timer", { name: "남은 시간", exact: true })
+        .isVisible(),
+    );
+    await finish(t);
+  }
+  for (const width of [390, 768, 1280]) {
+    const t = await open(
+      `long-empty-results-${width}`,
+      width,
+      800,
+      "?resultCase=long",
+    );
+    await submit(t.page);
+    const dialog = t.page.getByRole("dialog", { name: "미통과", exact: true });
+    await dialog.waitFor();
+    assert.equal(await dialog.getByLabel("정답 수").textContent(), "0/46문제");
+    const wrong = dialog.getByRole("region", {
+      name: "못 쓴 답들",
+      exact: true,
+    });
+    const text = await wrong.textContent();
+    assert.equal(
+      (text.match(/고조선/g) || []).length,
+      1,
+      "deduplicate answer labels",
+    );
+    assert(text.includes("공백없는매우긴역사정답"));
+    assert.equal(
+      await dialog.evaluate((el) => el.scrollWidth > el.clientWidth + 1),
+      false,
+    );
+    assert(
+      await dialog
+        .getByRole("button", { name: "확인", exact: true })
+        .isVisible(),
+    );
+    await finish(t);
+  }
+  {
+    const t = await open("all-correct-double-submit");
+    await firstInput(t.page).fill("고조선");
+    await t.page.getByRole("button", { name: "다음", exact: true }).click();
+    await t.page.locator('input[placeholder="둘째 빈칸"]').fill("백제");
+    await t.page
+      .getByRole("button", { name: "제출하기", exact: true })
+      .evaluate((button) => {
+        button.click();
+        button.click();
+      });
+    await t.page.getByRole("dialog", { name: "통과", exact: true }).waitFor();
+    assert.equal((await callsOf(t.page, "submit")).length, 1);
+    assert(
+      await t.page
+        .getByRole("region", { name: "못 쓴 답들" })
+        .getByText("없음")
+        .isVisible(),
+    );
+    await t.page.reload();
+    await t.page.getByRole("dialog", { name: "통과", exact: true }).waitFor();
+    assert.equal((await callsOf(t.page, "submit")).length, 1);
+    await finish(t);
+  }
+  {
+    const t = await open("server-threshold-snapshot");
+    await firstInput(t.page).fill("고조선");
+    await t.page.evaluate(() => {
+      window.__fixture.serverThreshold = 50;
+    });
+    await submit(t.page);
+    const dialog = t.page.getByRole("dialog", { name: "통과", exact: true });
+    await dialog.waitFor();
+    assert(
+      await dialog
+        .getByText("50% · 통과 기준 50%", { exact: true })
+        .isVisible(),
+    );
+    await finish(t);
+  }
+  {
+    const t = await open("autosave-offline-expiry");
+    await t.page.evaluate(() => {
+      window.__fixture.failSave = true;
+    });
+    await firstInput(t.page).fill("고조선");
+    await advance(t.page, 1000);
+    assert((await draft(t.page)).pendingProgress);
+    await t.context.setOffline(true);
+    await advance(t.page, 65000);
+    await t.context.setOffline(false);
+    await advance(t.page, 1000);
+    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
+    assert.equal((await callsOf(t.page, "submit")).length, 1);
+    await finish(t);
+  }
+  {
+    const t = await open("due-window-offline", 800, 1280, "?due=1");
+    await firstInput(t.page).fill("고조선");
+    await t.context.setOffline(true);
+    await advance(t.page, 10000);
+    assert.equal((await draft(t.page)).pendingSubmission.reason, "due-window");
+    assert.equal(await firstInput(t.page).isEditable(), false);
+    await t.context.setOffline(false);
+    await advance(t.page, 1000);
+    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
+    assert.equal((await callsOf(t.page, "submit"))[0].submitReason, "TIMEOUT");
+    await finish(t);
+  }
+  {
+    const t = await open("server-rejection-and-explicit-retry");
+    await firstInput(t.page).fill("고조선");
+    await t.page.evaluate(() => {
+      window.__fixture.failures.push("functions/permission-denied");
+    });
+    await submit(t.page);
+    await advance(t.page, 6000);
+    assert.equal(
+      (await callsOf(t.page, "submit")).length,
+      1,
+      "permission failures do not auto-retry",
+    );
+    assert((await draft(t.page)).pendingSubmission);
     await submit(t.page);
     await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
-    await t.page.evaluate((mode) => {
-      window.__fixture.legacyAssignment = mode === "legacy";
-      window.__persistBackend();
-    }, mode);
-    await t.page.reload();
-    await t.page.getByText(/분 후 다시 응시할 수 있습니다/).waitFor();
-    await t.page.evaluate(() => {
-      window.__fixture.assignment.retryResetByStudentUid = {
-        "other-student": { seconds: Date.now() / 1000 },
-      };
-      window.__emitAssignment();
-    });
-    await advance(t.page, 100);
-    assert(await t.page.getByText(/분 후 다시 응시할 수 있습니다/).isVisible());
-    await t.page.evaluate(() => {
-      window.__fixture.assignment.retryResetByStudentUid["student-1"] = {
-        seconds: Date.now() / 1000,
-      };
-      window.__emitAssignment();
-    });
-    await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
     assert.equal(
-      await t.page.locator('input[placeholder="첫 빈칸"]').inputValue(),
-      "",
+      await t.page.evaluate(() => window.__fixture.directWrites.length),
+      0,
     );
-    assert.equal(
-      await t.page.evaluate(() => Object.keys(window.__fixture.results).length),
-      1,
-    );
-    assert.equal((await getCalls(t.page)).length, 1);
     await finish(t);
   }
-  for (const mode of ["pending", "committed", "active", "passed"]) {
-    const t = await open(`teacher-reset-reentry-${mode}`);
-    assert.equal(await t.page.evaluate(() => window.__useHint()), true);
-    await fillFirst(t.page);
-    const before = await draft(t.page);
-    if (mode !== "active") {
-      if (mode === "passed") {
-        await t.page.getByRole("button", { name: "다음", exact: true }).click();
-        await t.page.locator('input[placeholder="둘째 빈칸"]').fill("백제");
-      }
-      await t.page.evaluate((mode) => {
-        if (mode === "pending")
-          window.__fixture.failures = ["functions/permission-denied"];
-        else window.__fixture.loseNextResponse = true;
-      }, mode);
-      await submit(t.page);
-      await advance(t.page, 100);
-    }
-    await advance(t.page, 100);
+  for (const scope of ["semester", "attempt"]) {
+    const t = await open(`draft-${scope}-isolation`);
+    await firstInput(t.page).fill("고조선");
+    await advance(t.page, 1000);
+    await t.page.evaluate(
+      ({ key, scope }) => {
+        const saved = JSON.parse(localStorage.getItem(key));
+        saved.answers = { "blank-a": "다른 응시 답안" };
+        saved.pendingSubmission = {
+          status: "failed",
+          reason: "manual",
+          answers: saved.answers,
+        };
+        if (scope === "semester") saved.semester = "1";
+        else saved.attemptId = "other-attempt";
+        localStorage.setItem(key, JSON.stringify(saved));
+      },
+      { key, scope },
+    );
+    await t.page.reload();
+    await t.page
+      .getByRole("button", { name: "제출하기", exact: true })
+      .waitFor();
+    assert.equal(await firstInput(t.page).inputValue(), "고조선");
+    assert.equal((await callsOf(t.page, "submit")).length, 0);
+    await finish(t);
+  }
+  for (const field of ["studentUid", "attemptId", "semesterId"]) {
+    const t = await open(`receipt-${field}-isolation`);
     await t.page.evaluate(() => {
+      window.__changeAnswer("blank-a", "고조선");
+      window.__changeAnswer("blank-b", "백제");
+    });
+    await submit(t.page);
+    await t.page.getByRole("dialog", { name: "통과", exact: true }).waitFor();
+    await t.page.evaluate((field) => {
+      window.__fixture.results["attempt-1"][field] = "other";
+      window.__persistBackend();
+    }, field);
+    await t.page.reload();
+    await t.page
+      .getByRole("button", { name: "다시 확인", exact: true })
+      .waitFor();
+    assert.equal(await t.page.getByRole("dialog").count(), 0);
+    await finish(t);
+  }
+  {
+    const t = await open("teacher-reset-new-attempt");
+    await visibility(t.page, "hidden");
+    await advance(t.page, 3500);
+    await visibility(t.page, "visible");
+    await t.page.reload();
+    await t.page
+      .getByRole("button", { name: "다시 확인", exact: true })
+      .waitFor();
+    await t.page.evaluate(() => {
+      window.__fixture.attempt = null;
+      window.__fixture.nextAttemptId = "attempt-2";
       window.__fixture.assignment.retryResetByStudentUid = {
         "student-1": { seconds: Date.now() / 1000 },
       };
       window.__emitAssignment();
     });
-    await advance(t.page, 100);
-    if (mode === "active") {
-      assert.equal(
-        await t.page.locator('input[placeholder="첫 빈칸"]').inputValue(),
-        "고조선",
-        "reset must not interrupt a normal active attempt",
-      );
-      assert.equal((await draft(t.page)).resultId, before.resultId);
-    }
-    // pagehide re-saves the draft after the reset. Its marker version must stay
-    // unchanged even though savedAt becomes newer than the teacher's reset.
-    await t.page.reload();
-    if (mode === "passed") {
-      await t.page.getByText(/이미 통과한 역사교실입니다/).waitFor();
-      assert.equal(await t.page.getByRole("dialog").count(), 0);
-    } else {
-      await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
-      assert.equal(
-        await t.page.locator('input[placeholder="첫 빈칸"]').inputValue(),
-        "",
-      );
-      assert.notEqual((await draft(t.page)).resultId, before.resultId);
-      assert.equal((await draft(t.page)).pendingSubmission, null);
-      assert.equal(
-        (await draft(t.page)).hintUseCount,
-        0,
-        "teacher reset starts a fresh hint allowance",
-      );
-    }
-    assert.equal((await getCalls(t.page)).length, mode === "active" ? 0 : 1);
-    assert.equal(
-      await t.page.evaluate(() => Object.keys(window.__fixture.results).length),
-      ["committed", "passed"].includes(mode) ? 1 : 0,
-    );
-    await finish(t);
-  }
-  for (const [raw, expected] of [
-    [null, 0],
-    [-8, 0],
-    [99, 3],
-    ["invalid", 0],
-    [2.9, 2],
-  ]) {
-    const t = await open(`hint-normalization-${String(raw)}`);
-    await t.page.addInitScript(
-      ({ key, raw }) => {
-        const saved = JSON.parse(localStorage.getItem(key));
-        if (raw === null) delete saved.hintUseCount;
-        else saved.hintUseCount = raw;
-        localStorage.setItem(key, JSON.stringify(saved));
-      },
-      { key, raw },
-    );
-    await t.page.reload();
-    await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
-    assert.equal((await draft(t.page)).hintUseCount, expected);
-    assert.equal(await t.page.evaluate(() => window.__hintCount), expected);
+    await t.page
+      .getByRole("button", { name: "응시 시작", exact: true })
+      .waitFor();
+    await t.page
+      .getByRole("button", { name: "응시 시작", exact: true })
+      .click();
+    await t.page
+      .getByRole("button", { name: "제출하기", exact: true })
+      .waitFor();
+    assert.equal((await draft(t.page)).attemptId, "attempt-2");
+    assert.equal((await draft(t.page)).pendingViolation, null);
+    assert.equal(await firstInput(t.page).inputValue(), "");
     await finish(t);
   }
   {
-    const t = await open("untimed-draft", 768, "?untimed=1");
-    await fillFirst(t.page);
-    await advance(t.page, 100);
-    assert.equal((await draft(t.page)).deadlineMs, 0);
-    await t.page.reload();
-    await t.page.locator('input[placeholder="첫 빈칸"]').waitFor();
+    const t = await open("hints-ime-and-reload");
+    await t.page.evaluate(() => {
+      window.__useHint();
+      window.__useHint();
+      window.__useHint();
+      window.__useHint();
+    });
+    assert.equal((await draft(t.page)).hintUseCount, 3);
+    await firstInput(t.page).focus();
+    await firstInput(t.page).dispatchEvent("compositionstart");
+    await firstInput(t.page).fill("고조선");
+    await t.page.getByRole("button", { name: /^단어 목록/ }).focus();
     assert.equal(
-      await t.page.locator('input[placeholder="첫 빈칸"]').inputValue(),
-      "고조선",
+      await t.page.locator("[data-blank-feedback]").count(),
+      0,
+      "IME does not show correctness mid-composition",
     );
+    await firstInput(t.page).dispatchEvent("compositionend");
+    await advance(t.page, 100);
+    assert.equal(await t.page.locator("[data-blank-feedback]").count(), 1);
+    await t.page.reload();
+    await t.page
+      .getByRole("button", { name: "제출하기", exact: true })
+      .waitFor();
+    assert.equal((await draft(t.page)).hintUseCount, 3);
+    assert.equal(await t.page.evaluate(() => window.__useHint()), false);
     await finish(t);
   }
-} finally {
   await fs.writeFile(
-    path.join(evidence, "runner-recovery-report.json"),
-    JSON.stringify(
-      {
-        recordedAt: new Date().toISOString(),
-        coverage:
-          "actual Runner/View, offline browser state and fake-clock deadlines; mock callable/backend; no physical iPad or live Firebase",
-        reports,
-      },
-      null,
-      2,
-    ),
+    path.join(evidence, "runner-report.json"),
+    JSON.stringify(reports, null, 2),
   );
+  console.log(
+    `History classroom runner: ${reports.length} browser scenarios passed.`,
+  );
+} finally {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));
 }
-console.log("Evidence: " + evidence);

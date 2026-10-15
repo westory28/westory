@@ -528,12 +528,8 @@ export const saveHistoryAssessmentSource = async (
     ],
     true,
     async (step) => {
-      // Close admission before changing/removing a source, then refresh its definition.
-      await saveAssessmentDefinition(
-        config,
-        historyPayload(config, sourceId, payload),
-        false,
-      );
+      // The source command validates first, then pauses admission and changes the
+      // worksheet atomically. A refused edit must leave its publication intact.
       const saved = await step("source", async () => ({
         commandType: "upsertHistoryClassroomSource",
         payload: {

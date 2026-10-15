@@ -14,7 +14,7 @@ import { useSearchParams } from "react-router-dom";
 import HistoryClassroomAssignmentView from "../../components/common/HistoryClassroomAssignmentView";
 import LessonWorksheetStage from "../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../contexts/AuthContext";
-import { db, getHttpsCallable } from "../../lib/firebase";
+import { db } from "../../lib/firebase";
 import {
   buildAssessmentDefinitionId,
   executeAssessmentManagementCommand,
@@ -33,12 +33,15 @@ import {
   getHistoryClassroomDueAtMs,
   getHistoryClassroomRemainingMs,
   getHistoryClassroomStudentRetryResetMs,
+  grantHistoryClassroomExemptions,
   inferHistoryClassroomBlankSource,
   isHistoryClassroomDeleted,
   isHistoryClassroomPastDue,
   mergeHistoryClassroomMapSnapshot,
   normalizeHistoryClassroomAssignment,
   normalizeHistoryClassroomResult,
+  reviewHistoryClassroomExemptionRequest,
+  revokeHistoryClassroomExemptions,
   sanitizeHistoryClassroomAssignmentForWrite,
   summarizeHistoryClassroomAnswers,
   type HistoryClassroomAssignment,
@@ -63,9 +66,10 @@ import {
 } from "../../lib/historyClassroomLessonSources";
 import { createManagedNotifications } from "../../lib/notifications";
 import {
-  getSemesterCollectionPath,
-  getYearSemester,
-} from "../../lib/semesterScope";
+  isActiveRosterStudent,
+  isStudentRosterProfile,
+} from "../../lib/studentRoster";
+import { getSemesterCollectionPath } from "../../lib/semesterScope";
 
 const HISTORY_CLASSROOM_RESULT_LIMIT = 500;
 const NEW_ASSIGNMENT_DEFAULTS = {
@@ -89,9 +93,15 @@ interface StudentOption {
   grade: string;
   className: string;
   number: string;
+  active?: boolean;
 }
 
-type ExemptionRequestStatus = "pending" | "approved" | "rejected";
+type ExemptionRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "used";
 type ExemptionGrantMode = "students" | "class";
 type ExemptionModalTab = "grant" | "requests" | "granted";
 
@@ -480,6 +490,7 @@ const normalizeExemptionRequestStatus = (
   const normalized = String(value || "").trim();
   if (normalized === "approved") return "approved";
   if (normalized === "rejected" || normalized === "denied") return "rejected";
+  if (normalized === "cancelled" || normalized === "used") return normalized;
   return "pending";
 };
 
@@ -542,6 +553,8 @@ const formatExemptionStudentLabel = (item: {
 const formatExemptionRequestStatusLabel = (status: ExemptionRequestStatus) => {
   if (status === "approved") return "승인";
   if (status === "rejected") return "반려";
+  if (status === "cancelled") return "취소";
+  if (status === "used") return "사용됨";
   return "대기";
 };
 
@@ -551,6 +564,9 @@ const getExemptionRequestStatusClassName = (status: ExemptionRequestStatus) => {
   }
   if (status === "rejected") {
     return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (status === "cancelled" || status === "used") {
+    return "border-gray-200 bg-gray-50 text-gray-600";
   }
   return "border-amber-200 bg-amber-50 text-amber-700";
 };
@@ -619,6 +635,28 @@ const getFirestoreErrorSummary = (error: unknown) => ({
       : "",
   message: error instanceof Error ? error.message : String(error || ""),
 });
+
+const getHistoryClassroomErrorMessage = (error: unknown, fallback: string) => {
+  const { code, message } = getFirestoreErrorSummary(error);
+  if (code === "functions/unauthenticated") {
+    return "로그인 상태를 확인한 뒤 다시 시도해 주세요.";
+  }
+  if (["functions/unavailable", "functions/deadline-exceeded"].includes(code)) {
+    return "연결을 확인한 뒤 다시 시도해 주세요. 같은 요청은 중복 처리되지 않습니다.";
+  }
+  if (
+    [
+      "functions/invalid-argument",
+      "functions/failed-precondition",
+      "functions/permission-denied",
+      "functions/not-found",
+    ].includes(code) &&
+    message
+  ) {
+    return message;
+  }
+  return fallback;
+};
 
 const describeHistoryResultStatus = (
   status: HistoryClassroomResult["status"],
@@ -953,6 +991,7 @@ const ManageHistoryClassroom: React.FC = () => {
     HistoryClassroomExemptionRequest[]
   >([]);
   const [loadingExemptions, setLoadingExemptions] = useState(false);
+  const [exemptionLoadError, setExemptionLoadError] = useState("");
   const [exemptionPanelOpen, setExemptionPanelOpen] = useState(false);
   const [exemptionModalTab, setExemptionModalTab] =
     useState<ExemptionModalTab>("grant");
@@ -1042,6 +1081,9 @@ const ManageHistoryClassroom: React.FC = () => {
     useState<HistoryClassroomAssignment | null>(null);
   const [editingAssignmentId, setEditingAssignmentId] = useState("");
   const [editingMapResourceId, setEditingMapResourceId] = useState("");
+  const [editingRefreshSource, setEditingRefreshSource] = useState(false);
+  const [refreshingEditingSource, setRefreshingEditingSource] = useState(false);
+  const editingSourceRefreshRef = React.useRef(0);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
   const [editingTimeLimitMinutes, setEditingTimeLimitMinutes] = useState(0);
@@ -1097,6 +1139,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const loadExemptionData = React.useCallback(async () => {
     setLoadingExemptions(true);
+    setExemptionLoadError("");
     try {
       const exemptionPath = getSemesterCollectionPath(
         config,
@@ -1137,6 +1180,9 @@ const ManageHistoryClassroom: React.FC = () => {
       );
     } catch (error) {
       console.error("Failed to load history classroom exemption data:", error);
+      setExemptionLoadError(
+        "면제권 내역을 불러오지 못했습니다. 새로고침해 주세요.",
+      );
     } finally {
       setLoadingExemptions(false);
     }
@@ -1184,13 +1230,14 @@ const ManageHistoryClassroom: React.FC = () => {
         const loadedStudents = studentSnap.docs
           .map((docSnap) => {
             const data = docSnap.data() as Record<string, unknown>;
-            if (data.role === "teacher") return null;
+            if (!isStudentRosterProfile(data)) return null;
             return {
               uid: docSnap.id,
               name: String(data.name || "").trim(),
               grade: String(data.grade || "").trim(),
               className: String(data.class || "").trim(),
               number: String(data.number || "").trim(),
+              active: data.role === "student" && isActiveRosterStudent(data),
             } as StudentOption;
           })
           .filter((item): item is StudentOption => !!item && !!item.uid)
@@ -1531,7 +1578,10 @@ const ManageHistoryClassroom: React.FC = () => {
     () =>
       exemptionSelectedStudentUids
         .map((uid) => students.find((student) => student.uid === uid))
-        .filter((student): student is StudentOption => !!student),
+        .filter(
+          (student): student is StudentOption =>
+            !!student && student.active !== false,
+        ),
     [exemptionSelectedStudentUids, students],
   );
 
@@ -1541,6 +1591,7 @@ const ManageHistoryClassroom: React.FC = () => {
     return students
       .filter(
         (student) =>
+          student.active !== false &&
           !exemptionSelectedStudentUids.includes(student.uid) &&
           buildStudentSearchText(student).includes(keyword),
       )
@@ -1554,7 +1605,9 @@ const ManageHistoryClassroom: React.FC = () => {
           students
             .filter(
               (student) =>
-                !exemptionTargetGrade || student.grade === exemptionTargetGrade,
+                student.active !== false &&
+                (!exemptionTargetGrade ||
+                  student.grade === exemptionTargetGrade),
             )
             .map((student) => student.className)
             .filter(Boolean),
@@ -1568,7 +1621,10 @@ const ManageHistoryClassroom: React.FC = () => {
     const className = String(exemptionTargetClass || "").trim();
     if (!grade || !className) return [];
     return students.filter(
-      (student) => student.grade === grade && student.className === className,
+      (student) =>
+        student.active !== false &&
+        student.grade === grade &&
+        student.className === className,
     );
   }, [exemptionTargetClass, exemptionTargetGrade, students]);
 
@@ -1977,7 +2033,9 @@ const ManageHistoryClassroom: React.FC = () => {
       resolveDueWindowDaysValue(editingDueWindowDays);
     const mapChanged =
       !!editingSelectedMap &&
-      editingSelectedMap.id !== getHistoryClassroomSourceId(editingAssignment);
+      (editingRefreshSource ||
+        editingSelectedMap.id !==
+          getHistoryClassroomSourceId(editingAssignment));
     const previewBlanks = mapChanged
       ? cloneMapResourceBlanks(editingSelectedMap)
       : editingAssignment.blanks;
@@ -2052,6 +2110,7 @@ const ManageHistoryClassroom: React.FC = () => {
     editingPassThresholdPercent,
     editingPreviewMap,
     editingSelectedMap,
+    editingRefreshSource,
     editingStudents,
     editingStudentReasons,
     editingStudentUids,
@@ -2646,7 +2705,6 @@ const ManageHistoryClassroom: React.FC = () => {
 
   const handleGrantExemptions = async () => {
     const reason = exemptionReason.trim();
-    const { year, semester } = getYearSemester(config);
     const targetStudents =
       exemptionGrantMode === "class"
         ? activeExemptionClassStudents
@@ -2675,15 +2733,13 @@ const ManageHistoryClassroom: React.FC = () => {
 
     setGrantingExemption(true);
     try {
-      const callable = await getHttpsCallable(
-        "grantHistoryClassroomExemptions",
-      );
-      await callable({
-        year,
-        semester,
-        mode: exemptionGrantMode,
+      const result = await grantHistoryClassroomExemptions(config, {
         reason,
-        studentUids: targetStudents.map((student) => student.uid),
+        recipientUids: targetStudents.map((student) => student.uid),
+        classId:
+          exemptionGrantMode === "class"
+            ? `${exemptionTargetGrade}-${exemptionTargetClass}`
+            : "",
         targetGrade: exemptionGrantMode === "class" ? exemptionTargetGrade : "",
         targetClass: exemptionGrantMode === "class" ? exemptionTargetClass : "",
       });
@@ -2691,10 +2747,12 @@ const ManageHistoryClassroom: React.FC = () => {
       setExemptionSelectedStudentUids([]);
       setExemptionReason("");
       await loadExemptionData();
-      alert("면제권을 부여했습니다.");
+      alert(`${result.createdCount}명에게 면제권을 부여했습니다.`);
     } catch (error) {
       console.error("Failed to grant history classroom exemptions:", error);
-      alert("면제권 부여에 실패했습니다.");
+      alert(
+        getHistoryClassroomErrorMessage(error, "면제권 부여에 실패했습니다."),
+      );
     } finally {
       setGrantingExemption(false);
     }
@@ -2704,18 +2762,10 @@ const ManageHistoryClassroom: React.FC = () => {
     requestId: string,
     status: "approved" | "rejected",
   ) => {
-    const { year, semester } = getYearSemester(config);
     setReviewingExemptionRequestId(requestId);
     try {
-      const callable = await getHttpsCallable(
-        "reviewHistoryClassroomExemptionRequest",
-      );
-      await callable({
-        year,
-        semester,
+      await reviewHistoryClassroomExemptionRequest(config, {
         requestId,
-        status,
-        decision: status,
         approved: status === "approved",
       });
       await loadExemptionData();
@@ -2725,7 +2775,12 @@ const ManageHistoryClassroom: React.FC = () => {
         status,
         error,
       });
-      alert("면제권 사용 요청 처리에 실패했습니다.");
+      alert(
+        getHistoryClassroomErrorMessage(
+          error,
+          "면제권 사용 요청 처리에 실패했습니다.",
+        ),
+      );
     } finally {
       setReviewingExemptionRequestId("");
     }
@@ -2766,19 +2821,12 @@ const ManageHistoryClassroom: React.FC = () => {
         : `${row.studentName} 학생의 보유 면제권 ${revokeCount}개를 회수할까요?`;
     if (!window.confirm(message)) return;
 
-    const { year, semester } = getYearSemester(config);
     setRevokingExemptionStudentKey(row.key);
     try {
-      const callable = await getHttpsCallable(
-        "revokeHistoryClassroomExemptions",
+      await revokeHistoryClassroomExemptions(
+        config,
+        revocableItems.slice(0, revokeCount).map((item) => item.id),
       );
-      await callable({
-        year,
-        semester,
-        exemptionIds: revocableItems
-          .slice(0, revokeCount)
-          .map((item) => item.id),
-      });
       setExpandedExemptionStudentKey("");
       await loadExemptionData();
     } catch (error) {
@@ -2786,7 +2834,9 @@ const ManageHistoryClassroom: React.FC = () => {
         row,
         error,
       });
-      alert("면제권 회수에 실패했습니다.");
+      alert(
+        getHistoryClassroomErrorMessage(error, "면제권 회수에 실패했습니다."),
+      );
     } finally {
       setRevokingExemptionStudentKey("");
     }
@@ -2806,28 +2856,29 @@ const ManageHistoryClassroom: React.FC = () => {
     );
     if (!confirmed) return;
 
-    const { year, semester } = getYearSemester(config);
     setResettingGrantedExemptions(true);
     try {
-      const callable = await getHttpsCallable(
-        "revokeHistoryClassroomExemptions",
-      );
       for (
         let index = 0;
         index < resettableGrantedExemptionIds.length;
         index += 50
       ) {
-        await callable({
-          year,
-          semester,
-          exemptionIds: resettableGrantedExemptionIds.slice(index, index + 50),
-        });
+        await revokeHistoryClassroomExemptions(
+          config,
+          resettableGrantedExemptionIds.slice(index, index + 50),
+        );
       }
       setExpandedExemptionStudentKey("");
       await loadExemptionData();
     } catch (error) {
       console.error("Failed to reset history classroom exemptions:", error);
-      alert("면제권 부여 초기화에 실패했습니다.");
+      await loadExemptionData();
+      alert(
+        getHistoryClassroomErrorMessage(
+          error,
+          "면제권 부여 초기화에 실패했습니다.",
+        ),
+      );
     } finally {
       setResettingGrantedExemptions(false);
     }
@@ -2944,8 +2995,11 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const openAssignmentEditor = (assignment: HistoryClassroomAssignment) => {
+    editingSourceRefreshRef.current += 1;
+    setRefreshingEditingSource(false);
     setEditingAssignmentId(assignment.id);
     setEditingMapResourceId(getHistoryClassroomSourceId(assignment));
+    setEditingRefreshSource(false);
     setEditingTitle(assignment.title);
     setEditingDescription(assignment.description);
     setEditingTimeLimitMinutes(assignment.timeLimitMinutes);
@@ -3023,8 +3077,11 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const closeAssignmentEditor = () => {
+    editingSourceRefreshRef.current += 1;
+    setRefreshingEditingSource(false);
     setEditingAssignmentId("");
     setEditingMapResourceId("");
+    setEditingRefreshSource(false);
     setEditingTitle("");
     setEditingDescription("");
     setEditingTimeLimitMinutes(0);
@@ -3050,8 +3107,42 @@ const ManageHistoryClassroom: React.FC = () => {
     setReviewCurrentPage(1);
   };
 
+  const handleRefreshEditingLesson = async () => {
+    if (!editingAssignment || !editingMapResourceId.startsWith("lesson:"))
+      return;
+    const sourceId = editingMapResourceId;
+    const requestId = ++editingSourceRefreshRef.current;
+    setRefreshingEditingSource(true);
+    try {
+      const sources = await readHistoryClassroomLessonSources(config, true);
+      if (requestId !== editingSourceRefreshRef.current) return;
+      const source = sources.find((item) => item.id === sourceId);
+      if (
+        !source ||
+        !source.pdfBlanks?.length ||
+        source.pdfBlanks.some((blank) => !blank.answer.trim())
+      ) {
+        alert("수업 자료에 저장된 학습지와 빈칸 정답을 먼저 확인해 주세요.");
+        return;
+      }
+      setLessonSources(sources);
+      setEditingRefreshSource(true);
+    } catch (error) {
+      console.error(
+        "Failed to refresh history classroom lesson snapshot:",
+        error,
+      );
+      if (requestId === editingSourceRefreshRef.current) {
+        alert("최신 수업 자료를 불러오지 못했습니다. 다시 시도해 주세요.");
+      }
+    } finally {
+      if (requestId === editingSourceRefreshRef.current)
+        setRefreshingEditingSource(false);
+    }
+  };
+
   const handleSaveAssignmentEdit = async () => {
-    if (resettingAttemptRef.current) return;
+    if (resettingAttemptRef.current || refreshingEditingSource) return;
     const targetAssignment = assignments.find(
       (assignment) => assignment.id === editingAssignmentId,
     );
@@ -3084,7 +3175,8 @@ const ManageHistoryClassroom: React.FC = () => {
     );
     const mapChanged =
       !!replacementMap &&
-      replacementMap.id !== getHistoryClassroomSourceId(targetAssignment);
+      (editingRefreshSource ||
+        replacementMap.id !== getHistoryClassroomSourceId(targetAssignment));
     if (
       editingMapResourceId !== getHistoryClassroomSourceId(targetAssignment) &&
       !replacementMap
@@ -3226,7 +3318,9 @@ const ManageHistoryClassroom: React.FC = () => {
         ...getFirestoreErrorSummary(error),
         error,
       });
-      alert("역사교실 수정에 실패했습니다.");
+      alert(
+        getHistoryClassroomErrorMessage(error, "역사교실 수정에 실패했습니다."),
+      );
       setSavingEdit(false);
     }
   };
@@ -4420,10 +4514,6 @@ const ManageHistoryClassroom: React.FC = () => {
                   <h2 className="text-xl font-black text-slate-900">
                     면제권 관리
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    학생별·학급별 부여와 학생 사용 요청 처리를 한 곳에서
-                    관리합니다.
-                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -4471,6 +4561,14 @@ const ManageHistoryClassroom: React.FC = () => {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto bg-white p-5">
+                {exemptionLoadError && (
+                  <div
+                    role="alert"
+                    className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+                  >
+                    {exemptionLoadError}
+                  </div>
+                )}
                 {exemptionModalTab === "grant" && (
                   <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-wrap gap-2">
@@ -4666,7 +4764,7 @@ const ManageHistoryClassroom: React.FC = () => {
                             </select>
                           </label>
                           <div className="rounded-2xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 sm:col-span-2">
-                            선택 대상 {exemptionClassStudents.length}명
+                            선택 대상 {activeExemptionClassStudents.length}명
                           </div>
                         </div>
                       </>
@@ -5970,17 +6068,37 @@ const ManageHistoryClassroom: React.FC = () => {
                           loading={loadingLessonSources}
                           error={lessonSourceError}
                           currentLabel={editingAssignment.title}
-                          onChange={setEditingMapResourceId}
+                          onChange={(sourceId) => {
+                            editingSourceRefreshRef.current += 1;
+                            setRefreshingEditingSource(false);
+                            setEditingRefreshSource(false);
+                            setEditingMapResourceId(sourceId);
+                          }}
                         />
                       </div>
                       {editingSelectedMap &&
-                        editingSelectedMap.id !==
-                          getHistoryClassroomSourceId(editingAssignment) && (
+                        (editingRefreshSource ||
+                          editingSelectedMap.id !==
+                            getHistoryClassroomSourceId(editingAssignment)) && (
                           <div className="mt-2 rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700">
-                            저장하면 {editingSelectedMap.title} 자료로
-                            교체됩니다.
+                            저장하면 {editingSelectedMap.title} 자료의 최신
+                            학습지와 빈칸{" "}
+                            {editingSelectedMap.pdfBlanks?.length || 0}개를
+                            반영합니다.
                           </div>
                         )}
+                      {editingMapResourceId.startsWith("lesson:") && (
+                        <button
+                          type="button"
+                          onClick={() => void handleRefreshEditingLesson()}
+                          disabled={refreshingEditingSource || savingEdit}
+                          className="mt-3 min-h-11 rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-60"
+                        >
+                          {refreshingEditingSource
+                            ? "수업 자료 불러오는 중"
+                            : "최신 수업 자료 반영"}
+                        </button>
+                      )}
                       {!editingMapResourceId.startsWith("lesson:") && (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <button
@@ -6477,7 +6595,10 @@ const ManageHistoryClassroom: React.FC = () => {
                     type="button"
                     onClick={() => void handleSaveAssignmentEdit()}
                     disabled={
-                      savingEdit || deletingAssignment || !!resettingAttemptUid
+                      savingEdit ||
+                      refreshingEditingSource ||
+                      deletingAssignment ||
+                      !!resettingAttemptUid
                     }
                     className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
                   >

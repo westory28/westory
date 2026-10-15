@@ -1,4 +1,11 @@
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocFromServer,
+  getDocs,
+  getDocsFromServer,
+} from "firebase/firestore";
 import type { SystemConfig } from "../types";
 import { db } from "./firebase";
 import type { HistoryClassroomAssignment } from "./historyClassroom";
@@ -109,8 +116,16 @@ export const buildHistoryClassroomLessonSources = (
   legacyLessons: LessonData[],
 ): HistoryClassroomLessonSource[] => {
   const lessonsByUnit = new Map<string, LessonData>();
-  [...legacyLessons, ...scopedLessons].forEach((lesson) => {
-    if (lesson.unitId) lessonsByUnit.set(lesson.unitId, lesson);
+  [legacyLessons, scopedLessons].forEach((scopeLessons) => {
+    const seenUnits = new Set<string>();
+    scopeLessons.forEach((lesson) => {
+      // Match the lesson editor's unitId query + limit(1), even when an older
+      // import left multiple documents for one curriculum item.
+      if (lesson.unitId && !seenUnits.has(lesson.unitId)) {
+        seenUnits.add(lesson.unitId);
+        lessonsByUnit.set(lesson.unitId, lesson);
+      }
+    });
   });
   const sources: HistoryClassroomLessonSource[] = [];
   const visit = (
@@ -182,16 +197,21 @@ export const buildHistoryClassroomLessonSources = (
 
 export const readHistoryClassroomLessonSources = async (
   config: Pick<SystemConfig, "year" | "semester"> | null | undefined,
+  requireServer = false,
 ) => {
+  const readDocument = requireServer ? getDocFromServer : getDoc;
+  const readCollection = requireServer ? getDocsFromServer : getDocs;
   const [scopedTree, scopedLessons, legacyLessons] = await Promise.all([
-    getDoc(doc(db, getSemesterDocPath(config, "curriculum", "tree"))),
-    getDocs(collection(db, getSemesterCollectionPath(config, "lessons"))),
-    getDocs(collection(db, "lessons")),
+    readDocument(doc(db, getSemesterDocPath(config, "curriculum", "tree"))),
+    readCollection(
+      collection(db, getSemesterCollectionPath(config, "lessons")),
+    ),
+    readCollection(collection(db, "lessons")),
   ]);
   const treeDoc =
     scopedTree.exists() && Array.isArray(scopedTree.data().tree)
       ? scopedTree
-      : await getDoc(doc(db, "curriculum", "tree"));
+      : await readDocument(doc(db, "curriculum", "tree"));
   const tree =
     treeDoc.exists() && Array.isArray(treeDoc.data().tree)
       ? treeDoc.data().tree

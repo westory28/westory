@@ -6,6 +6,7 @@ const archiveEnrollment = require("./archiveEnrollment");
 const cutoverAuthorization = require("./cutoverAuthorization");
 const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
+const historyExemptions = require("./historyClassroomExemptions");
 
 const REGION = "asia-northeast3";
 const ASSESSMENT_SCHEMA_VERSION = 1;
@@ -17,6 +18,8 @@ const RESULT_COLLECTION = "semester_assessment_results";
 const LEGACY_ISSUE_COLLECTION = "assessment_legacy_issues";
 
 const ASSESSMENT_COMMAND_TYPES = Object.freeze({
+  ...historyExemptions.COMMAND_TYPES,
+  LOCK_HISTORY_CLASSROOM_ATTEMPT: "lockHistoryClassroomAttempt",
   CREATE_ASSESSMENT_DEFINITION: "createAssessmentDefinition",
   UPDATE_ASSESSMENT_DEFINITION: "updateAssessmentDefinition",
   TRANSITION_ASSESSMENT_DEFINITION: "transitionAssessmentDefinition",
@@ -32,6 +35,8 @@ const ASSESSMENT_COMMAND_TYPES = Object.freeze({
 });
 
 const STUDENT_COMMAND_TYPES = new Set([
+  ASSESSMENT_COMMAND_TYPES.CREATE_HISTORY_CLASSROOM_EXEMPTION_REQUEST,
+  ASSESSMENT_COMMAND_TYPES.LOCK_HISTORY_CLASSROOM_ATTEMPT,
   ASSESSMENT_COMMAND_TYPES.START_ASSESSMENT_ATTEMPT,
   ASSESSMENT_COMMAND_TYPES.SUBMIT_ASSESSMENT_ATTEMPT,
 ]);
@@ -198,6 +203,14 @@ const normalizeIso = (value, label, allowEmpty = true) => {
 };
 
 const normalizeAssessmentPayload = (commandType, rawPayload) => {
+  if (Object.values(historyExemptions.COMMAND_TYPES).includes(commandType))
+    return historyExemptions.normalizePayload(commandType, rawPayload);
+  if (commandType === ASSESSMENT_COMMAND_TYPES.LOCK_HISTORY_CLASSROOM_ATTEMPT) {
+    assertAllowedKeys(rawPayload, ["attemptId", "reason"], "lockHistoryClassroomAttempt payload");
+    if (!["VISIBILITY_HIDDEN", "NAVIGATION"].includes(rawPayload.reason))
+      fail("invalid-argument", "Lock reason is invalid.", "ASSESSMENT_LOCK_REASON_INVALID");
+    return { attemptId: normalizeAttemptId(rawPayload.attemptId), reason: rawPayload.reason };
+  }
   const payload = rawPayload || {};
   if (
     commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION
@@ -455,7 +468,9 @@ const loadDefinitionSource = async (transaction, payload) => {
     : snapshot.data?.targetStudentUid
       ? [String(snapshot.data.targetStudentUid).trim()]
       : [];
-  return { itemCount: answerKey.length, answerKey, assignedStudentUids, sourceHash: sha256(canonicalJson({ answerKey, assignedStudentUids })) };
+  const threshold = snapshot.data.passThresholdPercent == null || snapshot.data.passThresholdPercent === "" ? Number.NaN : Number(snapshot.data.passThresholdPercent);
+  const passThresholdPercent = Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : 80;
+  return { itemCount: answerKey.length, answerKey, assignedStudentUids, passThresholdPercent, sourceHash: sha256(canonicalJson({ answerKey, assignedStudentUids })) };
 };
 
 const resolveAssignedClassIds = async (transaction, semesterId, requestedIds) => {
@@ -590,6 +605,26 @@ const assertContentRevision = (snapshot, expectedRevision, label) => {
 
 const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = null } = {}) => ({
   apply: async ({ transaction, commandId, commandType, payload, payloadHash, receiptId, timestamp, concreteTimestamp, actor }) => {
+    if (Object.values(historyExemptions.COMMAND_TYPES).includes(commandType))
+      return historyExemptions.apply({ transaction, commandId, commandType, payload, actor, timestamp,
+        helpers: { assertActiveEnrollment, assertTeacherActor, assertStudentActor, assertAssessmentSemesterWritable, now } });
+    if (commandType === ASSESSMENT_COMMAND_TYPES.LOCK_HISTORY_CLASSROOM_ATTEMPT) {
+      assertStudentActor(actor);
+      const path = attemptPath(payload.attemptId);
+      const current = await transaction.get(path);
+      const attempt = current.data || {};
+      if (!current.exists || attempt.studentUid !== actor.actorUid || attempt.assessmentKind !== "HISTORY_CLASSROOM")
+        fail("permission-denied", "This History Classroom attempt cannot be locked.", "ASSESSMENT_ATTEMPT_FORBIDDEN");
+      await assertAssessmentSemesterWritable(transaction, attempt.semesterId);
+      if (!["SUBMITTED", "LOCKED", "STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status))
+        fail("failed-precondition", "This attempt is no longer active.", "ASSESSMENT_ATTEMPT_NOT_WRITABLE");
+      const settled = ["SUBMITTED", "LOCKED"].includes(attempt.status);
+      const revision = Number(attempt.revision || 0) + (settled ? 0 : 1);
+      if (!settled) transaction.set(path, { status: "LOCKED", revision, lockReason: payload.reason,
+        lockedAtIso: now().toISOString(), updatedAt: timestamp }, { merge: true });
+      return { target: { kind: "assessment-attempt-lock", id: payload.attemptId, refs: [path] }, sourceHash: attempt.sourceHash || null,
+        result: { attemptId: payload.attemptId, status: settled ? attempt.status : "LOCKED", revision } };
+    }
     if (commandType === ASSESSMENT_COMMAND_TYPES.UPSERT_QUIZ_QUESTION) {
       assertTeacherActor(actor);
       await assertAssessmentSemesterWritable(transaction, payload.semesterId);
@@ -626,9 +661,27 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const path = `${semesterRoot(payload.semesterId)}/history_classrooms/${payload.sourceId}`;
       const snapshot = await transaction.get(path);
       const currentRevision = assertContentRevision(snapshot, payload.expectedRevision, "History Classroom source");
+      const definitionId = `history_classroom:${payload.semesterId}:${payload.sourceId}`;
+      const definition = await transaction.get(definitionPath(definitionId));
+      const worksheet = (value) => ({ blanks: value?.blanks || [], pdfPageImages: value?.pdfPageImages || [], pdfRegions: value?.pdfRegions || [] });
+      if (snapshot.exists && canonicalJson(worksheet(snapshot.data)) !== canonicalJson(worksheet(payload.source))) {
+        const [attempts, results, legacyResults] = await Promise.all([
+          transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: definitionId }),
+          transaction.query(RESULT_COLLECTION, { field: "definitionId", operator: "==", value: definitionId }),
+          transaction.query(`${semesterRoot(payload.semesterId)}/history_classroom_results`, { field: "assignmentId", operator: "==", value: payload.sourceId }),
+        ]);
+        if (results.some((row) => row.data?.completionSource !== "exemption") ||
+            legacyResults.some((row) => row.data?.completionSource !== "exemption" && row.data?.status !== "cancelled"))
+          fail("failed-precondition", "제출 기록이 있는 학습지는 새 역사교실로 등록해 주세요.", "ASSESSMENT_SOURCE_HAS_RESULTS");
+        if (attempts.some((row) => row.data?.resetAt == null && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(row.data?.status)))
+          fail("failed-precondition", "학생이 응시 중인 학습지는 변경할 수 없습니다. 제출 또는 응시 초기화 후 다시 저장해 주세요.", "ASSESSMENT_SOURCE_IN_USE");
+      }
       const nextRevision = currentRevision + 1;
       transaction.set(path, {
         ...payload.source,
+        // Reset permission is owned by reset commands; a stale editor must not
+        // remove it or manufacture a new local-lock release marker.
+        retryResetByStudentUid: snapshot.data?.retryResetByStudentUid || {},
         contentRevision: nextRevision,
         deletedAt: null,
         deletedByUid: "",
@@ -637,7 +690,12 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         updateReason: payload.reason,
         ...(snapshot.exists ? {} : { createdAt: timestamp, createdBy: actor.actorUid }),
       }, { merge: false });
-      return { target: { kind: "history-classroom-source", id: payload.sourceId, refs: [path] }, sourceHash: sha256(canonicalJson(payload.source)), result: { sourceId: payload.sourceId, contentRevision: nextRevision } };
+      // Publication changes only after every source guard passes. The client
+      // refreshes the definition snapshot and republishes the accepted source.
+      if (definition.exists && definition.data?.status === "PUBLISHED")
+        transaction.set(definition.path, { status: "PAUSED", revision: Number(definition.data.revision || 0) + 1,
+          transitionReason: payload.reason, updatedAt: timestamp, updatedBy: actor.actorUid, commandId }, { merge: true });
+      return { target: { kind: "history-classroom-source", id: payload.sourceId, refs: [path, ...(definition.exists && definition.data?.status === "PUBLISHED" ? [definition.path] : [])] }, sourceHash: sha256(canonicalJson(payload.source)), result: { sourceId: payload.sourceId, contentRevision: nextRevision } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.DELETE_HISTORY_CLASSROOM_SOURCE) {
@@ -809,6 +867,13 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         .filter((document) => document.data?.studentUid === actor.actorUid);
       const prior = allPrior.filter((document) => document.data?.resetAt == null)
         .sort((left, right) => Number(left.data?.attemptNumber || 0) - Number(right.data?.attemptNumber || 0));
+      if (definition.assessmentKind === "HISTORY_CLASSROOM") {
+        if (prior.some((document) => document.data?.status === "LOCKED" && ["VISIBILITY_HIDDEN", "NAVIGATION"].includes(document.data?.lockReason)))
+          fail("failed-precondition", "화면 이탈로 응시가 종료되었습니다. 선생님께 재응시를 요청해 주세요.", "ASSESSMENT_ATTEMPT_LOCKED");
+        const exemption = await transaction.get(resultPath(historyExemptions.resultIdFor(definition.semesterId, definition.sourceId, actor.actorUid)));
+        if (exemption.exists)
+          fail("failed-precondition", "면제권으로 이미 완료한 역사교실입니다.", "ASSESSMENT_ALREADY_EXEMPTED");
+      }
       const active = prior.find((document) => ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(document.data?.status));
       if (active) {
         return { target: { kind: "assessment-attempt", id: active.data.attemptId, refs: [active.path] }, sourceHash: active.data.sourceHash || null, result: serializeAttempt(active.data, true) };
@@ -860,6 +925,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         currentItemId: selectedIds[0] || "",
         questionIds: selectedIds,
         gradingSnapshot,
+        ...(definition.assessmentKind === "HISTORY_CLASSROOM" ? { passThresholdPercent: source.passThresholdPercent } : {}),
         sourceHash: source.sourceHash,
         startedAtIso: nowDate.toISOString(),
         deadlineAtIso: new Date(deadlineMs).toISOString(),
@@ -892,7 +958,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         const reward = result.reward || { status: "NOT_RECORDED", awarded: false, duplicate: false, amount: 0, bonusAwarded: false,
           bonusAmount: 0, totalAwarded: 0, blockedReason: "reward_not_recorded", blockedMessage: "이전 제출의 보상 확인 기록이 없습니다.", ledgerEntryIds: [] };
         return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, attempt.submissionRef, attempt.resultRef] }, sourceHash: attempt.sourceHash || null, result: { attemptId: attempt.attemptId, status: "SUBMITTED", resultRef: attempt.resultRef, submissionRef: attempt.submissionRef,
-          score: result.score, total: result.total, percent: result.percent, answerChecks: result.answerChecks, reward, replayedSubmission: true } };
+          score: result.score, total: result.total, percent: result.percent, ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, reward, replayedSubmission: true } };
       }
       if (!Array.isArray(attempt.gradingSnapshot) || !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status)) fail("failed-precondition", "Assessment attempt cannot be submitted.", "ASSESSMENT_ATTEMPT_NOT_SUBMITTABLE");
       if (Number(attempt.revision || 0) !== payload.expectedRevision) fail("aborted", "Assessment attempt revision changed.", "ASSESSMENT_ATTEMPT_REVISION_CONFLICT", { currentRevision: Number(attempt.revision || 0) });
@@ -905,6 +971,9 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const correctCount = checks.filter((item) => item.correct).length;
       const total = checks.length;
       const percent = total ? Math.round((correctCount / total) * 100) : 0;
+      const historyOutcome = attempt.assessmentKind === "HISTORY_CLASSROOM" && Number.isFinite(attempt.passThresholdPercent)
+        ? { passThresholdPercent: attempt.passThresholdPercent, passed: percent >= attempt.passThresholdPercent }
+        : {};
       const nextRevision = Number(attempt.revision) + 1;
       const immutableSubmissionPath = submissionPath(attempt.attemptId);
       const immutableResultPath = resultPath(attempt.attemptId);
@@ -943,6 +1012,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         score: correctCount,
         total,
         percent,
+        ...historyOutcome,
         answerChecks: checks,
         sourceHash: attempt.sourceHash,
         submittedAtIso,
@@ -953,7 +1023,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       });
       transaction.set(path, { status: "SUBMITTED", revision: nextRevision, answers: effectiveAnswers, submittedAtIso, submissionRef: immutableSubmissionPath, resultRef: immutableResultPath, submitReason: payload.submitReason, updatedAt: timestamp }, { merge: true });
       rewardPlan.apply();
-      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, answerChecks: checks, resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
+      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPTS_BY_CLASS) {
@@ -970,8 +1040,14 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         resolvedClassId = String(matchedClass.data?.classId || matchedClass.path.split("/").at(-1));
       }
       const attempts = (await transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: payload.definitionId })).filter((document) => document.data?.classId === resolvedClassId && document.data?.resetAt == null);
+      const sourcePath = definition.data?.assessmentKind === "HISTORY_CLASSROOM"
+        ? `${semesterRoot(definition.data.semesterId)}/history_classrooms/${definition.data.sourceId}` : "";
+      const source = sourcePath ? await transaction.get(sourcePath) : null;
+      const enrollments = source?.exists ? await transaction.query(archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION, { field: "classId", operator: "==", value: resolvedClassId }) : [];
+      const resetUids = [...new Set([...attempts.map((row) => row.data.studentUid), ...enrollments.filter((row) => row.data?.semesterId === definition.data.semesterId && row.data?.enrollmentStatus === "ACTIVE").map((row) => row.data.studentUid)].filter(Boolean))];
       for (const document of attempts) transaction.set(document.path, { status: "LOCKED", resetAt: timestamp, resetBy: actor.actorUid, resetReason: payload.reason, updatedAt: timestamp }, { merge: true });
-      return { target: { kind: "assessment-attempt-reset", id: `${payload.definitionId}:${resolvedClassId}`, refs: attempts.map((item) => item.path) }, sourceHash: definition.data?.sourceHash || null, result: { definitionId: payload.definitionId, classId: resolvedClassId, resetCount: attempts.length } };
+      if (source?.exists) transaction.set(sourcePath, { retryResetByStudentUid: { ...(source.data.retryResetByStudentUid || {}), ...Object.fromEntries(resetUids.map((uid) => [uid, timestamp])) } }, { merge: true });
+      return { target: { kind: "assessment-attempt-reset", id: `${payload.definitionId}:${resolvedClassId}`, refs: [...attempts.map((item) => item.path), ...(source?.exists ? [sourcePath] : [])] }, sourceHash: definition.data?.sourceHash || null, result: { definitionId: payload.definitionId, classId: resolvedClassId, resetCount: attempts.length } };
     }
     if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPT) {
       assertTeacherActor(actor);
@@ -979,8 +1055,12 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       if (!definition.exists) fail("not-found", "Assessment definition was not found.", "ASSESSMENT_DEFINITION_NOT_FOUND");
       await assertAssessmentSemesterWritable(transaction, definition.data?.semesterId);
       const attempts = (await transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: payload.definitionId })).filter((document) => document.data?.studentUid === payload.studentUid && document.data?.resetAt == null);
+      const sourcePath = definition.data?.assessmentKind === "HISTORY_CLASSROOM"
+        ? `${semesterRoot(definition.data.semesterId)}/history_classrooms/${definition.data.sourceId}` : "";
+      const source = sourcePath ? await transaction.get(sourcePath) : null;
       for (const document of attempts) transaction.set(document.path, { status: "LOCKED", resetAt: timestamp, resetBy: actor.actorUid, resetReason: payload.reason, updatedAt: timestamp }, { merge: true });
-      return { target: { kind: "assessment-attempt-reset", id: `${payload.definitionId}:${payload.studentUid}`, refs: attempts.map((item) => item.path) }, sourceHash: definition.data?.sourceHash || null, result: { definitionId: payload.definitionId, studentUid: payload.studentUid, resetCount: attempts.length } };
+      if (source?.exists) transaction.set(sourcePath, { retryResetByStudentUid: { ...(source.data.retryResetByStudentUid || {}), [payload.studentUid]: timestamp } }, { merge: true });
+      return { target: { kind: "assessment-attempt-reset", id: `${payload.definitionId}:${payload.studentUid}`, refs: [...attempts.map((item) => item.path), ...(source?.exists ? [sourcePath] : [])] }, sourceHash: definition.data?.sourceHash || null, result: { definitionId: payload.definitionId, studentUid: payload.studentUid, resetCount: attempts.length } };
     }
     fail("invalid-argument", "Unsupported assessment commandType.", "COMMAND_TYPE_UNSUPPORTED");
   },

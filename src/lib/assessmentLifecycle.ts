@@ -265,6 +265,16 @@ export const submitAssessmentAttempt = async (input: {
   );
 };
 
+export const lockHistoryClassroomAttempt = (input: {
+  attemptId: string;
+  reason: "VISIBILITY_HIDDEN" | "NAVIGATION";
+}) =>
+  executeStudentAssessmentCommand<{
+    attemptId: string;
+    status: "LOCKED" | "SUBMITTED";
+    revision: number;
+  }>("lockHistoryClassroomAttempt", input);
+
 export const isAssessmentRevisionConflict = (error: unknown) => {
   const failure = error as {
     details?: { reason?: unknown };
@@ -340,6 +350,8 @@ export interface AssessmentSubmissionResult {
   score: number;
   total: number;
   percent: number;
+  passed?: boolean;
+  passThresholdPercent?: number;
   answerChecks: Array<{ id: string; correct: boolean }>;
   resultRef: string;
   submissionRef: string;

@@ -83,8 +83,10 @@ PC에는 코드와 개발 도구가 있고 실제 로그인 처리는 공통 Fir
 2026-10-08 학생 개방 패치는 `functions/productionGateway`에 현재 운영 `executeCommand`
 의 의존 소스를 별도로 보존한다. 원본과 변경 해시는 `source-manifest.json`으로 확인하며
 다른 PC에서도 `npm --prefix functions run check`를 통과해야 한다. 루트에서 연결한
-`executeCommand`, `executeLessonCorePointCommand`만 이 복구 소스의 배포 대상이다.
+`executeCommand`, `getCommandStatus`, `executeLessonCorePointCommand`만 이 복구 소스의 명령 배포 대상이다.
 디렉터리의 나머지 callable을 일괄 export하거나 모든 Functions를 배포하지 않는다.
+
+2026-10-15 역사교실 안정화에서는 신규 면제권·응시 잠금 명령과 응답 유실 복구를 함께 지원하도록 `executeCommand`, `getCommandStatus` 두 함수를 배포한다. 명령 이름이나 학생 명령 분류를 바꾸면 상태 조회 함수의 동일 allowlist도 확인한다. [검증 기록](../reviews/history-classroom-stabilization-20261015.md)을 참고한다.
 
 학생 개방 전에는 교사 설정의 학생 접속 항목에서 현재 학기 평가 공개 상태를 점검하고,
 현재 공개 설정에 해당하는 평가를 준비한다. 가입 승인·세션·학급 권한, 서버 저장/보상,

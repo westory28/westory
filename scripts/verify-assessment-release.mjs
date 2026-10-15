@@ -9,12 +9,23 @@ import ts from "typescript";
 const serverPath = "functions/productionGateway/assessmentLifecycle.js";
 const serverModule = { exports: {} };
 const semesterCore = { SEMESTER_MANIFEST_COLLECTION: "semester_manifests", ACTIVE_SEMESTER_POINTER_PATH: "system/active", normalizeSemesterId: (value) => value };
+const exemptionModule = { exports: {} };
+const HttpsError = class extends Error { constructor(code, message, details) { super(message); this.code = code; this.details = details; } };
+vm.runInNewContext(fs.readFileSync("functions/productionGateway/historyClassroomExemptions.js", "utf8"), {
+  module: exemptionModule, exports: exemptionModule.exports,
+  require: (name) => {
+    if (name === "node:crypto") return { createHash };
+    if (name === "firebase-functions/v2/https") return { HttpsError };
+    throw new Error(name);
+  },
+});
 vm.runInNewContext(fs.readFileSync(serverPath, "utf8"), {
   module: serverModule, exports: serverModule.exports, Buffer,
   require: (name) => {
     if (name === "node:crypto") return { createHash };
     if (name === "firebase-functions/v2/https") return { HttpsError: class extends Error { constructor(code, message, details) { super(message); this.code = code; this.details = details; } } };
     if (name === "./semesterCore") return semesterCore;
+    if (name === "./historyClassroomExemptions") return exemptionModule.exports;
     if (name === "./archiveEnrollment") return { SEMESTER_CLASS_COLLECTION: "semester_classes" };
     if (["./cutoverAuthorization", "./sessionAuthority", "./studentMaintenance"].includes(name)) return {};
     throw new Error(name);
@@ -154,7 +165,23 @@ function harness() {
   assert.equal(docs.get("semester_assessment_definitions/history_classroom:2026-2:history1").title, "변경 제목");
   await assert.rejects(api.saveHistoryAssessmentSource(config, "history1", payload, 1), /revision changed/);
   assert.equal(docs.get(`${root}/history_classrooms/history1`).contentRevision, 2);
+  assert.equal(docs.get("semester_assessment_definitions/history_classroom:2026-2:history1").status, "PUBLISHED", "A stale edit must not pause the published assignment");
   assert.ok(calls.length > 4);
   console.log("PASS published source pause/update/republish, drafts, and stale source revision rejection");
+}
+{
+  const { api, docs, calls } = harness();
+  await api.prepareCurrentAssessmentRelease(await api.planCurrentAssessmentRelease(config));
+  const sourcePath = `${root}/history_classrooms/history1`;
+  const definitionPath = "semester_assessment_definitions/history_classroom:2026-2:history1";
+  const originalDefinition = JSON.parse(JSON.stringify(docs.get(definitionPath)));
+  const originalSource = JSON.parse(JSON.stringify(docs.get(sourcePath)));
+  docs.set("semester_assessment_attempts/active-student", { definitionId: "history_classroom:2026-2:history1", studentUid: "student-a", status: "IN_PROGRESS" });
+  const callCount = calls.length;
+  await assert.rejects(api.saveHistoryAssessmentSource(config, "history1", { ...originalSource, blanks: [{ id: "blank-a", answer: "CHANGED" }] }, 0), /응시 중인 학습지/);
+  assert.deepEqual(docs.get(definitionPath), originalDefinition, "Refused worksheet changes preserve the live definition and its revision");
+  assert.deepEqual(docs.get(sourcePath), originalSource, "Refused worksheet changes preserve the source");
+  assert.deepEqual(calls.slice(callCount).map(call => call.commandType), ["upsertHistoryClassroomSource"], "Do not pause before source validation");
+  console.log("PASS active attempt edit rejection leaves published source/definition intact");
 }
 console.log("Assessment release verification passed.");

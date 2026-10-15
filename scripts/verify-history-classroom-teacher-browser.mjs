@@ -150,7 +150,7 @@ const store = {
   },
 };
 const mock = `
-const fixture=window.__fixture={store:${JSON.stringify(store)},writes:[],notifications:[],reads:[],alerts:[]};
+const fixture=window.__fixture={store:${JSON.stringify(store)},writes:[],notifications:[],reads:[],alerts:[],commands:[]};
 export const config={year:'2026',semester:'2'};
 export const db={};
 export const useAuth=()=>({config,userData:{uid:'teacher-fixture',role:'teacher',name:'검증교사'}});
@@ -164,6 +164,8 @@ export const serverTimestamp=()=>({seconds:1790676000,nanoseconds:0});
 const snap=(key,value)=>({id:key.split('/').at(-1),exists:()=>value!==undefined,data:()=>structuredClone(value)});
 export const getDoc=async(reference)=>{fixture.reads.push(reference.path);return snap(reference.path,fixture.store[reference.path]);};
 export const getDocs=async(reference)=>{fixture.reads.push(reference.path);const docs=Object.entries(fixture.store).filter(([key])=>key.startsWith(reference.path+'/')&&!key.slice(reference.path.length+1).includes('/')).map(([key,value])=>snap(key,value));return {docs,empty:!docs.length,size:docs.length};};
+export const getDocFromServer=getDoc;
+export const getDocsFromServer=getDocs;
 export const setDoc=async(reference,payload,options)=>{
  const data=structuredClone(payload);fixture.writes.push({path:reference.path,data,options});
  if(fixture.pauseWrite){fixture.pauseWrite=false;await new Promise(resolve=>fixture.releaseWrite=resolve);}
@@ -174,6 +176,29 @@ export const setDoc=async(reference,payload,options)=>{
 };
 export const createManagedNotifications=async(_config,payload)=>{fixture.notifications.push(payload);return [];};
 export const getHttpsCallable=()=>{throw new Error('Callable use is outside this fixture');};
+export const callStudentDataService=()=>{throw new Error('Roster mutation is outside this fixture');};
+export const getAssessmentSemesterId=()=> '2026-2';
+export const buildAssessmentDefinitionId=(semesterId,kind,sourceId)=>kind.toLowerCase()+':'+semesterId+':'+sourceId;
+export const readAssessmentContentRevision=async()=>0;
+export const saveHistoryAssessmentSource=async(_config,sourceId,payload,expectedRevision)=>{
+ const reference={path:${JSON.stringify(scope)}+'/history_classrooms/'+sourceId};
+ const fields=Object.keys(payload).filter(key=>key!=='retryResetByStudentUid');
+ await setDoc(reference,payload,{mergeFields:fields});
+ return {contentRevision:expectedRevision+1};
+};
+export const deleteHistoryAssessmentSource=async()=>{throw new Error('Deletion is outside this fixture');};
+export const executeAssessmentManagementCommand=async(commandType,payload)=>{
+ fixture.commands.push({commandType,payload:structuredClone(payload)});
+ if(commandType==='resetAssessmentAttempt'){
+  const id=payload.definitionId.split(':').at(-1);
+  const key=Object.keys(fixture.store).find(key=>key.endsWith('/history_classrooms/'+id)||key==='history_classrooms/'+id);
+  await setDoc({path:key},{retryResetByStudentUid:{[payload.studentUid]:serverTimestamp()},updatedAt:serverTimestamp()},{merge:true});
+  return {};
+ }
+ if(commandType==='grantHistoryClassroomExemptions') return {createdCount:payload.recipientUids.length,exemptionIds:payload.recipientUids.map(uid=>'exemption-'+uid)};
+ throw new Error('Unexpected command '+commandType);
+};
+export const executeStudentAssessmentCommand=async()=>{throw new Error('Student mutation is outside this teacher fixture');};
 `;
 const component = JSON.stringify(
   path
@@ -198,7 +223,7 @@ const bundle = await build({
         build.onResolve(
           {
             filter:
-              /^firebase\/firestore$|(?:lib\/|^\.\/)(?:firebase|notifications)$|contexts\/AuthContext$/,
+              /^firebase\/firestore$|(?:lib\/|^\.\/)(?:firebase|notifications|assessmentLifecycle|assessmentRelease|studentProfileCommands)$|contexts\/AuthContext$/,
           },
           () => ({ path: "fixture-boundaries", namespace: "fixture" }),
         );
@@ -997,9 +1022,111 @@ try {
       "학생 배정을 먼저 저장해 주세요.",
     );
     assert.equal(await page.evaluate(() => window.__fixture.writes.length), 10);
+    await page.getByRole("button", { name: "취소", exact: true }).click();
+    // A lesson edited since publication is imported only by the explicit action.
+    await page.evaluate(
+      ({ legacyPath, original, scope }) => {
+        const f = window.__fixture;
+        delete f.store[legacyPath];
+        f.store[`${scope}/history_classrooms/refresh-fixture`] = original;
+        f.store["users/inactive-student"] = {
+          role: "student",
+          name: "전출학생",
+          grade: "3",
+          class: "2",
+          number: "20",
+          enrollmentStatus: "transferred",
+        };
+        f.store["users/pending-student"] = {
+          role: "student",
+          name: "승인대기학생",
+          grade: "3",
+          class: "2",
+          number: "21",
+          registrationApprovalStatus: "pending",
+        };
+        window.__remount();
+      },
+      { legacyPath, original: created.data, scope },
+    );
+    await page
+      .getByRole("button", { name: `${longTitle} 설정 수정`, exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "최신 수업 자료 반영", exact: true })
+      .click();
+    await page.getByText(/최신 학습지와 빈칸 2개를 반영합니다/).waitFor();
+    assert.equal(
+      await page.evaluate(() => window.__fixture.writes.length),
+      10,
+      "Refresh changes the draft only",
+    );
+    await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+    const refreshed = await waitWrite(page, 11);
+    assert.equal(refreshed.data.blanks[0].answer, "원본에서 수정된 정답");
+    assert.equal(
+      refreshed.data.pdfPageImages[0].imageUrl,
+      "/worksheet.svg?revision=2",
+    );
+    assert.equal(refreshed.data.blanks[0].id, created.data.blanks[0].id);
+    assert.equal(refreshed.data.blanks[0].left, created.data.blanks[0].left);
+    assert.equal(refreshed.data.blanks[0].top, created.data.blanks[0].top);
+
+    await page
+      .getByRole("button", { name: "면제권 관리", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "학급 단위 부여", exact: true })
+      .click();
+    const exemptionModal = page.locator("div.fixed.inset-0").last();
+    await exemptionModal.locator("select").nth(0).selectOption("3");
+    await exemptionModal.locator("select").nth(1).selectOption("2");
+    await page
+      .getByRole("button", { name: "추가학생 제외", exact: true })
+      .click();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "전출학생 제외", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "승인대기학생 제외", exact: true })
+        .count(),
+      0,
+    );
+    await exemptionModal
+      .getByPlaceholder("예: 학교 행사, 공결, 상담 등")
+      .fill("학급 활동 참여");
+    await exemptionModal
+      .getByRole("button", { name: "면제권 부여", exact: true })
+      .last()
+      .click();
+    await page.waitForFunction(() =>
+      window.__fixture.commands.some(
+        (command) => command.commandType === "grantHistoryClassroomExemptions",
+      ),
+    );
+    const granted = await page.evaluate(() => window.__fixture.commands.at(-1));
+    assert.equal(granted.payload.semesterId, "2026-2");
+    assert.equal(granted.payload.classId, "3-2");
+    assert.deepEqual(granted.payload.recipientUids, [
+      "student-1",
+      "student-2",
+      "student-3",
+    ]);
+    await page.screenshot({
+      path: path.join(evidence, `teacher-exemption-${viewport.width}.png`),
+      fullPage: true,
+    });
     assert.deepEqual(errors, [], "no runtime errors");
     assert(
-      alerts.every((message) => message === "역사교실 과제를 저장했습니다."),
+      alerts.every(
+        (message) =>
+          message === "역사교실 과제를 저장했습니다." ||
+          message === "3명에게 면제권을 부여했습니다.",
+      ),
       `unexpected alert: ${alerts.join(", ")}`,
     );
     const capture = await page.evaluate(() => ({

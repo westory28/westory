@@ -349,6 +349,8 @@ const HistoryClassroomAssignmentView: React.FC<
   const helpButtonRef = useRef<HTMLButtonElement | null>(null);
   const helpPopoverRef = useRef<HTMLDivElement | null>(null);
   const helpId = useId();
+  const wordListId = useId();
+  const [wordListOpen, setWordListOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const showHelp = !readOnly && !completed && helperItems.length > 0;
   const hintButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -763,6 +765,22 @@ const HistoryClassroomAssignmentView: React.FC<
 
     const viewport = viewportRef.current;
     const updateFitScale = () => {
+      const focusedInput = document.activeElement;
+      if (
+        focusedInput instanceof HTMLInputElement &&
+        viewport.contains(focusedInput) &&
+        !focusedInput.readOnly
+      ) {
+        // The tablet keyboard reduces the visible canvas, not the worksheet's
+        // reading scale. Scroll the active blank into that smaller canvas.
+        const fieldRect = focusedInput.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
+        if (fieldRect.bottom > viewportRect.bottom - 12)
+          viewport.scrollTop += fieldRect.bottom - viewportRect.bottom + 12;
+        else if (fieldRect.top < viewportRect.top + 12)
+          viewport.scrollTop += fieldRect.top - viewportRect.top - 12;
+        return;
+      }
       const availableWidth = Math.max(
         0,
         viewport.clientWidth - VIEWPORT_FIT_PADDING,
@@ -1157,7 +1175,7 @@ const HistoryClassroomAssignmentView: React.FC<
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {assignment.timeLimitMinutes > 0 && countdownLabel && (
+            {countdownLabel && (
               <div
                 className={`flex items-center gap-1 font-bold ${getCountdownToneClass(timeProgressPercent)}`}
               >
@@ -1413,6 +1431,51 @@ const HistoryClassroomAssignmentView: React.FC<
             >
               다음
             </button>
+          </div>
+        </div>
+        <div className="border-t border-gray-100">
+          <button
+            type="button"
+            aria-expanded={wordListOpen}
+            aria-controls={wordListId}
+            onClick={() => setWordListOpen((open) => !open)}
+            className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+          >
+            <span>
+              단어 목록{" "}
+              <span className="text-gray-500">
+                {assignment.answerOptions.length}개
+              </span>
+            </span>
+            <span aria-hidden="true">
+              {wordListOpen ? "접기 ∧" : "펼치기 ∨"}
+            </span>
+          </button>
+          <div
+            id={wordListId}
+            hidden={!wordListOpen}
+            role="region"
+            aria-label="단어 목록"
+            className="max-h-[min(24dvh,12rem)] overflow-y-auto overscroll-contain px-2 pb-3"
+          >
+            <div className="flex flex-wrap gap-2">
+              {assignment.answerOptions.map((option) => {
+                const isAnswered = normalizedAnsweredOptions.has(
+                  normalizeHistoryClassroomAnswer(option),
+                );
+                return (
+                  <span
+                    key={option}
+                    className={`inline-flex max-w-full rounded-lg border px-3 py-2 text-sm font-bold break-all ${isAnswered ? "border-blue-200 bg-blue-50 text-blue-900" : "border-gray-200 bg-gray-50 text-gray-700"}`}
+                  >
+                    {option}
+                  </span>
+                );
+              })}
+            </div>
+            {!assignment.answerOptions.length && (
+              <p className="text-sm text-gray-500">등록된 단어가 없습니다.</p>
+            )}
           </div>
         </div>
       </div>
@@ -1724,38 +1787,6 @@ const HistoryClassroomAssignmentView: React.FC<
             {lessonPath && <span>{lessonPath}</span>}
             <span>통과 기준 {assignment.passThresholdPercent}% 이상</span>
           </div>
-          {(readOnly || completed) && (
-            <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="text-sm font-bold text-gray-700">참고 보기</div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {assignment.answerOptions.map((option) => {
-                  const normalizedOption =
-                    normalizeHistoryClassroomAnswer(option);
-                  const isAnswered =
-                    Boolean(normalizedOption) &&
-                    normalizedAnsweredOptions.has(normalizedOption);
-
-                  return (
-                    <span
-                      key={option}
-                      className={`inline-flex max-w-full items-center rounded-full px-3 py-2 text-sm font-bold transition-colors ${
-                        isAnswered
-                          ? "border border-orange-300 bg-orange-50 text-orange-800 shadow-sm"
-                          : "border border-gray-200 bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      <span className="break-all">{option}</span>
-                    </span>
-                  );
-                })}
-              </div>
-              {!assignment.answerOptions.length && (
-                <div className="mt-3 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                  등록된 참고 보기가 없습니다.
-                </div>
-              )}
-            </div>
-          )}
         </aside>
       </div>
     </div>

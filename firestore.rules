@@ -319,11 +319,13 @@ service cloud.firestore {
     }
 
     function canReadHistoryClassroomExemption(data) {
+      // Enforce the session/maintenance fence once. Calling isAdmin and
+      // isTeacherRole here repeats the fence and can exceed the query budget.
       return canUseWestory()
         && (
-          data.uid == request.auth.uid
-          || isAdmin()
-          || isTeacherRole()
+          request.auth.token.email == "westoria28@gmail.com"
+          || (hasUserProfile() && userProfile().role == 'teacher')
+          || data.get('uid', '') == request.auth.uid
         );
     }
 

@@ -6,11 +6,12 @@
   "entry": "productionSource.js",
   "rootExports": [
     "executeCommand",
+    "getCommandStatus",
     "executeLessonCorePointCommand"
   ],
   "notes": [
     "Full deployed closure dependencies are retained to preserve existing canonical command adapters.",
-    "Only executeCommand and executeLessonCorePointCommand are attached to the root Functions entry; all other nested exports remain excluded.",
+    "Only executeCommand, getCommandStatus and executeLessonCorePointCommand are attached to the root Functions entry; all other nested exports remain excluded.",
     "Package files are excluded; dependencies resolve from the existing functions/package.json.",
     "Original SHA-256 hashes refer to downloaded deployment bytes; restored files use LF newlines.",
     "Isolated getWisEconomyState uses the current shared session contract; fresh live source generations verified on 2026-10-08T04:19:51.486Z. Seoul only; existing US query deployment is not a release target."
@@ -41,10 +42,11 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "576cf2677105a7df21e6540c689a86dc84e84fe65121f5e2b587c0a30c5e2ead",
+      "sha256": "71db6fa86aa7772d5ccce571bb8df8d0b9d4a33304bb72b6b257166cfa8550ce",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
-        "Preserve current lesson-source metadata in the History Classroom source command."
+        "Preserve current lesson-source metadata in the History Classroom source command.",
+        "Restore History Classroom reusable exemption tickets through canonical receipt-protected commands; add student-owned violation lock and preserve pass thresholds in new attempt/result snapshots."
       ]
     },
     {
@@ -405,6 +407,15 @@
         "Fill sparse public leaderboards up to five entries with canonically active zero-score accounts within configured public limits; preserve positive-score ties, test exclusions and positive-only podiums.",
         "Batch hall roster slot, enrollment and class hints in one read; preserve canonical membership checks, stale-hint fallback and existing non-hall/archive behavior."
       ]
+    },
+    {
+      "sourceFile": null,
+      "file": "historyClassroomExemptions.js",
+      "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "25343d546fa6fd7102989ea841efcb928b128dd169615c50bb11d530c35f6639",
+      "changes": [
+        "New canonical adapter, not restored legacy code: active semester/enrollment/class validated reusable grants, requests, reviews, and atomic compatible/canonical exemption results."
+      ]
     }
   ],
   "additionalDeploymentSources": [
@@ -412,6 +423,14 @@
       "functionName": "executeLessonCorePointCommand",
       "originalIndexSha256": "53fbcc68840be6fb83cff8ab45d88221e13aaa9a215445153839aad15d49163b",
       "comparison": "Before patch, normalized function bodies matched executeCommand archive exactly for executeLessonCorePointBusinessCommand, readEffectiveVisibleLessonCorePointCatalog, getLessonCorePointCompletion, assertLessonCorePointStudent, assertLessonCorePointActiveEnrollment."
+    },
+    {
+      "functionName": "getCommandStatus",
+      "sourceRegion": "asia-northeast3",
+      "sourceRevision": "getcommandstatus-00003-huv",
+      "sourceGeneration": "1789562589666007",
+      "originalIndexSha256": "b1e4d2e8137f26f789f1037850e668c5194b5089421225d1ee275b6869b672cf",
+      "comparison": "Live commandGateway.js and authorizeCommandGatewayActor match the local closure after LF normalization. Shared dependencies differ only in the reviewed assessment lifecycle changes, current 60-minute session policy, Admin initialization and unrelated core-point business logic. The status callable retains the same Seoul callable options."
     }
   ],
   "isolatedQueryExports": [

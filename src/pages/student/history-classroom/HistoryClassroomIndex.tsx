@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -38,11 +38,12 @@ import {
 } from "../../../lib/semesterScope";
 import { readHistoryClassroomPendingSubmission } from "../../../lib/historyClassroomAttemptRecovery";
 import { readCanonicalHistoryResults } from "../../../lib/studentAssessmentResults";
+import { lockHistoryClassroomAttempt } from "../../../lib/assessmentLifecycle";
 
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
 const HISTORY_CLASSROOM_ATTEMPT_PREFIX = "westoryHistoryClassroomAttempt";
 
-const readPendingRecoveryResultId = (
+const readCurrentAttemptDraft = (
   assignment: HistoryClassroomAssignment,
   uid: string,
   scope: { year: string; semester: string },
@@ -77,12 +78,10 @@ const readPendingRecoveryResultId = (
           : Number(draft.savedAt) <= resetAtMs)) ||
       typeof draft.resultId !== "string" ||
       !draft.resultId.trim() ||
-      draft.resultId.includes("/") ||
-      Array.isArray(draft.pendingSubmission?.answers) ||
-      !readHistoryClassroomPendingSubmission(draft.pendingSubmission)
+      draft.resultId.includes("/")
     )
       return null;
-    return draft.resultId;
+    return draft;
   } catch {
     return null;
   }
@@ -92,6 +91,7 @@ type StudentHistoryClassroomStatus =
   | "retry"
   | "passed"
   | "cooldown"
+  | "locked"
   | "closed";
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -222,6 +222,13 @@ const isExemptionUsedForAssignment = (
     exemption.usedAssignmentId === assignmentId);
 
 const getStatusMeta = (status: StudentHistoryClassroomStatus) => {
+  if (status === "locked") {
+    return {
+      label: "교사 확인 필요",
+      textClassName: "text-red-700",
+      buttonClassName: "bg-red-50 text-red-700",
+    };
+  }
   if (status === "passed") {
     return {
       label: "통과 완료",
@@ -275,12 +282,55 @@ const HistoryClassroomIndex: React.FC = () => {
     string | null
   >(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [nowMs, setNowMs] = useState(Date.now());
+  const syncedViolations = useRef(new Set<string>());
+  const syncingViolations = useRef(new Set<string>());
+  const [violationSyncVersion, setViolationSyncVersion] = useState(0);
 
   useEffect(() => {
     const timerId = window.setInterval(() => setNowMs(Date.now()), 60000);
     return () => window.clearInterval(timerId);
   }, []);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "hidden") {
+        setRefreshVersion((value) => value + 1);
+      }
+    };
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!studentUid) return;
+    // Refresh after teacher grants/reviews a ticket while this list is open.
+    const unsubscribers = [
+      "history_classroom_exemptions",
+      "history_classroom_exemption_requests",
+    ].map((collectionName) => {
+      let initial = true;
+      return onSnapshot(
+        query(
+          collection(db, getSemesterCollectionPath(config, collectionName)),
+          where("uid", "==", studentUid),
+        ),
+        () => {
+          if (initial) initial = false;
+          else setRefreshVersion((value) => value + 1);
+        },
+        (error) =>
+          console.warn("Failed to refresh history classroom tickets", error),
+      );
+    });
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [config, studentUid]);
 
   useEffect(() => {
     let cancelled = false;
@@ -291,6 +341,7 @@ const HistoryClassroomIndex: React.FC = () => {
         return;
       }
       setLoading(true);
+      setLoadError("");
       try {
         const loadAssignedSnapshots = async (collectionPath: string) => {
           const accessFieldPath = `targetStudentAccessMap.${studentUid}`;
@@ -300,13 +351,13 @@ const HistoryClassroomIndex: React.FC = () => {
                 collection(db, collectionPath),
                 where("targetStudentUid", "==", studentUid),
               ),
-            ).catch(() => null),
+            ),
             getDocs(
               query(
                 collection(db, collectionPath),
                 where(accessFieldPath, "==", true),
               ),
-            ).catch(() => null),
+            ),
           ]);
 
           return [
@@ -348,7 +399,12 @@ const HistoryClassroomIndex: React.FC = () => {
         if (!loadedAssignments.length) {
           assignmentCollectionPath = "history_classrooms";
           loadedAssignments = normalizeVisibleAssignments(
-            await loadAssignedSnapshots(assignmentCollectionPath),
+            await loadAssignedSnapshots(assignmentCollectionPath).catch(
+              (error) => {
+                if (error?.code === "permission-denied") return [];
+                throw error;
+              },
+            ),
           );
         }
         if (cancelled) return;
@@ -429,25 +485,13 @@ const HistoryClassroomIndex: React.FC = () => {
           }
         };
 
-        const loadOwnSemesterDocs = async (
-          collectionName: string,
-          ownerFields: string[],
-        ) => {
+        const loadOwnSemesterDocs = async (collectionName: string) => {
           const path = getSemesterCollectionPath(config, collectionName);
-          const snapshots = await Promise.all(
-            ownerFields.map((fieldName) =>
-              getDocs(
-                query(collection(db, path), where(fieldName, "==", studentUid)),
-              ).catch(() => null),
-            ),
+          // The rules and the server ticket contract both authorize by uid.
+          const snapshot = await getDocs(
+            query(collection(db, path), where("uid", "==", studentUid)),
           );
-          return Array.from(
-            new Map(
-              snapshots
-                .flatMap((snapshot) => snapshot?.docs || [])
-                .map((docSnap) => [docSnap.id, docSnap]),
-            ).values(),
-          );
+          return snapshot.docs;
         };
 
         const [resultDocs, exemptionDocs, requestDocs] = await Promise.all([
@@ -460,17 +504,8 @@ const HistoryClassroomIndex: React.FC = () => {
             }
             return docs;
           })(),
-          loadOwnSemesterDocs("history_classroom_exemptions", [
-            "uid",
-            "studentUid",
-            "ownerUid",
-            "recipientUid",
-          ]),
-          loadOwnSemesterDocs("history_classroom_exemption_requests", [
-            "uid",
-            "studentUid",
-            "requesterUid",
-          ]),
+          loadOwnSemesterDocs("history_classroom_exemptions"),
+          loadOwnSemesterDocs("history_classroom_exemption_requests"),
         ]);
 
         const grouped: Record<string, HistoryClassroomResult[]> = {};
@@ -498,7 +533,9 @@ const HistoryClassroomIndex: React.FC = () => {
             ];
           });
         Object.keys(grouped).forEach((key) => {
-          grouped[key].sort(compareResultCreatedAt);
+          grouped[key] = Array.from(
+            new Map(grouped[key].map((result) => [result.id, result])).values(),
+          ).sort(compareResultCreatedAt);
         });
         if (cancelled) return;
         setResultsByAssignment(grouped);
@@ -521,6 +558,11 @@ const HistoryClassroomIndex: React.FC = () => {
         );
       } catch (error) {
         console.error("Failed to load history classroom assignments:", error);
+        if (!cancelled) {
+          setLoadError(
+            "역사교실 정보를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.",
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -531,7 +573,74 @@ const HistoryClassroomIndex: React.FC = () => {
       cancelled = true;
       unsubscribeAssignments.forEach((unsubscribe) => unsubscribe());
     };
-  }, [config, studentUid]);
+  }, [config, studentUid, refreshVersion]);
+
+  useEffect(() => {
+    if (!studentUid || navigator.onLine === false) return;
+    let active = true;
+    for (const assignment of assignments) {
+      const draft = readCurrentAttemptDraft(
+        assignment,
+        studentUid,
+        getYearSemester(config),
+        getHistoryClassroomStudentRetryResetMs(assignment, studentUid),
+      );
+      if (
+        !draft?.attemptId ||
+        draft.attemptId !== draft.resultId ||
+        !["VISIBILITY_HIDDEN", "NAVIGATION"].includes(draft.pendingViolation)
+      )
+        continue;
+      const key = `${studentUid}:${draft.attemptId}`;
+      if (
+        syncedViolations.current.has(key) ||
+        syncingViolations.current.has(key)
+      )
+        continue;
+      syncingViolations.current.add(key);
+      void lockHistoryClassroomAttempt({
+        attemptId: draft.attemptId,
+        reason: draft.pendingViolation,
+      })
+        .then((result) => {
+          if (!active) return;
+          syncedViolations.current.add(key);
+          if (result.status !== "SUBMITTED") return;
+          const current = readCurrentAttemptDraft(
+            assignment,
+            studentUid,
+            getYearSemester(config),
+            getHistoryClassroomStudentRetryResetMs(assignment, studentUid),
+          );
+          if (current?.attemptId === draft.attemptId) {
+            removeStorage(
+              `${HISTORY_CLASSROOM_ATTEMPT_PREFIX}:${assignment.id}:${studentUid}`,
+            );
+            setRefreshVersion((value) => value + 1);
+          }
+        })
+        .catch((error) =>
+          console.warn(
+            "History classroom exit will sync after reconnection",
+            error,
+          ),
+        )
+        .finally(() => {
+          syncingViolations.current.delete(key);
+          if (!active) setViolationSyncVersion((value) => value + 1);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [
+    assignments,
+    config,
+    studentUid,
+    refreshVersion,
+    nowMs,
+    violationSyncVersion,
+  ]);
 
   const handleRequestExemption = async (
     assignmentId: string,
@@ -633,12 +742,22 @@ const HistoryClassroomIndex: React.FC = () => {
         const resetAtMs = studentUid
           ? getHistoryClassroomStudentRetryResetMs(assignment, studentUid)
           : null;
-        const pendingResultId = readPendingRecoveryResultId(
+        const attemptDraft = readCurrentAttemptDraft(
           assignment,
           studentUid,
           getYearSemester(config),
           resetAtMs,
         );
+        const hasViolation =
+          attemptDraft?.pendingViolation === "VISIBILITY_HIDDEN" ||
+          attemptDraft?.pendingViolation === "NAVIGATION";
+        const pendingResultId =
+          attemptDraft &&
+          !hasViolation &&
+          !Array.isArray(attemptDraft.pendingSubmission?.answers) &&
+          readHistoryClassroomPendingSubmission(attemptDraft.pendingSubmission)
+            ? (attemptDraft.resultId as string)
+            : null;
         const matchingResult = pendingResultId
           ? Object.values(resultsByAssignment)
               .flat()
@@ -679,13 +798,15 @@ const HistoryClassroomIndex: React.FC = () => {
         const pastDue = isHistoryClassroomPastDue(assignment, nowMs);
         const status: StudentHistoryClassroomStatus = passedAttempt
           ? "passed"
-          : pastDue
-            ? "closed"
-            : remainMinutes
-              ? "cooldown"
-              : latest
-                ? "retry"
-                : "available";
+          : hasViolation
+            ? "locked"
+            : pastDue
+              ? "closed"
+              : remainMinutes
+                ? "cooldown"
+                : latest
+                  ? "retry"
+                  : "available";
         const assignedCount =
           getHistoryClassroomAssignedStudentUids(assignment).length;
         const assignmentReason = String(
@@ -757,6 +878,7 @@ const HistoryClassroomIndex: React.FC = () => {
         (item.canRecoverPending && !item.hasRecoveredResult) ||
         item.status === "available" ||
         item.status === "retry" ||
+        item.status === "locked" ||
         item.status === "cooldown",
     );
     return {
@@ -772,6 +894,23 @@ const HistoryClassroomIndex: React.FC = () => {
   if (loading) {
     return (
       <InlineLoading message="역사교실을 불러오는 중입니다." showWarning />
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <p role="alert" className="mb-4 text-sm text-red-700">
+          {loadError}
+        </p>
+        <button
+          type="button"
+          onClick={() => setRefreshVersion((value) => value + 1)}
+          className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
+        >
+          다시 불러오기
+        </button>
+      </div>
     );
   }
 
@@ -812,6 +951,16 @@ const HistoryClassroomIndex: React.FC = () => {
           </div>
         </div>
       </section>
+
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={() => setRefreshVersion((value) => value + 1)}
+          className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
+        >
+          새로고침
+        </button>
+      </div>
 
       {groupedItems.length > 0 ? (
         <section className="space-y-4">
@@ -942,8 +1091,8 @@ const HistoryClassroomIndex: React.FC = () => {
                           ) : (
                             item.latest && (
                               <span>
-                                최근 {item.latest.score}/{item.latest.total}문제
-                                · {getResultLabel(item.latest.status)}
+                                최근 {item.latest.score}/{item.latest.total}
+                                문제 · {getResultLabel(item.latest.status)}
                               </span>
                             )
                           )}
