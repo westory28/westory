@@ -1,5 +1,9 @@
 /** Exercises the actual teacher component with an in-memory Firestore boundary.
  * No live Firebase reads, writes, notifications, or callable requests are made.
+ * Manual browser QA: node scripts/verify-history-classroom-teacher-browser.mjs --serve --port=4176
+ * Scenarios: /?scenario=dashboard, new, failure, or edit. Use the app's controls
+ * to open forms; the fixture toolbar only seeds scenarios and arms one failure.
+ * --serve never imports Playwright, starts a browser, or downloads assets.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -12,28 +16,35 @@ import http from "node:http";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(path.join(root, "package.json"));
 const { build } = require("esbuild");
+const serveOnly = process.argv.includes("--serve");
+const portArgument = process.argv.find((argument) => argument.startsWith("--port="));
+const servePort = Number(portArgument?.split("=")[1] || process.env.HISTORY_CLASSROOM_FIXTURE_PORT || 4176);
+assert(Number.isInteger(servePort) && servePort >= 0 && servePort <= 65535, "Fixture port must be an integer from 0 to 65535");
 let playwright;
-try {
-  playwright = require("playwright");
-} catch {
-  playwright = require(
-    process.env.PLAYWRIGHT_MODULE_PATH ||
-      path.join(
-        os.homedir(),
-        ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
-      ),
-  );
+if (!serveOnly) {
+  try {
+    playwright = require("playwright");
+  } catch {
+    playwright = require(
+      process.env.PLAYWRIGHT_MODULE_PATH ||
+        path.join(
+          os.homedir(),
+          ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
+        ),
+    );
+  }
 }
 const evidence = path.join(
   root,
   ".superloopy/sessions/history-classroom-followup/evidence",
 );
-await fs.mkdir(evidence, { recursive: true });
-const cache = path.join(os.tmpdir(), "westory-tailwind-fixture.js");
+if (!serveOnly) await fs.mkdir(evidence, { recursive: true });
+const cache = process.env.TAILWIND_FIXTURE_PATH || path.join(os.tmpdir(), "westory-tailwind-fixture.js");
 let tailwind;
 try {
   tailwind = await fs.readFile(cache, "utf8");
 } catch {
+  if (serveOnly) throw new Error(`Offline fixture requires a local Tailwind script: ${cache}. Set TAILWIND_FIXTURE_PATH to an existing local file.`);
   const response = await fetch("https://cdn.tailwindcss.com/3.4.17");
   assert(response.ok);
   tailwind = await response.text();
@@ -149,8 +160,53 @@ const store = {
     number: "3",
   },
 };
+// The server mode uses only synthetic students. New/failure scenarios start
+// with an empty dashboard; use the actual app's new/edit controls to enter forms.
+const serveStore = structuredClone(store);
+delete serveStore["users/student-1"];
+const syntheticStudents = Array.from({ length: 34 }, (_, index) => ({
+  uid: `synthetic-student-${String(index + 1).padStart(2, "0")}`,
+  name: `합성학생${String(index + 1).padStart(2, "0")}`,
+  number: String(index + 1),
+}));
+for (const student of syntheticStudents) {
+  serveStore[`users/${student.uid}`] = { role: "student", name: student.name, grade: "3", class: "2", number: student.number };
+}
+const assignedStudents = syntheticStudents.slice(0, 24);
+const seededAssignmentPath = `${scope}/history_classrooms/synthetic-long-assignment`;
+serveStore[seededAssignmentPath] = {
+  title: longTitle,
+  sourceType: "lesson", lessonUnitId: "a", lessonTitle: longTitle,
+  lessonUnitPath: ["II. 고대 사회", "국가의 형성", longTitle],
+  mapResourceId: "", mapTitle: "", description: "",
+  pdfPageImages: pageImages, pdfRegions: [],
+  blanks: originalBlanks.map((blank) => ({ id: blank.id, page: blank.page,
+    left: blank.leftRatio * 1000, top: blank.topRatio * 1400,
+    width: blank.widthRatio * 1000, height: blank.heightRatio * 1400,
+    answer: blank.answer, prompt: blank.prompt, source: blank.source })),
+  answerOptions: originalBlanks.map((blank) => blank.answer),
+  timeLimitMinutes: 10, cooldownMinutes: 5, dueWindowDays: null, passThresholdPercent: 90,
+  targetGrade: "3", targetClass: "2", targetStudentUid: assignedStudents[0].uid,
+  targetStudentUids: assignedStudents.map((student) => student.uid),
+  targetStudentNames: assignedStudents.map((student) => student.name),
+  targetStudentName: assignedStudents.map((student) => student.name).join(", "),
+  targetStudentNumber: assignedStudents.map((student) => student.number).join(", "),
+  targetStudentAccessMap: Object.fromEntries(assignedStudents.map((student) => [student.uid, true])),
+  targetStudentReasons: Object.fromEntries(assignedStudents.map((student, index) => [student.uid,
+    index % 3 === 0 ? "지각" : index % 3 === 1 ? "수업 태도" : "합성 검증용 개별 사유"])),
+  contentRevision: 1, isPublished: true,
+  createdAt: { seconds: 1792022400, nanoseconds: 0 },
+  updatedAt: { seconds: 1792022400, nanoseconds: 0 },
+  publishedAt: { seconds: 1792022400, nanoseconds: 0 }, dueAt: null,
+};
 const mock = `
-const fixture=window.__fixture={store:${JSON.stringify(store)},writes:[],notifications:[],reads:[],alerts:[],commands:[]};
+const fixture=window.__fixture={store:${JSON.stringify(serveOnly ? serveStore : store)},writes:[],successfulWrites:[],failedWrites:[],notifications:[],reads:[],alerts:[],commands:[]};
+const serveMode=${serveOnly};
+fixture.scenario=serveMode ? new URLSearchParams(window.location.search).get('scenario') || 'dashboard' : 'automated';
+if(serveMode && ['new','failure'].includes(fixture.scenario)) delete fixture.store[${JSON.stringify(seededAssignmentPath)}];
+if(serveMode && fixture.scenario==='failure') fixture.failNextWrite=true;
+const changed=()=>window.dispatchEvent(new CustomEvent('fixture-change'));
+if(serveMode){window.alert=(message)=>{fixture.alerts.push(String(message));changed();};changed();}
 export const config={year:'2026',semester:'2'};
 export const db={};
 export const useAuth=()=>({config,userData:{uid:'teacher-fixture',role:'teacher',name:'검증교사'}});
@@ -167,14 +223,15 @@ export const getDocs=async(reference)=>{fixture.reads.push(reference.path);const
 export const getDocFromServer=getDoc;
 export const getDocsFromServer=getDocs;
 export const setDoc=async(reference,payload,options)=>{
- const data=structuredClone(payload);fixture.writes.push({path:reference.path,data,options});
+ const data=structuredClone(payload);fixture.writes.push({path:reference.path,data,options});changed();
  if(fixture.pauseWrite){fixture.pauseWrite=false;await new Promise(resolve=>fixture.releaseWrite=resolve);}
- if(fixture.failNextWrite){fixture.failNextWrite=false;throw new Error('Expected fixture write failure');}
+ if(fixture.failNextWrite){fixture.failNextWrite=false;fixture.failedWrites.push({path:reference.path,data});changed();throw new Error('Expected fixture write failure');}
  if(options?.mergeFields){fixture.store[reference.path]={...(fixture.store[reference.path]||{}),...Object.fromEntries(options.mergeFields.map(key=>[key,data[key]]))};}
  else if(options?.merge){const previous=fixture.store[reference.path]||{};fixture.store[reference.path]={...previous,...data,retryResetByStudentUid:{...previous.retryResetByStudentUid,...data.retryResetByStudentUid}};}
  else fixture.store[reference.path]=data;
+ fixture.successfulWrites.push({path:reference.path,data});changed();
 };
-export const createManagedNotifications=async(_config,payload)=>{fixture.notifications.push(payload);return [];};
+export const createManagedNotifications=async(_config,payload)=>{fixture.notifications.push(payload);changed();return [];};
 export const getHttpsCallable=()=>{throw new Error('Callable use is outside this fixture');};
 export const callStudentDataService=()=>{throw new Error('Roster mutation is outside this fixture');};
 export const getAssessmentSemesterId=()=> '2026-2';
@@ -188,7 +245,7 @@ export const saveHistoryAssessmentSource=async(_config,sourceId,payload,expected
 };
 export const deleteHistoryAssessmentSource=async()=>{throw new Error('Deletion is outside this fixture');};
 export const executeAssessmentManagementCommand=async(commandType,payload)=>{
- fixture.commands.push({commandType,payload:structuredClone(payload)});
+ fixture.commands.push({commandType,payload:structuredClone(payload)});changed();
  if(commandType==='resetAssessmentAttempt'){
   const id=payload.definitionId.split(':').at(-1);
   const key=Object.keys(fixture.store).find(key=>key.endsWith('/history_classrooms/'+id)||key==='history_classrooms/'+id);
@@ -251,11 +308,65 @@ const css = (
   .join("\n")
   .replaceAll(/@import[^;]+;/g, "")
   .replaceAll(/@tailwind[^;]+;/g, "");
-const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}body{margin:0}#root{min-width:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
+const fixtureShellCss = `
+#fixture-shell{display:grid;grid-template-columns:224px minmax(0,1fr);min-height:100dvh}
+#fixture-sidebar{width:224px;box-sizing:border-box;padding:24px 16px;background:#fff;border-right:1px solid #e2e8f0;position:sticky;top:0;height:100dvh}
+#fixture-sidebar strong{display:block;color:#2563eb;font-size:24px;margin-bottom:24px}
+#fixture-sidebar p{margin:16px 0;color:#475569;font-size:14px}
+#fixture-sidebar [aria-current]{padding:12px;border-radius:8px;background:#eff6ff;color:#2563eb}
+#fixture-main{min-width:0}
+#fixture-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;background:#fff;border-bottom:1px solid #e2e8f0;font-size:12px}
+#fixture-toolbar nav{display:flex;flex-wrap:wrap;gap:4px}
+#fixture-toolbar a,#fixture-toolbar button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;text-decoration:none}
+#fixture-toolbar a[aria-current]{background:#eff6ff;color:#2563eb;border-color:#2563eb}
+#fixture-toolbar button:focus-visible,#fixture-toolbar a:focus-visible,#fixture-records summary:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+#fixture-status{flex-basis:100%;overflow-wrap:anywhere;color:#475569}
+#fixture-records{margin:16px;padding:12px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;min-width:0}
+#fixture-records summary{min-height:44px;cursor:pointer;font-weight:700;color:#334155}
+#fixture-records p{font-size:12px;color:#475569}
+#fixture-records pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:480px;overflow:auto}
+@media(max-width:768px){#fixture-shell{grid-template-columns:minmax(0,1fr)}#fixture-sidebar{display:none}}
+`;
+const fixtureControls = `
+<div id="fixture-toolbar" aria-label="합성 QA 도구">
+  <strong>합성 QA</strong>
+  <nav aria-label="QA 시나리오">
+    <a href="/?scenario=dashboard" data-scenario="dashboard">대시보드</a>
+    <a href="/?scenario=new" data-scenario="new">신규 등록</a>
+    <a href="/?scenario=failure" data-scenario="failure">저장 실패·재시도</a>
+    <a href="/?scenario=edit" data-scenario="edit">편집</a>
+  </nav>
+  <button type="button" id="fixture-fail-once">다음 저장 1회 실패</button>
+  <button type="button" id="fixture-clear-records">QA 기록 지우기</button>
+  <span id="fixture-status" role="status" aria-live="polite"></span>
+</div>`;
+const fixtureRecords = `<details id="fixture-records"><summary id="fixture-records-summary">QA 기록</summary><p>저장과 알림은 이 페이지 메모리에만 기록됩니다. 새로고침하면 초기화됩니다.</p><pre id="fixture-records-json" aria-label="QA 저장 payload와 처리 기록"></pre></details>`;
+const fixtureUiScript = `
+const updateFixtureRecords=()=>{
+ const fixture=window.__fixture;if(!fixture)return;
+ const data={scenario:fixture.scenario,writeAttempts:fixture.writes.length,successfulWrites:fixture.successfulWrites.length,failedWrites:fixture.failedWrites.length,notifications:fixture.notifications.length,notificationRecipients:fixture.notifications.reduce((sum,item)=>sum+(item.recipientUids?.length||0),0),failNextWrite:!!fixture.failNextWrite,lastWritePath:fixture.writes.at(-1)?.path||null,payload:fixture.writes.at(-1)?.data||null,writes:fixture.writes,notificationPayloads:fixture.notifications,alerts:fixture.alerts,commands:fixture.commands};
+ document.getElementById('fixture-records-summary').textContent='QA 기록 · 저장 시도 '+data.writeAttempts+' / 성공 '+data.successfulWrites+' / 실패 '+data.failedWrites+' · 알림 '+data.notifications+'회';
+ document.getElementById('fixture-records-json').textContent=JSON.stringify(data,null,2);
+ const hint=['new','failure'].includes(fixture.scenario)?'앱의 새 역사교실 버튼으로 등록을 시작하세요.':'긴 제목 과제 1개 · 합성 학생 34명 · 배정 24명. 앱의 행 수정 버튼으로 편집하세요.';
+ document.getElementById('fixture-status').textContent=(fixture.failNextWrite?'다음 저장은 합성 오류로 1회 실패합니다. ':'')+hint+(fixture.alerts.length?' 최근 메시지: '+fixture.alerts.at(-1):'');
+ document.querySelectorAll('[data-scenario]').forEach(link=>{if(link.dataset.scenario===fixture.scenario)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
+};
+window.addEventListener('fixture-change',updateFixtureRecords);
+document.getElementById('fixture-fail-once').addEventListener('click',()=>{if(window.__fixture){window.__fixture.failNextWrite=true;updateFixtureRecords();}});
+document.getElementById('fixture-clear-records').addEventListener('click',()=>{const fixture=window.__fixture;if(!fixture)return;for(const key of ['writes','successfulWrites','failedWrites','notifications','alerts','commands'])fixture[key].length=0;updateFixtureRecords();});
+`;
+const fixtureBody = serveOnly
+  ? `<div id="fixture-shell"><aside id="fixture-sidebar" aria-label="합성 교사 사이드바"><strong>Westory</strong><p>교사 포털 · 합성 화면</p><p>대시보드</p><p>수업 관리</p><p aria-current="page">역사교실</p><p>학생 관리</p><p>설정</p><p>가로 폭 224px</p></aside><div id="fixture-main">${fixtureControls}<div id="root"></div>${fixtureRecords}</div></div><script>${fixtureUiScript}</script>`
+  : '<div id="root"></div>';
+const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>역사교실 합성 QA</title><script src="/tailwind.js"></script><style>${css}body{margin:0}#root{min-width:0}${serveOnly ? fixtureShellCss : ""}</style>${fixtureBody}<script type="module" src="/fixture.js"></script></html>`;
 const svg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1400"><rect width="1000" height="1400" fill="white"/><text x="100" y="100" font-size="36">교사 자료 검증</text></svg>';
 const server = http.createServer((req, res) => {
   const route = req.url.split("?")[0];
+  res.setHeader("Cache-Control", "no-store");
+  // Block external fonts, images, frames and network calls in server-only QA.
+  // Tailwind's local browser compiler requires inline styles/scripts and eval.
+  if (serveOnly) res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:");
   res.setHeader(
     "Content-Type",
     route.endsWith(".js")
@@ -274,7 +385,22 @@ const server = http.createServer((req, res) => {
           : html,
   );
 });
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+await new Promise((resolve, reject) => {
+  server.once("error", reject);
+  server.listen(serveOnly ? servePort : 0, "127.0.0.1", resolve);
+});
+if (serveOnly) {
+  const base = `http://127.0.0.1:${server.address().port}`;
+  console.log(`History Classroom fixture ready (HTTP server only; synthetic data; external requests blocked): ${base}/?scenario=dashboard`);
+  console.log(`Scenarios: ${base}/?scenario=new | ${base}/?scenario=failure | ${base}/?scenario=edit`);
+  console.log("Use the app's new/edit controls; inspect the QA records panel for payloads and synthetic write/notification counts. Restart this server after source changes.");
+  await new Promise((resolve) => {
+    const stop = () => { server.closeAllConnections(); server.close(resolve); };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
+  process.exit(0);
+}
 const browser = await playwright.chromium.launch({
   channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
   headless: true,
@@ -448,7 +574,9 @@ try {
     );
     await page.getByPlaceholder("이름으로 전체 학생 검색").fill("검증학생");
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
-    const reasonSelect = page.getByLabel("검증학생 배정 사유", { exact: true });
+    assert.equal(await page.getByLabel("검증학생 배정 사유", { exact: true }).count(), 0, "A student is not added without a reason");
+    await page.getByText("배정 사유를 선택해 주세요.", { exact: true }).waitFor();
+    const reasonSelect = page.getByLabel("추가할 학생 배정 사유", { exact: true });
     assert.deepEqual(await reasonSelect.locator("option").allTextContents(), [
       "사유 선택",
       "1인 1역 및 청소 안함",
@@ -458,9 +586,7 @@ try {
       "기타",
     ]);
     await reasonSelect.selectOption("__other__");
-    await page
-      .getByRole("button", { name: "역사교실 저장", exact: true })
-      .click();
+    await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     assert.equal(
       await page.evaluate(() => window.__fixture.writes.length),
       0,
@@ -479,14 +605,20 @@ try {
       fullPage: true,
     });
     await page
-      .getByLabel("검증학생 기타 사유", { exact: true })
+      .getByLabel("추가할 학생 기타 사유", { exact: true })
       .fill("교사가 작성한 세부 사유");
     await reasonSelect.selectOption("지각");
     assert.equal(
-      await page.getByLabel("검증학생 기타 사유", { exact: true }).count(),
+      await page.getByLabel("추가할 학생 기타 사유", { exact: true }).count(),
       0,
       "Standard reasons do not show a free text field",
     );
+    await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
+    const assignedReason = page.getByLabel("검증학생 배정 사유", { exact: true });
+    assert.equal(await assignedReason.inputValue(), "지각");
+    await assignedReason.fill("같은 행에서 직접 수정한 사유");
+    assert.equal(await assignedReason.inputValue(), "같은 행에서 직접 수정한 사유");
+    await assignedReason.fill("지각");
     await page
       .getByRole("button", { name: "역사교실 저장", exact: true })
       .click();
@@ -579,12 +711,12 @@ try {
     );
     await page
       .getByLabel("검증학생 배정 사유", { exact: true })
-      .selectOption("__other__");
+      .fill("");
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     assert.equal(
       await page.evaluate(() => window.__fixture.writes.length),
       1,
-      "Edit other reason is required",
+      "An edited reason cannot be cleared",
     );
     await page.screenshot({
       path: path.join(
@@ -594,7 +726,7 @@ try {
       fullPage: true,
     });
     await page
-      .getByLabel("검증학생 기타 사유", { exact: true })
+      .getByLabel("검증학생 배정 사유", { exact: true })
       .fill("기존 자유 입력 사유를 유지합니다");
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const preserved = await waitWrite(page, 2);
@@ -632,6 +764,7 @@ try {
           pdfRegions: [],
           blanks: map.pdfBlanks,
           answerOptions: map.pdfBlanks.map((blank) => blank.answer),
+          targetStudentReasons: {},
         });
         window.__fixture.store[`${scope}/map_resources/map-1`].pdfBlanks = [];
         window.__remount();
@@ -643,22 +776,16 @@ try {
       .click();
     assert.equal(
       await page.getByLabel("검증학생 배정 사유", { exact: true }).inputValue(),
-      "__other__",
+      "",
+      "An untouched legacy assignment may have no saved reason",
     );
-    assert.equal(
-      await page.getByLabel("검증학생 기타 사유", { exact: true }).inputValue(),
-      "기존 자유 입력 사유를 유지합니다",
-    );
-    await page
-      .getByLabel("검증학생 배정 사유", { exact: true })
-      .selectOption("");
     assert.equal(await page.locator("#history-edit-source-type").count(), 0);
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const mapped = await waitWrite(page, 3);
     assert.equal(
       mapped.data.targetStudentReasons["student-1"] || "",
       "",
-      "Unselected reasons remain allowed for compatibility",
+      "Untouched legacy reasons remain allowed for compatibility",
     );
     assert.equal(mapped.data.sourceType, "map");
     assert.equal(mapped.data.mapResourceId, "map-1");
@@ -891,7 +1018,7 @@ try {
     await page.locator('input[type="number"]').first().fill("22");
     await page
       .getByLabel("검증학생 배정 사유", { exact: true })
-      .selectOption("수업 태도");
+      .fill("수업 태도");
     await page.evaluate(() => (window.__fixture.pauseWrite = true));
     const resetButton = pending.getByRole("button", {
       name: "검증학생 재응시 제한 리셋",
@@ -1038,6 +1165,7 @@ try {
     await page
       .getByRole("button", { name: "배정 학생 추가", exact: true })
       .click();
+    await page.getByLabel("추가할 학생 배정 사유", { exact: true }).selectOption("수업 태도");
     await page.getByPlaceholder("학년 반 번호 또는 이름 검색").fill("추가학생");
     await page.getByRole("button", { name: /추가학생.*3-2/ }).click();
     const unsavedReset = page

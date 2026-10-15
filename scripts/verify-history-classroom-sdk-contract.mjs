@@ -13,7 +13,9 @@ import { build } from "esbuild";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(path.join(root, "package.json"));
+const { normalizeAssessmentPayload } = require("./functions/productionGateway/assessmentLifecycle.js");
 const epoch = Math.floor(Date.now() / 1000);
+const authTime = epoch - 10 * 60;
 const uid = "synthetic-history-teacher";
 const projectId = "history-quiz-yongsin";
 const generation = "w1r2-2026-08-09";
@@ -27,7 +29,7 @@ const idToken = [
     aud: projectId,
     sub: uid,
     user_id: uid,
-    auth_time: epoch,
+    auth_time: authTime,
     iat: epoch,
     exp: epoch + 3600,
     firebase: { sign_in_provider: "custom", identities: {} },
@@ -36,7 +38,7 @@ const idToken = [
 ].join(".");
 const session = {
   status: "active",
-  authTime: epoch,
+  authTime,
   authorityGeneration: generation,
   protocolVersion: 2,
   revision,
@@ -118,6 +120,26 @@ const server = http.createServer(async (request, response) => {
       },
       "The real session helper injects the validated proof",
     );
+    if (["upsertHistoryClassroomSource", "createAssessmentDefinition", "updateAssessmentDefinition", "transitionAssessmentDefinition"].includes(data.commandType)) {
+      assert.equal(name, "executeCommand");
+      const normalized = normalizeAssessmentPayload(data.commandType, data.payload);
+      if (data.commandType === "upsertHistoryClassroomSource") {
+        assert.equal(normalized.source.blanks.length, 28);
+        assert.equal(normalized.source.targetStudentUids.length, 2);
+        assert.equal(normalized.source.passThresholdPercent, 90);
+        assert.equal(normalized.source.timeLimitMinutes, 10);
+        assert.equal(normalized.source.cooldownMinutes, 5);
+        assert.equal(normalized.source.publishedAt, "2099-01-01T00:00:00.000Z");
+        assert.equal(normalized.source.dueAt, null);
+        assert.equal("createdAt" in normalized.source, false);
+        assert.equal("updatedAt" in normalized.source, false);
+        return reply(response, 400, { error: { status: "FAILED_PRECONDITION", message: "Synthetic source boundary reached",
+          details: { reason: "TEST_SOURCE_BOUNDARY" } } });
+      }
+      assert.equal(normalized.expectedSourceRevision, 1);
+      return reply(response, 200, { result: { commandId: data.commandId, commandType: data.commandType, status: "SUCCEEDED", replayed: false,
+        result: { definitionId: normalized.definitionId, revision: 2 } } });
+    }
     assert.equal(data.commandType, "grantHistoryClassroomExemptions");
     if (name === "getCommandStatus") {
       if (failStatus)
@@ -213,6 +235,10 @@ try {
     stdin: {
       contents: `
         export { grantHistoryClassroomExemptions } from "./src/lib/historyClassroom";
+        export { sanitizeHistoryClassroomAssignmentForWrite } from "./src/lib/historyClassroom";
+        export { saveHistoryAssessmentSource, toAssessmentHistorySource } from "./src/lib/assessmentRelease";
+        export { executeAssessmentManagementCommand } from "./src/lib/assessmentLifecycle";
+        export { Timestamp, serverTimestamp } from "firebase/firestore";
         export { app, auth } from "./src/lib/firebase";
         export { connectAuthEmulator, signInWithCustomToken, signOut } from "firebase/auth";
         export { deleteApp } from "firebase/app";
@@ -353,6 +379,27 @@ try {
   assert.equal(retry.commandId, uncertain.commandId);
   assert.deepEqual(retry.payload, uncertain.payload);
 
+  const sourcePayload = api.sanitizeHistoryClassroomAssignmentForWrite({
+    title: "조선의 건국", sourceType: "lesson", lessonUnitId: "lesson-unit", lessonTitle: "조선의 건국",
+    isPublished: true, timeLimitMinutes: 10, cooldownMinutes: 5, passThresholdPercent: 90, dueWindowDays: null,
+    targetStudentUids: selected.slice(0, 2), targetStudentReasons: Object.fromEntries(selected.slice(0, 2).map((id) => [id, "지각"])),
+    blanks: Array.from({ length: 28 }, (_, index) => ({ id: `blank-${index + 1}`, answer: `정답 ${index + 1}` })),
+    createdAt: api.serverTimestamp(), updatedAt: api.serverTimestamp(),
+    publishedAt: api.Timestamp.fromDate(new Date("2099-01-01T00:00:00.000Z")), dueAt: null,
+  });
+  assert.equal(api.toAssessmentHistorySource(sourcePayload).publishedAt, "2099-01-01T00:00:00.000Z");
+  await assert.rejects(api.saveHistoryAssessmentSource(config, "sdk-source", sourcePayload, 0),
+    (error) => error.details?.reason === "TEST_SOURCE_BOUNDARY",
+    "Real source planner must serialize Timestamp/sentinels and reach the server with a 10-minute-old authenticated session");
+  const definitionPayload = { definitionId: "history_classroom:2026-2:sdk-source", semesterId: "2026-2", assessmentKind: "HISTORY_CLASSROOM",
+    sourceId: "sdk-source", title: "조선의 건국", durationSeconds: 600, cooldownMinutes: 5, maxAttempts: 20,
+    assignedClassIds: [], opensAt: "", closesAt: "", expectedSourceRevision: 1 };
+  await api.executeAssessmentManagementCommand("createAssessmentDefinition", definitionPayload);
+  await api.executeAssessmentManagementCommand("updateAssessmentDefinition", { ...definitionPayload, expectedRevision: 1, reason: "합성 수정" });
+  await api.executeAssessmentManagementCommand("transitionAssessmentDefinition", { definitionId: definitionPayload.definitionId,
+    expectedRevision: 2, expectedSourceRevision: 1, targetStatus: "PUBLISHED", reason: "합성 공개" });
+  assert.equal(requests.some(({ name }) => name === "beginApplicationSessionReauthentication"), false);
+
   rejectSession = true;
   const previousGrants = requests.filter(
     ({ name }) => name === "executeCommand",
@@ -375,7 +422,7 @@ try {
     "Synthetic HTTP boundary accepted every real SDK request",
   );
   console.log(
-    "PASS History Classroom SDK contract: real client/session/archive aliases/Auth/Functions SDK, 32 Korean class grants, lost-response receipt recovery, exact retry and expired-session rejection; loopback HTTP only",
+    "PASS History Classroom SDK contract: real client/session/archive aliases/Auth/Functions SDK, class grants/receipt recovery, 28-blank source Timestamp serialization, create/update/publish without stale-auth step-up and expired-session rejection; loopback HTTP only",
   );
 } finally {
   if (api?.app) await api.deleteApp(api.app);

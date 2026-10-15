@@ -42,13 +42,14 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "4f2394e34762c7f07e6bc7b766d38e24e984bcac69bf9c7cf700525b47082d19",
+      "sha256": "1beeaa8f3b558e0a3dfd2bdfcaea1226f4a8fa195a7ef6de31dd8107a28c8825",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "Preserve current lesson-source metadata in the History Classroom source command.",
         "Restore History Classroom reusable exemption tickets through canonical receipt-protected commands; add student-owned violation lock and preserve pass thresholds in new attempt/result snapshots.",
         "Restrict new History Classroom sources to worksheets; keep old map worksheets byte-for-byte on settings updates, treat omitted prompt/source defaults as equivalent, and reject live map blank writes.",
-        "2026-10-15: Optional bounded local diagnostics travel with existing saves/submissions; frozen learning metadata and unseen concept rechecks preserve grading/reward authority."
+        "2026-10-15: Optional bounded local diagnostics travel with existing saves/submissions; frozen learning metadata and unseen concept rechecks preserve grading/reward authority.",
+        "2026-10-15: Guard History Classroom definition create/update/publication with the committed source revision and retain the prepared revision for concurrent-edit safety."
       ]
     },
     {

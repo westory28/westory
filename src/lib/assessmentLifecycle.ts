@@ -225,12 +225,16 @@ export const executeAssessmentManagementCommand = async <T>(
 ): Promise<T> => {
   // Match the server's routine classroom policy. These commands still verify
   // the current session, teacher role, semester and enrollment on the server.
-  const routineExemptionCommand = [
+  const routineClassroomCommand = [
     "grantHistoryClassroomExemptions",
     "revokeHistoryClassroomExemptions",
     "reviewHistoryClassroomExemptionRequest",
+    "upsertHistoryClassroomSource",
+    "createAssessmentDefinition",
+    "updateAssessmentDefinition",
+    "transitionAssessmentDefinition",
   ].includes(commandType);
-  if (!routineExemptionCommand) await ensureSensitiveOperation();
+  if (!routineClassroomCommand) await ensureSensitiveOperation();
   return executeStudentAssessmentCommand<T>(commandType, payload);
 };
 
