@@ -3,10 +3,18 @@ import type {
   AtlasDataset,
   AtlasEntry,
   AtlasPlace,
+  AtlasSubject,
 } from "../../lib/historyAtlas";
+import {
+  atlasEntrySubject,
+  getAtlasHistoryEntries,
+  getAtlasHistoricalSummary,
+  getAtlasHistoricalRelations,
+} from "../../lib/historyAtlasStories";
 import {
   getAtlasPlaceProfile,
   isAtlasSourceContext,
+  type AtlasProfileSource,
 } from "../../lib/historyAtlasProfiles";
 import InfoHelp from "./InfoHelp";
 import "./atlasPlaceDetails.css";
@@ -15,6 +23,8 @@ interface AtlasPlaceDetailsProps {
   dataset: AtlasDataset;
   entry: AtlasEntry;
   place: AtlasPlace;
+  /** Omitted on the globe, where stories may span both subjects. */
+  subject?: AtlasSubject;
   onSelectEntry: (entryId: string) => void;
 }
 
@@ -29,33 +39,51 @@ export default function AtlasPlaceDetails({
   dataset,
   entry,
   place,
+  subject,
   onSelectEntry,
 }: AtlasPlaceDetailsProps) {
   const [expandedPlace, setExpandedPlace] = useState<string | null>(null);
-  const profile = useMemo(
-    () => getAtlasPlaceProfile(place, dataset.entries),
-    [place, dataset.entries],
+  const placeEntries = useMemo(
+    () =>
+      dataset.entries.filter(
+        (item) =>
+          item.placeId === place.id &&
+          (!subject || atlasEntrySubject(dataset, item) === subject),
+      ),
+    [dataset, place.id, subject],
   );
+  const profile = useMemo(() => getAtlasPlaceProfile(place), [place]);
   const displayName = entry.displayName || place.name;
   const stories = useMemo(() => {
     const groups = new Map<string, AtlasEntry[]>();
-    dataset.entries
-      .filter((item) => item.placeId === place.id)
-      .forEach((item) => {
-        const key = `${item.period}|${item.displayName || place.name}`;
-        groups.set(key, [...(groups.get(key) || []), item]);
-      });
+    getAtlasHistoryEntries(dataset, place.id, subject).forEach((item) => {
+      const key =
+        item.historicalStory?.id ||
+        `${item.period}|${item.displayName || place.name}`;
+      groups.set(key, [...(groups.get(key) || []), item]);
+    });
     return [...groups.values()];
-  }, [dataset.entries, place.id, place.name]);
-  const activeGroup = stories.find((group) =>
-    group.some((item) => item.id === entry.id),
-  ) || [entry];
+  }, [dataset, place.id, place.name, subject]);
+  const activeGroup =
+    stories.find((group) => group.some((item) => item.id === entry.id)) ||
+    stories.find((group) =>
+      group.some((item) =>
+        item.historicalStory?.replacesEntryIds?.includes(entry.id),
+      ),
+    ) ||
+    stories.find((group) =>
+      group.some((item) =>
+        item.eraIds?.some((era) => entry.eraIds?.includes(era)),
+      ),
+    ) ||
+    [];
+  const activeEntry = activeGroup[0] || entry;
   const shownStories =
     expandedPlace === place.id || stories.length <= 6
       ? stories
       : [
           ...stories.slice(0, 5),
-          ...(stories.slice(0, 5).includes(activeGroup)
+          ...(!activeGroup.length || stories.slice(0, 5).includes(activeGroup)
             ? stories.slice(5, 6)
             : [activeGroup]),
         ];
@@ -69,7 +97,9 @@ export default function AtlasPlaceDetails({
   const context = allContext.filter(
     (text) => !isAtlasSourceContext(text) && !inProfile(text),
   );
-  const mapReferences = allContext
+  const mapReferences = [
+    ...new Set(placeEntries.flatMap((item) => sentences(item.summary))),
+  ]
     .filter(isAtlasSourceContext)
     .map((text) =>
       text.replace(/[을를] 다루는 지도[·ㆍ]자료에 등장합니다\.$/u, ""),
@@ -82,38 +112,41 @@ export default function AtlasPlaceDetails({
       [
         place.name,
         place.modernName,
-        ...stories.flat().map((item) => item.displayName),
+        ...placeEntries.map((item) => item.displayName),
       ].filter((name): name is string => !!name && name !== displayName),
     ),
   ];
-  const related = useMemo(() => {
-    const found = new Map<string, AtlasEntry>();
-    const ids = new Set(
-      activeGroup.flatMap((item) => item.relatedEntryIds || []),
-    );
-    dataset.entries.forEach((item) => {
-      if (ids.has(item.id)) found.set(item.placeId, item);
-    });
-    activeGroup
-      .flatMap((item) => item.relatedPlaceIds || [])
-      .forEach((id) => {
-        if (found.has(id)) return;
-        const item =
-          dataset.entries.find(
-            (candidate) =>
-              candidate.placeId === id && candidate.unitId === entry.unitId,
-          ) || dataset.entries.find((candidate) => candidate.placeId === id);
-        if (item) found.set(id, item);
-      });
-    return [...found.values()];
-  }, [dataset.entries, activeGroup, entry.unitId]);
+  const related = useMemo(
+    () => getAtlasHistoricalRelations(dataset, activeEntry, subject),
+    [dataset, activeEntry, subject],
+  );
+  const referenceSources: AtlasProfileSource[] = [
+    ...new Map<string, AtlasProfileSource>(
+      [
+        ...(activeEntry.historicalStory?.sources || []),
+        ...related.flatMap((relation) => relation.sources),
+        ...profile.sources,
+      ].map((source) => [
+        source.url,
+        /https:\/\/(?:ko|en)\.wikipedia\.org\//u.test(source.url)
+          ? {
+              ...source,
+              title: source.title.replace(/^위키백과 ·/u, "위키백과 기여자 ·"),
+              license: "CC BY-SA 4.0 · 변경: 문장 요약·재작성",
+              licenseUrl:
+                "https://creativecommons.org/licenses/by-sa/4.0/deed.ko",
+            }
+          : source,
+      ]),
+    ).values(),
+  ];
   const citations = useMemo(() => {
     const groups = new Map<
       string,
       { pdf: Set<number>; printed: Set<string> }
     >();
     [
-      ...activeGroup.flatMap((item) => item.citations),
+      ...placeEntries.flatMap((item) => item.citations),
       ...(profile.textbookCitations || []),
     ].forEach((citation) => {
       if (!groups.has(citation.sourceId))
@@ -128,7 +161,7 @@ export default function AtlasPlaceDetails({
       pages: [...pages.pdf].sort((a, b) => a - b),
       printedPages: [...pages.printed],
     }));
-  }, [activeGroup, dataset.sources, profile]);
+  }, [placeEntries, dataset.sources, profile]);
   return (
     <div className="atlas-place-details">
       <header className="atlas-place-details__header">
@@ -165,18 +198,24 @@ export default function AtlasPlaceDetails({
 
       <section className="atlas-place-details__context">
         <div className="atlas-place-details__section-heading">
-          <h3>역사 속 이 장소</h3>
-          <span>{entry.period}</span>
+          <h3>{activeGroup.length ? "역사 속 이 장소" : "장소 개요"}</h3>
+          {activeGroup.length > 0 && <span>{activeEntry.period}</span>}
         </div>
-        <p className="atlas-place-details__definition">{profile.definition}</p>
+        <p className="atlas-place-details__definition">
+          {activeGroup.length
+            ? getAtlasHistoricalSummary(activeEntry)
+            : profile.definition}
+        </p>
         {entry.nameNote && (
           <p className="atlas-place-details__name-note">{entry.nameNote}</p>
         )}
         {context.length > 0 && (
           <ul>
-            {context.map((paragraph) => (
-              <li key={paragraph}>{paragraph}</li>
-            ))}
+            {context
+              .filter((paragraph) => !activeEntry.summary.includes(paragraph))
+              .map((paragraph) => (
+                <li key={paragraph}>{paragraph}</li>
+              ))}
           </ul>
         )}
         {significance.length > 0 && (
@@ -191,7 +230,7 @@ export default function AtlasPlaceDetails({
         )}
       </section>
 
-      {stories.length > 1 && (
+      {stories.length > 0 && (
         <section
           className="atlas-place-details__periods"
           aria-label="시대별 이야기"
@@ -210,6 +249,9 @@ export default function AtlasPlaceDetails({
                   onClick={() => onSelectEntry(item.id)}
                 >
                   {item.period}
+                  {item.historicalStory
+                    ? ` · ${item.historicalStory.title}`
+                    : ""}
                   {item.displayName && item.displayName !== place.name
                     ? ` · ${item.displayName}`
                     : ""}
@@ -275,17 +317,20 @@ export default function AtlasPlaceDetails({
         <section className="atlas-place-details__related">
           <h3>함께 볼 장소</h3>
           <div>
-            {related.map((item) => (
+            {related.map(({ entry: item, reason }) => (
               <button
                 type="button"
                 key={item.id}
                 onClick={() => onSelectEntry(item.id)}
               >
-                {item.displayName ||
-                  dataset.places.find(
-                    (candidate) => candidate.id === item.placeId,
-                  )?.name}{" "}
-                →
+                <strong>
+                  {item.displayName ||
+                    dataset.places.find(
+                      (candidate) => candidate.id === item.placeId,
+                    )?.name}{" "}
+                  →
+                </strong>
+                <span>{reason}</span>
               </button>
             ))}
           </div>
@@ -295,13 +340,13 @@ export default function AtlasPlaceDetails({
       <details className="atlas-place-details__sources" key={entry.id}>
         <summary>
           출처 · 교과서 {citations.length}권
-          {profile.sources.length
-            ? ` · 참고 자료 ${profile.sources.length}곳`
+          {referenceSources.length
+            ? ` · 참고 자료 ${referenceSources.length}곳`
             : ""}
         </summary>
         {mapReferences.length > 0 && (
           <div className="atlas-place-details__map-context">
-            <strong>{entry.period} · 지명이 표시된 자료의 주제</strong>
+            <strong>지명이 표시된 자료의 주제</strong>
             <ul>
               {mapReferences.map((text) => (
                 <li key={text}>{text}</li>
@@ -320,7 +365,7 @@ export default function AtlasPlaceDetails({
               <span>PDF {pages.join(", ")}쪽</span>
             </li>
           ))}
-          {profile.sources.map((source) => (
+          {referenceSources.map((source) => (
             <li key={source.url}>
               <a href={source.url} target="_blank" rel="noreferrer">
                 {source.title} ↗

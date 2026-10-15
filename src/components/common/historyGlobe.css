@@ -153,6 +153,20 @@
   min-width: 44px;
   padding: 8px;
 }
+.history-globe__controls .history-globe__motion-toggle {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+}
+.history-globe__motion-toggle[aria-pressed="true"] {
+  color: var(--ws-primary-text, #1e3a8a);
+  background: var(--ws-primary-soft, #eff6ff);
+  border-color: var(--ws-border-blue, #dbeafe);
+}
 .history-globe__control-spacer {
   flex: 1;
   min-width: 0;
@@ -273,18 +287,24 @@
   stroke: var(--ws-primary, #2563eb);
   stroke-width: 1px;
 }
-.history-globe__labels .is-active rect {
-  animation: history-globe-label 2400ms ease-in-out infinite;
+.history-globe__labels .history-globe__label-ripple {
+  fill: none;
+  stroke-width: 2px;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.history-globe__labels .is-active .history-globe__label-ripple {
+  animation: history-globe-label 2400ms ease-out infinite;
 }
 @keyframes history-globe-label {
-  0%,
-  100% {
-    stroke-width: 1px;
-    fill: var(--ws-primary-soft, #eff6ff);
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
   }
-  50% {
-    stroke-width: 2px;
-    fill: var(--ws-border-blue, #dbeafe);
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
   }
 }
 .history-globe__river-halo {
@@ -324,12 +344,12 @@
     opacity: 0;
   }
 }
-.history-globe.is-hidden .history-globe__halo span,
-.history-globe.is-offscreen .history-globe__halo span,
-.history-globe.is-hidden .history-globe__river-halo,
-.history-globe.is-offscreen .history-globe__river-halo,
-.history-globe.is-hidden .history-globe__labels .is-active rect,
-.history-globe.is-offscreen .history-globe__labels .is-active rect {
+.history-globe.is-motion-paused .history-globe__halo span,
+.history-globe.is-motion-paused .history-globe__river-halo,
+.history-globe.is-motion-paused
+  .history-globe__labels
+  .is-active
+  .history-globe__label-ripple {
   animation-play-state: paused;
 }
 .history-globe__sidebar {
@@ -520,18 +540,23 @@
     font-size: 24px;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .history-globe__halo span,
-  .history-globe__river-halo,
-  .history-globe__labels .is-active rect {
-    animation: none;
-    opacity: 0.4;
-  }
-  .history-globe__labels .is-active rect {
-    opacity: 1;
-  }
-  .history-globe__halo span + span {
-    transform: scale(1.45);
-    opacity: 0.65;
-  }
+/* Only location emphasis follows this local control; camera behavior is unchanged. */
+.history-globe.is-motion-off .history-globe__halo span,
+.history-globe.is-motion-off .history-globe__river-halo,
+.history-globe.is-motion-off
+  .history-globe__labels
+  .is-active
+  .history-globe__label-ripple {
+  animation: none;
+  opacity: 0.4;
+}
+.history-globe.is-motion-off
+  .history-globe__labels
+  .is-active
+  .history-globe__label-ripple {
+  opacity: 0;
+}
+.history-globe.is-motion-off .history-globe__halo span + span {
+  transform: scale(1.45);
+  opacity: 0.65;
 }

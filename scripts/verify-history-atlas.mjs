@@ -95,7 +95,10 @@ for (const entry of dataset.entries) {
   assert(place, `${entry.id}: missing place`);
   assert(entry.summary.trim(), `${entry.id}: missing source context`);
   assert(entry.eraIds?.length > 0, `${entry.id}: missing historical period`);
-  assert(entry.citations.length > 0, `${entry.id}: missing evidence`);
+  assert(
+    entry.citations.length > 0 || entry.historicalStory?.sources.length > 0,
+    `${entry.id}: missing evidence`,
+  );
   for (const citation of entry.citations) {
     assert(sources.has(citation.sourceId), `${entry.id}: unknown source`);
     assert(

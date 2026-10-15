@@ -62,7 +62,7 @@ const encyclopediaDefinitionsById = new Map<string, AtlasPlaceProfile>(
 
 /** Source captions belong in the citation disclosure, not in the explanation. */
 export const isAtlasSourceContext = (text: string): boolean =>
-  /(?:지도|교과서|자료|사진|본문|주석|단원).*(?:등장|표시|소개|제시)|(?:다루는|보여 주는|설명하는).*(?:지도|자료|사진)|지명으로 (?:표시|등장)/u.test(
+  /^교과서(?:는|에서|의)|(?:지도|교과서|자료|사진|본문|주석|단원).*(?:등장|표시|소개|제시)|(?:다루는|보여 주는|설명하는).*(?:지도|자료|사진)|지명으로 (?:표시|등장)/u.test(
     text,
   );
 
@@ -117,7 +117,7 @@ export const getAtlasPlaceProfile = (
     return {
       definition: explainedEntry.summary,
       facts: [],
-      sources: [],
+      sources: explainedEntry.historicalStory?.sources || [],
       textbookCitations: explainedEntry.citations,
       quality: "verified",
     };
