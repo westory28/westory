@@ -47,6 +47,7 @@
   white-space: normal;
   text-overflow: clip;
   overflow-wrap: anywhere;
+  word-break: keep-all;
   line-height: 1.6;
 }
 .quiz-unit-tree .teacher-settings-section > span.quiz-unit-label,
@@ -55,6 +56,7 @@
   white-space: normal;
   text-overflow: clip;
   overflow-wrap: anywhere;
+  word-break: keep-all;
   line-height: 1.6;
 }
 .quiz-unit-tree .quiz-unit-group {

@@ -264,24 +264,31 @@ service cloud.firestore {
         );
     }
 
+    function hasQuizReadRole() {
+      // Callers enforce the session, maintenance and registration fence once.
+      return request.auth.token.email == "westoria28@gmail.com"
+        || (hasUserProfile()
+          && (userProfile().role == 'teacher'
+            || (userProfile().get('teacherPortalEnabled', false) == true
+              && userProfile().get('staffPermissions', []) is list
+              && 'quiz_read' in userProfile().get('staffPermissions', []))));
+    }
+
     function canReadQuizResult(data) {
       return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || isAdmin()
-          || isTeacherRole()
-          || hasPermission('quiz_read')
-        );
+        && (hasQuizReadRole() || data.uid == request.auth.uid);
     }
 
     function canReadQuizSubmission(data) {
       return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || isAdmin()
-          || isTeacherRole()
-          || hasPermission('quiz_read')
-        );
+        && (hasQuizReadRole() || data.uid == request.auth.uid);
+    }
+
+    function canReadSemesterAssessment(data) {
+      return canUseWestory()
+        && (hasQuizReadRole()
+          || (data.studentUid == request.auth.uid
+            && data.semesterId == get(/databases/$(database)/documents/site_settings/semester_active).data.semesterId));
     }
 
     function isAssignedHistoryClassroomStudent(data) {
@@ -1131,16 +1138,12 @@ service cloud.firestore {
     }
 
     match /semester_assessment_results/{resultId} {
-      allow read: if (isSignedIn() && resource.data.studentUid == request.auth.uid
-        && resource.data.semesterId == get(/databases/$(database)/documents/site_settings/semester_active).data.semesterId
-        && canUseWestory()) || isAdmin() || isTeacherRole();
+      allow read: if canReadSemesterAssessment(resource.data);
       allow write: if false;
     }
 
     match /semester_assessment_submissions/{submissionId} {
-      allow read: if (isSignedIn() && resource.data.studentUid == request.auth.uid
-        && resource.data.semesterId == get(/databases/$(database)/documents/site_settings/semester_active).data.semesterId
-        && canUseWestory()) || isAdmin() || isTeacherRole();
+      allow read: if canReadSemesterAssessment(resource.data);
       allow write: if false;
     }
 
