@@ -30,7 +30,8 @@ function load(filename) {
   return exports;
 }
 
-const dataset = load("src/data/historyAtlasContent.ts").historyAtlasDataset;
+// Region membership is an archival catalogue; map curation may exclude its names.
+const dataset = load("src/data/historyAtlasContent.ts").historyAtlasSourceDataset;
 const regions = load("src/lib/historyAtlasRegions.ts");
 const { koreaAtlasRegionIdsByPlace: korea } = load(
   "src/data/historyAtlasKoreaRegions.ts",

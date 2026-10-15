@@ -286,7 +286,7 @@ export default function AtlasPlaceDetails({
   ]
     .filter(isAtlasSourceContext)
     .map((text) =>
-      text.replace(/[을를] 다루는 지도[·ㆍ]자료에 등장합니다\.$/u, ""),
+      text.replace(/[을를] 다루는 지도[·ㆍ]자료에 등장(?:한다|합니다)\.$/u, ""),
     );
   const significance = [
     ...new Set(activeGroup.flatMap((item) => sentences(item.significance))),
@@ -304,6 +304,16 @@ export default function AtlasPlaceDetails({
     () => getAtlasHistoricalRelations(dataset, activeEntry, subject),
     [dataset, activeEntry, subject],
   );
+  const relatedGroups = [
+    {
+      title: "관련 키워드",
+      items: related.filter(({ entry: item }) => item.placeId === place.id),
+    },
+    {
+      title: "함께 볼 장소",
+      items: related.filter(({ entry: item }) => item.placeId !== place.id),
+    },
+  ].filter(({ items }) => items.length > 0);
   const referenceSources: AtlasProfileSource[] = [
     ...new Map<string, AtlasProfileSource>(
       [
@@ -363,8 +373,8 @@ export default function AtlasPlaceDetails({
                     {
                       label: "표시",
                       content: place.coordinates
-                        ? "현대 자연지형 위에 표시한 대표 위치입니다."
-                        : "위치를 확정하지 않은 자료는 임의의 점으로 표시하지 않습니다.",
+                        ? "현대 자연지형 위에 표시한 대표 위치이다."
+                        : "위치를 확정하지 않은 자료는 임의의 점으로 표시하지 않는다.",
                     },
                   ],
                 },
@@ -522,12 +532,13 @@ export default function AtlasPlaceDetails({
         </section>
       )}
 
-      {related.length > 0 && (
-        <section className="atlas-place-details__related">
-          <h3>함께 볼 장소</h3>
+      {relatedGroups.map(({ title, items }) => (
+        <section className="atlas-place-details__related" key={title}>
+          <h3>{title}</h3>
           <div>
-            {related.map(({ entry: item, reason, sources }) => {
+            {items.map(({ entry: item, reason, sources, label }) => {
               const name =
+                label ||
                 item.displayName ||
                 dataset.places.find(
                   (candidate) => candidate.id === item.placeId,
@@ -554,11 +565,12 @@ export default function AtlasPlaceDetails({
             })}
           </div>
         </section>
-      )}
+      ))}
 
       <details className="atlas-place-details__sources" key={entry.id}>
         <summary>
-          출처 · 교과서 {citations.length}권
+          출처
+          {citations.length ? ` · 교과서 ${citations.length}권` : ""}
           {referenceSources.length
             ? ` · 참고 자료 ${referenceSources.length}곳`
             : ""}

@@ -6,6 +6,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import React from "react";
 import { geoOrthographic, geoArea, geoContains } from "d3-geo";
+import * as d3Geography from "d3-geo";
 const cache = new Map();
 const load = (filename) => {
   const path = resolve(filename);
@@ -23,6 +24,8 @@ const load = (filename) => {
       exports,
       URLSearchParams,
       require: (name) => {
+        if (name === "d3-geo") return d3Geography;
+        if (name.endsWith("?url")) return { default: name };
         assert(name.startsWith("."));
         return load(resolve(dirname(path), name + ".ts"));
       },
@@ -31,6 +34,11 @@ const load = (filename) => {
   return exports;
 };
 const m = load("src/lib/historyGlobeMath.ts");
+const {
+  atlasProjectedNorthBearing,
+  fitGlobeRegionCamera,
+  globeSelectionCenterY,
+} = load("src/lib/historyAtlasGeometry.ts");
 const equal = (actual, expected) =>
   assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected);
 equal(
@@ -529,6 +537,286 @@ assert(
   source.includes("GLOBE_FRAME_INTERVAL"),
   "Input frame cap remains wired",
 );
+for (const latitude of [-89.5, -60, 0, 37, 89.5]) {
+  for (const longitude of [-179, 0, 127, 179]) {
+    for (const roll of [-179, -90, -30, 0, 45, 90, 179]) {
+      const projection = geoOrthographic()
+        .translate([180, 240])
+        .scale(200)
+        .rotate([-longitude, -latitude, roll]);
+      const bearing = atlasProjectedNorthBearing(projection, [
+        longitude,
+        latitude,
+      ]);
+      assert(
+        Math.abs(m.wrapGlobeLongitude(bearing + roll)) < 1e-6,
+        `Compass north follows screen roll at ${longitude}/${latitude}/${roll}`,
+      );
+    }
+  }
+}
+assert.equal(fitGlobeRegionCamera([], 356, 480), null);
+// Actual narrow popup rectangles: retain its reading width and move it up only
+// below 344px, with enough room for the selected point's full 1.8x halo.
+for (const width of [286, 343, 344, 356]) {
+  for (const height of [400, 480, 640]) {
+    const bottom = width < 344 ? 84 : 32;
+    const popup = {
+      left: 8,
+      right: Math.min(288, width - 8),
+      top: height * 0.58 - bottom,
+      bottom: height - bottom,
+    };
+    const compass = {
+      left: width - 56,
+      right: width - 8,
+      top: height - 76,
+      bottom: height - 28,
+    };
+    assert(
+      !(
+        popup.left < compass.right &&
+        popup.right > compass.left &&
+        popup.top < compass.bottom &&
+        popup.bottom > compass.top
+      ),
+      `${width}/${height}: popup leaves all four compass directions visible`,
+    );
+    const centerY = globeSelectionCenterY(width, height);
+    const haloRadius = (44 * 1.8) / 2;
+    assert(
+      centerY - haloRadius >= 42 && centerY + haloRadius < popup.top,
+      `${width}/${height}: selected ripple stays between toolbar and popup`,
+    );
+  }
+}
+const regionFixtures = [
+  {
+    name: "전라도",
+    coordinates: [
+      [126.4, 34.7],
+      [127.2, 35.8],
+      [126.7, 35.6],
+    ],
+  },
+  {
+    name: "유럽",
+    coordinates: [
+      [-9, 39],
+      [2, 49],
+      [24, 60],
+      [28, 42],
+    ],
+  },
+  {
+    name: "남아메리카",
+    coordinates: [
+      [-79, 9],
+      [-71, -34],
+      [-38, -13],
+      [-68, -54],
+    ],
+  },
+  {
+    name: "날짜변경선",
+    coordinates: [
+      [179, 10],
+      [-179, 11],
+    ],
+  },
+  {
+    name: "극지방",
+    coordinates: [
+      [-120, 85],
+      [0, 85],
+      [120, 85],
+    ],
+  },
+];
+let regionCameraCases = 0;
+for (const region of regionFixtures) {
+  for (const width of [286, 356, 640, 920]) {
+    const camera = fitGlobeRegionCamera(region.coordinates, width, 480);
+    assert(camera && Object.values(camera).every(Number.isFinite));
+    const projection = geoOrthographic()
+      .translate([width / 2, 240])
+      .scale(Math.min(width, 480) * 0.44 * camera.zoom)
+      .rotate([-camera.longitude, -camera.latitude, camera.roll]);
+    for (const coordinate of region.coordinates) {
+      assert(
+        m.isGlobePointVisible(coordinate, camera),
+        `${region.name}: listed point cannot stay on the back hemisphere`,
+      );
+      const [x, y] = projection(coordinate);
+      assert(
+        x >= 24 && x <= width - 24 && y >= 40 && y <= 440,
+        `${region.name}/${width}: regional point is cropped by the camera`,
+      );
+      regionCameraCases += 1;
+    }
+  }
+}
+
+// Run the actual JSX region handler and selection callback with state adapters.
+// This catches filtering/camera wiring regressions that pure projection checks do not.
+const globeAst = ts.createSourceFile(
+  "HistoryGlobe.tsx",
+  source,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TSX,
+);
+let regionHandler, chooseEntryHandler;
+const visitGlobe = (node) => {
+  if (
+    ts.isJsxSelfClosingElement(node) &&
+    node.tagName.getText(globeAst) === "AtlasRegionFilters"
+  ) {
+    regionHandler = node.attributes.properties
+      .find(
+        (property) =>
+          ts.isJsxAttribute(property) &&
+          property.name.getText(globeAst) === "onChange",
+      )
+      .initializer.expression.getText(globeAst);
+  }
+  if (
+    ts.isVariableDeclaration(node) &&
+    node.name.getText(globeAst) === "chooseEntry"
+  )
+    chooseEntryHandler = node.initializer.arguments[0].getText(globeAst);
+  ts.forEachChild(node, visitGlobe);
+};
+visitGlobe(globeAst);
+assert(regionHandler && chooseEntryHandler);
+const testItems = regionFixtures[0].coordinates.map((coordinates, index) => ({
+  entry: {
+    id: `story-${index}`,
+    unitId: index === 2 ? "other-unit" : "chosen-unit",
+    eraIds: ["chosen-era"],
+  },
+  place: { id: `place-${index}`, coordinates },
+  subject: "korea",
+  search: "",
+}));
+for (const empty of [false, true]) {
+  const state = {};
+  const exports = {};
+  vm.runInNewContext(
+    ts.transpileModule(`exports.changeRegion = ${regionHandler}`, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText,
+    {
+      exports,
+      items: empty ? [] : testItems,
+      subject: "korea",
+      unitId: "chosen-unit",
+      eraId: "chosen-era",
+      size: { width: 356, height: 480 },
+      fitGlobeRegionCamera,
+      GLOBE_INITIAL_VIEW: m.GLOBE_INITIAL_VIEW,
+      matchesAtlasRegion: () => true,
+      ...Object.fromEntries(
+        [
+          "RegionId",
+          "SubregionId",
+          "SelectedId",
+          "Panel",
+          "Page",
+          "Notice",
+          "Query",
+          "Camera",
+        ].map((key) => [
+          `set${key}`,
+          (value) => {
+            state[key] = value;
+          },
+        ]),
+      ),
+    },
+  );
+  exports.changeRegion("jeolla", "");
+  assert.equal(state.Query, "");
+  assert.equal(state.SelectedId, null);
+  assert.equal(state.Panel, "list");
+  equal(
+    state.Camera ?? null,
+    empty
+      ? null
+      : JSON.parse(
+          JSON.stringify(
+            fitGlobeRegionCamera(
+              testItems.slice(0, 2).map((item) => item.place.coordinates),
+              356,
+              480,
+            ),
+          ),
+        ),
+  );
+}
+const selectionState = { revision: 0, cameraCount: 0 };
+const selectionExports = {};
+const viewRef = {
+  current: { longitude: -70, latitude: -30, roll: 45, zoom: 1 },
+};
+const pendingPanelFocus = { current: null };
+vm.runInNewContext(
+  ts.transpileModule(`exports.chooseEntry = ${chooseEntryHandler}`, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText,
+  {
+    exports: selectionExports,
+    itemsById: new Map(testItems.map((item) => [item.entry.id, item])),
+    subject: "korea",
+    unitId: "",
+    eraId: "",
+    regionId: "",
+    subregionId: "",
+    query: "",
+    pendingPanelFocus,
+    viewRef,
+    focusGlobeView: m.focusGlobeView,
+    setNotice: () => {},
+    setSelectedId: () => {},
+    setPanel: () => {},
+    setPanelOpen: () => {},
+    setSelectionRevision: (update) => {
+      selectionState.revision = update(selectionState.revision);
+    },
+    setCamera: (view) => {
+      selectionState.camera = view;
+      selectionState.cameraCount += 1;
+    },
+  },
+);
+selectionExports.chooseEntry("story-0");
+selectionExports.chooseEntry("story-0");
+assert.equal(
+  selectionState.revision,
+  2,
+  "Repeated same-place tag activation restarts watercourse focus",
+);
+assert.equal(
+  selectionState.cameraCount,
+  2,
+  "Repeated tag activation returns its pin to the view",
+);
+assert.equal(pendingPanelFocus.current, "detail");
+assert(
+  Math.abs(
+    selectionState.camera.longitude - testItems[0].place.coordinates[0],
+  ) < 1e-9,
+);
+assert(
+  Math.abs(selectionState.camera.latitude - testItems[0].place.coordinates[1]) <
+    1e-9,
+);
 console.log(
-  "History globe projection, hemisphere, interaction, pixel-budget, assets, menu migration and access checks passed.",
+  `History globe projection, hemisphere, interaction, compass, ${regionCameraCases} region camera fits, actual filter/tag handlers, pixel-budget, assets, menu migration and access checks passed.`,
 );

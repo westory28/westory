@@ -1,5 +1,6 @@
 import type { AtlasDataset, AtlasPlace } from "../lib/historyAtlas";
 import { addAtlasHistoricalStories } from "../lib/historyAtlasStories";
+import { buildAtlasMapDataset } from "../lib/historyAtlasMapDataset";
 import { profileHistoricalStories } from "./historyAtlasProfileStories";
 import {
   koreaHistoricalStories,
@@ -140,7 +141,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["연천"],
       coordinates: [127.06, 38.02],
       locationNote:
-        "유적 일대의 대표 위치입니다. 유적의 경계나 세부 발굴 지점을 뜻하지 않습니다.",
+        "유적 일대의 대표 위치이다. 유적의 경계나 세부 발굴 지점을 뜻하지 않는다.",
     },
     {
       id: "amsa",
@@ -149,7 +150,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["서울 암사동"],
       coordinates: [127.13, 37.56],
       locationNote:
-        "유적 일대의 대표 위치입니다. 유적의 경계나 세부 발굴 지점을 뜻하지 않습니다.",
+        "유적 일대의 대표 위치이다. 유적의 경계나 세부 발굴 지점을 뜻하지 않는다.",
     },
     {
       id: "pyongyang",
@@ -158,7 +159,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["서경"],
       coordinates: [125.75, 39.03],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "gongju",
@@ -167,7 +168,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["공주"],
       coordinates: [127.12, 36.46],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "buyeo",
@@ -176,7 +177,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["부여"],
       coordinates: [126.91, 36.28],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "gimhae",
@@ -185,7 +186,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["금관가야"],
       coordinates: [128.89, 35.23],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "gyeongju",
@@ -194,7 +195,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["경주", "서라벌"],
       coordinates: [129.22, 35.84],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "sanggyeong",
@@ -203,7 +204,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["상경", "발해 상경성"],
       coordinates: [129.13, 44.11],
       locationNote:
-        "유적 일대의 대표 위치입니다. 유적의 경계나 세부 발굴 지점을 뜻하지 않습니다.",
+        "유적 일대의 대표 위치이다. 유적의 경계나 세부 발굴 지점을 뜻하지 않는다.",
     },
     {
       id: "wando",
@@ -212,7 +213,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["완도", "장도"],
       coordinates: [126.71, 34.36],
       locationNote:
-        "유적 일대의 대표 위치입니다. 유적의 경계나 세부 발굴 지점을 뜻하지 않습니다.",
+        "유적 일대의 대표 위치이다. 유적의 경계나 세부 발굴 지점을 뜻하지 않는다.",
     },
     {
       id: "ulsan",
@@ -221,7 +222,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["울산"],
       coordinates: [129.31, 35.54],
       locationNote:
-        "울산 지역의 대표 위치입니다. 통일 신라 때의 항구 위치나 해안선을 정밀하게 복원한 좌표가 아닙니다.",
+        "울산 지역의 대표 위치이다. 통일 신라 때의 항구 위치나 해안선을 정밀하게 복원한 좌표가 아니다.",
     },
     {
       id: "kaesong",
@@ -230,7 +231,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["송악", "개경", "개성"],
       coordinates: [126.55, 37.97],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "ganghwa",
@@ -239,7 +240,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["강화", "강도"],
       coordinates: [126.49, 37.75],
       locationNote:
-        "강화도 중심 지역의 대표 위치입니다. 고려 궁궐이나 성곽의 정확한 위치를 뜻하지 않습니다.",
+        "강화도 중심 지역의 대표 위치이다. 고려 궁궐이나 성곽의 정확한 위치를 뜻하지 않는다.",
     },
     {
       id: "jeju",
@@ -248,7 +249,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["탐라"],
       coordinates: [126.53, 33.42],
       locationNote:
-        "제주도 일대의 대표 위치입니다. 삼별초의 개별 전투 지점이나 항파두리성의 정밀 좌표가 아닙니다.",
+        "제주도 일대의 대표 위치이다. 삼별초의 개별 전투 지점이나 항파두리성의 정밀 좌표가 아니다.",
     },
     {
       id: "cheongju",
@@ -257,7 +258,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["흥덕사", "직지"],
       coordinates: [127.47, 36.64],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "seoul",
@@ -266,7 +267,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["한성", "서울", "경성"],
       coordinates: [126.98, 37.57],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "andong",
@@ -275,7 +276,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["병산 서원", "병산서원"],
       coordinates: [128.73, 36.57],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "hansando",
@@ -284,7 +285,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["한산도 대첩", "통영"],
       coordinates: [128.48, 34.77],
       locationNote:
-        "한산도 일대의 대표 위치입니다. 해전의 정확한 전투 범위나 함대 이동 경로를 뜻하지 않습니다.",
+        "한산도 일대의 대표 위치이다. 해전의 정확한 전투 범위나 함대 이동 경로를 뜻하지 않는다.",
     },
     {
       id: "namhansanseong",
@@ -293,7 +294,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["병자호란"],
       coordinates: [127.18, 37.48],
       locationNote:
-        "유적 일대의 대표 위치입니다. 유적의 경계나 세부 발굴 지점을 뜻하지 않습니다.",
+        "유적 일대의 대표 위치이다. 유적의 경계나 세부 발굴 지점을 뜻하지 않는다.",
     },
     {
       id: "suwon",
@@ -302,7 +303,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["화성", "수원 화성"],
       coordinates: [127.01, 37.29],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "jinju",
@@ -311,7 +312,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["진주 농민 봉기"],
       coordinates: [128.08, 35.18],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "busan",
@@ -320,7 +321,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["동래", "부산포"],
       coordinates: [129.07, 35.18],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "jeonju",
@@ -329,7 +330,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["완산주", "전주성"],
       coordinates: [127.15, 35.82],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "daegu",
@@ -338,7 +339,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["국채 보상 운동"],
       coordinates: [128.6, 35.87],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "shanghai",
@@ -347,7 +348,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["상해"],
       coordinates: [121.47, 31.23],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "chongqing",
@@ -356,7 +357,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["중경", "한국 광복군"],
       coordinates: [106.55, 29.56],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "gwangju",
@@ -365,7 +366,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["5·18 민주화 운동"],
       coordinates: [126.92, 35.15],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "incheon",
@@ -374,7 +375,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["인천 상륙 작전"],
       coordinates: [126.65, 37.47],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "panmunjom",
@@ -383,7 +384,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["판문점 선언"],
       coordinates: [126.68, 37.96],
       locationNote:
-        "판문점 일대의 대표 위치입니다. 군사분계선이나 시설의 경계를 나타내는 좌표가 아닙니다.",
+        "판문점 일대의 대표 위치이다. 군사분계선이나 시설의 경계를 나타내는 좌표가 아니다.",
     },
     {
       id: "ur",
@@ -392,7 +393,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["수메르", "메소포타미아"],
       coordinates: [46.1, 30.96],
       locationNote:
-        "유적 일대의 대표 위치입니다. 유적의 경계나 세부 발굴 지점을 뜻하지 않습니다.",
+        "유적 일대의 대표 위치이다. 유적의 경계나 세부 발굴 지점을 뜻하지 않는다.",
     },
     {
       id: "giza",
@@ -401,7 +402,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["피라미드", "기자 피라미드"],
       coordinates: [31.13, 29.98],
       locationNote:
-        "유적 일대의 대표 위치입니다. 유적의 경계나 세부 발굴 지점을 뜻하지 않습니다.",
+        "유적 일대의 대표 위치이다. 유적의 경계나 세부 발굴 지점을 뜻하지 않는다.",
     },
     {
       id: "mohenjo-daro",
@@ -410,7 +411,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["인더스 문명"],
       coordinates: [68.14, 27.33],
       locationNote:
-        "유적 일대의 대표 위치입니다. 유적의 경계나 세부 발굴 지점을 뜻하지 않습니다.",
+        "유적 일대의 대표 위치이다. 유적의 경계나 세부 발굴 지점을 뜻하지 않는다.",
     },
     {
       id: "athens",
@@ -419,7 +420,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["아테나이", "아크로폴리스"],
       coordinates: [23.73, 37.98],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "rome",
@@ -428,7 +429,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["로마 공화정"],
       coordinates: [12.5, 41.9],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "xian",
@@ -437,7 +438,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["시안", "서안", "대흥"],
       coordinates: [108.94, 34.27],
       locationNote:
-        "현재 시안 일대의 대표 위치입니다. 한·당의 장안성과 현재 시가지의 범위는 서로 다릅니다.",
+        "현재 시안 일대의 대표 위치이다. 한·당의 장안성과 현재 시가지의 범위는 서로 다르다.",
     },
     {
       id: "nara",
@@ -446,7 +447,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["나라", "나라 시대"],
       coordinates: [135.8, 34.69],
       locationNote:
-        "현재 나라 일대의 대표 위치입니다. 고대 헤이조쿄의 경계를 나타내지 않습니다.",
+        "현재 나라 일대의 대표 위치이다. 고대 헤이조쿄의 경계를 나타내지 않는다.",
     },
     {
       id: "mecca",
@@ -455,7 +456,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["이슬람교"],
       coordinates: [39.83, 21.42],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "baghdad",
@@ -464,7 +465,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["아바스 왕조"],
       coordinates: [44.37, 33.32],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "istanbul",
@@ -473,7 +474,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["콘스탄티노폴리스", "이스탄불", "비잔티움"],
       coordinates: [28.98, 41.01],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "kaifeng",
@@ -482,7 +483,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["개봉", "변경"],
       coordinates: [114.31, 34.8],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "karakorum",
@@ -491,7 +492,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["하르호린"],
       coordinates: [102.82, 47.2],
       locationNote:
-        "고대 카라코룸 유적 일대의 대표 위치입니다. 현재 하르호린 시가지와 같은 범위로 보지 않습니다.",
+        "고대 카라코룸 유적 일대의 대표 위치이다. 현재 하르호린 시가지와 같은 범위로 보지 않는다.",
     },
     {
       id: "beijing",
@@ -500,7 +501,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["북경", "대도", "자금성"],
       coordinates: [116.4, 39.9],
       locationNote:
-        "현재 베이징 중심부의 대표 위치입니다. 원의 대도와 명·청의 수도는 시대별 도시 범위가 다릅니다.",
+        "현재 베이징 중심부의 대표 위치이다. 원의 대도와 명·청의 수도는 시대별 도시 범위가 다르다.",
     },
     {
       id: "agra",
@@ -509,7 +510,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["타지마할"],
       coordinates: [78.01, 27.18],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "lisbon",
@@ -518,7 +519,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["신항로 개척"],
       coordinates: [-9.14, 38.72],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "boston",
@@ -527,7 +528,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["보스턴 차 사건"],
       coordinates: [-71.06, 42.36],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "philadelphia",
@@ -536,7 +537,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["미국 독립 선언"],
       coordinates: [-75.16, 39.95],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "paris",
@@ -545,7 +546,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["바스티유", "프랑스 혁명"],
       coordinates: [2.35, 48.86],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "manchester",
@@ -554,7 +555,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["산업 혁명", "면직물"],
       coordinates: [-2.24, 53.48],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "wuchang",
@@ -563,7 +564,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["무창", "우한", "신해혁명"],
       coordinates: [114.3, 30.55],
       locationNote:
-        "우한을 이루는 우창 지역의 대표 위치입니다. 우창과 오늘날 우한 전체를 같은 범위로 보지 않습니다.",
+        "우한을 이루는 우창 지역의 대표 위치이다. 우창과 오늘날 우한 전체를 같은 범위로 보지 않는다.",
     },
     {
       id: "tokyo",
@@ -572,7 +573,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["에도", "도쿄", "동경"],
       coordinates: [139.76, 35.68],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "sarajevo",
@@ -581,7 +582,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["사라예보 사건"],
       coordinates: [18.41, 43.86],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "versailles",
@@ -590,7 +591,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["베르사유 조약", "베르사유 궁전"],
       coordinates: [2.13, 48.8],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "nanjing",
@@ -599,7 +600,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["남경", "금릉"],
       coordinates: [118.8, 32.06],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "hiroshima",
@@ -608,7 +609,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["원자 폭탄"],
       coordinates: [132.46, 34.39],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "bandung",
@@ -617,7 +618,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["아시아·아프리카 회의"],
       coordinates: [107.61, -6.92],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
     {
       id: "berlin",
@@ -626,7 +627,7 @@ const originalHistoryAtlasDataset: AtlasDataset = {
       aliases: ["베를린 장벽", "독일 통일"],
       coordinates: [13.4, 52.52],
       locationNote:
-        "현재 도시 일대의 대표 위치입니다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않습니다.",
+        "현재 도시 일대의 대표 위치이다. 당시 도시의 경계나 개별 유적의 정밀 위치를 뜻하지 않는다.",
     },
   ],
   entries: [
@@ -1769,29 +1770,33 @@ for (const update of [...koreaPlaceUpdates, ...worldPlaceUpdates]) {
   });
 }
 
-export const historyAtlasDataset: AtlasDataset = addAtlasHistoricalStories(
-  {
-    ...originalHistoryAtlasDataset,
-    places: [...places.values()],
-    eras: historyAtlasEras,
-    entries: [
-      ...originalHistoryAtlasDataset.entries.map((entry) => ({
-        ...entry,
-        eraIds: originalAtlasEntryEras[entry.id] || [],
-      })),
-      ...koreaExpansionEntries.map((entry) => ({
-        ...entry,
-        ...koreaHistoricalEntryCorrections[entry.id],
-      })),
-      ...worldExpansionEntries.map((entry) => ({
-        ...entry,
-        ...worldHistoricalEntryCorrections[entry.id],
-      })),
+export const historyAtlasSourceDataset: AtlasDataset =
+  addAtlasHistoricalStories(
+    {
+      ...originalHistoryAtlasDataset,
+      places: [...places.values()],
+      eras: historyAtlasEras,
+      entries: [
+        ...originalHistoryAtlasDataset.entries.map((entry) => ({
+          ...entry,
+          eraIds: originalAtlasEntryEras[entry.id] || [],
+        })),
+        ...koreaExpansionEntries.map((entry) => ({
+          ...entry,
+          ...koreaHistoricalEntryCorrections[entry.id],
+        })),
+        ...worldExpansionEntries.map((entry) => ({
+          ...entry,
+          ...worldHistoricalEntryCorrections[entry.id],
+        })),
+      ],
+    },
+    [
+      ...koreaHistoricalStories,
+      ...worldHistoricalStories,
+      ...profileHistoricalStories,
     ],
-  },
-  [
-    ...koreaHistoricalStories,
-    ...worldHistoricalStories,
-    ...profileHistoricalStories,
-  ],
-);
+  );
+
+export const { dataset: historyAtlasDataset, audit: historyAtlasMapAudit } =
+  buildAtlasMapDataset(historyAtlasSourceDataset);

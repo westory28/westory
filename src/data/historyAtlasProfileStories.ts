@@ -47,7 +47,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 668,
     eraIds: ["k-three-kingdoms"],
     summary:
-      "서울 송파구에 남아 있는 백제 초기의 무덤들로, 한성백제의 장례 문화를 보여 줍니다.",
+      "서울 송파구에 남아 있는 백제 초기의 무덤들로, 한성백제의 장례 문화를 보여 준다.",
     sources: [
       {
         title: "위키백과 기여자 · 서울 석촌동 고분군 (본문 발췌·요약)",
@@ -60,7 +60,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "kr-91751bb0167f",
         reason:
-          "서울 송파구에 남아 있는 백제 초기의 무덤들로, 한성백제의 장례 문화를 보여 줍니다.",
+          "서울 송파구에 남아 있는 백제 초기의 무덤들로, 한성백제의 장례 문화를 보여 준다.",
       },
     ],
   },
@@ -591,7 +591,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 926,
     eraIds: ["k-balhae", "k-north-south"],
     summary:
-      "압록부라고도 부르는 발해의 주요 도시로, 당나라와 오가는 교역로에서 중요한 곳이었습니다.",
+      "압록부라고도 부르는 발해의 주요 도시로, 당나라와 오가는 교역로에서 중요한 곳이었다.",
     sources: [
       {
         title: "위키백과 기여자 · 서경 압록부 (본문 발췌·요약)",
@@ -604,7 +604,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "kr-6c478f7d3a3c",
         reason:
-          "압록부라고도 부르는 발해의 주요 도시로, 당나라와 오가는 교역로에서 중요한 곳이었습니다.",
+          "압록부라고도 부르는 발해의 주요 도시로, 당나라와 오가는 교역로에서 중요한 곳이었다.",
       },
     ],
   },
@@ -1103,7 +1103,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1392,
     eraIds: ["k-goryeo"],
     summary:
-      "평창 월정사에 있는 고려시대 석탑으로, 팔각형의 몸체 위에 아홉 층을 올렸습니다.",
+      "평창 월정사에 있는 고려시대 석탑으로, 팔각형의 몸체 위에 아홉 층을 올렸다.",
     sources: [
       {
         title: "위키백과 기여자 · 평창 월정사 팔각구층석탑 (본문 발췌·요약)",
@@ -1116,7 +1116,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "kr-c75537fc787b",
         reason:
-          "평창 월정사에 있는 고려시대 석탑으로, 팔각형의 몸체 위에 아홉 층을 올렸습니다.",
+          "평창 월정사에 있는 고려시대 석탑으로, 팔각형의 몸체 위에 아홉 층을 올렸다.",
       },
     ],
   },
@@ -1332,7 +1332,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1876,
     eraIds: ["k-joseon-late"],
     summary:
-      "정조가 수원에 머물 때 사용한 임시 궁궐로, 평소에는 수원 유수의 집무 공간이었습니다.",
+      "정조가 수원에 머물 때 사용한 임시 궁궐로, 평소에는 수원 유수의 집무 공간이었다.",
     sources: [
       {
         title: "위키백과 기여자 · 수원 화성행궁 (본문 발췌·요약)",
@@ -1351,7 +1351,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     startYear: -100000,
     eraIds: ["k-prehistory"],
     summary:
-      "단양에 있는 선사시대 동굴 유적으로, 구석기부터 청동기시대까지의 생활 흔적이 발견되었습니다.",
+      "단양에 있는 선사시대 동굴 유적으로, 구석기부터 청동기시대까지의 생활 흔적이 발견되었다.",
     sources: [
       {
         title: "위키백과 기여자 · 단양 금굴 유적 (본문 발췌·요약)",
@@ -1370,7 +1370,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     startYear: -100000,
     eraIds: ["k-prehistory"],
     summary:
-      "충북 단양 애곡리에 있는 선사시대 유적으로, 옛사람들의 생활 흔적이 남아 있습니다.",
+      "충북 단양 애곡리에 있는 선사시대 유적으로, 옛사람들의 생활 흔적이 남아 있다.",
     sources: [
       {
         title: "위키백과 기여자 · 단양 수양개 유적 (본문 발췌·요약)",
@@ -1581,7 +1581,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 698,
     eraIds: ["k-balhae", "k-north-south"],
     summary:
-      "698년 대조영의 세력이 당나라 군대와 싸운 곳으로, 발해 건국으로 이어지는 전투의 무대였습니다.",
+      "698년 대조영의 세력이 당나라 군대와 싸운 곳으로, 발해 건국으로 이어지는 전투의 무대였다.",
     sources: [
       {
         title: "위키백과 기여자 · 천문령 전투 (본문 발췌·요약)",
@@ -1594,7 +1594,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "kr-6c478f7d3a3c",
         reason:
-          "698년 대조영의 세력이 당나라 군대와 싸운 곳으로, 발해 건국으로 이어지는 전투의 무대였습니다.",
+          "698년 대조영의 세력이 당나라 군대와 싸운 곳으로, 발해 건국으로 이어지는 전투의 무대였다.",
       },
     ],
   },
@@ -1733,7 +1733,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 568,
     eraIds: ["k-three-kingdoms"],
     summary:
-      "신라 진흥왕이 568년 함경남도 황초령 일대를 순시한 일을 기념해 세운 비석입니다.",
+      "신라 진흥왕이 568년 함경남도 황초령 일대를 순시한 일을 기념해 세운 비석이다.",
     sources: [
       {
         title: "위키백과 기여자 · 황초령 진흥왕 순수비 (본문 발췌·요약)",
@@ -1746,7 +1746,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "kr-e9c99a172d2b",
         reason:
-          "신라 진흥왕이 568년 함경남도 황초령 일대를 순시한 일을 기념해 세운 비석입니다.",
+          "신라 진흥왕이 568년 함경남도 황초령 일대를 순시한 일을 기념해 세운 비석이다.",
       },
     ],
   },
@@ -1759,7 +1759,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 634,
     eraIds: ["k-three-kingdoms"],
     summary:
-      "경주 분황사에 있는 신라의 석탑으로, 선덕여왕 때인 634년에 세운 것으로 봅니다.",
+      "경주 분황사에 있는 신라의 석탑으로, 선덕여왕 때인 634년에 세운 것으로 본다.",
     sources: [
       {
         title: "위키백과 기여자 · 경주 분황사 모전석탑 (본문 발췌·요약)",
@@ -1772,7 +1772,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "kr-e9c99a172d2b",
         reason:
-          "경주 분황사에 있는 신라의 석탑으로, 선덕여왕 때인 634년에 세운 것으로 봅니다.",
+          "경주 분황사에 있는 신라의 석탑으로, 선덕여왕 때인 634년에 세운 것으로 본다.",
       },
     ],
   },
@@ -1858,7 +1858,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     period: "1348년",
     startYear: 1348,
     eraIds: ["k-goryeo"],
-    summary: "고려 말인 1348년 개성 경천사에 세운 열 층의 석탑입니다.",
+    summary: "고려 말인 1348년 개성 경천사에 세운 열 층의 석탑이다.",
     sources: [
       {
         title: "위키백과 기여자 · 개성 경천사지 십층석탑 (본문 발췌·요약)",
@@ -1870,7 +1870,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     related: [
       {
         placeId: "kr-c75537fc787b",
-        reason: "고려 말인 1348년 개성 경천사에 세운 열 층의 석탑입니다.",
+        reason: "고려 말인 1348년 개성 경천사에 세운 열 층의 석탑이다.",
       },
     ],
   },
@@ -1908,7 +1908,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     period: "1010년",
     startYear: 1010,
     eraIds: ["k-goryeo"],
-    summary: "고려시대인 1010년에 세운 예천 개심사 터의 오층 석탑입니다.",
+    summary: "고려시대인 1010년에 세운 예천 개심사 터의 오층 석탑이다.",
     sources: [
       {
         title: "위키백과 기여자 · 예천 개심사지 오층석탑 (본문 발췌·요약)",
@@ -1920,7 +1920,7 @@ export const profileHistoricalStories: AtlasHistoricalStory[] = [
     related: [
       {
         placeId: "kr-c75537fc787b",
-        reason: "고려시대인 1010년에 세운 예천 개심사 터의 오층 석탑입니다.",
+        reason: "고려시대인 1010년에 세운 예천 개심사 터의 오층 석탑이다.",
       },
     ],
   },

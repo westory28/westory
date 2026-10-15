@@ -35,7 +35,12 @@ import {
   pinchGlobeView,
   type GlobeView,
 } from "../../lib/historyGlobeMath";
-import { loadAtlasRiverGeometry } from "../../lib/historyAtlasGeometry";
+import {
+  atlasProjectedNorthBearing,
+  fitGlobeRegionCamera,
+  globeSelectionCenterY,
+  loadAtlasRiverGeometry,
+} from "../../lib/historyAtlasGeometry";
 import {
   findAtlasRiver,
   type AtlasRiverCollection,
@@ -43,6 +48,7 @@ import {
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import AtlasPlaceDetails from "./AtlasPlaceDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
+import AtlasCompass from "./AtlasCompass";
 import { matchesAtlasRegion } from "../../lib/historyAtlasRegions";
 import InfoHelp from "./InfoHelp";
 import { atlasRiverCreditItems } from "./AtlasRiverCredits";
@@ -99,7 +105,7 @@ function loadLand() {
   if (!landPromise)
     landPromise = fetch(landUrl)
       .then((response) => {
-        if (!response.ok) throw new Error("지형을 불러오지 못했습니다.");
+        if (!response.ok) throw new Error("지형을 불러오지 못했다.");
         return response.json() as Promise<GeoPermissibleObjects>;
       })
       .catch((error) => {
@@ -115,7 +121,7 @@ function loadGeography() {
   if (!geographyPromise)
     geographyPromise = fetch(geographyUrl)
       .then((response) => {
-        if (!response.ok) throw new Error("지리 정보를 불러오지 못했습니다.");
+        if (!response.ok) throw new Error("지리 정보를 불러오지 못했다.");
         return response.json() as Promise<GlobeGeography>;
       })
       .catch((error) => {
@@ -141,6 +147,7 @@ export default function HistoryGlobe({
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const zoomRef = useRef<HTMLOutputElement>(null);
+  const compassRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<SVGSVGElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
   const riverHaloRef = useRef<SVGPathElement>(null);
@@ -157,6 +164,7 @@ export default function HistoryGlobe({
   const [subregionId, setSubregionId] = useState("");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectionRevision, setSelectionRevision] = useState(0);
   const [page, setPage] = useState(0);
   const [panel, setPanel] = useState<"list" | "detail">("list");
   const [panelOpen, setPanelOpen] = useState(false);
@@ -280,7 +288,7 @@ export default function HistoryGlobe({
             ...selected.place,
             coordinates: geoCentroid(selectedRiver) as [number, number],
             locationNote:
-              "확인된 현대 수계의 물줄기를 선으로 표시합니다. 지도 축척에 맞춰 작은 굴곡은 단순화했습니다.",
+              "확인된 현대 수계의 물줄기를 선으로 표시한다. 지도 축척에 맞춰 작은 굴곡은 단순화했다.",
           }
         : selected?.place,
     [selected?.place, selectedRiver],
@@ -391,7 +399,7 @@ export default function HistoryGlobe({
       roll: 0,
       zoom: Math.min(GLOBE_MAX_ZOOM, scale / (Math.min(width, height) * 0.44)),
     });
-  }, [selectedRiver, setCamera]);
+  }, [selectedRiver, selectionRevision, setCamera]);
   useEffect(() => {
     const root = rootRef.current,
       map = mapRef.current;
@@ -466,12 +474,18 @@ export default function HistoryGlobe({
         .translate([
           width / 2,
           // Keep the selected point above the lower-left description popup.
-          height * (selected && panel === "detail" ? 0.3 : 0.5),
+          selected && panel === "detail"
+            ? globeSelectionCenterY(width, height)
+            : height * 0.5,
         ])
         .scale(Math.min(width, height) * 0.44 * camera.zoom)
         .rotate([-camera.longitude, -camera.latitude, camera.roll])
         .clipAngle(90)
         .precision(0.5);
+      compassRef.current?.style.setProperty(
+        "--atlas-compass-bearing",
+        `${atlasProjectedNorthBearing(projection, [camera.longitude, camera.latitude])}deg`,
+      );
       const path = geoPath(projection, context);
       context.fillStyle = color("--ws-surface-subtle");
       context.fillRect(0, 0, width, height);
@@ -737,12 +751,13 @@ export default function HistoryGlobe({
         setPage(0);
         setNotice(
           subjectChanged
-            ? `${ATLAS_SUBJECT_LABELS[next.subject]}로 이동했습니다.${cleared.length ? ` ${cleared.join("·")} 조건을 해제했습니다.` : ""}`
-            : `선택한 이야기를 보기 위해 ${cleared.join("·")} 조건을 해제했습니다.`,
+            ? `${ATLAS_SUBJECT_LABELS[next.subject]}로 이동했다.${cleared.length ? ` ${cleared.join("·")} 조건을 해제했다.` : ""}`
+            : `선택한 이야기를 보기 위해 ${cleared.join("·")} 조건을 해제했다.`,
         );
       } else setNotice("");
       pendingPanelFocus.current = "detail";
       setSelectedId(entryId);
+      setSelectionRevision((value) => value + 1);
       setPanel("detail");
       setPanelOpen(false);
       if (next.place.coordinates)
@@ -764,6 +779,7 @@ export default function HistoryGlobe({
     if (!item) return;
     pendingPanelFocus.current = "detail";
     setSelectedId(entryId);
+    setSelectionRevision((value) => value + 1);
     setPanel("detail");
     setPanelOpen(false);
     setNotice("");
@@ -961,7 +977,7 @@ export default function HistoryGlobe({
       </div>
       {filtered.length === 0 ? (
         <div className="history-globe__empty">
-          <p>조건에 맞는 장소가 없습니다.</p>
+          <p>조건에 맞는 장소가 없다.</p>
           <button onClick={resetFilters}>필터 초기화</button>
         </div>
       ) : (
@@ -1008,7 +1024,7 @@ export default function HistoryGlobe({
     <div className="history-globe__detail" ref={detailRef}>
       {selected.place.kind === "water" && riverError && (
         <div className="history-globe__river-error" role="alert">
-          <p>물줄기를 불러오지 못했습니다.</p>
+          <p>물줄기를 불러오지 못했다.</p>
           <button onClick={() => setRiverAttempt((value) => value + 1)}>
             다시 시도
           </button>
@@ -1039,22 +1055,22 @@ export default function HistoryGlobe({
               rows: [
                 {
                   label: "회전",
-                  content: "마우스나 손가락으로 지구본을 끕니다.",
+                  content: "마우스나 손가락으로 지구본을 끈다.",
                 },
                 {
                   label: "확대·축소",
-                  content: "휠 또는 두 손가락 벌리기·오므리기를 사용합니다.",
+                  content: "휠 또는 두 손가락 벌리기·오므리기를 사용한다.",
                 },
                 {
-                  label: "북쪽",
+                  label: "방위",
                   content:
-                    "N 버튼으로 북쪽을 위로 맞춥니다. 두 손가락을 비틀면 방향을 회전합니다.",
+                    "우하단 나침반은 화면 중앙의 방위를 가리킨다. 두 손가락을 비틀면 방향을 회전한다.",
                 },
               ],
             },
             {
               title: "키보드",
-              text: "방향키로 회전, +·−로 확대·축소, N으로 북쪽 복귀, Home으로 전체를 봅니다. 장소 목록에서도 지점을 선택할 수 있습니다.",
+              text: "방향키로 회전, +·−로 확대·축소, N으로 북쪽 복귀, Home으로 전체를 본다. 장소 목록에서도 지점을 선택할 수 있다.",
             },
             {
               title: "지형과 위치",
@@ -1068,9 +1084,9 @@ export default function HistoryGlobe({
                   >
                     Natural Earth
                   </a>
-                  의 현대 국경·하천·사막과 지명을 표시합니다. 점선은 분쟁·통제선
-                  등이며 역사 시대의 영토를 뜻하지 않습니다. 작은 섬과 해안선은
-                  세계 개관에 맞춰 단순화되어 있습니다.
+                  의 현대 국경·하천·사막과 지명을 표시한다. 점선은 분쟁·통제선
+                  등이며 역사 시대의 영토를 뜻하지 않는다. 작은 섬과 해안선은
+                  세계 개관에 맞춰 단순화되어 있다.
                 </>
               ),
             },
@@ -1172,6 +1188,35 @@ export default function HistoryGlobe({
               setPanel("list");
               setPage(0);
               setNotice("");
+              setQuery("");
+              const coordinates = [
+                ...new Map(
+                  items
+                    .filter(
+                      (item) =>
+                        item.subject === subject &&
+                        (!unitId || item.entry.unitId === unitId) &&
+                        (!eraId || item.entry.eraIds?.includes(eraId)) &&
+                        matchesAtlasRegion(
+                          item.place,
+                          subject,
+                          group,
+                          subregion,
+                        ),
+                    )
+                    .flatMap(({ place }) =>
+                      place.coordinates
+                        ? [[place.id, place.coordinates] as const]
+                        : [],
+                    ),
+                ).values(),
+              ];
+              const next = group
+                ? fitGlobeRegionCamera(coordinates, size.width, size.height)
+                : subject === "world"
+                  ? GLOBE_INITIAL_VIEW
+                  : { longitude: 127, latitude: 36, roll: 0, zoom: 2 };
+              if (next) setCamera(next);
             }}
           />
         </div>
@@ -1306,35 +1351,23 @@ export default function HistoryGlobe({
                   +
                 </button>
               </div>
-              <div
-                className="history-globe__view-controls"
-                role="group"
-                aria-label="지구본 방향과 전체 보기"
+              <button
+                aria-label="지구본 전체 보기"
+                onClick={() => setCamera(GLOBE_INITIAL_VIEW)}
               >
-                <button
-                  aria-label="북쪽을 위로"
-                  title="북쪽을 위로"
-                  onClick={() => setCamera({ ...viewRef.current, roll: 0 })}
-                >
-                  N ↑
-                </button>
-                <button
-                  aria-label="지구본 전체 보기"
-                  onClick={() => setCamera(GLOBE_INITIAL_VIEW)}
-                >
-                  전체
-                </button>
-              </div>
+                전체
+              </button>
             </div>
           </div>
+          <AtlasCompass ref={compassRef} />
           {!land && !landError && (
             <div className="history-globe__loading" role="status">
-              지형을 불러오는 중입니다.
+              지형을 불러오는 중이다.
             </div>
           )}
           {landError && (
             <div className="history-globe__loading" role="alert">
-              <span>지형을 불러오지 못했습니다.</span>
+              <span>지형을 불러오지 못했다.</span>
               <button onClick={() => setLoadAttempt((value) => value + 1)}>
                 다시 시도
               </button>
@@ -1343,6 +1376,7 @@ export default function HistoryGlobe({
           {selected && panel === "detail" && (
             <div
               className="history-globe__popup"
+              style={size.width < 344 ? { bottom: 84 } : undefined}
               role="region"
               aria-label={nameOf(selected) + " 장소 설명"}
               onKeyDown={(event) => {

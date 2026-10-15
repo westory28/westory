@@ -23,6 +23,9 @@ export interface AtlasHistoricalStory {
   related?: {
     placeId: string;
     reason: string;
+    /** A historical keyword can open an evidenced event at the same location. */
+    label?: string;
+    targetEntryId?: string;
     /** Required for stories shared by multiple places: never copy a city's
      * relationship to every monument that appears in the same story. */
     fromPlaceIds?: string[];
@@ -175,6 +178,7 @@ export interface AtlasHistoricalRelation {
   entry: AtlasEntry;
   reason: string;
   sources: AtlasHistoricalStory["sources"];
+  label?: string;
 }
 
 /** Explicit, evidenced edges only; reverse edges retain the complete reason. */
@@ -192,9 +196,23 @@ export const getAtlasHistoricalRelations = (
     reason: string,
     story: AtlasHistoricalStory,
     preferredEntry?: AtlasEntry,
+    link?: NonNullable<AtlasHistoricalStory["related"]>[number],
   ) => {
-    if (placeId === entry.placeId || found.has(placeId)) return;
+    const key =
+      link?.targetEntryId && placeId === entry.placeId
+        ? link.targetEntryId
+        : placeId;
+    if ((!link?.targetEntryId && placeId === entry.placeId) || found.has(key))
+      return;
+    const explicitTarget = link?.targetEntryId
+      ? allowed.find(
+          (item) => item.id === link.targetEntryId && item.placeId === placeId,
+        )
+      : undefined;
+    // Explicit links fail closed: never silently select another period.
+    if (link?.targetEntryId && !explicitTarget) return;
     const target =
+      explicitTarget ||
       preferredEntry ||
       allowed.find(
         (item) =>
@@ -204,8 +222,13 @@ export const getAtlasHistoricalRelations = (
           ),
       ) ||
       allowed.find((item) => item.placeId === placeId);
-    if (target)
-      found.set(placeId, { entry: target, reason, sources: story.sources });
+    if (target && target.id !== entry.id)
+      found.set(key, {
+        entry: target,
+        reason,
+        sources: story.sources,
+        label: link?.label,
+      });
   };
   const story = entry.historicalStory;
   const appliesTo = (
@@ -219,14 +242,15 @@ export const getAtlasHistoricalRelations = (
     ).includes(placeId);
   story?.related?.forEach((link) => {
     if (appliesTo(story, link, entry.placeId))
-      add(link.placeId, link.reason, story);
+      add(link.placeId, link.reason, story, undefined, link);
   });
   for (const other of allowed) {
     if (other.placeId !== entry.placeId || !other.historicalStory) continue;
     const context = other.historicalStory;
     context.related?.forEach((link) => {
+      if (link.targetEntryId && other.id !== entry.id) return;
       if (appliesTo(context, link, entry.placeId))
-        add(link.placeId, link.reason, context);
+        add(link.placeId, link.reason, context, undefined, link);
     });
   }
   // Include incoming factual relationships even for an otherwise unannotated
@@ -235,6 +259,7 @@ export const getAtlasHistoricalRelations = (
     const otherStory = other.historicalStory;
     if (!otherStory) continue;
     for (const link of otherStory.related || []) {
+      if (link.targetEntryId) continue;
       if (
         link.placeId === entry.placeId &&
         appliesTo(otherStory, link, other.placeId)

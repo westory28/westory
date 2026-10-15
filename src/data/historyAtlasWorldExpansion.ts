@@ -9,7 +9,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a945f2be5802",
@@ -17,7 +17,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: [35.35, -2.98333],
     locationNote:
-      "유적의 대표 위치 · Wikidata Q217043 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않습니다.",
+      "유적의 대표 위치 · Wikidata Q217043 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않는다.",
   },
   {
     id: "world-c28adc1d28f4",
@@ -25,7 +25,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: [31.250917, 29.844667],
     locationNote:
-      "유적의 대표 위치 · Wikidata Q5715 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않습니다.",
+      "유적의 대표 위치 · Wikidata Q5715 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않는다.",
   },
   {
     id: "world-d9ddae77a31a",
@@ -33,7 +33,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-97df6cd0732f",
@@ -41,7 +41,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: [72.866667, 30.633333],
     locationNote:
-      "유적의 대표 위치 · Wikidata Q185562 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않습니다.",
+      "유적의 대표 위치 · Wikidata Q185562 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않는다.",
   },
   {
     id: "world-5b8ea5131294",
@@ -49,7 +49,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: [114.318611, 36.1225],
     locationNote:
-      "유적의 대표 위치 · Wikidata Q464904 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않습니다.",
+      "유적의 대표 위치 · Wikidata Q464904 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않는다.",
   },
   {
     id: "world-9a51ac2557e3",
@@ -57,7 +57,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bce22ab2c1ce",
@@ -65,7 +65,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e3b98335594b",
@@ -73,7 +73,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-59e18dcb0269",
@@ -81,7 +81,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: [52.89, 29.935],
     locationNote:
-      "유적의 대표 위치 · Wikidata Q129072 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않습니다.",
+      "유적의 대표 위치 · Wikidata Q129072 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않는다.",
   },
   {
     id: "world-9d7be6c5aca6",
@@ -89,7 +89,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-0e4c5347dc44",
@@ -97,7 +97,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-c8f4eeed3dd9",
@@ -105,7 +105,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [35.37148, 33.55751],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 268064 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 268064 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-bf0c345a5654",
@@ -113,7 +113,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [94.68333, 40.16667],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1529531 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1529531 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["사주"],
   },
   {
@@ -122,7 +122,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9d0dcab9fa8d",
@@ -130,7 +130,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [107.02214, 33.07507],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1808857 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1808857 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3a677b8411aa",
@@ -138,7 +138,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-07b8c66d6a4e",
@@ -146,7 +146,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["함양"],
   },
   {
@@ -155,7 +155,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [35.19389, 33.27333],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 267008 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 267008 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ed58de0394bd",
@@ -163,7 +163,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["에페소스"],
   },
   {
@@ -172,7 +172,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9d9bf70b7a60",
@@ -180,7 +180,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [29.91582, 31.20176],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 361058 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 361058 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c80c9c6b44d4",
@@ -188,7 +188,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["일리온"],
   },
   {
@@ -197,7 +197,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-0.26667, 39.68333],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2511619 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2511619 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-1b0eb48798b1",
@@ -205,7 +205,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [17.24707, 40.46438],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3165926 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3165926 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-9f0de41cfebd",
@@ -213,7 +213,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1c2883151fc7",
@@ -221,7 +221,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["카르타고 노바"],
   },
   {
@@ -230,7 +230,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [9.18951, 45.46427],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3173435 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3173435 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-1cf4720d3424",
@@ -238,7 +238,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-88eb1b60d9a5",
@@ -246,7 +246,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [12.20121, 44.41344],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3169561 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3169561 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f61188c971b7",
@@ -254,7 +254,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-4.02263, 39.8581],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2510409 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2510409 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-71f0c245b5a4",
@@ -262,7 +262,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-0.12574, 51.50853],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2643743 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2643743 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["론디니움", "론다니움"],
   },
   {
@@ -271,7 +271,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [14.26811, 40.85216],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3172394 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3172394 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d14c69b9f3f2",
@@ -279,7 +279,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [30.5238, 50.45466],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 703448 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 703448 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e5c5a6cda4c3",
@@ -287,7 +287,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [31.27104, 58.52131],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 519336 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 519336 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-bba99c8a182a",
@@ -295,7 +295,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [35.21633, 31.76904],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 281184 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 281184 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f1afcae2dabc",
@@ -303,7 +303,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [91.1, 29.65],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1280737 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1280737 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-63658712255f",
@@ -311,7 +311,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-62214dfdf01f",
@@ -319,7 +319,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [96.08359, 21.97473],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1311874 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1311874 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3e1abb72378b",
@@ -327,7 +327,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [103.61667, -1.6],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1642858 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1642858 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-52219a2e62b2",
@@ -335,7 +335,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [104.7458, -2.91673],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1633070 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1633070 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8ebf71da60cd",
@@ -343,7 +343,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [84.9869, 24.69808],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1275389 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1275389 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-32a24248aa0f",
@@ -351,7 +351,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["푸르샤프라"],
   },
   {
@@ -360,7 +360,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-44d9dbb2338c",
@@ -368,7 +368,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [77.67215, 27.5035],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1263364 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1263364 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-9655276935bd",
@@ -376,7 +376,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-23f8483f8d47",
@@ -384,7 +384,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [135.75385, 35.02107],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1857910 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1857910 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["헤이안쿄", "헤이안"],
   },
   {
@@ -393,7 +393,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [36.29128, 33.5102],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 170654 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 170654 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-685a859c916f",
@@ -401,7 +401,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [39.61417, 24.46861],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 109223 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 109223 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["야스리브"],
   },
   {
@@ -410,7 +410,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [31.24967, 30.06263],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 360630 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 360630 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-26d0afbd6492",
@@ -418,7 +418,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [45.03852, 12.77957],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 415189 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 415189 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-46a8d449ce7a",
@@ -426,7 +426,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-81e7bc663b95",
@@ -434,7 +434,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e7b216b2a964",
@@ -442,7 +442,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [66.96445, 39.65456],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1216265 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1216265 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["마라칸다"],
   },
   {
@@ -451,7 +451,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-3e1340984f87",
@@ -459,7 +459,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [69.17233, 34.52813],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1138958 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1138958 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-844dd33bf4b8",
@@ -467,7 +467,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["호르무스"],
   },
   {
@@ -476,7 +476,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-4.77275, 37.89155],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2519240 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2519240 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6c8f7f219544",
@@ -484,7 +484,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [10.16579, 36.81897],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2464470 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2464470 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-878a81796ee0",
@@ -492,7 +492,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [0.70398, 47.39484],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2972191 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2972191 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3f39257dc07c",
@@ -500,7 +500,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [0.34348, 46.58261],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2986495 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2986495 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d504fb66dba4",
@@ -508,7 +508,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [12.33265, 45.43713],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3164603 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3164603 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7ffc7fdbeb12",
@@ -516,7 +516,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [32.89942, 24.09082],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 359792 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 359792 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4af9af54b3c7",
@@ -524,7 +524,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [13.18733, 32.88743],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2210247 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2210247 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7091642a2395",
@@ -532,7 +532,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2fb960eee7ee",
@@ -540,7 +540,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-5.00028, 34.03313],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2548885 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2548885 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d833506ddd81",
@@ -548,7 +548,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [100.45167, 38.93417],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1785036 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1785036 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["감주"],
   },
   {
@@ -557,7 +557,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["쿠챠"],
   },
   {
@@ -566,7 +566,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [75.98675, 39.46718],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1280849 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1280849 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["소륵", "카스"],
   },
   {
@@ -575,7 +575,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [44.20646, 15.35452],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 71137 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 71137 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-23c5a08b83e0",
@@ -583,7 +583,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [45.34375, 2.03711],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 53654 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 53654 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-cbd8f5e1c3e4",
@@ -591,7 +591,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [40.11692, -3.21799],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 187968 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 187968 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-02d9b294203a",
@@ -599,7 +599,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [39.66359, -4.05466],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 186301 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 186301 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-872972e9a3dc",
@@ -607,7 +607,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [120.16142, 30.29365],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1808926 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1808926 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["임안", "여항"],
   },
   {
@@ -616,7 +616,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-f1bc721d62c8",
@@ -624,7 +624,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-3e0c7bdd2609",
@@ -632,7 +632,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [113.25, 23.11667],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1809858 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1809858 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-5b3e89fd66c7",
@@ -640,7 +640,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [6.14569, 46.20222],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2660646 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2660646 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e6b9fed95bb8",
@@ -648,7 +648,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [10.89851, 48.37154],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2954172 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2954172 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b5dda255b318",
@@ -656,7 +656,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [4.88969, 52.37403],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2759794 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2759794 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4bb835aa0dab",
@@ -664,7 +664,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [3.22424, 51.20892],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2800931 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2800931 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b93b961da157",
@@ -672,7 +672,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [11.24626, 43.77925],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3176959 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3176959 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c5077530ed4f",
@@ -680,7 +680,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [8.28008, 49.98185],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2874225 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2874225 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-db517ae6e2e9",
@@ -688,7 +688,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [12.64973, 51.8661],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 7303020 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 7303020 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-aa3ca89c7d57",
@@ -696,7 +696,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [16.86982, 41.12066],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3182351 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3182351 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7000f576325c",
@@ -704,7 +704,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [1.09932, 49.44313],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2982652 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2982652 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3ab601a376d0",
@@ -712,7 +712,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [12.10161, 49.01513],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2849483 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2849483 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f3a7766e75d0",
@@ -720,7 +720,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [36.15722, 36.20655],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 323779 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 323779 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d750321dee4b",
@@ -728,7 +728,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [38.79392, 37.16708],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 298333 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 298333 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-97f521ccd2b4",
@@ -736,7 +736,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [22.93493, 40.64072],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 734077 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 734077 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3a7f1066c582",
@@ -744,7 +744,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [120.66682, 27.99942],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1791388 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1791388 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["윈저우"],
   },
   {
@@ -753,7 +753,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [46.2919, 38.08],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 113646 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 113646 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-949e31a1d379",
@@ -761,7 +761,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-f9e0d07817bd",
@@ -769,7 +769,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [37.61781, 55.75204],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 524901 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 524901 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-46e515708eee",
@@ -777,7 +777,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [40.39976, 56.13854],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 473247 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 473247 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-125082c14c3f",
@@ -785,7 +785,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [47.7804, 30.50852],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 99532 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 99532 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-9f14f6a5fcc9",
@@ -793,7 +793,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [35.07647, 32.92814],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 295721 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 295721 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2aa69c3bbe5b",
@@ -801,7 +801,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [77.23149, 28.65195],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1273294 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1273294 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f258dd399718",
@@ -809,7 +809,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [102.71833, 25.03889],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1804651 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1804651 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-074a7a1332ea",
@@ -817,7 +817,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [39.72694, 41.005],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 738648 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 738648 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-43b370fd0aec",
@@ -825,7 +825,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2064571eae7e",
@@ -833,7 +833,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 몽골 교통로 지도의 원문 표기입니다. 동명 현대 도시나 장예와의 동일성을 확정하지 않았습니다.",
+      "위치 확인 필요 · 몽골 교통로 지도의 원문 표기이다. 동명 현대 도시나 장예와의 동일성을 확정하지 않았다.",
     aliases: ["간주"],
   },
   {
@@ -842,7 +842,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["장두"],
   },
   {
@@ -851,7 +851,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [75.7804, 11.24802],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1265873 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1265873 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["코지코드"],
   },
   {
@@ -860,7 +860,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-c69a008674e1",
@@ -868,7 +868,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [102.2405, 2.196],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1734759 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1734759 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-fbb7d4168bc0",
@@ -876,7 +876,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [109.22367, 13.77648],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1568574 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1568574 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e602a1fe2788",
@@ -884,7 +884,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [106.451, 50.34956],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2021066 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2021066 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-68f0c26b6639",
@@ -892,7 +892,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-99.90891, 16.84942],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3533462 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3533462 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-13685b2251ac",
@@ -900,7 +900,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-287e29e93d5f",
@@ -908,7 +908,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [120.9822, 14.6042],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1701668 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1701668 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3cc22b04fb0d",
@@ -916,7 +916,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-65.75306, -19.58361],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3907584 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3907584 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-66f95cab05f0",
@@ -924,7 +924,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [113.54611, 22.20056],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1821274 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1821274 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-35570aabeb92",
@@ -932,7 +932,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-5.97317, 37.38283],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2510911 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2510911 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-97044479ee0e",
@@ -940,7 +940,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [118.08187, 24.47979],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1790645 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1790645 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["아모이"],
   },
   {
@@ -949,7 +949,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [117.20789, 29.2947],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1805680 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1805680 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-cf92e4ec620a",
@@ -957,7 +957,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2af353560891",
@@ -965,7 +965,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [104.06667, 30.66667],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1815286 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1815286 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7816f66482b0",
@@ -973,7 +973,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1ef115875c31",
@@ -981,7 +981,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fad0004357cb",
@@ -989,7 +989,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [135.50107, 34.69379],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1853909 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1853909 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-728c452cb149",
@@ -997,7 +997,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [62.19967, 34.34817],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1140026 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1140026 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2d45ecf65497",
@@ -1005,7 +1005,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [51.67462, 32.65246],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 418863 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 418863 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4e2164e6453a",
@@ -1013,7 +1013,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [69.21627, 41.26465],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1512569 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1512569 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-5cc99cbf356c",
@@ -1021,7 +1021,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [32.85427, 39.91987],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 323786 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 323786 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["앙고라"],
   },
   {
@@ -1030,7 +1030,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e787efd0eb34",
@@ -1038,7 +1038,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [12.56553, 55.67594],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2618425 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2618425 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3853153f06af",
@@ -1046,7 +1046,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [21.01178, 52.22977],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 756135 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 756135 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c9263001c56b",
@@ -1054,7 +1054,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [8.94439, 44.40478],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3176219 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3176219 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-1221565fd8b8",
@@ -1062,7 +1062,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [7.68682, 45.07049],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3165524 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3165524 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e927495d0c18",
@@ -1070,7 +1070,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-2.97794, 53.41058],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2644210 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2644210 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a236f7cd46dd",
@@ -1078,7 +1078,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.54785, 53.79648],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2644688 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2644688 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-98635f611c75",
@@ -1086,7 +1086,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.4659, 53.38297],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2638077 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2638077 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-27733ed89fa9",
@@ -1094,7 +1094,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.89983, 52.48142],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2655603 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2655603 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-15e2a2c5c985",
@@ -1102,7 +1102,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [8.68417, 50.11552],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2925533 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2925533 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-78bbb09d209f",
@@ -1110,7 +1110,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [4.34878, 50.85045],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2800866 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2800866 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-35c35344f75f",
@@ -1118,7 +1118,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [3.71667, 51.05],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2797656 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2797656 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-9be8af9c4b87",
@@ -1126,7 +1126,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-2.92528, 43.26271],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3128026 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3128026 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7ecd1c90370e",
@@ -1134,7 +1134,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [2.15899, 41.38879],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3128760 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3128760 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-dbc8d1f04d96",
@@ -1142,7 +1142,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-3.70256, 40.4165],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3117735 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3117735 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-65239e156701",
@@ -1150,7 +1150,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [9.99302, 53.55073],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2911298 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2911298 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-88b3be0c87c3",
@@ -1158,7 +1158,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-3.19648, 55.95206],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2650225 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2650225 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-86d1063cecf2",
@@ -1166,7 +1166,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-4.25763, 55.86515],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2648579 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2648579 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-953815853ea7",
@@ -1174,7 +1174,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-2.9382, 54.8951],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2653775 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2653775 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f8cd246966c9",
@@ -1182,7 +1182,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.38222, 54.90465],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2636531 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2636531 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e95f736a53f1",
@@ -1190,7 +1190,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-041271ab1158",
@@ -1198,7 +1198,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.55039, 54.52429],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2651513 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2651513 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6fe2b793fa46",
@@ -1206,7 +1206,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-6.24889, 53.33306],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2964574 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2964574 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-82f985fac477",
@@ -1214,7 +1214,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-5.92541, 54.59682],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2655984 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2655984 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e9da2579e708",
@@ -1222,7 +1222,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-2.18538, 53.00415],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2636841 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2636841 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-436b58f4f65c",
@@ -1230,7 +1230,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.85, 53.71667],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2647632 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2647632 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8fcac02cf0bd",
@@ -1238,7 +1238,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.47663, 52.92277],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2651347 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2651347 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3fa76ee00daa",
@@ -1246,7 +1246,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-2.59665, 51.45523],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2654675 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2654675 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-530f985720bc",
@@ -1254,7 +1254,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [1.15545, 52.05917],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2646057 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2646057 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8cae5a9b430d",
@@ -1262,7 +1262,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [1.29834, 52.62783],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2641181 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2641181 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ec7d12e70873",
@@ -1270,7 +1270,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.40428, 50.90395],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2637487 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2637487 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-5f4e3c16c8c3",
@@ -1278,7 +1278,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-4.14305, 50.37153],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2640194 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2640194 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f2f88289db6e",
@@ -1286,7 +1286,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-14d555e5a607",
@@ -1294,7 +1294,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.08271, 53.95763],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2633352 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2633352 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-78771dc76973",
@@ -1302,7 +1302,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.25596, 51.75222],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2640729 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2640729 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2f0df936c6f0",
@@ -1310,7 +1310,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-2.70452, 53.76282],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2639912 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2639912 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-80cb06b0e5b2",
@@ -1318,7 +1318,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-2.44472, 50.56748],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 6692041 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 6692041 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
   },
   {
     id: "world-300ce67c302a",
@@ -1326,7 +1326,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-2.51418, 56.00062],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 2650776 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 2650776 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
   },
   {
     id: "world-6ceecfcf7168",
@@ -1334,7 +1334,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-77.03637, 38.89511],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 4140963 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 4140963 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
   },
   {
     id: "world-422933f04efe",
@@ -1342,7 +1342,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-406d831cc5de",
@@ -1350,7 +1350,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-77.94604, 34.23556],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 4499379 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 4499379 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
     aliases: ["웰밍턴"],
   },
   {
@@ -1359,7 +1359,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-27469829202d",
@@ -1367,7 +1367,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-71.21454, 46.81228],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 6325494 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 6325494 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["퀘백"],
   },
   {
@@ -1376,7 +1376,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-83.04575, 42.33143],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 4990729 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 4990729 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7652045affb8",
@@ -1384,7 +1384,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-74.00597, 40.71427],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 5128581 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 5128581 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b369e43fe03f",
@@ -1392,7 +1392,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-76.50894, 37.23858],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 4046946 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 4046946 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e5ec86b32b42",
@@ -1400,7 +1400,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [51.42151, 35.69439],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 112931 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 112931 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-82b52c335023",
@@ -1408,7 +1408,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [72.88261, 19.07283],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1275339 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1275339 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["봄베이"],
   },
   {
@@ -1417,7 +1417,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [88.36304, 22.56263],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1275004 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1275004 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-757696e32799",
@@ -1425,7 +1425,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [80.27847, 13.08784],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1264527 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1264527 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["마드라스"],
   },
   {
@@ -1434,7 +1434,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [96.15611, 16.80528],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1298824 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1298824 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["양곤"],
   },
   {
@@ -1443,7 +1443,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [106.62965, 10.82302],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1566083 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1566083 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["호찌민시"],
   },
   {
@@ -1452,7 +1452,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [105.84117, 21.0245],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1581130 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1581130 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-df50d392c54c",
@@ -1460,7 +1460,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [106.84513, -6.21462],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1642911 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1642911 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["바타비아"],
   },
   {
@@ -1469,7 +1469,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["즈푸"],
   },
   {
@@ -1478,7 +1478,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [122.23176, 40.66472],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2033370 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2033370 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6e9cd3a9a135",
@@ -1486,7 +1486,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [117.17667, 39.14222],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1792947 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1792947 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d103575254d6",
@@ -1494,7 +1494,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a7e0e7d05dc0",
@@ -1502,7 +1502,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [116.67876, 23.35489],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1795940 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1795940 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-877f53b09370",
@@ -1510,7 +1510,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e9e0ab50361d",
@@ -1518,7 +1518,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-6250637ec634",
@@ -1526,7 +1526,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a6ef8381f098",
@@ -1534,7 +1534,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ed3838629aad",
@@ -1542,7 +1542,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-93c4b621d059",
@@ -1550,7 +1550,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [140.73667, 41.77583],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2130188 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2130188 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-24264553716d",
@@ -1558,7 +1558,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [139.04125, 37.92259],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1855431 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1855431 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4b08af94b8bd",
@@ -1566,7 +1566,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [135.183, 34.6913],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1859171 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1859171 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["효고"],
   },
   {
@@ -1575,7 +1575,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [18.42322, -33.92584],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3369157 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3369157 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6404df318bc2",
@@ -1583,7 +1583,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [103.85007, 1.28967],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1880252 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1880252 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ae6d96814fa0",
@@ -1591,7 +1591,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [13.06566, 52.39886],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2852458 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2852458 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2ffbb37ad8c3",
@@ -1599,7 +1599,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [34.16624, 44.50218],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 688533 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 688533 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-845a3fde2ab5",
@@ -1607,7 +1607,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [14.42076, 50.08804],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3067696 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3067696 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-91abafbeb8cc",
@@ -1615,7 +1615,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [23.32415, 42.69751],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 727011 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 727011 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-5ac0fb3528de",
@@ -1623,7 +1623,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [103.02301, 21.38602],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1583477 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1583477 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-576d4303e8a4",
@@ -1631,7 +1631,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [30.31413, 59.93863],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 498817 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 498817 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-21ab7727d5e0",
@@ -1639,7 +1639,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [114.48764, 36.60999],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1808963 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1808963 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-53b83393e769",
@@ -1647,7 +1647,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-f146cd627fc2",
@@ -1655,7 +1655,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fff4e0bfd841",
@@ -1663,7 +1663,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bb8c27bc83cb",
@@ -1671,7 +1671,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-939a1df24c5f",
@@ -1679,7 +1679,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5ec32e9ad526",
@@ -1687,7 +1687,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-f26aeb57f038",
@@ -1695,7 +1695,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [79.84868, 6.93548],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1248991 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1248991 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3e2e889d7b56",
@@ -1703,7 +1703,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [46.72185, 24.68773],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 108410 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 108410 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b6ff742d86b4",
@@ -1711,7 +1711,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [54.3675, 31.89722],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 111822 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 111822 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e7f3bd2053ba",
@@ -1719,7 +1719,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [6.08342, 50.77664],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3247449 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3247449 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-94e150b89eb4",
@@ -1727,7 +1727,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-d410f7a73809",
@@ -1735,7 +1735,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [10.4036, 43.70853],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3170647 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3170647 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a220548dc908",
@@ -1743,7 +1743,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [1.48925, 48.44685],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3026467 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3026467 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ffd665fc6736",
@@ -1751,7 +1751,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [6.95, 50.93333],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2886242 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2886242 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-62b9e6b54d60",
@@ -1759,7 +1759,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [72.35067, 40.78338],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1514588 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1514588 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["인디잔"],
   },
   {
@@ -1768,7 +1768,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [74.87534, 31.62234],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1278710 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1278710 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-df9ce94dff2b",
@@ -1776,7 +1776,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-71.96701, -13.53188],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3941584 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3941584 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-0e331ff8e89c",
@@ -1784,7 +1784,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [58.79575, 36.21329],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 122285 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 122285 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["나샤푸르"],
   },
   {
@@ -1793,7 +1793,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [74.35071, 31.558],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1172451 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1172451 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c40cf82a1fda",
@@ -1801,7 +1801,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [52.53113, 29.61031],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 115019 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 115019 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8bcb5aaf1fe6",
@@ -1809,7 +1809,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [39.19793, -6.16394],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 148730 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 148730 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d12515f624d6",
@@ -1817,7 +1817,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-3.00742, 16.77348],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2449067 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2449067 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6a3a0d4cf3ef",
@@ -1825,7 +1825,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [58.40778, 23.58413],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 287286 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 287286 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-fd370ee5d8b8",
@@ -1833,7 +1833,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [37.16117, 36.20124],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 170063 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 170063 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4f96080e9f80",
@@ -1841,7 +1841,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [1.44367, 43.60426],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2972315 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2972315 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7e90cda0a860",
@@ -1849,7 +1849,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [4.84789, 45.74906],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2996944 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2996944 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ba2226fc28c9",
@@ -1857,7 +1857,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [5.38107, 43.29695],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2995469 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2995469 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["마실리아"],
   },
   {
@@ -1866,7 +1866,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [11.63189, 52.13129],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2874545 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2874545 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a4fdb35d4967",
@@ -1874,7 +1874,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [10.68729, 53.86893],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2875601 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2875601 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-fd22064dcb83",
@@ -1882,7 +1882,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [8.80717, 53.07582],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2944388 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2944388 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3120a0b4ccc9",
@@ -1890,7 +1890,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [0.11667, 52.2],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2653941 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2653941 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-0e64700a72af",
@@ -1898,7 +1898,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [71.47824, 30.19679],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1169825 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1169825 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a0144bfc49e4",
@@ -1906,7 +1906,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-30225f61b55e",
@@ -1914,7 +1914,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [11.57549, 48.13743],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2867714 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2867714 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-79dbeef5365a",
@@ -1922,7 +1922,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [19.04045, 47.49835],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3054643 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3054643 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c194012dc5e0",
@@ -1930,7 +1930,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [7.26608, 43.70313],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2990440 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2990440 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-98a5f0cff814",
@@ -1938,7 +1938,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [18.06871, 59.32938],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2673730 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2673730 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b2bf15f06f6b",
@@ -1946,7 +1946,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-0.58046, 44.84124],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3031582 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3031582 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-89964281fd43",
@@ -1954,7 +1954,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [8.72091, 47.34713],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 2658216 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 2658216 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
   },
   {
     id: "world-d4a692181eed",
@@ -1962,7 +1962,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [17.03006, 51.10286],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3081368 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3081368 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["브로츠와프"],
   },
   {
@@ -1971,7 +1971,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [121.54945, 29.87819],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1799397 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1799397 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4745bda9996d",
@@ -1979,7 +1979,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [114.26667, 30.58333],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1791247 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1791247 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["한구"],
   },
   {
@@ -1988,7 +1988,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-d06180a7e02c",
@@ -1996,7 +1996,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-62.72499, 17.2955],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3575551 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3575551 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d8af82484a1d",
@@ -2004,7 +2004,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-61.84329, 17.12096],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3576022 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3576022 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-bb0c74fdef99",
@@ -2012,7 +2012,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-61.38808, 15.30174],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3575635 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3575635 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-26a646d09c92",
@@ -2020,7 +2020,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-59.62021, 13.10732],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3374036 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3374036 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c134ed0fa2d3",
@@ -2028,7 +2028,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-61.22742, 13.15527],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3577887 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3577887 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d599ac149473",
@@ -2036,7 +2036,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [35.50157, 33.89332],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 276781 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 276781 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ccfef6c210c1",
@@ -2044,7 +2044,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-16.57803, 13.45274],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2413876 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2413876 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-be0892878898",
@@ -2052,7 +2052,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-61.51889, 10.66668],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3573890 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3573890 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e977be58feac",
@@ -2060,7 +2060,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-61.75226, 12.05288],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3579925 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3579925 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-44ba669bbb01",
@@ -2068,7 +2068,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-61.00614, 13.9957],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3576812 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3576812 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-98993d6ed711",
@@ -2076,7 +2076,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [51.53096, 25.28545],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 290030 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 290030 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-958f30cdb2a2",
@@ -2084,7 +2084,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [30.05885, -1.94995],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 202061 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 202061 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-faa4313ab0ed",
@@ -2092,7 +2092,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [29.36142, -3.38193],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 425378 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 425378 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-03a20f2eef06",
@@ -2100,7 +2100,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [27.48333, -29.31667],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 932505 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 932505 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-666e125e51bb",
@@ -2108,7 +2108,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [50.58565, 26.22787],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 290340 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 290340 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["마나바"],
   },
   {
@@ -2117,7 +2117,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [17.08323, -22.55941],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3352136 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3352136 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b080e7495de6",
@@ -2125,7 +2125,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [73.04329, 33.72148],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1176615 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1176615 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c6f38f10836f",
@@ -2133,7 +2133,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [68.77905, 38.53575],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1221874 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1221874 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-81f4115173d5",
@@ -2141,7 +2141,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-1.53388, 12.36566],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2357048 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2357048 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-123fcb465d1d",
@@ -2149,7 +2149,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [89.64191, 27.46609],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1252416 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1252416 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-86cacaf1260d",
@@ -2157,7 +2157,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [57.49889, -20.16194],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 934154 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 934154 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-34d9f0503d01",
@@ -2165,7 +2165,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [47.53613, -18.91368],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1070940 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1070940 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2b4adcaa14eb",
@@ -2173,7 +2173,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [35.73947, -6.17221],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 160196 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 160196 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-5506a44c952f",
@@ -2181,7 +2181,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [43.25506, -11.70216],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 921772 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 921772 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f35c9a166408",
@@ -2189,7 +2189,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [32.58219, 0.31628],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 232422 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 232422 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8e27538d89d6",
@@ -2197,7 +2197,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [31.58247, 4.85165],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 373303 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 373303 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-459165107877",
@@ -2205,7 +2205,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [36.81667, -1.28333],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 184745 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 184745 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b10068d722ea",
@@ -2213,7 +2213,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [32.53241, 15.55177],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 379252 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 379252 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ae061c68c10a",
@@ -2221,7 +2221,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [38.74689, 9.02497],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 344979 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 344979 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8938cd22789d",
@@ -2229,7 +2229,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [14.5148, 35.89968],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2562305 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2562305 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2e2e5509a457",
@@ -2237,7 +2237,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [125.57361, -8.55861],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1645457 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1645457 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-953c761e000b",
@@ -2245,7 +2245,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [149.12807, -35.28346],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2172517 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2172517 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-fd95d1b39869",
@@ -2253,7 +2253,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [147.15089, -9.47723],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2088122 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2088122 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-89b5a9dc33ab",
@@ -2261,7 +2261,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [159.95, -9.43333],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2108502 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2108502 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ea2c6319a21a",
@@ -2269,7 +2269,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [102.6, 17.96667],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1651944 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1651944 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e0fa79970f3e",
@@ -2277,7 +2277,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [96.12972, 19.745],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 6611854 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 6611854 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-debb1c6e8f9f",
@@ -2285,7 +2285,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [104.91601, 11.56245],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1821306 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1821306 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4dc2c2918945",
@@ -2293,7 +2293,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [100.50144, 13.75398],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1609350 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1609350 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-897c2ffcbe1e",
@@ -2301,7 +2301,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-87664e198569",
@@ -2309,7 +2309,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [90.40744, 23.7104],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1185241 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1185241 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-72891a782815",
@@ -2317,7 +2317,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [85.3206, 27.70169],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1283240 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1283240 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4ca5c460e0aa",
@@ -2325,7 +2325,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [168.31366, -17.73648],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2135171 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2135171 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-9adf477d4eac",
@@ -2333,7 +2333,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [178.42531, -18.13683],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2198148 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2198148 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-37a726b6aa5b",
@@ -2341,7 +2341,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-175.20114, -21.13683],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 4032402 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 4032402 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-72e73261214b",
@@ -2349,7 +2349,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [174.77557, -41.28664],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2179537 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2179537 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-1397c8e752fd",
@@ -2357,7 +2357,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [179.19417, -8.52425],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2110394 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2110394 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-02655c997872",
@@ -2365,7 +2365,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [158.16109, 6.92477],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2081986 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2081986 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f4fc3adc89cb",
@@ -2373,7 +2373,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [171.38027, 7.08971],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2113779 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2113779 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8e3c8d1963b2",
@@ -2381,7 +2381,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [172.97696, 1.3278],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2110257 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2110257 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-afc24089dcab",
@@ -2389,7 +2389,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-739f04e901b6",
@@ -2397,7 +2397,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-171.76666, -13.83333],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 4035413 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 4035413 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-0d90d4689bcd",
@@ -2405,7 +2405,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [114.94006, 4.89035],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1820906 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1820906 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-adc06734cdce",
@@ -2413,7 +2413,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [101.68653, 3.1412],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1735161 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1735161 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-05ee6433441f",
@@ -2421,7 +2421,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [58.38333, 37.95],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 162183 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 162183 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-25d9668531ef",
@@ -2429,7 +2429,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [77.2148, 28.62137],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1261481 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1261481 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8b3c8a38a5f0",
@@ -2437,7 +2437,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [18.55496, 4.36122],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2389853 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2389853 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f900ac604424",
@@ -2445,7 +2445,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-6.83255, 34.01325],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2538475 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2538475 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-71406aff84cb",
@@ -2453,7 +2453,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [3.08746, 36.73225],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2507480 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2507480 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-62a91fd70c0b",
@@ -2461,7 +2461,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [27.56653, 53.90019],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 625144 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 625144 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-50b3411db883",
@@ -2469,7 +2469,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [24.10589, 56.946],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 456172 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 456172 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-cf5d80a41881",
@@ -2477,7 +2477,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [10.74609, 59.91273],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3143244 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3143244 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c77bc45fa4a3",
@@ -2485,7 +2485,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [24.93545, 60.16952],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 658225 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 658225 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-0fe79474f511",
@@ -2493,7 +2493,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-21.89541, 64.13548],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3413829 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3413829 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-51ad3062c706",
@@ -2501,7 +2501,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [71.44598, 51.1801],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1526273 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1526273 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-aff647f72b9c",
@@ -2509,7 +2509,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [74.59, 42.87],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1528675 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1528675 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ff4b7057a082",
@@ -2517,7 +2517,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [106.88324, 47.90771],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2028462 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2028462 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4405128a577b",
@@ -2525,7 +2525,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-75.69812, 45.41117],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 6094817 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 6094817 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a6952efab536",
@@ -2533,7 +2533,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-69.89232, 18.47186],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3492908 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3492908 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-0fb91a01683f",
@@ -2541,7 +2541,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-72.33881, 18.54349],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3718426 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3718426 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-639fe165b2d0",
@@ -2549,7 +2549,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-66.87919, 10.48801],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3646738 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3646738 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-edd79c00c725",
@@ -2557,7 +2557,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-74.08175, 4.60971],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3688689 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3688689 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-521605389ff6",
@@ -2565,7 +2565,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-47.92972, -15.77972],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3469058 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3469058 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-666dde50c44f",
@@ -2573,7 +2573,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-68.15, -16.5],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3911925 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3911925 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-5aa7b76bf5d3",
@@ -2581,7 +2581,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-77.02824, -12.04318],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3936456 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3936456 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f4fa728c36f1",
@@ -2589,7 +2589,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-78.52495, -0.22985],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3652462 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3652462 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f1c4b006ce2d",
@@ -2597,7 +2597,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-56.18816, -34.90328],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3441575 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3441575 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-90929054ef0d",
@@ -2605,7 +2605,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-58.37723, -34.61315],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3435910 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3435910 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6ea3cb9e05ed",
@@ -2613,7 +2613,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-70.64827, -33.45694],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3871336 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3871336 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a588331b0ad8",
@@ -2621,7 +2621,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-57.647, -25.28646],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3439389 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3439389 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b4120d1e9f49",
@@ -2629,7 +2629,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-99.12766, 19.42847],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3530597 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3530597 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a25dec022812",
@@ -2637,7 +2637,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [49.89201, 40.37767],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 587084 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 587084 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-b1c683d0ae94",
@@ -2645,7 +2645,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [26.10626, 44.43225],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 683506 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 683506 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6984ccf41df7",
@@ -2653,7 +2653,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [25.90859, -24.65451],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 933773 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 933773 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-65d8801c96f1",
@@ -2661,7 +2661,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [13.23432, -8.83682],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2240449 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2240449 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-391e7578815c",
@@ -2669,7 +2669,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [9.45356, 0.39241],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2399697 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2399697 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-bb79c8ddbecc",
@@ -2677,7 +2677,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [6.7299, 0.33756],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2410763 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2410763 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-fcd2bc2a92d8",
@@ -2685,7 +2685,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [55.45501, -4.62001],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 241131 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 241131 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ddb7810b25bb",
@@ -2693,7 +2693,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [32.58322, -25.96553],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1040652 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1040652 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6fa201253cf8",
@@ -2701,7 +2701,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [31.13333, -26.31667],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 934985 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 934985 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-29a5168602f9",
@@ -2709,7 +2709,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [28.18783, -25.74486],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 964137 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 964137 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-1dddd388ac80",
@@ -2717,7 +2717,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [35.94503, 31.95522],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 250441 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 250441 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d2a157896c52",
@@ -2725,7 +2725,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [38.93184, 15.33805],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 343300 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 343300 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7748807cb509",
@@ -2733,7 +2733,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-89.18718, 13.68935],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3583361 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3583361 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-66c445c483ab",
@@ -2741,7 +2741,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-90.51327, 14.64072],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3598132 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3598132 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2982520cff06",
@@ -2749,7 +2749,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-88.76401, 17.25376],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3582672 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3582672 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-e300412f389a",
@@ -2757,7 +2757,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-87.20681, 14.0818],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3600949 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3600949 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-77f28b11c333",
@@ -2765,7 +2765,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-86.2504, 12.13282],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3617763 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3617763 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d94d4de5a20c",
@@ -2773,7 +2773,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-84.08489, 9.93388],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3621849 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3621849 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-827ae4d954cd",
@@ -2781,7 +2781,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-79.51973, 8.9936],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3703443 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3703443 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ed13193a656c",
@@ -2789,7 +2789,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-76.79358, 17.99702],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3489854 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3489854 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-859934644c76",
@@ -2797,7 +2797,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-55.16682, 5.86638],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3383330 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3383330 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ec29da4eeefe",
@@ -2805,7 +2805,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-58.15527, 6.80448],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3378644 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3378644 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-aa12967c72cc",
@@ -2813,7 +2813,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [44.83412, 41.69143],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 611717 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 611717 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-38a77f11ea4c",
@@ -2821,7 +2821,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [44.5126, 40.17765],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 616052 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 616052 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-633681bf3c0d",
@@ -2829,7 +2829,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [54.39696, 24.45118],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 292968 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 292968 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-9f04bc2fcb4c",
@@ -2837,7 +2837,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [2.1098, 13.51366],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2440485 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2440485 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d97e79ec8d61",
@@ -2845,7 +2845,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [7.49508, 9.05785],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2352778 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2352778 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-09e4cb92eb23",
@@ -2853,7 +2853,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-0.1969, 5.55602],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2306104 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2306104 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d4b3e5c026e8",
@@ -2861,7 +2861,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [8.78166, 3.75578],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2309527 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2309527 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-f1f969b0ab10",
@@ -2869,7 +2869,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [1.22154, 6.12874],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2365267 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2365267 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-5fe54dedfbfd",
@@ -2877,7 +2877,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [2.60359, 6.49646],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2392087 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2392087 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-bb343ba5a2a3",
@@ -2885,7 +2885,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [11.51667, 3.86667],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2220957 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2220957 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-4b3e67c591d5",
@@ -2893,7 +2893,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [15.0444, 12.10672],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2427123 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2427123 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-3fcd5049ac5a",
@@ -2901,7 +2901,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-10.7969, 6.30054],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2274895 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2274895 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-8c7d2ce17b53",
@@ -2909,7 +2909,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-13.2356, 8.48714],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2409306 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2409306 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-df13189fdda6",
@@ -2917,7 +2917,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-7.97522, 12.60915],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2460596 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2460596 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c80926ca41f1",
@@ -2925,7 +2925,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-5.27674, 6.82055],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2279755 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2279755 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-30a8d6d58f5a",
@@ -2933,7 +2933,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-15.9785, 18.08581],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2377450 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2377450 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2ba7eed0686f",
@@ -2941,7 +2941,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-13.67729, 9.53795],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2422465 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2422465 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-888603ae6325",
@@ -2949,7 +2949,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-17.44406, 14.6937],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2253354 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2253354 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-07e3771e1d91",
@@ -2957,7 +2957,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-23.51254, 14.93152],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3374333 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3374333 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a70543c80d9c",
@@ -2965,7 +2965,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-15.59767, 11.86357],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2374775 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2374775 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d52bf9f8d336",
@@ -2973,7 +2973,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [15.28318, -4.26613],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2260535 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2260535 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-495cb5706d68",
@@ -2981,7 +2981,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [15.31357, -4.32758],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2314302 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2314302 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-cdf37f8a4ed6",
@@ -2989,7 +2989,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [33.78725, -13.96692],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 927967 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 927967 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-2ed7b51b2c7a",
@@ -2997,7 +2997,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [28.28713, -15.40669],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 909137 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 909137 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-0c90108a3272",
@@ -3005,7 +3005,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [31.05337, -17.82772],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 890299 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 890299 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-d46bd897574a",
@@ -3013,7 +3013,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-77.34306, 25.05823],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3571824 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3571824 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ce7086ea96e3",
@@ -3021,7 +3021,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-82.38304, 23.13302],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3553478 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3553478 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-9b1a5c7ececf",
@@ -3029,7 +3029,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [73.50916, 4.17521],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1282027 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1282027 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ba5d065219f4",
@@ -3037,7 +3037,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-195494df6100",
@@ -3045,7 +3045,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bec6801683d0",
@@ -3053,7 +3053,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5eb9d9672ff3",
@@ -3061,7 +3061,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-d0eefaa3ad53",
@@ -3069,7 +3069,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-119cdcf6ee4c",
@@ -3077,7 +3077,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-147f05a7502d",
@@ -3085,7 +3085,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-0dc97f2223be",
@@ -3093,7 +3093,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-6f177c8eaf51",
@@ -3101,7 +3101,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["카노사성"],
   },
   {
@@ -3110,7 +3110,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["산치"],
   },
   {
@@ -3119,7 +3119,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["아잔타"],
   },
   {
@@ -3128,7 +3128,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["엘로라"],
   },
   {
@@ -3137,7 +3137,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-940724b5425a",
@@ -3145,7 +3145,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["윈강"],
   },
   {
@@ -3154,7 +3154,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["룽먼"],
   },
   {
@@ -3163,7 +3163,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-231991299b29",
@@ -3171,7 +3171,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["보로부두르"],
   },
   {
@@ -3180,7 +3180,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2a0214af0106",
@@ -3188,7 +3188,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fccf1c2757b2",
@@ -3196,7 +3196,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-da7c64db4e96",
@@ -3204,7 +3204,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b34e87aa7e42",
@@ -3212,7 +3212,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a84dd0f2f304",
@@ -3220,7 +3220,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-46962a011e2d",
@@ -3228,7 +3228,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-674594c5ad7d",
@@ -3236,7 +3236,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-374afd061166",
@@ -3244,7 +3244,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2be2d8c6b68b",
@@ -3252,7 +3252,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2ed83376c3d5",
@@ -3260,7 +3260,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ce18f783b00f",
@@ -3268,7 +3268,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["하기야 소피아", "아야 소피아"],
   },
   {
@@ -3277,7 +3277,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-c18da6091df4",
@@ -3285,7 +3285,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-526832fb9f58",
@@ -3293,7 +3293,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fd1da2d38651",
@@ -3301,7 +3301,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-dda0e2793f60",
@@ -3309,7 +3309,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ec11b0970d7a",
@@ -3317,7 +3317,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fa40bf609e6e",
@@ -3325,7 +3325,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-78e2fb7e5bbf",
@@ -3333,7 +3333,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-85f7f6427d22",
@@ -3341,7 +3341,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a632a7623035",
@@ -3349,7 +3349,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9b94ffe0e820",
@@ -3357,7 +3357,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-934e37b3d63c",
@@ -3365,7 +3365,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-6af4dc50ea01",
@@ -3373,7 +3373,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-0ef1477d7652",
@@ -3381,7 +3381,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a130a4489fd9",
@@ -3389,7 +3389,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-897b554f8e5a",
@@ -3397,7 +3397,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-059f9d2e355c",
@@ -3405,7 +3405,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2331a4168ea2",
@@ -3413,7 +3413,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-10a07d54f014",
@@ -3421,7 +3421,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1f798304d63b",
@@ -3429,7 +3429,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9c287315aeee",
@@ -3437,7 +3437,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["성 베드로 대성당"],
   },
   {
@@ -3446,7 +3446,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a1c7072bdcf4",
@@ -3454,7 +3454,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-85ccc4b7727d",
@@ -3462,7 +3462,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a09020985d8a",
@@ -3470,7 +3470,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-3ff1d060d317",
@@ -3478,7 +3478,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-655e3d1d4667",
@@ -3486,7 +3486,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["대영 박물관"],
   },
   {
@@ -3495,7 +3495,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-f4a4b13bb004",
@@ -3503,7 +3503,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["아우슈비츠"],
   },
   {
@@ -3512,7 +3512,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["군함도"],
   },
   {
@@ -3521,7 +3521,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fef2e018fbf8",
@@ -3529,7 +3529,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-cf3d40448b5e",
@@ -3537,7 +3537,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-d793382e90f0",
@@ -3545,7 +3545,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-477bacb3420f",
@@ -3553,7 +3553,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ddf1cf5695f9",
@@ -3561,7 +3561,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bf7dd6c55d84",
@@ -3569,7 +3569,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-3fb94cff0ce7",
@@ -3577,7 +3577,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9f0534311414",
@@ -3585,7 +3585,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5651dc7e7c3b",
@@ -3593,7 +3593,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-64d4730780be",
@@ -3601,7 +3601,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-dbc48d8da6c1",
@@ -3609,7 +3609,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5cc2d3e90816",
@@ -3617,7 +3617,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bf1bef5d11c6",
@@ -3625,7 +3625,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["베르떗"],
   },
   {
@@ -3634,7 +3634,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b2348170d975",
@@ -3642,7 +3642,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-cabe8ba56bdc",
@@ -3650,7 +3650,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-03e9d84630a1",
@@ -3658,7 +3658,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e68ee06be63e",
@@ -3666,7 +3666,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["테르모필라이"],
   },
   {
@@ -3675,7 +3675,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["플라타이아"],
   },
   {
@@ -3684,7 +3684,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-283bfe5c1ed2",
@@ -3692,7 +3692,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ea9b0400b7f9",
@@ -3700,7 +3700,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-19b64e940438",
@@ -3708,7 +3708,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bef57bf71a4c",
@@ -3716,7 +3716,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-aabd59690e11",
@@ -3724,7 +3724,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-4f12e8995f96",
@@ -3732,7 +3732,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [128.1295, 36.38492],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["한국"],
   },
   {
@@ -3741,7 +3741,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [138.44217, 36.14254],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-41ede1bcb4ab",
@@ -3749,7 +3749,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [106.33729, 32.49818],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0d3883b86e50",
@@ -3757,7 +3757,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [79.3581, 22.68685],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f251e68fb551",
@@ -3765,7 +3765,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [29.44584, 26.18617],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-31618adeb2f6",
@@ -3773,7 +3773,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [54.93149, 32.16622],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-31a39577c78b",
@@ -3781,7 +3781,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [43.26181, 33.09403],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-83cd9ed73391",
@@ -3789,7 +3789,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [66.49659, 34.16426],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6d78b3425d50",
@@ -3797,7 +3797,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [68.54563, 29.32839],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c71f3eebc18b",
@@ -3805,7 +3805,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [34.84792, 30.91115],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7e67f1f66878",
@@ -3813,7 +3813,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [35.99289, 34.13337],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-980baeb76ee3",
@@ -3821,7 +3821,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [38.27778, 35.00664],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5764c06aa251",
@@ -3829,7 +3829,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [36.37599, 30.80503],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7cf4a6abc2e1",
@@ -3837,7 +3837,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [44.6996, 23.80691],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-43627abd9bac",
@@ -3845,7 +3845,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [45.87438, 15.32823],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b2c27492bbe9",
@@ -3853,7 +3853,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [57.33655, 22.12043],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-3a33b02cd837",
@@ -3861,7 +3861,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [47.314, 29.41363],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-d9ba1e9dc251",
@@ -3869,7 +3869,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [51.14351, 25.23738],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e7097656bbc0",
@@ -3877,7 +3877,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [50.55482, 26.05597],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5bcb83f0195a",
@@ -3885,7 +3885,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [54.54726, 23.46628],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2a19b1192677",
@@ -3893,7 +3893,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [34.50827, 39.34539],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["터키"],
   },
   {
@@ -3902,7 +3902,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [33.08418, 34.91333],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9666e1eb9e53",
@@ -3910,7 +3910,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [21.72568, 39.49276],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-815ebdbea6d6",
@@ -3918,7 +3918,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [11.07691, 44.73248],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-1e48802bad65",
@@ -3926,7 +3926,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [2.55227, 46.69611],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-faec8a156570",
@@ -3934,7 +3934,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-2.11635, 54.40274],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-534b5de342c8",
@@ -3942,7 +3942,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [9.67835, 50.96173],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-622809f2e224",
@@ -3950,7 +3950,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-3.46472, 40.09095],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2447b3e85f1f",
@@ -3958,7 +3958,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-8.27175, 39.60668],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7a5ca87bed95",
@@ -3966,7 +3966,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [5.61144, 52.42221],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f5cd46b8a260",
@@ -3974,7 +3974,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [4.80045, 50.78539],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-15310fe99bb5",
@@ -3982,7 +3982,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [6.07762, 49.73373],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7584d2eef4e8",
@@ -3990,7 +3990,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-7.79859, 53.07873],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-23cc549096a1",
@@ -3998,7 +3998,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [7.46396, 46.71911],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9cdef177f920",
@@ -4006,7 +4006,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [14.13052, 47.51886],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-cb26b06762b2",
@@ -4014,7 +4014,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [19.44787, 47.08684],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-01ac7b0e8486",
@@ -4022,7 +4022,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [19.49047, 51.99032],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-04f7cc4bf68b",
@@ -4030,7 +4030,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [15.37755, 49.88236],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-de4c3726e191",
@@ -4038,7 +4038,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [19.04987, 48.73404],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b0ae8a68a2c7",
@@ -4046,7 +4046,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [20.78799, 44.18992],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b342b174013e",
@@ -4054,7 +4054,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [19.14373, 42.8031],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-41eaf625b900",
@@ -4062,7 +4062,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [20.11384, 40.65485],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e23f97970277",
@@ -4070,7 +4070,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [25.15709, 42.50879],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-bcb3287f45f5",
@@ -4078,7 +4078,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [24.97262, 45.73324],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4d8a12fb340c",
@@ -4086,7 +4086,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [16.37241, 45.8058],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-502876e21faf",
@@ -4094,7 +4094,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [14.91531, 46.06076],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a2e0b0c23adc",
@@ -4102,7 +4102,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [18.06841, 44.09105],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-95fa2f2756bf",
@@ -4110,7 +4110,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [21.55584, 41.55822],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["마케도니아"],
   },
   {
@@ -4119,7 +4119,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [20.86072, 42.59359],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ed25efdbbb01",
@@ -4127,7 +4127,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [44.68647, 58.24936],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-eb497401c359",
@@ -4135,7 +4135,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [32.14086, 49.72474],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a8b7fa4f39bc",
@@ -4143,7 +4143,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [28.4177, 53.82189],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0984ec03345e",
@@ -4151,7 +4151,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [28.4879, 47.435],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-048c39467e94",
@@ -4159,7 +4159,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [25.86713, 58.72487],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5377cd84cd44",
@@ -4167,7 +4167,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [25.45872, 57.06687],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-19418ff1d255",
@@ -4175,7 +4175,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [24.08993, 55.1037],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-8ffe4633192b",
@@ -4183,7 +4183,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [9.01816, 55.96697],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-28bba42ea813",
@@ -4191,7 +4191,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [19.01705, 65.85918],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4a61b39be92f",
@@ -4199,7 +4199,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [9.67998, 61.35709],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-601e89d16ff3",
@@ -4207,7 +4207,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [27.27645, 63.25236],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-8f7f79ade9e7",
@@ -4215,7 +4215,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-18.67371, 64.77929],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-3169ab26731f",
@@ -4223,7 +4223,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [14.433, 35.89289],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-973894843d99",
@@ -4231,7 +4231,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [12.44121, 43.93392],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f2c2f3a10b35",
@@ -4239,7 +4239,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [7.39829, 43.73965],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9df5fc0e4810",
@@ -4247,7 +4247,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [12.45342, 41.90332],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-3a54ad6bd567",
@@ -4255,7 +4255,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [1.53941, 42.54764],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-830a930ba348",
@@ -4263,7 +4263,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [9.55944, 47.1114],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0c5bab1129a0",
@@ -4271,7 +4271,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [43.73572, 41.87009],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-391f4cf956c0",
@@ -4279,7 +4279,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [44.80056, 40.45908],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-67f93027a8be",
@@ -4287,7 +4287,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [47.21099, 40.40239],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a70856ed7805",
@@ -4295,7 +4295,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [68.68555, 49.05415],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2c2c3b487137",
@@ -4303,7 +4303,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [64.00543, 41.6936],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a60dd4b3ebfb",
@@ -4311,7 +4311,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [74.53264, 41.66854],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-354bbc0c54ad",
@@ -4319,7 +4319,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [72.58728, 38.19984],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-36e48a94bda5",
@@ -4327,7 +4327,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [58.67665, 39.85525],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0d7749b6ad10",
@@ -4335,7 +4335,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [104.15041, 45.99749],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-af44c080ed20",
@@ -4343,7 +4343,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [83.63991, 28.29792],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6ac0e81c2201",
@@ -4351,7 +4351,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [90.04029, 27.53668],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6baa9a43fd27",
@@ -4359,7 +4359,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [89.68496, 24.21496],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b995415b3422",
@@ -4367,7 +4367,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [80.70482, 7.5811],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c00f14712750",
@@ -4375,7 +4375,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [73.50755, 4.17444],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2541f60d32c7",
@@ -4383,7 +4383,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [95.8045, 21.57385],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2f702d56e366",
@@ -4391,7 +4391,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [101.0732, 15.45974],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-34ab7f2bece7",
@@ -4399,7 +4399,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [102.53391, 19.43182],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6e808b36fb8b",
@@ -4407,7 +4407,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [105.38729, 21.71542],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fd5da91be12f",
@@ -4415,7 +4415,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [104.50487, 12.64758],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-37fcddcb95c9",
@@ -4423,7 +4423,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [113.83708, 2.52867],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-48fbf2cc0c22",
@@ -4431,7 +4431,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [101.89295, -0.9544],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a4b3a91d5217",
@@ -4439,7 +4439,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [122.465, 11.198],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5d1c39fb45e0",
@@ -4447,7 +4447,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [114.55194, 4.4483],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-77633f61b479",
@@ -4455,7 +4455,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [125.85468, -8.80371],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-8a9d64bd994a",
@@ -4463,7 +4463,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-97.4826, 39.53848],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-55045089b35d",
@@ -4471,7 +4471,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-101.9107, 60.32429],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b0e06d098e72",
@@ -4479,7 +4479,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-102.28945, 23.91999],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b04477644207",
@@ -4487,7 +4487,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-77.97585, 21.33402],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a947d2f569ea",
@@ -4495,7 +4495,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-72.22405, 19.26378],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2457fb1828e9",
@@ -4503,7 +4503,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-70.654, 19.10414],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e9fde811d124",
@@ -4511,7 +4511,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-61.34496, 15.45883],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-34f9d846495f",
@@ -4519,7 +4519,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-77.31877, 18.13712],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6cb295a45082",
@@ -4527,7 +4527,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-77.14669, 26.40179],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5590e9f07893",
@@ -4535,7 +4535,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-88.71296, 17.20207],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5f821e2698de",
@@ -4543,7 +4543,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-90.49713, 14.98213],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b270347fb602",
@@ -4551,7 +4551,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-86.8876, 14.7948],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fcd4ede0679f",
@@ -4559,7 +4559,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-88.89012, 13.68537],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-77dde5e924e0",
@@ -4567,7 +4567,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-85.06935, 12.6707],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0f8021cc6428",
@@ -4575,7 +4575,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-84.07792, 10.0651],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-03b4aef6baa2",
@@ -4583,7 +4583,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-80.35211, 8.72198],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-da3b8489fa18",
@@ -4591,7 +4591,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-62.75798, 17.33656],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e3ab880003af",
@@ -4599,7 +4599,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-61.79061, 17.35225],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f2515127fc1f",
@@ -4607,7 +4607,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-59.56897, 13.16371],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-570916d49772",
@@ -4615,7 +4615,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-61.3359, 13.0879],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e60bfdbdbca2",
@@ -4623,7 +4623,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-60.9184, 10.9989],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ec43e868bd10",
@@ -4631,7 +4631,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-61.68046, 12.11316],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6cf4a7cd1731",
@@ -4639,7 +4639,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-60.98009, 13.89237],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-67a84e81ccbf",
@@ -4647,7 +4647,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-73.17435, 3.37311],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c95139a20020",
@@ -4655,7 +4655,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-64.59938, 7.18248],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["베네수엘라 볼리바르"],
   },
   {
@@ -4664,7 +4664,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-58.94264, 5.12432],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-38846b36d0f9",
@@ -4672,7 +4672,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-55.91094, 4.14399],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-efa5972b75e5",
@@ -4680,7 +4680,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-78.18837, -1.25908],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-206e2cc4f705",
@@ -4688,7 +4688,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-72.90016, -12.97668],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-72a86731874e",
@@ -4696,7 +4696,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-64.59343, -16.66602],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-432b9eb55dec",
@@ -4704,7 +4704,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-49.55945, -12.09869],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ef7afd7dfe5e",
@@ -4712,7 +4712,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-60.14639, -21.67451],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-3e06391ea652",
@@ -4720,7 +4720,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-55.96694, -32.96113],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-114af6464ac6",
@@ -4728,7 +4728,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-64.17333, -33.50116],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ce68aa41e6ac",
@@ -4736,7 +4736,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-72.31887, -38.15177],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-16bb937044f7",
@@ -4744,7 +4744,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-7.1873, 31.65072],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-790efb1a5746",
@@ -4752,7 +4752,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [2.80824, 27.39741],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-43354853de34",
@@ -4760,7 +4760,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [9.00788, 33.68726],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-53d63f5dbb5d",
@@ -4768,7 +4768,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [18.01102, 26.63894],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7934f508c9da",
@@ -4776,7 +4776,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-9.7403, 19.58706],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-76343dbc8b76",
@@ -4784,7 +4784,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-2.03845, 18.69271],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a49c6c155919",
@@ -4792,7 +4792,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [9.50436, 17.44619],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4b7cd5a7af4c",
@@ -4800,7 +4800,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [18.64504, 15.14296],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-afd2495321ce",
@@ -4808,7 +4808,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [29.26066, 16.33075],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f87cbfae0730",
@@ -4816,7 +4816,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [30.39015, 7.23048],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0cb1eb54374f",
@@ -4824,7 +4824,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [38.28557, 15.7874],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ecb24fd7a698",
@@ -4832,7 +4832,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [39.0886, 8.0328],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["아비시니아"],
   },
   {
@@ -4841,7 +4841,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [45.19238, 3.56893],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7675e45c5665",
@@ -4849,7 +4849,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [42.49882, 11.97634],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-d8ec1ee7176a",
@@ -4857,7 +4857,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-14.77859, 15.13813],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-cfcfe6c978b9",
@@ -4865,7 +4865,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-14.99832, 13.64172],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6967bd5cfdd8",
@@ -4873,7 +4873,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-14.52413, 12.16371],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-380fa8983b7b",
@@ -4881,7 +4881,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-10.0164, 10.61852],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["기이나"],
   },
   {
@@ -4890,7 +4890,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-11.76368, 8.61745],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-12bd41f4f9a6",
@@ -4898,7 +4898,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-9.46038, 6.44718],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-3ad5937a1614",
@@ -4906,7 +4906,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-5.56862, 7.49139],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-3ca97889c86d",
@@ -4914,7 +4914,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-1.03694, 7.71764],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["골드코스트"],
   },
   {
@@ -4923,7 +4923,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [1.05811, 8.80722],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b9b2141f062c",
@@ -4931,7 +4931,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [2.35202, 10.32478],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7c310c7aada1",
@@ -4939,7 +4939,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-1.36388, 12.67305],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f15a383801d7",
@@ -4947,7 +4947,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [7.50322, 9.4398],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f05eb6420eeb",
@@ -4955,7 +4955,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-23.63943, 15.07476],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fa5d69e01d8b",
@@ -4963,7 +4963,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [12.47349, 4.58504],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f5075a8f32d0",
@@ -4971,7 +4971,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [20.9069, 6.98968],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["중앙아프리카"],
   },
   {
@@ -4980,7 +4980,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [8.9902, 2.333],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-84ef34e783e4",
@@ -4988,7 +4988,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [11.83594, -0.43774],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-71df61221bba",
@@ -4996,7 +4996,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [15.9005, 0.14233],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a5e4727d837a",
@@ -5004,7 +5004,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [23.45883, -1.85817],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["자이르"],
   },
   {
@@ -5013,7 +5013,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [32.94855, 1.97259],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-493eea97642f",
@@ -5021,7 +5021,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [37.90763, 0.54904],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9809e2e5b045",
@@ -5029,7 +5029,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [34.95918, -6.05187],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ab86112eec5e",
@@ -5037,7 +5037,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [30.10389, -1.8972],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fea85c1145b4",
@@ -5045,7 +5045,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [29.91709, -3.33284],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0d0a9e5949a0",
@@ -5053,7 +5053,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [17.98425, -12.18276],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9c2fc5e58c8e",
@@ -5061,7 +5061,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [26.3953, -14.6608],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-70780978cc9c",
@@ -5069,7 +5069,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [33.60808, -13.38674],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-d3a409395109",
@@ -5077,7 +5077,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [37.83789, -13.94323],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-baf0f923d6b1",
@@ -5085,7 +5085,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [29.92544, -18.91164],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-bab9d72f6dd1",
@@ -5093,7 +5093,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [17.10817, -20.5753],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f549c452d45d",
@@ -5101,7 +5101,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [24.17922, -22.10263],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-30a82d46567b",
@@ -5109,7 +5109,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [23.66573, -29.70878],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9c2ce63c3d6b",
@@ -5117,7 +5117,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [28.24664, -29.48016],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-21f1159564b5",
@@ -5125,7 +5125,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [31.46726, -26.53368],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["스와질란드"],
   },
   {
@@ -5134,7 +5134,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [46.70424, -18.62829],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-43ec57cfb892",
@@ -5142,7 +5142,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [57.56585, -20.29951],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-656c40fa435c",
@@ -5150,7 +5150,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [55.48018, -4.67666],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4292c5f99c26",
@@ -5158,7 +5158,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [43.31809, -11.72768],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-28e3d94b942e",
@@ -5166,7 +5166,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [7.021, 0.9709],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-182a68a37544",
@@ -5174,7 +5174,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [134.04972, -24.12952],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-38cc49cb4793",
@@ -5182,7 +5182,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [172.787, -39.759],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f89c3336c67c",
@@ -5190,7 +5190,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [143.91022, -5.69529],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ca099418e79c",
@@ -5198,7 +5198,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [158.23402, 6.88755],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6ee5f0b9e5a7",
@@ -5206,7 +5206,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [171.19361, 7.08257],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-001798768954",
@@ -5214,7 +5214,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-157.38458, 1.82044],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f3f184b453e0",
@@ -5222,7 +5222,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [134.58016, 7.51825],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7122a6487e95",
@@ -5230,7 +5230,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [159.17047, -8.02955],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-8ec9827b7b18",
@@ -5238,7 +5238,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [166.93264, -0.52026],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-caf06436677f",
@@ -5246,7 +5246,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [166.90876, -15.37153],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-70857da4a20b",
@@ -5254,7 +5254,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [177.97543, -17.8261],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-d3da1f0aabb5",
@@ -5262,7 +5262,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-175.16301, -21.21003],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fc8d3f3f0da6",
@@ -5270,7 +5270,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [179.20959, -8.51372],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a25b3cbf93dd",
@@ -5278,7 +5278,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "country",
     coordinates: [-172.43824, -13.63914],
     locationNote:
-      "현대 국가의 대표 위치입니다. 당시 영토·국경을 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 국가의 대표 위치이다. 당시 영토·국경을 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-1fa80372c8c5",
@@ -5286,7 +5286,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [86.22009, 39.52996],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-dbd7d66ccd6d",
@@ -5294,7 +5294,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [34.43187, 53.5613],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f236cea16295",
@@ -5302,7 +5302,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [26.76544, 1.21859],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5935f7794ca6",
@@ -5310,7 +5310,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4e16f698bae4",
@@ -5318,7 +5318,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-97.11588, 43.8188],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-411d8aae0282",
@@ -5326,7 +5326,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-55.55792, -20.94647],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ccd722c9d0d5",
@@ -5334,7 +5334,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0381381dd2b5",
@@ -5342,7 +5342,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2d56af2054e2",
@@ -5350,7 +5350,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-8938a8020e65",
@@ -5358,7 +5358,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-a0b9cd727c60",
@@ -5366,7 +5366,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-198c41ae8459",
@@ -5374,7 +5374,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-d6ba2ba5991b",
@@ -5382,7 +5382,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-7d04529249b0",
@@ -5390,7 +5390,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9b42e42ee4b7",
@@ -5398,7 +5398,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0dd2c0cf6ba9",
@@ -5406,7 +5406,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-105e198d8bbf",
@@ -5414,7 +5414,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-230b2d9672fc",
@@ -5422,7 +5422,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e0b313ff9c4c",
@@ -5430,7 +5430,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [43.45589, 33.99607],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-82c962e25336",
@@ -5438,7 +5438,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f498ff22bbd5",
@@ -5446,7 +5446,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [76.96486, 16.23637],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-535241559ce3",
@@ -5454,7 +5454,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [89.18608, 33.40629],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["시짱고원"],
   },
   {
@@ -5463,7 +5463,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [108.65717, 46.27695],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c65bc552ea77",
@@ -5471,7 +5471,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-25538527916e",
@@ -5479,7 +5479,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4791aba6aa42",
@@ -5487,7 +5487,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0e48ce55a749",
@@ -5495,7 +5495,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-1eb30b7015f6",
@@ -5503,7 +5503,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-13c56bd349d1",
@@ -5511,7 +5511,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e7a04056a204",
@@ -5519,7 +5519,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0204c02497e0",
@@ -5527,7 +5527,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-a79a36208db8",
@@ -5535,7 +5535,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ace9d8a79b30",
@@ -5543,7 +5543,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fdc76662f59a",
@@ -5551,7 +5551,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-447803281e82",
@@ -5559,7 +5559,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9bd6026a6551",
@@ -5567,7 +5567,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-649df1bb49c2",
@@ -5575,7 +5575,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-d4f713481be0",
@@ -5583,7 +5583,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-033369d8bedb",
@@ -5591,7 +5591,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3d70add00e9d",
@@ -5599,7 +5599,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-abb60db1739d",
@@ -5607,7 +5607,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e9fa45b48444",
@@ -5615,7 +5615,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6c18809a3f48",
@@ -5623,7 +5623,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fe16399ca5cc",
@@ -5631,7 +5631,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-a90c90a0b5a0",
@@ -5639,7 +5639,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-bdfe9ecfe1c0",
@@ -5647,7 +5647,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-853a222277bb",
@@ -5655,7 +5655,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b84adea35f65",
@@ -5663,7 +5663,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-1a1f1b780879",
@@ -5671,7 +5671,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fbf8723724e5",
@@ -5679,7 +5679,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e0b191a9746e",
@@ -5687,7 +5687,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-834556d5afc8",
@@ -5695,7 +5695,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-19a6006c03f9",
@@ -5703,7 +5703,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-742ccc763014",
@@ -5711,7 +5711,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-389dc8d0c779",
@@ -5719,7 +5719,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-84223e5416be",
@@ -5727,7 +5727,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-7cbeab27f763",
@@ -5735,7 +5735,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ea335e1223ca",
@@ -5743,7 +5743,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-7724af6f478b",
@@ -5751,7 +5751,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e209bb2a0ca7",
@@ -5759,7 +5759,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-77f46f47568c",
@@ -5767,7 +5767,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3f8ac46d1a50",
@@ -5775,7 +5775,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b2fe20476666",
@@ -5783,7 +5783,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-91dedcb95f6a",
@@ -5791,7 +5791,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b535bdd649d7",
@@ -5799,7 +5799,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-11eddf08f69f",
@@ -5807,7 +5807,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-cf72440edd36",
@@ -5815,7 +5815,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fc22e157278d",
@@ -5823,7 +5823,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0b54d51fcb12",
@@ -5831,7 +5831,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2e650fb5bf69",
@@ -5839,7 +5839,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-712a73d9835f",
@@ -5847,7 +5847,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-85876df4f134",
@@ -5855,7 +5855,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6a0ddfa27692",
@@ -5863,7 +5863,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-75841919e7cd",
@@ -5871,7 +5871,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-13ae4ade86e2",
@@ -5879,7 +5879,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-7a5412c40597",
@@ -5887,7 +5887,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-09d883ec0c98",
@@ -5895,7 +5895,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9a45b048f647",
@@ -5903,7 +5903,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-1c73339afd0f",
@@ -5911,7 +5911,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-be253a175b8f",
@@ -5919,7 +5919,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["송"],
   },
   {
@@ -5928,7 +5928,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b6be881f43d6",
@@ -5936,7 +5936,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["금(여진)", "여진(금)"],
   },
   {
@@ -5945,7 +5945,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["요(거란)", "거란(요)"],
   },
   {
@@ -5954,7 +5954,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4fd182c7e202",
@@ -5962,7 +5962,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b8dc36955675",
@@ -5970,7 +5970,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-d86e1bc04701",
@@ -5978,7 +5978,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-d4f5a909fde6",
@@ -5986,7 +5986,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-288919f654aa",
@@ -5994,7 +5994,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-bc330fef99da",
@@ -6002,7 +6002,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ce88fcb8a5f2",
@@ -6010,7 +6010,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-eaad4d0da858",
@@ -6018,7 +6018,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f126b452c335",
@@ -6026,7 +6026,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6589bb11246a",
@@ -6034,7 +6034,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-7828ce36107f",
@@ -6042,7 +6042,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b45a06fc033f",
@@ -6050,7 +6050,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-05562438a3b1",
@@ -6058,7 +6058,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-268680974708",
@@ -6066,7 +6066,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-7a26b1e44f9e",
@@ -6074,7 +6074,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-415ab815a87e",
@@ -6082,7 +6082,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-364a9cd2ca79",
@@ -6090,7 +6090,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4ab644ac30c3",
@@ -6098,7 +6098,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-153dc5901e65",
@@ -6106,7 +6106,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-1d4b1a6026ef",
@@ -6114,7 +6114,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f38a74289d73",
@@ -6122,7 +6122,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f5886bc59a07",
@@ -6130,7 +6130,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-db9c270192ea",
@@ -6138,7 +6138,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0481776b4f1a",
@@ -6146,7 +6146,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ef65d883abf8",
@@ -6154,7 +6154,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["키예프 대공국"],
   },
   {
@@ -6163,7 +6163,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-0.18061, 49.094],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5ed88d140465",
@@ -6171,7 +6171,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fa129181b9e7",
@@ -6179,7 +6179,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9a844dcf00da",
@@ -6187,7 +6187,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fccf212f5473",
@@ -6195,7 +6195,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-21185f7f7ea9",
@@ -6203,7 +6203,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [73.90627, 31.1493],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-899460cc5238",
@@ -6211,7 +6211,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ce17d417da7e",
@@ -6219,7 +6219,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5b3fe7b915fe",
@@ -6227,7 +6227,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-49b7c65c72e2",
@@ -6235,7 +6235,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-c550b0632ad8",
@@ -6243,7 +6243,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2c7076bdb2af",
@@ -6251,7 +6251,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-16b97598d7e1",
@@ -6259,7 +6259,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9e29771c16b1",
@@ -6267,7 +6267,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-680a40625695",
@@ -6275,7 +6275,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-552da51c2e8c",
@@ -6283,7 +6283,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-26400e7ab644",
@@ -6291,7 +6291,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [49.26617, 21.82886],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-1e901919ab99",
@@ -6299,7 +6299,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-bf9bc529dbd6",
@@ -6307,7 +6307,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [35.5787, 39.03861],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["아나톨리아반도"],
   },
   {
@@ -6316,7 +6316,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [24.20412, 41.26777],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-174eeb31601a",
@@ -6324,7 +6324,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5e1e634ba163",
@@ -6332,7 +6332,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ee05a4ee5bad",
@@ -6340,7 +6340,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5514d0f9567a",
@@ -6348,7 +6348,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ca87c5a8a77f",
@@ -6356,7 +6356,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["운남"],
   },
   {
@@ -6365,7 +6365,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["산둥성"],
   },
   {
@@ -6374,7 +6374,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0829e120c776",
@@ -6382,7 +6382,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["허난성"],
   },
   {
@@ -6391,7 +6391,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["산시성"],
   },
   {
@@ -6400,7 +6400,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-1f1712acff27",
@@ -6408,7 +6408,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["저장성"],
   },
   {
@@ -6417,7 +6417,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6cd90be5e9fe",
@@ -6425,7 +6425,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["후난박물관"],
   },
   {
@@ -6434,7 +6434,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-bf91277b21a8",
@@ -6442,7 +6442,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-36825ba1120b",
@@ -6450,7 +6450,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9d8135b8e7a9",
@@ -6458,7 +6458,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-61f2deb8443a",
@@ -6466,7 +6466,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-a96e0b611dc1",
@@ -6474,7 +6474,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-285ac07a17ac",
@@ -6482,7 +6482,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-d916ab01efbf",
@@ -6490,7 +6490,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-31d3e4b2cd8d",
@@ -6498,7 +6498,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-940b8725c8da",
@@ -6506,7 +6506,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2484fe774693",
@@ -6514,7 +6514,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-168da8edecda",
@@ -6522,7 +6522,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2ee07aa0869d",
@@ -6530,7 +6530,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-03747ca7b71e",
@@ -6538,7 +6538,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-09565a026625",
@@ -6546,7 +6546,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-bcd137861f32",
@@ -6554,7 +6554,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-dc74f63714d0",
@@ -6562,7 +6562,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-916a17abd892",
@@ -6570,7 +6570,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-83b42e1eeb12",
@@ -6578,7 +6578,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5031cfe8750b",
@@ -6586,7 +6586,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f6175f1c152e",
@@ -6594,7 +6594,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-53748f844c6a",
@@ -6602,7 +6602,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-170.59311, -13.96752],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2547d555b3a8",
@@ -6610,7 +6610,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-537f12c85e71",
@@ -6618,7 +6618,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-12.6303, 23.96759],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-93e586b480c2",
@@ -6626,7 +6626,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [35.29134, 32.04743],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e2f3f0786e50",
@@ -6634,7 +6634,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b1aea207534d",
@@ -6642,7 +6642,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-084525ed6a66",
@@ -6650,7 +6650,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ab1bb41fcb10",
@@ -6658,7 +6658,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-8fba006cdf73",
@@ -6666,7 +6666,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-eb04251319a2",
@@ -6674,7 +6674,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0295b39269b5",
@@ -6682,7 +6682,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-31720b3c9219",
@@ -6690,7 +6690,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-038da36b76cb",
@@ -6698,7 +6698,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-bbb9b9287d90",
@@ -6706,7 +6706,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-052137827f80",
@@ -6714,7 +6714,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["유고"],
   },
   {
@@ -6723,7 +6723,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4498732abf6b",
@@ -6731,7 +6731,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b02f1d5d920d",
@@ -6739,7 +6739,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4af3e3ae890b",
@@ -6747,7 +6747,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-147.38502, 29.18835],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-d664cad55b6d",
@@ -6755,7 +6755,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-28.8396, 34.22681],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f034321149eb",
@@ -6763,7 +6763,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [80.11848, -25.09911],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2c93c776c3a8",
@@ -6771,7 +6771,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-138.07261, 80.60326],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fd8d34b891f1",
@@ -6779,7 +6779,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-122.84351, -66.39765],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-d672dce026f6",
@@ -6787,7 +6787,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [137.34596, 43.07263],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-30f218c8fb6e",
@@ -6795,7 +6795,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [123.4774, 35.99583],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-dc4c95b06fa9",
@@ -6803,7 +6803,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [3.95079, 37.31953],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e6f3049fe4d5",
@@ -6811,7 +6811,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [33.80382, 44.13599],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2cecd4da469d",
@@ -6819,7 +6819,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [50.50646, 41.86507],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-cdc715dc1f12",
@@ -6827,7 +6827,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bfd1be5f7369",
@@ -6835,7 +6835,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [3.1158, 55.73982],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-284634c1c038",
@@ -6843,7 +6843,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [18.98775, 56.85874],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f965876f357b",
@@ -6851,7 +6851,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [62.87441, 12.46483],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7e5d0f31abef",
@@ -6859,7 +6859,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [86.5895, 14.52833],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9e5449770b0b",
@@ -6867,7 +6867,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [38.49753, 20.34176],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-03a37fdc974f",
@@ -6875,7 +6875,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [112.74572, 10.26033],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-01e69cf55a72",
@@ -6883,7 +6883,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [125.53295, 28.45599],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-43acb655fb8e",
@@ -6891,7 +6891,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [15.95847, 42.74349],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0608a1298c33",
@@ -6899,7 +6899,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [149.93374, 51.552],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-1195aa61ec6c",
@@ -6907,7 +6907,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-170.89245, 57.3059],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7717d1987f40",
@@ -6915,7 +6915,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-996209bcabc8",
@@ -6923,7 +6923,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-172.26252, 68.53004],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-8a3f28594742",
@@ -6931,7 +6931,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [158.59824, 72.95759],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-25c071da14cf",
@@ -6939,7 +6939,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-135.95707, 72.7946],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0d703b804628",
@@ -6947,7 +6947,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-68.98912, 74.37099],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7f2f2d9a3aaf",
@@ -6955,7 +6955,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-86.14255, 60.33192],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-8e4885e51562",
@@ -6963,7 +6963,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-89.25791, 25.74348],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-099638d08ff4",
@@ -6971,7 +6971,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-64.03745, -64.55027],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c0c1291a727e",
@@ -6979,7 +6979,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-73.91403, 62.5568],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-98e13780d532",
@@ -6987,7 +6987,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-57.838, 65.07883],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-02800054f86e",
@@ -6995,7 +6995,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-147.35979, 57.35908],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7ee55392238e",
@@ -7003,7 +7003,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-108.088, -73.70783],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e657af83b88c",
@@ -7011,7 +7011,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-168.16922, -78.5968],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2bcde9e0b601",
@@ -7019,7 +7019,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [161.80476, -40.3325],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fec5bff1d9fd",
@@ -7027,7 +7027,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [158.34497, -19.40845],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-dd2f152a55d2",
@@ -7035,7 +7035,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [4.0266, 2.63716],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-71e146917580",
@@ -7043,7 +7043,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [125.59776, 76.00214],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-51ce86580b2e",
@@ -7051,7 +7051,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [73.21463, 74.80648],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7f058620e77f",
@@ -7059,7 +7059,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [38.32277, 74.30298],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-742d431bd912",
@@ -7067,7 +7067,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [2.04064, 68.49776],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ada31ea2da57",
@@ -7075,7 +7075,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [35.59305, 66.24326],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a8c56e940e5f",
@@ -7083,7 +7083,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-6.79719, 74.27731],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c7dbcb03189e",
@@ -7091,7 +7091,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [134.7131, -7.75356],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6b7cda1b3891",
@@ -7099,7 +7099,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [48.17086, 12.87785],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-45a1542eee3c",
@@ -7107,7 +7107,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [108.15867, 53.63105],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e844f45ae267",
@@ -7115,7 +7115,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-50.74705, -1.12205],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-dfcca3fdbc35",
@@ -7123,7 +7123,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-58.05374, -20.40381],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-394c020cb8d2",
@@ -7131,7 +7131,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-126.35231, 65.14925],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f3dbb14f1b88",
@@ -7139,7 +7139,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-113.92767, 61.81687],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2fc2a7177705",
@@ -7147,7 +7147,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-120.35408, 65.92752],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a6a850bff5ac",
@@ -7155,7 +7155,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-159.38327, 63.64679],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7d1a19952e74",
@@ -7163,7 +7163,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-108.3257, 39.14971],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6dc1b5ab0608",
@@ -7171,7 +7171,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-104.05932, 29.34033],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-be499697ff1d",
@@ -7179,7 +7179,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-91.62659, 31.15022],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-db6f7f3f91e1",
@@ -7187,7 +7187,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-97.48146, 52.40061],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4f6735971726",
@@ -7195,7 +7195,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-88.20106, 47.72581],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5611b84b6a33",
@@ -7203,7 +7203,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-87.08872, 43.87847],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-acdba4202158",
@@ -7211,7 +7211,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-80.9667, 42.24696],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f0a3f33d207b",
@@ -7219,7 +7219,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-77.64536, 43.84904],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-27b40a86117b",
@@ -7227,7 +7227,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-82.28833, 44.68591],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e1adc410bed1",
@@ -7235,7 +7235,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [87.70548, 64.73542],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-21e5ed1e2a79",
@@ -7243,7 +7243,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [126.7608, 64.26512],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4f41f8fe7335",
@@ -7251,7 +7251,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [69.75649, 28.50364],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-1b051d391ed8",
@@ -7259,7 +7259,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [82.1351, 25.28756],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5ca1981dec6b",
@@ -7267,7 +7267,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [121.48433, 31.50928],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["창장", "양쯔강", "장강"],
   },
   {
@@ -7276,7 +7276,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [104.32807, 37.1518],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c7a7391bf2b5",
@@ -7284,7 +7284,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [45.53656, 48.44661],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-048438ba3b71",
@@ -7292,7 +7292,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [40.41084, 50.07556],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9db4e4297482",
@@ -7300,7 +7300,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [32.86569, -1.26683],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-bdc041f6076e",
@@ -7308,7 +7308,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [30.85326, 18.13691],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9cb6583b9800",
@@ -7316,7 +7316,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [17.80952, -0.4601],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e23017e5f507",
@@ -7324,7 +7324,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [0.94728, 14.6446],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-346644e1f9bf",
@@ -7332,7 +7332,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [79.11228, 59.81487],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-198ae4b466bd",
@@ -7340,7 +7340,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [44.43644, 33.87023],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-69e57f3ecae9",
@@ -7348,7 +7348,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [43.24853, 33.46056],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ad76fa8de999",
@@ -7356,7 +7356,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [100.15975, 23.55505],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2406582c375c",
@@ -7364,7 +7364,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [114.56205, 32.30394],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0bb56880383a",
@@ -7372,7 +7372,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [131.51638, 47.71635],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["아무르강"],
   },
   {
@@ -7381,7 +7381,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-82.1862, 38.70409],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4966c2abef75",
@@ -7389,7 +7389,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [19.54202, 45.26196],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0f91877cb13d",
@@ -7397,7 +7397,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-995b1bd0184a",
@@ -7405,7 +7405,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-7dfe359d14b1",
@@ -7413,7 +7413,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-3a7e95373cf3",
@@ -7421,7 +7421,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-6a46165a669a",
@@ -7429,7 +7429,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5987fd3880c4",
@@ -7437,7 +7437,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2f323ebac563",
@@ -7445,7 +7445,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [32.31707, 30.8347],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e6e29ec7dbcd",
@@ -7453,7 +7453,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [80.47017, 30.54257],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-8403ad1bdb2c",
@@ -7461,7 +7461,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [58.63688, 59.89271],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4d3d1971afbb",
@@ -7469,7 +7469,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [78.76393, 41.95637],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4cb39933e3e3",
@@ -7477,7 +7477,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [-66.71682, -21.02822],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2ca864e96198",
@@ -7485,7 +7485,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [-3.88524, 32.80295],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-92aea1dc053a",
@@ -7493,7 +7493,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [128.23447, 66.74918],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ad17c3a4dc5d",
@@ -7501,7 +7501,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [158.65055, 62.78867],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-df9de943515e",
@@ -7509,7 +7509,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [117.04814, 54.09019],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c8b258343b16",
@@ -7517,7 +7517,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [86.28064, 36.39901],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ab17f5a94829",
@@ -7525,7 +7525,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [121.30814, 48.53477],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-d97c8c994ffc",
@@ -7533,7 +7533,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [90.10426, 47.83091],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b5cbe08488fa",
@@ -7541,7 +7541,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [149.71088, -25.24194],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fed82d9d6012",
@@ -7549,7 +7549,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [-114.46787, 47.47608],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2a0413a7b584",
@@ -7557,7 +7557,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [-119.61215, 37.73285],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-43133fdca851",
@@ -7565,7 +7565,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [-76.79169, 40.95215],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-626081f0c472",
@@ -7573,7 +7573,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: [7.26006, 45.88959],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e7ce27d50ce0",
@@ -7581,7 +7581,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-79e0a5c47e8f",
@@ -7589,7 +7589,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fe0a1c74974c",
@@ -7597,7 +7597,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1601c88febad",
@@ -7605,7 +7605,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "mountain",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-7096f97791db",
@@ -7613,7 +7613,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [27.90608, 36.17033],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["로도스"],
   },
   {
@@ -7622,7 +7622,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9bf059a9e361",
@@ -7630,7 +7630,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ff7d971d00f6",
@@ -7638,7 +7638,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [14.11794, 37.49195],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["시칠리아"],
   },
   {
@@ -7647,7 +7647,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [9.0656, 42.18987],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f9fd5cbb1ec9",
@@ -7655,7 +7655,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [9.07926, 40.08469],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["사르데냐"],
   },
   {
@@ -7664,7 +7664,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [101.63033, -0.13912],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-f04a8323f676",
@@ -7672,7 +7672,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [114.8749, 1.41001],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-dc21cb120fce",
@@ -7680,7 +7680,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [120.35781, -2.0105],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-715c5ce1b826",
@@ -7688,7 +7688,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [109.61009, -7.33396],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["자와"],
   },
   {
@@ -7697,7 +7697,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [139.84119, 37.49146],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-05bf185a28a3",
@@ -7705,7 +7705,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [131.11562, 32.4691],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e426b236ac3b",
@@ -7713,7 +7713,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [133.37593, 33.55335],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0569981b95e4",
@@ -7721,7 +7721,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [120.81901, 23.59461],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-411bda9a20bb",
@@ -7729,7 +7729,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [114.09777, 22.44883],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4e5a5629bb55",
@@ -7737,7 +7737,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-74.49291, 24.0528],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-36d953360933",
@@ -7745,7 +7745,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [141.97451, -5.50125],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ae7750306be7",
@@ -7753,7 +7753,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0746d1532791",
@@ -7761,7 +7761,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["괌"],
   },
   {
@@ -7770,7 +7770,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [145.73993, 15.18638],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["사이판"],
   },
   {
@@ -7779,7 +7779,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [143.02867, 50.15601],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-88e17ce44710",
@@ -7787,7 +7787,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-37.63632, 71.70083],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0b39a0aa9d82",
@@ -7795,7 +7795,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [71.57922, -6.3554],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ca5b74738e45",
@@ -7803,7 +7803,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5138ea106951",
@@ -7811,7 +7811,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [50.65052, -46.12353],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-010e5c348cb5",
@@ -7819,7 +7819,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-908a542169fc",
@@ -7827,7 +7827,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [20.4054, 77.68601],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-31839e8a32a6",
@@ -7835,7 +7835,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [143.44692, 74.72611],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c4228fbd9cab",
@@ -7843,7 +7843,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-94.22062, 78.68833],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-0add32a7426c",
@@ -7851,7 +7851,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [55.2304, 80.79615],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-1aa08a7e3303",
@@ -7859,7 +7859,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-58.7386, -51.60891],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-9c4b54c310e4",
@@ -7867,7 +7867,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-90.68757, -0.36944],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-34ff9d75cc8e",
@@ -7875,7 +7875,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-d5f1595d897c",
@@ -7883,7 +7883,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [166.08596, -50.87933],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-11d208888fc2",
@@ -7891,7 +7891,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5c8ba1f5bfdb",
@@ -7899,7 +7899,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-140.79613, -18.10961],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2cbdfaf9a9e7",
@@ -7907,7 +7907,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-159.78567, -21.21599],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2f2798bf0cff",
@@ -7915,7 +7915,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-176.51969, -43.99877],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-397fe1597c11",
@@ -7923,7 +7923,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [95.0191, 80.17081],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7d1f41e4a947",
@@ -7931,7 +7931,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [159.44453, 56.76921],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-3b60d2a4fd84",
@@ -7939,7 +7939,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [176.38479, 52.24763],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5fee1b8f49c1",
@@ -7947,7 +7947,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [152.12482, 47.53115],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-54c6eca6113c",
@@ -7955,7 +7955,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [106.79284, 75.42881],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e47e11d24675",
@@ -7963,7 +7963,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [37.02869, 67.6814],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-bf052ae29ec4",
@@ -7971,7 +7971,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5d0c3ca7723d",
@@ -7979,7 +7979,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-65.27688, -68.88081],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-73d8d5471a21",
@@ -7987,7 +7987,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ec0d15508365",
@@ -7995,7 +7995,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fae2db90a861",
@@ -8003,7 +8003,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-111.21662, 70.90776],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-dc3130961d2f",
@@ -8011,7 +8011,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-76.7287, 79.67222],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-22279bf26696",
@@ -8019,7 +8019,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-69.59915, 67.86978],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4782dc11ba82",
@@ -8027,7 +8027,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-56.71171, 49.10872],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-aee712efb81d",
@@ -8035,7 +8035,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-155.43964, 19.60917],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-cc46db6e72eb",
@@ -8043,7 +8043,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-36.46101, -54.4313],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-ef0436ac0671",
@@ -8051,7 +8051,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-eab6bde96324",
@@ -8059,7 +8059,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-149.46591, -17.67681],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
     aliases: ["타이티 섬"],
   },
   {
@@ -8068,7 +8068,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-128.31754, -24.36458],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-fc993a0538fc",
@@ -8076,7 +8076,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-109.36791, -27.10223],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-a20ed50a9050",
@@ -8084,7 +8084,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [175.98455, -38.01873],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-5bcd7473fe97",
@@ -8092,7 +8092,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [171.30311, -43.56578],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4bfb5d7ea4ff",
@@ -8100,7 +8100,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["실론"],
   },
   {
@@ -8109,7 +8109,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 교과서 세계지도의 원문 표기입니다. 통상 지형 명칭과의 불일치 가능성이 있어 정확한 지형·좌표 대조가 필요합니다.",
+      "위치 확인 필요 · 교과서 세계지도의 원문 표기이다. 통상 지형 명칭과의 불일치 가능성이 있어 정확한 지형·좌표 대조가 필요하다.",
   },
   {
     id: "world-6a03f19f1746",
@@ -8117,7 +8117,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-47.14854, -13.13301],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-99ede30a9ca1",
@@ -8125,7 +8125,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-61.95935, -7.95385],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-6fb23f25aa61",
@@ -8133,7 +8133,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 교과서 세계지도의 원문 표기입니다. 통상 지형 명칭과의 불일치 가능성이 있어 정확한 지형·좌표 대조가 필요합니다.",
+      "위치 확인 필요 · 교과서 세계지도의 원문 표기이다. 통상 지형 명칭과의 불일치 가능성이 있어 정확한 지형·좌표 대조가 필요하다.",
   },
   {
     id: "world-9e21644b4935",
@@ -8141,7 +8141,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [10.0886, 21.88276],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-767aab168ab8",
@@ -8149,7 +8149,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["타커라마간 사막"],
   },
   {
@@ -8158,7 +8158,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-c28a8dc35a20",
@@ -8166,7 +8166,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-8664035d6777",
@@ -8174,7 +8174,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-74bf92bfa6fd",
@@ -8182,7 +8182,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-7d50065999b2",
@@ -8190,7 +8190,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-796e5a99b9c8",
@@ -8198,7 +8198,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e50557c4ba6f",
@@ -8206,7 +8206,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-4bd41104f817",
@@ -8214,7 +8214,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-755a3565fb40",
@@ -8222,7 +8222,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [58.93674, 40.82532],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-2167934c4fca",
@@ -8230,7 +8230,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-050ab257e98a",
@@ -8238,7 +8238,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-626a5cc218d3",
@@ -8246,7 +8246,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bed99b42ef92",
@@ -8254,7 +8254,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-0d3c650dad27",
@@ -8262,7 +8262,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-787c09bcea0b",
@@ -8270,7 +8270,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e7eb35422f77",
@@ -8278,7 +8278,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fe0c90d098ea",
@@ -8286,7 +8286,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["덩저우"],
   },
   {
@@ -8295,7 +8295,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-97055e0511cd",
@@ -8303,7 +8303,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-dc30acc79c98",
@@ -8311,7 +8311,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-db52cbc24a74",
@@ -8319,7 +8319,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2a47e48263bb",
@@ -8327,7 +8327,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-72b8df331fc6",
@@ -8335,7 +8335,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-cf2c252d9421",
@@ -8343,7 +8343,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [32.6421, 25.69893],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 360502 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 360502 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-0a48798d2f40",
@@ -8351,7 +8351,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1c4b7d689632",
@@ -8359,7 +8359,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-07e5430318de",
@@ -8367,7 +8367,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [4.80892, 43.94834],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3035681 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3035681 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ba901a12f323",
@@ -8375,7 +8375,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [4.35788, 43.83665],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2990363 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2990363 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-0087126c8947",
@@ -8383,7 +8383,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [19.21037, 50.03437],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3089658 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3089658 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a730c371946e",
@@ -8391,7 +8391,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [114.38278, 36.096],
     locationNote:
-      "중국 허난의 현대 안양 대표 위치입니다. 한국 안양과 구분하며 은허 유적 자체의 좌표가 아닙니다. GeoNames 1785294 (CC BY 4.0).",
+      "중국 허난의 현대 안양 대표 위치이다. 한국 안양과 구분하며 은허 유적 자체의 좌표가 아니다. GeoNames 1785294 (CC BY 4.0).",
   },
   {
     id: "world-da2cc50b7f4d",
@@ -8399,7 +8399,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ed074edaab7c",
@@ -8407,7 +8407,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [123.43278, 41.79222],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2034937 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2034937 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-a987d1ac7495",
@@ -8415,7 +8415,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fb7dc6132842",
@@ -8423,7 +8423,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b1a69c29b525",
@@ -8431,7 +8431,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5c49a2731534",
@@ -8439,7 +8439,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-494ab2d8a2a6",
@@ -8447,7 +8447,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-f264380b68d2",
@@ -8455,7 +8455,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [127.44361, 39.15278],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1866923 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1866923 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-013f3691faf5",
@@ -8463,7 +8463,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-aa778c35f854",
@@ -8471,7 +8471,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [124.39806, 40.10056],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2040893 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2040893 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-446279412a7c",
@@ -8479,7 +8479,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2ba5ea9e2a31",
@@ -8487,7 +8487,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-49a8b82d8a71",
@@ -8495,7 +8495,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-fbbe630ac76e",
@@ -8503,7 +8503,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [128.49506, 35.54145],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 6903078 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 6903078 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-cdc7fc68d659",
@@ -8511,7 +8511,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-8a4fea607263",
@@ -8519,7 +8519,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [126.25798, 39.75261],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1868144 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1868144 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-ec63111900db",
@@ -8527,7 +8527,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-c983de742b2a",
@@ -8535,7 +8535,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [130.41081, 42.34166],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 13446724 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 13446724 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-608b7ba880ec",
@@ -8543,7 +8543,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [128.1943, 40.03971],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2040959 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2040959 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-74ad959502c9",
@@ -8551,7 +8551,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-6e04a3b12ebb",
@@ -8559,7 +8559,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-4bdeb2c71c26",
@@ -8567,7 +8567,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-23574ff547ec",
@@ -8575,7 +8575,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9cf50511dfbb",
@@ -8583,7 +8583,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-3acf35338566",
@@ -8591,7 +8591,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bc8f11eb40ce",
@@ -8599,7 +8599,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [83.01041, 25.31668],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1253405 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1253405 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c3731fc7efec",
@@ -8607,7 +8607,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["배로인"],
   },
   {
@@ -8616,7 +8616,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-cd98948ba2f4",
@@ -8624,7 +8624,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-4b7191b50a4a",
@@ -8632,7 +8632,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f42a0b74f5ba",
@@ -8640,7 +8640,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-153c91651359",
@@ -8648,7 +8648,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-dba535567525",
@@ -8656,7 +8656,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2f7ff81d01f6",
@@ -8664,7 +8664,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2b7f59bd0132",
@@ -8672,7 +8672,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4f030e10f1e6",
@@ -8680,7 +8680,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ccff7dfd215c",
@@ -8688,7 +8688,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9eeae53bfaf6",
@@ -8696,7 +8696,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fe25e26b52fe",
@@ -8704,7 +8704,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-29617a649501",
@@ -8712,7 +8712,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-41c113d33df4",
@@ -8720,7 +8720,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-1e699c20aa40",
@@ -8728,7 +8728,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3c2abfe15f5d",
@@ -8736,7 +8736,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4c51052d4a44",
@@ -8744,7 +8744,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-abcc8f9c105a",
@@ -8752,7 +8752,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6a8aff6066f2",
@@ -8760,7 +8760,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-157b5deefe15",
@@ -8768,7 +8768,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6ce418592ee5",
@@ -8776,7 +8776,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2005f69e3721",
@@ -8784,7 +8784,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-8c67496816a5",
@@ -8792,7 +8792,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b857009efc09",
@@ -8800,7 +8800,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-74f6ad18feac",
@@ -8808,7 +8808,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4fdb2a5db8bb",
@@ -8816,7 +8816,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e7e69e5ad13c",
@@ -8824,7 +8824,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-b94e8e3ed858",
@@ -8832,7 +8832,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6a2f596d3893",
@@ -8840,7 +8840,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-93f671879da5",
@@ -8848,7 +8848,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ce6ccbbe0836",
@@ -8856,7 +8856,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5792a5d6b822",
@@ -8864,7 +8864,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3d068f59a7b6",
@@ -8872,7 +8872,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a7376660af60",
@@ -8880,7 +8880,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-7bf15a96a32b",
@@ -8888,7 +8888,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ca542b3c5afd",
@@ -8896,7 +8896,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-548d464996d3",
@@ -8904,7 +8904,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9ca01e3be9a1",
@@ -8912,7 +8912,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9cf60ddb89ca",
@@ -8920,7 +8920,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-6393e85b1cef",
@@ -8928,7 +8928,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ae2876b88f77",
@@ -8936,7 +8936,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-aefbb091415a",
@@ -8944,7 +8944,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-78f243d2044b",
@@ -8952,7 +8952,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-3441614bbb90",
@@ -8960,7 +8960,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-38ab425c9090",
@@ -8968,7 +8968,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bf6e55b112b2",
@@ -8976,7 +8976,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-0252e66ad3e6",
@@ -8984,7 +8984,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-57086925e3ce",
@@ -8992,7 +8992,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-4ced75d148b0",
@@ -9000,7 +9000,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["산타마리아 델 피오레 성당"],
   },
   {
@@ -9009,7 +9009,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-070ebde598d9",
@@ -9017,7 +9017,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b87f5ba20b3d",
@@ -9025,7 +9025,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ef664ffc7c1b",
@@ -9033,7 +9033,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e3684633c98f",
@@ -9041,7 +9041,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ca2f8bfaeda0",
@@ -9049,7 +9049,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["수에비"],
   },
   {
@@ -9058,7 +9058,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["서고트"],
   },
   {
@@ -9067,7 +9067,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["동고트"],
   },
   {
@@ -9076,7 +9076,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["부르군트"],
   },
   {
@@ -9085,7 +9085,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["롬바르드"],
   },
   {
@@ -9094,7 +9094,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["반달"],
   },
   {
@@ -9103,7 +9103,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["노르망디"],
   },
   {
@@ -9112,7 +9112,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-17329b7e7e7b",
@@ -9120,7 +9120,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f200348ea9e3",
@@ -9128,7 +9128,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fb03b8615c94",
@@ -9136,7 +9136,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [25.27889, 38.75331],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-99caef8e620e",
@@ -9144,7 +9144,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-7040f0fbdb66",
@@ -9152,7 +9152,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-f511fd6f9bb1",
@@ -9160,7 +9160,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b01bafee9415",
@@ -9168,7 +9168,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-936bc7cbfab4",
@@ -9176,7 +9176,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-91b689203e6d",
@@ -9184,7 +9184,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-90acadddd3a2",
@@ -9192,7 +9192,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-172c48d95c98",
@@ -9200,7 +9200,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-63c4919a09a6",
@@ -9208,7 +9208,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9cfeb0ee4f89",
@@ -9216,7 +9216,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-88c5a1e6c993",
@@ -9224,7 +9224,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1bdfe785c9fc",
@@ -9232,7 +9232,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-04c176b5e44a",
@@ -9240,7 +9240,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b995b835e376",
@@ -9248,7 +9248,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b28c706d1e19",
@@ -9256,7 +9256,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-382adcb6a659",
@@ -9264,7 +9264,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-7db4ff8a0b00",
@@ -9272,7 +9272,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1983212a5d01",
@@ -9280,7 +9280,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-685f04e72a64",
@@ -9288,7 +9288,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9c1b77e8e7c3",
@@ -9296,7 +9296,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1b4457b2f341",
@@ -9304,7 +9304,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e1eb2f561b2f",
@@ -9312,7 +9312,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-60064b649d75",
@@ -9320,7 +9320,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-0b5aaef85c9c",
@@ -9328,7 +9328,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ec081b56ea49",
@@ -9336,7 +9336,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a6dc5f0de748",
@@ -9344,7 +9344,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [99.823, 17.00778],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1150533 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1150533 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7c55087ba8b0",
@@ -9352,7 +9352,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-7.61138, 33.58831],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2553604 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2553604 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-7714c79bc3a8",
@@ -9360,7 +9360,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b43bdda051da",
@@ -9368,7 +9368,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [44.4976, 48.71378],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 472757 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 472757 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["스탈린그라드"],
   },
   {
@@ -9377,7 +9377,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-118.32674, 34.09834],
     locationNote:
-      "미국 로스앤젤레스 안의 할리우드 지역 대표 위치입니다. 플로리다의 동명 도시와 구분합니다. GeoNames 5357527 (CC BY 4.0).",
+      "미국 로스앤젤레스 안의 할리우드 지역 대표 위치이다. 플로리다의 동명 도시와 구분한다. GeoNames 5357527 (CC BY 4.0).",
   },
   {
     id: "world-613823748fd1",
@@ -9385,7 +9385,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-7a622355fb25",
@@ -9393,7 +9393,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-93e0d0fe7b2b",
@@ -9401,7 +9401,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 몽골 시대 교통로의 도시이며, 우즈베키스탄의 동명 현대 도시와 구분합니다.",
+      "위치 확인 필요 · 몽골 시대 교통로의 도시이며, 우즈베키스탄의 동명 현대 도시와 구분한다.",
   },
   {
     id: "world-254d1c32ae4b",
@@ -9409,7 +9409,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["비슈발리크"],
   },
   {
@@ -9418,7 +9418,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [16.37208, 48.20849],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2761369 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2761369 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["비엔나"],
   },
   {
@@ -9427,7 +9427,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-828b82553e1d",
@@ -9435,7 +9435,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-d89538caa532",
@@ -9443,7 +9443,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-04320109cea7",
@@ -9451,7 +9451,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-3f08a7b47e31",
@@ -9459,7 +9459,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-46bd08294e9f",
@@ -9467,7 +9467,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-d37ac2007e4a",
@@ -9475,7 +9475,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-d9f7ef39a0f0",
@@ -9483,7 +9483,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-7f8f3a881934",
@@ -9491,7 +9491,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e5f081252766",
@@ -9499,7 +9499,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-21d125e24732",
@@ -9507,7 +9507,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-4aa2e2423223",
@@ -9515,7 +9515,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a4b35fc74a9a",
@@ -9523,7 +9523,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-8025359b98e6",
@@ -9531,7 +9531,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [101.77788, 5.3353],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-7bddbf9f743b",
@@ -9539,7 +9539,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [158.5311, 5.17133],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-cc54d9729df8",
@@ -9547,7 +9547,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ace6f31010ea",
@@ -9555,7 +9555,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-eb03984f5b17",
@@ -9563,7 +9563,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-45f2fc738d22",
@@ -9571,7 +9571,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f8592a7dda54",
@@ -9579,7 +9579,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-85.34281, 35.03165],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-c95e85aaf327",
@@ -9587,7 +9587,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [66.8972, 36.75635],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1147290 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1147290 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
     aliases: ["박트라"],
   },
   {
@@ -9596,7 +9596,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["낙읍"],
   },
   {
@@ -9605,7 +9605,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["우전"],
   },
   {
@@ -9614,7 +9614,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["사리이"],
   },
   {
@@ -9623,7 +9623,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-e339a34ef7f1",
@@ -9631,7 +9631,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2bad6a77ad9a",
@@ -9639,7 +9639,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["상경"],
   },
   {
@@ -9648,7 +9648,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-889b917c9a65",
@@ -9656,7 +9656,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-966f020e9ddd",
@@ -9664,7 +9664,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-a20326842266",
@@ -9672,7 +9672,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-740016a66488",
@@ -9680,7 +9680,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["자오찌"],
   },
   {
@@ -9689,7 +9689,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-c20ace5a2e3e",
@@ -9697,7 +9697,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-8efbcad44f14",
@@ -9705,7 +9705,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4c81ce004a45",
@@ -9713,7 +9713,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-cefc5d0bb1cb",
@@ -9721,7 +9721,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ccea4adf046b",
@@ -9729,7 +9729,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f1dd0b0cbb6e",
@@ -9737,7 +9737,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["남해"],
   },
   {
@@ -9746,7 +9746,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5350ddf46cbb",
@@ -9754,7 +9754,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["북위(북조)"],
   },
   {
@@ -9763,7 +9763,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["남조 송"],
   },
   {
@@ -9772,7 +9772,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-71afff4a18ed",
@@ -9780,7 +9780,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-eddea29aaace",
@@ -9788,7 +9788,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6c0fa4a15cd8",
@@ -9796,7 +9796,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-752244cf84ad",
@@ -9804,7 +9804,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3299d0c5f4f3",
@@ -9812,7 +9812,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-c04eb2ef104c",
@@ -9820,7 +9820,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f2e0675144d2",
@@ -9828,7 +9828,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5a62fd50d243",
@@ -9836,7 +9836,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-8ce2774dbf6d",
@@ -9844,7 +9844,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-60d9cdec28ff",
@@ -9852,7 +9852,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-21ba070b23b6",
@@ -9860,7 +9860,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["카안 울루스"],
   },
   {
@@ -9869,7 +9869,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e8350c00f10a",
@@ -9877,7 +9877,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0ee1f40ad364",
@@ -9885,7 +9885,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-91751bb0167f",
@@ -9893,7 +9893,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e9c99a172d2b",
@@ -9901,7 +9901,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-6c478f7d3a3c",
@@ -9909,7 +9909,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-c75537fc787b",
@@ -9917,7 +9917,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-049670fa94f9",
@@ -9925,7 +9925,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-661ecabf0610",
@@ -9933,7 +9933,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["야마토 정권"],
   },
   {
@@ -9942,7 +9942,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [139.54698, 35.31085],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1860672 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1860672 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-945dc597ab52",
@@ -9950,7 +9950,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-c37db0f7a33c",
@@ -9958,7 +9958,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: [32.610278, 25.720556],
     locationNote:
-      "유적의 대표 위치 · Wikidata Q101583 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않습니다.",
+      "유적의 대표 위치 · Wikidata Q101583 (CC0). 유적 전체의 경계나 특정 발굴 구역을 뜻하지 않는다.",
     aliases: ["테베"],
   },
   {
@@ -9967,7 +9967,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["테베"],
   },
   {
@@ -9976,7 +9976,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["한"],
   },
   {
@@ -9985,7 +9985,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["성 소피아 성당"],
   },
   {
@@ -9994,7 +9994,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["연"],
   },
   {
@@ -10003,7 +10003,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["조"],
   },
   {
@@ -10012,7 +10012,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["위"],
   },
   {
@@ -10021,7 +10021,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["초"],
   },
   {
@@ -10030,7 +10030,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["제"],
   },
   {
@@ -10039,7 +10039,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["노"],
   },
   {
@@ -10048,7 +10048,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["송"],
   },
   {
@@ -10057,7 +10057,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["오"],
   },
   {
@@ -10066,7 +10066,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["월"],
   },
   {
@@ -10075,7 +10075,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["진(晉)", "진(晋)"],
   },
   {
@@ -10084,7 +10084,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["위"],
   },
   {
@@ -10093,7 +10093,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["촉"],
   },
   {
@@ -10102,7 +10102,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["오"],
   },
   {
@@ -10111,7 +10111,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-30865a206a35",
@@ -10119,7 +10119,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3e3ae062c941",
@@ -10127,7 +10127,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-7d4527837803",
@@ -10135,7 +10135,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-39ba85d45dd5",
@@ -10143,7 +10143,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5e674ee3c07c",
@@ -10151,7 +10151,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-004a9164f4b8",
@@ -10159,7 +10159,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["제"],
   },
   {
@@ -10168,7 +10168,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["양"],
   },
   {
@@ -10177,7 +10177,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["진"],
   },
   {
@@ -10186,7 +10186,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4c537d131462",
@@ -10194,7 +10194,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-504e991f0aa0",
@@ -10202,7 +10202,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-741afa5aae6c",
@@ -10210,7 +10210,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["진"],
   },
   {
@@ -10219,7 +10219,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-add6a706fa1d",
@@ -10227,7 +10227,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3ebadde1f2da",
@@ -10235,7 +10235,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5c0ca8eef869",
@@ -10243,7 +10243,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["한구"],
   },
   {
@@ -10252,7 +10252,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ac87986c6b00",
@@ -10260,7 +10260,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["니혼바시"],
   },
   {
@@ -10269,7 +10269,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["가야바초"],
   },
   {
@@ -10278,7 +10278,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["오테마치"],
   },
   {
@@ -10287,7 +10287,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-b90ae636980c",
@@ -10295,7 +10295,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [129.31667, 35.53722],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1833747 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1833747 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-28dfd0944255",
@@ -10303,7 +10303,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2c922ffa2176",
@@ -10311,7 +10311,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-bc5db121dbf5",
@@ -10319,7 +10319,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-78218dd7abdc",
@@ -10327,7 +10327,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-6ae4b960ece1",
@@ -10335,7 +10335,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-695c35aa75af",
@@ -10343,7 +10343,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [127.13139, 36.91556],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 1836208 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 1836208 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-6d2fff6baec5",
@@ -10351,7 +10351,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-72e3b398c2ba",
@@ -10359,7 +10359,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-8848d510f147",
@@ -10367,7 +10367,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-fdf975ec61cd",
@@ -10375,7 +10375,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e4f984b2129d",
@@ -10383,7 +10383,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3b28b0d7a7b5",
@@ -10391,7 +10391,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-ddc0539071f0",
@@ -10399,7 +10399,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-167e4778c473",
@@ -10407,7 +10407,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-2ff45e60c6c9",
@@ -10415,7 +10415,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-9d6a74a1d2fc",
@@ -10423,7 +10423,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["단디"],
   },
   {
@@ -10432,7 +10432,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-adeb68158d71",
@@ -10440,7 +10440,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-db007fa96e33",
@@ -10448,7 +10448,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [21.87851, 55.08392],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 490068 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 490068 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
   },
   {
     id: "world-bb70adfe9542",
@@ -10456,7 +10456,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [2.3, 49.9],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 3037854 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 3037854 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
   },
   {
     id: "world-c2e4de45537b",
@@ -10464,7 +10464,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f92ef86b568b",
@@ -10472,7 +10472,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-521701365429",
@@ -10480,7 +10480,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [13.01665, 43.84052],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 3177219 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 3177219 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
   },
   {
     id: "world-13c2900caa06",
@@ -10488,7 +10488,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [-87.52863, 38.67727],
     locationNote:
-      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 4266307 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않습니다.",
+      "원문 지도의 국가·지역과 대조한 현대 대표 위치 · GeoNames 4266307 (CC BY 4.0). 당시 도시 경계나 전투 지점 자체를 뜻하지 않는다.",
     aliases: ["빈센스"],
   },
   {
@@ -10497,7 +10497,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["니케아"],
   },
   {
@@ -10506,7 +10506,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-c970a8be5f33",
@@ -10514,7 +10514,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["서시"],
   },
   {
@@ -10523,7 +10523,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
     aliases: ["동시"],
   },
   {
@@ -10532,7 +10532,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-47ebf61bdf3b",
@@ -10540,7 +10540,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3e013f3f9161",
@@ -10548,7 +10548,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2edf429694b8",
@@ -10556,7 +10556,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-489a2a93ab84",
@@ -10564,7 +10564,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-de4c255e874d",
@@ -10572,7 +10572,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [22.22442, 37.38735],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-4f12969164aa",
@@ -10580,7 +10580,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5d807984ad16",
@@ -10588,7 +10588,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-5f9d3b8b301d",
@@ -10596,7 +10596,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-d66e8f796993",
@@ -10604,7 +10604,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-cfaf80b385d5",
@@ -10612,7 +10612,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4a098c3a05e7",
@@ -10620,7 +10620,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1ead645ac66a",
@@ -10628,7 +10628,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-c227b68c415a",
@@ -10636,7 +10636,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [116.58693, 51.97981],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 2019326 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 2019326 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-c53e5443385d",
@@ -10644,7 +10644,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ed41d2617cc9",
@@ -10652,7 +10652,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-71.49053, 18.49308],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-b3b00e9b1a86",
@@ -10660,7 +10660,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: [-17.47173, 14.73249],
     locationNote:
-      "현대 지형의 대표 위치입니다. 역사적 영역·경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 지형의 대표 위치이다. 역사적 영역·경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-57436616cc72",
@@ -10668,7 +10668,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: [-70.69328, -53.1751],
     locationNote:
-      "현대 수계·수역의 대표 위치입니다. 강의 전체 경로나 수역 경계를 뜻하지 않습니다. Natural Earth 공개 지리 자료.",
+      "현대 수계·수역의 대표 위치이다. 강의 전체 경로나 수역 경계를 뜻하지 않는다. Natural Earth 공개 지리 자료.",
   },
   {
     id: "world-e79d7d995f21",
@@ -10676,7 +10676,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-85e3519fc38f",
@@ -10684,7 +10684,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "water",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-933630211708",
@@ -10692,7 +10692,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4f2a8625ea0d",
@@ -10700,7 +10700,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-ce30624a042e",
@@ -10708,7 +10708,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-513eeceed116",
@@ -10716,7 +10716,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "site",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았습니다.",
+      "위치 확인 필요 · 원문 지명은 확인했으며, 다른 도시나 현대 국가의 중심으로 임의 대체하지 않았다.",
   },
   {
     id: "world-1243a16422b9",
@@ -10724,7 +10724,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-23d8fb870454",
@@ -10732,7 +10732,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: [13.77678, 45.64953],
     locationNote:
-      "현대 도시의 대표 위치 · GeoNames 3165185 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않습니다.",
+      "현대 도시의 대표 위치 · GeoNames 3165185 (CC BY 4.0). 고대 도시의 정확한 경계나 유적 위치를 뜻하지 않는다.",
   },
   {
     id: "world-45b8c0b957b5",
@@ -10740,7 +10740,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "원문 표기 확인 필요 · 인용문의 발트해 위치와 일반적인 슈데텐 지명이 일치하지 않아 영역이나 위치를 확정하지 않았습니다.",
+      "원문 표기 확인 필요 · 인용문의 발트해 위치와 일반적인 슈데텐 지명이 일치하지 않아 영역이나 위치를 확정하지 않았다.",
   },
   {
     id: "world-766493cf38b2",
@@ -10748,7 +10748,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "settlement",
     coordinates: null,
     locationNote:
-      "위치 확인 필요 · 조몬 토기 사진의 원문 표기입니다. 다른 판본의 미타카 표기와 같은 지점인지 확정하지 않았습니다.",
+      "위치 확인 필요 · 조몬 토기 사진의 원문 표기이다. 다른 판본의 미타카 표기와 같은 지점인지 확정하지 않았다.",
   },
   {
     id: "world-b9c3f6102ecd",
@@ -10756,7 +10756,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-2a4c7cfc5588",
@@ -10764,7 +10764,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-d4a8d58d90a8",
@@ -10772,7 +10772,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-c9e65336e40e",
@@ -10780,7 +10780,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-e459b591fbce",
@@ -10788,7 +10788,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-aad166ee40da",
@@ -10796,7 +10796,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f192a1edf3ff",
@@ -10804,7 +10804,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-9f2537e83fcd",
@@ -10812,7 +10812,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5b55d5bfff60",
@@ -10820,7 +10820,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-078c3d7b1f27",
@@ -10828,7 +10828,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0fbf0c1a2230",
@@ -10836,7 +10836,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0b31745aa4a8",
@@ -10844,7 +10844,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-0eadf4092864",
@@ -10852,7 +10852,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-4d89093432bd",
@@ -10860,7 +10860,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-5a3cf1ff8e65",
@@ -10868,7 +10868,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-dc21e03b701a",
@@ -10876,7 +10876,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-3c8582675442",
@@ -10884,7 +10884,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-55e0f986e7c1",
@@ -10892,7 +10892,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-f0cb2ac2faa3",
@@ -10900,7 +10900,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
     aliases: ["남조"],
   },
   {
@@ -10909,7 +10909,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
   {
     id: "world-cf5632c7ab52",
@@ -10917,7 +10917,7 @@ export const worldExpansionPlaces: AtlasPlace[] = [
     kind: "region",
     coordinates: null,
     locationNote:
-      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않습니다. 정밀한 역사 영역 자료는 현재 제공하지 않습니다.",
+      "시대별 영역이 다른 나라·지역으로 단일 점을 표시하지 않는다. 정밀한 역사 영역 자료는 현재 제공하지 않는다.",
   },
 ];
 
@@ -11536,7 +11536,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 둔황, 사주. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 둔황, 사주. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-bf0c345a5654-1",
       "world-exp-world-bf0c345a5654-2",
@@ -11579,7 +11579,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 둔황, 사주. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 둔황, 사주. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-bf0c345a5654-0",
       "world-exp-world-bf0c345a5654-2",
@@ -11610,7 +11610,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 둔황, 사주. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 둔황, 사주. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-bf0c345a5654-0",
       "world-exp-world-bf0c345a5654-1",
@@ -11845,7 +11845,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 셴양, 함양. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 셴양, 함양. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-ed94e354ae97-0",
@@ -11893,7 +11893,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 에페수스, 에페소스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 에페수스, 에페소스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-ed58de0394bd-0"],
   },
   {
@@ -11917,7 +11917,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 에페수스, 에페소스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 에페수스, 에페소스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-ed58de0394bd-1"],
   },
   {
@@ -12118,7 +12118,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 트로이, 일리온. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 트로이, 일리온. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-18c0db61f1b2-0",
@@ -12215,7 +12215,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 카르타고노바, 카르타고 노바. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 카르타고노바, 카르타고 노바. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-72d88c822fad-0",
@@ -12402,7 +12402,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-paris-1",
       "world-exp-paris-2",
@@ -12460,7 +12460,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-paris-0",
       "world-exp-paris-2",
@@ -12486,7 +12486,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-paris-0",
       "world-exp-paris-1",
@@ -12568,7 +12568,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-paris-0",
       "world-exp-paris-1",
@@ -12634,7 +12634,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-paris-0",
       "world-exp-paris-1",
@@ -12668,7 +12668,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 파리, 루테티아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-paris-0",
       "world-exp-paris-1",
@@ -12698,7 +12698,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-71f0c245b5a4-1",
       "world-exp-world-71f0c245b5a4-2",
@@ -12744,7 +12744,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-71f0c245b5a4-0",
       "world-exp-world-71f0c245b5a4-2",
@@ -12774,7 +12774,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-71f0c245b5a4-0",
       "world-exp-world-71f0c245b5a4-1",
@@ -12836,7 +12836,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-71f0c245b5a4-0",
       "world-exp-world-71f0c245b5a4-1",
@@ -12870,7 +12870,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-71f0c245b5a4-0",
       "world-exp-world-71f0c245b5a4-1",
@@ -12908,7 +12908,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 런던, 론디니움, 론다니움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-71f0c245b5a4-0",
       "world-exp-world-71f0c245b5a4-1",
@@ -13873,7 +13873,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 장안, 시안, 대흥. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 장안, 시안, 대흥. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-xian-1",
       "world-exp-xian-2",
@@ -13949,7 +13949,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 장안, 시안, 대흥. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 장안, 시안, 대흥. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-xian-0",
       "world-exp-xian-2",
@@ -13993,7 +13993,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 장안, 시안, 대흥. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 장안, 시안, 대흥. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-xian-0",
       "world-exp-xian-1",
@@ -14021,7 +14021,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 장안, 시안, 대흥. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 장안, 시안, 대흥. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-xian-0",
       "world-exp-xian-1",
@@ -14078,7 +14078,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-beijing-1",
       "world-exp-beijing-2",
@@ -14116,7 +14116,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-beijing-0",
       "world-exp-beijing-2",
@@ -14218,7 +14218,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-beijing-0",
       "world-exp-beijing-1",
@@ -14264,7 +14264,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-beijing-0",
       "world-exp-beijing-1",
@@ -14302,7 +14302,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-beijing-0",
       "world-exp-beijing-1",
@@ -14344,7 +14344,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베이징, 북경, 대도, 계, 탁군, 중도, 칸발릭. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-beijing-0",
       "world-exp-beijing-1",
@@ -14382,7 +14382,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-nanjing-2",
       "world-exp-nanjing-3",
@@ -14427,7 +14427,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-nanjing-1",
       "world-exp-nanjing-3",
@@ -14484,7 +14484,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-nanjing-1",
       "world-exp-nanjing-2",
@@ -14561,7 +14561,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-nanjing-1",
       "world-exp-nanjing-2",
@@ -14590,7 +14590,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 난징, 남경, 금릉, 건강, 진링. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-nanjing-1",
       "world-exp-nanjing-2",
@@ -14667,7 +14667,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 충칭, 중경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 충칭, 중경. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-chongqing-2"],
   },
   {
@@ -14687,7 +14687,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 충칭, 중경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 충칭, 중경. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-chongqing-3"],
   },
   {
@@ -14888,7 +14888,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 카이펑, 변경, 개봉. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 카이펑, 변경, 개봉. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-kaifeng-3", "world-exp-kaifeng-0"],
   },
   {
@@ -14912,7 +14912,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 카이펑, 변경, 개봉. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 카이펑, 변경, 개봉. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-kaifeng-2", "world-exp-kaifeng-0"],
   },
   {
@@ -14940,7 +14940,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 카이펑, 변경, 개봉. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 카이펑, 변경, 개봉. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-kaifeng-2", "world-exp-kaifeng-3"],
   },
   {
@@ -15616,7 +15616,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 리스본, 리스보아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 리스본, 리스보아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-lisbon-2", "world-exp-lisbon-5"],
   },
   {
@@ -15652,7 +15652,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 리스본, 리스보아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 리스본, 리스보아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-lisbon-1", "world-exp-lisbon-5"],
   },
   {
@@ -15672,7 +15672,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 리스본, 리스보아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 리스본, 리스보아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-lisbon-1", "world-exp-lisbon-2"],
   },
   {
@@ -15833,7 +15833,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-tokyo-2",
       "world-exp-tokyo-3",
@@ -15895,7 +15895,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-tokyo-0",
       "world-exp-tokyo-3",
@@ -15941,7 +15941,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-tokyo-0",
       "world-exp-tokyo-2",
@@ -15987,7 +15987,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-tokyo-0",
       "world-exp-tokyo-2",
@@ -16025,7 +16025,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-tokyo-0",
       "world-exp-tokyo-2",
@@ -16051,7 +16051,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 도쿄, 에도, 동경. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-tokyo-0",
       "world-exp-tokyo-2",
@@ -16672,7 +16672,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 푸르샤푸라, 푸르샤프라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 푸르샤푸라, 푸르샤프라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-32a24248aa0f-0"],
   },
   {
@@ -16692,7 +16692,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 푸르샤푸라, 푸르샤프라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 푸르샤푸라, 푸르샤프라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-32a24248aa0f-1"],
   },
   {
@@ -16888,7 +16888,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 교토, 헤이안쿄, 헤이안. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 교토, 헤이안쿄, 헤이안. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-23f8483f8d47-2",
       "world-exp-world-23f8483f8d47-5",
@@ -16927,7 +16927,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 교토, 헤이안쿄, 헤이안. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 교토, 헤이안쿄, 헤이안. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-23f8483f8d47-1",
       "world-exp-world-23f8483f8d47-5",
@@ -16958,7 +16958,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 교토, 헤이안쿄, 헤이안. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 교토, 헤이안쿄, 헤이안. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-23f8483f8d47-1",
       "world-exp-world-23f8483f8d47-2",
@@ -17001,7 +17001,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 나라, 헤이조쿄. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 나라, 헤이조쿄. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-b101efd1859e-0",
@@ -17218,7 +17218,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 메디나, 야스리브. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 메디나, 야스리브. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-685a859c916f-2",
       "world-exp-world-685a859c916f-3",
@@ -17249,7 +17249,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 메디나, 야스리브. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 메디나, 야스리브. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-685a859c916f-1",
       "world-exp-world-685a859c916f-3",
@@ -17280,7 +17280,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 메디나, 야스리브. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 메디나, 야스리브. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-685a859c916f-1",
       "world-exp-world-685a859c916f-2",
@@ -17739,7 +17739,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사마르칸트, 마라칸다. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사마르칸트, 마라칸다. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-e7b216b2a964-1",
       "world-exp-world-e7b216b2a964-2",
@@ -17790,7 +17790,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사마르칸트, 마라칸다. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사마르칸트, 마라칸다. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-e7b216b2a964-0",
       "world-exp-world-e7b216b2a964-2",
@@ -17846,7 +17846,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사마르칸트, 마라칸다. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사마르칸트, 마라칸다. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-e7b216b2a964-0",
       "world-exp-world-e7b216b2a964-1",
@@ -18080,7 +18080,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 호르무즈, 호르무스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 호르무즈, 호르무스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-844dd33bf4b8-1",
       "world-exp-world-844dd33bf4b8-2",
@@ -18132,7 +18132,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 호르무즈, 호르무스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 호르무즈, 호르무스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-844dd33bf4b8-0",
       "world-exp-world-844dd33bf4b8-2",
@@ -18184,7 +18184,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 호르무즈, 호르무스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 호르무즈, 호르무스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-844dd33bf4b8-0",
       "world-exp-world-844dd33bf4b8-1",
@@ -18208,7 +18208,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 호르무즈, 호르무스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 호르무즈, 호르무스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-844dd33bf4b8-0",
       "world-exp-world-844dd33bf4b8-1",
@@ -18700,7 +18700,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 장예, 감주. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 장예, 감주. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-d833506ddd81-2"],
   },
   {
@@ -18720,7 +18720,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 장예, 감주. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 장예, 감주. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-d833506ddd81-1"],
   },
   {
@@ -18740,7 +18740,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 쿠처, 쿠챠. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 쿠처, 쿠챠. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-28f190fbd40a-1"],
   },
   {
@@ -18768,7 +18768,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 쿠처, 쿠챠. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 쿠처, 쿠챠. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-28f190fbd40a-0"],
   },
   {
@@ -18804,7 +18804,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 카슈가르, 소륵, 카스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 카슈가르, 소륵, 카스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-d8099a7f96a4-1",
       "world-exp-world-d8099a7f96a4-2",
@@ -18835,7 +18835,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 카슈가르, 소륵, 카스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 카슈가르, 소륵, 카스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-d8099a7f96a4-0",
       "world-exp-world-d8099a7f96a4-2",
@@ -18870,7 +18870,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 카슈가르, 소륵, 카스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 카슈가르, 소륵, 카스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-d8099a7f96a4-0",
       "world-exp-world-d8099a7f96a4-1",
@@ -19140,7 +19140,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 항저우, 임안, 여항. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 항저우, 임안, 여항. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-872972e9a3dc-2",
       "world-exp-world-872972e9a3dc-3",
@@ -19215,7 +19215,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 항저우, 임안, 여항. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 항저우, 임안, 여항. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-872972e9a3dc-1",
       "world-exp-world-872972e9a3dc-3",
@@ -19242,7 +19242,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 항저우, 임안, 여항. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 항저우, 임안, 여항. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-872972e9a3dc-1",
       "world-exp-world-872972e9a3dc-2",
@@ -20050,7 +20050,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 원저우, 윈저우. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 원저우, 윈저우. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-3a7f1066c582-2"],
   },
   {
@@ -20074,7 +20074,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 원저우, 윈저우. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 원저우, 윈저우. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-3a7f1066c582-3"],
   },
   {
@@ -20595,7 +20595,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 간저우, 간주. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 간저우, 간주. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-2adc976ccf9d-1",
@@ -20626,7 +20626,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 양저우, 장두. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 양저우, 장두. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-2adc976ccf9d-2"],
   },
   {
@@ -20662,7 +20662,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 양저우, 장두. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 양저우, 장두. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-2adc976ccf9d-1"],
   },
   {
@@ -20686,7 +20686,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 캘리컷, 코지코드. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 캘리컷, 코지코드. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-3dde311574e0-2",
       "world-exp-world-3dde311574e0-3",
@@ -20742,7 +20742,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 캘리컷, 코지코드. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 캘리컷, 코지코드. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-3dde311574e0-1",
       "world-exp-world-3dde311574e0-3",
@@ -20770,7 +20770,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 캘리컷, 코지코드. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 캘리컷, 코지코드. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-3dde311574e0-1",
       "world-exp-world-3dde311574e0-2",
@@ -21260,7 +21260,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 샤먼, 아모이. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 샤먼, 아모이. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-97044479ee0e-2"],
   },
   {
@@ -21285,7 +21285,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 샤먼, 아모이. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 샤먼, 아모이. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-97044479ee0e-3"],
   },
   {
@@ -21754,7 +21754,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 앙카라, 앙고라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 앙카라, 앙고라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-5cc99cbf356c-2",
       "world-exp-world-5cc99cbf356c-5",
@@ -21789,7 +21789,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 앙카라, 앙고라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 앙카라, 앙고라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-5cc99cbf356c-1",
       "world-exp-world-5cc99cbf356c-5",
@@ -21812,7 +21812,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 앙카라, 앙고라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 앙카라, 앙고라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-5cc99cbf356c-1",
       "world-exp-world-5cc99cbf356c-2",
@@ -23083,7 +23083,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 윌밍턴, 웰밍턴. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 윌밍턴, 웰밍턴. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-5cd50e5182fe-3",
@@ -23123,7 +23123,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 퀘벡, 퀘백. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 퀘벡, 퀘백. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-7fb4d0b70279-3",
@@ -23362,7 +23362,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 뭄바이, 봄베이. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 뭄바이, 봄베이. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-82b52c335023-3"],
   },
   {
@@ -23387,7 +23387,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 뭄바이, 봄베이. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 뭄바이, 봄베이. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-82b52c335023-2"],
   },
   {
@@ -23492,7 +23492,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 첸나이, 마드라스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 첸나이, 마드라스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-757696e32799-3"],
   },
   {
@@ -23517,7 +23517,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 첸나이, 마드라스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 첸나이, 마드라스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-757696e32799-2"],
   },
   {
@@ -23538,7 +23538,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 랑군, 양곤. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 랑군, 양곤. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-8510abc47546-3",
@@ -23558,7 +23558,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사이공, 호찌민시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사이공, 호찌민시. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-8510abc47546-5"],
   },
   {
@@ -23579,7 +23579,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사이공, 호찌민시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사이공, 호찌민시. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-8510abc47546-3"],
   },
   {
@@ -23696,7 +23696,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 자카르타, 바타비아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 자카르타, 바타비아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-df50d392c54c-3"],
   },
   {
@@ -23717,7 +23717,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 자카르타, 바타비아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 자카르타, 바타비아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-df50d392c54c-5"],
   },
   {
@@ -23745,7 +23745,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 옌타이, 즈푸. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 옌타이, 즈푸. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-c5fe09a8a03a-3",
@@ -24043,7 +24043,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 고베, 효고. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 고베, 효고. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-b13608d65d51-3",
@@ -24800,7 +24800,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 안디잔, 인디잔. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 안디잔, 인디잔. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-b31b784884b5-2",
@@ -24866,7 +24866,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 니샤푸르, 나샤푸르. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 니샤푸르, 나샤푸르. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-ff9f3361bf68-1",
@@ -25138,7 +25138,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 마르세유, 마실리아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 마르세유, 마실리아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ba2226fc28c9-1",
       "world-exp-world-ba2226fc28c9-3",
@@ -25169,7 +25169,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 마르세유, 마실리아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 마르세유, 마실리아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ba2226fc28c9-0",
       "world-exp-world-ba2226fc28c9-3",
@@ -25200,7 +25200,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 마르세유, 마실리아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 마르세유, 마실리아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ba2226fc28c9-0",
       "world-exp-world-ba2226fc28c9-1",
@@ -25537,7 +25537,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 브레슬라우, 브로츠와프. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 브레슬라우, 브로츠와프. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-adc7ecf17df7-3",
@@ -25593,7 +25593,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 한커우, 한구. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 한커우, 한구. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-c4ec4bc59b1a-3",
@@ -25867,7 +25867,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 마나마, 마나바. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 마나마, 마나바. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-ced298724d79-5",
@@ -28155,7 +28155,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 카노사, 카노사성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 카노사, 카노사성. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-7f92f95fbc50-1",
@@ -28199,7 +28199,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산치 대탑, 산치. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산치 대탑, 산치. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-7f92f95fbc50-0"],
   },
   {
@@ -28219,7 +28219,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산치 대탑, 산치. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산치 대탑, 산치. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-7f92f95fbc50-1"],
   },
   {
@@ -28255,7 +28255,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 아잔타 석굴 사원, 아잔타. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 아잔타 석굴 사원, 아잔타. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-c8afcf2513f3-0"],
   },
   {
@@ -28275,7 +28275,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 아잔타 석굴 사원, 아잔타. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 아잔타 석굴 사원, 아잔타. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-c8afcf2513f3-1"],
   },
   {
@@ -28307,7 +28307,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 엘로라 석굴 사원, 엘로라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 엘로라 석굴 사원, 엘로라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-e10dace492d5-0"],
   },
   {
@@ -28327,7 +28327,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 엘로라 석굴 사원, 엘로라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 엘로라 석굴 사원, 엘로라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-e10dace492d5-1"],
   },
   {
@@ -28389,7 +28389,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 윈강 석굴, 윈강. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 윈강 석굴, 윈강. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-940724b5425a-0"],
   },
   {
@@ -28417,7 +28417,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 윈강 석굴, 윈강. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 윈강 석굴, 윈강. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-940724b5425a-1"],
   },
   {
@@ -28453,7 +28453,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 룽먼 석굴, 룽먼. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 룽먼 석굴, 룽먼. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-9e8d217233bd-5",
       "world-exp-world-9e8d217233bd-0",
@@ -28477,7 +28477,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 룽먼 석굴, 룽먼. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 룽먼 석굴, 룽먼. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-9e8d217233bd-1",
       "world-exp-world-9e8d217233bd-0",
@@ -28508,7 +28508,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 룽먼 석굴, 룽먼. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 룽먼 석굴, 룽먼. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-9e8d217233bd-1",
       "world-exp-world-9e8d217233bd-5",
@@ -28609,7 +28609,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 보로부두르 사원, 보로부두르. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 보로부두르 사원, 보로부두르. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-231991299b29-0"],
   },
   {
@@ -28629,7 +28629,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 보로부두르 사원, 보로부두르. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 보로부두르 사원, 보로부두르. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-231991299b29-1"],
   },
   {
@@ -28994,7 +28994,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 성 소피아 대성당, 하기야 소피아, 아야 소피아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 성 소피아 대성당, 하기야 소피아, 아야 소피아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ce18f783b00f-2",
       "world-exp-world-ce18f783b00f-5",
@@ -29017,7 +29017,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 성 소피아 대성당, 하기야 소피아, 아야 소피아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 성 소피아 대성당, 하기야 소피아, 아야 소피아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ce18f783b00f-1",
       "world-exp-world-ce18f783b00f-5",
@@ -29048,7 +29048,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 성 소피아 대성당, 하기야 소피아, 아야 소피아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 성 소피아 대성당, 하기야 소피아, 아야 소피아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ce18f783b00f-1",
       "world-exp-world-ce18f783b00f-2",
@@ -29601,7 +29601,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 성 베드로 성당, 성 베드로 대성당. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 성 베드로 성당, 성 베드로 대성당. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-006e23a0c9fa-1",
@@ -29818,7 +29818,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 영국박물관, 대영 박물관. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 영국박물관, 대영 박물관. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-655e3d1d4667-0"],
   },
   {
@@ -29851,7 +29851,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 영국박물관, 대영 박물관. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 영국박물관, 대영 박물관. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-655e3d1d4667-1"],
   },
   {
@@ -30032,7 +30032,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 아우슈비츠 수용소, 아우슈비츠. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 아우슈비츠 수용소, 아우슈비츠. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-7935964e832b-4",
@@ -30056,7 +30056,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 하시마, 군함도. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 하시마, 군함도. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-c137ea78cf57-5",
@@ -30419,7 +30419,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베르됭, 베르떗. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베르됭, 베르떗. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-bf1bef5d11c6-4"],
   },
   {
@@ -30439,7 +30439,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베르됭, 베르떗. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베르됭, 베르떗. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-bf1bef5d11c6-1"],
   },
   {
@@ -30553,7 +30553,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 테르모필레, 테르모필라이. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 테르모필레, 테르모필라이. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-6e09fa77bce3-0",
@@ -30580,7 +30580,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 플라타이아이, 플라타이아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 플라타이아이, 플라타이아. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-47d4f1ccd9eb-0",
@@ -30839,7 +30839,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4f12e8995f96-1",
       "world-exp-world-4f12e8995f96-2",
@@ -30882,7 +30882,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4f12e8995f96-0",
       "world-exp-world-4f12e8995f96-2",
@@ -30912,7 +30912,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4f12e8995f96-0",
       "world-exp-world-4f12e8995f96-1",
@@ -30950,7 +30950,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4f12e8995f96-0",
       "world-exp-world-4f12e8995f96-1",
@@ -31040,7 +31040,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4f12e8995f96-0",
       "world-exp-world-4f12e8995f96-1",
@@ -31118,7 +31118,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 대한민국, 한국. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4f12e8995f96-0",
       "world-exp-world-4f12e8995f96-1",
@@ -34708,7 +34708,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-2a19b1192677-2",
       "world-exp-world-2a19b1192677-3",
@@ -34750,7 +34750,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-2a19b1192677-1",
       "world-exp-world-2a19b1192677-3",
@@ -34776,7 +34776,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-2a19b1192677-1",
       "world-exp-world-2a19b1192677-2",
@@ -34838,7 +34838,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-2a19b1192677-1",
       "world-exp-world-2a19b1192677-2",
@@ -34888,7 +34888,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-2a19b1192677-1",
       "world-exp-world-2a19b1192677-2",
@@ -34922,7 +34922,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 튀르키예, 터키. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-2a19b1192677-1",
       "world-exp-world-2a19b1192677-2",
@@ -39773,7 +39773,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 북마케도니아, 마케도니아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 북마케도니아, 마케도니아. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-1ece0ded5b95-5",
@@ -44561,7 +44561,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베네수엘라, 베네수엘라 볼리바르. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베네수엘라, 베네수엘라 볼리바르. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-c95139a20020-3",
       "world-exp-world-c95139a20020-5",
@@ -44593,7 +44593,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베네수엘라, 베네수엘라 볼리바르. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베네수엘라, 베네수엘라 볼리바르. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-c95139a20020-2",
       "world-exp-world-c95139a20020-5",
@@ -44617,7 +44617,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베네수엘라, 베네수엘라 볼리바르. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베네수엘라, 베네수엘라 볼리바르. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-c95139a20020-2",
       "world-exp-world-c95139a20020-3",
@@ -44641,7 +44641,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베네수엘라, 베네수엘라 볼리바르. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베네수엘라, 베네수엘라 볼리바르. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-c95139a20020-2",
       "world-exp-world-c95139a20020-3",
@@ -46090,7 +46090,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 에티오피아, 아비시니아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 에티오피아, 아비시니아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ecb24fd7a698-3",
       "world-exp-world-ecb24fd7a698-4",
@@ -46130,7 +46130,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 에티오피아, 아비시니아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 에티오피아, 아비시니아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ecb24fd7a698-0",
       "world-exp-world-ecb24fd7a698-4",
@@ -46166,7 +46166,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 에티오피아, 아비시니아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 에티오피아, 아비시니아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ecb24fd7a698-0",
       "world-exp-world-ecb24fd7a698-3",
@@ -46214,7 +46214,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 에티오피아, 아비시니아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 에티오피아, 아비시니아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ecb24fd7a698-0",
       "world-exp-world-ecb24fd7a698-3",
@@ -46339,7 +46339,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 기니, 기이나. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 기니, 기이나. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-75112fb82049-5",
@@ -46484,7 +46484,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 가나, 골드코스트. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 가나, 골드코스트. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-1f57281ac0af-5",
@@ -46731,7 +46731,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 중앙아프리카공화국, 중앙아프리카. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 중앙아프리카공화국, 중앙아프리카. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-f5075a8f32d0-5"],
   },
   {
@@ -46763,7 +46763,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 중앙아프리카공화국, 중앙아프리카. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 중앙아프리카공화국, 중앙아프리카. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-f5075a8f32d0-0"],
   },
   {
@@ -46901,7 +46901,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 콩고 민주 공화국, 자이르. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 콩고 민주 공화국, 자이르. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-d9f3975ae8d5-5",
@@ -47371,7 +47371,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 에스와티니, 스와질란드. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 에스와티니, 스와질란드. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-1ce0457eee04-3",
@@ -52194,7 +52194,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 티베트고원, 시짱고원. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 티베트고원, 시짱고원. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-535241559ce3-0"],
   },
   {
@@ -52222,7 +52222,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 티베트고원, 시짱고원. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 티베트고원, 시짱고원. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-535241559ce3-5"],
   },
   {
@@ -54974,8 +54974,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
         pdfPage: 30,
       },
     ],
-    nameNote:
-      "교과서 표기·연결 이름: 북송, 송. 동명 지역은 구분하여 확인합니다.",
+    nameNote: "교과서 표기·연결 이름: 북송, 송. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-100cd8fa0e47-2",
@@ -55074,7 +55073,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 금나라, 금(여진), 여진(금). 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 금나라, 금(여진), 여진(금). 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-76a356b47ee0-2",
@@ -55121,7 +55120,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 요나라, 요(거란), 거란(요). 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 요나라, 요(거란), 거란(요). 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-19d567595754-2",
@@ -56892,7 +56891,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 키예프 공국, 키예프 대공국. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 키예프 공국, 키예프 대공국. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-9e1fff55808d-4",
@@ -57862,7 +57861,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 아나톨리아, 아나톨리아반도. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 아나톨리아, 아나톨리아반도. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-6f5fb13660bf-0",
@@ -58217,7 +58216,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 윈난, 운남. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 윈난, 운남. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-62169619f233-0",
@@ -58237,7 +58236,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산둥, 산둥성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산둥, 산둥성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-62169619f233-1",
       "world-exp-world-62169619f233-3",
@@ -58269,7 +58268,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산둥, 산둥성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산둥, 산둥성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-62169619f233-0",
       "world-exp-world-62169619f233-3",
@@ -58292,7 +58291,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산둥, 산둥성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산둥, 산둥성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-62169619f233-0",
       "world-exp-world-62169619f233-1",
@@ -58337,7 +58336,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 허난, 허난성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 허난, 허난성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-0829e120c776-5",
       "world-exp-world-0829e120c776-2",
@@ -58361,7 +58360,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 허난, 허난성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 허난, 허난성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-0829e120c776-1",
       "world-exp-world-0829e120c776-2",
@@ -58385,7 +58384,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 허난, 허난성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 허난, 허난성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-0829e120c776-1",
       "world-exp-world-0829e120c776-5",
@@ -58410,7 +58409,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 허난, 허난성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 허난, 허난성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-0829e120c776-1",
       "world-exp-world-0829e120c776-5",
@@ -58446,7 +58445,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산시, 산시성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산시, 산시성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ec18208ba93c-0",
       "world-exp-world-ec18208ba93c-2",
@@ -58473,7 +58472,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산시, 산시성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산시, 산시성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ec18208ba93c-1",
       "world-exp-world-ec18208ba93c-2",
@@ -58496,7 +58495,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산시, 산시성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산시, 산시성. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ec18208ba93c-1",
       "world-exp-world-ec18208ba93c-0",
@@ -58555,7 +58554,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 저장, 저장성. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 저장, 저장성. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-6b528a3beff3-3",
@@ -58610,7 +58609,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 후난, 후난박물관. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 후난, 후난박물관. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-7cc2ca430928-1",
@@ -59917,7 +59916,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 유고슬라비아, 유고. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 유고슬라비아, 유고. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-052137827f80-5"],
   },
   {
@@ -59953,7 +59952,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 유고슬라비아, 유고. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 유고슬라비아, 유고. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-052137827f80-4"],
   },
   {
@@ -65663,7 +65662,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-5ca1981dec6b-1",
       "world-exp-world-5ca1981dec6b-2",
@@ -65704,7 +65703,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-5ca1981dec6b-0",
       "world-exp-world-5ca1981dec6b-2",
@@ -65749,7 +65748,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-5ca1981dec6b-0",
       "world-exp-world-5ca1981dec6b-1",
@@ -65774,7 +65773,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-5ca1981dec6b-0",
       "world-exp-world-5ca1981dec6b-1",
@@ -65800,7 +65799,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 창장강, 창장, 양쯔강, 장강. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-5ca1981dec6b-0",
       "world-exp-world-5ca1981dec6b-1",
@@ -66455,7 +66454,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 헤이룽강, 아무르강. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 헤이룽강, 아무르강. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-3faf2050cd3b-3",
@@ -67285,7 +67284,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 로도스섬, 로도스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 로도스섬, 로도스. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-3c87cec8df7c-0",
@@ -67374,7 +67373,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 시칠리아섬, 시칠리아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 시칠리아섬, 시칠리아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ff7d971d00f6-1",
       "world-exp-world-ff7d971d00f6-3",
@@ -67401,7 +67400,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 시칠리아섬, 시칠리아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 시칠리아섬, 시칠리아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ff7d971d00f6-0",
       "world-exp-world-ff7d971d00f6-3",
@@ -67432,7 +67431,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 시칠리아섬, 시칠리아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 시칠리아섬, 시칠리아. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-ff7d971d00f6-0",
       "world-exp-world-ff7d971d00f6-1",
@@ -67480,7 +67479,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사르데냐섬, 사르데냐. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사르데냐섬, 사르데냐. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f9fd5cbb1ec9-1",
       "world-exp-world-f9fd5cbb1ec9-3",
@@ -67507,7 +67506,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사르데냐섬, 사르데냐. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사르데냐섬, 사르데냐. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f9fd5cbb1ec9-0",
       "world-exp-world-f9fd5cbb1ec9-3",
@@ -67538,7 +67537,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사르데냐섬, 사르데냐. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사르데냐섬, 사르데냐. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f9fd5cbb1ec9-0",
       "world-exp-world-f9fd5cbb1ec9-1",
@@ -67851,7 +67850,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-715c5ce1b826-1",
       "world-exp-world-715c5ce1b826-3",
@@ -67889,7 +67888,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-715c5ce1b826-0",
       "world-exp-world-715c5ce1b826-3",
@@ -67919,7 +67918,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-715c5ce1b826-0",
       "world-exp-world-715c5ce1b826-1",
@@ -67949,7 +67948,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-715c5ce1b826-0",
       "world-exp-world-715c5ce1b826-1",
@@ -67975,7 +67974,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-715c5ce1b826-0",
       "world-exp-world-715c5ce1b826-1",
@@ -68010,7 +68009,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 자와섬, 자와. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-715c5ce1b826-0",
       "world-exp-world-715c5ce1b826-1",
@@ -68401,8 +68400,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
         pdfPage: 152,
       },
     ],
-    nameNote:
-      "교과서 표기·연결 이름: 괌섬, 괌. 동명 지역은 구분하여 확인합니다.",
+    nameNote: "교과서 표기·연결 이름: 괌섬, 괌. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-0746d1532791-4",
       "world-exp-world-0746d1532791-5",
@@ -68428,8 +68426,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
         pdfPage: 47,
       },
     ],
-    nameNote:
-      "교과서 표기·연결 이름: 괌섬, 괌. 동명 지역은 구분하여 확인합니다.",
+    nameNote: "교과서 표기·연결 이름: 괌섬, 괌. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-0746d1532791-3",
       "world-exp-world-0746d1532791-5",
@@ -68451,8 +68448,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
         pdfPage: 249,
       },
     ],
-    nameNote:
-      "교과서 표기·연결 이름: 괌섬, 괌. 동명 지역은 구분하여 확인합니다.",
+    nameNote: "교과서 표기·연결 이름: 괌섬, 괌. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-0746d1532791-3",
       "world-exp-world-0746d1532791-4",
@@ -68479,7 +68475,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사이판섬, 사이판. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사이판섬, 사이판. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-f3602b3e925a-5"],
   },
   {
@@ -68499,7 +68495,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사이판섬, 사이판. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사이판섬, 사이판. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-f3602b3e925a-4"],
   },
   {
@@ -69152,7 +69148,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 타히티섬, 타이티 섬. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 타히티섬, 타이티 섬. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-431deb196d22-5",
@@ -69263,7 +69259,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4bfb5d7ea4ff-3",
       "world-exp-world-4bfb5d7ea4ff-5",
@@ -69304,7 +69300,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4bfb5d7ea4ff-1",
       "world-exp-world-4bfb5d7ea4ff-5",
@@ -69333,7 +69329,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4bfb5d7ea4ff-1",
       "world-exp-world-4bfb5d7ea4ff-3",
@@ -69363,7 +69359,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4bfb5d7ea4ff-1",
       "world-exp-world-4bfb5d7ea4ff-3",
@@ -69388,7 +69384,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 실론섬, 실론. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-4bfb5d7ea4ff-1",
       "world-exp-world-4bfb5d7ea4ff-3",
@@ -69517,7 +69513,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 타클라마칸사막, 타커라마간 사막. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 타클라마칸사막, 타커라마간 사막. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-7161d7ffce64-5",
@@ -69860,7 +69856,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 등주, 덩저우. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 등주, 덩저우. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-fe0c90d098ea-2"],
   },
   {
@@ -69880,7 +69876,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 등주, 덩저우. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 등주, 덩저우. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-fe0c90d098ea-1"],
   },
   {
@@ -71076,7 +71072,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 배로인퍼니스, 배로인. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 배로인퍼니스, 배로인. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-1b7ef5d260ad-0",
@@ -72771,7 +72767,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산타 마리아 델 피오레 성당, 산타마리아 델 피오레 성당. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산타 마리아 델 피오레 성당, 산타마리아 델 피오레 성당. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-4ced75d148b0-1"],
   },
   {
@@ -72791,7 +72787,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 산타 마리아 델 피오레 성당, 산타마리아 델 피오레 성당. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 산타 마리아 델 피오레 성당, 산타마리아 델 피오레 성당. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-4ced75d148b0-5"],
   },
   {
@@ -72902,7 +72898,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 수에비 왕국, 수에비. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 수에비 왕국, 수에비. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-99bec3bd12df-1",
@@ -72941,7 +72937,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 서고트 왕국, 서고트. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 서고트 왕국, 서고트. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-9a25cf731bea-1",
@@ -72980,7 +72976,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 동고트 왕국, 동고트. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 동고트 왕국, 동고트. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-d5c69f01334c-1",
@@ -73007,7 +73003,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 부르군트 왕국, 부르군트. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 부르군트 왕국, 부르군트. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-bd11ee8b460f-1",
@@ -73034,7 +73030,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 롬바르드 왕국, 롬바르드. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 롬바르드 왕국, 롬바르드. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-3eb6a1dd12ca-1",
@@ -73073,7 +73069,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 반달 왕국, 반달. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 반달 왕국, 반달. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-3eb6a1dd12ca-2"],
   },
   {
@@ -73093,7 +73089,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 반달 왕국, 반달. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 반달 왕국, 반달. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-3eb6a1dd12ca-1"],
   },
   {
@@ -73118,7 +73114,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 노르망디 공국, 노르망디. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 노르망디 공국, 노르망디. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-c6fc714a16be-1",
@@ -74090,7 +74086,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 볼고그라드, 스탈린그라드. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 볼고그라드, 스탈린그라드. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-ee4a34fc45b6-5",
@@ -74213,7 +74209,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베슈발리크, 비슈발리크. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베슈발리크, 비슈발리크. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-254d1c32ae4b-1"],
   },
   {
@@ -74233,7 +74229,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 베슈발리크, 비슈발리크. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 베슈발리크, 비슈발리크. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-254d1c32ae4b-2"],
   },
   {
@@ -74265,7 +74261,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 빈, 비엔나. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 빈, 비엔나. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f42f96d155a5-2",
       "world-exp-world-f42f96d155a5-3",
@@ -74301,7 +74297,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 빈, 비엔나. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 빈, 비엔나. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f42f96d155a5-1",
       "world-exp-world-f42f96d155a5-3",
@@ -74342,7 +74338,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 빈, 비엔나. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 빈, 비엔나. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f42f96d155a5-1",
       "world-exp-world-f42f96d155a5-2",
@@ -74370,7 +74366,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 빈, 비엔나. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 빈, 비엔나. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f42f96d155a5-1",
       "world-exp-world-f42f96d155a5-2",
@@ -74912,7 +74908,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 발흐, 박트라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 발흐, 박트라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-c95e85aaf327-2",
       "world-exp-world-c95e85aaf327-1",
@@ -74939,7 +74935,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 발흐, 박트라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 발흐, 박트라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-c95e85aaf327-0",
       "world-exp-world-c95e85aaf327-1",
@@ -74966,7 +74962,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 발흐, 박트라. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 발흐, 박트라. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-c95e85aaf327-0",
       "world-exp-world-c95e85aaf327-2",
@@ -75013,7 +75009,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 뤄양, 낙읍. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 뤄양, 낙읍. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-70ed25aa6908-1"],
   },
   {
@@ -75057,7 +75053,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 뤄양, 낙읍. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 뤄양, 낙읍. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-70ed25aa6908-0"],
   },
   {
@@ -75114,7 +75110,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-istanbul-1",
       "world-exp-istanbul-2",
@@ -75217,7 +75213,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-istanbul-0",
       "world-exp-istanbul-2",
@@ -75292,7 +75288,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-istanbul-0",
       "world-exp-istanbul-1",
@@ -75326,7 +75322,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-istanbul-0",
       "world-exp-istanbul-1",
@@ -75360,7 +75356,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-istanbul-0",
       "world-exp-istanbul-1",
@@ -75394,7 +75390,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 콘스탄티노폴리스, 이스탄불, 비잔티움. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-istanbul-0",
       "world-exp-istanbul-1",
@@ -75428,7 +75424,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 호탄, 우전. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 호탄, 우전. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-3cc6b8ed8a6d-1"],
   },
   {
@@ -75452,7 +75448,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 호탄, 우전. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 호탄, 우전. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-3cc6b8ed8a6d-0"],
   },
   {
@@ -75484,7 +75480,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 사라이, 사리이. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 사라이, 사리이. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-109050d80e70-2",
@@ -75569,7 +75565,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 상경(요), 상경. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 상경(요), 상경. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-9ab745ec51b2-1",
@@ -75692,7 +75688,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 교지, 자오찌. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 교지, 자오찌. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-740016a66488-2"],
   },
   {
@@ -75716,7 +75712,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 교지, 자오찌. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 교지, 자오찌. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-740016a66488-1"],
   },
   {
@@ -75885,7 +75881,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 남해(군), 남해. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 남해(군), 남해. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f1dd0b0cbb6e-2",
       "world-exp-world-f1dd0b0cbb6e-1",
@@ -75908,7 +75904,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 남해(군), 남해. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 남해(군), 남해. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f1dd0b0cbb6e-0",
       "world-exp-world-f1dd0b0cbb6e-1",
@@ -75935,7 +75931,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 남해(군), 남해. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 남해(군), 남해. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-f1dd0b0cbb6e-0",
       "world-exp-world-f1dd0b0cbb6e-2",
@@ -75995,7 +75991,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 북위, 북위(북조). 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 북위, 북위(북조). 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-5350ddf46cbb-5"],
   },
   {
@@ -76023,7 +76019,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 북위, 북위(북조). 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 북위, 북위(북조). 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-5350ddf46cbb-1"],
   },
   {
@@ -76051,7 +76047,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 송(남조), 남조 송. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 송(남조), 남조 송. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-a6a9d2c0ff15-1",
@@ -76230,7 +76226,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
         pdfPage: 19,
       },
     ],
-    nameNote: "진 이후의 한(漢) 왕조. 전국 시대의 한(韓)과 구분합니다.",
+    nameNote: "진 이후의 한(漢) 왕조. 전국 시대의 한(韓)과 구분한다.",
   },
   {
     id: "world-exp-world-6c0fa4a15cd8-0",
@@ -76668,7 +76664,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 원, 카안 울루스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 원, 카안 울루스. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-2ea0d7b54e5f-0",
@@ -77722,7 +77718,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 야마토, 야마토 정권. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 야마토, 야마토 정권. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-2cf034fd839f-2",
@@ -77831,7 +77827,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 테베(이집트), 테베. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 테베(이집트), 테베. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-628117e528a4-0",
@@ -77850,7 +77846,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 테베(그리스), 테베. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 테베(그리스), 테베. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-c4b4c1ff8f62-0",
@@ -77881,7 +77877,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
         pdfPage: 18,
       },
     ],
-    nameNote: "전국 7웅의 한(韓). 중국을 통일한 한(漢) 왕조와 구분합니다.",
+    nameNote: "전국 7웅의 한(韓). 중국을 통일한 한(漢) 왕조와 구분한다.",
   },
   {
     id: "world-exp-world-58298362ef7d-1",
@@ -77901,7 +77897,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 성 소피아 성당(키이우), 성 소피아 성당. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 성 소피아 성당(키이우), 성 소피아 성당. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-f491c34140f0-0",
@@ -77928,7 +77924,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 연(춘추 전국), 연. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 연(춘추 전국), 연. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-eb1ffb70aded-0",
@@ -77955,7 +77951,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 조(춘추 전국), 조. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 조(춘추 전국), 조. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-6d564dd3edc1-0",
@@ -77982,7 +77978,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 위(춘추 전국), 위. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 위(춘추 전국), 위. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-62ab8148b680-0",
@@ -78009,7 +78005,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 초(춘추 전국), 초. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 초(춘추 전국), 초. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-7fc89d715c44-0",
@@ -78036,7 +78032,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 제(춘추 전국), 제. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 제(춘추 전국), 제. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-d27ffce66f43-0",
@@ -78063,7 +78059,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 노(춘추 전국), 노. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 노(춘추 전국), 노. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-eb57b8c26c16-0",
@@ -78090,7 +78086,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 송(춘추 전국), 송. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 송(춘추 전국), 송. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-f9f92f660985-0",
@@ -78117,7 +78113,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 오(춘추 전국), 오. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 오(춘추 전국), 오. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-925073c3fa06-0",
@@ -78144,7 +78140,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 월(춘추 전국), 월. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 월(춘추 전국), 월. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-3a6c4b30010a-1",
@@ -78171,7 +78167,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 진(晉, 춘추 시대), 진(晉), 진(晋). 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 진(晉, 춘추 시대), 진(晉), 진(晋). 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-3a6c4b30010a-0"],
   },
   {
@@ -78200,7 +78196,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 진(晉, 춘추 시대), 진(晉), 진(晋). 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 진(晉, 춘추 시대), 진(晉), 진(晋). 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-3a6c4b30010a-1"],
   },
   {
@@ -78224,7 +78220,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 위(삼국), 위. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 위(삼국), 위. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-8be4ecba13f9-1",
@@ -78247,7 +78243,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 촉(삼국), 촉. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 촉(삼국), 촉. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-201cfb833a41-1",
@@ -78270,7 +78266,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 오(삼국), 오. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 오(삼국), 오. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-85bfb750108f-1",
@@ -78443,7 +78439,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 제(남조), 제. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 제(남조), 제. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-ca40f87e0521-1",
@@ -78470,7 +78466,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 양(남조), 양. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 양(남조), 양. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-79b5561c2abc-1",
@@ -78497,7 +78493,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 진(남조), 진. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 진(남조), 진. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-2f0be0c1a3ac-1",
@@ -78583,7 +78579,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 진(진나라 군현 지도), 진. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 진(진나라 군현 지도), 진. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-b3f9f0eabe75-1",
@@ -78654,7 +78650,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 한구(운하), 한구. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 한구(운하), 한구. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-0869eb1c8476-1",
@@ -78691,7 +78687,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 니혼바시역, 니혼바시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 니혼바시역, 니혼바시. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-75606971be45-1",
@@ -78711,7 +78707,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 가야바초역, 가야바초. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 가야바초역, 가야바초. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-e3b0b86cd546-1",
@@ -78731,7 +78727,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 오테마치역, 오테마치. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 오테마치역, 오테마치. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-57f7519f8805-1",
@@ -79122,7 +79118,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 단디 해안, 단디. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 단디 해안, 단디. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-a1d203deb3f3-5",
@@ -79300,7 +79296,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 빈센트, 빈센스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 빈센트, 빈센스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-13c2900caa06-3"],
   },
   {
@@ -79321,7 +79317,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 빈센트, 빈센스. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 빈센트, 빈센스. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: ["world-exp-world-13c2900caa06-2"],
   },
   {
@@ -79343,7 +79339,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 니케아(알렉산드로스 원정), 니케아. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 니케아(알렉산드로스 원정), 니케아. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-78bcfd92e933-1",
@@ -79384,7 +79380,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 서시(장안), 서시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 서시(장안), 서시. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-a0b511ad3fed-0",
@@ -79407,7 +79403,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-a0b511ad3fed-1",
       "world-exp-world-a0b511ad3fed-4",
@@ -79433,7 +79429,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-a0b511ad3fed-0",
       "world-exp-world-a0b511ad3fed-4",
@@ -79459,7 +79455,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-a0b511ad3fed-0",
       "world-exp-world-a0b511ad3fed-1",
@@ -79509,7 +79505,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-a0b511ad3fed-0",
       "world-exp-world-a0b511ad3fed-1",
@@ -79536,7 +79532,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-a0b511ad3fed-0",
       "world-exp-world-a0b511ad3fed-1",
@@ -79563,7 +79559,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 동시(장안), 동시. 동명 지역은 구분하여 확인한다.",
     relatedEntryIds: [
       "world-exp-world-a0b511ad3fed-0",
       "world-exp-world-a0b511ad3fed-1",
@@ -80795,7 +80791,7 @@ export const worldExpansionEntries: AtlasEntry[] = [
       },
     ],
     nameNote:
-      "교과서 표기·연결 이름: 남조(南詔), 남조. 동명 지역은 구분하여 확인합니다.",
+      "교과서 표기·연결 이름: 남조(南詔), 남조. 동명 지역은 구분하여 확인한다.",
   },
   {
     id: "world-exp-world-e8762a25919b-2",

@@ -1,10 +1,18 @@
 import {
   geoMercator,
   geoNaturalEarth1,
+  geoCentroid,
+  geoOrthographic,
   geoPath,
   type GeoPermissibleObjects,
+  type GeoProjection,
 } from "d3-geo";
 import type { AtlasSubject, AtlasUnit } from "./historyAtlas";
+import {
+  constrainGlobeView,
+  isGlobePointVisible,
+  type GlobeView,
+} from "./historyGlobeMath";
 import koreaLandUrl from "../data/atlas/land-korea.json?url";
 import koreaRiversUrl from "../data/atlas/rivers-korea.json?url";
 import worldLandUrl from "../data/atlas/land-world.json?url";
@@ -113,7 +121,9 @@ export function createAtlasProjection(
   const middleLongitude = (west + east) / 2;
   const projection =
     subject === "korea"
-      ? geoMercator().center([middleLongitude, (south + north) / 2])
+      ? geoMercator()
+          .rotate([-middleLongitude, 0])
+          .center([0, (south + north) / 2])
       : geoNaturalEarth1().rotate([-middleLongitude, 0]);
   // Sample the boundary as points: polygon winding must not invert the fit area.
   const coordinates: [number, number][] = [];
@@ -131,6 +141,131 @@ export function createAtlasProjection(
     { type: "MultiPoint", coordinates },
   );
   return projection.precision(0.3);
+}
+
+/** A camera extent from located places, never a historical boundary polygon. */
+export function atlasRegionCameraBounds(
+  input: readonly [number, number][],
+  subject: AtlasSubject,
+): AtlasUnit["bounds"] | null {
+  const coordinates = input.filter((point) => point.every(Number.isFinite));
+  if (!coordinates.length) return null;
+  const longitudes = [
+    ...new Set(
+      coordinates.map(([longitude]) => ((longitude % 360) + 360) % 360),
+    ),
+  ].sort((a, b) => a - b);
+  // The largest empty arc is outside the view, including across the date line.
+  let gap = -1;
+  let start = longitudes[0];
+  for (let index = 0; index < longitudes.length; index += 1) {
+    const next =
+      longitudes[(index + 1) % longitudes.length] +
+      (index === longitudes.length - 1 ? 360 : 0);
+    if (next - longitudes[index] > gap) {
+      gap = next - longitudes[index];
+      start = next % 360;
+    }
+  }
+  const span = 360 - gap;
+  let center = start + span / 2;
+  if (center > 180) center -= 360;
+  const halfWidth = Math.min(180, Math.max(0.9, span * 0.6));
+  const south = Math.min(...coordinates.map((point) => point[1]));
+  const north = Math.max(...coordinates.map((point) => point[1]));
+  const halfHeight = Math.max(0.7, (north - south) * 0.6);
+  const latitude = (south + north) / 2;
+  const limit = subject === "korea" ? 85.0511287798 : 90;
+  return [
+    center - halfWidth,
+    Math.max(-limit, latitude - halfHeight),
+    center + halfWidth,
+    Math.min(limit, latitude + halfHeight),
+  ];
+}
+
+/** Fit a region on the visible hemisphere; a globe cannot show both sides. */
+export function fitGlobeRegionCamera(
+  coordinates: readonly [number, number][],
+  width: number,
+  height: number,
+): GlobeView | null {
+  const bounds = atlasRegionCameraBounds(coordinates, "world");
+  if (!bounds) return null;
+  const points: GeoPermissibleObjects = {
+    type: "MultiPoint",
+    coordinates: [...coordinates],
+  };
+  const center = geoCentroid(points);
+  const candidates = [
+    center,
+    [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
+  ];
+  const views = candidates
+    .filter((point) => point.every(Number.isFinite))
+    .map((point) =>
+      constrainGlobeView({
+        longitude: point[0],
+        latitude: point[1],
+        roll: 0,
+        zoom: 1,
+      }),
+    );
+  views.sort(
+    (a, b) =>
+      coordinates.filter((point) => isGlobePointVisible(point, b)).length -
+      coordinates.filter((point) => isGlobePointVisible(point, a)).length,
+  );
+  const view = views[0];
+  const projection = geoOrthographic()
+    .translate([0, 0])
+    .scale(1)
+    .rotate([-view.longitude, -view.latitude, 0]);
+  const visible = coordinates.filter((point) =>
+    isGlobePointVisible(point, view),
+  );
+  // Keep the full globe when a broad region necessarily spans its back side.
+  if (visible.length !== coordinates.length) return view;
+  const projected = visible.map((point) => projection(point)!);
+  const horizontal = Math.max(
+    0.01,
+    ...projected.map((point) => Math.abs(point[0])),
+  );
+  const vertical = Math.max(
+    0.01,
+    ...projected.map((point) => Math.abs(point[1])),
+  );
+  const radius = Math.min(
+    (width / 2 - 32) / horizontal,
+    (height / 2 - 48) / vertical,
+  );
+  return constrainGlobeView({
+    ...view,
+    zoom: radius / (Math.min(width, height) * 0.44),
+  });
+}
+
+/** A selected point stays above its popup, including on a 320px page. */
+export function globeSelectionCenterY(width: number, height: number): number {
+  // The narrow popup is raised above the compass. Center the selected point
+  // between the toolbar and that popup, including room for its expanding halo.
+  return width < 344 ? (height * 0.58 - 84) / 2 + 12 : height * 0.3;
+}
+
+/** Local projected north at the camera center, including orthographic roll. */
+export function atlasProjectedNorthBearing(
+  projection: GeoProjection,
+  coordinates: [number, number],
+): number {
+  const origin = projection(coordinates);
+  const north = projection([
+    coordinates[0],
+    Math.min(90, coordinates[1] + 0.01),
+  ]);
+  if (!origin || !north) return 0;
+  const angle =
+    (Math.atan2(north[0] - origin[0], origin[1] - north[1]) * 180) / Math.PI;
+  return Number.isFinite(angle) ? angle : 0;
 }
 
 export function createAtlasPaths(

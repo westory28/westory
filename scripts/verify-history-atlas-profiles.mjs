@@ -25,7 +25,7 @@ function load(filename) {
   return exports;
 }
 
-const { historyAtlasDataset: dataset } = load(
+const { historyAtlasSourceDataset: dataset } = load(
   "src/data/historyAtlasContent.ts",
 );
 const { getAtlasPlaceProfile, isAtlasSourceContext } = load(

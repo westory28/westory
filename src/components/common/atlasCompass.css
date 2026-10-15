@@ -1,0 +1,41 @@
+.atlas-compass {
+  --atlas-compass-bearing: 0deg;
+  position: absolute;
+  right: 8px;
+  bottom: 28px;
+  z-index: 3;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text-muted, #6b7280);
+  pointer-events: none;
+}
+.atlas-compass svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.atlas-compass__rose {
+  transform: rotate(var(--atlas-compass-bearing));
+  transform-origin: 24px 24px;
+}
+.atlas-compass__axis {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+.atlas-compass__north {
+  fill: var(--ws-primary, #2563eb);
+}
+.atlas-compass text {
+  fill: currentColor;
+  font:
+    700 12px "Noto Sans KR",
+    sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+  transform: rotate(calc(-1 * var(--atlas-compass-bearing)));
+  transform-box: fill-box;
+  transform-origin: center;
+}

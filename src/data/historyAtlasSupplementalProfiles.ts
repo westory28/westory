@@ -4,7 +4,7 @@ export const historyAtlasSupplementalProfiles = [
     names: [],
     placeIds: ["kr-abd0e6d54b04"],
     definition:
-      "개성 동남쪽에 있는 산으로, 고려의 장수 최영을 모신 사당이 있어 무속 신앙의 중심지로 여겨졌습니다.",
+      "개성 동남쪽에 있는 산으로, 고려의 장수 최영을 모신 사당이 있어 무속 신앙의 중심지로 여겨졌다.",
     facts: [],
     sources: [
       {
@@ -17,7 +17,7 @@ export const historyAtlasSupplementalProfiles = [
     names: [],
     placeIds: ["kr-55e1a20fdec1"],
     definition:
-      "개경 인근에 있는 산으로, 고려 충렬왕이 중창한 왕실 사찰 신효사가 자리했던 곳입니다.",
+      "개경 인근에 있는 산으로, 고려 충렬왕이 중창한 왕실 사찰 신효사가 자리했던 곳이다.",
     facts: [],
     sources: [
       {
@@ -30,7 +30,7 @@ export const historyAtlasSupplementalProfiles = [
     names: [],
     placeIds: ["kr-14f039880b2e"],
     definition:
-      "강화도 고려산에 있는 사찰로, 백련사·청련사와 함께 이 산의 불교 유적을 이룹니다.",
+      "강화도 고려산에 있는 사찰로, 백련사·청련사와 함께 이 산의 불교 유적을 이룬다.",
     facts: [],
     sources: [
       {
@@ -43,7 +43,7 @@ export const historyAtlasSupplementalProfiles = [
     names: [],
     placeIds: ["kr-ea79288d87f4"],
     definition:
-      "강화도 하점면과 양사면 사이에 있는 산으로, 다른 산줄기와 떨어져 있어 별립산이라 불렸다고 전합니다.",
+      "강화도 하점면과 양사면 사이에 있는 산으로, 다른 산줄기와 떨어져 있어 별립산이라 불렸다고 전한다.",
     facts: [],
     sources: [
       {
@@ -56,7 +56,7 @@ export const historyAtlasSupplementalProfiles = [
     names: [],
     placeIds: ["kr-822a93ca9764"],
     definition:
-      "강화도 양도면에 있는 산으로, 조선시대 정상의 봉수대에서 주변 지역으로 군사 신호를 전했습니다.",
+      "강화도 양도면에 있는 산으로, 조선시대 정상의 봉수대에서 주변 지역으로 군사 신호를 전했다.",
     facts: [],
     sources: [
       {
@@ -69,7 +69,7 @@ export const historyAtlasSupplementalProfiles = [
     names: [],
     placeIds: ["kr-a1d1fa237489"],
     definition:
-      "강화도 북부에 있는 산으로, 하늘에 제사를 지냈다는 봉천대와 조선시대 봉수의 역사가 남아 있습니다.",
+      "강화도 북부에 있는 산으로, 하늘에 제사를 지냈다는 봉천대와 조선시대 봉수의 역사가 남아 있다.",
     facts: [],
     sources: [
       {

@@ -19,7 +19,7 @@ export interface AtlasPlace {
   name: string;
   modernName?: string;
   aliases?: string[];
-  /** Null keeps an evidenced name searchable without inventing a location. */
+  /** The source catalogue may lack a position; such places never enter the map dataset. */
   coordinates: [number, number] | null;
   kind?: "settlement" | "site" | "region" | "country" | "water" | "mountain";
   locationNote?: string;

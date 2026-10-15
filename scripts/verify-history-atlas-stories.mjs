@@ -35,7 +35,8 @@ function load(filename) {
   );
   return exports;
 }
-const { historyAtlasDataset: dataset } = load(
+// Audit all authored facts even when a place is excluded from the map catalogue.
+const { historyAtlasSourceDataset: dataset } = load(
   "src/data/historyAtlasContent.ts",
 );
 const {

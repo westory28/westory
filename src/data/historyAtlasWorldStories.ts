@@ -39,7 +39,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: -2000000,
     eraIds: ["w-prehistory"],
     summary:
-      "초기 인류의 화석과 석기가 발견되어, 인류가 도구를 만들며 살아간 과정을 보여 주는 유적입니다.",
+      "초기 인류의 화석과 석기가 발견되어, 인류가 도구를 만들며 살아간 과정을 보여 주는 유적이다.",
     sources: [
       {
         title: "UNESCO · Ngorongoro Conservation Area",
@@ -57,7 +57,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: -15000,
     eraIds: ["w-prehistory"],
     summary:
-      "말과 소 등 동물 그림이 남아 있어 구석기인의 생활과 예술을 살펴볼 수 있는 동굴입니다.",
+      "말과 소 등 동물 그림이 남아 있어 구석기인의 생활과 예술을 살펴볼 수 있는 동굴이다.",
     sources: [
       {
         title: "위키백과 · 라스코 동굴",
@@ -75,7 +75,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: -6200,
     eraIds: ["w-prehistory"],
     summary:
-      "집들이 밀집한 신석기시대 정착지로, 농경을 바탕으로 사람들이 모여 살던 모습을 보여 줍니다.",
+      "집들이 밀집한 신석기시대 정착지로, 농경을 바탕으로 사람들이 모여 살던 모습을 보여 준다.",
     sources: [
       {
         title: "UNESCO · Neolithic Site of Çatalhöyük",
@@ -94,7 +94,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["w-ur"],
     summary:
-      "수메르의 도시 국가로 성장한 곳으로, 달의 신 난나를 위한 지구라트는 신전이 도시 생활의 중심에 있었음을 보여 줍니다.",
+      "수메르의 도시 국가로 성장한 곳으로, 달의 신 난나를 위한 지구라트는 신전이 도시 생활의 중심에 있었음을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 우르",
@@ -113,7 +113,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["w-giza"],
     summary:
-      "쿠푸 등 파라오의 피라미드가 세워져, 고대 이집트 왕권과 사후 세계에 대한 믿음을 보여 줍니다.",
+      "쿠푸 등 파라오의 피라미드가 세워져, 고대 이집트 왕권과 사후 세계에 대한 믿음을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 기자의 피라미드",
@@ -132,7 +132,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["world-exp-world-c28adc1d28f4-5"],
     summary:
-      "이집트 고왕국의 수도로 발전했으며, 주변 왕릉 지대와 함께 초기 이집트 국가의 중심을 이루었습니다.",
+      "이집트 고왕국의 수도로 발전했으며, 주변 왕릉 지대와 함께 초기 이집트 국가의 중심을 이루었다.",
     sources: [
       {
         title: "위키백과 · 멤피스 (이집트)",
@@ -151,7 +151,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["w-mohenjo", "world-exp-world-97df6cd0732f-0"],
     summary:
-      "모헨조다로와 하라파는 인더스 문명의 대표 도시입니다. 정비된 거리와 주거 시설은 큰 도시를 조직하여 운영한 사람들의 생활을 보여 줍니다.",
+      "모헨조다로와 하라파는 인더스 문명의 대표 도시이다. 정비된 거리와 주거 시설은 큰 도시를 조직하여 운영한 사람들의 생활을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 인더스 문명",
@@ -163,13 +163,13 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
         placeId: "mohenjo-daro",
         fromPlaceIds: ["world-97df6cd0732f"],
         reason:
-          "하라파와 모헨조다로는 같은 인더스 문명을 대표하는 도시 유적입니다.",
+          "하라파와 모헨조다로는 같은 인더스 문명을 대표하는 도시 유적이다.",
       },
       {
         placeId: "world-97df6cd0732f",
         fromPlaceIds: ["mohenjo-daro"],
         reason:
-          "하라파와 모헨조다로는 같은 인더스 문명을 대표하는 도시 유적입니다.",
+          "하라파와 모헨조다로는 같은 인더스 문명을 대표하는 도시 유적이다.",
       },
     ],
   },
@@ -184,7 +184,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["world-exp-world-5b8ea5131294-0"],
     summary:
-      "상 왕조 후기의 수도 유적으로, 왕실의 점복 기록인 갑골문을 통해 당시 정치와 신앙을 알 수 있습니다.",
+      "상 왕조 후기의 수도 유적으로, 왕실의 점복 기록인 갑골문을 통해 당시 정치와 신앙을 알 수 있다.",
     sources: [
       {
         title: "UNESCO · Yin Xu",
@@ -206,7 +206,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: -1750,
     eraIds: ["w-ancient"],
     summary:
-      "함무라비가 이끈 바빌로니아의 수도로, 메소포타미아를 통합한 왕권과 법의 발전을 보여 줍니다.",
+      "함무라비가 이끈 바빌로니아의 수도로, 메소포타미아를 통합한 왕권과 법의 발전을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 함무라비",
@@ -225,7 +225,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["world-exp-world-59e18dcb0269-0"],
     summary:
-      "아케메네스 왕조의 궁전과 의례 공간으로 조성되어, 여러 민족을 거느린 페르시아 제국의 권위를 드러냈습니다.",
+      "아케메네스 왕조의 궁전과 의례 공간으로 조성되어, 여러 민족을 거느린 페르시아 제국의 권위를 드러냈다.",
     sources: [
       {
         title: "UNESCO · Persepolis",
@@ -244,7 +244,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["w-athens"],
     summary:
-      "아테네는 시민의 정치 참여가 확대된 폴리스였습니다. 아크로폴리스에 세운 파르테논 신전은 전성기 아테네의 문화와 권력을 보여 줍니다.",
+      "아테네는 시민의 정치 참여가 확대된 폴리스였다. 아크로폴리스에 세운 파르테논 신전은 전성기 아테네의 문화와 권력을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 아크로폴리스 (아테네)",
@@ -255,17 +255,17 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "athens",
         fromPlaceIds: ["world-119cdcf6ee4c"],
-        reason: "아테네의 아크로폴리스에 파르테논 신전이 세워졌습니다.",
+        reason: "아테네의 아크로폴리스에 파르테논 신전이 세워졌다.",
       },
       {
         placeId: "world-119cdcf6ee4c",
         fromPlaceIds: ["athens", "world-147f05a7502d"],
-        reason: "아테네의 아크로폴리스에 파르테논 신전이 세워졌습니다.",
+        reason: "아테네의 아크로폴리스에 파르테논 신전이 세워졌다.",
       },
       {
         placeId: "world-147f05a7502d",
         fromPlaceIds: ["world-119cdcf6ee4c"],
-        reason: "아테네의 아크로폴리스에 파르테논 신전이 세워졌습니다.",
+        reason: "아테네의 아크로폴리스에 파르테논 신전이 세워졌다.",
       },
     ],
   },
@@ -279,7 +279,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 393,
     eraIds: ["w-ancient"],
     summary:
-      "제우스에게 바치는 고대 올림픽 경기가 열려, 여러 폴리스의 그리스인들이 만나는 종교·체육 중심지가 되었습니다.",
+      "제우스에게 바치는 고대 올림픽 경기가 열려, 여러 폴리스의 그리스인들이 만나는 종교·체육 중심지가 되었다.",
     sources: [
       {
         title: "위키백과 · 고대 올림픽",
@@ -298,7 +298,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["world-exp-world-9d9bf70b7a60-0"],
     summary:
-      "알렉산드로스가 세운 뒤 프톨레마이오스 왕조의 수도가 되었고, 도서관과 학술 활동이 발달했습니다.",
+      "알렉산드로스가 세운 뒤 프톨레마이오스 왕조의 수도가 되었고, 도서관과 학술 활동이 발달했다.",
     sources: [
       {
         title: "위키백과 · 알렉산드리아",
@@ -317,7 +317,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["world-exp-world-9f0de41cfebd-0"],
     summary:
-      "서지중해의 해상 강국으로 로마와 포에니 전쟁을 벌였으나, 마지막 전쟁에서 로마에 파괴되었습니다.",
+      "서지중해의 해상 강국으로 로마와 포에니 전쟁을 벌였으나, 마지막 전쟁에서 로마에 파괴되었다.",
     sources: [
       {
         title: "위키백과 · 포에니 전쟁",
@@ -328,7 +328,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "rome",
         reason:
-          "로마와 카르타고는 지중해의 주도권을 놓고 세 차례 포에니 전쟁을 벌였습니다.",
+          "로마와 카르타고는 지중해의 주도권을 놓고 세 차례 포에니 전쟁을 벌였다.",
       },
     ],
   },
@@ -342,7 +342,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 200,
     eraIds: ["w-ancient"],
     summary:
-      "로마는 제국의 정치 중심지였습니다. 포룸 로마눔에서는 정치·경제 활동이 이루어졌고, 콜로세움은 검투사 경기와 대규모 행사가 열린 원형 경기장이었습니다.",
+      "로마는 제국의 정치 중심지였다. 포룸 로마눔에서는 정치·경제 활동이 이루어졌고, 콜로세움은 검투사 경기와 대규모 행사가 열린 원형 경기장이었다.",
     sources: [
       {
         title: "위키백과 · 로마",
@@ -362,13 +362,13 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
         placeId: "world-0dc97f2223be",
         fromPlaceIds: ["rome"],
         reason:
-          "로마의 콜로세움에서는 검투사 경기와 대규모 시민 행사가 열렸습니다.",
+          "로마의 콜로세움에서는 검투사 경기와 대규모 시민 행사가 열렸다.",
       },
       {
         placeId: "world-bf6e55b112b2",
         fromPlaceIds: ["rome"],
         reason:
-          "로마의 포룸 로마눔은 공적인 정치·경제 활동이 이루어진 중심 공간이었습니다.",
+          "로마의 포룸 로마눔은 공적인 정치·경제 활동이 이루어진 중심 공간이었다.",
       },
     ],
   },
@@ -386,7 +386,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: -206,
     eraIds: ["w-ancient"],
     summary:
-      "셴양은 중국을 통일한 진의 수도였습니다. 진시황의 무덤인 진시황릉과 이를 지키는 군대를 본뜬 병마용 갱은 황제가 동원한 권력을 보여 줍니다.",
+      "셴양은 중국을 통일한 진의 수도였다. 진시황의 무덤인 진시황릉과 이를 지키는 군대를 본뜬 병마용 갱은 황제가 동원한 권력을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 진나라",
@@ -408,7 +408,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient"],
     replacesEntryIds: ["world-exp-world-8ebf71da60cd-1"],
     summary:
-      "석가모니가 깨달음을 얻었다고 전해지는 곳으로, 불교도들이 순례하는 중요한 성지가 되었습니다.",
+      "석가모니가 깨달음을 얻었다고 전해지는 곳으로, 불교도들이 순례하는 중요한 성지가 되었다.",
     sources: [
       {
         title: "위키백과 · 부다가야",
@@ -426,7 +426,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 100,
     eraIds: ["w-ancient"],
     summary:
-      "아소카 시대에 시작된 불교 유적으로, 탑과 조각을 통해 불교 신앙이 널리 퍼진 모습을 보여 줍니다.",
+      "아소카 시대에 시작된 불교 유적으로, 탑과 조각을 통해 불교 신앙이 널리 퍼진 모습을 보여 준다.",
     sources: [
       {
         title: "UNESCO · Buddhist Monuments at Sanchi",
@@ -444,7 +444,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: -185,
     eraIds: ["w-ancient"],
     summary:
-      "마우리아 왕조의 수도로서 북인도와 넓은 영토를 다스리는 정치 중심지였습니다.",
+      "마우리아 왕조의 수도로서 북인도와 넓은 영토를 다스리는 정치 중심지였다.",
     sources: [
       {
         title: "위키백과 · 파탈리푸트라",
@@ -463,7 +463,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-ancient", "w-medieval"],
     unitId: "world-religions",
     summary:
-      "유대교·크리스트교·이슬람교의 중요한 성지가 모여 있어, 신앙과 정치가 겹치는 역사적 중심지가 되었습니다.",
+      "유대교·크리스트교·이슬람교의 중요한 성지가 모여 있어, 신앙과 정치가 겹치는 역사적 중심지가 되었다.",
     sources: [
       {
         title: "위키백과 · 예루살렘",
@@ -482,7 +482,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-medieval"],
     replacesEntryIds: ["w-mecca"],
     summary:
-      "무함마드가 태어나 이슬람교를 전하기 시작한 도시이며, 카바를 중심으로 이슬람 순례의 중심지가 되었습니다.",
+      "무함마드가 태어나 이슬람교를 전하기 시작한 도시이며, 카바를 중심으로 이슬람 순례의 중심지가 되었다.",
     sources: [
       {
         title: "위키백과 · 메카",
@@ -501,7 +501,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-medieval"],
     replacesEntryIds: ["world-exp-world-685a859c916f-1"],
     summary:
-      "무함마드가 박해를 피해 메카에서 이주한 곳으로, 이 사건은 이슬람 공동체가 발전하는 전환점이 되었습니다.",
+      "무함마드가 박해를 피해 메카에서 이주한 곳으로, 이 사건은 이슬람 공동체가 발전하는 전환점이 되었다.",
     sources: [
       {
         title: "위키백과 · 헤지라",
@@ -512,7 +512,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "mecca",
         reason:
-          "무함마드는 622년 메카에서 메디나로 이주하여 이슬람 공동체를 이끌었습니다.",
+          "무함마드는 622년 메카에서 메디나로 이주하여 이슬람 공동체를 이끌었다.",
       },
     ],
   },
@@ -526,7 +526,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 750,
     eraIds: ["w-medieval"],
     summary:
-      "다마스쿠스는 우마이야 왕조의 수도였습니다. 도시 중심의 우마이야 모스크는 왕조의 종교 생활과 초기 이슬람 건축을 보여 줍니다.",
+      "다마스쿠스는 우마이야 왕조의 수도였다. 도시 중심의 우마이야 모스크는 왕조의 종교 생활과 초기 이슬람 건축을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 우마이야 왕조",
@@ -549,7 +549,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-medieval"],
     replacesEntryIds: ["w-baghdad"],
     summary:
-      "아바스 왕조가 새 수도로 세운 도시로, 여러 지역의 지식과 상품이 모이는 이슬람 세계의 중심지로 번성했습니다.",
+      "아바스 왕조가 새 수도로 세운 도시로, 여러 지역의 지식과 상품이 모이는 이슬람 세계의 중심지로 번성했다.",
     sources: [
       {
         title: "위키백과 · 바그다드",
@@ -574,7 +574,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       "world-exp-istanbul-1",
     ],
     summary:
-      "콘스탄티노폴리스는 로마의 새 수도로 출발해 비잔티움 제국의 정치·교역 중심지가 되었습니다. 그곳의 성 소피아 대성당은 정교회 신앙과 비잔티움 건축을 보여 줍니다.",
+      "콘스탄티노폴리스는 로마의 새 수도로 출발해 비잔티움 제국의 정치·교역 중심지가 되었다. 그곳의 성 소피아 대성당은 정교회 신앙과 비잔티움 건축을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 콘스탄티노폴리스",
@@ -590,13 +590,13 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
         placeId: "istanbul",
         fromPlaceIds: ["world-ce18f783b00f"],
         reason:
-          "콘스탄티노폴리스의 성 소피아 대성당은 비잔티움 제국의 정교회 중심 공간이었습니다.",
+          "콘스탄티노폴리스의 성 소피아 대성당은 비잔티움 제국의 정교회 중심 공간이었다.",
       },
       {
         placeId: "world-ce18f783b00f",
         fromPlaceIds: ["istanbul"],
         reason:
-          "콘스탄티노폴리스의 성 소피아 대성당은 비잔티움 제국의 정교회 중심 공간이었습니다.",
+          "콘스탄티노폴리스의 성 소피아 대성당은 비잔티움 제국의 정교회 중심 공간이었다.",
       },
     ],
   },
@@ -610,7 +610,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1031,
     eraIds: ["w-medieval"],
     summary:
-      "코르도바는 후우마이야 왕조의 정치·문화 중심지였습니다. 코르도바 대모스크는 그 번영을 보여 주는 이슬람 종교 건축물입니다.",
+      "코르도바는 후우마이야 왕조의 정치·문화 중심지였다. 코르도바 대모스크는 그 번영을 보여 주는 이슬람 종교 건축물이다.",
     sources: [
       {
         title: "UNESCO · Historic Centre of Cordoba",
@@ -629,7 +629,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-medieval"],
     replacesEntryIds: ["w-xian"],
     summary:
-      "장안은 각국 사절·상인·승려가 모인 당의 수도였습니다. 장안의 대명궁은 황제가 정사를 처리하던 궁궐로, 제국의 통치와 궁정 문화를 보여 줍니다.",
+      "장안은 각국 사절·상인·승려가 모인 당의 수도였다. 장안의 대명궁은 황제가 정사를 처리하던 궁궐로, 제국의 통치와 궁정 문화를 보여 준다.",
     sources: [
       {
         title: "위키백과 · 장안",
@@ -651,7 +651,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1400,
     eraIds: ["w-medieval"],
     summary:
-      "비단길의 길목에서 상인과 승려가 오갔으며, 막고굴의 불교 미술에는 여러 지역 문화가 함께 남았습니다.",
+      "비단길의 길목에서 상인과 승려가 오갔으며, 막고굴의 불교 미술에는 여러 지역 문화가 함께 남았다.",
     sources: [
       {
         title: "UNESCO · Mogao Caves",
@@ -669,7 +669,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1500,
     eraIds: ["w-medieval", "w-early-modern"],
     summary:
-      "사마르칸트는 티무르 제국의 수도로 번성했습니다. 레기스탄 광장의 울루그 베그 마드라사는 15세기에 세운 이슬람 학교로, 도시의 학문과 건축 문화를 보여 줍니다.",
+      "사마르칸트는 티무르 제국의 수도로 번성했다. 레기스탄 광장의 울루그 베그 마드라사는 15세기에 세운 이슬람 학교로, 도시의 학문과 건축 문화를 보여 준다.",
     sources: [
       {
         title: "UNESCO · Samarkand – Crossroad of Cultures",
@@ -696,7 +696,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-medieval"],
     replacesEntryIds: ["w-nara"],
     summary:
-      "일본이 당의 제도를 받아들여 정비한 수도로, 도다이사 등 사찰은 국가가 불교를 후원한 모습을 보여 줍니다.",
+      "일본이 당의 제도를 받아들여 정비한 수도로, 도다이사 등 사찰은 국가가 불교를 후원한 모습을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 헤이조쿄",
@@ -710,7 +710,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     related: [
       {
         placeId: "xian",
-        reason: "일본은 당의 수도 장안을 본떠 헤이조쿄를 건설했습니다.",
+        reason: "일본은 당의 수도 장안을 본떠 헤이조쿄를 건설했다.",
       },
     ],
   },
@@ -724,7 +724,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 752,
     eraIds: ["w-medieval"],
     summary:
-      "쇼무 천황의 명으로 거대한 불상을 만들고 752년 완성 법회를 열어, 나라 시대 국가가 불교를 후원한 모습을 보여 줍니다.",
+      "쇼무 천황의 명으로 거대한 불상을 만들고 752년 완성 법회를 열어, 나라 시대 국가가 불교를 후원한 모습을 보여 준다.",
     sources: [
       {
         title: "도다이지 공식 역사",
@@ -735,7 +735,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "nara",
         reason:
-          "도다이사는 나라 시대 수도 헤이조쿄에 세운 국가 불교의 중심 사찰입니다.",
+          "도다이사는 나라 시대 수도 헤이조쿄에 세운 국가 불교의 중심 사찰이다.",
       },
     ],
   },
@@ -749,7 +749,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1185,
     eraIds: ["w-medieval"],
     summary:
-      "794년 헤이안쿄로 천도한 뒤 천황의 거처와 귀족 문화의 중심지가 되었습니다.",
+      "794년 헤이안쿄로 천도한 뒤 천황의 거처와 귀족 문화의 중심지가 되었다.",
     sources: [
       {
         title: "위키백과 · 헤이안쿄",
@@ -759,7 +759,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     related: [
       {
         placeId: "xian",
-        reason: "헤이안쿄로 세운 교토의 도성은 당의 수도 장안을 본떴습니다.",
+        reason: "헤이안쿄로 세운 교토의 도성은 당의 수도 장안을 본떴다.",
       },
     ],
   },
@@ -774,7 +774,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-medieval"],
     replacesEntryIds: ["w-kaifeng"],
     summary:
-      "북송의 수도로서 인구와 상업이 집중되었으며, 도시 소비와 시장의 발달을 보여 주는 중심지였습니다.",
+      "북송의 수도로서 인구와 상업이 집중되었으며, 도시 소비와 시장의 발달을 보여 주는 중심지였다.",
     sources: [
       {
         title: "위키백과 · 카이펑시",
@@ -792,7 +792,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1276,
     eraIds: ["w-medieval"],
     summary:
-      "북방을 잃은 송이 남쪽으로 옮긴 뒤 수도가 되었으며, 강남의 상업과 도시 문화가 번성한 곳입니다.",
+      "북방을 잃은 송이 남쪽으로 옮긴 뒤 수도가 되었으며, 강남의 상업과 도시 문화가 번성한 곳이다.",
     sources: [
       {
         title: "위키백과 · 항저우시",
@@ -802,8 +802,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     related: [
       {
         placeId: "kaifeng",
-        reason:
-          "금에 카이펑을 잃은 송은 남쪽의 항저우를 새로운 수도로 삼았습니다.",
+        reason: "금에 카이펑을 잃은 송은 남쪽의 항저우를 새로운 수도로 삼았다.",
       },
     ],
   },
@@ -818,7 +817,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-medieval"],
     replacesEntryIds: ["world-exp-karakorum-2"],
     summary:
-      "오고타이 때 수도로 정비되어 몽골 제국의 정치 중심이 되었고, 여러 지역의 사람과 물자가 모였습니다.",
+      "오고타이 때 수도로 정비되어 몽골 제국의 정치 중심이 되었고, 여러 지역의 사람과 물자가 모였다.",
     sources: [
       {
         title: "위키백과 · 카라코룸",
@@ -836,7 +835,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1368,
     eraIds: ["w-medieval"],
     summary:
-      "중국을 인도양 교역망과 연결한 항구로, 상업과 여러 종교가 함께 발달한 해상 교류의 중심지였습니다.",
+      "중국을 인도양 교역망과 연결한 항구로, 상업과 여러 종교가 함께 발달한 해상 교류의 중심지였다.",
     sources: [
       {
         title: "UNESCO · Quanzhou: Emporium of the World in Song-Yuan China",
@@ -854,7 +853,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1200,
     eraIds: ["w-medieval"],
     summary:
-      "크메르 왕국이 비슈누에게 바치는 거대한 사원으로 세웠으며, 왕권과 힌두교 신앙의 관계를 보여 줍니다.",
+      "크메르 왕국이 비슈누에게 바치는 거대한 사원으로 세웠으며, 왕권과 힌두교 신앙의 관계를 보여 준다.",
     sources: [
       {
         title: "위키백과 · 앙코르 와트",
@@ -872,7 +871,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 850,
     eraIds: ["w-medieval"],
     summary:
-      "자와섬에 세운 대규모 불교 유적으로, 불교의 가르침을 부조와 탑의 구조로 표현했습니다.",
+      "자와섬에 세운 대규모 불교 유적으로, 불교의 가르침을 부조와 탑의 구조로 표현했다.",
     sources: [
       {
         title: "UNESCO · Borobudur Temple Compounds",
@@ -890,7 +889,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1287,
     eraIds: ["w-medieval"],
     summary:
-      "파간 왕국의 수도로서 수많은 불교 사원과 탑이 세워져 미얀마의 불교 문화를 형성했습니다.",
+      "파간 왕국의 수도로서 수많은 불교 사원과 탑이 세워져 미얀마의 불교 문화를 형성했다.",
     sources: [
       {
         title: "UNESCO · Bagan",
@@ -908,7 +907,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1600,
     eraIds: ["w-medieval", "w-early-modern"],
     summary:
-      "사하라 횡단 교역망의 도시로 성장했으며, 이슬람 학문과 필사본 문화가 발달했습니다.",
+      "사하라 횡단 교역망의 도시로 성장했으며, 이슬람 학문과 필사본 문화가 발달했다.",
     sources: [
       {
         title: "위키백과 · 팀북투",
@@ -926,7 +925,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1500,
     eraIds: ["w-medieval"],
     summary:
-      "동부 지중해와 유럽을 잇는 무역으로 성장한 도시 국가로, 상인들이 해상 교역망을 운영했습니다.",
+      "동부 지중해와 유럽을 잇는 무역으로 성장한 도시 국가로, 상인들이 해상 교역망을 운영했다.",
     sources: [
       {
         title: "위키백과 · 베네치아 공화국",
@@ -944,7 +943,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1550,
     eraIds: ["w-early-modern"],
     summary:
-      "상업과 금융으로 축적한 부를 바탕으로 미술·건축·인문주의를 후원하며 르네상스가 꽃핀 도시입니다.",
+      "상업과 금융으로 축적한 부를 바탕으로 미술·건축·인문주의를 후원하며 르네상스가 꽃핀 도시이다.",
     sources: [
       {
         title: "위키백과 · 피렌체",
@@ -962,7 +961,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1555,
     eraIds: ["w-early-modern"],
     summary:
-      "루터의 활동 거점으로, 면벌부 비판에서 시작된 종교 개혁이 확산하는 중심지가 되었습니다.",
+      "루터의 활동 거점으로, 면벌부 비판에서 시작된 종교 개혁이 확산하는 중심지가 되었다.",
     sources: [
       {
         title: "위키백과 · 비텐베르크",
@@ -982,7 +981,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-early-modern"],
     replacesEntryIds: ["w-istanbul", "world-exp-istanbul-2"],
     summary:
-      "이스탄불은 1453년 오스만의 정복 뒤 제국의 수도가 되었습니다. 그곳의 톱카프궁전은 술탄의 거처이자 국정을 논의하던 통치 공간이었습니다.",
+      "이스탄불은 1453년 오스만의 정복 뒤 제국의 수도가 되었다. 그곳의 톱카프궁전은 술탄의 거처이자 국정을 논의하던 통치 공간이었다.",
     sources: [
       {
         title: "위키백과 · 이스탄불",
@@ -1005,7 +1004,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-early-modern"],
     replacesEntryIds: ["w-beijing"],
     summary:
-      "베이징은 명 영락제의 천도 뒤 명·청의 수도가 되었습니다. 자금성은 베이징에서 황제가 거주하고 통치한 궁궐로, 두 왕조의 궁정 문화를 보여 줍니다.",
+      "베이징은 명 영락제의 천도 뒤 명·청의 수도가 되었다. 자금성은 베이징에서 황제가 거주하고 통치한 궁궐로, 두 왕조의 궁정 문화를 보여 준다.",
     sources: [
       {
         title: "위키백과 · 자금성",
@@ -1016,12 +1015,12 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "beijing",
         fromPlaceIds: ["world-9b94ffe0e820"],
-        reason: "베이징의 자금성은 명·청 황제가 거주하고 통치하던 궁궐입니다.",
+        reason: "베이징의 자금성은 명·청 황제가 거주하고 통치하던 궁궐이다.",
       },
       {
         placeId: "world-9b94ffe0e820",
         fromPlaceIds: ["beijing"],
-        reason: "베이징의 자금성은 명·청 황제가 거주하고 통치하던 궁궐입니다.",
+        reason: "베이징의 자금성은 명·청 황제가 거주하고 통치하던 궁궐이다.",
       },
     ],
   },
@@ -1036,7 +1035,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-early-modern"],
     replacesEntryIds: ["w-agra", "world-exp-world-fa40bf609e6e-2"],
     summary:
-      "무굴 제국의 주요 수도 아그라에서 샤자한이 황후를 기려 세운 타지마할은 인도와 이슬람 건축 문화가 어우러진 모습을 보여 줍니다.",
+      "무굴 제국의 주요 수도 아그라에서 샤자한이 황후를 기려 세운 타지마할은 인도와 이슬람 건축 문화가 어우러진 모습을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 아그라",
@@ -1051,14 +1050,12 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "agra",
         fromPlaceIds: ["world-fa40bf609e6e"],
-        reason:
-          "무굴 황제 샤자한은 아그라에 황후를 기리는 타지마할을 세웠습니다.",
+        reason: "무굴 황제 샤자한은 아그라에 황후를 기리는 타지마할을 세웠다.",
       },
       {
         placeId: "world-fa40bf609e6e",
         fromPlaceIds: ["agra"],
-        reason:
-          "무굴 황제 샤자한은 아그라에 황후를 기리는 타지마할을 세웠습니다.",
+        reason: "무굴 황제 샤자한은 아그라에 황후를 기리는 타지마할을 세웠다.",
       },
     ],
   },
@@ -1072,7 +1069,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1722,
     eraIds: ["w-early-modern"],
     summary:
-      "이스파한은 아바스 1세가 수도로 삼아 정비한 도시입니다. 이맘 광장은 왕궁·모스크·시장과 연결된 공간으로, 사파비 왕조의 정치·종교·상업 생활을 보여 줍니다.",
+      "이스파한은 아바스 1세가 수도로 삼아 정비한 도시이다. 이맘 광장은 왕궁·모스크·시장과 연결된 공간으로, 사파비 왕조의 정치·종교·상업 생활을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 이스파한",
@@ -1095,7 +1092,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-early-modern"],
     replacesEntryIds: ["w-lisbon"],
     summary:
-      "대서양과 인도양으로 나아간 포르투갈 항해와 무역의 중심 항구로 성장했습니다.",
+      "대서양과 인도양으로 나아간 포르투갈 항해와 무역의 중심 항구로 성장했다.",
     sources: [
       {
         title: "위키백과 · 리스본",
@@ -1113,7 +1110,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1511,
     eraIds: ["w-early-modern"],
     summary:
-      "인도양과 남중국해를 연결하는 항구로 번성했으며, 1511년 포르투갈의 점령 뒤 유럽 세력의 아시아 진출 거점이 되었습니다.",
+      "인도양과 남중국해를 연결하는 항구로 번성했으며, 1511년 포르투갈의 점령 뒤 유럽 세력의 아시아 진출 거점이 되었다.",
     sources: [
       {
         title: "위키백과 · 믈라카",
@@ -1131,7 +1128,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1815,
     eraIds: ["w-early-modern"],
     summary:
-      "마닐라와 아카풀코 사이의 갈레온 무역은 아시아 상품과 아메리카의 은을 태평양을 건너 교환하게 했습니다.",
+      "마닐라와 아카풀코 사이의 갈레온 무역은 아시아 상품과 아메리카의 은을 태평양을 건너 교환하게 했다.",
     sources: [
       {
         title: "위키백과 · 마닐라 갈레온",
@@ -1143,13 +1140,13 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
         placeId: "world-287e29e93d5f",
         fromPlaceIds: ["world-68f0c26b6639"],
         reason:
-          "마닐라와 아카풀코 사이의 갈레온 무역은 아시아 상품과 아메리카의 은을 교환했습니다.",
+          "마닐라와 아카풀코 사이의 갈레온 무역은 아시아 상품과 아메리카의 은을 교환했다.",
       },
       {
         placeId: "world-68f0c26b6639",
         fromPlaceIds: ["world-287e29e93d5f"],
         reason:
-          "마닐라와 아카풀코 사이의 갈레온 무역은 아시아 상품과 아메리카의 은을 교환했습니다.",
+          "마닐라와 아카풀코 사이의 갈레온 무역은 아시아 상품과 아메리카의 은을 교환했다.",
       },
     ],
   },
@@ -1163,7 +1160,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1700,
     eraIds: ["w-early-modern"],
     summary:
-      "대규모 은광 개발로 스페인 식민지 경제의 핵심이 되었으며, 은 생산에는 원주민의 강제 노동이 동원되었습니다.",
+      "대규모 은광 개발로 스페인 식민지 경제의 핵심이 되었으며, 은 생산에는 원주민의 강제 노동이 동원되었다.",
     sources: [
       {
         title: "UNESCO · City of Potosí",
@@ -1181,7 +1178,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1533,
     eraIds: ["w-early-modern"],
     summary:
-      "잉카 제국의 수도로서 정치·종교·문화의 중심을 이루었으며, 안데스 지역을 다스리는 거점이 되었습니다.",
+      "잉카 제국의 수도로서 정치·종교·문화의 중심을 이루었으며, 안데스 지역을 다스리는 거점이 되었다.",
     sources: [
       {
         title: "위키백과 · 쿠스코",
@@ -1199,7 +1196,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1521,
     eraIds: ["w-early-modern"],
     summary:
-      "아스테카의 수도로 호수 위에 건설되었으나, 1521년 에스파냐 정복군에 함락되었습니다.",
+      "아스테카의 수도로 호수 위에 건설되었으나, 1521년 에스파냐 정복군에 함락되었다.",
     sources: [
       {
         title: "위키백과 · 테노치티틀란",
@@ -1217,7 +1214,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1859,
     eraIds: ["w-early-modern"],
     summary:
-      "나가사키는 에도 막부가 대외 교역을 통제한 항구였습니다. 항구의 인공섬 데지마에는 네덜란드 상관이 자리하여 서양 지식과 상품이 들어오는 창구가 되었습니다.",
+      "나가사키는 에도 막부가 대외 교역을 통제한 항구였다. 항구의 인공섬 데지마에는 네덜란드 상관이 자리하여 서양 지식과 상품이 들어오는 창구가 되었다.",
     sources: [
       {
         title: "위키백과 · 데지마",
@@ -1229,13 +1226,13 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
         placeId: "world-1ef115875c31",
         fromPlaceIds: ["world-85f7f6427d22"],
         reason:
-          "나가사키의 데지마는 에도 시대에 네덜란드 상관이 자리한 대외 교역 창구였습니다.",
+          "나가사키의 데지마는 에도 시대에 네덜란드 상관이 자리한 대외 교역 창구였다.",
       },
       {
         placeId: "world-85f7f6427d22",
         fromPlaceIds: ["world-1ef115875c31"],
         reason:
-          "나가사키의 데지마는 에도 시대에 네덜란드 상관이 자리한 대외 교역 창구였습니다.",
+          "나가사키의 데지마는 에도 시대에 네덜란드 상관이 자리한 대외 교역 창구였다.",
       },
     ],
   },
@@ -1250,7 +1247,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1868,
     eraIds: ["w-early-modern"],
     summary:
-      "도쿠가와 막부의 거점이 된 에도에는 무사와 상인이 모였으며, 거대한 소비 도시로 성장했습니다.",
+      "도쿠가와 막부의 거점이 된 에도에는 무사와 상인이 모였으며, 거대한 소비 도시로 성장했다.",
     sources: [
       {
         title: "위키백과 · 에도",
@@ -1268,7 +1265,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1700,
     eraIds: ["w-early-modern"],
     summary:
-      "네덜란드의 해상 진출과 함께 무역·금융 중심지로 성장하며 세계 각지의 상품과 자금이 모였습니다.",
+      "네덜란드의 해상 진출과 함께 무역·금융 중심지로 성장하며 세계 각지의 상품과 자금이 모였다.",
     sources: [
       {
         title: "UNESCO · Seventeenth-Century Canal Ring Area of Amsterdam",
@@ -1287,7 +1284,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-early-modern"],
     replacesEntryIds: ["world-exp-world-0b5aaef85c9c-2"],
     summary:
-      "루이 14세는 베르사유 궁전에 궁정과 정부를 옮겨 베르사유를 정치 중심지로 삼았습니다. 궁전은 귀족을 궁정 생활에 묶어 두며 왕권을 드러내는 무대가 되었습니다.",
+      "루이 14세는 베르사유 궁전에 궁정과 정부를 옮겨 베르사유를 정치 중심지로 삼았다. 궁전은 귀족을 궁정 생활에 묶어 두며 왕권을 드러내는 무대가 되었다.",
     sources: [
       {
         title: "위키백과 · 베르사유궁",
@@ -1299,13 +1296,13 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
         placeId: "versailles",
         fromPlaceIds: ["world-0b5aaef85c9c"],
         reason:
-          "루이 14세는 베르사유 궁전에 궁정과 정부를 옮겨 베르사유를 정치 중심지로 삼았습니다.",
+          "루이 14세는 베르사유 궁전에 궁정과 정부를 옮겨 베르사유를 정치 중심지로 삼았다.",
       },
       {
         placeId: "world-0b5aaef85c9c",
         fromPlaceIds: ["versailles"],
         reason:
-          "루이 14세는 베르사유 궁전에 궁정과 정부를 옮겨 베르사유를 정치 중심지로 삼았습니다.",
+          "루이 14세는 베르사유 궁전에 궁정과 정부를 옮겨 베르사유를 정치 중심지로 삼았다.",
       },
     ],
   },
@@ -1320,7 +1317,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-modern"],
     replacesEntryIds: ["w-boston", "world-exp-boston-3"],
     summary:
-      "차에 대한 세금과 영국의 통제에 맞선 저항이 커진 도시로, 미국 독립 전쟁으로 이어지는 갈등의 중심지였습니다.",
+      "차에 대한 세금과 영국의 통제에 맞선 저항이 커진 도시로, 미국 독립 전쟁으로 이어지는 갈등의 중심지였다.",
     sources: [
       {
         title: "위키백과 · 보스턴 차 사건",
@@ -1335,7 +1332,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "philadelphia",
         reason:
-          "보스턴의 저항 뒤 독립 운동이 전개되었고, 필라델피아에서 독립 선언을 채택했습니다.",
+          "보스턴의 저항 뒤 독립 운동이 전개되었고, 필라델피아에서 독립 선언을 채택했다.",
       },
     ],
   },
@@ -1350,7 +1347,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-modern"],
     replacesEntryIds: ["w-philadelphia", "world-exp-world-c137ea78cf57-5"],
     summary:
-      "필라델피아의 독립기념관에서 독립 선언과 미국 헌법이 논의·채택되었습니다. 이 건물은 새로운 국가 체제를 정한 회의 장소였습니다.",
+      "필라델피아의 독립기념관에서 독립 선언과 미국 헌법이 논의·채택되었다. 이 건물은 새로운 국가 체제를 정한 회의 장소였다.",
     sources: [
       {
         title: "위키백과 · 독립기념관 (미국)",
@@ -1362,13 +1359,13 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
         placeId: "philadelphia",
         fromPlaceIds: ["world-c137ea78cf57"],
         reason:
-          "필라델피아의 독립기념관에서 미국 독립 선언과 헌법이 논의·채택되었습니다.",
+          "필라델피아의 독립기념관에서 미국 독립 선언과 헌법이 논의·채택되었다.",
       },
       {
         placeId: "world-c137ea78cf57",
         fromPlaceIds: ["philadelphia"],
         reason:
-          "필라델피아의 독립기념관에서 미국 독립 선언과 헌법이 논의·채택되었습니다.",
+          "필라델피아의 독립기념관에서 미국 독립 선언과 헌법이 논의·채택되었다.",
       },
     ],
   },
@@ -1383,7 +1380,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-modern"],
     replacesEntryIds: ["w-paris", "world-exp-world-897b554f8e5a-3"],
     summary:
-      "파리 시민의 바스티유 감옥 습격은 프랑스 혁명의 시작을 알렸으며, 감옥이 있던 자리는 오늘날 바스티유 광장으로 남아 있습니다.",
+      "파리 시민의 바스티유 감옥 습격은 프랑스 혁명의 시작을 알렸으며, 감옥이 있던 자리는 오늘날 바스티유 광장으로 남아 있다.",
     sources: [
       {
         title: "위키백과 · 바스티유 습격",
@@ -1402,7 +1399,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-modern"],
     replacesEntryIds: ["w-manchester"],
     summary:
-      "기계와 공장이 집중된 면직물 공업 도시로 성장하여 산업 혁명이 생산과 도시 생활을 바꾼 모습을 보여 줍니다.",
+      "기계와 공장이 집중된 면직물 공업 도시로 성장하여 산업 혁명이 생산과 도시 생활을 바꾼 모습을 보여 준다.",
     sources: [
       {
         title: "Historic England · The Industrial Revolution in Manchester",
@@ -1419,7 +1416,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1830,
     eraIds: ["w-modern"],
     summary:
-      "맨체스터와 연결한 철도가 개통되어 항구와 공업 도시 사이의 사람·화물 운송을 바꾸었습니다.",
+      "맨체스터와 연결한 철도가 개통되어 항구와 공업 도시 사이의 사람·화물 운송을 바꾸었다.",
     sources: [
       {
         title: "Historic England · Liverpool and Manchester Railway",
@@ -1434,7 +1431,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "manchester",
         reason:
-          "1830년 개통한 철도가 항구 리버풀과 공업 도시 맨체스터를 연결했습니다.",
+          "1830년 개통한 철도가 항구 리버풀과 공업 도시 맨체스터를 연결했다.",
       },
     ],
   },
@@ -1449,7 +1446,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-modern"],
     replacesEntryIds: ["world-exp-world-f42f96d155a5-3"],
     summary:
-      "빈 회의에서 유럽 열강이 나폴레옹 전쟁 뒤의 국경과 정치 질서를 다시 정했습니다.",
+      "빈 회의에서 유럽 열강이 나폴레옹 전쟁 뒤의 국경과 정치 질서를 다시 정했다.",
     sources: [
       {
         title: "위키백과 · 빈 회의",
@@ -1466,7 +1463,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1815,
     eraIds: ["w-modern"],
     summary:
-      "나폴레옹이 영국·프로이센 연합군에 패배하면서 백일천하가 끝난 전투 장소입니다.",
+      "나폴레옹이 영국·프로이센 연합군에 패배하면서 백일천하가 끝난 전투 장소이다.",
     sources: [
       {
         title: "위키백과 · 워털루 전투",
@@ -1485,7 +1482,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-modern"],
     replacesEntryIds: ["w-wuchang"],
     summary:
-      "우창 봉기가 청 왕조를 무너뜨리는 신해혁명의 계기가 되어 중국의 공화정 수립으로 이어졌습니다.",
+      "우창 봉기가 청 왕조를 무너뜨리는 신해혁명의 계기가 되어 중국의 공화정 수립으로 이어졌다.",
     sources: [
       {
         title: "위키백과 · 우창 봉기",
@@ -1505,7 +1502,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-modern"],
     replacesEntryIds: ["w-tokyo"],
     summary:
-      "에도가 도쿄로 이름을 바꾸고 새 정부의 중심이 되어, 메이지 시기의 국가 개혁과 근대화가 추진되었습니다.",
+      "에도가 도쿄로 이름을 바꾸고 새 정부의 중심이 되어, 메이지 시기의 국가 개혁과 근대화가 추진되었다.",
     sources: [
       {
         title: "위키백과 · 도쿄",
@@ -1522,7 +1519,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1842,
     eraIds: ["w-modern"],
     summary:
-      "청이 제1차 아편 전쟁에서 패한 뒤 난징 조약을 맺어 항구를 열고 홍콩섬을 영국에 넘기게 되었습니다.",
+      "청이 제1차 아편 전쟁에서 패한 뒤 난징 조약을 맺어 항구를 열고 홍콩섬을 영국에 넘기게 되었다.",
     sources: [
       {
         title: "위키백과 · 난징 조약",
@@ -1532,7 +1529,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     related: [
       {
         placeId: "world-411bda9a20bb",
-        reason: "난징 조약에 따라 홍콩섬이 영국에 할양되었습니다.",
+        reason: "난징 조약에 따라 홍콩섬이 영국에 할양되었다.",
       },
     ],
   },
@@ -1545,7 +1542,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1757,
     eraIds: ["w-modern"],
     summary:
-      "영국 동인도 회사가 벵골의 군대를 물리쳐 인도에서 정치·경제적 지배를 확대하는 전환점이 되었습니다.",
+      "영국 동인도 회사가 벵골의 군대를 물리쳐 인도에서 정치·경제적 지배를 확대하는 전환점이 되었다.",
     sources: [
       {
         title: "위키백과 · 플라시 전투",
@@ -1562,7 +1559,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1896,
     eraIds: ["w-wars"],
     summary:
-      "에티오피아군이 이탈리아의 침략군을 물리쳐 독립을 지켜 낸 전투 장소입니다.",
+      "에티오피아군이 이탈리아의 침략군을 물리쳐 독립을 지켜 낸 전투 장소이다.",
     sources: [
       {
         title: "위키백과 · 아두와 전투",
@@ -1583,7 +1580,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1869,
     eraIds: ["w-wars"],
     summary:
-      "지중해와 홍해를 연결하여 유럽과 아시아 사이의 항로를 단축하고 제국주의 열강의 전략적 관심을 끌었습니다.",
+      "지중해와 홍해를 연결하여 유럽과 아시아 사이의 항로를 단축하고 제국주의 열강의 전략적 관심을 끌었다.",
     sources: [
       {
         title: "위키백과 · 수에즈 운하",
@@ -1601,7 +1598,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-wars"],
     replacesEntryIds: ["w-sarajevo", "world-exp-sarajevo-4"],
     summary:
-      "오스트리아·헝가리 황태자 부부가 암살되었고, 이 사건 뒤 열강 간의 충돌이 세계 대전으로 확대되었습니다.",
+      "오스트리아·헝가리 황태자 부부가 암살되었고, 이 사건 뒤 열강 간의 충돌이 세계 대전으로 확대되었다.",
     sources: [
       {
         title: "위키백과 · 사라예보 사건",
@@ -1618,7 +1615,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1916,
     eraIds: ["w-wars"],
     summary:
-      "프랑스군과 독일군이 장기간 싸우며 막대한 희생을 치러, 제1차 세계 대전의 소모전을 상징하는 곳이 되었습니다.",
+      "프랑스군과 독일군이 장기간 싸우며 막대한 희생을 치러, 제1차 세계 대전의 소모전을 상징하는 곳이 되었다.",
     sources: [
       {
         title: "위키백과 · 베르됭 전투",
@@ -1635,7 +1632,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1917,
     eraIds: ["w-wars"],
     summary:
-      "당시 페트로그라드라 불린 이 도시에서 혁명이 일어나 차르 체제가 무너지고 볼셰비키가 권력을 잡았습니다.",
+      "당시 페트로그라드라 불린 이 도시에서 혁명이 일어나 차르 체제가 무너지고 볼셰비키가 권력을 잡았다.",
     sources: [
       {
         title: "위키백과 · 러시아 혁명",
@@ -1653,7 +1650,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-wars"],
     replacesEntryIds: ["w-versailles"],
     summary:
-      "베르사유의 궁전에서 체결된 베르사유 조약은 독일의 군비와 영토·배상 의무를 정하여, 제1차 세계 대전 뒤 국제 질서의 한 축을 마련했습니다.",
+      "베르사유의 궁전에서 체결된 베르사유 조약은 독일의 군비와 영토·배상 의무를 정하여, 제1차 세계 대전 뒤 국제 질서의 한 축을 마련했다.",
     sources: [
       {
         title: "위키백과 · 베르사유 조약",
@@ -1670,7 +1667,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1919,
     eraIds: ["w-wars"],
     summary:
-      "영국군이 잘리안왈라 바그의 군중에게 발포한 학살 사건이 일어나 인도의 반영 독립 운동에 큰 영향을 주었습니다.",
+      "영국군이 잘리안왈라 바그의 군중에게 발포한 학살 사건이 일어나 인도의 반영 독립 운동에 큰 영향을 주었다.",
     sources: [
       {
         title: "위키백과 · 암리차르 학살",
@@ -1688,7 +1685,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-wars"],
     replacesEntryIds: ["world-exp-world-9d6a74a1d2fc-4"],
     summary:
-      "간디가 바닷가에서 소금을 만들며 영국의 소금 독점에 저항하여, 비폭력 시민 불복종 운동을 널리 알렸습니다.",
+      "간디가 바닷가에서 소금을 만들며 영국의 소금 독점에 저항하여, 비폭력 시민 불복종 운동을 널리 알렸다.",
     sources: [
       {
         title: "위키백과 · 소금 행진",
@@ -1707,7 +1704,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-wars"],
     replacesEntryIds: ["w-nanjing"],
     summary:
-      "중일 전쟁 중 일본군이 점령한 뒤 대규모 민간인 학살과 폭력이 벌어진 곳입니다.",
+      "중일 전쟁 중 일본군이 점령한 뒤 대규모 민간인 학살과 폭력이 벌어진 곳이다.",
     sources: [
       {
         title: "위키백과 · 난징 대학살",
@@ -1725,7 +1722,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1945,
     eraIds: ["w-wars"],
     summary:
-      "나치 독일은 점령한 폴란드의 오시비엥침에 아우슈비츠 수용소를 설치했습니다. 유대인 등을 강제 수용하고 대량 학살한 수용소는 홀로코스트의 참상을 증언합니다.",
+      "나치 독일은 점령한 폴란드의 오시비엥침에 아우슈비츠 수용소를 설치했다. 유대인 등을 강제 수용하고 대량 학살한 수용소는 홀로코스트의 참상을 증언한다.",
     sources: [
       {
         title: "위키백과 · 아우슈비츠 강제 수용소",
@@ -1744,7 +1741,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1943,
     eraIds: ["w-wars"],
     summary:
-      "당시 스탈린그라드에서 소련군이 독일군을 포위해 승리하면서 독소 전쟁의 흐름이 크게 바뀌었습니다.",
+      "당시 스탈린그라드에서 소련군이 독일군을 포위해 승리하면서 독소 전쟁의 흐름이 크게 바뀌었다.",
     sources: [
       {
         title: "위키백과 · 스탈린그라드 전투",
@@ -1762,7 +1759,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-wars"],
     replacesEntryIds: ["w-hiroshima"],
     summary:
-      "1945년 8월 6일 미국이 원자 폭탄을 투하하여 막대한 인명 피해가 발생한 도시입니다.",
+      "1945년 8월 6일 미국이 원자 폭탄을 투하하여 막대한 인명 피해가 발생한 도시이다.",
     sources: [
       {
         title: "위키백과 · 히로시마·나가사키 원자폭탄 투하",
@@ -1779,7 +1776,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1945,
     eraIds: ["w-wars"],
     summary:
-      "연합국 지도자들이 모여 패전한 독일의 처리 등 전후 문제를 논의한 회담이 열린 곳입니다.",
+      "연합국 지도자들이 모여 패전한 독일의 처리 등 전후 문제를 논의한 회담이 열린 곳이다.",
     sources: [
       {
         title: "위키백과 · 포츠담 회담",
@@ -1798,7 +1795,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-contemporary"],
     replacesEntryIds: ["w-berlin"],
     summary:
-      "베를린에서는 동서를 갈라놓은 장벽의 통행이 1989년에 열렸습니다. 같은 해 브란덴부르크 문도 다시 통행할 수 있게 되었고, 이듬해 독일의 통일과 함께 냉전 종식을 상징하게 되었습니다.",
+      "베를린에서는 동서를 갈라놓은 장벽의 통행이 1989년에 열렸다. 같은 해 브란덴부르크 문도 다시 통행할 수 있게 되었고, 이듬해 독일의 통일과 함께 냉전 종식을 상징하게 되었다.",
     sources: [
       {
         title: "위키백과 · 베를린 장벽",
@@ -1820,7 +1817,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-contemporary"],
     replacesEntryIds: ["w-bandung", "world-exp-bandung-5"],
     summary:
-      "아시아·아프리카 국가들이 모여 식민주의에 반대하고 평화 공존과 협력을 논의한 회의가 열렸습니다.",
+      "아시아·아프리카 국가들이 모여 식민주의에 반대하고 평화 공존과 협력을 논의한 회의가 열렸다.",
     sources: [
       {
         title: "미국 국무부 역사실 · The Bandung Conference, 1955",
@@ -1841,7 +1838,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1954,
     eraIds: ["w-contemporary"],
     summary:
-      "베트민이 프랑스군을 물리쳐 제1차 인도차이나 전쟁을 끝내는 협상으로 이어진 전투 장소입니다.",
+      "베트민이 프랑스군을 물리쳐 제1차 인도차이나 전쟁을 끝내는 협상으로 이어진 전투 장소이다.",
     sources: [
       {
         title: "위키백과 · 디엔비엔푸 전투",
@@ -1859,7 +1856,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1959,
     eraIds: ["w-contemporary"],
     summary:
-      "바티스타 정권을 무너뜨린 혁명군이 1959년 1월 입성하면서 쿠바 혁명으로 세워진 새 정권의 중심지가 되었습니다.",
+      "바티스타 정권을 무너뜨린 혁명군이 1959년 1월 입성하면서 쿠바 혁명으로 세워진 새 정권의 중심지가 되었다.",
     sources: [
       {
         title: "위키백과 · 쿠바 혁명",
@@ -1876,7 +1873,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1968,
     eraIds: ["w-contemporary"],
     summary:
-      "체코슬로바키아의 자유화 개혁이 추진되었으나 바르샤바 조약 기구 군대의 개입으로 좌절되었습니다.",
+      "체코슬로바키아의 자유화 개혁이 추진되었으나 바르샤바 조약 기구 군대의 개입으로 좌절되었다.",
     sources: [
       {
         title: "위키백과 · 프라하의 봄",
@@ -1893,7 +1890,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1957,
     eraIds: ["w-contemporary"],
     summary:
-      "가나가 영국의 식민 지배에서 독립한 뒤 수도가 되어, 아프리카 탈식민화의 흐름을 보여 줍니다.",
+      "가나가 영국의 식민 지배에서 독립한 뒤 수도가 되어, 아프리카 탈식민화의 흐름을 보여 준다.",
     sources: [
       {
         title: "위키백과 · 가나",
@@ -1911,7 +1908,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 2002,
     eraIds: ["w-contemporary"],
     summary:
-      "아프리카 단결 기구가 창설된 도시로, 이후 아프리카 연합 본부가 자리한 대륙 협력의 중심지가 되었습니다.",
+      "아프리카 단결 기구가 창설된 도시로, 이후 아프리카 연합 본부가 자리한 대륙 협력의 중심지가 되었다.",
     sources: [
       {
         title: "위키백과 · 아프리카 단결 기구",
@@ -1932,7 +1929,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1986,
     eraIds: ["w-contemporary"],
     summary:
-      "인근 원자력 발전소 사고의 방사성 물질이 여러 나라로 퍼져, 원전 안전과 환경 문제를 국제적 과제로 드러냈습니다.",
+      "인근 원자력 발전소 사고의 방사성 물질이 여러 나라로 퍼져, 원전 안전과 환경 문제를 국제적 과제로 드러냈다.",
     sources: [
       {
         title: "위키백과 · 체르노빌 원자력 발전소 사고",
@@ -1949,7 +1946,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1956,
     eraIds: ["w-contemporary"],
     summary:
-      "이집트의 운하 국유화 뒤 영국·프랑스·이스라엘이 군사 행동에 나서면서 탈식민화와 냉전이 충돌한 무대가 되었습니다.",
+      "이집트의 운하 국유화 뒤 영국·프랑스·이스라엘이 군사 행동에 나서면서 탈식민화와 냉전이 충돌한 무대가 되었다.",
     sources: [
       {
         title: "위키백과 · 수에즈 위기",
@@ -1966,7 +1963,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1788,
     eraIds: ["w-modern"],
     summary:
-      "영국이 시드니 코브에 죄수 유배지를 세우며 식민화를 시작했습니다. 이후 정착 확대와 충돌·질병은 원주민의 삶과 문화에 큰 피해를 주었습니다.",
+      "영국이 시드니 코브에 죄수 유배지를 세우며 식민화를 시작했다. 이후 정착 확대와 충돌·질병은 원주민의 삶과 문화에 큰 피해를 주었다.",
     sources: [
       {
         title: "호주 국립박물관 · 제1함대의 시드니 코브 도착",
@@ -1983,7 +1980,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1901,
     eraIds: ["w-modern"],
     summary:
-      "여섯 영국 식민지가 오스트레일리아 연방을 이루고 각 주와 연방 정부가 권한을 나누게 되었습니다. 영국 군주를 국가 원수로 유지하면서 자치의 범위를 넓혔습니다.",
+      "여섯 영국 식민지가 오스트레일리아 연방을 이루고 각 주와 연방 정부가 권한을 나누게 되었다. 영국 군주를 국가 원수로 유지하면서 자치의 범위를 넓혔다.",
     sources: [
       {
         title: "호주 국립박물관 · 오스트레일리아 식민지의 연방 성립",
@@ -2002,7 +1999,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     eraIds: ["w-modern", "w-wars"],
     unitId: "world-nations",
     summary:
-      "시드니와 멜버른의 경쟁 속에서 새 연방 수도로 선정되었습니다. 1913년 캔버라라는 이름을 정했고, 1927년 연방 의회가 옮겨 와 정치 중심지가 되었습니다.",
+      "시드니와 멜버른의 경쟁 속에서 새 연방 수도로 선정되었다. 1913년 캔버라라는 이름을 정했고, 1927년 연방 의회가 옮겨 와 정치 중심지가 되었다.",
     sources: [
       {
         title: "호주 국가수도청 · 캔버라의 선정과 명명",
@@ -2017,7 +2014,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "world-182a68a37544",
         reason:
-          "캔버라는 1901년 성립한 오스트레일리아 연방의 정부와 의회를 위한 새 수도로 건설되었습니다.",
+          "캔버라는 1901년 성립한 오스트레일리아 연방의 정부와 의회를 위한 새 수도로 건설되었다.",
       },
     ],
   },
@@ -2030,7 +2027,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1840,
     eraIds: ["w-modern"],
     summary:
-      "와이탕이에서 마오리 지도자들과 영국 왕실 대표가 조약을 맺었습니다. 영어본과 마오리어본의 차이는 영국의 통치권과 마오리의 권한을 둘러싼 해석 갈등으로 이어졌습니다.",
+      "와이탕이에서 마오리 지도자들과 영국 왕실 대표가 조약을 맺었다. 영어본과 마오리어본의 차이는 영국의 통치권과 마오리의 권한을 둘러싼 해석 갈등으로 이어졌다.",
     sources: [
       {
         title: "뉴질랜드 문화유산부 · 와이탕이 조약의 서명",
@@ -2051,7 +2048,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1893,
     eraIds: ["w-modern"],
     summary:
-      "여성들의 청원과 참정권 운동 끝에 선거법을 개정하여, 자치 국가 가운데 세계 최초로 여성의 의회 선거 투표권을 인정했습니다.",
+      "여성들의 청원과 참정권 운동 끝에 선거법을 개정하여, 자치 국가 가운데 세계 최초로 여성의 의회 선거 투표권을 인정했다.",
     sources: [
       {
         title: "뉴질랜드 문화유산부 · 여성과 선거권",
@@ -2072,7 +2069,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1865,
     eraIds: ["w-modern"],
     summary:
-      "남섬의 성장과 오클랜드까지의 긴 이동 거리를 고려하여 수도와 의회가 옮겨 왔습니다. 이후 뉴질랜드 중앙 정부의 중심지가 되었습니다.",
+      "남섬의 성장과 오클랜드까지의 긴 이동 거리를 고려하여 수도와 의회가 옮겨 왔다. 이후 뉴질랜드 중앙 정부의 중심지가 되었다.",
     sources: [
       {
         title: "뉴질랜드 문화유산부 · 웰링턴에서 열린 의회",
@@ -2083,7 +2080,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "world-38cc49cb4793",
         reason:
-          "웰링턴은 1865년 뉴질랜드의 수도와 의회가 이전한 뒤 중앙 정치의 중심지가 되었습니다.",
+          "웰링턴은 1865년 뉴질랜드의 수도와 의회가 이전한 뒤 중앙 정치의 중심지가 되었다.",
       },
     ],
   },
@@ -2097,7 +2094,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     endYear: 1898,
     eraIds: ["w-modern"],
     summary:
-      "미국 해병대의 지원을 받은 세력이 1893년 왕정을 무너뜨렸고, 원주민의 반대 청원에도 1898년 미국에 병합되어 태평양으로의 제국주의 팽창을 보여 줍니다.",
+      "미국 해병대의 지원을 받은 세력이 1893년 왕정을 무너뜨렸고, 원주민의 반대 청원에도 1898년 미국에 병합되어 태평양으로의 제국주의 팽창을 보여 준다.",
     sources: [
       {
         title: "미국 국립공원관리청 · 이올라니 궁전과 하와이의 역사",
@@ -2114,7 +2111,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1941,
     eraIds: ["w-wars"],
     summary:
-      "일본이 12월 7일 하와이의 미국 태평양 함대 기지를 기습했습니다. 이 공격은 미국이 일본에 선전 포고하고 제2차 세계 대전에 본격적으로 참전하는 계기가 되었습니다.",
+      "일본이 12월 7일 하와이의 미국 태평양 함대 기지를 기습했다. 이 공격은 미국이 일본에 선전 포고하고 제2차 세계 대전에 본격적으로 참전하는 계기가 되었다.",
     sources: [
       {
         title: "미국 국립공원관리청 · 진주만 공격",
@@ -2131,7 +2128,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
     startYear: 1942,
     eraIds: ["w-wars"],
     summary:
-      "일본의 공격 계획을 암호 해독으로 파악한 미국이 부근 해전에서 일본 항공모함 4척을 격침하여, 태평양 전쟁의 중요한 전환점이 되었습니다.",
+      "일본의 공격 계획을 암호 해독으로 파악한 미국이 부근 해전에서 일본 항공모함 4척을 격침하여, 태평양 전쟁의 중요한 전환점이 되었다.",
     sources: [
       {
         title: "미국 국립공원관리청 · 미드웨이의 제2차 세계 대전 유적",
@@ -2142,7 +2139,7 @@ export const worldHistoricalStories: AtlasHistoricalStory[] = [
       {
         placeId: "world-d9f7ef39a0f0",
         reason:
-          "진주만 공격에 참가한 일본 항공모함 4척은 이듬해 미드웨이 해전에서 침몰했습니다.",
+          "진주만 공격에 참가한 일본 항공모함 4척은 이듬해 미드웨이 해전에서 침몰했다.",
       },
     ],
   },

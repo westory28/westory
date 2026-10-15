@@ -70,7 +70,7 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
         fallback={
           <>
             {navigation}
-            <InlineLoading message="지구본을 불러오는 중입니다." />
+            <InlineLoading message="지구본 불러오는 중" />
           </>
         }
       >

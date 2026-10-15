@@ -33,7 +33,10 @@ const load = (filename) => {
   );
   return exports;
 };
-const dataset = load("src/data/historyAtlasContent.ts").historyAtlasDataset;
+const atlasContent = load("src/data/historyAtlasContent.ts");
+const dataset = atlasContent.historyAtlasDataset;
+// Geometry source coverage survives the stricter set shown in the public UI.
+const sourceDataset = atlasContent.historyAtlasSourceDataset || dataset;
 const { findAtlasRiver, atlasFocusExtent, atlasRiverPath } = load(
   "src/lib/historyAtlasRivers.ts",
 );
@@ -44,7 +47,10 @@ const {
   fitAtlasSelection,
   includeAtlasContextBounds,
   reframeAtlasSelectionBounds,
+  atlasRegionCameraBounds,
 } = load("src/lib/historyAtlasGeometry.ts");
+const { ATLAS_KOREA_PROVINCES, ATLAS_WORLD_REGION_GROUPS, matchesAtlasRegion } =
+  load("src/lib/historyAtlasRegions.ts");
 const read = (file) =>
   JSON.parse(readFileSync(`src/data/atlas/${file}`, "utf8"));
 const supplement = read("rivers-supplement.json");
@@ -57,7 +63,7 @@ const rivers = {
   ],
 };
 const place = (name) => {
-  const item = dataset.places.find((item) => item.name === name);
+  const item = sourceDataset.places.find((item) => item.name === name);
   assert(item, name);
   return item;
 };
@@ -67,14 +73,29 @@ const place = (name) => {
 // check projected geography against the actual card and visible map, not just
 // whether the production branch chose the same numbers as another copy of it.
 // Compact maps are 480px tall (42% card cap); wide maps are 640px (55%).
-// Every card is 8px from the left and 28px above the map bottom. A wide layout
+// Cards are 8px from the left and 28px above the map bottom; below 344px map
+// width they rise to 84px so the four-direction compass remains visible. A wide layout
 // can still have a narrow map after its sidebar takes space (the 624px case).
 const popupViewports = [
   {
     name: "compact-286",
     width: 286,
     mapHeight: 480,
-    popup: { left: 8, top: 250.4, right: 278, bottom: 452 },
+    popup: { left: 8, top: 194.4, right: 278, bottom: 396 },
+    focus: { height: 186.4 },
+  },
+  {
+    name: "compact-343",
+    width: 343,
+    mapHeight: 480,
+    popup: { left: 8, top: 194.4, right: 288, bottom: 396 },
+    focus: { height: 186.4 },
+  },
+  {
+    name: "compact-344",
+    width: 344,
+    mapHeight: 480,
+    popup: { left: 8, top: 250.4, right: 288, bottom: 452 },
     focus: { height: 242.4 },
   },
   {
@@ -129,6 +150,18 @@ const popupViewports = [
 ];
 const intersects = (a, b) =>
   a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+for (const viewport of popupViewports) {
+  const compass = {
+    left: viewport.width - 56,
+    right: viewport.width - 8,
+    top: viewport.mapHeight - 76,
+    bottom: viewport.mapHeight - 28,
+  };
+  assert(
+    !intersects(viewport.popup, compass),
+    `${viewport.name}: description must leave the compass visible`,
+  );
+}
 const assertVisibleSelection = (box, viewport, label) => {
   const { width, mapHeight, popup, focus } = viewport;
   assert(
@@ -238,7 +271,7 @@ assert(
 
 // The previous +/-80 degree cap never contained three actual northern places,
 // so selection repeatedly allocated the same bounds and reset the camera.
-const polarPlaces = dataset.places.filter(
+const polarPlaces = sourceDataset.places.filter(
   (item) => item.coordinates && Math.abs(item.coordinates[1]) > 75,
 );
 assert(
@@ -300,7 +333,7 @@ for (const name of ["나일강", "창장강", "아마존강", "한강", "백두�
   const initialBounds = [
     ATLAS_SUBJECT_BOUNDS[subject],
     ...(subject === "korea"
-      ? dataset.units
+      ? sourceDataset.units
           .filter((unit) => unit.subject === subject)
           .map((unit) => unit.bounds)
       : []),
@@ -433,10 +466,213 @@ for (const subject of ["korea", "world"]) {
     popupPlacesChecked.add(item.name);
   }
 }
-for (const name of ["제주도", "상하이", "케이프타운", "포토시", "북극해"]) {
+for (const name of [
+  "제주도",
+  "상하이",
+  "케이프타운",
+  "포토시",
+  "북극해",
+].filter((name) => dataset.places.some((item) => item.name === name))) {
   assert(
     popupPlacesChecked.has(name),
     `${name}: popup regression must include the real extreme-position place`,
+  );
+}
+// A region camera must contain every listed located place, not merely the first
+// 가나다 row. Include the real province/group hierarchy at narrow and wide sizes.
+let regionCameraCases = 0;
+for (const subject of ["korea", "world"]) {
+  const unitIds = new Set(
+    dataset.units
+      .filter((unit) => unit.subject === subject)
+      .map((unit) => unit.id),
+  );
+  const ids = new Set(
+    dataset.entries
+      .filter((entry) => unitIds.has(entry.unitId))
+      .map((entry) => entry.placeId),
+  );
+  const regions =
+    subject === "korea"
+      ? ATLAS_KOREA_PROVINCES.map((region) => [region.id, ""])
+      : ATLAS_WORLD_REGION_GROUPS.flatMap((region) => [
+          [region.id, ""],
+          ...region.children.map((child) => [region.id, child.id]),
+        ]);
+  for (const [group, subregion] of regions) {
+    const coordinates = dataset.places
+      .filter(
+        (place) =>
+          ids.has(place.id) &&
+          place.coordinates &&
+          matchesAtlasRegion(place, subject, group, subregion),
+      )
+      .map((place) => place.coordinates);
+    if (!coordinates.length) continue;
+    for (const width of [286, 356, 640, 920]) {
+      const bounds = atlasRegionCameraBounds(coordinates, subject);
+      const projection = createAtlasProjection(subject, bounds, width, 480);
+      for (const coordinate of coordinates) {
+        const point = projection(coordinate);
+        assert(
+          point &&
+            point[0] >= 24 &&
+            point[0] <= width - 24 &&
+            point[1] >= 32 &&
+            point[1] <= 448,
+          `${subject}/${group}/${subregion}/${width}: listed place ${coordinate} leaves region camera`,
+        );
+        regionCameraCases += 1;
+      }
+    }
+  }
+}
+assert.equal(
+  atlasRegionCameraBounds([], "korea"),
+  null,
+  "Empty filters cannot reuse an old point as their region extent",
+);
+for (const subject of ["korea", "world"]) {
+  const coordinates = [
+    [179, 10],
+    [-179, 11],
+  ];
+  const bounds = atlasRegionCameraBounds(coordinates, subject);
+  assert(
+    bounds[2] - bounds[0] < 5,
+    "Date-line neighbors must stay in one narrow camera extent",
+  );
+  const projection = createAtlasProjection(subject, bounds, 356, 480);
+  for (const coordinate of coordinates) {
+    const [x, y] = projection(coordinate);
+    assert(
+      x >= 24 && x <= 332 && y >= 32 && y <= 448,
+      "Both sides of the date line must remain visible",
+    );
+  }
+}
+
+// Execute the actual region-change handler with state adapters. A stale search
+// must not suppress a new region, while explicit unit/era choices remain active.
+const atlasSource = readFileSync(
+  "src/components/common/HistoryAtlas.tsx",
+  "utf8",
+);
+const atlasAst = ts.createSourceFile(
+  "HistoryAtlas.tsx",
+  atlasSource,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TSX,
+);
+let changeScopeSource;
+const findChangeScope = (node) => {
+  if (
+    ts.isVariableDeclaration(node) &&
+    node.name.getText(atlasAst) === "changeScope"
+  )
+    changeScopeSource = node.initializer.getText(atlasAst);
+  ts.forEachChild(node, findChangeScope);
+};
+findChangeScope(atlasAst);
+assert(changeScopeSource, "Real region-change handler is exercised");
+const fixturePlace = (id, coordinates) => ({ id, coordinates, name: id });
+const regionFixture = [
+  {
+    entry: { id: "jeolla-a", unitId: "chosen-unit", eraIds: ["chosen-era"] },
+    place: fixturePlace("a", [126.8, 35.1]),
+  },
+  {
+    entry: { id: "jeolla-b", unitId: "chosen-unit", eraIds: ["chosen-era"] },
+    place: fixturePlace("b", [127.2, 35.8]),
+  },
+  {
+    entry: { id: "wrong-unit", unitId: "other-unit", eraIds: ["chosen-era"] },
+    place: fixturePlace("c", [129, 37]),
+  },
+  {
+    entry: { id: "wrong-era", unitId: "chosen-unit", eraIds: ["other-era"] },
+    place: fixturePlace("d", [129, 38]),
+  },
+];
+for (const empty of [false, true]) {
+  const state = {};
+  const scopeExports = {};
+  const pendingFocusRef = { current: "old-place" };
+  vm.runInNewContext(
+    ts.transpileModule(`exports.changeScope = ${changeScopeSource}`, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText,
+    {
+      exports: scopeExports,
+      subject: "korea",
+      unitId: "chosen-unit",
+      eraId: "chosen-era",
+      regionId: "gyeonggi",
+      subregionId: "",
+      query: "old search",
+      selected: undefined,
+      subjectEntries: empty ? [] : regionFixture,
+      pendingFocusRef,
+      matchesAtlasRegion: () => true,
+      atlasRegionCameraBounds,
+      searchEntries: (items, query) => {
+        assert.equal(
+          query,
+          "",
+          "Region navigation clears the previous query before matching",
+        );
+        return items;
+      },
+      requestPlaceFocus: () =>
+        assert.fail("A region view must not select its first row"),
+      resetMap: () => {
+        state.reset = true;
+      },
+      ...Object.fromEntries(
+        [
+          "ListPage",
+          "Query",
+          "UnitId",
+          "EraId",
+          "RegionId",
+          "SubregionId",
+          "FilterNotice",
+          "SelectedId",
+          "DetailOpen",
+          "ViewBounds",
+        ].map((key) => [
+          `set${key}`,
+          (value) => {
+            state[key] = value;
+          },
+        ]),
+      ),
+    },
+  );
+  scopeExports.changeScope("chosen-unit", "chosen-era", "jeolla", "");
+  assert.equal(state.Query, "");
+  assert.equal(state.UnitId, "chosen-unit");
+  assert.equal(state.EraId, "chosen-era");
+  assert.equal(state.SelectedId, "");
+  assert.equal(state.DetailOpen, false);
+  assert.equal(pendingFocusRef.current, null);
+  assert.equal(state.reset, true);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(state.ViewBounds)),
+    empty
+      ? null
+      : JSON.parse(
+          JSON.stringify(
+            atlasRegionCameraBounds(
+              regionFixture.slice(0, 2).map((item) => item.place.coordinates),
+              "korea",
+            ),
+          ),
+        ),
   );
 }
 const profile = getAtlasPlaceProfile(place("백두산"));
@@ -469,5 +705,5 @@ assert(
   "Globe terrain must remain separately small",
 );
 console.log(
-  `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} full-geometry camera fits, ${polarCameraCases} polar camera fits, ${popupCameraCases} real-place camera fits across ${popupViewports.length} bottom-left popup layouts, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,
+  `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} full-geometry camera fits, ${polarCameraCases} polar camera fits, ${popupCameraCases} real-place camera fits across ${popupViewports.length} bottom-left popup layouts, ${regionCameraCases} region camera fits, region handler state transitions, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,
 );

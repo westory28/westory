@@ -32,7 +32,9 @@ const load = (filename) => {
   return exports;
 };
 
-const { historyAtlasDataset: dataset } = load(
+// The source ledger preserves textbook provenance independently of the smaller
+// coordinate-backed map dataset, which has its own curation regression checks.
+const { historyAtlasSourceDataset: dataset } = load(
   "src/data/historyAtlasContent.ts",
 );
 const { matchesAtlasSearch } = load("src/lib/historyAtlas.ts");

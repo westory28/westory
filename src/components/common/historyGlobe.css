@@ -143,21 +143,21 @@
 .history-globe__controls button {
   pointer-events: auto;
   flex: 0 0 auto;
-  min-width: 36px;
-  min-height: 36px;
-  height: 36px;
+  min-width: 32px;
+  min-height: 32px;
+  height: 32px;
   padding: 4px 8px;
   font-size: 14px;
   white-space: nowrap;
 }
 .history-globe__control-cluster {
-  display: grid;
-  justify-items: end;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
   gap: 4px;
   margin-left: auto;
 }
-.history-globe__zoom-controls,
-.history-globe__view-controls {
+.history-globe__zoom-controls {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -183,8 +183,8 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-width: 52px;
-  min-height: 36px;
+  min-width: 48px;
+  min-height: 32px;
   background: var(--ws-surface, #ffffff);
   color: var(--ws-text, #1f2937);
   font-size: 14px;

@@ -194,7 +194,7 @@
   display: grid;
   place-items: center;
   min-width: 48px;
-  height: 36px;
+  height: 32px;
   background: var(--ws-surface, #ffffff);
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 8px;
@@ -211,13 +211,13 @@
 }
 .history-atlas__map-toolbar button {
   pointer-events: auto;
-  height: 36px;
-  min-height: 36px;
+  height: 32px;
+  min-height: 32px;
   padding: 4px 8px;
 }
 .history-atlas__map-actions button {
-  min-width: 36px;
-  min-height: 36px;
+  min-width: 32px;
+  min-height: 32px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 8px;
   padding: 4px;
@@ -230,6 +230,10 @@
 .history-atlas__map-actions button[aria-label] {
   font-size: 24px;
   line-height: 1;
+}
+.history-atlas__map-actions .history-atlas__reset[aria-label] {
+  padding: 4px 8px;
+  font-size: 12px;
 }
 .history-atlas__map-actions button[aria-pressed="true"] {
   background: var(--ws-primary-soft, #eff6ff);
@@ -466,23 +470,6 @@
   color: inherit;
   text-decoration: underline;
 }
-.history-atlas__north {
-  position: absolute;
-  left: 12px;
-  top: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: var(--ws-text-muted, #6b7280);
-  font-size: 24px;
-  line-height: 1;
-  pointer-events: none;
-}
-.history-atlas__north span {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 700;
-}
 /* The place collection lives beside the map or in the one mobile drawer. */
 .history-atlas__side-panel {
   display: flex;
@@ -633,9 +620,6 @@
   min-height: 32px;
   max-width: calc(100% - 16px);
   padding: 4px 8px;
-}
-.history-atlas__north {
-  top: 52px;
 }
 .history-atlas__period {
   display: block;
