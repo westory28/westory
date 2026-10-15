@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -23,6 +23,13 @@ import {
   applyQuizPassageMark,
   type QuizPassageMarkType,
 } from "../../../lib/quizPassageMarkup";
+import QuizLearningMetadataFields, {
+  normalizeQuizLearningMetadata,
+  validateQuizLearningMetadata,
+  type QuizLearningMetadata,
+} from "./QuizLearningMetadataFields";
+import { useQuizDialog } from "./useQuizDialog";
+import { hasQuizDerivationContentChange } from "./quizDerivation";
 
 interface TreeUnit {
   id: string;
@@ -40,7 +47,7 @@ interface MatchingPair {
 
 type ChoiceOptionImage = string | null;
 
-interface Question {
+export interface QuizQuestionDraft extends QuizLearningMetadata {
   contentRevision?: number;
   id: number;
   unitId: string;
@@ -63,6 +70,7 @@ interface Question {
   createdAt?: unknown;
   updatedAt?: unknown;
 }
+type Question = QuizQuestionDraft;
 
 interface QuizEditorProps {
   node: { id: string; title: string };
@@ -71,6 +79,7 @@ interface QuizEditorProps {
   treeData: TreeUnit[];
   canEdit: boolean;
   onOpenSettings: (category: string) => void;
+  sourceQuestion?: QuizQuestionDraft | null;
 }
 
 interface CascadingFilter {
@@ -157,12 +166,21 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   treeData,
   canEdit,
   onOpenSettings,
+  sourceQuestion,
 }) => {
   const { config } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
   const pendingQuestionId = useRef<number | null>(null);
   const [category, setCategory] = useState<string>("diagnostic");
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [questionSearch, setQuestionSearch] = useState("");
+  const [metadata, setMetadata] = useState<QuizLearningMetadata>({});
+  const [derivationSource, setDerivationSource] = useState<Question | null>(
+    null,
+  );
+  const [answerReviewed, setAnswerReviewed] = useState(false);
+  const [formError, setFormError] = useState("");
   const [epFilter, setEpFilter] = useState<CascadingFilter>(
     EMPTY_CASCADING_FILTER,
   );
@@ -222,6 +240,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const passageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const savingQuestionRef = useRef(false);
   const defaultExamPrepFocusKeyRef = useRef("");
+  const composerDialogRef = useRef<HTMLDivElement>(null);
+  useQuizDialog(isComposerOpen, composerDialogRef, () => closeComposer());
 
   useEffect(() => {
     if (type === "special") {
@@ -237,6 +257,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const fetchQuestions = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const scopedRef = collection(
         db,
@@ -254,6 +275,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       });
       setQuestions(list);
     } catch (error) {
+      setLoadError("문제를 불러오지 못했습니다. 다시 불러오기를 눌러 주세요.");
       console.error(error);
     } finally {
       setLoading(false);
@@ -411,6 +433,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const filteredQuestions = useMemo(() => {
     const list = questions.filter((q) => {
       if (q.category !== category) return false;
+      if (
+        questionSearch &&
+        ![q.question, q.explanation, q.passage, ...(q.concepts || [])]
+          .join(" ")
+          .toLowerCase()
+          .includes(questionSearch.toLowerCase())
+      )
+        return false;
       if (type !== "special") return true;
       if (epFilter.big && q.refBig !== epFilter.big) return false;
       if (epFilter.mid && q.refMid !== epFilter.mid) return false;
@@ -418,7 +448,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       return true;
     });
     return list.sort((a, b) => a.id - b.id);
-  }, [category, epFilter.big, epFilter.mid, epFilter.small, questions, type]);
+  }, [
+    category,
+    epFilter.big,
+    epFilter.mid,
+    epFilter.small,
+    questions,
+    type,
+    questionSearch,
+  ]);
   const categoryQuestionCounts = useMemo(
     () =>
       questions.reduce<Record<string, number>>((counts, question) => {
@@ -487,6 +525,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const resetForm = () => {
+    setFormError("");
+    setMetadata({});
+    setDerivationSource(null);
+    setAnswerReviewed(false);
     pendingQuestionId.current = null;
     const defaultCategory = type === "special" ? "exam_prep" : category;
     setEditingQuestionId(null);
@@ -663,6 +705,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const handleVerticalFocus = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (!e.altKey) return;
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     const current = e.currentTarget as HTMLElement;
     const fields = Array.from(
@@ -689,6 +732,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const startEdit = (question: Question) => {
+    setMetadata(question);
+    setDerivationSource(null);
     setEditingQuestionId(question.id);
     setIsComposerOpen(true);
     setFormType(question.type);
@@ -810,6 +855,24 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setMatchingPairs(createDefaultMatchingPairs());
   };
 
+  const startDerivedQuestion = (question: Question) => {
+    startEdit(question);
+    pendingQuestionId.current = null;
+    setEditingQuestionId(null);
+    setCategory(question.category);
+    setDerivationSource(question);
+    setAnswerReviewed(false);
+    setMetadata({
+      ...question,
+      familyId: question.familyId || String(question.id),
+      derivedFromQuestionId: String(question.id),
+    });
+  };
+
+  useEffect(() => {
+    if (sourceQuestion && canEdit) startDerivedQuestion(sourceQuestion);
+  }, [sourceQuestion]);
+
   const addChoiceOption = () => {
     setChoiceOptions((prev) => [...prev, ""]);
     setChoiceOptionImages((prev) => [...prev, null]);
@@ -916,12 +979,40 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const handleAdd = async () => {
     if (!canEdit) return;
     if (savingQuestionRef.current) return;
+    setFormError("");
     if (optimizingImage) {
       alert("이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.");
       return;
     }
     const payload = buildQuestionPayload();
     if (!payload) return;
+    const metadataError = validateQuizLearningMetadata(
+      metadata,
+      payload.options,
+    );
+    if (metadataError) {
+      setFormError(metadataError);
+      return;
+    }
+    if (derivationSource && !answerReviewed) {
+      setFormError("파생 문항의 정답과 해설을 확인해 주세요.");
+      return;
+    }
+    if (
+      derivationSource &&
+      !hasQuizDerivationContentChange(derivationSource, {
+        type: formType,
+        question: formText,
+        passage: formPassage,
+        image: formImage,
+        ...payload,
+      })
+    ) {
+      setFormError(
+        "발문·자료·보기 중 하나 이상을 바꾸어 새로운 문항을 만들어 주세요.",
+      );
+      return;
+    }
     const targetId =
       editingQuestionId ?? pendingQuestionId.current ?? Date.now();
     pendingQuestionId.current = targetId;
@@ -943,6 +1034,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       const existingQuestion = questions.find((q) => q.id === targetId);
       const nowMs = Date.now();
       const newQuestion: Question = {
+        ...normalizeQuizLearningMetadata(
+          { ...metadata, familyId: metadata.familyId || String(targetId) },
+          payload.options,
+        ),
         id: targetId,
         unitId: node.id,
         subUnitId:
@@ -988,7 +1083,18 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
           : [...prev, newQuestion],
       );
       setEditingQuestionId(targetId);
-      await refreshPublishedQuizDefinitions(config, node.id, category);
+      try {
+        await refreshPublishedQuizDefinitions(config, node.id, category);
+      } catch (error) {
+        console.error(
+          "Saved question could not refresh published definitions",
+          error,
+        );
+        setFormError(
+          "문항은 저장되었지만 공개 평가에 반영하지 못했습니다. 저장을 다시 눌러 반영해 주세요.",
+        );
+        return;
+      }
       pendingQuestionId.current = null;
       resetForm();
       setIsComposerOpen(false);
@@ -997,7 +1103,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       const code = error?.code ? ` (${error.code})` : "";
       const message =
         error instanceof Error && error.message ? `\n${error.message}` : "";
-      alert(`문제 등록에 실패했습니다${code}.${message}`);
+      setFormError(`문제 등록에 실패했습니다${code}.${message}`);
     } finally {
       savingQuestionRef.current = false;
       setSavingQuestion(false);
@@ -1053,7 +1159,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+      <div className="quiz-editor-toolbar p-4 border-b bg-gray-50 shrink-0">
         <div>
           {type !== "special" && (
             <div className="text-xs text-gray-500 font-bold mb-1">
@@ -1067,8 +1173,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
             {canEdit && (
               <button
                 onClick={() => onOpenSettings(category)}
-                className="text-gray-400 hover:text-blue-600 transition p-1"
+                className="min-h-11 min-w-11 text-gray-500 hover:text-blue-600 transition p-2"
                 title="평가 설정"
+                aria-label="평가 설정"
               >
                 <i className="fas fa-cog"></i>
               </button>
@@ -1108,6 +1215,34 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               </span>
             </button>
           ))}
+        </div>
+      )}
+
+      <div className="quiz-editor-toolbar border-b border-gray-200 px-4 py-3">
+        <label className="flex min-w-0 flex-1 items-center gap-2 text-sm font-bold text-gray-700">
+          검색
+          <input
+            type="search"
+            value={questionSearch}
+            onChange={(event) => setQuestionSearch(event.target.value)}
+            placeholder="문제·자료·해설·개념"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 font-normal"
+          />
+        </label>
+        <span className="text-sm text-gray-500">
+          {filteredQuestions.length}문항
+        </span>
+      </div>
+      {loadError && (
+        <div role="alert" className="p-4 text-sm text-red-700">
+          {loadError}
+          <button
+            type="button"
+            onClick={() => void fetchQuestions()}
+            className="ml-2 min-h-11 font-bold underline"
+          >
+            다시 불러오기
+          </button>
         </div>
       )}
 
@@ -1213,12 +1348,25 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         {getQuestionSubUnitLabel(q)}
                       </span>
                       {canEdit && (
-                        <div className="flex items-center gap-2">
+                        <div className="quiz-question-actions">
+                          <button
+                            type="button"
+                            onClick={() => startDerivedQuestion(q)}
+                            className="text-blue-700 hover:bg-blue-50"
+                            aria-label={`${idx + 1}번 문항으로 파생 문항 만들기`}
+                          >
+                            <i
+                              className="far fa-copy mr-1"
+                              aria-hidden="true"
+                            />
+                            파생
+                          </button>
                           <button
                             type="button"
                             onClick={() => startEdit(q)}
                             className="text-gray-300 hover:text-blue-500"
                             title="문제 수정"
+                            aria-label={`${idx + 1}번 문제 수정`}
                           >
                             <i className="fas fa-pen"></i>
                           </button>
@@ -1226,6 +1374,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             onClick={() => void handleDelete(q.id)}
                             className="text-gray-300 hover:text-red-500"
                             title="문제 삭제"
+                            aria-label={`${idx + 1}번 문제 삭제`}
                           >
                             <i className="fas fa-trash"></i>
                           </button>
@@ -1426,15 +1575,37 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               onClick={closeComposer}
               aria-label="문제 등록 팝업 닫기"
             />
-            <div className="absolute inset-0 flex items-center justify-center p-4">
-              <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5">
+            <div
+              className="absolute inset-0 flex items-center justify-center p-4"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) closeComposer();
+              }}
+            >
+              <div
+                ref={composerDialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label={
+                  editingQuestionId
+                    ? "문제 수정"
+                    : derivationSource
+                      ? "파생 문항 만들기"
+                      : "새 문제 등록"
+                }
+                tabIndex={-1}
+                className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5"
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg flex items-center">
                       <i
                         className={`fas ${editingQuestionId ? "fa-pen" : "fa-plus-circle"} text-blue-500 mr-2`}
                       ></i>
-                      {editingQuestionId ? "문제 수정" : "새 문제 등록"}
+                      {editingQuestionId
+                        ? "문제 수정"
+                        : derivationSource
+                          ? "파생 문항 만들기"
+                          : "새 문제 등록"}
                     </h3>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
                       <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 font-bold">
@@ -1448,7 +1619,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   <button
                     type="button"
                     onClick={closeComposer}
-                    className="text-gray-400 hover:text-gray-700"
+                    className="min-h-11 min-w-11 text-gray-500 hover:text-gray-700"
+                    aria-label="문제 편집 닫기"
                   >
                     <i className="fas fa-times text-lg"></i>
                   </button>
@@ -1460,6 +1632,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   >
                     <select
                       value={formType}
+                      aria-label="문항 유형"
                       onChange={(e) =>
                         handleTypeChange(e.target.value as QuestionType)
                       }
@@ -1475,6 +1648,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     {type === "normal" && (
                       <select
                         value={formSubUnit}
+                        aria-label="소단원"
                         onChange={(e) => setFormSubUnit(e.target.value)}
                         onKeyDown={handleVerticalFocus}
                         className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
@@ -1555,6 +1729,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     inputMode="text"
                     type="text"
                     placeholder="문제 내용을 입력하세요"
+                    aria-label="발문"
                     value={formText}
                     onChange={(e) => setFormText(e.target.value)}
                     onKeyDown={handleVerticalFocus}
@@ -1755,6 +1930,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             <button
                               type="button"
                               onClick={() => removeChoiceOption(index)}
+                              aria-label={`${index + 1}번 보기 삭제`}
                               className="mt-1 text-gray-400 hover:text-red-500 px-1"
                             >
                               <i className="fas fa-times"></i>
@@ -2315,6 +2491,50 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     </div>
                   )}
 
+                  <QuizLearningMetadataFields
+                    value={metadata}
+                    onChange={setMetadata}
+                    options={
+                      formType === "choice"
+                        ? getChoiceOptionItems(
+                            choiceOptions,
+                            choiceOptionImages,
+                          ).map((item) => item.text)
+                        : []
+                    }
+                    units={treeData.flatMap((big) =>
+                      (big.children || []).flatMap((mid) =>
+                        (mid.children || []).map((small) => ({
+                          id: small.id,
+                          title: `${mid.title} · ${small.title}`,
+                        })),
+                      ),
+                    )}
+                  />
+                  {derivationSource && (
+                    <label className="flex min-h-11 items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={answerReviewed}
+                        onChange={(event) =>
+                          setAnswerReviewed(event.target.checked)
+                        }
+                      />
+                      <span>
+                        원본 #{derivationSource.id}에서 바꾼 발문·자료·보기와
+                        정답·해설의 일치를 확인했습니다.
+                      </span>
+                    </label>
+                  )}
+                  {formError && (
+                    <p
+                      role="alert"
+                      className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700"
+                    >
+                      {formError}
+                    </p>
+                  )}
                   <div
                     className={`grid gap-2 ${editingQuestionId ? "grid-cols-3" : "grid-cols-2"}`}
                   >

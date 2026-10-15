@@ -3,6 +3,18 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { PageLoading } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
+import InfoHelp from "../../../components/common/InfoHelp";
+import {
+  AssessmentTelemetryCollector,
+  type AssessmentConfidence,
+  type AssessmentTelemetrySnapshot,
+} from "../../../lib/assessmentTelemetry";
+import "./QuizLearning.css";
+import QuizLearningResult from "./QuizLearningResult";
+import {
+  buildAssessmentLearningSummary,
+  type AssessmentLearningQuestion,
+} from "../../../lib/assessmentLearning";
 import {
   collection,
   doc,
@@ -79,6 +91,11 @@ interface Question {
   refMid?: string;
   refSmall?: string;
   category?: string;
+  concepts?: string[];
+  cognitiveProcess?: string;
+  familyId?: string;
+  reviewLessonId?: string;
+  misconceptionTags?: Record<string, string>;
 }
 
 interface MatchingPair {
@@ -99,6 +116,7 @@ interface QuizConfig {
 }
 
 interface ResultDetail {
+  questionId: number;
   q: string;
   u: string | undefined;
   a: string | number;
@@ -202,9 +220,31 @@ const QuizRunner: React.FC = () => {
 
   const [score, setScore] = useState(0);
   const [results, setResults] = useState<ResultDetail[]>([]);
+  const [resultLearningSnapshot, setResultLearningSnapshot] = useState<
+    AssessmentLearningQuestion[] | undefined
+  >();
+  const [resultTelemetry, setResultTelemetry] = useState<
+    AssessmentTelemetrySnapshot | null | undefined
+  >();
   const [pointNotice, setPointNotice] = useState("");
   const [finishSubmitting, setFinishSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitConflict, setSubmitConflict] = useState(false);
   const [finalizedResultId, setFinalizedResultId] = useState("");
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "pending" | "saving" | "saved" | "error"
+  >("idle");
+  const [confidences, setConfidences] = useState<
+    Record<string, AssessmentConfidence | null>
+  >({});
+  const telemetryRef = useRef<AssessmentTelemetryCollector | null>(null);
+  const pendingSubmitAnalyticsRef = useRef<AssessmentTelemetrySnapshot>();
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [imageReloadKey, setImageReloadKey] = useState(0);
+  const questionHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const questionNavRef = useRef<HTMLElement | null>(null);
+  const curriculumLabelsRef = useRef<Record<string, string>>({});
 
   const timerRef = useRef<number | null>(null);
   const persistTimeoutRef = useRef<number | null>(null);
@@ -212,6 +252,7 @@ const QuizRunner: React.FC = () => {
   const persistSaveTailRef = useRef<Promise<void>>(Promise.resolve());
   const finishSubmittingRef = useRef(false);
   const persistQueuedRef = useRef(false);
+  const progressChangeRef = useRef(0);
   const persistQuizProgressRef = useRef<() => Promise<void>>(async () => {});
   const timeoutHandledRef = useRef(false);
   const unitOrderMapRef = useRef<Record<string, number>>({});
@@ -241,6 +282,68 @@ const QuizRunner: React.FC = () => {
           examRound,
         )
       : "";
+
+  // Observation must never interrupt an answer, its save, or server grading.
+  const observe = (
+    action: (collector: AssessmentTelemetryCollector) => void,
+  ) => {
+    try {
+      if (telemetryRef.current) action(telemetryRef.current);
+    } catch {
+      telemetryRef.current = null;
+    }
+  };
+  const readTelemetry = (): AssessmentTelemetrySnapshot | undefined => {
+    try {
+      return telemetryRef.current?.snapshot();
+    } catch {
+      return undefined;
+    }
+  };
+  const beginTelemetry = (
+    attempt: AssessmentAttemptState,
+    resumed: boolean,
+  ) => {
+    pendingSubmitAnalyticsRef.current = undefined;
+    try {
+      telemetryRef.current = new AssessmentTelemetryCollector(
+        attempt.questionIds,
+        {
+          answers: attempt.answers,
+          restored: attempt.analytics || undefined,
+          resumed,
+        },
+      );
+      setConfidences(
+        Object.fromEntries(
+          Object.entries(readTelemetry()?.questions || {}).map(([id, item]) => [
+            id,
+            item.confidence,
+          ]),
+        ),
+      );
+    } catch {
+      telemetryRef.current = null;
+      setConfidences({});
+    }
+  };
+  const currentQuestionImages = [
+    selectedQuestions[currentIndex]?.image,
+    ...(selectedQuestions[currentIndex]?.type === "choice"
+      ? selectedQuestions[currentIndex]?.choiceOptionImages || []
+      : []),
+    ...(selectedQuestions[currentIndex]?.type === "matching"
+      ? selectedQuestions[currentIndex]?.matchingPairs || []
+      : []
+    ).map((pair) => pair.rightImage),
+  ].filter((source): source is string => !!source);
+  const waitingForQuestionImages = currentQuestionImages.some(
+    (source) => !loadedImages.has(source),
+  );
+  const finishImageLoad = (source: string, failed = false) => {
+    setLoadedImages((previous) => new Set(previous).add(source));
+    if (failed) setFailedImages((previous) => new Set(previous).add(source));
+  };
 
   const mapCanonicalAttemptToSubmission = (
     attempt: AssessmentAttemptState,
@@ -830,11 +933,17 @@ const QuizRunner: React.FC = () => {
     if (!activeAttempt) {
       throw new Error("응시 상태를 확인할 수 없습니다.");
     }
+    observe((collector) => {
+      collector.commitAnswer(String(questionList[currentIndex]?.id || ""));
+      collector.setRunning(false);
+    });
+    pendingSubmitAnalyticsRef.current ??= readTelemetry();
     const submitted = await submitAssessmentAttempt({
       attemptId: activeAttempt.attemptId,
       expectedRevision: activeAttempt.revision,
       answers: answerMap,
       submitReason: isTimeout ? "TIMEOUT" : "STUDENT",
+      analytics: pendingSubmitAnalyticsRef.current,
     });
     const serverChecks = new Map(
       submitted.answerChecks.map((check) => [check.id, check.correct]),
@@ -846,6 +955,7 @@ const QuizRunner: React.FC = () => {
       const isCorrect = serverChecks.get(String(question.id)) === true;
 
       resultDetails.push({
+        questionId: question.id,
         q: question.question,
         u: storedAnswer,
         a: question.answer,
@@ -861,6 +971,24 @@ const QuizRunner: React.FC = () => {
 
     setScore(submitted.percent);
     setResults(resultDetails);
+    setResultLearningSnapshot(
+      submitted.learningSnapshot || activeAttempt.learningSnapshot,
+    );
+    setResultTelemetry(
+      submitted.analytics === undefined
+        ? pendingSubmitAnalyticsRef.current
+        : submitted.analytics,
+    );
+    if (submitted.analytics) {
+      setConfidences(
+        Object.fromEntries(
+          Object.entries(submitted.analytics.questions).map(([id, item]) => [
+            id,
+            item.confidence,
+          ]),
+        ),
+      );
+    }
     setFinalizedResultId(submitted.attemptId);
     setPointNotice("");
     setActiveSubmission((prev) =>
@@ -919,6 +1047,8 @@ const QuizRunner: React.FC = () => {
     }
 
     persistInFlightRef.current = true;
+    const savingChange = progressChangeRef.current;
+    setSaveStatus("saving");
 
     try {
       const pendingSave = saveAssessmentProgress({
@@ -926,6 +1056,7 @@ const QuizRunner: React.FC = () => {
         expectedRevision: canonicalAttempt.revision,
         answers,
         currentItemId: String(selectedQuestions[currentIndex]?.id || ""),
+        analytics: readTelemetry(),
       }).then((saved) => {
         setCanonicalAttempt((previous) =>
           previous?.attemptId === canonicalAttempt.attemptId &&
@@ -949,7 +1080,11 @@ const QuizRunner: React.FC = () => {
         () => undefined,
       );
       await pendingSave;
+      setSaveStatus(
+        savingChange === progressChangeRef.current ? "saved" : "pending",
+      );
     } catch (saveError) {
+      setSaveStatus("error");
       console.error("Failed to save quiz progress", {
         attemptId: canonicalAttempt.attemptId,
         saveError,
@@ -965,8 +1100,57 @@ const QuizRunner: React.FC = () => {
   // Debounced saves must use the committed answer and revision from the latest render.
   persistQuizProgressRef.current = persistQuizProgress;
 
+  useEffect(() => {
+    observe((collector) => {
+      collector.setRunning(
+        view === "quiz" && !finishSubmitting && !waitingForQuestionImages,
+      );
+      collector.setVisible(document.visibilityState !== "hidden");
+      if (view === "quiz") {
+        collector.visit(String(selectedQuestions[currentIndex]?.id || ""));
+      }
+    });
+  }, [
+    view,
+    currentIndex,
+    selectedQuestions,
+    finishSubmitting,
+    waitingForQuestionImages,
+  ]);
+
+  useEffect(() => {
+    const updateVisibility = () => {
+      observe((collector) =>
+        collector.setVisible(document.visibilityState !== "hidden"),
+      );
+    };
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => {
+      observe((collector) => collector.setRunning(false));
+      document.removeEventListener("visibilitychange", updateVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (view !== "quiz") return;
+    questionHeadingRef.current?.focus({ preventScroll: true });
+    questionNavRef.current
+      ?.querySelector<HTMLElement>('[aria-current="step"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    questionHeadingRef.current
+      ?.closest(".student-quiz-shell")
+      ?.querySelectorAll(
+        ".student-quiz-body-split, .student-quiz-question-panel, .student-quiz-answer-panel",
+      )
+      .forEach((panel) => {
+        panel.scrollTop = 0;
+      });
+  }, [view, currentIndex]);
+
   const schedulePersistQuizProgress = () => {
     if (view !== "quiz" || finishSubmittingRef.current || startingQuiz) return;
+    progressChangeRef.current += 1;
+    setSaveStatus("pending");
     if (persistTimeoutRef.current) {
       window.clearTimeout(persistTimeoutRef.current);
     }
@@ -1067,15 +1251,20 @@ const QuizRunner: React.FC = () => {
     if (!unitId || !category || !fallbackStudentUid) return;
 
     try {
+      setView("loading");
       setErrorMsg(null);
       setBlockReason(null);
       setResumeNotice("");
       setStartingQuiz(false);
       setFinishSubmitting(false);
+      setSubmitError("");
+      setSubmitConflict(false);
       setPointNotice("");
       setActiveSubmission(null);
       setQuizDeadlineMs(null);
       setServerTimeOffsetMs(0);
+      setSaveStatus("idle");
+      telemetryRef.current = null;
       timeoutHandledRef.current = false;
 
       const assessmentState = await getAssessmentState({
@@ -1109,6 +1298,14 @@ const QuizRunner: React.FC = () => {
         readStudentCurriculumTree(config),
       ]);
       unitOrderMapRef.current = buildUnitOrderMap(curriculumTree);
+      const visitLabels = (items: StudentCurriculumTreeItem[]) => {
+        items.forEach((item) => {
+          curriculumLabelsRef.current[item.id] = item.title;
+          visitLabels(item.children || []);
+        });
+      };
+      curriculumLabelsRef.current = {};
+      visitLabels(curriculumTree);
       const assessmentConfigMap = await readAssessmentConfigMap(
         config,
         grade3ClassIds,
@@ -1181,6 +1378,8 @@ const QuizRunner: React.FC = () => {
         : null;
 
       if (existingSubmission?.status === "in_progress") {
+        if (canonicalExistingAttempt)
+          beginTelemetry(canonicalExistingAttempt, true);
         const questionMap = new Map(
           fetchedQuestions.map((question) => [String(question.id), question]),
         );
@@ -1314,6 +1513,7 @@ const QuizRunner: React.FC = () => {
       setHintUsedCount(0);
       setRevealedHints({});
       setCanonicalAttempt(attempt);
+      beginTelemetry(attempt, attempt.resumed);
       setSelectedQuestions(committedSelection.selected);
       restoreSubmissionState(
         committedSubmission,
@@ -1351,14 +1551,58 @@ const QuizRunner: React.FC = () => {
 
   const handleAnswer = (value: string) => {
     const question = selectedQuestions[currentIndex];
-    if (!question) return;
+    if (!question || finishSubmittingRef.current) return;
+    if (answers[String(question.id)] !== value)
+      pendingSubmitAnalyticsRef.current = undefined;
 
     emitSessionActivity();
+    const completedSelection =
+      question.type === "choice" ||
+      question.type === "ox" ||
+      (question.type === "order" &&
+        parseOrderAnswer(value).length ===
+          (orderOptionMap[question.id] || question.options || []).length) ||
+      (question.type === "matching" &&
+        parseMatchingPairs(question).every((pair) =>
+          Boolean(parseMatchingAnswer(value)[pair.left]),
+        ));
+    observe((collector) =>
+      collector.answer(String(question.id), value, completedSelection),
+    );
     setAnswers((prev) => ({
       ...prev,
       [String(question.id)]: value,
     }));
     schedulePersistQuizProgress();
+  };
+
+  const chooseConfidence = (value: AssessmentConfidence) => {
+    const question = selectedQuestions[currentIndex];
+    if (!question || finishSubmittingRef.current) return;
+    const id = String(question.id);
+    const next = confidences[id] === value ? null : value;
+    pendingSubmitAnalyticsRef.current = undefined;
+    observe((collector) => collector.setConfidence(id, next));
+    setConfidences((previous) => ({ ...previous, [id]: next }));
+    schedulePersistQuizProgress();
+  };
+
+  const isQuestionAnswered = (question: Question) => {
+    const answer = answers[String(question.id)] || "";
+    if (!hasStudentAnswer(answer)) return false;
+    if (question.type === "order") {
+      const expected = orderOptionMap[question.id] || question.options || [];
+      return (
+        expected.length > 0 &&
+        parseOrderAnswer(answer).length === expected.length
+      );
+    }
+    if (question.type === "matching") {
+      const pairs = parseMatchingPairs(question);
+      const selected = parseMatchingAnswer(answer);
+      return pairs.length > 0 && pairs.every((pair) => !!selected[pair.left]);
+    }
+    return true;
   };
 
   const appendOrderSelection = (option: string) => {
@@ -1404,6 +1648,7 @@ const QuizRunner: React.FC = () => {
       return;
     }
     emitSessionActivity();
+    observe((collector) => collector.markHintViewed(String(questionId)));
     setRevealedHints((prev) => ({
       ...prev,
       [questionId]: true,
@@ -1413,6 +1658,7 @@ const QuizRunner: React.FC = () => {
   };
 
   const nextQuestion = async () => {
+    if (finishSubmittingRef.current) return;
     emitSessionActivity();
     if (currentIndex < selectedQuestions.length - 1) {
       setMatchingActiveLeft("");
@@ -1421,9 +1667,12 @@ const QuizRunner: React.FC = () => {
       return;
     }
 
+    const incompleteCount = selectedQuestions.filter(
+      (item) => !isQuestionAnswered(item),
+    ).length;
     const confirmed = await confirm({
       title: "평가를 제출할까요?",
-      message: "제출 후에는 답안을 수정할 수 없습니다.",
+      message: `${incompleteCount ? `답안을 완성하지 않은 문제가 ${incompleteCount}개 있습니다. ` : "모든 문제에 답안을 입력했습니다. "}제출 후에는 답안을 수정할 수 없습니다.`,
       confirmLabel: "제출하기",
       cancelLabel: "계속 풀기",
       tone: "warning",
@@ -1436,7 +1685,7 @@ const QuizRunner: React.FC = () => {
   };
 
   const prevQuestion = () => {
-    if (currentIndex <= 0) return;
+    if (currentIndex <= 0 || finishSubmittingRef.current) return;
     emitSessionActivity();
     setMatchingActiveLeft("");
     setCurrentIndex((prev) => prev - 1);
@@ -1444,17 +1693,9 @@ const QuizRunner: React.FC = () => {
   };
 
   const goToQuestion = async (targetIndex: number) => {
+    if (finishSubmittingRef.current) return;
     if (targetIndex < 0 || targetIndex >= selectedQuestions.length) return;
     if (targetIndex === currentIndex) return;
-
-    const confirmed = await confirm({
-      title: `${targetIndex + 1}번 문제로 이동하시겠습니까?`,
-      message: "지금까지 입력한 답안은 자동 저장됩니다.",
-      confirmLabel: "이동하기",
-      cancelLabel: "취소",
-      tone: "info",
-    });
-    if (!confirmed) return;
 
     emitSessionActivity();
     setMatchingActiveLeft("");
@@ -1546,6 +1787,8 @@ const QuizRunner: React.FC = () => {
     }
 
     setFinishSubmitting(true);
+    setSubmitError("");
+    setSubmitConflict(false);
     if (persistTimeoutRef.current) {
       window.clearTimeout(persistTimeoutRef.current);
       persistTimeoutRef.current = null;
@@ -1568,12 +1811,15 @@ const QuizRunner: React.FC = () => {
       setView("result");
     } catch (error) {
       console.error("Failed to finish quiz", error);
+      const message = isAssessmentRevisionConflict(error)
+        ? "다른 창에서 답안이 변경되었습니다. 입력한 답안을 보관한 뒤 새로고침하여 저장 상태를 확인해 주세요."
+        : "제출을 완료하지 못했습니다. 연결을 확인한 뒤 다시 제출해 주세요.";
+      setSubmitError(message);
+      setSubmitConflict(isAssessmentRevisionConflict(error));
       showToast({
         tone: "error",
         title: "문제 풀이 결과 저장에 실패했습니다.",
-        message: isAssessmentRevisionConflict(error)
-          ? "다른 창에서 답안이 변경되었습니다. 입력한 답안을 보관한 뒤 새로고침하여 저장 상태를 확인해 주세요."
-          : "잠시 후 다시 시도해 주세요.",
+        message,
       });
     } finally {
       finishSubmittingRef.current = false;
@@ -1611,9 +1857,6 @@ const QuizRunner: React.FC = () => {
       : activeSubmission?.status === "in_progress"
         ? "이어 풀기"
         : "응시 전 확인";
-    const introDescription = isMockExamAttempt
-      ? "실제 시험 흐름에 맞춰 제한 시간 안에 모든 문항을 풀어 보세요."
-      : "문항 수와 제한 시간을 확인한 뒤 바로 시작하세요.";
     const introActionLabel = startingQuiz
       ? "준비 중..."
       : activeSubmission?.status === "in_progress"
@@ -1646,9 +1889,16 @@ const QuizRunner: React.FC = () => {
               <h1 className="mt-3 break-keep text-2xl font-black leading-tight text-slate-950 sm:mt-4 sm:text-3xl">
                 {title}
               </h1>
-              <p className="mt-2 max-w-2xl break-keep text-sm font-semibold leading-6 text-slate-500">
-                {introDescription}
-              </p>
+              <div className="mt-2 flex items-center gap-1 text-sm text-slate-500">
+                <span>풀이 기록</span>
+                <InfoHelp label="풀이 기록 수집 안내">
+                  문항을 화면에서 본 시간, 화면 밖에 있던 시간, 답 변경과
+                  재방문, 선택한 확신도를 답안과 함께 저장합니다. 복습할 부분을
+                  찾기 위한 참고 자료이며, 시간만으로 실력이나 찍기를 판단하지
+                  않습니다. 확신도는 선택 사항이며 점수와 위스에 영향을 주지
+                  않습니다.
+                </InfoHelp>
+              </div>
 
               <dl className="mt-4 grid grid-cols-3 divide-x divide-blue-100 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/70 text-left sm:mt-5">
                 <div className="px-3 py-2.5 sm:px-4 sm:py-3">
@@ -1699,8 +1949,7 @@ const QuizRunner: React.FC = () => {
                   <i className="fas fa-stopwatch"></i>
                 </div>
                 <p className="text-sm font-bold leading-6 text-slate-600 md:mt-4">
-                  시작하면 타이머가 바로 작동합니다. 답안을 확인한 뒤 마지막
-                  문항에서 제출하세요.
+                  시작 후에는 화면을 벗어나도 제한 시간이 계속됩니다.
                 </p>
               </div>
 
@@ -1708,11 +1957,13 @@ const QuizRunner: React.FC = () => {
                 {!blockReason ? (
                   <button
                     type="button"
-                    onClick={() => void startQuiz()}
+                    onClick={() =>
+                      errorMsg ? void initializeQuiz() : void startQuiz()
+                    }
                     disabled={startingQuiz}
                     className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-5 text-base font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 sm:h-12"
                   >
-                    {introActionLabel}
+                    {errorMsg ? "다시 불러오기" : introActionLabel}
                   </button>
                 ) : (
                   <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-500">
@@ -1724,7 +1975,7 @@ const QuizRunner: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => navigate(-1)}
-                  className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                 >
                   돌아가기
                 </button>
@@ -1747,9 +1998,11 @@ const QuizRunner: React.FC = () => {
     }
 
     const currentAnswer = answers[String(question.id)] || "";
-    const answeredQuestionCount = selectedQuestions.filter((item) =>
-      hasStudentAnswer(answers[String(item.id)]),
-    ).length;
+    const answeredQuestionCount =
+      selectedQuestions.filter(isQuestionAnswered).length;
+    const incompleteIndexes = selectedQuestions.flatMap((item, index) =>
+      isQuestionAnswered(item) ? [] : [index],
+    );
     const passageText = String(question.passage || "").trim();
     const hasQuestionSupportPanel = !!question.image || !!passageText;
     const hasChoiceOptionImages =
@@ -1780,21 +2033,29 @@ const QuizRunner: React.FC = () => {
         : assessmentCategoryLabel;
 
     return (
-      <div className="student-quiz-runner mx-auto flex max-w-6xl animate-fadeIn flex-col px-3 py-3 sm:px-4 lg:max-w-7xl">
+      <div className="student-quiz-runner student-quiz-learning mx-auto flex max-w-6xl animate-fadeIn flex-col px-3 py-3 sm:px-4 lg:max-w-7xl">
         <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 shadow-sm">
               <i className="fas fa-file-signature shrink-0 text-[11px]"></i>
-              <span className="min-w-0 truncate">{assessmentBadgeLabel}</span>
+              <span
+                className="student-quiz-context-title min-w-0 break-words"
+                title={assessmentBadgeLabel}
+              >
+                {assessmentBadgeLabel}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {canUseHints && (
-              <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+              <div className="shrink-0 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
                 힌트 {hintUsedCount}/{maxHintUses}
               </div>
             )}
-            <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
+            <div
+              aria-label="평가 남은 시간"
+              className="flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm"
+            >
               <i className="fas fa-stopwatch text-red-500"></i>
               <span className="w-12 text-center font-mono text-lg font-bold text-gray-700">
                 {Math.floor(timeLeft / 60)
@@ -1810,36 +2071,60 @@ const QuizRunner: React.FC = () => {
         </div>
 
         <nav
+          ref={questionNavRef}
           className="mb-3 shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm"
           aria-label="문항 이동"
         >
-          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-gray-500">
-            <span>응시 진척도</span>
-            <span>
-              <span className="text-blue-600">{answeredQuestionCount}</span>/
-              {selectedQuestions.length}문항 완료
-            </span>
+          <div className="student-quiz-progress-summary mb-2 flex items-center justify-between gap-2 text-sm text-gray-500">
+            <div>
+              <p className="font-bold">
+                현재 {currentIndex + 1}번 ·{" "}
+                <span className="text-blue-600">{answeredQuestionCount}</span>/
+                {selectedQuestions.length} 입력
+              </p>
+              <p role="status" aria-live="polite" className="text-xs">
+                {saveStatus === "saving"
+                  ? "답안 저장 중"
+                  : saveStatus === "pending"
+                    ? "저장 대기"
+                    : saveStatus === "saved"
+                      ? "답안 저장됨"
+                      : saveStatus === "error"
+                        ? "저장 재시도 필요"
+                        : ""}
+              </p>
+            </div>
+            {incompleteIndexes.length > 0 && (
+              <button
+                type="button"
+                disabled={finishSubmitting}
+                onClick={() =>
+                  void goToQuestion(
+                    incompleteIndexes.find((index) => index > currentIndex) ??
+                      incompleteIndexes[0],
+                  )
+                }
+              >
+                미완성 {incompleteIndexes.length}개 보기
+              </button>
+            )}
           </div>
           <div className="student-quiz-progress-scroll -mx-1 overflow-x-auto px-1 pb-0.5">
-            <div
-              className="grid min-w-full gap-1"
-              style={{
-                gridTemplateColumns: `repeat(${selectedQuestions.length}, minmax(1.5rem, 1fr))`,
-              }}
-            >
+            <div className="student-quiz-progress-items">
               {selectedQuestions.map((item, index) => {
-                const answered = hasStudentAnswer(answers[String(item.id)]);
+                const answered = isQuestionAnswered(item);
                 const active = index === currentIndex;
                 return (
                   <button
                     key={`question-progress-${item.id}-${index}`}
                     type="button"
                     onClick={() => void goToQuestion(index)}
+                    disabled={finishSubmitting}
                     aria-current={active ? "step" : undefined}
                     aria-label={`${index + 1}번 문제${
                       answered ? " 답안 입력됨" : " 미입력"
                     }`}
-                    className={`flex h-7 items-center justify-center rounded-md border text-[10px] font-black leading-none transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    className={`student-quiz-progress-item flex items-center justify-center rounded-md border text-sm font-bold leading-none transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                       active
                         ? answered
                           ? "border-blue-600 bg-blue-600 text-white shadow-sm"
@@ -1850,15 +2135,38 @@ const QuizRunner: React.FC = () => {
                     }`}
                   >
                     {index + 1}
+                    {answered && (
+                      <span
+                        className="student-quiz-progress-check"
+                        aria-hidden="true"
+                      >
+                        ✓
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
+          {saveStatus === "error" && (
+            <div className="student-quiz-save-error" role="alert">
+              <span>
+                답안을 저장하지 못했습니다. 연결을 확인한 뒤 다시 저장해 주세요.
+              </span>
+              <button
+                type="button"
+                onClick={() => void persistQuizProgress()}
+                disabled={finishSubmitting}
+              >
+                다시 저장
+              </button>
+            </div>
+          )}
         </nav>
 
         <div className="student-quiz-shell flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
-          <div
+          <fieldset
+            disabled={finishSubmitting}
             className={`student-quiz-body-split min-h-0 flex-1 ${
               hasQuestionSupportPanel ? "student-quiz-body-has-support" : ""
             }`}
@@ -1866,9 +2174,13 @@ const QuizRunner: React.FC = () => {
             <section className="student-quiz-question-panel min-h-0 rounded-xl border border-gray-100 bg-slate-50/70 p-4">
               <div className="mb-4">
                 <div className="mb-2 text-xs font-black text-blue-600">
-                  문제
+                  {currentIndex + 1}번 문제
                 </div>
-                <h2 className="break-keep text-lg font-bold leading-snug text-gray-900 md:text-xl">
+                <h2
+                  ref={questionHeadingRef}
+                  tabIndex={-1}
+                  className="student-quiz-question-heading break-words text-lg font-bold leading-relaxed text-gray-900 md:text-xl"
+                >
                   {question.question}
                 </h2>
               </div>
@@ -1882,7 +2194,7 @@ const QuizRunner: React.FC = () => {
                       !!revealedHints[question.id] ||
                       hintUsedCount >= maxHintUses
                     }
-                    className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
+                    className={`min-h-11 rounded-lg px-3 py-2 text-sm font-bold transition ${
                       revealedHints[question.id]
                         ? "bg-amber-100 text-amber-700"
                         : hintUsedCount >= maxHintUses
@@ -1910,7 +2222,10 @@ const QuizRunner: React.FC = () => {
                       }`}
                     >
                       <img
+                        key={`question-image-${imageReloadKey}`}
                         src={question.image}
+                        onLoad={() => finishImageLoad(question.image!)}
+                        onError={() => finishImageLoad(question.image!, true)}
                         className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
                           passageText
                             ? "max-h-[min(30vh,280px)]"
@@ -1975,8 +2290,14 @@ const QuizRunner: React.FC = () => {
               )}
             </section>
 
-            <section className="student-quiz-answer-panel min-h-0 rounded-xl border border-gray-100 bg-white p-4">
-              <div className="mb-3 text-xs font-black text-blue-600">
+            <section
+              className="student-quiz-answer-panel min-h-0 rounded-xl border border-gray-100 bg-white p-4"
+              aria-labelledby="quiz-answer-label"
+            >
+              <div
+                id="quiz-answer-label"
+                className="mb-3 text-xs font-black text-blue-600"
+              >
                 {answerPanelLabel}
               </div>
 
@@ -2000,6 +2321,7 @@ const QuizRunner: React.FC = () => {
                         type="button"
                         key={`${question.id}-choice-${index}`}
                         onClick={() => handleAnswer(option)}
+                        aria-pressed={selected}
                         className={
                           hasChoiceOptionImages
                             ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left transition ${
@@ -2007,7 +2329,7 @@ const QuizRunner: React.FC = () => {
                                   ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
                                   : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
                               }`
-                            : `flex cursor-pointer items-start rounded-xl border-2 px-3 py-2.5 text-left transition ${
+                            : `flex w-full cursor-pointer items-start rounded-xl border-2 px-3 py-2.5 text-left text-base leading-relaxed transition ${
                                 selected
                                   ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
                                   : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
@@ -2034,7 +2356,12 @@ const QuizRunner: React.FC = () => {
                               </span>
                               {optionImage ? (
                                 <img
+                                  key={`choice-image-${imageReloadKey}`}
                                   src={optionImage}
+                                  onLoad={() => finishImageLoad(optionImage)}
+                                  onError={() =>
+                                    finishImageLoad(optionImage, true)
+                                  }
                                   alt={`${index + 1}번 보기`}
                                   className="max-h-full max-w-full object-contain"
                                 />
@@ -2045,7 +2372,7 @@ const QuizRunner: React.FC = () => {
                               )}
                             </div>
                             {visibleOptionText && optionImage && (
-                              <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                              <div className="mt-2 min-h-[2.5rem] w-full break-words text-center text-base font-bold leading-relaxed">
                                 {visibleOptionText}
                               </div>
                             )}
@@ -2063,7 +2390,12 @@ const QuizRunner: React.FC = () => {
                             </div>
                             {optionImage && (
                               <img
+                                key={`choice-preview-${imageReloadKey}`}
                                 src={optionImage}
+                                onLoad={() => finishImageLoad(optionImage)}
+                                onError={() =>
+                                  finishImageLoad(optionImage, true)
+                                }
                                 alt={`${index + 1}번 보기 이미지`}
                                 className="mr-3 h-24 w-28 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
                               />
@@ -2086,6 +2418,7 @@ const QuizRunner: React.FC = () => {
                       key={option}
                       type="button"
                       onClick={() => handleAnswer(option)}
+                      aria-pressed={currentAnswer === option}
                       className={`rounded-xl border-2 p-6 text-center text-xl font-bold transition ${
                         currentAnswer === option
                           ? "border-blue-500 bg-blue-50 text-blue-800"
@@ -2103,8 +2436,14 @@ const QuizRunner: React.FC = () => {
                   lang="ko"
                   inputMode="text"
                   type="text"
+                  aria-label={`${currentIndex + 1}번 문제 답안`}
                   value={currentAnswer}
                   onChange={(event) => handleAnswer(event.target.value)}
+                  onBlur={() =>
+                    observe((collector) =>
+                      collector.commitAnswer(String(question.id)),
+                    )
+                  }
                   className="w-full rounded-xl border-2 border-gray-200 bg-white p-3 text-center text-lg font-bold outline-none transition focus:border-blue-500"
                   placeholder="정답을 입력하세요"
                 />
@@ -2184,6 +2523,7 @@ const QuizRunner: React.FC = () => {
                               }}
                               type="button"
                               onClick={() => setMatchingActiveLeft(pair.left)}
+                              aria-pressed={matchingActiveLeft === pair.left}
                               className={`relative z-20 w-full rounded-xl border-2 p-4 text-left transition ${
                                 matchingActiveLeft === pair.left
                                   ? "border-blue-500 bg-blue-50 text-blue-800"
@@ -2217,6 +2557,7 @@ const QuizRunner: React.FC = () => {
                               }}
                               type="button"
                               onClick={() => handleMatchingRightSelect(right)}
+                              disabled={!matchingActiveLeft}
                               className={`relative z-20 flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
                                 used
                                   ? "border-blue-500 bg-blue-50 font-bold text-blue-700"
@@ -2225,7 +2566,17 @@ const QuizRunner: React.FC = () => {
                             >
                               {sourcePair?.rightImage && (
                                 <img
+                                  key={`matching-image-${imageReloadKey}`}
                                   src={sourcePair.rightImage}
+                                  onLoad={() =>
+                                    finishImageLoad(sourcePair.rightImage!)
+                                  }
+                                  onError={() =>
+                                    finishImageLoad(
+                                      sourcePair.rightImage!,
+                                      true,
+                                    )
+                                  }
                                   alt=""
                                   className="h-16 w-16 shrink-0 rounded-lg border border-gray-100 object-contain"
                                 />
@@ -2244,14 +2595,111 @@ const QuizRunner: React.FC = () => {
                     </div>
                   );
                 })()}
+              {currentQuestionImages.some((source) =>
+                failedImages.has(source),
+              ) && (
+                <div role="alert" className="mt-4 text-sm text-red-700">
+                  <p>
+                    문항 이미지를 불러오지 못했습니다. 연결을 확인해 주세요.
+                  </p>
+                  <button
+                    type="button"
+                    className="min-h-11 underline underline-offset-4"
+                    onClick={() => {
+                      setLoadedImages(
+                        (previous) =>
+                          new Set(
+                            [...previous].filter(
+                              (source) =>
+                                !currentQuestionImages.includes(source),
+                            ),
+                          ),
+                      );
+                      setFailedImages(
+                        (previous) =>
+                          new Set(
+                            [...previous].filter(
+                              (source) =>
+                                !currentQuestionImages.includes(source),
+                            ),
+                          ),
+                      );
+                      setImageReloadKey((value) => value + 1);
+                    }}
+                  >
+                    이미지 다시 불러오기
+                  </button>
+                </div>
+              )}
+              <div
+                className="student-quiz-confidence"
+                onFocusCapture={() =>
+                  observe((collector) => collector.setConfidenceFocused(true))
+                }
+                onBlurCapture={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                    observe((collector) =>
+                      collector.setConfidenceFocused(false),
+                    );
+                  }
+                }}
+              >
+                <div className="student-quiz-confidence-label">
+                  <span>
+                    내 확신도 <span className="font-normal">(선택)</span>
+                  </span>
+                  <InfoHelp label="확신도 도움말">
+                    답에 대한 느낌을 남겨 주세요. 선택하지 않아도 제출할 수
+                    있으며 점수와 위스는 달라지지 않습니다. 선택한 버튼을 다시
+                    누르면 해제됩니다.
+                  </InfoHelp>
+                </div>
+                <div
+                  className="student-quiz-confidence-options"
+                  role="group"
+                  aria-label="답에 대한 확신도"
+                >
+                  {(
+                    [
+                      ["sure", "확실해요"],
+                      ["unsure", "헷갈려요"],
+                      ["unknown", "모르겠어요"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={confidences[String(question.id)] === value}
+                      onClick={() => chooseConfidence(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </section>
-          </div>
+          </fieldset>
 
-          <div className="mt-3 flex shrink-0 items-center justify-between border-t border-gray-100 pt-3">
+          {submitError && (
+            <div role="alert" className="student-quiz-save-error mt-3">
+              <span>{submitError}</span>
+              {!submitConflict && (
+                <button
+                  type="button"
+                  disabled={finishSubmitting}
+                  onClick={() => void finishQuiz(timeoutHandledRef.current)}
+                >
+                  다시 제출
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="student-quiz-actions mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-gray-100 pt-3">
             <button
               type="button"
               onClick={prevQuestion}
-              disabled={currentIndex === 0}
+              disabled={currentIndex === 0 || finishSubmitting}
               className={`flex items-center rounded-xl px-5 py-2.5 font-bold shadow-sm transition ${
                 currentIndex === 0
                   ? "cursor-not-allowed bg-gray-100 text-gray-400"
@@ -2294,51 +2742,51 @@ const QuizRunner: React.FC = () => {
           finalizedResultId,
         )}`
       : "/student/mypage?menu=wrong_note";
+    const learningSummary = buildAssessmentLearningSummary({
+      studentUid: fallbackStudentUid,
+      semesterId: `${assessmentYear}-${assessmentSemester}`,
+      questions: questionBank,
+      attempts: [
+        {
+          id: finalizedResultId,
+          studentUid: fallbackStudentUid,
+          semesterId: `${assessmentYear}-${assessmentSemester}`,
+          submittedAt: Date.now(),
+          items: results.map((result) => ({
+            questionId: result.questionId,
+            correct: result.correct,
+            answer: result.u,
+            confidence:
+              resultTelemetry?.questions[String(result.questionId)]
+                ?.confidence || null,
+            hintViewed:
+              resultTelemetry?.questions[String(result.questionId)]
+                ?.hintViewed === true,
+          })),
+          questionMetadata: resultLearningSnapshot,
+        },
+      ],
+    });
 
     return (
-      <div className="student-quiz-result mx-auto flex w-full max-w-2xl animate-fadeIn items-center px-4 py-4 text-center sm:py-6">
-        <div className="w-full rounded-2xl border-t-8 border-blue-500 bg-white p-6 shadow-xl sm:p-8">
-          <h2 className="mb-2 text-3xl font-black text-gray-800">평가 종료</h2>
-          <p className="mb-8 text-gray-500">
-            수고하셨습니다. 결과를 확인하세요.
-          </p>
-          {!!pointNotice && (
-            <div
-              className={`mb-6 rounded-xl px-4 py-3 text-sm font-bold ${
-                pointNotice.includes("못했습니다")
-                  ? "bg-amber-50 text-amber-700"
-                  : "bg-emerald-50 text-emerald-700"
-              }`}
-            >
-              {pointNotice}
-            </div>
-          )}
-
-          <div className="relative mx-auto mb-6 flex h-48 w-48 items-center justify-center rounded-full border-8 border-blue-50">
-            <div className="flex flex-col items-center justify-center">
-              <span className="text-5xl font-black text-blue-600">{score}</span>
-              <span className="text-sm font-bold text-gray-400">점</span>
-            </div>
-          </div>
-
-          <div className="mb-6 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => navigate(resultReviewUrl)}
-              className="rounded-xl border-2 border-blue-100 bg-blue-50 py-3 font-bold text-blue-700 transition hover:border-blue-200 hover:bg-blue-100"
-            >
-              오답노트에서 확인
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/student/quiz")}
-              className="rounded-xl bg-gray-800 py-3 font-bold text-white shadow-md transition hover:bg-gray-900"
-            >
-              목록으로
-            </button>
-          </div>
-        </div>
-      </div>
+      <QuizLearningResult
+        score={score}
+        correctCount={results.filter((result) => result.correct).length}
+        summary={learningSummary}
+        labels={curriculumLabelsRef.current}
+        pointNotice={pointNotice}
+        onReview={() => navigate(resultReviewUrl)}
+        onChooseAssessment={() => navigate("/student/quiz")}
+        onRetry={() => {
+          setView("loading");
+          void initializeQuiz();
+        }}
+        onLesson={(id) =>
+          navigate(
+            `/student/lesson/note?id=${encodeURIComponent(id)}&title=${encodeURIComponent(curriculumLabelsRef.current[id] || "수업 자료")}`,
+          )
+        }
+      />
     );
   }
 

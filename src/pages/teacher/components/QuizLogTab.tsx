@@ -30,6 +30,11 @@ import {
 } from "../../../lib/mockExamRounds";
 import StudentDetailModal from "./StudentDetailModal";
 import StudentWrongNoteModal from "./StudentWrongNoteModal";
+import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
+import type { AssessmentLearningQuestion } from "../../../lib/assessmentLearning";
+import type { AssessmentTelemetrySnapshot } from "../../../lib/assessmentTelemetry";
+import QuizLearningEvidencePanel from "./QuizLearningEvidencePanel";
+import InfoHelp from "../../../components/common/InfoHelp";
 
 interface QuizDetail {
   id?: string | number;
@@ -37,7 +42,7 @@ interface QuizDetail {
   u?: string;
 }
 
-interface Log {
+export interface QuizLearningLog {
   id: string;
   timestamp: any;
   uid?: string;
@@ -51,7 +56,10 @@ interface Log {
   classOnly: string;
   studentNumber: string;
   details: QuizDetail[];
+  learningSnapshot?: AssessmentLearningQuestion[];
+  analytics?: AssessmentTelemetrySnapshot;
 }
+type Log = QuizLearningLog;
 
 interface UserProfile {
   uid: string;
@@ -69,7 +77,8 @@ interface TreeUnit {
   children?: TreeUnit[];
 }
 
-interface QuestionMeta {
+interface QuestionMeta extends AssessmentLearningQuestion {
+  question?: string;
   docId: string;
   id: string;
   unitId: string;
@@ -176,6 +185,8 @@ const normalizeGrade = (value: unknown): string => {
 const toText = (value: unknown): string => String(value ?? "").trim();
 
 const getTimestampMs = (value: any): number => {
+  if (typeof value === "string") return Date.parse(value) || 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value?.seconds === "number") return value.seconds * 1000;
   if (typeof value?.toDate === "function") {
     const date = value.toDate();
@@ -502,6 +513,10 @@ const parseLogDoc = (id: string, raw: any): Log => {
     classOnly: normalizeClass(classOnly) || "-",
     studentNumber: normalizeNumber(studentNumber) || "-",
     details: Array.isArray(raw.details) ? raw.details : [],
+    learningSnapshot: Array.isArray(raw.learningSnapshot)
+      ? raw.learningSnapshot
+      : undefined,
+    analytics: raw.analytics?.version === 1 ? raw.analytics : undefined,
   };
 };
 
@@ -513,16 +528,16 @@ const getStatusMeta = (status: StudentSummary["status"]) => {
     };
   if (status === "risk")
     return {
-      label: "위험",
+      label: "보충 확인",
       className: "border-red-200 bg-red-50 text-red-600",
     };
   if (status === "watch")
     return {
-      label: "주의",
+      label: "재확인",
       className: "border-amber-200 bg-amber-50 text-amber-700",
     };
   return {
-    label: "안정",
+    label: "현재 점수 양호",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
   };
 };
@@ -630,9 +645,14 @@ const getDefaultSortDirection = (key: StudentSortKey): SortDirection =>
     ? "desc"
     : "asc";
 
-const QuizLogTab: React.FC = () => {
+const QuizLogTab: React.FC<{ onOpenQuestions?: (ids: string[]) => void }> = ({
+  onOpenQuestions,
+}) => {
   const { config, userData, currentUser } = useAuth();
   const [logs, setLogs] = useState<Log[]>([]);
+  const [assessmentLogs, setAssessmentLogs] = useState<Log[]>([]);
+  const [assessmentLoadError, setAssessmentLoadError] = useState("");
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [analyticsBackfillLogs, setAnalyticsBackfillLogs] = useState<Log[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
@@ -818,6 +838,7 @@ const QuizLogTab: React.FC = () => {
             questionSnap.value.docs.map((item) => {
               const data = item.data() as any;
               return {
+                ...data,
                 docId: item.id,
                 id: toText(data.id || item.id),
                 unitId: toText(data.unitId),
@@ -872,6 +893,65 @@ const QuizLogTab: React.FC = () => {
 
     return () => {
       active = false;
+    };
+  }, [config, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    setAssessmentLoading(true);
+    setAssessmentLoadError("");
+    setAssessmentLogs([]);
+    const unsubscribe = onSnapshot(
+      query(
+        collection(db, "semester_assessment_results"),
+        where("semesterId", "==", getAssessmentSemesterId(config)),
+      ),
+      (snapshot) => {
+        if (!active) return;
+        const next = snapshot.docs.flatMap((document) => {
+          const data = document.data();
+          if (data.assessmentKind !== "QUIZ") return [];
+          const parts = String(data.definitionId || "").split(":");
+          const rawCategory = data.category || parts[3] || "";
+          return [
+            parseLogDoc(`assessment:${document.id}`, {
+              ...data,
+              uid: data.studentUid,
+              timestamp: data.submittedAtIso || data.createdAt,
+              unitId: data.sourceId || parts[2] || "",
+              category: rawCategory,
+              examRound: data.examRound || parts[4] || "",
+              score: Number(data.percent || 0),
+              details: (Array.isArray(data.answerChecks)
+                ? data.answerChecks
+                : []
+              ).map((check: { id: string; correct: boolean }) => ({
+                id: check.id,
+                correct: check.correct,
+                u:
+                  data.answers?.[check.id] == null
+                    ? undefined
+                    : String(data.answers[check.id]),
+              })),
+            }),
+          ];
+        });
+        setAssessmentLogs(next);
+        setAssessmentLoading(false);
+        setLastSyncedAt(Date.now());
+      },
+      (error) => {
+        if (!active) return;
+        console.error(error);
+        setAssessmentLoadError(
+          "새 평가 기록을 불러오지 못했습니다. 새로고침하여 다시 확인해 주세요.",
+        );
+        setAssessmentLoading(false);
+      },
+    );
+    return () => {
+      active = false;
+      unsubscribe();
     };
   }, [config, refreshKey]);
 
@@ -1123,7 +1203,7 @@ const QuizLogTab: React.FC = () => {
 
   const mergedLogs = useMemo(() => {
     const dedupedMap = new Map<string, Log>();
-    [...logs, ...analyticsBackfillLogs].forEach((log) => {
+    [...logs, ...analyticsBackfillLogs, ...assessmentLogs].forEach((log) => {
       const key = buildDedupKey(log);
       const existing = dedupedMap.get(key);
       if (
@@ -1136,7 +1216,7 @@ const QuizLogTab: React.FC = () => {
     return Array.from(dedupedMap.values()).sort(
       (a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp),
     );
-  }, [analyticsBackfillLogs, logs]);
+  }, [analyticsBackfillLogs, logs, assessmentLogs]);
 
   const canonicalLogs = useMemo(
     () =>
@@ -1469,9 +1549,13 @@ const QuizLogTab: React.FC = () => {
       );
       const scores = sortedLogs.map((log) => log.score);
       const wrongUnits = new Map<string, { label: string; count: number }>();
+      const seenQuestions = new Set<string>();
 
       sortedLogs.forEach((log) => {
         log.details.forEach((detail) => {
+          const questionId = toText(detail.id);
+          if (!questionId || seenQuestions.has(questionId)) return;
+          seenQuestions.add(questionId);
           if (detail.correct) return;
           const question = questionMetaById.get(toText(detail.id));
           const meta = findUnitMeta([
@@ -1899,14 +1983,18 @@ const QuizLogTab: React.FC = () => {
     <div className="pb-4">
       <div className="mb-6 flex flex-col gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-gray-900">응시 현황</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            반별 점수 흐름과 취약 단원을 현재 필터 기준으로 분석합니다.
-          </p>
+          <div className="flex items-center gap-1">
+            <h2 className="text-xl font-extrabold text-gray-900">학습 진단</h2>
+            <InfoHelp label="학습 진단의 기록 범위">
+              현재 학기 새 평가 제출 기록과 기존 응시 기록을 함께 표시합니다.
+              기존 기록은 조회 범위 안의 기록이며 관찰 정보가 없습니다.
+              점수·시간만으로 숙달이나 찍기를 확정하지 않습니다.
+            </InfoHelp>
+          </div>
         </div>
 
         <div className="overflow-x-auto pb-1">
-          <div className="grid min-w-[680px] grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(56px,0.45fr)_minmax(86px,0.78fr)_minmax(84px,0.72fr)_minmax(88px,0.7fr)] gap-2">
+          <div className="quiz-diagnostic-filters">
             <select
               value={bigFilter}
               onChange={(event) => {
@@ -2016,17 +2104,43 @@ const QuizLogTab: React.FC = () => {
           {loadError}
         </div>
       )}
-      {rosterLimited && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-          학생 명단 권한이 없어 미응시 수와 현재 반 정보는 제출 기록 기준으로
-          제한됩니다.
+      {assessmentLoadError && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          {assessmentLoadError}
         </div>
       )}
+      {rosterLimited && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+          학생 명단을 불러오지 못해 미응시 수와 현재 반 정보는 제출 기록
+          기준으로 제한됩니다.
+        </div>
+      )}
+
+      <QuizLearningEvidencePanel
+        logs={filteredLogs}
+        questions={questions}
+        students={reportStudentSummaries.map((student) => ({
+          uid: student.uid || student.email || student.key,
+          label: `${student.classOnly}반 ${student.number}번 ${student.name}`,
+        }))}
+        semesterId={getAssessmentSemesterId(config)}
+        unitLabels={Object.fromEntries(
+          Array.from(unitMetaById.entries()).map(([id, unit]) => [
+            id,
+            unit.title,
+          ]),
+        )}
+        loading={loading || supportLoading || assessmentLoading}
+        onOpenQuestions={onOpenQuestions}
+      />
 
       <section className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="mb-4 flex items-center gap-2">
           <h3 className="text-sm font-extrabold text-gray-800">
-            오늘의 학급 수준
+            선택 범위 응시 현황
           </h3>
           {(loading || supportLoading || analyticsBackfillLoading) && (
             <span className="text-xs font-bold text-blue-600">
@@ -2035,7 +2149,7 @@ const QuizLogTab: React.FC = () => {
           )}
         </div>
         <div className="overflow-x-auto pb-1">
-          <div className="grid min-w-[640px] grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {[
               {
                 label: "응시",

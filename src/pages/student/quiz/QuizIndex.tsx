@@ -35,12 +35,15 @@ const QuizIndex: React.FC = () => {
     Record<string, AssessmentConfigEntry>
   >({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         const [nextTree, grade3ClassIds] = await Promise.all([
           readStudentCurriculumTree(config),
@@ -56,6 +59,7 @@ const QuizIndex: React.FC = () => {
         setAssessmentConfig(nextConfig);
       } catch (error) {
         console.error("Error fetching quiz data:", error);
+        if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -65,7 +69,7 @@ const QuizIndex: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config]);
+  }, [config, reloadKey]);
 
   const toggleAccordion = (index: number) => {
     setExpandedItems((current) => {
@@ -124,6 +128,21 @@ const QuizIndex: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl animate-fadeIn px-4 py-8">
+      {loadError && (
+        <div
+          role="alert"
+          className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          <span>평가 목록을 불러오지 못했습니다. 연결을 확인해 주세요.</span>
+          <button
+            type="button"
+            className="min-h-11 rounded-lg border border-red-200 bg-white px-4 font-bold"
+            onClick={() => setReloadKey((value) => value + 1)}
+          >
+            다시 불러오기
+          </button>
+        </div>
+      )}
       <div className="mb-5 flex justify-end">
         <button
           type="button"
@@ -148,9 +167,6 @@ const QuizIndex: React.FC = () => {
                 FINAL CHECK
               </div>
               <h3 className="mb-1 text-2xl font-black">모의고사 문제</h3>
-              <p className="text-sm font-medium text-blue-100 opacity-90">
-                실제 시험처럼 문제를 풀어보고 실력을 점검하세요.
-              </p>
             </div>
 
             <div className="grid min-w-[min(100%,18rem)] grid-cols-4 gap-2 md:min-w-[19rem]">
@@ -192,13 +208,9 @@ const QuizIndex: React.FC = () => {
         </h2>
 
         <div className="space-y-4">
-          {tree.length === 0 && (
+          {!loadError && tree.length === 0 && (
             <div className="rounded-xl border border-gray-200 bg-white py-20 text-center text-gray-400">
               등록된 단원이 없습니다.
-              <br />
-              <span className="text-xs">
-                선생님이 아직 단원을 등록하지 않았습니다.
-              </span>
             </div>
           )}
 
@@ -207,9 +219,12 @@ const QuizIndex: React.FC = () => {
               key={idx}
               className="overflow-hidden rounded-xl border border-gray-200 bg-white transition-shadow hover:shadow-sm"
             >
-              <div
+              <button
+                type="button"
                 onClick={() => toggleAccordion(idx)}
-                className="flex cursor-pointer items-center justify-between bg-white p-5 transition-colors hover:bg-gray-50"
+                aria-expanded={expandedItems.has(idx)}
+                aria-controls={`quiz-unit-${idx}`}
+                className="flex w-full cursor-pointer items-center justify-between gap-3 bg-white p-5 text-left transition-colors hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <span className="text-lg font-extrabold text-gray-800">
                   {big.title}
@@ -219,10 +234,13 @@ const QuizIndex: React.FC = () => {
                     expandedItems.has(idx) ? "rotate-180 text-blue-500" : ""
                   }`}
                 ></i>
-              </div>
+              </button>
 
               {expandedItems.has(idx) && (
-                <div className="border-t border-gray-100 bg-gray-50">
+                <div
+                  id={`quiz-unit-${idx}`}
+                  className="border-t border-gray-100 bg-gray-50"
+                >
                   {big.children?.map((mid, mIdx) => {
                     const diagActive = getVisibility(mid.id, "diagnostic");
                     const formActive = getVisibility(mid.id, "formative");
@@ -244,7 +262,7 @@ const QuizIndex: React.FC = () => {
                             }
                             disabled={!diagActive}
                             className={`
-                              flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-bold transition-all
+                              flex min-h-11 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-bold transition-all
                               ${
                                 diagActive
                                   ? "border-blue-100 bg-blue-50 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"
@@ -267,7 +285,7 @@ const QuizIndex: React.FC = () => {
                             }
                             disabled={!formActive}
                             className={`
-                              flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-bold transition-all
+                              flex min-h-11 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-bold transition-all
                               ${
                                 formActive
                                   ? "border-emerald-100 bg-emerald-50 text-emerald-600 hover:border-emerald-600 hover:bg-emerald-600 hover:text-white"

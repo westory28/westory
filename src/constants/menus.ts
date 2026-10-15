@@ -99,9 +99,7 @@ export const MENUS: MenuConfig = {
       url: "/teacher/quiz",
       icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
       children: [
-        { name: "문제 등록", url: "/teacher/quiz" },
-        { name: "응시 현황", url: "/teacher/quiz?tab=log" },
-        { name: "문제 은행", url: "/teacher/quiz?tab=bank" },
+        { name: "평가 관리", url: "/teacher/quiz" },
         { name: "역사교실", url: "/teacher/quiz/history-classroom" },
       ],
     },
@@ -277,6 +275,39 @@ const mergeFallbackChildren = (
   });
 };
 
+// Previously saved menu settings also converge on the tabbed workspace.
+// Existing bookmarked tab URLs remain valid; unrelated custom links stay intact.
+const consolidateAssessmentChildren = (item: MenuItem): MenuItem => {
+  if (item.url !== "/teacher/quiz") return item;
+  const isWorkspace = (child: MenuChild) => {
+    const [path, query = ""] = child.url.split("?");
+    const params = new URLSearchParams(query);
+    return (
+      path === "/teacher/quiz" &&
+      [...params.keys()].every((key) => key === "tab") &&
+      [null, "manage", "log", "bank"].includes(params.get("tab"))
+    );
+  };
+  const workspace = (item.children || []).filter(isWorkspace);
+  if (!workspace.length) return item;
+  let inserted = false;
+  return {
+    ...item,
+    children: (item.children || []).flatMap((child) => {
+      if (!isWorkspace(child)) return [child];
+      if (inserted) return [];
+      inserted = true;
+      return [
+        {
+          name: "평가 관리",
+          url: "/teacher/quiz",
+          hidden: workspace.every((entry) => entry.hidden === true),
+        },
+      ];
+    }),
+  };
+};
+
 export const cloneDefaultMenus = (): MenuConfig => deepCloneMenus(MENUS);
 
 export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
@@ -302,6 +333,9 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
         children: sanitizeChildren((item as MenuItem)?.children),
       }))
       .filter((item) => item.name && item.url && !isLegacyRemovedUrl(item.url))
+      .map((item) =>
+        portal === "teacher" ? consolidateAssessmentChildren(item) : item,
+      )
       .map((item) => ({
         ...item,
         icon:

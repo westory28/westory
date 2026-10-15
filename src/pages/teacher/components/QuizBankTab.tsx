@@ -7,8 +7,7 @@ import {
   limit,
   orderBy,
   query,
-  serverTimestamp,
-  setDoc,
+  where,
 } from "firebase/firestore";
 import { db, getHttpsCallable } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -44,6 +43,19 @@ import {
   normalizeMockExamCategory,
   sortMockExamRounds,
 } from "../../../lib/mockExamRounds";
+import {
+  getAssessmentSemesterId,
+  refreshPublishedQuizDefinitions,
+} from "../../../lib/assessmentRelease";
+import { executeAssessmentManagementCommand } from "../../../lib/assessmentLifecycle";
+import type { QuizQuestionDraft } from "./QuizEditor";
+import QuizLearningMetadataFields, {
+  normalizeQuizLearningMetadata,
+  validateQuizLearningMetadata,
+  type QuizLearningMetadata,
+} from "./QuizLearningMetadataFields";
+import InfoHelp from "../../../components/common/InfoHelp";
+import { useQuizDialog } from "./useQuizDialog";
 
 interface TreeUnit {
   id: string;
@@ -51,7 +63,8 @@ interface TreeUnit {
   children?: TreeUnit[];
 }
 
-interface Question {
+interface Question extends QuizLearningMetadata {
+  contentRevision?: number;
   docId: string;
   id: number;
   category: string;
@@ -86,6 +99,7 @@ const QUESTION_ANALYTICS_RESULT_LIMIT = 500;
 interface QuestionStat {
   attempts: number;
   correct: number;
+  missingAnswerCount: number;
   wrongAnswers: Record<string, number>;
   uniqueStudents: number;
   uniqueWrongStudents: number;
@@ -100,6 +114,7 @@ interface QuestionAggregate extends QuestionStat {
 interface MutableQuestionStat {
   attempts: number;
   correct: number;
+  missingAnswerCount: number;
   wrongAnswers: Record<string, number>;
   studentKeys: Set<string>;
   wrongStudentKeys: Set<string>;
@@ -238,6 +253,8 @@ const normalizeNumber = (value: unknown): string => {
   return digits || raw.replace("번", "").trim();
 };
 const getTimestampMs = (value: any): number => {
+  if (typeof value === "string") return Date.parse(value) || 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value?.seconds === "number") return value.seconds * 1000;
   if (typeof value?.toDate === "function") {
     const date = value.toDate();
@@ -251,6 +268,7 @@ const formatPercent = (value: number | null) =>
 const createEmptyStat = (): QuestionStat => ({
   attempts: 0,
   correct: 0,
+  missingAnswerCount: 0,
   wrongAnswers: {},
   uniqueStudents: 0,
   uniqueWrongStudents: 0,
@@ -264,6 +282,7 @@ const createEmptyAggregate = (): QuestionAggregate => ({
 const createMutableStat = (): MutableQuestionStat => ({
   attempts: 0,
   correct: 0,
+  missingAnswerCount: 0,
   wrongAnswers: {},
   studentKeys: new Set<string>(),
   wrongStudentKeys: new Set<string>(),
@@ -277,6 +296,7 @@ const createMutableAggregate = (): MutableQuestionAggregate => ({
 const finalizeStat = (stat: MutableQuestionStat): QuestionStat => ({
   attempts: stat.attempts,
   correct: stat.correct,
+  missingAnswerCount: stat.missingAnswerCount,
   wrongAnswers: stat.wrongAnswers,
   uniqueStudents: stat.studentKeys.size,
   uniqueWrongStudents: stat.wrongStudentKeys.size,
@@ -324,7 +344,12 @@ const getWrongAnswerLabel = (value: unknown) => {
   return text || "무응답";
 };
 
-const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
+const QuizBankTab: React.FC<{
+  canEdit: boolean;
+  onDeriveQuestion?: (question: QuizQuestionDraft) => void;
+  focusedQuestionIds?: string[];
+  onClearFocus?: () => void;
+}> = ({ canEdit, onDeriveQuestion, focusedQuestionIds = [], onClearFocus }) => {
   const { config } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [questionStats, setQuestionStats] = useState<
@@ -344,6 +369,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [lastAttemptAt, setLastAttemptAt] = useState(0);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
   const [loading, setLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState("");
+  const [questionLoadError, setQuestionLoadError] = useState("");
   const [filters, setFilters] = useState<BankFilterState>(
     createEmptyBankFilters,
   );
@@ -365,6 +392,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [classComparisonSort, setClassComparisonSort] =
     useState<ClassComparisonSort>("class");
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [editMetadata, setEditMetadata] = useState<QuizLearningMetadata>({});
+  const pendingCorrectionsRef = useRef(new Set<string>());
   const [savingEdit, setSavingEdit] = useState(false);
   const [optimizingImageCount, setOptimizingImageCount] = useState(0);
   const optimizingImage = optimizingImageCount > 0;
@@ -438,6 +467,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   >({});
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const editPassageTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorDialogRef = useRef<HTMLDivElement>(null);
+  useQuizDialog(!!editingQuestion, editorDialogRef, () => closeEditModal());
 
   const toggleSort = (key: Exclude<SortKey, "none">) => {
     if (sortKey !== key) {
@@ -549,12 +580,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     const loadAll = async () => {
       setLoading(true);
       try {
+        const rosterPromise = loadStudentRoster();
         const [questionsResult, treeResult, statsResult, rosterResult] =
           await Promise.all([
             loadQuestions(),
             loadTreeData(),
-            loadQuestionAnalytics(),
-            loadStudentRoster(),
+            rosterPromise.then((roster) =>
+              loadQuestionAnalytics(undefined, roster.students),
+            ),
+            rosterPromise,
           ]);
         setQuestions(questionsResult);
         setTreeData(treeResult);
@@ -591,6 +625,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   }, [config]);
 
   const loadQuestions = async () => {
+    setQuestionLoadError("");
     try {
       const snap = await getDocs(
         collection(db, getSemesterCollectionPath(config, "quiz_questions")),
@@ -608,6 +643,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       return list;
     } catch (error) {
       console.error(error);
+      setQuestionLoadError(
+        "문제 목록을 불러오지 못했습니다. 다른 탭으로 이동한 뒤 다시 열어 주세요.",
+      );
       return [];
     }
   };
@@ -777,27 +815,86 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   ) => {
     stat.attempts += 1;
     stat.studentKeys.add(studentKey);
+    const recordedAnswer = detail.u ?? detail.userAnswer ?? detail.answer;
+    if (recordedAnswer == null) stat.missingAnswerCount += 1;
     if (detail.correct) {
       stat.correct += 1;
       return;
     }
     stat.wrongStudentKeys.add(studentKey);
-    const wrongAnswer = getWrongAnswerLabel(
-      detail.u ?? detail.userAnswer ?? detail.answer,
-    );
+    if (recordedAnswer == null) return;
+    const wrongAnswer = getWrongAnswerLabel(recordedAnswer);
     stat.wrongAnswers[wrongAnswer] = (stat.wrongAnswers[wrongAnswer] || 0) + 1;
   };
 
   const loadQuestionAnalytics = async (
     examRound?: string,
+    roster = studentRoster,
   ): Promise<BankAnalyticsResult> => {
+    setAnalyticsError("");
     try {
-      const snap = await getDocs(
-        query(
-          collection(db, getSemesterCollectionPath(config, "quiz_results")),
-          orderBy("timestamp", "desc"),
-          limit(QUESTION_ANALYTICS_RESULT_LIMIT),
+      const [legacyResult, canonicalResult] = await Promise.allSettled([
+        getDocs(
+          query(
+            collection(db, getSemesterCollectionPath(config, "quiz_results")),
+            orderBy("timestamp", "desc"),
+            limit(QUESTION_ANALYTICS_RESULT_LIMIT),
+          ),
         ),
+        getDocs(
+          query(
+            collection(db, "semester_assessment_results"),
+            where("semesterId", "==", getAssessmentSemesterId(config)),
+          ),
+        ),
+      ]);
+      if (
+        legacyResult.status === "rejected" ||
+        canonicalResult.status === "rejected"
+      )
+        setAnalyticsError(
+          "일부 응시 기록을 불러오지 못했습니다. 문항 통계가 불완전할 수 있습니다. 다른 탭으로 이동한 뒤 다시 열어 주세요.",
+        );
+      const records: { id: string; raw: any }[] =
+        legacyResult.status === "fulfilled"
+          ? legacyResult.value.docs.map((item) => ({
+              id: item.id,
+              raw: item.data(),
+            }))
+          : [];
+      if (canonicalResult.status === "fulfilled")
+        canonicalResult.value.docs.forEach((item) => {
+          const data = item.data();
+          if (data.assessmentKind !== "QUIZ") return;
+          const parts = String(data.definitionId || "").split(":");
+          const profile = roster.find(
+            (student) => student.uid === data.studentUid,
+          );
+          records.push({
+            id: item.id,
+            raw: {
+              ...data,
+              uid: data.studentUid,
+              class: profile?.classOnly || "",
+              name: profile?.name || "",
+              timestamp: data.submittedAtIso || data.createdAt,
+              score: data.percent,
+              category: data.category || parts[3],
+              examRound: data.examRound || parts[4],
+              details: (Array.isArray(data.answerChecks)
+                ? data.answerChecks
+                : []
+              ).map((check: { id: string; correct: boolean }) => ({
+                id: check.id,
+                correct: check.correct,
+                u: data.answers?.[check.id],
+              })),
+            },
+          });
+        });
+      records.sort(
+        (a, b) =>
+          getTimestampMs(b.raw.timestamp) - getTimestampMs(a.raw.timestamp),
       );
 
       const mutableStats: Record<string, MutableQuestionAggregate> = {};
@@ -827,9 +924,22 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         }
       > = {};
       let latestAttemptAt = 0;
+      const seenAttempts = new Set<string>();
 
-      snap.forEach((d) => {
-        const raw = d.data() as any;
+      records.forEach((d) => {
+        const raw = d.raw;
+        const identity = buildStudentKey(raw, d.id);
+        const timestamp = getTimestampMs(raw.timestamp);
+        const attemptKeys = [
+          ...(raw.attemptId ? [`attempt:${raw.attemptId}`] : []),
+          ...(timestamp
+            ? [
+                `response:${identity}:${timestamp}:${normalizeMockExamCategory(toText(raw.category))}:${JSON.stringify((Array.isArray(raw.details) ? raw.details : []).map((detail: any) => [toText(detail.id ?? detail.qid), !!detail.correct]).sort((a: string[], b: string[]) => String(a[0]).localeCompare(String(b[0]))))}`,
+              ]
+            : []),
+        ];
+        if (attemptKeys.some((key) => seenAttempts.has(key))) return;
+        attemptKeys.forEach((key) => seenAttempts.add(key));
         const rawCategory = toText(raw.category);
         const category = normalizeMockExamCategory(rawCategory);
         const resultExamRound = isMockExamCategory(rawCategory)
@@ -1265,7 +1375,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         label: "응시 없음",
         tone: "bg-gray-100 text-gray-600 border-gray-200",
       };
-    if (stat.attempts < 3)
+    if (stat.uniqueStudents < 3)
       return {
         key: "data_short" as StatusFilter,
         label: "데이터 부족",
@@ -1279,7 +1389,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       };
     return {
       key: "stable" as StatusFilter,
-      label: "안정",
+      label: "정답 우세",
       tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
     };
   };
@@ -1293,6 +1403,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const getRecommendation = (q: Question, stat: QuestionStat) => {
     if (!stat.attempts) return "응시 안내 확인";
+    if (stat.uniqueStudents < 3) return "응시 표본 확보";
     const rate = Math.round((stat.correct / stat.attempts) * 100);
     if (rate < 50) return q.type === "order" ? "흐름도 재정리" : "보충 설명";
     if (rate < 65) return "유사 문항 재출제";
@@ -1303,6 +1414,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const filteredQuestions = useMemo(() => {
     let list = [...questions];
+    if (focusedQuestionIds.length)
+      return list.filter(
+        (question) =>
+          focusedQuestionIds.includes(String(question.id)) ||
+          focusedQuestionIds.includes(question.docId),
+      );
 
     list = list.filter((q) => {
       if (categoryFilter && q.category !== categoryFilter) return false;
@@ -1405,6 +1522,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     activeClassFilter,
     categoryFilter,
     filters,
+    focusedQuestionIds,
     questionDisplayCodes,
     questionDisplayMeta,
     questionStats,
@@ -1870,10 +1988,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     }
     if (!suggestions.length) {
       suggestions.push({
-        icon: "fa-check",
-        title: "현재 필터 안정",
-        description: "우선 조치가 필요한 문항이 뚜렷하지 않습니다.",
-        tone: "text-emerald-700 bg-emerald-50",
+        icon: filteredQuestions.length ? "fa-check" : "fa-folder-open",
+        title: filteredQuestions.length ? "현재 문항 확인" : "문항 없음",
+        description: filteredQuestions.length
+          ? "확인한 응답에서 우선 복습할 문항이 뚜렷하지 않습니다."
+          : "선택한 범위에 문항이 없어 학습 상태를 판단할 수 없습니다.",
+        tone: "text-slate-600 bg-slate-100",
       });
     }
     return suggestions.slice(0, 4);
@@ -2132,6 +2252,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     if (!canEdit) return;
     const normalizedType = normalizeQuestionType(question.type);
     setEditingQuestion(question);
+    setEditMetadata(question);
     setEditCategory(question.category || "diagnostic");
     setEditType(normalizedType);
     setEditQuestionText(question.question || "");
@@ -2354,7 +2475,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     if (!editingQuestion) return false;
     const current = buildCurrentEditSnapshot();
     const original = buildOriginalEditSnapshot(editingQuestion);
-    return JSON.stringify(current) !== JSON.stringify(original);
+    return (
+      JSON.stringify(current) !== JSON.stringify(original) ||
+      JSON.stringify(
+        normalizeQuizLearningMetadata(editMetadata, current.options),
+      ) !==
+        JSON.stringify(
+          normalizeQuizLearningMetadata(editingQuestion, original.options),
+        )
+    );
   }, [
     editingQuestion,
     editCategory,
@@ -2372,6 +2501,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     editMatchingPairs,
     editHintEnabled,
     editHintText,
+    editMetadata,
   ]);
 
   const closeEditModal = (force = false) => {
@@ -2486,6 +2616,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       return;
     }
 
+    const metadataError = validateQuizLearningMetadata(editMetadata, options);
+    if (metadataError) {
+      alert(metadataError);
+      return;
+    }
     savingEditRef.current = true;
     setSavingEdit(true);
     try {
@@ -2503,6 +2638,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           : [];
       const payload: Question = {
         ...editingQuestion,
+        ...normalizeQuizLearningMetadata(editMetadata, options),
         category: editCategory || editingQuestion.category,
         type: editType || (editingQuestion.type as QuestionType),
         question: editQuestionText.trim(),
@@ -2518,21 +2654,67 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       };
       const originalSnapshot = buildOriginalEditSnapshot(editingQuestion);
       const shouldRecalculateCorrections =
+        pendingCorrectionsRef.current.has(editingQuestion.docId) ||
         originalSnapshot.type !== payload.type ||
         String(originalSnapshot.answer || "") !== String(payload.answer || "");
-      const { docId: _docId, id: _localId, ...persistedPayload } = payload;
-      await setDoc(
-        doc(
-          db,
-          getSemesterDocPath(
-            config,
-            "quiz_questions",
-            String(editingQuestion.docId),
-          ),
+      if (String(payload.id) !== editingQuestion.docId) {
+        alert(
+          "문항 ID와 저장 ID가 일치하지 않아 저장할 수 없습니다. 문항 데이터 확인이 필요합니다.",
+        );
+        return;
+      }
+      if (shouldRecalculateCorrections)
+        pendingCorrectionsRef.current.add(editingQuestion.docId);
+      const persistedPayload = {
+        id: payload.id,
+        unitId: payload.unitId,
+        subUnitId: payload.subUnitId || null,
+        category: payload.category,
+        type: payload.type,
+        question: payload.question,
+        answer: payload.answer,
+        explanation: payload.explanation || "",
+        image: payload.image || null,
+        passage: payload.passage || "",
+        options: payload.options || [],
+        choiceOptionImages: payload.choiceOptionImages || [],
+        matchingPairs: payload.matchingPairs || [],
+        hintEnabled: !!payload.hintEnabled,
+        hint: payload.hint || "",
+        ...(payload.refBig ? { refBig: payload.refBig } : {}),
+        ...(payload.refMid ? { refMid: payload.refMid } : {}),
+        ...(payload.refSmall ? { refSmall: payload.refSmall } : {}),
+        ...normalizeQuizLearningMetadata(payload, payload.options || []),
+      };
+      const saved = await executeAssessmentManagementCommand<{
+        contentRevision: number;
+      }>("upsertQuizQuestion", {
+        semesterId: getAssessmentSemesterId(config),
+        questionId: String(editingQuestion.docId),
+        question: persistedPayload,
+        expectedRevision: Number(editingQuestion.contentRevision || 0),
+        reason: "문제 은행 문항 수정",
+      });
+      payload.contentRevision = saved.contentRevision;
+      setQuestions((prev) =>
+        prev.map((question) =>
+          question.docId === payload.docId ? payload : question,
         ),
-        { ...persistedPayload, updatedAt: serverTimestamp() },
-        { merge: true },
       );
+      setEditingQuestion(payload);
+      try {
+        await refreshPublishedQuizDefinitions(
+          config,
+          payload.unitId,
+          payload.category,
+        );
+      } catch (error) {
+        console.error(error);
+        alert(
+          "문항은 저장되었지만 공개 평가에 반영하지 못했습니다. 수정 저장을 다시 눌러 반영해 주세요.",
+        );
+        return;
+      }
       if (shouldRecalculateCorrections) {
         try {
           const { year, semester } = getYearSemester(config);
@@ -2551,6 +2733,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             questionDocId: String(editingQuestion.docId),
             questionId: Number(editingQuestion.id),
           });
+          pendingCorrectionsRef.current.delete(editingQuestion.docId);
           if (Number(correction.data?.updatedResultCount || 0) > 0) {
             const statsResult = await loadQuestionAnalytics();
             setQuestionStats(statsResult.questionStats);
@@ -2566,8 +2749,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             correctionError,
           );
           alert(
-            "문제는 저장되었지만 기존 응시 결과와 위스 보너스를 자동 반영하지 못했습니다. 잠시 후 다시 저장해 주세요.",
+            "문항은 저장되었지만 이전 방식의 응시 기록과 위스 보너스를 다시 계산하지 못했습니다. 수정 저장을 다시 눌러 주세요. 새 평가의 제출 기록은 유지됩니다.",
           );
+          return;
         }
       }
       setQuestions((prev) =>
@@ -2599,6 +2783,26 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   return (
     <div>
+      {(analyticsError || questionLoadError) && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          {questionLoadError || analyticsError}
+        </div>
+      )}
+      {focusedQuestionIds.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+          <span>학습 진단에서 선택한 {focusedQuestionIds.length}문항</span>
+          <button
+            type="button"
+            className="min-h-11 font-bold underline"
+            onClick={onClearFocus}
+          >
+            전체 문제 은행 보기
+          </button>
+        </div>
+      )}
       {!canEdit && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
           읽기 전용 권한입니다. 문제 수정은 관리자만 가능합니다.
@@ -2609,13 +2813,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-900">문제 은행</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <div className="mt-1 text-sm text-slate-500">
                 {activeClassFilter
                   ? `${activeClassFilter}반 기준`
                   : "전체 응시 기록 기준"}
                 {activeExamRoundLabel ? ` · ${activeExamRoundLabel}` : ""}
-                으로 문항, 단원, 오답 흐름을 함께 봅니다.
-              </p>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
               <span className="rounded-full bg-slate-100 px-3 py-1.5">
@@ -2752,7 +2955,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               <option value="weak">우선 확인</option>
               <option value="no_attempt">응시 없음</option>
               <option value="data_short">데이터 부족</option>
-              <option value="stable">안정</option>
+              <option value="stable">정답 우세</option>
             </select>
             <div className="relative min-w-0 md:col-span-2 xl:col-span-1">
               <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
@@ -2784,14 +2987,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       </div>
 
       <div className="pb-4">
-        <section className="rounded-lg border border-slate-200 bg-white">
+        <details className="rounded-lg border border-slate-200 bg-white">
+          <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-bold text-gray-700">
+            문항 통계 · 단원·유형·학급 비교
+          </summary>
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h3 className="font-black text-slate-900">{scopeTitle}</h3>
-              <p className="mt-1 text-xs font-bold text-slate-500">
-                현재 필터 기준으로 단원, 유형, 학급 격차와 재출제 후보를 함께
-                봅니다.
-              </p>
             </div>
             <div className="text-xs font-black text-slate-400">
               마지막 응시{" "}
@@ -3033,17 +3235,20 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               </div>
             </section>
           </div>
-        </section>
+        </details>
 
         <div className="mt-4 grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h3 className="font-black text-slate-900">문항별 분석</h3>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  행을 선택하면 문제를 수정할 수 있습니다. 학급별 선택 시 해당
-                  반 응시 결과만 반영합니다.
-                </p>
+                <div className="flex items-center gap-1">
+                  <h3 className="font-black text-slate-900">문항 목록</h3>
+                  <InfoHelp label="문항 통계 해석 기준">
+                    정답률은 조회한 제출 기록 기준이며 반복 응시가 포함됩니다.
+                    표본 수와 서로 다른 학생 수를 함께 확인하세요. 정답률만으로
+                    학생의 숙달이나 문항의 품질을 확정하지 않습니다.
+                  </InfoHelp>
+                </div>
               </div>
               <div className="text-xs font-black text-slate-500">
                 {activeClassFilter
@@ -3252,11 +3457,53 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                                   .split(ORDER_DELIMITER)
                                   .join(" > ")}
                               </div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                                <span>
+                                  {q.concepts?.filter(Boolean).join(" · ") ||
+                                    "개념 미등록"}
+                                </span>
+                                <span>
+                                  {q.cognitiveProcess || "사고 과정 미등록"}
+                                </span>
+                              </div>
+                              {canEdit && (
+                                <div className="quiz-question-actions mt-2">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openEditModal(q);
+                                    }}
+                                    className="text-gray-700 hover:bg-gray-100"
+                                  >
+                                    수정
+                                  </button>
+                                  {onDeriveQuestion && (
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        onDeriveQuestion({
+                                          ...q,
+                                          type: q.type as QuizQuestionDraft["type"],
+                                          answer: String(q.answer),
+                                        });
+                                      }}
+                                      className="text-blue-700 hover:bg-blue-50"
+                                    >
+                                      파생 문항 만들기
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="text-xs font-black text-slate-700">
                               {rateInfo.text}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              {stat.attempts}회 · {stat.uniqueStudents}명
                             </div>
                             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                               <div
@@ -3455,7 +3702,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             </section>
 
             <section className="rounded-lg border border-slate-200 bg-white p-4">
-              <h3 className="font-black text-slate-900">수업 활용 제안</h3>
+              <h3 className="font-black text-slate-900">다음 확인</h3>
               <div className="mt-4 space-y-2">
                 {actionSuggestions.map((item) => (
                   <div
@@ -3480,7 +3727,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               </div>
               {rosterAccessLimited && (
                 <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">
-                  학생 명단 권한이 없어 참여율은 응시 기록 기준으로 표시합니다.
+                  학생 명단을 불러오지 못해 참여율은 응시 기록 기준으로
+                  표시합니다.
                 </div>
               )}
             </section>
@@ -3493,6 +3741,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           <div className="absolute inset-0 bg-black/45" />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div
+              ref={editorDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="문제 수정"
+              tabIndex={-1}
               className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5"
               onClick={(event) => event.stopPropagation()}
             >
@@ -3514,13 +3767,52 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 <button
                   type="button"
                   onClick={() => closeEditModal()}
-                  className="text-gray-400 hover:text-gray-700"
+                  className="min-h-11 min-w-11 text-gray-500 hover:text-gray-700"
+                  aria-label="문제 수정 닫기"
                 >
                   <i className="fas fa-times text-lg"></i>
                 </button>
               </div>
 
               <div className="space-y-4">
+                <details className="rounded-lg border border-gray-200 p-3">
+                  <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold text-gray-700">
+                    응답 분포 ·{" "}
+                    {getScopedQuestionStat(editingQuestion).attempts}회,{" "}
+                    {getScopedQuestionStat(editingQuestion).uniqueStudents}명
+                  </summary>
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      정답 응답 {getScopedQuestionStat(editingQuestion).correct}
+                      회
+                    </p>
+                    {getScopedQuestionStat(editingQuestion).missingAnswerCount >
+                      0 && (
+                      <p className="text-gray-600">
+                        답안 정보 없음{" "}
+                        {
+                          getScopedQuestionStat(editingQuestion)
+                            .missingAnswerCount
+                        }
+                        회 · 정오답 집계에 포함하며 오답 선지 분포에서는
+                        제외합니다.
+                      </p>
+                    )}
+                    {Object.entries(
+                      getScopedQuestionStat(editingQuestion).wrongAnswers,
+                    )
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([answer, count]) => (
+                        <p
+                          key={answer}
+                          className="flex justify-between gap-3 border-t border-gray-100 pt-2"
+                        >
+                          <span className="break-words">오답: {answer}</span>
+                          <strong className="shrink-0">{count}회</strong>
+                        </p>
+                      ))}
+                  </div>
+                </details>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <select
                     value={editType}
@@ -3753,6 +4045,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           <button
                             type="button"
                             onClick={() => removeChoiceOption(index)}
+                            aria-label={`${index + 1}번 보기 삭제`}
                             className="mt-1 text-gray-400 hover:text-red-500 px-1"
                           >
                             <i className="fas fa-times"></i>
@@ -4327,6 +4620,30 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   </div>
                 )}
 
+                <QuizLearningMetadataFields
+                  value={editMetadata}
+                  onChange={setEditMetadata}
+                  options={
+                    editType === "choice"
+                      ? getChoiceOptionItems(
+                          editChoiceOptions,
+                          editChoiceOptionImages,
+                        ).map((item) => item.text)
+                      : []
+                  }
+                  units={treeData.flatMap((big) =>
+                    (big.children || []).flatMap((mid) =>
+                      (mid.children || []).map((small) => ({
+                        id: small.id,
+                        title: `${mid.title} · ${small.title}`,
+                      })),
+                    ),
+                  )}
+                />
+                <p className="text-sm text-amber-800">
+                  수정한 문항은 이후 출제에 반영됩니다. 이미 제출된 새 평가
+                  기록의 점수와 출제 당시 문항은 유지됩니다.
+                </p>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
