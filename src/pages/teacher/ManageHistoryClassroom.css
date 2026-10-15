@@ -169,6 +169,10 @@
   font-size: 12px;
 }
 
+.history-results-table {
+  container: history-attempts / inline-size;
+}
+
 .history-attempt-table,
 .history-attempt-table thead,
 .history-attempt-table tbody {
@@ -179,12 +183,16 @@
 
 .history-attempt-table {
   position: relative;
-  --history-row-actions: 216px;
+  --history-row-actions: 184px;
+  --history-row-result: 112px;
+  font-variant-numeric: tabular-nums;
 }
 
 .history-attempt-table tr {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px var(--history-row-actions);
+  grid-template-columns:
+    minmax(0, 1fr) var(--history-row-result)
+    var(--history-row-actions);
   align-items: center;
   min-width: 0;
 }
@@ -199,7 +207,7 @@
 }
 
 .history-attempt-row {
-  min-height: 52px;
+  min-height: 36px;
 }
 
 .history-attempt-student,
@@ -207,21 +215,120 @@
 .history-attempt-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  line-height: 16px;
 }
 
-.history-attempt-student,
-.history-attempt-result {
-  flex-wrap: wrap;
+.history-attempt-table thead th {
+  padding: 8px 4px;
+  white-space: nowrap;
+}
+
+.history-attempt-table .history-attempt-student,
+.history-attempt-table .history-attempt-result {
+  padding: 4px;
+}
+
+.history-attempt-table .history-attempt-actions {
+  justify-content: flex-end;
+  padding: 3px 4px;
 }
 
 .history-attempt-number {
+  flex-shrink: 0;
   white-space: nowrap;
 }
 
 .history-attempt-name {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-attempt-status {
+  flex-shrink: 0;
+  padding: 2px 4px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.history-attempt-percent {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Dense table controls intentionally override the general 44px action size. */
+.history-classroom .history-attempt-actions .history-action-button {
+  width: auto;
+  min-width: 28px;
+  max-width: none;
+  height: 28px;
+  min-height: 28px;
+  flex-basis: auto;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.history-attempt-actions .history-action-button > svg {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+}
+
+.history-classroom .history-attempt-actions .history-action-label {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+}
+
+@container history-attempts (max-width: 560px) {
+  .history-attempt-table {
+    --history-row-actions: 68px;
+  }
+
+  .history-classroom .history-attempt-actions .history-action-button {
+    width: 28px;
+    max-width: 28px;
+    flex-basis: 28px;
+    padding: 0;
+  }
+
+  .history-classroom .history-attempt-actions .history-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+}
+
+@container history-attempts (max-width: 360px) {
+  .history-attempt-table {
+    --history-row-actions: 60px;
+    --history-row-result: 96px;
+  }
+
+  .history-attempt-table .history-attempt-student,
+  .history-attempt-table .history-attempt-result {
+    padding-left: 2px;
+    padding-right: 2px;
+    font-size: 11px;
+  }
+
+  .history-attempt-table .history-attempt-actions {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 .history-attempt-table .history-attempt-details,
@@ -258,35 +365,13 @@
 }
 
 @container history-content (max-width: 520px) {
-  .history-classroom .history-attempt-table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
+  .history-classroom .history-edit-results {
+    padding-left: 4px;
+    padding-right: 4px;
   }
 
-  .history-classroom .history-attempt-row {
-    grid-template-columns: minmax(0, 1fr) var(--history-row-actions);
-    padding: 4px 0;
-  }
-
-  .history-classroom .history-attempt-student {
-    grid-column: 1;
-    grid-row: 1;
-    gap: 4px 8px;
-  }
-
-  .history-classroom .history-attempt-result {
-    grid-column: 1;
-    grid-row: 2;
-    gap: 4px;
-  }
-
-  .history-classroom .history-attempt-actions {
-    grid-column: 2;
-    grid-row: 1 / 3;
-    gap: 4px;
+  .history-classroom .history-attempt-section {
+    padding: 8px;
   }
 }
 
@@ -354,10 +439,6 @@
 }
 
 @container (max-width: 900px) {
-  .history-classroom .history-attempt-table {
-    --history-row-actions: 104px;
-  }
-
   .history-classroom .history-action-button {
     width: 44px;
     max-width: 44px;
