@@ -1,0 +1,9 @@
+{
+  "source": "Natural Earth",
+  "license": "Public domain",
+  "sourceScale": "1:110,000,000",
+  "sourceUrl": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_110m_land.geojson",
+  "sourceSha256": "9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9",
+  "assetSha256": "5f7656032a496cd954cc9e068d4abe0401f4be2175aed4c1883283328170c03c",
+  "notes": "Modern natural geography for globe overview. Source coordinates retained; properties removed and Polygon features joined into MultiPolygon. No political borders. Detailed coastlines remain in the 2D atlas."
+}

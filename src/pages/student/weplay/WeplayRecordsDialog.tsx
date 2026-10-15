@@ -6,6 +6,10 @@ import {
   type WeplayLobby,
 } from "../../../lib/weplay";
 import WeplayLobbyIcon from "./WeplayLobbyIcon";
+import {
+  InfoHelpContent,
+  InfoHelpIcon,
+} from "../../../components/common/InfoHelp";
 
 export type WeplayRecordsView = "ranking" | "history";
 const date = (value: number) =>
@@ -136,12 +140,26 @@ export default function WeplayRecordsDialog({
                 setHelpOpen(helpPinned.current);
               }}
             >
-              <WeplayLobbyIcon name="info" />
+              <InfoHelpIcon />
             </button>
             {helpOpen && (
               <span id={helpId} role="tooltip">
-                도전 모드의 한 판 최고 점수로 순위를 정합니다. 같은 점수는 먼저
-                달성한 기록이 앞섭니다.
+                <InfoHelpContent
+                  sections={[
+                    {
+                      rows: [
+                        {
+                          label: "순위 기준",
+                          content: "도전 모드의 한 판 최고 점수",
+                        },
+                        {
+                          label: "동점일 때",
+                          content: "먼저 달성한 기록이 앞섭니다.",
+                        },
+                      ],
+                    },
+                  ]}
+                />
               </span>
             )}
           </span>

@@ -1,0 +1,1212 @@
+{
+  "source": "OpenStreetMap",
+  "license": "ODbL 1.0",
+  "licenseUrl": "https://opendatacommons.org/licenses/odbl/1-0/",
+  "attribution": "© OpenStreetMap contributors",
+  "attributionUrl": "https://www.openstreetmap.org/copyright",
+  "generatedAt": "2026-10-15T05:09:03.048811+00:00",
+  "coordinateSystem": "WGS84 longitude, latitude",
+  "simplificationToleranceDegrees": 0.0003,
+  "processing": "Simplify each source way separately with Shapely preserve_topology=True; round to six decimals. Preserve way endpoints and separate MultiLineString parts. No joining, interpolation or traced geometry.",
+  "geometryFile": "rivers-supplement.json",
+  "sha256": "d0c554e07cd51a7c2e4f96bb01494427aa6f4f26d4e739620c17a1210d45b1f7",
+  "bytes": 243355,
+  "featureCount": 21,
+  "wayCount": 383,
+  "sources": [
+    {
+      "id": "korea-river-osm-source",
+      "file": "korea-river-osm-source.json",
+      "sha256": "7bec5bbf9161b0a5edc195358dcd0f8d5c7563da9673549dad694f68c9a75bc7",
+      "query": "[out:json][timeout:45];way[waterway=river][name~\"^(금강|대동강|청천강|예성강|임진강|북한강|섬진강|영산강|대령강|동진강|재령강|태화강|형산강|탐진강|성천강)$\"](32,123,44,132);out geom;",
+      "url": "https://overpass.kumi.systems/api/interpreter?data=%5Bout%3Ajson%5D%5Btimeout%3A45%5D%3Bway%5Bwaterway%3Driver%5D%5Bname~%22%5E%28%EA%B8%88%EA%B0%95%7C%EB%8C%80%EB%8F%99%EA%B0%95%7C%EC%B2%AD%EC%B2%9C%EA%B0%95%7C%EC%98%88%EC%84%B1%EA%B0%95%7C%EC%9E%84%EC%A7%84%EA%B0%95%7C%EB%B6%81%ED%95%9C%EA%B0%95%7C%EC%84%AC%EC%A7%84%EA%B0%95%7C%EC%98%81%EC%82%B0%EA%B0%95%7C%EB%8C%80%EB%A0%B9%EA%B0%95%7C%EB%8F%99%EC%A7%84%EA%B0%95%7C%EC%9E%AC%EB%A0%B9%EA%B0%95%7C%ED%83%9C%ED%99%94%EA%B0%95%7C%ED%98%95%EC%82%B0%EA%B0%95%7C%ED%83%90%EC%A7%84%EA%B0%95%7C%EC%84%B1%EC%B2%9C%EA%B0%95%29%24%22%5D%2832%2C123%2C44%2C132%29%3Bout%20geom%3B",
+      "retrievedAt": "2026-10-15T04:52:50.823849+00:00",
+      "retrievalTimeBasis": "saved response file modification time",
+      "osmBaseTimestamp": "2026-07-15T15:22:01Z",
+      "generator": "Overpass API 0.7.62.11 87bfad18",
+      "sourceElements": 160,
+      "includedNames": [
+        "대동강",
+        "청천강",
+        "대령강",
+        "재령강",
+        "성천강"
+      ]
+    },
+    {
+      "id": "korea-river-osm-primary-south-source",
+      "file": "korea-river-osm-primary-south-source.json",
+      "sha256": "5c8b11dedfbda997248fc5c4fed2e095293a7346b176ede3907fc8dd825acbb1",
+      "query": "[out:json][timeout:60];way[\"waterway\"=\"river\"][\"name\"~\"^(금강|임진강|북한강|섬진강|영산강|동진강|태화강|형산강|탐진강)$\"](33,124,39,131);out geom;",
+      "url": "https://overpass-api.de/api/interpreter?data=%5Bout%3Ajson%5D%5Btimeout%3A60%5D%3Bway%5B%22waterway%22%3D%22river%22%5D%5B%22name%22~%22%5E%28%EA%B8%88%EA%B0%95%7C%EC%9E%84%EC%A7%84%EA%B0%95%7C%EB%B6%81%ED%95%9C%EA%B0%95%7C%EC%84%AC%EC%A7%84%EA%B0%95%7C%EC%98%81%EC%82%B0%EA%B0%95%7C%EB%8F%99%EC%A7%84%EA%B0%95%7C%ED%83%9C%ED%99%94%EA%B0%95%7C%ED%98%95%EC%82%B0%EA%B0%95%7C%ED%83%90%EC%A7%84%EA%B0%95%29%24%22%5D%2833%2C124%2C39%2C131%29%3Bout%20geom%3B",
+      "retrievedAt": "2026-10-15T05:02:25.141631+00:00",
+      "retrievalTimeBasis": "request record",
+      "osmBaseTimestamp": "2026-10-15T05:00:44Z",
+      "generator": "Overpass API 0.7.62.11 87bfad18",
+      "sourceElements": 48,
+      "includedNames": null
+    },
+    {
+      "id": "korea-river-osm-south-source",
+      "file": "korea-river-osm-south-source.json",
+      "sha256": "d8537050bee9aa6058f98e1ba8c0f135998a39b8819d4e27677b03041786b0e1",
+      "query": "[out:json][timeout:60];way[\"waterway\"=\"river\"][\"name\"~\"^(한강|남한강|낙동강|백마강)$\"](33,124,39,131);out geom;",
+      "url": "https://overpass-api.de/api/interpreter?data=%5Bout%3Ajson%5D%5Btimeout%3A60%5D%3Bway%5B%22waterway%22%3D%22river%22%5D%5B%22name%22~%22%5E%28%ED%95%9C%EA%B0%95%7C%EB%82%A8%ED%95%9C%EA%B0%95%7C%EB%82%99%EB%8F%99%EA%B0%95%7C%EB%B0%B1%EB%A7%88%EA%B0%95%29%24%22%5D%2833%2C124%2C39%2C131%29%3Bout%20geom%3B",
+      "retrievedAt": "2026-10-15T04:56:30.693757+00:00",
+      "retrievalTimeBasis": "request record",
+      "osmBaseTimestamp": "2026-10-15T04:54:35Z",
+      "generator": "Overpass API 0.7.62.11 87bfad18",
+      "sourceElements": 53,
+      "includedNames": null
+    },
+    {
+      "id": "korea-river-osm-yesong-source",
+      "file": "korea-river-osm-yesong-source.json",
+      "sha256": "d8a4ec83792fa8a938f7d6284a9dea61894fb6a51573ed0f3fea9e27cb5f1914",
+      "query": "[out:json][timeout:45];way[\"waterway\"=\"river\"](37.5,125.5,39.5,127.5);out tags geom;",
+      "url": "https://overpass-api.de/api/interpreter?data=%5Bout%3Ajson%5D%5Btimeout%3A45%5D%3Bway%5B%22waterway%22%3D%22river%22%5D%2837.5%2C125.5%2C39.5%2C127.5%29%3Bout%20tags%20geom%3B",
+      "retrievedAt": "2026-10-15T04:56:31.448900+00:00",
+      "retrievalTimeBasis": "request record",
+      "osmBaseTimestamp": "2026-10-15T04:54:35Z",
+      "generator": "Overpass API 0.7.62.11 87bfad18",
+      "sourceElements": 2490,
+      "includedNames": [
+        "예성강"
+      ]
+    },
+    {
+      "id": "korea-river-osm-border-source",
+      "file": "korea-river-osm-border-source.json",
+      "sha256": "6dc1127472fee117eeb7d2564143111dcb56ed9bab9720bed7a31d637ec02cb3",
+      "query": "[out:json][timeout:60];(way[\"waterway\"=\"river\"][\"name\"~\"압록강|鴨綠江|鸭绿江|두만강|圖們江|图们江|Tumen|Yalu\",i](39,123,44,132);way[\"waterway\"=\"river\"][\"name:en\"~\"Tumen|Yalu|Amnok\",i](39,123,44,132););out geom;",
+      "url": "https://overpass-api.de/api/interpreter?data=%5Bout%3Ajson%5D%5Btimeout%3A60%5D%3B%28way%5B%22waterway%22%3D%22river%22%5D%5B%22name%22~%22%EC%95%95%EB%A1%9D%EA%B0%95%7C%E9%B4%A8%E7%B6%A0%E6%B1%9F%7C%E9%B8%AD%E7%BB%BF%E6%B1%9F%7C%EB%91%90%EB%A7%8C%EA%B0%95%7C%E5%9C%96%E5%80%91%E6%B1%9F%7C%E5%9B%BE%E4%BB%AC%E6%B1%9F%7CTumen%7CYalu%22%2Ci%5D%2839%2C123%2C44%2C132%29%3Bway%5B%22waterway%22%3D%22river%22%5D%5B%22name%3Aen%22~%22Tumen%7CYalu%7CAmnok%22%2Ci%5D%2839%2C123%2C44%2C132%29%3B%29%3Bout%20geom%3B",
+      "retrievedAt": "2026-10-15T04:59:21.631088+00:00",
+      "retrievalTimeBasis": "request record",
+      "osmBaseTimestamp": "2026-10-15T04:57:36Z",
+      "generator": "Overpass API 0.7.62.11 87bfad18",
+      "sourceElements": 144,
+      "includedNames": null
+    },
+    {
+      "id": "world-river-osm-gardon-source",
+      "file": "world-river-osm-gardon-source.json",
+      "sha256": "66957610e55d710b8d260d5c40c65eb2840e938f3ebd287f41530fd612d4124d",
+      "query": "[out:json][timeout:45];way[\"waterway\"=\"river\"][\"name\"~\"^(Gardon|Le Gardon|Gard|le Gardon)$\"](43,3,45,5);out geom;",
+      "url": "https://overpass-api.de/api/interpreter?data=%5Bout%3Ajson%5D%5Btimeout%3A45%5D%3Bway%5B%22waterway%22%3D%22river%22%5D%5B%22name%22~%22%5E%28Gardon%7CLe%20Gardon%7CGard%7Cle%20Gardon%29%24%22%5D%2843%2C3%2C45%2C5%29%3Bout%20geom%3B",
+      "retrievedAt": "2026-10-15T05:01:48.769574+00:00",
+      "retrievalTimeBasis": "request record",
+      "osmBaseTimestamp": "2026-10-15T04:59:41Z",
+      "generator": "Overpass API 0.7.62.11 87bfad18",
+      "sourceElements": 8,
+      "includedNames": null
+    }
+  ],
+  "rivers": [
+    {
+      "name": "가르강",
+      "osmWayIds": [
+        65981268,
+        70378372,
+        80728924,
+        105878739,
+        188636060,
+        188636061,
+        200849018,
+        200849020
+      ],
+      "sourceIds": [
+        "world-river-osm-gardon-source"
+      ],
+      "sourceNames": [
+        "Le Gardon"
+      ],
+      "ways": 8,
+      "sourcePoints": 291,
+      "outputPoints": 99,
+      "bbox": [
+        4.019555,
+        43.969648,
+        4.476403,
+        44.471506
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "금강",
+      "osmWayIds": [
+        34834591,
+        86127015,
+        135346158,
+        1074970952,
+        1074970958,
+        1310611748
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "금강"
+      ],
+      "ways": 6,
+      "sourcePoints": 2085,
+      "outputPoints": 881,
+      "bbox": [
+        126.613652,
+        35.610065,
+        127.712513,
+        36.520191
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "낙동강",
+      "osmWayIds": [
+        28791510,
+        251653236,
+        514525111,
+        853609026,
+        853717280,
+        855259075,
+        855259076,
+        855767841,
+        855767985,
+        855828494,
+        855828495,
+        855844874,
+        855844875,
+        855875233,
+        855875234,
+        856203974,
+        856203975,
+        856203976,
+        856203977,
+        856223089,
+        856223090,
+        856310296,
+        856310297,
+        856353442,
+        856353443,
+        856355120,
+        856355121,
+        856640204,
+        856640205,
+        921587783,
+        921587786
+      ],
+      "sourceIds": [
+        "korea-river-osm-south-source"
+      ],
+      "sourceNames": [
+        "낙동강"
+      ],
+      "ways": 31,
+      "sourcePoints": 3484,
+      "outputPoints": 955,
+      "bbox": [
+        128.235683,
+        35.107326,
+        129.09542,
+        37.091703
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "남한강",
+      "osmWayIds": [
+        369344234,
+        379968172,
+        399704846,
+        583846270,
+        810284748,
+        847913956,
+        847913957,
+        847981348,
+        847981349,
+        848265759,
+        880461760,
+        880461761,
+        988784988,
+        988784989
+      ],
+      "sourceIds": [
+        "korea-river-osm-south-source"
+      ],
+      "sourceNames": [
+        "남한강"
+      ],
+      "ways": 14,
+      "sourcePoints": 1712,
+      "outputPoints": 414,
+      "bbox": [
+        127.310514,
+        36.925199,
+        128.542077,
+        37.535524
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "대동강",
+      "osmWayIds": [
+        35280905,
+        35280920,
+        35281167,
+        35281315,
+        35281347,
+        42681742,
+        42681743,
+        176950186,
+        178636144,
+        179901927,
+        183077281,
+        196173367,
+        236680401,
+        236680402,
+        289975806,
+        290339967,
+        290339968,
+        290340120,
+        290455250,
+        290455563,
+        290525739,
+        290526829,
+        290526830,
+        359267296,
+        366728334,
+        366728338,
+        366740334,
+        366742108,
+        366742110,
+        366742111,
+        366742842,
+        366792053,
+        366809144,
+        366809145,
+        366861765,
+        366970970,
+        366970972,
+        366970973,
+        530192249,
+        530192250,
+        722790706,
+        872870200,
+        872870201,
+        873396861,
+        873396862,
+        873399911,
+        873399912,
+        874994946,
+        880488550,
+        880488551,
+        960594159,
+        987075272,
+        1014325436,
+        1041868262,
+        1041868263,
+        1041868270
+      ],
+      "sourceIds": [
+        "korea-river-osm-source"
+      ],
+      "sourceNames": [
+        "대동강"
+      ],
+      "ways": 56,
+      "sourcePoints": 3343,
+      "outputPoints": 953,
+      "bbox": [
+        125.180848,
+        38.64967,
+        126.974192,
+        40.305218
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "대령강",
+      "osmWayIds": [
+        35279596,
+        37181359,
+        220874427,
+        366702634,
+        366704358,
+        366704359,
+        495527319,
+        1255157689,
+        1333513987,
+        1342077095,
+        1342077096,
+        1342394037
+      ],
+      "sourceIds": [
+        "korea-river-osm-source"
+      ],
+      "sourceNames": [
+        "대령강"
+      ],
+      "ways": 12,
+      "sourcePoints": 464,
+      "outputPoints": 303,
+      "bbox": [
+        125.207319,
+        39.590097,
+        125.602665,
+        40.215325
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "동진강",
+      "osmWayIds": [
+        134972232
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "동진강"
+      ],
+      "ways": 1,
+      "sourcePoints": 342,
+      "outputPoints": 117,
+      "bbox": [
+        126.524313,
+        35.597904,
+        127.067328,
+        35.82122
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "두만강",
+      "osmWayIds": [
+        30729941,
+        30730067,
+        30730241,
+        30730459,
+        30730558,
+        30730597,
+        30730628,
+        30730629,
+        140244395,
+        140244396,
+        145690346,
+        259217847,
+        259220151,
+        259220152,
+        259747398,
+        260187288,
+        409237335,
+        421918520,
+        447860349,
+        474159206,
+        600367398,
+        600367399,
+        604010042,
+        684704084,
+        684739870,
+        684739871,
+        684806488,
+        1228788411,
+        1228788415,
+        1239270711,
+        1239270714,
+        1239270717,
+        1241396698,
+        1249004547,
+        1249004548,
+        1297642245,
+        1453498427,
+        1453498428,
+        1453498429,
+        1453498430,
+        1453498431,
+        1453498432,
+        1453530615,
+        1453530618
+      ],
+      "sourceIds": [
+        "korea-river-osm-border-source"
+      ],
+      "sourceNames": [
+        "Туманная - 두만강",
+        "두만강",
+        "두만강 - 图们江",
+        "두만강 图们江"
+      ],
+      "ways": 44,
+      "sourcePoints": 3579,
+      "outputPoints": 1441,
+      "bbox": [
+        128.356417,
+        41.996804,
+        130.696981,
+        43.008964
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "북한강",
+      "osmWayIds": [
+        26084529,
+        35243344,
+        35251325,
+        35340465,
+        35340629,
+        35340698,
+        204866786,
+        209142945,
+        226390743,
+        227460905,
+        227468069,
+        227468070,
+        227468071,
+        227468074,
+        244808044,
+        244808840,
+        369265306,
+        589661722,
+        589661723,
+        589661724,
+        589661726,
+        589661727,
+        589758663,
+        1078142755,
+        1078142758
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "북한강"
+      ],
+      "ways": 25,
+      "sourcePoints": 1446,
+      "outputPoints": 766,
+      "bbox": [
+        127.30736,
+        37.524873,
+        127.907349,
+        38.831813
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "섬진강",
+      "osmWayIds": [
+        107138088,
+        108714116,
+        109817825
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "섬진강"
+      ],
+      "ways": 3,
+      "sourcePoints": 1135,
+      "outputPoints": 519,
+      "bbox": [
+        127.085252,
+        34.908425,
+        127.801902,
+        35.744342
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "성천강",
+      "osmWayIds": [
+        117081949,
+        199054669,
+        199054670,
+        391891339,
+        391893176,
+        525949617
+      ],
+      "sourceIds": [
+        "korea-river-osm-source"
+      ],
+      "sourceNames": [
+        "성천강"
+      ],
+      "ways": 6,
+      "sourcePoints": 1206,
+      "outputPoints": 290,
+      "bbox": [
+        127.460107,
+        39.802088,
+        127.878268,
+        40.473273
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "압록강",
+      "osmWayIds": [
+        28279043,
+        45559079,
+        45567834,
+        141662028,
+        141662040,
+        141662063,
+        141662081,
+        153789146,
+        205643531,
+        205643533,
+        205797761,
+        218452189,
+        260354666,
+        260637453,
+        260637454,
+        263784117,
+        366687563,
+        366689984,
+        366694109,
+        366700748,
+        366810685,
+        368446645,
+        368446646,
+        368446647,
+        368446648,
+        381288486,
+        381288491,
+        381288499,
+        381288500,
+        387803138,
+        397470819,
+        409236191,
+        416206731,
+        416206734,
+        416206743,
+        425918111,
+        425931171,
+        425931172,
+        604914592,
+        605306209,
+        605306220,
+        639638933,
+        684229332,
+        684229334,
+        684229335,
+        684342936,
+        684390077,
+        684393433,
+        684393434,
+        684393435,
+        684393436,
+        684393437,
+        694949774,
+        694955150,
+        694987394,
+        866934609,
+        866934610,
+        964221264,
+        964221265,
+        983791565,
+        983794235,
+        1032769161,
+        1032769162,
+        1032775789,
+        1032775790,
+        1032775791,
+        1041673073,
+        1153459385,
+        1190220862,
+        1190220863,
+        1190220866,
+        1190220867,
+        1190220868,
+        1190220872,
+        1196984946,
+        1201490675,
+        1256777160,
+        1256777163,
+        1256777164,
+        1256777165,
+        1355630789,
+        1450996294,
+        1450996295,
+        1450997456,
+        1453492146,
+        1453492147,
+        1453492149,
+        1453494948,
+        1453496616,
+        1453496617,
+        1453496618,
+        1453496619,
+        1453497372,
+        1453497373,
+        1453497374,
+        1453497376,
+        1453497377,
+        1453497378,
+        1453497379,
+        1453498815
+      ],
+      "sourceIds": [
+        "korea-river-osm-border-source"
+      ],
+      "sourceNames": [
+        "鸭绿江",
+        "鸭绿江 / 압록강",
+        "鸭绿江 압록강"
+      ],
+      "ways": 100,
+      "sourcePoints": 3069,
+      "outputPoints": 1668,
+      "bbox": [
+        124.334549,
+        39.970682,
+        128.312148,
+        41.810104
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "영산강",
+      "osmWayIds": [
+        200813454,
+        469319776,
+        858449740,
+        1310616480
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "영산강"
+      ],
+      "ways": 4,
+      "sourcePoints": 774,
+      "outputPoints": 283,
+      "bbox": [
+        126.335479,
+        34.764743,
+        127.032364,
+        35.446925
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "예성강",
+      "osmWayIds": [
+        35307975,
+        35308008,
+        200737622,
+        213125755,
+        221119237,
+        366822349,
+        366822350,
+        366939388,
+        367995740,
+        454718455,
+        454718457,
+        454929106,
+        454929108,
+        454929109,
+        487612634,
+        753658436,
+        1023550252,
+        1023550260
+      ],
+      "sourceIds": [
+        "korea-river-osm-yesong-source"
+      ],
+      "sourceNames": [
+        "례성강"
+      ],
+      "ways": 18,
+      "sourcePoints": 1232,
+      "outputPoints": 504,
+      "bbox": [
+        126.369482,
+        37.891502,
+        126.574759,
+        38.815663
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "임진강",
+      "osmWayIds": [
+        366856671,
+        515751693,
+        516577645,
+        879224575,
+        879224576
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "임진강"
+      ],
+      "ways": 5,
+      "sourcePoints": 537,
+      "outputPoints": 165,
+      "bbox": [
+        126.691253,
+        37.8394,
+        128.303109,
+        38.598177
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "재령강",
+      "osmWayIds": [
+        178260411,
+        290339969,
+        366858190,
+        366858695,
+        367994699,
+        368007794,
+        368009508,
+        368013714,
+        1023563399,
+        1223804406,
+        1223804407
+      ],
+      "sourceIds": [
+        "korea-river-osm-source"
+      ],
+      "sourceNames": [
+        "재령강"
+      ],
+      "ways": 11,
+      "sourcePoints": 433,
+      "outputPoints": 220,
+      "bbox": [
+        125.613798,
+        38.191227,
+        125.856617,
+        38.650001
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "청천강",
+      "osmWayIds": [
+        30923456,
+        30923487,
+        35306852,
+        35307013,
+        35307029,
+        35307037,
+        39935418,
+        179866082,
+        198883061,
+        198897210,
+        198897211,
+        198897216,
+        289397633,
+        366708130,
+        366708134,
+        366708138,
+        366708142,
+        366708147,
+        366711759,
+        366711760,
+        366711761,
+        366740862,
+        554500671,
+        969458403,
+        1455210433,
+        1455210434,
+        1484628243
+      ],
+      "sourceIds": [
+        "korea-river-osm-source"
+      ],
+      "sourceNames": [
+        "청천강"
+      ],
+      "ways": 27,
+      "sourcePoints": 886,
+      "outputPoints": 431,
+      "bbox": [
+        125.460361,
+        39.573675,
+        126.715887,
+        40.417005
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "탐진강",
+      "osmWayIds": [
+        64379582
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "탐진강"
+      ],
+      "ways": 1,
+      "sourcePoints": 169,
+      "outputPoints": 63,
+      "bbox": [
+        126.777274,
+        34.619031,
+        126.910184,
+        34.755492
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "태화강",
+      "osmWayIds": [
+        64149194
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "태화강"
+      ],
+      "ways": 1,
+      "sourcePoints": 265,
+      "outputPoints": 91,
+      "bbox": [
+        129.03329,
+        35.482973,
+        129.39503,
+        35.620866
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "한강",
+      "osmWayIds": [
+        366856674,
+        378066781,
+        379766914,
+        549929142,
+        549929146,
+        587684502,
+        727265578,
+        906802842
+      ],
+      "sourceIds": [
+        "korea-river-osm-south-source"
+      ],
+      "sourceNames": [
+        "한강"
+      ],
+      "ways": 8,
+      "sourcePoints": 213,
+      "outputPoints": 113,
+      "bbox": [
+        126.413576,
+        37.509862,
+        127.310514,
+        37.844704
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "형산강",
+      "osmWayIds": [
+        132580559,
+        353253952
+      ],
+      "sourceIds": [
+        "korea-river-osm-primary-south-source"
+      ],
+      "sourceNames": [
+        "형산강"
+      ],
+      "ways": 2,
+      "sourcePoints": 155,
+      "outputPoints": 85,
+      "bbox": [
+        129.194685,
+        35.724485,
+        129.383915,
+        36.029435
+      ],
+      "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    }
+  ],
+  "requestedCoverage": [
+    {
+      "name": "한강",
+      "status": "supplement",
+      "wayCount": 8
+    },
+    {
+      "name": "남한강",
+      "status": "supplement",
+      "wayCount": 14
+    },
+    {
+      "name": "낙동강",
+      "status": "supplement",
+      "wayCount": 31
+    },
+    {
+      "name": "압록강",
+      "status": "supplement",
+      "wayCount": 100
+    },
+    {
+      "name": "두만강",
+      "status": "supplement",
+      "wayCount": 44
+    },
+    {
+      "name": "대동강",
+      "status": "supplement",
+      "wayCount": 56
+    },
+    {
+      "name": "금강",
+      "status": "supplement",
+      "wayCount": 6
+    },
+    {
+      "name": "섬진강",
+      "status": "supplement",
+      "wayCount": 3
+    },
+    {
+      "name": "청천강",
+      "status": "supplement",
+      "wayCount": 27
+    },
+    {
+      "name": "예성강",
+      "status": "supplement",
+      "wayCount": 18
+    },
+    {
+      "name": "백마강",
+      "status": "unresolved",
+      "note": "No explicitly named source centerline obtained; no inferred line."
+    },
+    {
+      "name": "패강",
+      "status": "unresolved",
+      "note": "Historical identification requires entry-specific evidence; no inferred line."
+    },
+    {
+      "name": "백강",
+      "status": "unresolved",
+      "note": "Historical identification requires entry-specific evidence; no inferred line."
+    },
+    {
+      "name": "가르강",
+      "status": "supplement",
+      "wayCount": 8
+    },
+    {
+      "name": "위강",
+      "status": "natural-earth-only",
+      "naturalEarthNames": [
+        "Wei"
+      ],
+      "note": "Existing generalized geometry; full river coverage is not asserted."
+    }
+  ],
+  "ignoredElementCount": 2520,
+  "ignoredNamedWaterways": {
+    "가평천": 1,
+    "간파천": 1,
+    "갈마천": 6,
+    "강남천": 3,
+    "개련천": 2,
+    "검단천": 1,
+    "검수천": 1,
+    "경안천": 1,
+    "계정천": 1,
+    "고도천": 3,
+    "고미탄천": 13,
+    "고신은천": 3,
+    "고아이강": 1,
+    "고지천": 1,
+    "곡산천": 2,
+    "곤양강": 4,
+    "공릉천": 1,
+    "관문천": 1,
+    "광석천": 1,
+    "구연천": 1,
+    "구운천": 1,
+    "구읍천": 1,
+    "금강": 6,
+    "금성천": 4,
+    "금야강": 2,
+    "금천강": 3,
+    "금평천": 1,
+    "남강": 16,
+    "남대천": 14,
+    "남천강": 2,
+    "남한강": 1,
+    "내백천": 3,
+    "단장천": 1,
+    "당현천": 1,
+    "대교천": 1,
+    "대동강": 37,
+    "대정천": 2,
+    "대평천": 4,
+    "덕지강": 3,
+    "동연천": 1,
+    "동정천": 1,
+    "동진강": 1,
+    "동천": 1,
+    "두무강": 2,
+    "룡연천": 1,
+    "룡지천": 11,
+    "루천": 4,
+    "림진강": 14,
+    "림진강/임진강": 4,
+    "림진강·임진강": 1,
+    "매상천": 4,
+    "무갈천": 2,
+    "무자천": 1,
+    "무진천": 7,
+    "묵지천": 1,
+    "묵현천": 1,
+    "문동천": 1,
+    "문산천": 2,
+    "문암천": 3,
+    "미당천": 1,
+    "미수천": 3,
+    "미원천": 1,
+    "반포천": 1,
+    "백석천": 3,
+    "뱀천": 6,
+    "보통강": 17,
+    "복포천": 1,
+    "봉명천": 1,
+    "봉상강": 1,
+    "봉선사천": 2,
+    "봉성포천": 1,
+    "부소천": 1,
+    "부용천": 1,
+    "북한강": 26,
+    "불광천": 1,
+    "비류강": 8,
+    "비천": 1,
+    "사능천": 1,
+    "사릉천": 1,
+    "사리원운하": 1,
+    "사미천": 5,
+    "사박천": 2,
+    "사북천": 2,
+    "사천": 3,
+    "사천강": 1,
+    "삼봉천": 1,
+    "상동천": 1,
+    "상류천": 2,
+    "상서천": 2,
+    "상원강": 1,
+    "서강": 4,
+    "서흥강": 6,
+    "선적천": 1,
+    "섬진강": 3,
+    "성북천": 1,
+    "성산천": 1,
+    "성재천": 1,
+    "세림천": 1,
+    "소창천": 4,
+    "송석천": 1,
+    "수정천": 9,
+    "수합강": 1,
+    "순화강": 7,
+    "시변리천": 2,
+    "시정천": 7,
+    "식현천": 1,
+    "신천": 5,
+    "심포천": 2,
+    "십이탄천": 2,
+    "아천": 1,
+    "안악천": 1,
+    "안양천": 1,
+    "암포천": 1,
+    "양재천": 1,
+    "어둔천": 1,
+    "어사천": 2,
+    "언진천": 1,
+    "역곡천": 10,
+    "염탄천": 1,
+    "영산강": 4,
+    "영평천": 3,
+    "오동천": 1,
+    "오조천": 1,
+    "오천": 2,
+    "옥류천": 2,
+    "왕숙천": 5,
+    "외북천": 3,
+    "용암천": 3,
+    "용천": 3,
+    "용화천": 2,
+    "우룡천": 1,
+    "운흥천": 1,
+    "위라천": 2,
+    "은구천": 1,
+    "은파천": 5,
+    "읍천": 2,
+    "인창천": 1,
+    "임진강": 8,
+    "입암천": 1,
+    "자일천": 1,
+    "장선강": 1,
+    "장촌강": 1,
+    "재령강": 11,
+    "적천천": 3,
+    "전탄강": 9,
+    "전탄천": 1,
+    "정릉천": 4,
+    "정암천": 1,
+    "조종천": 7,
+    "죽배천": 2,
+    "중랑천": 6,
+    "지동천": 1,
+    "지석천": 5,
+    "지파리천": 2,
+    "직천": 2,
+    "진계천": 2,
+    "차탄천": 5,
+    "창릉천": 3,
+    "척서천": 3,
+    "천성천": 1,
+    "천주천": 1,
+    "청계천": 2,
+    "청천": 1,
+    "추동천": 1,
+    "추전강": 1,
+    "취야천": 2,
+    "쿠리리카와": 3,
+    "탄천": 1,
+    "탐진강": 1,
+    "탑거천": 2,
+    "태봉천": 2,
+    "태화강": 1,
+    "통동천": 3,
+    "판문천": 1,
+    "평원천": 1,
+    "포천천": 4,
+    "필밀천": 1,
+    "한강": 8,
+    "한교천": 2,
+    "한탄강": 10,
+    "한탄천": 12,
+    "합장강": 4,
+    "해창강": 1,
+    "형산강": 2,
+    "홍릉천": 1,
+    "홍제천": 3,
+    "화강": 2,
+    "화암천": 1,
+    "화양천": 2,
+    "화천": 1,
+    "황주천": 6,
+    "흑교천": 1,
+    "흥수천": 1
+  },
+  "limitations": "Modern OSM river centerlines, not reconstructed historical courses. Named segments may have gaps. This derived database remains separate from the public-domain Natural Earth layers and is distributed under ODbL 1.0."
+}

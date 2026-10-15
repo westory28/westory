@@ -33,16 +33,35 @@
       "file": "rivers-world.json",
       "source": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_50m_rivers_lake_centerlines.geojson",
       "sourceSha256": "f286e0ce978fde999ca2d7a78c764be08542e19b63cded52b05c12d5173ccc51",
-      "sha256": "167f0ddaf77aa606aa66d93876975d12bd515f3fda9440ad88d78067dabe7a15",
+      "sha256": "04afc19c7d9405bf91229d931729541630c019d2235a135442cfbea2002c3308",
       "sourceScale": "1:50,000,000",
       "clipBounds": null,
-      "bytes": 620291
+      "bytes": 656122,
+      "additionalSources": [
+        {
+          "source": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_rivers_lake_centerlines.geojson",
+          "sourceSha256": "bb854a900ecbd3b408df46d5e16e3e0f974ba55993f9d8b5c26e855273c0905a",
+          "sourceScale": "1:10,000,000",
+          "rivernums": [
+            873,
+            553,
+            611,
+            458
+          ],
+          "names": [
+            "Huai",
+            "Ussuri",
+            "Wei"
+          ],
+          "featureCount": 4
+        }
+      ]
     },
     {
       "file": "rivers-korea.json",
       "source": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_rivers_lake_centerlines.geojson",
       "sourceSha256": "bb854a900ecbd3b408df46d5e16e3e0f974ba55993f9d8b5c26e855273c0905a",
-      "sha256": "36784b3b91068341ed72ed0f8a494a00550621ce2fdc3505b396f6a753fc1780",
+      "sha256": "f5b6d47a1693b529dfc6f459505dff17d77cb6485ce0369305516df84f5e65cf",
       "sourceScale": "1:10,000,000",
       "clipBounds": [
         90,
@@ -50,7 +69,7 @@
         160,
         65
       ],
-      "bytes": 1004151
+      "bytes": 1014750
     }
   ]
 }

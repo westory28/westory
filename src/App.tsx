@@ -38,6 +38,10 @@ const StudentMaps = lazyWithRetry(
   () => import("./pages/student/lesson/Maps"),
   "student-maps",
 );
+const StudentGlobe = lazyWithRetry(
+  () => import("./pages/student/lesson/Globe"),
+  "student-globe",
+);
 const StudentThinkCloud = lazyWithRetry(
   () => import("./pages/student/lesson/ThinkCloud"),
   "student-think-cloud",
@@ -113,6 +117,10 @@ const ManageHistoryDictionary = lazyWithRetry(
 const ManageMaps = lazyWithRetry(
   () => import("./pages/teacher/ManageMaps"),
   "manage-maps",
+);
+const TeacherGlobe = lazyWithRetry(
+  () => import("./pages/teacher/Globe"),
+  "teacher-globe",
 );
 const ManageSourceArchive = lazyWithRetry(
   () => import("./pages/teacher/ManageSourceArchive"),
@@ -242,6 +250,13 @@ const App: React.FC = () => {
                   element={renderWithLayout(
                     <StudentThinkCloud />,
                     "생각 구름을 준비하는 중입니다.",
+                  )}
+                />
+                <Route
+                  path="/student/lesson/globe"
+                  element={renderWithLayout(
+                    <StudentGlobe />,
+                    "지구본을 준비하는 중입니다.",
                   )}
                 />
                 <Route
@@ -405,6 +420,13 @@ const App: React.FC = () => {
                   element={renderWithLayout(
                     <ManageSourceArchive />,
                     "사료 보관함을 준비하는 중입니다.",
+                  )}
+                />
+                <Route
+                  path="/teacher/lesson/globe"
+                  element={renderWithLayout(
+                    <TeacherGlobe />,
+                    "지구본을 준비하는 중입니다.",
                   )}
                 />
                 <Route

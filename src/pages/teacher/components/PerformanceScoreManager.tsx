@@ -1,4 +1,5 @@
 import NumericInput from "../../../components/common/NumericInput";
+import InfoHelp from "../../../components/common/InfoHelp";
 import { readScoreWorkbookRows } from "../../../lib/scoreWorkbookReader";
 import { isSemesterArchive } from "../../../lib/semesterArchive";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -712,65 +713,24 @@ function ScoreUploadTableScroll({ children }: { children: React.ReactNode }) {
 }
 
 function ScoreUploadMaximumHelp() {
-  const root = useRef<HTMLSpanElement | null>(null);
-  const pinned = useRef(false);
-  const [open, setOpen] = useState(false);
-  const close = () => {
-    pinned.current = false;
-    setOpen(false);
-  };
-  useEffect(() => {
-    if (!open) return;
-    const dismiss = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) close();
-    };
-    document.addEventListener("pointerdown", dismiss);
-    return () => document.removeEventListener("pointerdown", dismiss);
-  }, [open]);
   return (
-    <span
-      ref={root}
-      className="relative inline-flex"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => {
-        if (!pinned.current) setOpen(false);
-      }}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) close();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && open) {
-          event.preventDefault();
-          event.stopPropagation();
-          close();
-        }
-      }}
-    >
-      <button
-        type="button"
-        aria-label="평가 배점 도움말"
-        aria-expanded={open}
-        aria-describedby={open ? "score-upload-maximum-help" : undefined}
-        onFocus={() => setOpen(true)}
-        onClick={() => {
-          pinned.current = !pinned.current;
-          setOpen(pinned.current);
-        }}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-black text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
-      >
-        <span aria-hidden="true">i</span>
-      </button>
-      {open && (
-        <span
-          id="score-upload-maximum-help"
-          role="tooltip"
-          className="absolute left-0 top-full z-20 mt-2 w-56 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold leading-5 text-white shadow-lg"
-        >
-          배점이 없는 파일은 최고점을 기준으로 읽습니다. 실제 배점과 다르면
-          수정해 주세요.
-        </span>
-      )}
-    </span>
+    <InfoHelp
+      label="평가 배점 도움말"
+      sections={[
+        {
+          rows: [
+            {
+              label: "배점이 없는 파일",
+              content: "최고점을 기준으로 읽습니다.",
+            },
+            {
+              label: "배점 수정",
+              content: "실제 배점과 다르면 수정해 주세요.",
+            },
+          ],
+        },
+      ]}
+    />
   );
 }
 

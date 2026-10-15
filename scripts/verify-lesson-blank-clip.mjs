@@ -601,6 +601,10 @@ const HistoryView = compile(
   {
     react: staticReact,
     "./WorksheetBlankInput": "WorksheetBlankInput",
+    "./InfoHelp": {
+      InfoHelpContent: "InfoHelpContent",
+      InfoHelpIcon: "InfoHelpIcon",
+    },
     "./HistoryBlankFeedback": "HistoryBlankFeedback",
     "../../lib/historyClassroom": history,
     "../../lib/lessonBlankClip": clipModule,

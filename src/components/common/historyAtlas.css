@@ -278,6 +278,84 @@
   height: 16px;
   box-shadow: 0 0 0 3px var(--ws-border-blue, #dbeafe);
 }
+.history-atlas__point.is-active:not(.is-river)::before {
+  content: "";
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--ws-primary, #2563eb);
+  border-radius: 50%;
+  background: var(--ws-primary-soft, #eff6ff);
+  opacity: 0.4;
+  animation: atlas-point-halo 2400ms ease-in-out infinite;
+  pointer-events: none;
+}
+.history-atlas__point.is-active .history-atlas__dot {
+  position: relative;
+}
+.history-atlas__point.is-river .history-atlas__dot {
+  display: none;
+}
+.history-atlas__river-glow,
+.history-atlas__river-selected {
+  fill: none;
+  stroke: var(--ws-primary, #2563eb);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.history-atlas__river-glow {
+  stroke-width: 10px;
+  opacity: 0.25;
+  animation: atlas-river-halo 2400ms ease-in-out infinite;
+}
+.history-atlas__river-selected {
+  stroke-width: 3px;
+}
+.history-atlas--focusing .history-atlas__geography {
+  transition: transform 300ms ease-out;
+}
+.history-atlas--focusing .history-atlas__point {
+  transition:
+    left 300ms ease-out,
+    top 300ms ease-out;
+}
+.history-atlas--paused .history-atlas__point::before,
+.history-atlas--paused .history-atlas__river-glow {
+  animation-play-state: paused;
+}
+@keyframes atlas-point-halo {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.45);
+    opacity: 0.65;
+  }
+}
+@keyframes atlas-river-halo {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .history-atlas__point::before,
+  .history-atlas__river-glow {
+    animation: none !important;
+    opacity: 0.35;
+  }
+  .history-atlas--focusing .history-atlas__geography,
+  .history-atlas--focusing .history-atlas__point {
+    transition: none;
+  }
+}
 .history-atlas__point-label {
   position: absolute;
   white-space: normal;
@@ -313,6 +391,24 @@
   gap: 12px;
   padding: 24px;
   color: var(--ws-text-muted, #6b7280);
+}
+.history-atlas__attribution {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  z-index: 4;
+  padding: 4px 8px;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.history-atlas__attribution a {
+  color: inherit;
+  text-decoration: underline;
+}
+.history-atlas:not(.history-atlas--wide) .history-atlas__selection-card {
+  bottom: 32px;
 }
 .history-atlas__north {
   position: absolute;

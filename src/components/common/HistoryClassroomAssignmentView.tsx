@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import WorksheetBlankInput from "./WorksheetBlankInput";
+import { InfoHelpContent, InfoHelpIcon } from "./InfoHelp";
 import HistoryBlankFeedback from "./HistoryBlankFeedback";
 import { getLessonBlankClipPath } from "../../lib/lessonBlankClip";
 import {
@@ -1159,12 +1160,7 @@ const HistoryClassroomAssignmentView: React.FC<
                 }}
                 className="absolute right-0 top-0 flex h-11 w-11 items-start justify-end pt-0.5 text-gray-600"
               >
-                <span
-                  aria-hidden="true"
-                  className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-xs font-bold"
-                >
-                  i
-                </span>
+                <InfoHelpIcon />
               </button>
             )}
             <div
@@ -1244,9 +1240,7 @@ const HistoryClassroomAssignmentView: React.FC<
             role="tooltip"
             className="absolute right-0 top-full z-40 mt-1 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-3 text-sm leading-6 text-gray-700 shadow-lg"
           >
-            {helperItems.map((item, index) => (
-              <p key={`${item}-${index}`}>{item}</p>
-            ))}
+            <InfoHelpContent sections={[{ items: helperItems }]} />
           </div>
         )}
         {hintAvailable && hintOpen && (

@@ -8,6 +8,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
+import { geoCentroid } from "d3-geo";
 import {
   ATLAS_SUBJECT_BOUNDS,
   ATLAS_SUBJECT_LABELS,
@@ -25,12 +26,23 @@ import {
   constrainAtlasTransform,
   createAtlasPaths,
   createAtlasProjection,
+  fitAtlasSelection,
+  includeAtlasContextBounds,
   loadAtlasGeometry,
+  reframeAtlasSelectionBounds,
   zoomAtlasAt,
   type AtlasGeometry,
   type AtlasTransform,
 } from "../../lib/historyAtlasGeometry";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
+import AtlasPlaceDetails from "./AtlasPlaceDetails";
+import InfoHelp from "./InfoHelp";
+import { atlasRiverCreditItems } from "./AtlasRiverCredits";
+import {
+  atlasFocusExtent,
+  atlasRiverPath,
+  findAtlasRiver,
+} from "../../lib/historyAtlasRivers";
 import "./historyAtlas.css";
 
 interface HistoryAtlasProps {
@@ -73,125 +85,120 @@ const searchEntries = (items: LocatedEntry[], query: string) => {
     .sort((a, b) => searchRank(a, normalized) - searchRank(b, normalized));
 };
 
-function AtlasHelp({
-  label = "지도 조작과 지형 정보",
-  children,
-}: {
-  label?: string;
-  children?: ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLSpanElement>(null);
-  const id = useId();
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [open]);
+function AtlasHelp() {
   return (
-    <span
-      className="history-atlas__help"
-      ref={root}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => {
-        if (!root.current?.contains(document.activeElement)) setOpen(false);
-      }}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-      }}
-    >
-      <button
-        type="button"
-        className="history-atlas__help-button"
-        aria-label={label}
-        aria-expanded={open}
-        aria-controls={id}
-        aria-describedby={open ? id : undefined}
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
-      >
-        <span aria-hidden="true">i</span>
-      </button>
-      {open && (
-        <span className="history-atlas__tooltip" id={id} role="tooltip">
-          {children || (
-            <>
-              <strong>지도 조작</strong>
-              <span>
-                마우스로 끌어 이동하고, Ctrl 또는 ⌘와 휠로 확대합니다. 터치
-                화면은 두 손가락을 사용하거나 ‘지도 이동’을 켜세요.
-              </span>
-              <span>
-                지도에 키보드 초점을 두고 방향키로 이동, +·−로 확대·축소,
-                Home으로 전체를 봅니다. 겹치는 지명은 확대하거나 장소 목록에서
-                선택하세요.
-              </span>
-              <strong>지형과 위치</strong>
-              <span>
-                Natural Earth의 현대 자연지형을 단순화해 표시하며 국경은
-                표시하지 않습니다. 지점은 도시 중심 또는 설명에 표시한 추정
-                위치입니다. 한국사는 메르카토르, 세계사는 내추럴 어스 투영을
-                사용합니다.
-              </span>
-              <span>
-                지형:{" "}
-                <a
-                  href="https://www.naturalearthdata.com/about/terms-of-use/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Natural Earth
-                </a>
-                . 지명 좌표 일부:{" "}
-                <a
-                  href="https://www.geonames.org/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  GeoNames
-                </a>{" "}
-                (
-                <a
-                  href="https://creativecommons.org/licenses/by/4.0/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  CC BY 4.0
-                </a>
-                , 지명 대조·대표점 가공).
-              </span>
-            </>
-          )}
-        </span>
-      )}
-    </span>
+    <InfoHelp
+      label="지도 조작과 지형 정보"
+      sections={[
+        {
+          title: "지도 조작",
+          rows: [
+            {
+              label: "이동",
+              content: "마우스 드래그 · 터치 두 손가락 또는 ‘지도 이동’",
+            },
+            {
+              label: "확대·축소",
+              content: "+·− 버튼 · Ctrl/⌘+휠 · 두 손가락 벌리기",
+            },
+            {
+              label: "키보드",
+              content: "방향키 이동 · +/− 확대·축소 · Home 전체 보기",
+            },
+            {
+              label: "장소 선택",
+              content:
+                "지명 또는 목록을 누르면 주변 지역과 함께 확대합니다. 선택한 지점·강줄기는 파란 후광으로 표시됩니다.",
+            },
+          ],
+        },
+        {
+          title: "지형과 위치",
+          rows: [
+            {
+              label: "바탕 지도",
+              content:
+                "현대 자연지형을 단순화한 지도이며 역사적 국경은 표시하지 않습니다.",
+            },
+            {
+              label: "강",
+              content:
+                "확인된 물줄기를 선으로 표시합니다. 축척상 작은 지류는 생략될 수 있습니다.",
+            },
+            {
+              label: "위치",
+              content: "도시·유적은 대표점 또는 출처에 기재한 추정 위치입니다.",
+            },
+          ],
+        },
+        {
+          title: "자료 출처",
+          items: [
+            ...atlasRiverCreditItems,
+            <a
+              key="ne"
+              href="https://www.naturalearthdata.com/about/terms-of-use/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Natural Earth · 자연지형
+            </a>,
+            <a
+              key="osm"
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noreferrer"
+            >
+              © OpenStreetMap contributors · ODbL · 하천 선형
+            </a>,
+            <span key="gn">
+              <a
+                href="https://www.geonames.org/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GeoNames
+              </a>{" "}
+              ·{" "}
+              <a
+                href="https://creativecommons.org/licenses/by/4.0/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                CC BY 4.0
+              </a>{" "}
+              · 일부 대표 좌표 가공
+            </span>,
+          ],
+        },
+      ]}
+    />
   );
 }
 
 const AtlasBackground = memo(function AtlasBackground({
   paths,
   transform,
+  selectedRiver,
 }: {
   paths: { land: string; rivers: string } | null;
   transform: AtlasTransform;
+  selectedRiver: string;
 }) {
   if (!paths) return null;
   return (
     <g
+      className="history-atlas__geography"
       transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}
     >
       <path className="history-atlas__land" d={paths.land} />
       <path className="history-atlas__rivers" d={paths.rivers} />
+      {selectedRiver && (
+        <>
+          <path className="history-atlas__river-glow" d={selectedRiver} />
+          <path className="history-atlas__river-selected" d={selectedRiver} />
+        </>
+      )}
     </g>
   );
 });
@@ -338,6 +345,8 @@ export default function HistoryAtlas({
   const [geometryError, setGeometryError] = useState(false);
   const [geometryAttempt, setGeometryAttempt] = useState(0);
   const [transform, setTransform] = useState<AtlasTransform>(ATLAS_IDENTITY);
+  const [cameraMoving, setCameraMoving] = useState(false);
+  const [motionPaused, setMotionPaused] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
   const transformRef = useRef(transform);
   const movedRef = useRef(false);
@@ -356,10 +365,6 @@ export default function HistoryAtlas({
   const unitsById = useMemo(
     () => new Map(dataset.units.map((unit) => [unit.id, unit])),
     [dataset.units],
-  );
-  const sourcesById = useMemo(
-    () => new Map(dataset.sources.map((source) => [source.id, source])),
-    [dataset.sources],
   );
   const subjectUnits = useMemo(
     () => dataset.units.filter((unit) => unit.subject === subject),
@@ -430,7 +435,7 @@ export default function HistoryAtlas({
   const selected =
     entries.find(({ entry }) => entry.id === selectedId) || entries[0];
   const overlayWidth = Math.min(360, mapWidth - 32);
-  const overlayMaxHeight = mapWidth >= 650 ? mapHeight - 32 : mapHeight - 144;
+  const overlayMaxHeight = mapHeight - 32;
   const overlayObstacle = useMemo(
     () =>
       wide && detailOpen && selected
@@ -452,9 +457,6 @@ export default function HistoryAtlas({
     currentPage * PAGE_SIZE,
     (currentPage + 1) * PAGE_SIZE,
   );
-  const samePlaceEntries = selected
-    ? entriesByPlace.get(selected.place.id) || []
-    : [];
   const projection = useMemo(
     () => createAtlasProjection(subject, bounds, mapWidth, mapHeight),
     [subject, bounds, mapWidth, mapHeight],
@@ -466,12 +468,46 @@ export default function HistoryAtlas({
         : null,
     [geometry, subject, bounds, projection],
   );
+  const riversByPlace = useMemo(() => {
+    const result = new Map<
+      string,
+      NonNullable<ReturnType<typeof findAtlasRiver>>
+    >();
+    if (geometry?.subject !== subject || geometry.bounds !== bounds)
+      return result;
+    for (const { place } of visiblePlaces) {
+      const river = findAtlasRiver(place, geometry.data.rivers);
+      if (river) result.set(place.id, river);
+    }
+    return result;
+  }, [visiblePlaces, geometry, subject, bounds]);
+  const selectedRiver = selected
+    ? riversByPlace.get(selected.place.id) || null
+    : null;
+  const selectedRiverPath = useMemo(
+    () => atlasRiverPath(selectedRiver, projection),
+    [selectedRiver, projection],
+  );
+  const displayedPlace = useMemo(
+    () =>
+      selected && selectedRiver
+        ? {
+            ...selected.place,
+            coordinates: geoCentroid(selectedRiver) as [number, number],
+            locationNote:
+              "확인된 현대 수계의 물줄기를 선으로 표시합니다. 지도 축척에 맞춰 작은 굴곡은 단순화했습니다.",
+          }
+        : selected?.place,
+    [selected?.place, selectedRiver],
+  );
   const mapPoints = useMemo(() => {
     const points: MapPoint[] = [];
     visiblePlaces.forEach((item) => {
       const { place } = item;
-      if (!place.coordinates) return;
-      const position = projection(place.coordinates);
+      const river = riversByPlace.get(place.id);
+      const coordinates = river ? geoCentroid(river) : place.coordinates;
+      if (!coordinates) return;
+      const position = projection(coordinates);
       if (!position) return;
       const x = position[0] * transform.scale + transform.x;
       const y = position[1] * transform.scale + transform.y;
@@ -493,6 +529,7 @@ export default function HistoryAtlas({
     mapHeight,
     selected?.place.id,
     overlayObstacle,
+    riversByPlace,
   ]);
   const minorDotsPath = useMemo(
     () =>
@@ -503,9 +540,33 @@ export default function HistoryAtlas({
     [mapPoints],
   );
 
-  const updateTransform = useCallback((value: AtlasTransform) => {
-    transformRef.current = value;
-    setTransform(value);
+  const updateTransform = useCallback(
+    (value: AtlasTransform, animate = false) => {
+      setCameraMoving(animate);
+      transformRef.current = value;
+      setTransform(value);
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!cameraMoving) return;
+    const timer = window.setTimeout(() => setCameraMoving(false), 300);
+    return () => window.clearTimeout(timer);
+  }, [cameraMoving, focusRevision]);
+  useEffect(() => {
+    let onscreen = true;
+    const update = () => setMotionPaused(document.hidden || !onscreen);
+    const observer = new IntersectionObserver(([entry]) => {
+      onscreen = entry.isIntersecting;
+      update();
+    });
+    if (rootRef.current) observer.observe(rootRef.current);
+    document.addEventListener("visibilitychange", update);
+    update();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", update);
+    };
   }, []);
   const resetMap = useCallback(
     () => updateTransform(ATLAS_IDENTITY),
@@ -630,59 +691,54 @@ export default function HistoryAtlas({
     // Persist the actual filtered selection, so removing a query cannot restore
     // an older fallback entry while leaving the camera at the search result.
     if (selectedId !== selected.entry.id) setSelectedId(selected.entry.id);
-    const coordinates = selected.place.coordinates;
+    if (
+      selected.place.kind === "water" &&
+      (geometry?.subject !== subject || geometry.bounds !== bounds)
+    )
+      return;
+    const coordinates = selectedRiver
+      ? geoCentroid(selectedRiver)
+      : selected.place.coordinates;
     if (!coordinates) {
       pendingFocusRef.current = null;
       return;
     }
-    const [lon, lat] = coordinates;
-    const contains = (extent: AtlasUnit["bounds"]) =>
-      lon >= extent[0] &&
-      lon <= extent[2] &&
-      lat >= extent[1] &&
-      lat <= extent[3];
-    if (!contains(bounds)) {
-      if (contains(baseBounds)) setViewBounds(null);
-      else {
-        const halfWidth = Math.min(
-          20,
-          Math.max(4, (baseBounds[2] - baseBounds[0]) / 2),
-        );
-        const halfHeight = Math.min(
-          16,
-          Math.max(4, (baseBounds[3] - baseBounds[1]) / 2),
-        );
-        setViewBounds([
-          Math.max(-180, lon - halfWidth),
-          Math.max(-80, lat - halfHeight),
-          Math.min(180, lon + halfWidth),
-          Math.min(80, lat + halfHeight),
-        ]);
-      }
+    const selectionBounds = reframeAtlasSelectionBounds(
+      subject,
+      coordinates as [number, number],
+      bounds,
+      baseBounds,
+    );
+    if (selectionBounds !== bounds) {
+      setViewBounds(selectionBounds === baseBounds ? null : selectionBounds);
+      return;
+    }
+    const contextExtent = atlasFocusExtent(
+      selected.place,
+      subject,
+      selectedRiver,
+    );
+    const contextBounds = includeAtlasContextBounds(bounds, contextExtent);
+    if (contextBounds !== bounds) {
+      setViewBounds(contextBounds);
       return;
     }
     pendingFocusRef.current = null;
-    const point = projection(coordinates);
-    if (!point) return;
-    const current = transformRef.current;
-    const targetX =
-      overlayObstacle && mapWidth >= 650
-        ? (overlayObstacle.right + mapWidth) / 2
-        : mapWidth / 2;
-    const targetY =
-      overlayObstacle && mapWidth < 650
-        ? (overlayObstacle.bottom + mapHeight) / 2
-        : mapHeight / 2;
     updateTransform(
-      constrainAtlasTransform(
+      fitAtlasSelection(
+        projection,
         {
-          scale: current.scale,
-          x: targetX - point[0] * current.scale,
-          y: targetY - point[1] * current.scale,
+          coordinates: coordinates as [number, number],
+          contextBounds: contextExtent,
+          geometry: selectedRiver,
         },
-        mapWidth,
-        mapHeight,
+        {
+          width: mapWidth,
+          height: mapHeight,
+          overlayRight: overlayObstacle?.right,
+        },
       ),
+      true,
     );
   }, [
     query,
@@ -697,6 +753,9 @@ export default function HistoryAtlas({
     mapWidth,
     mapHeight,
     updateTransform,
+    selectedRiver,
+    geometry,
+    subject,
   ]);
 
   useEffect(() => {
@@ -874,7 +933,7 @@ export default function HistoryAtlas({
       requestPlaceFocus(next.place.id);
     }
   };
-  const focusPlace = (placeId: string, focusMap = true) => {
+  const focusPlace = (placeId: string) => {
     const next =
       entries.find(
         ({ entry, place }) =>
@@ -884,7 +943,7 @@ export default function HistoryAtlas({
     setFilterNotice("");
     setSelectedId(next.entry.id);
     setDetailOpen(true);
-    if (focusMap || wide) requestPlaceFocus(next.place.id);
+    requestPlaceFocus(next.place.id);
     if (!wide) setMobilePanel("detail");
   };
   const selectStory = (next: LocatedEntry) => {
@@ -923,35 +982,6 @@ export default function HistoryAtlas({
     requestPlaceFocus(next.place.id);
     if (!wide) setMobilePanel("detail");
   };
-  const relatedStories = useMemo(() => {
-    if (!selected) return [];
-    const result = new Map<string, LocatedEntry>();
-    (selected.entry.relatedEntryIds || []).forEach((entryId) => {
-      const item = entriesById.get(entryId);
-      if (item) result.set(item.entry.id, item);
-    });
-    (selected.entry.relatedPlaceIds || []).forEach((placeId) => {
-      if (Array.from(result.values()).some((item) => item.place.id === placeId))
-        return;
-      const item =
-        scopeEntries.find((item) => item.place.id === placeId) ||
-        entriesByPlace.get(placeId)?.[0] ||
-        allEntries.find((item) => item.place.id === placeId);
-      if (item) result.set(item.entry.id, item);
-    });
-    return Array.from(result.values());
-  }, [selected, entriesById, entriesByPlace, scopeEntries, allEntries]);
-  const locationExplanation = selected
-    ? selected.place.locationNote ||
-      (!selected.place.coordinates
-        ? "위치가 확정되지 않아 지도에 핀을 표시하지 않습니다."
-        : ["region", "country", "water", "mountain"].includes(
-              selected.place.kind || "",
-            )
-          ? "표시는 지명의 대표 위치이며 영역이나 경계를 뜻하지 않습니다."
-          : "")
-    : "";
-
   const placeList = (
     <section className="history-atlas__places" aria-label="장소 목록">
       <div className="history-atlas__places-heading">
@@ -971,7 +1001,7 @@ export default function HistoryAtlas({
                 <span>{entryName(item)}</span>
                 <small>
                   {item.entry.period}
-                  {!item.place.coordinates
+                  {!item.place.coordinates && !riversByPlace.has(item.place.id)
                     ? ` · ${locationStatus(item.place)}`
                     : ""}
                 </small>
@@ -1034,101 +1064,15 @@ export default function HistoryAtlas({
         </p>
       )}
       {selected ? (
-        <>
-          <div className="history-atlas__detail-heading">
-            <span className="history-atlas__period">
-              {selected.entry.period}
-            </span>
-            <div className="history-atlas__place-title">
-              <h2>{entryName(selected)}</h2>
-              {locationExplanation && (
-                <AtlasHelp label={`${entryName(selected)} 위치 정보`}>
-                  <span>{locationExplanation}</span>
-                </AtlasHelp>
-              )}
-            </div>
-            {selected.entry.nameNote ? (
-              <p>{selected.entry.nameNote}</p>
-            ) : (
-              selected.place.modernName &&
-              selected.place.modernName !== entryName(selected) && (
-                <p>현재 {selected.place.modernName}</p>
-              )
-            )}
-            {!selected.place.coordinates && (
-              <span className="history-atlas__location-status">
-                {locationStatus(selected.place)}
-              </span>
-            )}
-          </div>
-          <div className="history-atlas__story">
-            <h3>{selected.entry.title}</h3>
-            <p>{selected.entry.summary}</p>
-            {selected.entry.significance.trim() && (
-              <>
-                <h3>역사적 의미</h3>
-                <p>{selected.entry.significance}</p>
-              </>
-            )}
-          </div>
-          {samePlaceEntries.length > 1 && (
-            <div
-              className="history-atlas__story-choices"
-              role="group"
-              aria-label="같은 장소의 시대별 이야기"
-            >
-              <h3 className="history-atlas__story-choices-label">
-                시대별 이야기
-              </h3>
-              {samePlaceEntries.map((item) => (
-                <button
-                  type="button"
-                  key={item.entry.id}
-                  aria-pressed={item.entry.id === selected.entry.id}
-                  onClick={() => selectStory(item)}
-                >
-                  {item.entry.period} · {entryName(item)}
-                </button>
-              ))}
-            </div>
-          )}
-          {relatedStories.length > 0 && (
-            <div className="history-atlas__related">
-              <h3>함께 볼 장소</h3>
-              <div>
-                {relatedStories.map((item) => (
-                  <button
-                    key={item.entry.id}
-                    type="button"
-                    onClick={() => selectStory(item)}
-                  >
-                    {entryName(item)}
-                    <span aria-hidden="true"> →</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <details className="history-atlas__sources" key={selected.entry.id}>
-            <summary>교과서 근거 · {selected.entry.citations.length}곳</summary>
-            <ul>
-              {selected.entry.citations.map((citation, index) => {
-                const source = sourcesById.get(citation.sourceId);
-                const printedPage = citation.printedPage?.trim();
-                return (
-                  <li key={`${citation.sourceId}-${citation.pdfPage}-${index}`}>
-                    <strong>{source?.title || citation.sourceId}</strong>
-                    {source?.edition && <span>{source.edition}</span>}
-                    <span>
-                      {printedPage ? `본문 ${printedPage}쪽 · ` : ""}
-                      PDF {citation.pdfPage}쪽
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </details>
-        </>
+        <AtlasPlaceDetails
+          dataset={dataset}
+          entry={selected.entry}
+          place={displayedPlace || selected.place}
+          onSelectEntry={(entryId) => {
+            const next = entriesById.get(entryId);
+            if (next) selectStory(next);
+          }}
+        />
       ) : (
         <p className="history-atlas__empty">
           선택한 조건에 맞는 장소가 없습니다.
@@ -1140,7 +1084,7 @@ export default function HistoryAtlas({
   return (
     <div
       ref={rootRef}
-      className={`history-atlas${wide ? " history-atlas--wide" : ""}${containerWidth >= 1100 ? " history-atlas--large" : ""}`}
+      className={`history-atlas${wide ? " history-atlas--wide" : ""}${containerWidth >= 1100 ? " history-atlas--large" : ""}${cameraMoving ? " history-atlas--focusing" : ""}${motionPaused ? " history-atlas--paused" : ""}`}
     >
       <div className="history-atlas__heading">
         <div className="history-atlas__heading-title">
@@ -1273,7 +1217,7 @@ export default function HistoryAtlas({
               <button
                 type="button"
                 aria-label="지도 축소"
-                disabled={transform.scale <= 1}
+                disabled={transform.scale <= 0.5}
                 onClick={() => zoom(1 / 1.4)}
               >
                 −
@@ -1436,7 +1380,11 @@ export default function HistoryAtlas({
               viewBox={`0 0 ${mapWidth} ${mapHeight}`}
               aria-hidden="true"
             >
-              <AtlasBackground paths={paths} transform={transform} />
+              <AtlasBackground
+                paths={paths}
+                transform={transform}
+                selectedRiver={selectedRiverPath}
+              />
               {paths && (
                 <path className="history-atlas__minor-dots" d={minorDotsPath} />
               )}
@@ -1447,11 +1395,11 @@ export default function HistoryAtlas({
                   <button
                     key={point.place.id}
                     type="button"
-                    className={`history-atlas__point${point.active ? " is-active" : ""}`}
+                    className={`history-atlas__point${point.active ? " is-active" : ""}${riversByPlace.has(point.place.id) ? " is-river" : ""}`}
                     style={{ left: point.x, top: point.y }}
                     aria-label={`${point.name} 설명 보기`}
                     aria-pressed={point.active}
-                    onClick={() => focusPlace(point.place.id, false)}
+                    onClick={() => focusPlace(point.place.id)}
                   >
                     <span className="history-atlas__dot" />
                     {point.labelVisible && (
@@ -1505,6 +1453,23 @@ export default function HistoryAtlas({
             <span className="history-atlas__north" aria-hidden="true">
               ↑<span>북</span>
             </span>
+            <div className="history-atlas__attribution">
+              <a
+                href="https://www.naturalearthdata.com/about/terms-of-use/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Natural Earth
+              </a>
+              {" · "}
+              <a
+                href="https://www.openstreetmap.org/copyright"
+                target="_blank"
+                rel="noreferrer"
+              >
+                © OpenStreetMap contributors
+              </a>
+            </div>
             {!wide && selected && (
               <button
                 type="button"
@@ -1555,9 +1520,12 @@ export default function HistoryAtlas({
           if (event.key !== "Tab") return;
           const controls = Array.from(
             event.currentTarget.querySelectorAll<HTMLElement>(
-              "button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex]:not([tabindex='-1'])",
+              "button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], summary, [tabindex]:not([tabindex='-1'])",
             ),
-          ).filter((element) => element.getClientRects().length > 0);
+          ).filter(
+            (element) =>
+              element.tabIndex >= 0 && element.getClientRects().length > 0,
+          );
           if (!controls.length) {
             event.preventDefault();
             return;

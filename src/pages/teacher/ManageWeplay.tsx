@@ -1,4 +1,5 @@
 import PortalWorkspace from "../../components/common/PortalWorkspace";
+import { InfoHelpIcon } from "../../components/common/InfoHelp";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -273,7 +274,8 @@ export default function ManageWeplay() {
             onClick={guide.openGuide}
             disabled={!currentUser || starting}
           >
-            <span aria-hidden="true">i</span>게임 안내
+            <InfoHelpIcon />
+            게임 안내
           </button>
           {canReadPoints(userData, currentUser?.email) && (
             <Link

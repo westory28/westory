@@ -1,0 +1,209 @@
+.atlas-place-details {
+  color: var(--ws-text, #1f2937);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.atlas-place-details :is(h2, h3, p, dl, dd, ul) {
+  margin: 0;
+}
+.atlas-place-details h2 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ws-text-strong, #111827);
+}
+.atlas-place-details h3 {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ws-text-strong, #111827);
+}
+.atlas-place-details__title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.atlas-place-details__definition {
+  margin-top: 8px !important;
+  font-size: 16px;
+  font-weight: 400;
+  word-break: keep-all;
+}
+.atlas-place-details__status {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.atlas-place-details__facts {
+  margin-top: 16px !important;
+  padding: 12px 0;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  display: grid;
+  gap: 8px;
+}
+.atlas-place-details__facts > div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+}
+.atlas-place-details__facts dt {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ws-text-muted, #6b7280);
+}
+.atlas-place-details__facts dd {
+  font-size: 14px;
+  line-height: 1.65;
+}
+.atlas-place-details section {
+  margin-top: 24px;
+}
+.atlas-place-details__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.atlas-place-details .atlas-place-details__chips button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font:
+    500 12px/1.5 "Noto Sans KR",
+    sans-serif;
+  color: var(--ws-text, #1f2937);
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--ws-surface, #ffffff);
+  text-align: left;
+  cursor: pointer;
+}
+.atlas-place-details__chips button[aria-pressed="true"] {
+  color: var(--ws-primary-text, #1e3a8a);
+  border-color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.atlas-place-details .atlas-place-details__chips .atlas-place-details__more {
+  color: var(--ws-primary-text, #1e3a8a);
+  border-color: transparent;
+}
+.atlas-place-details__section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.atlas-place-details__section-heading > span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ws-primary-text, #1e3a8a);
+}
+.atlas-place-details__context ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 20px;
+  margin-top: 12px;
+}
+.atlas-place-details__context li {
+  font-size: 16px;
+  font-weight: 400;
+  word-break: keep-all;
+}
+.atlas-place-details__context li::marker {
+  color: var(--ws-text-soft, #9ca3af);
+}
+.atlas-place-details__name-note {
+  margin-top: 12px !important;
+  font-size: 14px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.atlas-place-details__meaning {
+  margin-top: 16px;
+}
+.atlas-place-details__names > div,
+.atlas-place-details__related > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.atlas-place-details__names span {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.atlas-place-details__names span + span::before {
+  content: "·";
+  margin-right: 8px;
+}
+.atlas-place-details__related button,
+.atlas-place-details__names button {
+  min-height: 44px;
+  padding: 8px 12px;
+  font:
+    500 14px/1.5 "Noto Sans KR",
+    sans-serif;
+  color: var(--ws-primary-text, #1e3a8a);
+  border: 1px solid var(--ws-border-blue, #dbeafe);
+  border-radius: 8px;
+  background: var(--ws-primary-soft, #eff6ff);
+  cursor: pointer;
+}
+.atlas-place-details__sources {
+  margin-top: 24px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+  font-size: 14px;
+}
+.atlas-place-details__sources summary {
+  min-height: 44px;
+  padding: 12px 0;
+  cursor: pointer;
+  color: var(--ws-text-muted, #6b7280);
+}
+.atlas-place-details__sources ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+.atlas-place-details__sources li {
+  display: grid;
+  gap: 4px;
+}
+.atlas-place-details__sources li > span {
+  color: var(--ws-text-muted, #6b7280);
+}
+.atlas-place-details__sources strong {
+  font-weight: 500;
+}
+.atlas-place-details__sources a {
+  color: var(--ws-primary-text, #1e3a8a);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.atlas-place-details__map-context {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--ws-surface-subtle, #f8fafc);
+  border-radius: 8px;
+}
+.atlas-place-details__map-context ul {
+  margin-top: 8px;
+  gap: 4px;
+}
+.atlas-place-details :is(button, summary, a):focus-visible {
+  outline: 3px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .atlas-place-details .atlas-place-details__chips button {
+    min-height: 36px;
+  }
+}

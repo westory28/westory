@@ -1,4 +1,5 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useId, useState } from "react";
+import InfoHelp from "../common/InfoHelp";
 import { getGradeBand, type ScoreBand } from "../../lib/studentScores";
 import "./public-score-demo.css";
 
@@ -13,62 +14,31 @@ const nextBands: Partial<
 const formatScore = (value: number) => Number(value.toFixed(1)).toString();
 
 function AchievementHelp() {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLSpanElement>(null);
-  const id = useId();
-
-  useEffect(() => {
-    if (!open) return;
-    const closeOutside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [open]);
-
   return (
-    <span
-      ref={root}
-      className="entry-score-lab__help"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => {
-        if (!root.current?.contains(document.activeElement)) setOpen(false);
-      }}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-      }}
-    >
-      <button
-        type="button"
-        className="entry-score-lab__help-button"
-        aria-label="성취도 기준 안내"
-        aria-expanded={open}
-        aria-controls={id}
-        aria-describedby={open ? id : undefined}
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
-      >
-        <span aria-hidden="true">i</span>
-      </button>
-      {open && (
-        <span id={id} role="tooltip" className="entry-score-lab__tooltip">
-          <strong>일반 교과 성취도</strong>
-          <span>A 90 이상 · B 80 이상 · C 70 이상 · D 60 이상 · E 60 미만</span>
-          <span>
-            환산 점수를 정수로 반올림해 판정합니다. 예를 들어 89.5점은 90점으로
-            반올림되어 A입니다.
-          </span>
-          <span>이 체험은 역사 교과의 5단계 기준을 사용합니다.</span>
-        </span>
-      )}
-    </span>
+    <InfoHelp
+      label="성취도 기준 안내"
+      sections={[
+        {
+          title: "일반 교과 성취도",
+          rows: [
+            {
+              label: "기준",
+              content:
+                "A 90 이상 · B 80 이상 · C 70 이상 · D 60 이상 · E 60 미만",
+            },
+            {
+              label: "반올림",
+              content:
+                "환산 점수를 정수로 반올림해 판정합니다. 예를 들어 89.5점은 90점으로 반올림되어 A입니다.",
+            },
+            {
+              label: "체험 교과",
+              content: "역사 교과의 5단계 기준을 사용합니다.",
+            },
+          ],
+        },
+      ]}
+    />
   );
 }
 
