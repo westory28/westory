@@ -143,9 +143,9 @@ assert.equal(
 );
 const mountainExtent = atlasFocusExtent(place("백두산"), "korea");
 assert(
-  mountainExtent[2] - mountainExtent[0] >= 9 &&
-    mountainExtent[3] - mountainExtent[1] >= 10,
-  "Selection must preserve peninsula-scale geographic context",
+  mountainExtent[2] - mountainExtent[0] === 3 &&
+    mountainExtent[3] - mountainExtent[1] === 3,
+  "Korean point selection must zoom into a three-degree regional context",
 );
 
 // The previous +/-80 degree cap never contained three actual northern places,
@@ -275,6 +275,83 @@ for (const name of ["나일강", "창장강", "아마존강", "한강", "백두�
       cameraCases += 1;
     }
 }
+// The mobile card leaves only its upper part free, while the projection still
+// occupies the full 400px map. Pan limits must use that full map height or
+// southern places (including Jeju and Cape Town) are clamped under the card.
+let compactCameraCases = 0;
+const compactPlacesChecked = new Set();
+for (const subject of ["korea", "world"]) {
+  const subjectUnits = new Set(
+    dataset.units
+      .filter((unit) => unit.subject === subject)
+      .map((unit) => unit.id),
+  );
+  const subjectPlaceIds = new Set(
+    dataset.entries
+      .filter((entry) => subjectUnits.has(entry.unitId))
+      .map((entry) => entry.placeId),
+  );
+  const subjectRivers = {
+    type: "FeatureCollection",
+    features: [
+      ...read(`rivers-${subject}.json`).features,
+      ...supplement.features,
+    ],
+  };
+  for (const item of dataset.places.filter(
+    (item) => subjectPlaceIds.has(item.id) && item.coordinates,
+  )) {
+    const river = findAtlasRiver(item, subjectRivers);
+    const coordinates = river ? geography.geoCentroid(river) : item.coordinates;
+    const extent = atlasFocusExtent(item, subject, river);
+    const baseBounds = ATLAS_SUBJECT_BOUNDS[subject];
+    const bounds = includeAtlasContextBounds(
+      reframeAtlasSelectionBounds(subject, coordinates, baseBounds, baseBounds),
+      extent,
+    );
+    for (const width of [286, 356, 720]) {
+      const mapHeight = 400;
+      const availableHeight = 180;
+      const projection = createAtlasProjection(
+        subject,
+        bounds,
+        width,
+        mapHeight,
+      );
+      const camera = fitAtlasSelection(
+        projection,
+        { coordinates, contextBounds: extent, geometry: river },
+        { width, height: availableHeight, mapHeight },
+      );
+      const point = projection(coordinates);
+      const x = point[0] * camera.scale + camera.x;
+      const y = point[1] * camera.scale + camera.y;
+      assert(
+        Number.isFinite(x) &&
+          Number.isFinite(y) &&
+          x >= 24 - 1e-6 &&
+          x <= width - 24 + 1e-6 &&
+          y >= 24 - 1e-6 &&
+          y <= availableHeight - 24 + 1e-6,
+        `${subject}/${item.name} at ${width}px: selected point must stay above the mobile card, got ${JSON.stringify({ x, y, camera })}`,
+      );
+      assert(
+        camera.scale >= 0.5 &&
+          camera.scale <= 12 &&
+          Object.values(camera).every(Number.isFinite),
+        `${subject}/${item.name}: compact camera remains finite and bounded`,
+      );
+      compactCameraCases += 1;
+    }
+    compactPlacesChecked.add(item.name);
+  }
+}
+for (const name of ["제주도", "상하이", "케이프타운", "포토시", "북극해"]) {
+  assert(
+    compactPlacesChecked.has(name),
+    `${name}: compact regression must include the real extreme-position place`,
+  );
+}
 const profile = getAtlasPlaceProfile(place("백두산"));
 assert(
   profile.definition.includes("화산") && profile.definition.includes("천지"),
@@ -305,5 +382,5 @@ assert(
   "Globe terrain must remain separately small",
 );
 console.log(
-  `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} real-data camera fits, ${polarCameraCases} polar camera fits, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,
+  `Atlas navigation checks passed: ${supplement.features.length} supplemental river features, ${cameraCases} real-data camera fits, ${polarCameraCases} polar camera fits, ${compactCameraCases} compact camera fits above the mobile card, full river extents, conservative selection scale, verified definition, no alias identity substitution. Globe SHA256 ${createHash("sha256").update(globeBytes).digest("hex").slice(0, 12)}.`,
 );

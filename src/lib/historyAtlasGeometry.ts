@@ -210,7 +210,12 @@ export function fitAtlasSelection(
     contextBounds?: AtlasUnit["bounds"] | null;
     geometry?: GeoPermissibleObjects | null;
   },
-  viewport: { width: number; height: number; overlayRight?: number },
+  viewport: {
+    width: number;
+    height: number;
+    mapHeight?: number;
+    overlayRight?: number;
+  },
 ): AtlasTransform {
   const { width, height, overlayRight = 0 } = viewport;
   const coordinates: [number, number][] = [selection.coordinates];
@@ -258,7 +263,7 @@ export function fitAtlasSelection(
       y: height / 2 - ((top + bottom) / 2) * scale,
     },
     width,
-    height,
+    viewport.mapHeight ?? height,
   );
 }
 

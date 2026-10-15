@@ -17,13 +17,7 @@ const VIEWS: { id: MapView; label: string }[] = [
   { id: "globe", label: "지구본" },
 ];
 
-export default function HistoryMaps({
-  dataset,
-  onOpenOriginals,
-}: {
-  dataset: AtlasDataset;
-  onOpenOriginals?: () => void;
-}) {
+export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedView = searchParams.get("view");
@@ -86,7 +80,6 @@ export default function HistoryMaps({
             searchParams.get("subject") === "korea" ? "korea" : "world"
           }
           navigation={navigation}
-          onOpenOriginals={onOpenOriginals}
         />
       </Suspense>
     );
@@ -98,7 +91,6 @@ export default function HistoryMaps({
       dataset={dataset}
       initialSubject={view}
       navigation={navigation}
-      onOpenOriginals={onOpenOriginals}
       onSubjectChange={(subject) => {
         if (subject === view) return;
         const next = new URLSearchParams(searchParams);

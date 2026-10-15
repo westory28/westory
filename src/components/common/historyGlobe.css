@@ -46,9 +46,6 @@
   gap: 8px;
   margin-bottom: 16px;
 }
-.history-globe__originals {
-  margin-left: auto;
-}
 .history-globe__header h1 {
   margin: 0;
   color: var(--ws-text-strong, #111827);
@@ -160,6 +157,22 @@
   flex: 1;
   min-width: 0;
 }
+.history-globe__zoom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 60px;
+  min-height: 44px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text, #1f2937);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: auto;
+}
 .history-globe__loading {
   z-index: 3;
   position: absolute;
@@ -175,24 +188,25 @@
   border-radius: 8px;
   font-size: 16px;
 }
-.history-globe__selection {
-  z-index: 3;
+.history-globe__popup {
+  box-sizing: border-box;
+  z-index: 4;
   position: absolute;
   inset: auto 12px 32px;
+  max-height: 50%;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  text-align: left;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #ffffff);
+  box-shadow: 0 4px 12px rgb(15 23 42 / 8%);
 }
-.history-globe__selection strong {
-  font-size: 18px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-.history-globe__selection span {
-  font-size: 14px;
-  color: var(--ws-text-muted, #6b7280);
+.history-globe.is-wide .history-globe__popup {
+  left: auto;
+  width: min(320px, calc(100% - 24px));
+  max-height: calc(50% - 64px);
 }
 .history-globe__attribution {
   z-index: 3;
@@ -220,7 +234,7 @@
   width: 44px;
   height: 44px;
   transform: translate(-50%, -50%);
-  border: 2px solid var(--ws-primary, #2563eb);
+  border: 1px solid var(--ws-primary, #2563eb);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -259,6 +273,20 @@
   stroke: var(--ws-primary, #2563eb);
   stroke-width: 1px;
 }
+.history-globe__labels .is-active rect {
+  animation: history-globe-label 2400ms ease-in-out infinite;
+}
+@keyframes history-globe-label {
+  0%,
+  100% {
+    stroke-width: 1px;
+    fill: var(--ws-primary-soft, #eff6ff);
+  }
+  50% {
+    stroke-width: 2px;
+    fill: var(--ws-border-blue, #dbeafe);
+  }
+}
 .history-globe__river-halo {
   fill: none;
   stroke: var(--ws-primary, #2563eb);
@@ -281,23 +309,27 @@
   inset: 0;
   border: 2px solid var(--ws-primary, #2563eb);
   border-radius: 50%;
-  animation: history-globe-location 2400ms ease-in-out infinite;
+  animation: history-globe-location 2400ms ease-out infinite;
+}
+.history-globe__halo span + span {
+  animation-delay: -1200ms;
 }
 @keyframes history-globe-location {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.25;
+  0% {
+    transform: scale(0.35);
+    opacity: 0.8;
   }
-  50% {
-    transform: scale(1.45);
-    opacity: 0.65;
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
   }
 }
 .history-globe.is-hidden .history-globe__halo span,
 .history-globe.is-offscreen .history-globe__halo span,
 .history-globe.is-hidden .history-globe__river-halo,
-.history-globe.is-offscreen .history-globe__river-halo {
+.history-globe.is-offscreen .history-globe__river-halo,
+.history-globe.is-hidden .history-globe__labels .is-active rect,
+.history-globe.is-offscreen .history-globe__labels .is-active rect {
   animation-play-state: paused;
 }
 .history-globe__sidebar {
@@ -371,12 +403,29 @@
   font-size: 14px;
 }
 .history-globe__detail {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px;
 }
+.history-globe__detail .atlas-place-details__title {
+  min-height: 44px;
+  padding-right: 44px;
+}
+.history-globe__detail .atlas-place-details__context {
+  margin-top: 8px;
+}
 .history-globe .history-globe__back {
-  margin-bottom: 16px;
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  margin: 0;
   border: 0;
-  padding-left: 0;
+  padding: 0;
+  font-size: 24px;
   color: var(--ws-primary-text, #1e3a8a);
 }
 .history-globe__river-error {
@@ -462,10 +511,10 @@
   .history-globe__controls button {
     font-size: 14px;
   }
-  .history-globe__selection {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
+  .history-globe__controls .history-globe__list-toggle {
+    position: absolute;
+    top: 52px;
+    left: 0;
   }
   .history-globe__header h1 {
     font-size: 24px;
@@ -473,8 +522,16 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .history-globe__halo span,
-  .history-globe__river-halo {
+  .history-globe__river-halo,
+  .history-globe__labels .is-active rect {
     animation: none;
     opacity: 0.4;
+  }
+  .history-globe__labels .is-active rect {
+    opacity: 1;
+  }
+  .history-globe__halo span + span {
+    transform: scale(1.45);
+    opacity: 0.65;
   }
 }

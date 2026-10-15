@@ -4,7 +4,10 @@ import type {
   AtlasEntry,
   AtlasPlace,
 } from "../../lib/historyAtlas";
-import { getAtlasPlaceProfile } from "../../lib/historyAtlasProfiles";
+import {
+  getAtlasPlaceProfile,
+  isAtlasSourceContext,
+} from "../../lib/historyAtlasProfiles";
 import InfoHelp from "./InfoHelp";
 import "./atlasPlaceDetails.css";
 
@@ -20,8 +23,6 @@ const sentences = (text: string) =>
     .trim()
     .split(/(?<=[.!?])\s+/u)
     .filter(Boolean);
-const isMapReference = (text: string) =>
-  /지도[·ㆍ]자료에 등장합니다|다루는 지도|지명으로 (표시|등장)/u.test(text);
 
 /** The same reading structure is used on the flat atlas and the globe. */
 export default function AtlasPlaceDetails({
@@ -31,7 +32,10 @@ export default function AtlasPlaceDetails({
   onSelectEntry,
 }: AtlasPlaceDetailsProps) {
   const [expandedPlace, setExpandedPlace] = useState<string | null>(null);
-  const profile = useMemo(() => getAtlasPlaceProfile(place), [place]);
+  const profile = useMemo(
+    () => getAtlasPlaceProfile(place, dataset.entries),
+    [place, dataset.entries],
+  );
   const displayName = entry.displayName || place.name;
   const stories = useMemo(() => {
     const groups = new Map<string, AtlasEntry[]>();
@@ -63,10 +67,10 @@ export default function AtlasPlaceDetails({
       (value) => value.includes(text),
     );
   const context = allContext.filter(
-    (text) => !isMapReference(text) && !inProfile(text),
+    (text) => !isAtlasSourceContext(text) && !inProfile(text),
   );
   const mapReferences = allContext
-    .filter(isMapReference)
+    .filter(isAtlasSourceContext)
     .map((text) =>
       text.replace(/[을를] 다루는 지도[·ㆍ]자료에 등장합니다\.$/u, ""),
     );
@@ -150,7 +154,6 @@ export default function AtlasPlaceDetails({
             />
           )}
         </div>
-        <p className="atlas-place-details__definition">{profile.definition}</p>
         {!place.coordinates && (
           <span className="atlas-place-details__status">
             {place.kind === "country" || place.kind === "region"
@@ -160,16 +163,33 @@ export default function AtlasPlaceDetails({
         )}
       </header>
 
-      {profile.facts.length > 0 && (
-        <dl className="atlas-place-details__facts">
-          {profile.facts.map((fact, index) => (
-            <div key={`${fact.label}-${index}`}>
-              <dt>{fact.label}</dt>
-              <dd>{fact.value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <section className="atlas-place-details__context">
+        <div className="atlas-place-details__section-heading">
+          <h3>역사 속 이 장소</h3>
+          <span>{entry.period}</span>
+        </div>
+        <p className="atlas-place-details__definition">{profile.definition}</p>
+        {entry.nameNote && (
+          <p className="atlas-place-details__name-note">{entry.nameNote}</p>
+        )}
+        {context.length > 0 && (
+          <ul>
+            {context.map((paragraph) => (
+              <li key={paragraph}>{paragraph}</li>
+            ))}
+          </ul>
+        )}
+        {significance.length > 0 && (
+          <div className="atlas-place-details__meaning">
+            <h3>기억할 점</h3>
+            <ul>
+              {significance.map((paragraph) => (
+                <li key={paragraph}>{paragraph}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
 
       {stories.length > 1 && (
         <section
@@ -214,31 +234,15 @@ export default function AtlasPlaceDetails({
         </section>
       )}
 
-      {(context.length > 0 || significance.length > 0 || entry.nameNote) && (
-        <section className="atlas-place-details__context">
-          <div className="atlas-place-details__section-heading">
-            <h3>역사 속 이 장소</h3>
-            <span>{entry.period}</span>
-          </div>
-          {entry.nameNote && (
-            <p className="atlas-place-details__name-note">{entry.nameNote}</p>
-          )}
-          <ul>
-            {context.map((paragraph) => (
-              <li key={paragraph}>{paragraph}</li>
-            ))}
-          </ul>
-          {significance.length > 0 && (
-            <div className="atlas-place-details__meaning">
-              <h3>기억할 점</h3>
-              <ul>
-                {significance.map((paragraph) => (
-                  <li key={paragraph}>{paragraph}</li>
-                ))}
-              </ul>
+      {profile.facts.length > 0 && (
+        <dl className="atlas-place-details__facts">
+          {profile.facts.map((fact, index) => (
+            <div key={`${fact.label}-${index}`}>
+              <dt>{fact.label}</dt>
+              <dd>{fact.value}</dd>
             </div>
-          )}
-        </section>
+          ))}
+        </dl>
       )}
 
       {aliases.length > 0 && (
@@ -321,6 +325,11 @@ export default function AtlasPlaceDetails({
               <a href={source.url} target="_blank" rel="noreferrer">
                 {source.title} ↗
               </a>
+              {source.license && source.licenseUrl && (
+                <a href={source.licenseUrl} target="_blank" rel="noreferrer">
+                  {source.license}
+                </a>
+              )}
             </li>
           ))}
         </ul>

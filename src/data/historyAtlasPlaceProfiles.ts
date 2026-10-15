@@ -1,8 +1,11 @@
 import type { AtlasCitation } from "../lib/historyAtlas";
+import { historyAtlasSupplementalProfiles } from "./historyAtlasSupplementalProfiles";
 
 export interface AtlasProfileSource {
   title: string;
   url: string;
+  license?: string;
+  licenseUrl?: string;
 }
 
 export interface AtlasPlaceProfile {
@@ -10,7 +13,7 @@ export interface AtlasPlaceProfile {
   facts: { label: string; value: string }[];
   sources: AtlasProfileSource[];
   textbookCitations?: AtlasCitation[];
-  quality: "verified" | "basic";
+  quality: "verified" | "reference" | "basic";
 }
 
 export interface CuratedAtlasPlaceProfile {
@@ -33,6 +36,108 @@ const aks = (name: string, article: string): AtlasProfileSource => ({
  * Extents, river courses and present-day port boundaries are not inferred from map pins.
  */
 export const historyAtlasPlaceProfiles: CuratedAtlasPlaceProfile[] = [
+  ...historyAtlasSupplementalProfiles,
+  {
+    names: [],
+    placeIds: ["kr-7fb1e90e9e47"],
+    definition:
+      "고려 서경의 장소로, 묘청의 건의에 따라 인종이 대화궁을 지었던 곳이다.",
+    facts: [],
+    sources: [aks("인종", "E0047033")],
+  },
+  {
+    names: [],
+    placeIds: ["kr-14d26b24bf6f"],
+    definition: "강화도에 있었던 고려의 사찰로, 대장경판을 보관했던 곳이다.",
+    facts: [],
+    sources: [
+      {
+        title: "한국학중앙연구원 조선왕조실록사전 · 선원사",
+        url: "https://dh.aks.ac.kr/sillokwiki/index.php/선원사(禪源寺)",
+      },
+    ],
+  },
+  {
+    names: ["사로국"],
+    definition: "경주 일대에서 성장한 진한의 소국으로, 뒤에 신라로 발전하였다.",
+    facts: [],
+    sources: [aks("사로국", "E0025526"), aks("신라", "E0032800")],
+  },
+  {
+    names: ["백제국"],
+    definition:
+      "한강 유역에 있던 마한의 소국으로, 주변 세력을 통합하면서 백제로 성장하였다.",
+    facts: [],
+    sources: [aks("백제국", "E0022357")],
+  },
+  {
+    names: ["구야국"],
+    definition:
+      "오늘날 김해 일대에 있던 변한의 나라로, 금관가야와 연결되는 고대 국가다.",
+    facts: [],
+    sources: [
+      {
+        title: "국사편찬위원회 한국 고대 사료 DB · 금관국 관련 주석",
+        url: "https://db.history.go.kr/id/sg_004r_0030_0150",
+      },
+    ],
+  },
+  {
+    names: ["부조"],
+    definition:
+      "옥저와 관련된 고대 지명으로, 한나라의 기록에는 낙랑군에 속한 현의 이름으로도 나온다.",
+    facts: [],
+    sources: [aks("부조예군묘", "E0024563")],
+  },
+  {
+    names: ["국동대혈"],
+    definition:
+      "고구려 도읍 동쪽의 큰 동굴로, 하늘에 제사를 지낼 때 이곳에서 신을 맞았다고 전해진다.",
+    facts: [],
+    sources: [
+      {
+        title: "국립국어원 우리말샘 · 국동대혈",
+        url: "https://kli.korean.go.kr/term/trgtWord/indexTrgtWord.do?trgtWordNo=2061095",
+      },
+    ],
+  },
+  {
+    names: [],
+    placeIds: ["kr-fe6083c45bfa"],
+    definition:
+      "황해도 봉산의 옛 지명으로, 고려 때 북방 방어와 연결되는 지역이었다.",
+    facts: [],
+    sources: [aks("봉주", "E0024018")],
+  },
+  {
+    names: [],
+    placeIds: ["kr-ab0228174178"],
+    definition:
+      "고려가 지방을 다스리기 위해 둔 도호부로, 풍주에 설치된 뒤 해주로 옮겨졌다.",
+    facts: [],
+    sources: [aks("안서도호부", "E0034791")],
+  },
+  {
+    names: [],
+    placeIds: ["kr-52c80072ba18"],
+    definition:
+      "고려의 지방 통치 기구로, 전주·고부·영암·수주 등 시대에 따라 설치 지역이 달라졌다.",
+    facts: [],
+    sources: [aks("안남도호부", "E0034565")],
+  },
+  {
+    names: [],
+    placeIds: ["kr-8fbc2902ad39"],
+    definition:
+      "고려가 안주에 두었던 도호부로, 지방 통치와 북쪽 방어를 맡는 거점이었다.",
+    facts: [],
+    sources: [
+      {
+        title: "국사편찬위원회 우리역사넷 · 고려의 지방 제도",
+        url: "https://contents.history.go.kr/front/ta/webBook.do?levelId=ta_p51r_0030_0020_0070_0010&md=2",
+      },
+    ],
+  },
   {
     names: ["고조선"],
     definition:
@@ -1074,7 +1179,7 @@ export const historyAtlasPlaceProfiles: CuratedAtlasPlaceProfile[] = [
     names: [],
     placeIds: ["andong"],
     definition:
-      "경북에 있는 도시로, 조선 시대 사림의 학문과 교육을 보여 주는 서원이 남아 있다. 교과서는 병산 서원을 통해 이 지역의 유교 문화를 설명한다.",
+      "경북에 있는 도시로, 병산 서원 등 조선 시대 사림의 학문과 교육을 보여 주는 유적이 남아 있다.",
     facts: [
       {
         label: "현재 위치",
@@ -1384,7 +1489,7 @@ export const historyAtlasPlaceProfiles: CuratedAtlasPlaceProfile[] = [
     names: [],
     placeIds: ["panmunjom"],
     definition:
-      "한반도 군사분계선 일대의 회담 장소다. 2018년 남북 정상이 만나 판문점 선언을 발표한 곳으로 교과서에 소개된다.",
+      "한반도 군사분계선 일대의 회담 장소로, 2018년 남북 정상이 만나 판문점 선언을 발표한 곳이다.",
     facts: [
       {
         label: "현재 위치",
@@ -1393,7 +1498,7 @@ export const historyAtlasPlaceProfiles: CuratedAtlasPlaceProfile[] = [
       {
         label: "역사",
         value:
-          "남북한 정상은 판문점에서 회담을 열고 판문점 선언을 발표하였다. 교과서는 이 만남을 변화하는 남북 관계 속에서 대화와 협력으로 평화를 모색한 사례로 다룬다.",
+          "남북한 정상은 판문점에서 회담을 열고 판문점 선언을 발표하였다. 이 만남은 대화와 협력으로 평화를 모색한 사례다.",
       },
     ],
     sources: [],
@@ -1604,7 +1709,7 @@ export const historyAtlasPlaceProfiles: CuratedAtlasPlaceProfile[] = [
     names: [],
     placeIds: ["kaifeng"],
     definition:
-      "중국의 도시로, 송 시대의 활발한 상업과 서민 문화를 보여 주는 곳이다. 화폐 유통과 전문 공연장의 발달이 교과서에 소개된다.",
+      "송 시대에 화폐 유통과 전문 공연장이 발달하는 등 상업과 서민 문화가 번성했던 중국의 도시다.",
     facts: [
       {
         label: "현재 위치",
@@ -1688,7 +1793,7 @@ export const historyAtlasPlaceProfiles: CuratedAtlasPlaceProfile[] = [
       {
         label: "역사",
         value:
-          "리스본은 포르투갈이 아프리카를 돌아 인도로 나아간 항해로의 출발점으로 지도에 나타난다. 항해 기술의 발달과 동방 물품을 직접 거래하려는 움직임이 새로운 바닷길 개척을 이끌었다.",
+          "리스본은 포르투갈이 아프리카를 돌아 인도로 나아간 항해로의 출발점이었다. 항해 기술의 발달과 동방 물품을 직접 거래하려는 움직임이 새로운 바닷길 개척을 이끌었다.",
       },
     ],
     sources: [],
