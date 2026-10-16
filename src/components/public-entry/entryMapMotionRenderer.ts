@@ -136,12 +136,11 @@ export function mountEntryMapMotion(
     ...root.querySelectorAll<HTMLButtonElement>("[data-map-scene]"),
   ];
   const announcement = element<HTMLElement>(".entry-map-motion__announcement");
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)");
   let enabled = initiallyEnabled,
     playing = true,
     visible = false,
     disposed = false;
-  let elapsed = enabled && !reduced.matches ? 0 : STILL_TIME;
+  let elapsed = enabled ? 0 : STILL_TIME;
   let width = stage.clientWidth,
     height = stage.clientHeight;
   let frame = 0,
@@ -209,8 +208,15 @@ export function mountEntryMapMotion(
     labelsRoot.append(group);
     return { ...item, group };
   });
-  const canMove = () => enabled && !reduced.matches;
-  const canPlay = () => canMove() && playing && visible && !document.hidden;
+  // The public page has one user-controlled motion setting across devices.
+  const canMove = () => enabled;
+  const canPlay = () =>
+    canMove() &&
+    playing &&
+    visible &&
+    !document.hidden &&
+    width > 0 &&
+    height > 0;
   const setText = (selector: string, value: string) => {
     element<HTMLElement>(selector).textContent = value;
   };
@@ -452,48 +458,74 @@ export function mountEntryMapMotion(
       : "지도 모션이 일시정지되었습니다.";
     updatePlayback();
   };
-  const motionChange = () => {
-    updatePlayback();
-  };
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      visible = entry.isIntersecting;
+  const checkVisibility = () => {
+    const bounds = root.getBoundingClientRect();
+    const inView =
+      bounds.bottom > 0 &&
+      bounds.top < window.innerHeight &&
+      bounds.right > 0 &&
+      bounds.left < window.innerWidth;
+    if (visible !== inView) {
+      visible = inView;
       updatePlayback();
-    },
-    { threshold: 0.1 },
-  );
-  observer.observe(root);
-  const resize = new ResizeObserver(() => {
+    }
+  };
+  const observer =
+    typeof IntersectionObserver === "undefined"
+      ? null
+      : new IntersectionObserver(
+          ([entry]) => {
+            visible = entry.isIntersecting;
+            updatePlayback();
+          },
+          { threshold: 0.1 },
+        );
+  const measure = () => {
     width = stage.clientWidth;
     height = stage.clientHeight;
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
     geometryKey = "";
-    render();
-  });
-  resize.observe(stage);
+    if (!observer) checkVisibility();
+    updatePlayback();
+  };
+  const resize =
+    typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+  observer?.observe(root);
+  resize?.observe(stage);
+  if (!observer) {
+    window.addEventListener("scroll", checkVisibility, {
+      passive: true,
+      capture: true,
+    });
+    checkVisibility();
+  }
+  window.addEventListener("resize", measure, { passive: true });
+  window.addEventListener("pageshow", measure);
   buttons.forEach((button) => button.addEventListener("click", clickScene));
   toggle.addEventListener("click", clickToggle);
   document.addEventListener("visibilitychange", updatePlayback);
-  reduced.addEventListener("change", motionChange);
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   render();
   return {
     setEnabled(value) {
       enabled = value;
-      motionChange();
+      updatePlayback();
     },
     dispose() {
       disposed = true;
       cancelAnimationFrame(frame);
-      observer.disconnect();
-      resize.disconnect();
+      observer?.disconnect();
+      resize?.disconnect();
+      if (!observer)
+        window.removeEventListener("scroll", checkVisibility, true);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("pageshow", measure);
       labelsRoot.replaceChildren();
       buttons.forEach((button) =>
         button.removeEventListener("click", clickScene),
       );
       toggle.removeEventListener("click", clickToggle);
       document.removeEventListener("visibilitychange", updatePlayback);
-      reduced.removeEventListener("change", motionChange);
     },
   };
 }

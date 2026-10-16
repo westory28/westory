@@ -40,19 +40,23 @@ export default function EntryMapMotion() {
         if (!cancelled) setError(true);
       }
     };
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          observer.disconnect();
-          void load();
-        }
-      },
-      { rootMargin: "400px" },
-    );
-    observer.observe(element);
+    const observer =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(
+            ([entry]) => {
+              if (entry.isIntersecting) {
+                observer?.disconnect();
+                void load();
+              }
+            },
+            { rootMargin: "400px" },
+          );
+    if (observer) observer.observe(element);
+    else void load();
     return () => {
       cancelled = true;
-      observer.disconnect();
+      observer?.disconnect();
       controller.current?.dispose();
       controller.current = null;
     };

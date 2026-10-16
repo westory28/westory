@@ -182,8 +182,11 @@ export default function EntryThinkCloud() {
       );
     };
     measure();
-    const resize = new ResizeObserver(measure);
-    resize.observe(node);
+    const resize =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    resize?.observe(node);
     window.addEventListener("resize", measure, { passive: true });
     document.addEventListener("visibilitychange", visibility);
     let active = true;
@@ -206,7 +209,7 @@ export default function EntryThinkCloud() {
       window.addEventListener("resize", inspect, { passive: true });
       return () => {
         active = false;
-        resize.disconnect();
+        resize?.disconnect();
         window.removeEventListener("resize", measure);
         window.removeEventListener("scroll", inspect);
         window.removeEventListener("resize", inspect);
@@ -223,7 +226,7 @@ export default function EntryThinkCloud() {
     observer.observe(node);
     return () => {
       active = false;
-      resize.disconnect();
+      resize?.disconnect();
       window.removeEventListener("resize", measure);
       document.removeEventListener("visibilitychange", visibility);
       observer.disconnect();

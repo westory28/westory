@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm run typecheck && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection && npm run verify:history-atlas",
+    "prebuild": "npm run typecheck && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-atlas",
+    "verify:entry-map-motion": "node scripts/verify-entry-map-motion.mjs",
     "typecheck": "tsc --noEmit",
     "verify:student-profile-emoji": "node scripts/verify-student-profile-emoji.mjs",
     "build": "vite build",

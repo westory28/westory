@@ -400,10 +400,18 @@ export function RecordScene() {
           : { width, height },
       );
     };
-    const observer = new ResizeObserver(measure);
-    observer.observe(svg);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    observer?.observe(svg);
+    if (!observer)
+      window.addEventListener("resize", measure, { passive: true });
     measure();
-    return () => observer.disconnect();
+    return () => {
+      observer?.disconnect();
+      if (!observer) window.removeEventListener("resize", measure);
+    };
   }, []);
   const progress = manualProgress ?? scrollProgress;
   const values = [28, 46, 72, 96];
