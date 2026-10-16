@@ -330,6 +330,7 @@
 }
 .history-atlas__country-label span {
   padding: 4px 8px;
+  white-space: nowrap;
   border: 1px solid transparent;
   border-radius: 8px;
 }
