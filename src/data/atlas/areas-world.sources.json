@@ -33,7 +33,8 @@
   "m49": {
     "url": "https://unstats.un.org/unsd/methodology/m49/",
     "snapshot": "scripts/history-atlas-world-regions.m49.json",
-    "sha256": "14424c5e08759b7c27277608dba80235ea4b0fd4f51928e7f628bd20fa5d41ea",
+    "sha256": "751ecc7a84b1bd387f9c68c6afc963f06bc60780adf5a6c6e6a854a874aa8b72",
+    "hashNormalization": "UTF-8 with LF line endings",
     "retrievedAt": "2026-10-15"
   },
   "processing": "Source polygons repaired with make_valid, dissolved by named memberships, topology-preserving simplification 0.02 degrees, 5 decimal precision, edges densified at 1 degree for spherical projection. Source conversion seams within 0.0005 degrees of the antimeridian and 0.01 degrees of a pole are snapped to the exact meridian/pole to preserve spherical closure. No minimum island area filter. The Arctic uses the source Arctic Circle's north-side cap. Overseas map units retain their own geographic classification; transcontinental portions use source continent/island outlines.",

@@ -19,15 +19,21 @@ const payload = read("src/data/atlas/areas-world.json");
 const collection = JSON.parse(payload);
 const sources = JSON.parse(read("src/data/atlas/areas-world.sources.json"));
 const digest = (value) => createHash("sha256").update(value).digest("hex");
+const textDigest = (value) => digest(value.replace(/\r\n/g, "\n"));
 assert.equal(
   digest(payload),
   sources.assetSha256,
   "World-area asset matches its source manifest",
 );
 assert.equal(
-  digest(read(sources.m49.snapshot)),
+  textDigest(read(sources.m49.snapshot)),
   sources.m49.sha256,
   "UN M49 grouping snapshot is unchanged",
+);
+assert.equal(
+  textDigest(read(sources.m49.snapshot).replace(/\r?\n/g, "\r\n")),
+  sources.m49.sha256,
+  "Windows and Linux checkouts must verify the same M49 content",
 );
 assert.equal(
   sources.naturalEarthRevision,
