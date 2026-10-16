@@ -13,7 +13,11 @@ const compiled = ts.transpileModule(
     },
   },
 ).outputText;
-const { buildQuizAnalysis, deduplicateQuizAnalysisRecords } = await import(
+const {
+  buildQuizAnalysis,
+  buildQuizItemStatistics,
+  deduplicateQuizAnalysisRecords,
+} = await import(
   `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
 );
 const semesterId = "2026-2";
@@ -74,6 +78,233 @@ const test = (name, body) => {
   cases += 1;
   console.log(`PASS ${name}`);
 };
+
+const psychQuestions = [1, 2, 3, 4].map((id) => ({ ...questions[0], id }));
+const psychRecord = (id, studentUid, outcomes, extra = {}) =>
+  record(
+    id,
+    studentUid,
+    10,
+    99,
+    outcomes.map((correct, index) =>
+      item(index + 1, correct, correct ? "선지 A" : "선지 B"),
+    ),
+    { totalCount: outcomes.length, ...extra },
+  );
+const psych = (records, extra = {}) =>
+  buildQuizItemStatistics({
+    semesterId,
+    students,
+    questions: psychQuestions,
+    records,
+    scope: { unitIds: ["unit-a"], category: "diagnostic" },
+    ...extra,
+  });
+const near = (actual, expected) =>
+  assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
+const positiveRecords = [
+  psychRecord("a", "a", [false, false, false]),
+  psychRecord("b", "b", [true, false, false]),
+  psychRecord("c", "c", [true, true, false]),
+  psychRecord("d", "d", [true, true, true]),
+];
+
+test("Corrected point-biserial removes the item; complete-form alpha uses all 0/1 items", () => {
+  const result = psych(positiveRecords);
+  const row = result.questions[0].cohorts[0];
+  assert.equal(result.eligibleSubmissionCount, 4);
+  assert.equal(row.sampleSize, 4);
+  assert.equal(row.smallSample, true);
+  assert.equal(row.difficultyPercent, 75);
+  near(row.correctedItemTotalCorrelation, 0.75 / Math.sqrt(0.75 * 2.75));
+  near(row.alphaReliability, 0.75);
+  assert.equal(row.correlationUnavailableReason, null);
+  assert.equal(row.alphaUnavailableReason, null);
+  assert.equal(
+    row.options.find((option) => option.answer === "선지 A").meanRestPercent,
+    50,
+  );
+  assert.equal(
+    row.options.find((option) => option.answer === "선지 B").meanRestPercent,
+    0,
+  );
+  // Deliberately wrong stored percentages (99) must never supply rest scores.
+  assert.equal(
+    row.options.find((option) => option.answer === "선지 A").percent,
+    75,
+  );
+});
+
+test("Negative discrimination and reliability remain negative, never clamped to favorable scores", () => {
+  const result = psych(
+    [true, true, false, false].map((value, index) =>
+      psychRecord(String(index), String(index), [value, !value, !value]),
+    ),
+  );
+  const row = result.questions[0].cohorts[0];
+  near(row.correctedItemTotalCorrelation, -1);
+  near(row.alphaReliability, -3);
+});
+
+test("Different random forms never pool; presentation order does not split an identical form", () => {
+  const records = structuredClone(positiveRecords);
+  records[1].items.reverse();
+  records[3].items[2].questionId = 4;
+  const result = psych(records);
+  const row = result.questions[0];
+  assert.equal(row.formCount, 2);
+  assert.deepEqual(
+    row.cohorts.map((cohort) => cohort.sampleSize).sort(),
+    [1, 3],
+  );
+  assert.equal(
+    row.cohorts.find((cohort) => cohort.sampleSize === 1)
+      .correctedItemTotalCorrelation,
+    null,
+  );
+});
+
+test("A retake never replaces the first submission or gives a student another observation", () => {
+  const later = psychRecord("a-later", "a", [true, true, true], {
+    submittedAt: 20,
+  });
+  const result = psych([...positiveRecords, later, positiveRecords[0]]);
+  assert.equal(result.firstSubmissionCount, 4);
+  assert.equal(result.eligibleSubmissionCount, 4);
+  assert.equal(result.questions[0].cohorts[0].difficultyPercent, 75);
+  const badFirst = { ...positiveRecords[0], totalCount: undefined };
+  const excluded = psych([badFirst, later]);
+  assert.equal(excluded.excludedIncompleteCount, 1);
+  assert.equal(excluded.eligibleSubmissionCount, 0);
+});
+
+test("Incomplete grading, duplicate item IDs and missing totals are excluded as whole forms", () => {
+  for (const mutate of [
+    (row) => {
+      row.items[0].correct = null;
+    },
+    (row) => {
+      row.items[1].questionId = 1;
+    },
+    (row) => {
+      row.totalCount = 4;
+    },
+    (row) => {
+      delete row.totalCount;
+    },
+  ]) {
+    const first = structuredClone(positiveRecords[0]);
+    mutate(first);
+    const result = psych([first]);
+    assert.equal(result.excludedIncompleteCount, 1);
+    assert.equal(result.eligibleSubmissionCount, 0);
+  }
+});
+
+test("Every item in the form needs its explicit current revision, not only the focal item", () => {
+  for (const value of ["1", "legacy", undefined]) {
+    const first = structuredClone(positiveRecords[0]);
+    first.items[2].sourceRevision = value;
+    const result = psych([first]);
+    assert.equal(result.excludedRevisionCount, 1);
+    assert.equal(result.eligibleSubmissionCount, 0);
+  }
+  const result = psych(positiveRecords, {
+    questions: psychQuestions.slice(0, 2),
+  });
+  assert.equal(result.excludedRevisionCount, 4);
+});
+
+test("Unknown or tied first chronology cannot pick a favorable first submission", () => {
+  for (const submittedAt of [10, null]) {
+    const result = psych([
+      positiveRecords[0],
+      psychRecord("later", "a", [true, true, true], { submittedAt }),
+    ]);
+    assert.equal(result.excludedChronologyCount, 1);
+    assert.equal(result.eligibleSubmissionCount, 0);
+  }
+  assert.equal(
+    psych([{ ...positiveRecords[0], submittedAt: null }])
+      .excludedChronologyCount,
+    1,
+  );
+});
+
+test("Undefined correlations distinguish few students, one item, constant item and constant rest", () => {
+  const few = psych(positiveRecords.slice(0, 2)).questions[0].cohorts[0];
+  assert.equal(few.correctedItemTotalCorrelation, null);
+  assert.equal(few.correlationUnavailableReason, "insufficient_students");
+  assert.equal(few.alphaUnavailableReason, "insufficient_students");
+  const single = psych(
+    [false, true, true].map((value, index) =>
+      psychRecord(String(index), String(index), [value]),
+    ),
+  ).questions[0].cohorts[0];
+  assert.equal(single.correlationUnavailableReason, "single_item");
+  assert.equal(single.alphaUnavailableReason, "single_item");
+  assert.equal(single.options[0].meanRestPercent, null);
+  const constant = psych(
+    [false, true, true].map((value, index) =>
+      psychRecord(String(index), String(index), [true, value]),
+    ),
+  );
+  assert.equal(
+    constant.questions[0].cohorts[0].correlationUnavailableReason,
+    "constant_item",
+  );
+  assert.equal(
+    constant.questions[1].cohorts[0].correlationUnavailableReason,
+    "constant_rest_score",
+  );
+  const equalTotals = psych(
+    [false, true, true].map((value, index) =>
+      psychRecord(String(index), String(index), [value, !value]),
+    ),
+  );
+  assert.equal(
+    equalTotals.questions[0].cohorts[0].alphaUnavailableReason,
+    "constant_total_score",
+  );
+});
+
+test("First-submission option percentages use the complete cohort, preserving blank and absent answers", () => {
+  const records = structuredClone(positiveRecords);
+  records[0].items[0].answer = "";
+  delete records[1].items[0].answer;
+  const row = psych(records).questions[0].cohorts[0];
+  assert.equal(row.unansweredCount, 1);
+  assert.equal(row.missingAnswerCount, 1);
+  assert.equal(
+    row.options.find((option) => option.answer === "선지 A").percent,
+    50,
+  );
+  assert.equal(row.sampleSize, 4);
+});
+
+test("First-form analysis rechecks semester, class and assessment without reusing another population", () => {
+  const result = psych(
+    [
+      ...positiveRecords,
+      { ...positiveRecords[0], id: "past", semesterId: "2025-2" },
+    ],
+    {
+      scope: { unitIds: ["unit-a"], category: "diagnostic", classId: "3-1" },
+    },
+  );
+  assert.equal(result.firstSubmissionCount, 2);
+  assert.equal(result.questions[0].cohorts[0].sampleSize, 2);
+  assert.equal(
+    psych(positiveRecords, {
+      rosterAvailable: false,
+      scope: { classId: "3-1" },
+    }).eligibleSubmissionCount,
+    0,
+  );
+  const before = structuredClone(positiveRecords);
+  psych(positiveRecords);
+  assert.deepEqual(positiveRecords, before);
+});
 
 test("Empty records keep missing distinct from zero", () => {
   const result = run();
@@ -496,17 +727,15 @@ const loadPureExports = (path, dependencies = {}) => {
   return exports;
 };
 const rounds = loadPureExports("src/lib/mockExamRounds.ts");
-const { adaptQuizAnalysisRecords } = loadPureExports(
-  "src/pages/teacher/components/useQuizAnalysisData.ts",
-  {
+const { adaptQuizAnalysisRecords, quizAnalysisConfiguredClasses } =
+  loadPureExports("src/pages/teacher/components/useQuizAnalysisData.ts", {
     react: {},
     "firebase/firestore": {},
     "../../../lib/firebase": {},
     "../../../lib/semesterScope": {},
     "../../../lib/assessmentRelease": {},
     "../../../lib/mockExamRounds": rounds,
-  },
-);
+  });
 
 test("Actual teacher adapter preserves server percentage, current revisions and result linkage", () => {
   const data = adaptQuizAnalysisRecords(
@@ -568,6 +797,8 @@ test("Actual teacher adapter preserves server percentage, current revisions and 
   );
   const result = run(data.records);
   assert.equal(result.recordCount, 1);
+  assert.equal(data.records[0].totalCount, 2);
+  assert.equal(data.records[0].definitionId, "quiz:2026-2:unit-a:diagnostic");
   assert.equal(student(result).latestScore, 50);
   assert.equal(question(result).correctRate, 100);
   assert.equal(question(result, "2").correctRate, 0);
@@ -575,6 +806,64 @@ test("Actual teacher adapter preserves server percentage, current revisions and 
   assert.equal(
     data.snapshots["canonical:attempt-real-shape"]["1"].question,
     "당시 원문",
+  );
+});
+
+test("School configuration includes every grade and empty class without a grade-3 fallback", () => {
+  const result = quizAnalysisConfiguredClasses({
+    grades: [
+      { value: "1", label: "1학년" },
+      { value: "3", label: "3학년" },
+    ],
+    classes: [
+      { value: "2", label: "2반" },
+      { value: "1", label: "1반" },
+      { value: "1" },
+    ],
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), [
+    { id: "1-1", label: "1학년 1반" },
+    { id: "1-2", label: "1학년 2반" },
+    { id: "3-1", label: "3학년 1반" },
+    { id: "3-2", label: "3학년 2반" },
+  ]);
+  assert.equal(quizAnalysisConfiguredClasses(null).length, 0);
+});
+
+test("Unrelated config changes cannot restart semester analysis reads or listeners", () => {
+  const dependencies = [];
+  const { useQuizAnalysisData } = loadPureExports(
+    "src/pages/teacher/components/useQuizAnalysisData.ts",
+    {
+      react: {
+        useEffect: (_body, deps) => dependencies.push(deps),
+        useState: (initial) => [initial, () => {}],
+        useRef: (value) => ({ current: value }),
+        useMemo: (calculate) => calculate(),
+      },
+      "firebase/firestore": {},
+      "../../../lib/firebase": {},
+      "../../../lib/semesterScope": {
+        getYearSemester: (config) => ({
+          year: config.year,
+          semester: config.semester,
+        }),
+      },
+      "../../../lib/assessmentRelease": {
+        getAssessmentSemesterId: (config) =>
+          `${config.year}-${config.semester}`,
+      },
+      "../../../lib/mockExamRounds": rounds,
+    },
+  );
+  useQuizAnalysisData({ year: "2026", semester: "2", unrelated: "old" });
+  useQuizAnalysisData({ year: "2026", semester: "2", unrelated: "new" });
+  useQuizAnalysisData({ year: "2026", semester: "1" });
+  assert.deepEqual(dependencies[0], dependencies[1]);
+  assert.notDeepEqual(dependencies[1], dependencies[2]);
+  assert.equal(
+    dependencies[0].some((value) => typeof value === "object"),
+    false,
   );
 });
 
@@ -623,6 +912,65 @@ test("Actual adapter preserves missing legacy data and source-qualified snapshot
     data.snapshots["canonical:collision"]["1"].question,
     "다른 학생 당시 발문",
   );
+});
+
+test("Canonical absent answer keys are non-answers only when the submitted answer map exists", () => {
+  const rawResult = (studentUid, answers) => ({
+    assessmentKind: "QUIZ",
+    studentUid,
+    semesterId,
+    sourceId: "unit-a",
+    category: "diagnostic",
+    percent: 0,
+    total: 2,
+    submittedAtIso: "2026-10-15T01:00:00Z",
+    answerChecks: [
+      { id: "1", correct: false },
+      { id: "2", correct: false },
+    ],
+    learningSnapshot: [
+      { id: "1", sourceRevision: "2" },
+      { id: "2", sourceRevision: "2" },
+    ],
+    ...(answers === undefined ? {} : { answers }),
+  });
+  const { records } = adaptQuizAnalysisRecords(
+    [
+      { id: "normal-timeout", source: "canonical", raw: rawResult("a", {}) },
+      {
+        id: "unavailable",
+        source: "canonical",
+        raw: rawResult("b", undefined),
+      },
+      {
+        id: "explicit-blank",
+        source: "canonical",
+        raw: rawResult("c", { 1: "", 2: "선지 B" }),
+      },
+    ],
+    students,
+    semesterId,
+  );
+  assert.equal(records[0].items[0].answer, "");
+  assert.equal(Object.hasOwn(records[1].items[0], "answer"), false);
+  const recent = question(run(records));
+  assert.equal(recent.unansweredCount, 2);
+  assert.equal(recent.missingAnswerCount, 1);
+  assert.equal(recent.assessedStudentCount, 3);
+  assert.equal(recent.correctRate, 0);
+  const first = psych(records).questions[0].cohorts[0];
+  assert.equal(first.unansweredCount, 2);
+  assert.equal(first.missingAnswerCount, 1);
+  assert.equal(first.sampleSize, 3);
+  assert.equal(first.difficultyPercent, 0);
+  for (const malformed of [null, [], "", { 1: null }]) {
+    const { records: invalid } = adaptQuizAnalysisRecords(
+      [{ id: "invalid", source: "canonical", raw: rawResult("a", malformed) }],
+      students,
+      semesterId,
+    );
+    assert.equal(Object.hasOwn(invalid[0].items[0], "answer"), false);
+  }
 });
 
 test("Legacy saved question content survives the actual teacher adapter", () => {

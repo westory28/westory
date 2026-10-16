@@ -48,8 +48,81 @@
   min-width: 120px;
 }
 .qa-filterbar .qa-assessment-filter {
-  flex: 1;
+  flex: 1 1 144px;
+  min-width: 120px;
+}
+.qa-filterbar .qa-unit-filter,
+.qa-filterbar .qa-subunit-filter {
+  flex: 2 1 240px;
   min-width: 0;
+}
+.qa-submission-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.qa-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.qa-list-count {
+  margin: 12px 0;
+  color: var(--ws-text-muted);
+  font-size: 14px;
+}
+.qa-item-statistics {
+  margin: 24px 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--ws-border);
+}
+.qa-form-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.qa-form-filter select {
+  max-width: 100%;
+}
+.qa-statistics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 16px;
+  margin: 16px 0 24px;
+}
+.qa-statistics-grid dt {
+  font-size: 14px;
+  color: var(--ws-text-muted);
+}
+.qa-statistics-grid dd {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+.qa-statistics-grid small {
+  display: block;
+  font-size: 14px;
+  font-weight: 400;
+}
+.qa-first-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(64px, auto) minmax(80px, 140px);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ws-border);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.qa-first-option:first-child {
+  font-weight: 700;
+}
+.qa-first-option > :not(:first-child) {
+  text-align: right;
 }
 .qa-filterbar select {
   width: 100%;
@@ -458,11 +531,12 @@
     padding: 12px;
     gap: 12px;
   }
-  .qa-filterbar .qa-assessment-filter {
-    flex-basis: 100%;
+  .qa-filterbar .qa-unit-filter,
+  .qa-filterbar .qa-subunit-filter {
+    flex: 1 1 100%;
   }
-  .qa-filterbar > label:not(.qa-assessment-filter) {
-    flex: 1;
+  .qa-filterbar .qa-assessment-filter {
+    flex: 1 1 144px;
   }
   .qa-filterbar > button {
     padding: 8px 12px;
@@ -486,7 +560,7 @@
   .qa-search {
     order: 2;
     margin: 0;
-    flex: 1;
+    flex: 1 1 100%;
     min-width: 0;
   }
   .qa-search input {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildQuizAnalysis,
+  buildQuizItemStatistics,
   type QuizAnalysisRecord,
   type QuizAnalysisStudent,
   type QuizAnalysisStudentRow,
@@ -13,6 +14,7 @@ import {
 } from "../../../lib/mockExamRounds";
 import QuizPassage from "../../../components/common/QuizPassage";
 import InfoHelp from "../../../components/common/InfoHelp";
+import QuizItemStatistics from "./QuizItemStatistics";
 import type { Question, TreeUnit } from "./QuizBankTab";
 import type { QuizQuestionDraft } from "./QuizEditor";
 import type { QuizReviewSnapshots } from "./useQuizAnalysisData";
@@ -97,6 +99,7 @@ export default function QuizAnalysisView({
   students,
   records,
   snapshots,
+  configuredClasses = [],
   semesterId,
   loading,
   errors,
@@ -111,6 +114,7 @@ export default function QuizAnalysisView({
   students: QuizAnalysisStudent[];
   records: QuizAnalysisRecord[];
   snapshots: QuizReviewSnapshots;
+  configuredClasses?: Array<{ id: string; label: string }>;
   semesterId: string;
   loading: boolean;
   errors: string[];
@@ -121,7 +125,10 @@ export default function QuizAnalysisView({
   onReload: () => void;
 }) {
   const [assessmentKey, setAssessmentKey] = useState("");
+  const [unitId, setUnitId] = useState("");
+  const [subUnitId, setSubUnitId] = useState("");
   const [classId, setClassId] = useState("");
+  const [submissionFilter, setSubmissionFilter] = useState("all");
   const [view, setView] = useState<"questions" | "students">("questions");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("default");
@@ -198,41 +205,106 @@ export default function QuizAnalysisView({
         a.key.localeCompare(b.key, "ko", { numeric: true }),
     );
   }, [records, questions, labels]);
+  const unitOptions = useMemo(() => {
+    const units = new Map<
+      string,
+      { id: string; label: string; children: TreeUnit[] }
+    >();
+    tree.forEach((big) =>
+      big.children?.forEach((mid) =>
+        units.set(mid.id, {
+          id: mid.id,
+          label: `${big.title} · ${mid.title}`,
+          children: mid.children || [],
+        }),
+      ),
+    );
+    assessments.forEach((item) => {
+      if (!units.has(item.unitId))
+        units.set(item.unitId, {
+          id: item.unitId,
+          label:
+            item.category === "exam_prep"
+              ? "모의고사 · 전 범위"
+              : labels.get(item.unitId) || "단원명 미등록",
+          children: [],
+        });
+    });
+    return [...units.values()];
+  }, [tree, assessments, labels]);
+  const availableAssessments = useMemo(
+    () => assessments.filter((item) => !unitId || item.unitId === unitId),
+    [assessments, unitId],
+  );
+  useEffect(() => {
+    if (
+      !loading &&
+      (!unitId || !unitOptions.some((unit) => unit.id === unitId))
+    )
+      setUnitId(assessments[0]?.unitId || unitOptions[0]?.id || "");
+  }, [loading, unitId, unitOptions, assessments]);
   useEffect(() => {
     if (loading) return;
     if (
       !assessmentKey ||
-      !assessments.some((item) => item.key === assessmentKey)
+      !availableAssessments.some((item) => item.key === assessmentKey)
     )
-      setAssessmentKey(assessments[0]?.key || "");
-  }, [assessments, assessmentKey, loading]);
-  const assessment = assessments.find((item) => item.key === assessmentKey);
-  const classes = [
-    ...new Set(
-      students
-        .map((student) => student.classId)
-        .filter((id): id is string => !!id),
-    ),
-  ].sort((a, b) => a.localeCompare(b, "ko", { numeric: true }));
+      setAssessmentKey(availableAssessments[0]?.key || "");
+  }, [availableAssessments, assessmentKey, loading]);
+  const assessment = availableAssessments.find(
+    (item) => item.key === assessmentKey,
+  );
+  const subUnits =
+    unitOptions.find((unit) => unit.id === unitId)?.children || [];
+  const classes = useMemo(
+    () =>
+      [
+        ...new Set([
+          ...configuredClasses.map((item) => item.id),
+          ...students
+            .map((student) => student.classId)
+            .filter((id): id is string => !!id),
+        ]),
+      ].sort((a, b) => a.localeCompare(b, "ko", { numeric: true })),
+    [students, configuredClasses],
+  );
   useEffect(() => {
     if (!loading && classId && !classes.includes(classId)) setClassId("");
   }, [loading, classId, classes]);
-  const scopedQuestions = useMemo(
+  const assessmentQuestions = useMemo(
     () =>
       questions.filter(
         (q) =>
-          !assessment ||
-          (q.unitId === assessment.unitId &&
-            normalizeMockExamCategory(q.category) === assessment.category),
+          !!assessment &&
+          q.unitId === assessment.unitId &&
+          normalizeMockExamCategory(q.category) === assessment.category,
       ),
     [questions, assessment],
   );
-  const analysis = useMemo(
+  const questionSubUnit = (q: Question) => q.subUnitId || q.refSmall || "";
+  const hasUnassignedQuestions = assessmentQuestions.some(
+    (q) => !subUnits.some((unit) => unit.id === questionSubUnit(q)),
+  );
+  const scopedQuestions = useMemo(
+    () =>
+      assessmentQuestions.filter(
+        (q) =>
+          !subUnitId ||
+          (subUnitId === "__unassigned__"
+            ? !subUnits.some((unit) => unit.id === questionSubUnit(q))
+            : questionSubUnit(q) === subUnitId),
+      ),
+    [assessmentQuestions, subUnitId, subUnits],
+  );
+  useEffect(() => {
+    setSubUnitId("");
+  }, [unitId]);
+  const fullAnalysis = useMemo(
     () =>
       buildQuizAnalysis({
         semesterId,
         students,
-        questions: scopedQuestions,
+        questions: assessmentQuestions,
         records,
         rosterAvailable: !errors.includes("학생 명단을 불러오지 못했습니다."),
         scope: {
@@ -245,12 +317,80 @@ export default function QuizAnalysisView({
     [
       semesterId,
       students,
-      scopedQuestions,
+      assessmentQuestions,
       records,
       assessment,
       classId,
       errors,
     ],
+  );
+  const itemStatistics = useMemo(
+    () =>
+      buildQuizItemStatistics({
+        semesterId,
+        students,
+        questions: assessmentQuestions,
+        records,
+        rosterAvailable: !errors.includes("학생 명단을 불러오지 못했습니다."),
+        scope: {
+          unitIds: assessment ? [assessment.unitId] : [],
+          category: assessment?.category,
+          examRound: assessment?.examRound,
+          classId: classId || undefined,
+        },
+      }),
+    [
+      semesterId,
+      students,
+      assessmentQuestions,
+      records,
+      errors,
+      assessment,
+      classId,
+    ],
+  );
+  const itemAnalysis = useMemo(
+    () =>
+      !subUnitId
+        ? fullAnalysis
+        : buildQuizAnalysis({
+            semesterId,
+            students,
+            questions: scopedQuestions,
+            records,
+            rosterAvailable:
+              !errors.includes("학생 명단을 불러오지 못했습니다."),
+            scope: {
+              unitIds: assessment ? [assessment.unitId] : [],
+              category: assessment?.category,
+              examRound: assessment?.examRound,
+              classId: classId || undefined,
+            },
+          }),
+    [
+      subUnitId,
+      fullAnalysis,
+      semesterId,
+      students,
+      scopedQuestions,
+      records,
+      errors,
+      assessment,
+      classId,
+    ],
+  );
+  // A randomly drawn assessment may contain no question from this subunit.
+  // Submission status and the overall score still belong to the whole assessment.
+  const analysis = useMemo(
+    () => ({
+      ...fullAnalysis,
+      questions: itemAnalysis.questions,
+      students: itemAnalysis.students,
+    }),
+    [fullAnalysis, itemAnalysis],
+  );
+  const submissionDataAvailable = !errors.some((error) =>
+    error.includes("평가 기록을 불러오지 못했습니다."),
   );
   const byQuestion = new Map(analysis.questions.map((row) => [row.id, row]));
   const selectedQuestion = scopedQuestions.find(
@@ -279,6 +419,14 @@ export default function QuizAnalysisView({
           : 0,
     );
   const visibleStudents = analysis.students
+    .filter(
+      (student) =>
+        submissionFilter === "all" ||
+        !submissionDataAvailable ||
+        (submissionFilter === "submitted"
+          ? student.attemptCount > 0
+          : student.attemptCount === 0),
+    )
     .filter((student) =>
       `${student.classId} ${student.number} ${student.name}`.includes(search),
     )
@@ -300,7 +448,7 @@ export default function QuizAnalysisView({
     setPage(1);
     setSelectedQuestionId("");
     setSelectedStudentId("");
-  }, [assessmentKey, classId, view, search, sort]);
+  }, [assessmentKey, subUnitId, classId, submissionFilter, view, search, sort]);
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
   }, [page, pageCount]);
@@ -344,22 +492,65 @@ export default function QuizAnalysisView({
   return (
     <section className="quiz-analysis" aria-label="평가 분석">
       <div className="qa-filterbar">
+        <label className="qa-unit-filter">
+          중단원
+          <select
+            aria-label="분석할 중단원"
+            value={unitId}
+            onChange={(e) => {
+              setUnitId(e.target.value);
+              setSubUnitId("");
+            }}
+            disabled={loading || !unitOptions.length}
+          >
+            <option value="" disabled>
+              단원 선택
+            </option>
+            {unitOptions.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="qa-assessment-filter">
           평가
           <select
             aria-label="분석할 평가"
             value={assessmentKey}
             onChange={(e) => setAssessmentKey(e.target.value)}
-            disabled={!assessments.length}
+            disabled={loading || !availableAssessments.length}
           >
             <option value="" disabled>
-              평가 선택
+              {availableAssessments.length ? "평가 선택" : "등록된 평가 없음"}
             </option>
-            {assessments.map((item) => (
+            {availableAssessments.map((item) => (
               <option key={item.key} value={item.key}>
-                {item.label}
+                {categoryName(item.category)}
+                {item.examRound
+                  ? ` · ${formatMockExamRoundLabel(item.examRound)}`
+                  : ""}
               </option>
             ))}
+          </select>
+        </label>
+        <label className="qa-subunit-filter">
+          소단원
+          <select
+            aria-label="분석할 소단원"
+            value={subUnitId}
+            onChange={(e) => setSubUnitId(e.target.value)}
+            disabled={loading || (!subUnits.length && !hasUnassignedQuestions)}
+          >
+            <option value="">전체 소단원</option>
+            {subUnits.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.title}
+              </option>
+            ))}
+            {hasUnassignedQuestions && (
+              <option value="__unassigned__">소단원 미지정</option>
+            )}
           </select>
         </label>
         <label>
@@ -368,11 +559,15 @@ export default function QuizAnalysisView({
             aria-label="분석할 학급"
             value={classId}
             onChange={(e) => setClassId(e.target.value)}
+            disabled={
+              loading || errors.includes("학생 명단을 불러오지 못했습니다.")
+            }
           >
             <option value="">전체 학급</option>
             {classes.map((id) => (
               <option key={id} value={id}>
-                {classLabel(id)}
+                {configuredClasses.find((item) => item.id === id)?.label ||
+                  classLabel(id)}
               </option>
             ))}
           </select>
@@ -394,6 +589,8 @@ export default function QuizAnalysisView({
         <div role="status" className="qa-empty">
           평가 자료를 불러오는 중입니다.
         </div>
+      ) : !assessment ? (
+        <p className="qa-empty">이 중단원에는 등록된 평가가 없습니다.</p>
       ) : (
         <>
           <div className="qa-summaryline">
@@ -432,7 +629,9 @@ export default function QuizAnalysisView({
                 <InfoHelp label="최근 평가 점수 집계 기준">
                   선택한 평가의 학생별 최근 제출 점수입니다. 다른 평가의 점수를
                   합치지 않습니다. 점수나 제출 순서를 확인할 수 없는 기록은
-                  제외합니다.
+                  제외합니다. 소단원 필터는 문항 결과에만 적용하며, 점수와 제출
+                  여부는 선택한 평가 전체를 기준으로 합니다. 학급은 현재 학생
+                  명단의 반을 기준으로 구분합니다.
                 </InfoHelp>
               </div>
               {analysis.scoredStudentCount > 0 ? (
@@ -557,6 +756,28 @@ export default function QuizAnalysisView({
                 학생
               </button>
             </div>
+            {view === "students" && (
+              <label className="qa-submission-filter">
+                <span className="qa-filter-label">
+                  응시 상태{" "}
+                  <InfoHelp label="응시 상태 구분 기준">
+                    선택한 평가에 제출 기록이 있으면 응시 완료로 구분합니다.
+                    미응시·미제출에는 아직 시작하지 않았거나 풀이 중인 학생이
+                    포함됩니다. 소단원 필터로 미응시 여부를 바꾸지 않습니다.
+                  </InfoHelp>
+                </span>
+                <select
+                  aria-label="학생 응시 상태"
+                  value={submissionFilter}
+                  disabled={!submissionDataAvailable}
+                  onChange={(e) => setSubmissionFilter(e.target.value)}
+                >
+                  <option value="all">전체 학생</option>
+                  <option value="submitted">응시 완료</option>
+                  <option value="not_submitted">미응시·미제출</option>
+                </select>
+              </label>
+            )}
             <label className="qa-search">
               <span className="sr-only">
                 {view === "questions" ? "문항·개념 검색" : "학생 검색"}
@@ -593,6 +814,9 @@ export default function QuizAnalysisView({
                 )}
               </select>
             </label>
+          </div>
+          <div className="qa-list-count" role="status">
+            {view === "questions" ? `문항 ${total}개` : `학생 ${total}명`}
           </div>
           <div
             className="qa-table-region"
@@ -634,6 +858,10 @@ export default function QuizAnalysisView({
                             >
                               {q.question || "발문 미등록"}
                             </button>
+                            <span className="qa-row-meta">
+                              {labels.get(questionSubUnit(q)) ||
+                                "소단원 미지정"}
+                            </span>
                             {!!q.concepts?.length && (
                               <span className="qa-row-meta">
                                 {q.concepts.join(" · ")}
@@ -731,7 +959,9 @@ export default function QuizAnalysisView({
                         <td>
                           {student.attemptCount
                             ? `${student.attemptCount}회`
-                            : "기록 없음"}
+                            : submissionDataAvailable
+                              ? "미응시·미제출"
+                              : "확인 불가"}
                         </td>
                       </tr>
                     ))}
@@ -821,8 +1051,16 @@ export default function QuizAnalysisView({
                     )}
                   </div>
                   <QuestionContent question={selectedQuestion} />
+                  <QuizItemStatistics
+                    key={`${selectedQuestion.id}:${assessmentKey}:${classId}`}
+                    row={itemStatistics.questions.find(
+                      (row) => row.id === String(selectedQuestion.id),
+                    )}
+                    summary={itemStatistics}
+                    answer={String(selectedQuestion.answer ?? "")}
+                  />
                   <div className="qa-section-head">
-                    <h4>응답 분포</h4>
+                    <h4>최근 답안 분포</h4>
                     <InfoHelp label="응답 분포 기준">
                       현재 문항 버전의 학생별 최근 답안입니다. 각 선택 비율의
                       분모는 비어 있지 않은 답안이 보관된 학생 수입니다. 정답률
@@ -874,6 +1112,7 @@ export default function QuizAnalysisView({
                   questions={scopedQuestions}
                   snapshots={snapshots}
                   onOpenQuestion={openQuestion}
+                  filterQuestions={Boolean(subUnitId)}
                 />
               )}
             </section>
@@ -949,13 +1188,21 @@ function StudentDetail({
   questions,
   snapshots,
   onOpenQuestion,
+  filterQuestions = false,
 }: {
   student: QuizAnalysisStudentRow;
   questions: Question[];
   snapshots: QuizReviewSnapshots;
   onOpenQuestion: (id: string) => void;
+  filterQuestions?: boolean;
 }) {
   const record = student.latestRecord;
+  const visibleItems =
+    record?.items.filter(
+      (item) =>
+        !filterQuestions ||
+        questions.some((q) => String(q.id) === String(item.questionId)),
+    ) || [];
   return (
     <>
       {record ? (
@@ -993,7 +1240,12 @@ function StudentDetail({
             </div>
           )}
           <div className="qa-student-answers">
-            {record.items.map((item, index) => {
+            {filterQuestions && !visibleItems.length && (
+              <p className="qa-empty">
+                최근 제출에는 선택한 소단원의 문항이 없습니다.
+              </p>
+            )}
+            {visibleItems.map((item, index) => {
               const q = questions.find(
                 (q) => String(q.id) === String(item.questionId),
               );

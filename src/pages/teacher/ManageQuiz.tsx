@@ -77,7 +77,7 @@ const ManageQuiz: React.FC = () => {
       }
     };
     void loadTree();
-  }, [config]);
+  }, [config?.year, config?.semester]);
 
   if (!canRead) return null;
 

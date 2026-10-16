@@ -50,6 +50,9 @@ export interface QuizAnalysisRecord {
   resultRef?: string;
   resultId?: string;
   legacyResultId?: string;
+  /** Server-recorded item count, needed to verify a complete test form. */
+  totalCount?: number;
+  definitionId?: string;
 }
 
 export interface QuizAnalysisScope {
@@ -150,6 +153,58 @@ export interface QuizAnalysisSummary {
   excludedRecordCount: number;
   scoreBasis: "latest_recorded_attempt";
   rosterAvailable: boolean;
+}
+
+export type QuizCorrelationUnavailableReason =
+  | "insufficient_students"
+  | "single_item"
+  | "constant_item"
+  | "constant_rest_score";
+
+export interface QuizItemStatisticsCohort {
+  /** Exact assessment + sorted question IDs and explicit revision pairs. */
+  formKey: string;
+  itemCount: number;
+  sampleSize: number;
+  /** Product caution threshold, not a minimum prescribed by UW. */
+  smallSample: boolean;
+  correctCount: number;
+  difficultyPercent: number;
+  correctedItemTotalCorrelation: number | null;
+  correlationUnavailableReason: QuizCorrelationUnavailableReason | null;
+  alphaReliability: number | null;
+  alphaUnavailableReason:
+    | "insufficient_students"
+    | "single_item"
+    | "constant_total_score"
+    | null;
+  options: Array<{
+    answer: string;
+    count: number;
+    /** All students in this exact form, including recorded non-answers. */
+    percent: number;
+    /** Mean percent correct on the other items, excluding this item. */
+    meanRestPercent: number | null;
+    listedOption: boolean;
+  }>;
+  unansweredCount: number;
+  missingAnswerCount: number;
+}
+
+export interface QuizItemStatisticsRow {
+  id: string;
+  formCount: number;
+  cohorts: QuizItemStatisticsCohort[];
+}
+
+export interface QuizItemStatisticsSummary {
+  basis: "first_recorded_submission_same_form";
+  questions: QuizItemStatisticsRow[];
+  firstSubmissionCount: number;
+  eligibleSubmissionCount: number;
+  excludedChronologyCount: number;
+  excludedIncompleteCount: number;
+  excludedRevisionCount: number;
 }
 
 const text = (value: unknown): string =>
@@ -651,4 +706,253 @@ export const buildQuizAnalysis = (input: {
     scoreBasis: "latest_recorded_attempt",
     rosterAvailable,
   };
+};
+
+/**
+ * Equal-weight dichotomous item analysis of the loaded, authorized sample.
+ * A student's first recorded submission is chosen BEFORE validating its items;
+ * a later successful/revised submission must never replace an excluded first.
+ * Call with the whole assessment bank; a display-only subunit filter must not
+ * alter the rest score or split a test form. Different forms are never pooled.
+ */
+export const buildQuizItemStatistics = (input: {
+  semesterId: string;
+  scope?: QuizAnalysisScope;
+  students: readonly QuizAnalysisStudent[];
+  questions: readonly QuizAnalysisQuestion[];
+  records: readonly QuizAnalysisRecord[];
+  rosterAvailable?: boolean;
+}): QuizItemStatisticsSummary => {
+  const scope = input.scope || {};
+  const questionMap = new Map(
+    input.questions
+      .filter(
+        (question) => text(question.id) && questionInScope(question, scope),
+      )
+      .map((question) => [text(question.id), question]),
+  );
+  const studentIds = new Set(
+    (input.rosterAvailable === false ? [] : input.students)
+      .filter(
+        (student) => !scope.classId || text(student.classId) === scope.classId,
+      )
+      .map((student) => text(student.uid)),
+  );
+  const records = deduplicateQuizAnalysisRecords(
+    input.records.filter(
+      (record) =>
+        text(input.semesterId) &&
+        text(record.id) &&
+        text(record.studentUid) &&
+        text(record.semesterId) === text(input.semesterId) &&
+        (!scope.classId || studentIds.has(text(record.studentUid))) &&
+        (record.source === "canonical" || record.source === "legacy") &&
+        Array.isArray(record.items),
+    ),
+  ).filter(
+    (record) =>
+      (!scope.category || text(record.category) === scope.category) &&
+      (!scope.examRound || text(record.examRound) === scope.examRound) &&
+      (!scope.unitIds || scope.unitIds.includes(text(record.unitId))),
+  );
+  const assessmentKey = (record: QuizAnalysisRecord) =>
+    JSON.stringify([
+      text(record.unitId),
+      text(record.category),
+      text(record.examRound),
+    ]);
+  const byStudentAssessment = new Map<string, QuizAnalysisRecord[]>();
+  for (const record of records) {
+    const key = JSON.stringify([
+      text(record.studentUid),
+      assessmentKey(record),
+    ]);
+    const entries = byStudentAssessment.get(key) || [];
+    entries.push(record);
+    byStudentAssessment.set(key, entries);
+  }
+  const summary: QuizItemStatisticsSummary = {
+    basis: "first_recorded_submission_same_form",
+    questions: [],
+    firstSubmissionCount: byStudentAssessment.size,
+    eligibleSubmissionCount: 0,
+    excludedChronologyCount: 0,
+    excludedIncompleteCount: 0,
+    excludedRevisionCount: 0,
+  };
+  const forms = new Map<string, QuizAnalysisRecord[]>();
+  for (const entries of byStudentAssessment.values()) {
+    const times = entries.map((record) => timestamp(record.submittedAt));
+    const firstTime = Math.min(
+      ...times.filter((value): value is number => value !== null),
+    );
+    const firstRows = entries.filter((_, index) => times[index] === firstTime);
+    if (times.includes(null) || firstRows.length !== 1) {
+      summary.excludedChronologyCount += 1;
+      continue;
+    }
+    const first = firstRows[0];
+    const ids = first.items.map((item) => text(item.questionId));
+    if (
+      !Number.isSafeInteger(first.totalCount) ||
+      first.totalCount !== first.items.length ||
+      first.items.length === 0 ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !id) ||
+      first.items.some((item) => typeof item.correct !== "boolean")
+    ) {
+      summary.excludedIncompleteCount += 1;
+      continue;
+    }
+    if (
+      first.items.some((item) => {
+        const current = questionMap.get(text(item.questionId));
+        const currentRevision =
+          current &&
+          (revision(current.sourceRevision) ||
+            revision(current.contentRevision));
+        return (
+          !currentRevision || revision(item.sourceRevision) !== currentRevision
+        );
+      })
+    ) {
+      summary.excludedRevisionCount += 1;
+      continue;
+    }
+    const signature = first.items
+      .map((item) => [text(item.questionId), revision(item.sourceRevision)])
+      .sort(([left], [right]) => left.localeCompare(right));
+    const formKey = JSON.stringify([assessmentKey(first), signature]);
+    const cohort = forms.get(formKey) || [];
+    cohort.push(first);
+    forms.set(formKey, cohort);
+    summary.eligibleSubmissionCount += 1;
+  }
+  const squaredDeviation = (values: number[]) => {
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    return values.reduce((sum, value) => sum + (value - mean) ** 2, 0);
+  };
+  const rows = new Map<string, QuizItemStatisticsRow>(
+    [...questionMap.keys()].map((id) => [
+      id,
+      { id, formCount: 0, cohorts: [] },
+    ]),
+  );
+  for (const [formKey, cohort] of [...forms].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    const sampleSize = cohort.length;
+    const itemCount = cohort[0].items.length;
+    const maps = cohort.map(
+      (record) =>
+        new Map(record.items.map((item) => [text(item.questionId), item])),
+    );
+    const totals = cohort.map(
+      (record) => record.items.filter((item) => item.correct).length,
+    );
+    const totalDeviation = squaredDeviation(totals);
+    const alphaUnavailableReason =
+      sampleSize < 3
+        ? "insufficient_students"
+        : itemCount < 2
+          ? "single_item"
+          : totalDeviation === 0
+            ? "constant_total_score"
+            : null;
+    // Same denominator for all variances cancels; this is Cronbach alpha/KR-20
+    // for complete, equally weighted 0/1 items. Do not clamp negative reliability.
+    const itemDeviationSum = cohort[0].items.reduce(
+      (sum, item) =>
+        sum +
+        squaredDeviation(
+          maps.map((map) => Number(map.get(text(item.questionId))!.correct)),
+        ),
+      0,
+    );
+    const alphaReliability = alphaUnavailableReason
+      ? null
+      : (itemCount / (itemCount - 1)) * (1 - itemDeviationSum / totalDeviation);
+    for (const sourceItem of cohort[0].items) {
+      const id = text(sourceItem.questionId);
+      const question = questionMap.get(id)!;
+      const items = maps.map((map) => map.get(id)!);
+      const values = items.map((item) => Number(item.correct));
+      const rest = totals.map((total, index) => total - values[index]);
+      const itemDeviation = squaredDeviation(values);
+      const restDeviation = squaredDeviation(rest);
+      const correlationUnavailableReason =
+        sampleSize < 3
+          ? "insufficient_students"
+          : itemCount < 2
+            ? "single_item"
+            : itemDeviation === 0
+              ? "constant_item"
+              : restDeviation === 0
+                ? "constant_rest_score"
+                : null;
+      const meanX = values.reduce((sum, value) => sum + value, 0) / sampleSize;
+      const meanY = rest.reduce((sum, value) => sum + value, 0) / sampleSize;
+      const covariance = values.reduce(
+        (sum, value, index) => sum + (value - meanX) * (rest[index] - meanY),
+        0,
+      );
+      const correlation = correlationUnavailableReason
+        ? null
+        : Math.max(
+            -1,
+            Math.min(1, covariance / Math.sqrt(itemDeviation * restDeviation)),
+          );
+      const answers = new Map<string, number[]>(
+        [
+          ...new Set(
+            (question.options || []).filter(
+              (answer) => typeof answer === "string" && answer.trim(),
+            ),
+          ),
+        ].map((answer) => [answer, []]),
+      );
+      let unansweredCount = 0;
+      let missingAnswerCount = 0;
+      items.forEach((item, index) => {
+        if (typeof item.answer !== "string") {
+          missingAnswerCount += 1;
+        } else if (!item.answer.trim()) {
+          unansweredCount += 1;
+        } else {
+          const restScores = answers.get(item.answer) || [];
+          restScores.push(rest[index]);
+          answers.set(item.answer, restScores);
+        }
+      });
+      const row = rows.get(id)!;
+      row.cohorts.push({
+        formKey,
+        itemCount,
+        sampleSize,
+        smallSample: sampleSize < 20,
+        correctCount: values.reduce((sum, value) => sum + value, 0),
+        difficultyPercent: meanX * 100,
+        correctedItemTotalCorrelation: correlation,
+        correlationUnavailableReason,
+        alphaReliability,
+        alphaUnavailableReason,
+        options: [...answers].map(([answer, restScores]) => ({
+          answer,
+          count: restScores.length,
+          percent: (100 * restScores.length) / sampleSize,
+          meanRestPercent:
+            restScores.length && itemCount > 1
+              ? (100 * restScores.reduce((sum, value) => sum + value, 0)) /
+                (restScores.length * (itemCount - 1))
+              : null,
+          listedOption: (question.options || []).includes(answer),
+        })),
+        unansweredCount,
+        missingAnswerCount,
+      });
+      row.formCount = row.cohorts.length;
+    }
+  }
+  summary.questions = [...rows.values()];
+  return summary;
 };

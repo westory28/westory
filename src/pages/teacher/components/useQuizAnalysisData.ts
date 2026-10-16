@@ -14,6 +14,7 @@ import { db } from "../../../lib/firebase";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
+  getYearSemester,
 } from "../../../lib/semesterScope";
 import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
 import {
@@ -38,6 +39,34 @@ export type QuizReviewSnapshots = Record<
   string,
   Record<string, Partial<Question>>
 >;
+
+/** Configured options include classes with no student accounts or submissions. */
+export function quizAnalysisConfiguredClasses(raw: Record<string, any> | null) {
+  const normalize = (values: unknown, suffix: string) => {
+    const options = new Map<string, { value: string; label: string }>();
+    for (const item of Array.isArray(values) ? values : []) {
+      const value = text(item?.value ?? item?.label)
+        .replace(/\s/g, "")
+        .replace(/학년|반/g, "");
+      if (!value || options.has(value)) continue;
+      options.set(value, {
+        value,
+        label: text(item?.label) || `${value}${suffix}`,
+      });
+    }
+    return [...options.values()];
+  };
+  const grades = normalize(raw?.grades, "학년");
+  const classes = normalize(raw?.classes, "반");
+  return grades
+    .flatMap((grade) =>
+      classes.map((entry) => ({
+        id: `${grade.value}-${entry.value}`,
+        label: `${grade.label} ${entry.label}`,
+      })),
+    )
+    .sort((a, b) => a.id.localeCompare(b.id, "ko", { numeric: true }));
+}
 
 const legacyQuestionSnapshot = (
   item: Record<string, any>,
@@ -138,9 +167,22 @@ export function adaptQuizAnalysisRecords(
           const saved = legacyQuestionSnapshot(item);
           if (saved) snapshots[`${source}:${id}`][questionId] = saved;
         }
+        // A canonical submission stores only answered keys. A present answer
+        // map proves an absent key is an intentional non-answer; an absent or
+        // malformed map does not prove what the student submitted.
+        const answerMap =
+          raw.answers &&
+          typeof raw.answers === "object" &&
+          !Array.isArray(raw.answers)
+            ? raw.answers
+            : null;
         const answer =
           source === "canonical"
-            ? raw.answers?.[questionId]
+            ? answerMap
+              ? Object.prototype.hasOwnProperty.call(answerMap, questionId)
+                ? answerMap[questionId]
+                : ""
+              : undefined
             : (item.u ?? item.userAnswer ?? item.answer);
         return [
           {
@@ -176,6 +218,8 @@ export function adaptQuizAnalysisRecords(
       resultRef: raw.resultRef,
       resultId: raw.resultId,
       legacyResultId: raw.legacyResultId,
+      totalCount: typeof raw.total === "number" ? raw.total : undefined,
+      definitionId: text(raw.definitionId),
     });
   }
   return { records, snapshots };
@@ -191,10 +235,15 @@ export function useQuizAnalysisData(config: any) {
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [legacyLimited, setLegacyLimited] = useState(false);
+  const [configuredClasses, setConfiguredClasses] = useState<
+    Array<{ id: string; label: string }>
+  >([]);
   const [version, setVersion] = useState(0);
   const activeVersion = useRef(0);
   const semesterId = getAssessmentSemesterId(config);
+  const { year, semester } = getYearSemester(config);
   useEffect(() => {
+    const semesterConfig = { year, semester };
     const run = ++activeVersion.current;
     let active = true;
     const loaded = new Set<string>();
@@ -207,15 +256,19 @@ export function useQuizAnalysisData(config: any) {
     setRawRows([]);
     setTreeData([]);
     setLegacyLimited(false);
+    setConfiguredClasses([]);
     const finish = (key: string, error?: string) => {
       if (!active || activeVersion.current !== run) return;
       loaded.add(key);
       error ? failures.set(key, error) : failures.delete(key);
       setErrors([...failures.values()]);
-      setLoading(loaded.size < 5);
+      setLoading(loaded.size < 6);
     };
     void getDocs(
-      collection(db, getSemesterCollectionPath(config, "quiz_questions")),
+      collection(
+        db,
+        getSemesterCollectionPath(semesterConfig, "quiz_questions"),
+      ),
     )
       .then((snapshot) => {
         if (!active) return;
@@ -240,7 +293,7 @@ export function useQuizAnalysisData(config: any) {
     void (async () => {
       try {
         const scoped = await getDoc(
-          doc(db, getSemesterDocPath(config, "curriculum", "tree")),
+          doc(db, getSemesterDocPath(semesterConfig, "curriculum", "tree")),
         );
         const source = scoped.exists()
           ? scoped
@@ -252,6 +305,17 @@ export function useQuizAnalysisData(config: any) {
         finish("tree", "단원 목록을 불러오지 못했습니다.");
       }
     })();
+    void getDoc(doc(db, "site_settings", "school_config"))
+      .then((snapshot) => {
+        if (!active) return;
+        setConfiguredClasses(
+          quizAnalysisConfiguredClasses(
+            snapshot.exists() ? snapshot.data() : null,
+          ),
+        );
+        finish("classes");
+      })
+      .catch(() => finish("classes", "학교 학급 설정을 불러오지 못했습니다."));
     void getDocs(collection(db, "users"))
       .then((snapshot) => {
         if (!active) return;
@@ -285,7 +349,10 @@ export function useQuizAnalysisData(config: any) {
       onSnapshot(
         source === "legacy"
           ? query(
-              collection(db, getSemesterCollectionPath(config, "quiz_results")),
+              collection(
+                db,
+                getSemesterCollectionPath(semesterConfig, "quiz_results"),
+              ),
               orderBy("timestamp", "desc"),
               limit(LEGACY_LIMIT),
             )
@@ -318,7 +385,7 @@ export function useQuizAnalysisData(config: any) {
       active = false;
       unsubscribe.forEach((stop) => stop());
     };
-  }, [config, semesterId, version]);
+  }, [year, semester, semesterId, version]);
   const { records, snapshots } = useMemo(
     () => adaptQuizAnalysisRecords(rawRows, students, semesterId),
     [rawRows, students, semesterId],
@@ -333,6 +400,7 @@ export function useQuizAnalysisData(config: any) {
     loading,
     errors,
     legacyLimited,
+    configuredClasses,
     reload: () => setVersion((value) => value + 1),
   };
 }

@@ -93,6 +93,7 @@ interface CascadingFilter {
 
 const ORDER_DELIMITER = "||";
 const MATCHING_PAIR_DELIMITER = "=>";
+const UNASSIGNED_SUB_UNIT_FILTER = "__unassigned__";
 const DEFAULT_CHOICE_OPTION_COUNT = 5;
 const EXAM_PREP_CHOICE_OPTION_COUNT = 5;
 const DEFAULT_ORDER_OPTION_COUNT = 4;
@@ -180,6 +181,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [questionSearch, setQuestionSearch] = useState("");
+  const [normalSubUnitFilter, setNormalSubUnitFilter] = useState("");
   const [metadata, setMetadata] = useState<QuizLearningMetadata>({});
   const [derivationSource, setDerivationSource] = useState<Question | null>(
     null,
@@ -262,6 +264,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       setCategory("diagnostic");
     }
     setEpFilter(EMPTY_CASCADING_FILTER);
+    setNormalSubUnitFilter("");
     setEpSource(EMPTY_CASCADING_FILTER);
     defaultExamPrepFocusKeyRef.current = "";
     void fetchQuestions();
@@ -314,9 +317,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const normalSubUnits = useMemo(
     () =>
       treeData
-        .find((big) => big.title === parentTitle)
-        ?.children?.find((mid) => mid.id === node.id)?.children || [],
-    [treeData, parentTitle, node.id],
+        .flatMap((big) => big.children || [])
+        .find((mid) => mid.id === node.id)?.children || [],
+    [treeData, node.id],
+  );
+  const normalSubUnitIds = useMemo(
+    () => new Set(normalSubUnits.map((unit) => unit.id)),
+    [normalSubUnits],
   );
   const findNodeTitle = (targetId?: string | null) => {
     if (!targetId) return "";
@@ -439,21 +446,54 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         "";
       return findNodeTitle(sourceId) || "소단원 전체";
     }
-    return findNodeTitle(question.subUnitId || "") || "소단원 전체";
+    return findNodeTitle(question.subUnitId || "") || "소단원 미지정";
   };
 
+  const searchedQuestions = useMemo(() => {
+    const search = questionSearch.trim().toLowerCase();
+    if (!search) return questions;
+    return questions.filter((question) =>
+      [
+        question.question,
+        question.explanation,
+        question.passage,
+        ...(question.concepts || []),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(search),
+    );
+  }, [questions, questionSearch]);
+  const subUnitQuestionCounts = useMemo(
+    () =>
+      searchedQuestions.reduce<Record<string, number>>((counts, question) => {
+        if (question.category !== category) return counts;
+        const id =
+          question.subUnitId && normalSubUnitIds.has(question.subUnitId)
+            ? question.subUnitId
+            : UNASSIGNED_SUB_UNIT_FILTER;
+        counts[id] = (counts[id] || 0) + 1;
+        return counts;
+      }, {}),
+    [searchedQuestions, category, normalSubUnitIds],
+  );
+  const totalSubUnitQuestionCount = Object.values(subUnitQuestionCounts).reduce(
+    (total, count) => total + count,
+    0,
+  );
+  const hasUnassignedQuestions = questions.some(
+    (question) => !normalSubUnitIds.has(question.subUnitId || ""),
+  );
+  const matchesNormalSubUnit = (question: Question) => {
+    if (!normalSubUnitFilter) return true;
+    return normalSubUnitFilter === UNASSIGNED_SUB_UNIT_FILTER
+      ? !normalSubUnitIds.has(question.subUnitId || "")
+      : question.subUnitId === normalSubUnitFilter;
+  };
   const filteredQuestions = useMemo(() => {
-    const list = questions.filter((q) => {
+    const list = searchedQuestions.filter((q) => {
       if (q.category !== category) return false;
-      if (
-        questionSearch &&
-        ![q.question, q.explanation, q.passage, ...(q.concepts || [])]
-          .join(" ")
-          .toLowerCase()
-          .includes(questionSearch.toLowerCase())
-      )
-        return false;
-      if (type !== "special") return true;
+      if (type !== "special") return matchesNormalSubUnit(q);
       if (epFilter.big && q.refBig !== epFilter.big) return false;
       if (epFilter.mid && q.refMid !== epFilter.mid) return false;
       if (epFilter.small && q.refSmall !== epFilter.small) return false;
@@ -465,17 +505,20 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     epFilter.big,
     epFilter.mid,
     epFilter.small,
-    questions,
+    searchedQuestions,
     type,
-    questionSearch,
+    normalSubUnitFilter,
+    normalSubUnitIds,
   ]);
   const categoryQuestionCounts = useMemo(
     () =>
       questions.reduce<Record<string, number>>((counts, question) => {
+        if (type !== "special" && !matchesNormalSubUnit(question))
+          return counts;
         counts[question.category] = (counts[question.category] || 0) + 1;
         return counts;
       }, {}),
-    [questions],
+    [questions, type, normalSubUnitFilter, normalSubUnitIds],
   );
 
   const trimList = (values: string[]) =>
@@ -559,8 +602,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setHintText("");
     setPreviewOpen(false);
     resetPreview();
-    if (type !== "special") setFormSubUnit(recentNormalSubUnit);
-    else setEpSource(recentExamPrepFocus);
+    if (type !== "special") {
+      setFormSubUnit(
+        normalSubUnitIds.has(normalSubUnitFilter)
+          ? normalSubUnitFilter
+          : normalSubUnitFilter === UNASSIGNED_SUB_UNIT_FILTER
+            ? ""
+            : recentNormalSubUnit,
+      );
+    } else setEpSource(recentExamPrepFocus);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -1151,23 +1201,69 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   return (
     <div className="quiz-authoring-surface quiz-registration-workspace flex h-full min-h-0 flex-col">
       <div className="quiz-editor-toolbar quiz-registration-heading">
-        <div>
+        <div className="quiz-registration-context">
           {type !== "special" && (
             <div className="text-sm text-gray-500 mb-1">{parentTitle}</div>
           )}
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-gray-800">
-              {type === "special" ? "모의고사" : node.title}
-            </h2>
-            {canEdit && (
-              <button
-                onClick={() => onOpenSettings(category)}
-                className="min-h-11 min-w-11 text-gray-500 hover:text-blue-600 transition p-2"
-                title="평가 설정"
-                aria-label="평가 설정"
-              >
-                <i className="fas fa-cog"></i>
-              </button>
+          <div className="quiz-registration-title-row">
+            <div className="quiz-registration-title">
+              <h2 className="text-xl font-bold text-gray-800">
+                {type === "special" ? "모의고사" : node.title}
+              </h2>
+              {canEdit && (
+                <button
+                  onClick={() => onOpenSettings(category)}
+                  className="min-h-11 min-w-11 text-gray-500 hover:text-blue-600 transition p-2"
+                  title="평가 설정"
+                  aria-label="평가 설정"
+                >
+                  <i className="fas fa-cog"></i>
+                </button>
+              )}
+            </div>
+            {type !== "special" && (
+              <label className="quiz-registration-subunit-filter">
+                <span>소단원</span>
+                <select
+                  aria-label="소단원 필터"
+                  value={normalSubUnitFilter}
+                  onChange={(event) =>
+                    setNormalSubUnitFilter(event.target.value)
+                  }
+                  title={
+                    normalSubUnits.find(
+                      (unit) => unit.id === normalSubUnitFilter,
+                    )?.title ||
+                    (normalSubUnitFilter === UNASSIGNED_SUB_UNIT_FILTER
+                      ? "소단원 미지정"
+                      : "전체 소단원")
+                  }
+                >
+                  <option value="">
+                    전체 소단원 (
+                    {totalSubUnitQuestionCount.toLocaleString("ko-KR")}문항)
+                  </option>
+                  {normalSubUnits.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {unit.title} (
+                      {(subUnitQuestionCounts[unit.id] || 0).toLocaleString(
+                        "ko-KR",
+                      )}
+                      문항)
+                    </option>
+                  ))}
+                  {(hasUnassignedQuestions ||
+                    normalSubUnitFilter === UNASSIGNED_SUB_UNIT_FILTER) && (
+                    <option value={UNASSIGNED_SUB_UNIT_FILTER}>
+                      소단원 미지정 (
+                      {(
+                        subUnitQuestionCounts[UNASSIGNED_SUB_UNIT_FILTER] || 0
+                      ).toLocaleString("ko-KR")}
+                      문항)
+                    </option>
+                  )}
+                </select>
+              </label>
             )}
           </div>
         </div>
@@ -1308,7 +1404,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               </div>
             ) : filteredQuestions.length === 0 ? (
               <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
-                등록된 문제가 없습니다.
+                {questionSearch.trim() || normalSubUnitFilter
+                  ? "조건에 맞는 문제가 없습니다."
+                  : "등록된 문제가 없습니다."}
               </div>
             ) : (
               filteredQuestions.map((q, idx) => {

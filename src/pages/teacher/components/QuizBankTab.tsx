@@ -119,6 +119,7 @@ const QuizBankTab: React.FC<{
     students,
     records,
     snapshots,
+    configuredClasses,
     loading,
     errors,
     legacyLimited,
@@ -991,6 +992,7 @@ const QuizBankTab: React.FC<{
         students={students}
         records={records}
         snapshots={snapshots}
+        configuredClasses={configuredClasses}
         loading={loading}
         errors={errors}
         legacyLimited={legacyLimited}
