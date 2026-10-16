@@ -46,6 +46,7 @@ const { ATLAS_SUBJECT_BOUNDS } = load("src/lib/historyAtlas.ts");
 const {
   createAtlasProjection,
   fitAtlasSelection,
+  fitAtlasRegionProjection,
   includeAtlasContextBounds,
   reframeAtlasSelectionBounds,
   atlasRegionCameraBounds,
@@ -54,6 +55,9 @@ const {
 } = load("src/lib/historyAtlasGeometry.ts");
 const { ATLAS_KOREA_PROVINCES, ATLAS_WORLD_REGION_GROUPS, matchesAtlasRegion } =
   load("src/lib/historyAtlasRegions.ts");
+const { atlasAreaCameraBounds, findAtlasRegionArea } = load(
+  "src/lib/historyAtlasAreas.ts",
+);
 const read = (file) =>
   JSON.parse(readFileSync(`src/data/atlas/${file}`, "utf8"));
 const supplement = read("rivers-supplement.json");
@@ -766,88 +770,163 @@ const regionFixture = [
     place: fixturePlace("d", [129, 38]),
   },
 ];
-for (const empty of [false, true]) {
-  const state = {};
-  const scopeExports = {};
-  const pendingFocusRef = { current: "old-place" };
-  vm.runInNewContext(
-    ts.transpileModule(`exports.changeScope = ${changeScopeSource}`, {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-      },
-    }).outputText,
-    {
-      exports: scopeExports,
-      subject: "korea",
-      unitId: "chosen-unit",
-      eraId: "chosen-era",
-      regionId: "gyeonggi",
-      subregionId: "",
-      query: "old search",
-      selected: undefined,
-      areaGeometry: null,
-      subjectEntries: empty ? [] : regionFixture,
-      pendingFocusRef,
-      matchesAtlasRegion: () => true,
-      atlasRegionCameraBounds,
-      searchEntries: (items, query) => {
-        assert.equal(
-          query,
-          "",
-          "Region navigation clears the previous query before matching",
-        );
-        return items;
-      },
-      requestPlaceFocus: () =>
-        assert.fail("A region view must not select its first row"),
-      resetMap: () => {
-        state.reset = true;
-      },
-      ...Object.fromEntries(
-        [
-          "ListPage",
-          "Query",
-          "UnitId",
-          "EraId",
-          "RegionId",
-          "SubregionId",
-          "FilterNotice",
-          "SelectedId",
-          "DetailOpen",
-          "ProvinceDetailOpen",
-          "ViewBounds",
-        ].map((key) => [
-          `set${key}`,
-          (value) => {
-            state[key] = value;
+const currentAreas = Object.fromEntries(
+  ["korea", "world"].map((subject) => [subject, read(`areas-${subject}.json`)]),
+);
+let currentAreaCameraCases = 0;
+for (const subject of ["korea", "world"])
+  for (const area of currentAreas[subject].features.filter(
+    (feature) => feature.properties.regionId,
+  ))
+    for (const viewport of popupViewports) {
+      const { width, mapHeight, focus } = viewport;
+      const bounds = atlasAreaCameraBounds(area);
+      assert(bounds.every(Number.isFinite), area.properties.id);
+      assert(
+        bounds[0] < bounds[2] && bounds[1] < bounds[3],
+        area.properties.id,
+      );
+      assert(
+        bounds[2] - bounds[0] <= 360 && bounds[1] >= -90 && bounds[3] <= 90,
+      );
+      const projection = fitAtlasRegionProjection(
+        createAtlasProjection(subject, bounds, width, mapHeight),
+        area,
+        { width, ...focus },
+      );
+      const camera = fitAtlasSelection(
+        projection,
+        { coordinates: geography.geoCentroid(area), geometry: area },
+        { width, mapHeight, ...focus },
+      );
+      assert(
+        camera.scale >= 0.5,
+        "Regional overview preserves the existing 50% minimum zoom",
+      );
+      const [[left, top], [right, bottom]] = geography
+        .geoPath(projection)
+        .bounds(area)
+        .map(([x, y]) => [
+          x * camera.scale + camera.x,
+          y * camera.scale + camera.y,
+        ]);
+      assertVisibleSelection(
+        { left, top, right, bottom },
+        viewport,
+        `${subject}/${area.properties.regionId}: current region outline`,
+      );
+      currentAreaCameraCases++;
+    }
+console.log(
+  `Current area camera checks passed: ${currentAreaCameraCases} full boundaries across top-left popup layouts.`,
+);
+
+for (const subject of ["korea", "world"])
+  for (const useArea of [false, true])
+    for (const empty of [false, true]) {
+      const state = {};
+      const scopeExports = {};
+      const pendingFocusRef = { current: "old-place" };
+      vm.runInNewContext(
+        ts.transpileModule(`exports.changeScope = ${changeScopeSource}`, {
+          compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2022,
           },
-        ]),
-      ),
-    },
-  );
-  scopeExports.changeScope("chosen-unit", "chosen-era", "jeolla", "");
-  assert.equal(state.Query, "");
-  assert.equal(state.UnitId, "chosen-unit");
-  assert.equal(state.EraId, "chosen-era");
-  assert.equal(state.SelectedId, "");
-  assert.equal(state.DetailOpen, false);
-  assert.equal(pendingFocusRef.current, null);
-  assert.equal(state.reset, true);
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(state.ViewBounds)),
-    empty
-      ? null
-      : JSON.parse(
-          JSON.stringify(
-            atlasRegionCameraBounds(
-              regionFixture.slice(0, 2).map((item) => item.place.coordinates),
-              "korea",
-            ),
+        }).outputText,
+        {
+          exports: scopeExports,
+          subject,
+          unitId: "chosen-unit",
+          eraId: "chosen-era",
+          regionId: "gyeonggi",
+          subregionId: "",
+          query: "old search",
+          selected: undefined,
+          areaGeometry: useArea ? currentAreas[subject] : null,
+          subjectEntries: empty ? [] : regionFixture,
+          pendingFocusRef,
+          matchesAtlasCurrentRegion: () => true,
+          atlasRegionCameraBounds,
+          atlasAreaCameraBounds,
+          findAtlasRegionArea,
+          searchEntries: (items, query) => {
+            assert.equal(
+              query,
+              "",
+              "Region navigation clears the previous query before matching",
+            );
+            return items;
+          },
+          requestPlaceFocus: () =>
+            assert.fail("A region view must not select its first row"),
+          resetMap: () => {
+            state.reset = true;
+          },
+          ...Object.fromEntries(
+            [
+              "ListPage",
+              "Query",
+              "UnitId",
+              "EraId",
+              "RegionId",
+              "SubregionId",
+              "FilterNotice",
+              "SelectedId",
+              "DetailOpen",
+              "ProvinceDetailOpen",
+              "ViewBounds",
+            ].map((key) => [
+              `set${key}`,
+              (value) => {
+                state[key] = value;
+              },
+            ]),
           ),
-        ),
-  );
-}
+        },
+      );
+      const nextRegion = subject === "korea" ? "jeolla" : "europe";
+      const nextSubregion = subject === "korea" ? "" : "europe-west";
+      scopeExports.changeScope(
+        "chosen-unit",
+        "chosen-era",
+        nextRegion,
+        nextSubregion,
+      );
+      assert.equal(state.Query, "");
+      assert.equal(state.UnitId, "chosen-unit");
+      assert.equal(state.EraId, "chosen-era");
+      assert.equal(state.SelectedId, "");
+      assert.equal(state.DetailOpen, false);
+      assert.equal(pendingFocusRef.current, null);
+      assert.equal(state.reset, true);
+      assert.deepEqual(
+        JSON.parse(JSON.stringify(state.ViewBounds)),
+        useArea
+          ? JSON.parse(
+              JSON.stringify(
+                atlasAreaCameraBounds(
+                  findAtlasRegionArea(
+                    nextSubregion || nextRegion,
+                    currentAreas[subject],
+                  ),
+                ),
+              ),
+            )
+          : empty
+            ? null
+            : JSON.parse(
+                JSON.stringify(
+                  atlasRegionCameraBounds(
+                    regionFixture
+                      .slice(0, 2)
+                      .map((item) => item.place.coordinates),
+                    subject,
+                  ),
+                ),
+              ),
+      );
+    }
 const profile = getAtlasPlaceProfile(place("백두산"));
 assert(
   profile.definition.includes("화산") && profile.definition.includes("천지"),

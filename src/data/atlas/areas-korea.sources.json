@@ -1,34 +1,56 @@
 {
   "coordinateSystem": "WGS84 longitude, latitude; D3 clockwise exterior rings",
-  "assetSha256": "dc2392e5ab44017b4c69e3fbdbc9573366a34b5a307daabb508cbb408845b0e2",
-  "historical": {
-    "source": "국사편찬위원회 역사지리정보DB · 행정구역 GIS 데이터 (1910~1945년)",
-    "sourceUrl": "https://hgis.history.go.kr/pro_g1/dataset.do",
-    "download": {
-      "url": "https://hgis.history.go.kr/pro_g1/fileDownload.do",
-      "method": "POST",
-      "fileName": "data_set_03_01.zip"
+  "assetSha256": "6b4bf825d380eb9f2bcf8f676d08aea0c8c7f1be5e648329e2e4d8ff91c7b076",
+  "administrative": {
+    "source": "© OpenStreetMap contributors · current administrative boundaries",
+    "sourceUrl": "https://www.openstreetmap.org/copyright",
+    "license": "ODbL 1.0",
+    "licenseUrl": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "snapshotDate": "2026-10-16",
+    "notes": "Complete current admin-level-4 polygons grouped under eight familiar navigation names; no historic boundary geometry. Seoul, Incheon and Kaesong join Gyeonggi; Jeju joins Jeolla; Jagang joins Pyeongan; Ryanggang and Rason join Hamgyeong. These are navigation groupings, not assertions of administrative subordination. Current Jeonnam-Gwangju unified city is one source relation. Intersect with existing modern base land; topology-preserving simplification 0.002 degrees, six decimal precision grid; no island area threshold.",
+    "administrativeUpdateEvidence": {
+      "title": "전남광주통합특별시 · 2026년 7월 1일 행정통합",
+      "url": "https://www.jeonnam.go.kr/"
     },
-    "sourceSha256": "2e2fab2d5acf4a7b0264a3d02a87c71124633538e384cec6e3e929c5e2dd898c",
-    "boundaryDate": "1910-05-10",
-    "datasetUpdated": "2025-04-24",
-    "usage": "Official open dataset; retain National Institute of Korean History attribution. Source describes restored boundaries as research references without legal effect.",
-    "notes": "Dissolved north/south provinces; Hanseong included in Gyeonggi navigation only. Never a claim of identical boundaries in all Joseon eras. Source geometry reference/trust codes retained below. make_valid repairs source rings; topology-preserving simplification 0.002 degrees, six decimal precision grid removes only sub-grid collapsed slivers. No island area threshold.",
     "provinces": [
       {
         "regionId": "gyeonggi",
         "sourceRecords": [
           {
-            "id": 46532,
+            "id": 2306392,
             "name": "경기도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "iso3166_2": "KR-41",
+            "version": 227,
+            "timestamp": "2026-07-07T02:13:57Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2306392/full.json",
+            "sourceSha256": "e1bf727e158e7e068f62f28a08a768594fa454c5d20c21b2e037d97252a0c8c9"
           },
           {
-            "id": 8906,
-            "name": "한성부",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "id": 2297418,
+            "name": "서울특별시",
+            "iso3166_2": "KR-11",
+            "version": 150,
+            "timestamp": "2026-10-12T22:50:31Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2297418/full.json",
+            "sourceSha256": "8f0b6042bdc12d36269fb12acaf4b5d4959ddde8c74b4d83813a94496beb4320"
+          },
+          {
+            "id": 2297419,
+            "name": "인천광역시",
+            "iso3166_2": "KR-28",
+            "version": 117,
+            "timestamp": "2026-06-30T04:26:06Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2297419/full.json",
+            "sourceSha256": "840226a4abdea29b1ee3132ffa222afd4b04bc424cfa0fcd5cda8485004363b3"
+          },
+          {
+            "id": 5455268,
+            "name": "개성시",
+            "iso3166_2": "KP-15",
+            "version": 55,
+            "timestamp": "2025-05-24T16:26:47Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/5455268/full.json",
+            "sourceSha256": "84d47cdec298ec5b2c2c2ae963b199f3f56a4e33fc4d341ae3d1be9db9c554ef"
           }
         ]
       },
@@ -36,10 +58,22 @@
         "regionId": "gangwon",
         "sourceRecords": [
           {
-            "id": 56138,
+            "id": 2308426,
+            "name": "강원특별자치도",
+            "iso3166_2": "KR-42",
+            "version": 99,
+            "timestamp": "2026-06-28T10:44:02Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2308426/full.json",
+            "sourceSha256": "2e25d720929906bea8b0464f8d20719d327804ab2242c8ed064ae419cb949281"
+          },
+          {
+            "id": 356535,
             "name": "강원도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "iso3166_2": "KP-07",
+            "version": 98,
+            "timestamp": "2026-02-06T20:58:19Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356535/full.json",
+            "sourceSha256": "2488b13ccef755c1790c63311c19a229e01115d252fdc5c6f040a6ded77fb452"
           }
         ]
       },
@@ -47,16 +81,40 @@
         "regionId": "chungcheong",
         "sourceRecords": [
           {
-            "id": 35018,
-            "name": "충청남도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "id": 2327258,
+            "name": "충청북도",
+            "iso3166_2": "KR-43",
+            "version": 83,
+            "timestamp": "2026-08-10T14:29:18Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2327258/full.json",
+            "sourceSha256": "1e536c71f5d22ec3086b673705421e537e88fd690ee1dbd9ee0d3927feab3474"
           },
           {
-            "id": 20171,
-            "name": "충청북도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "id": 2327259,
+            "name": "충청남도",
+            "iso3166_2": "KR-44",
+            "version": 110,
+            "timestamp": "2026-08-27T09:42:54Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2327259/full.json",
+            "sourceSha256": "8dd409c6717b7fc640926b8fdf87d0abe947c7c813d6026c47772c0dc444f361"
+          },
+          {
+            "id": 2349984,
+            "name": "대전광역시",
+            "iso3166_2": "KR-30",
+            "version": 54,
+            "timestamp": "2026-07-04T15:44:26Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2349984/full.json",
+            "sourceSha256": "151c60fbb971d81d25c51d733126f5e5450571cf4c600ecdd0b205c4bb34a474"
+          },
+          {
+            "id": 2349795,
+            "name": "세종특별자치시",
+            "iso3166_2": "KR-50",
+            "version": 54,
+            "timestamp": "2026-06-28T10:44:02Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2349795/full.json",
+            "sourceSha256": "ed32489ba85c57114c4eff58dadf5ca95585154fac1354bcebbee83d727c2730"
           }
         ]
       },
@@ -64,16 +122,31 @@
         "regionId": "jeolla",
         "sourceRecords": [
           {
-            "id": 124244,
-            "name": "전라남도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "id": 2355168,
+            "name": "전북특별자치도",
+            "iso3166_2": "KR-45",
+            "version": 75,
+            "timestamp": "2026-08-27T09:42:54Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2355168/full.json",
+            "sourceSha256": "b896149f78609952e75bc5f0c07cef5415a7cce1f13d169e5044f175ba948472"
           },
           {
-            "id": 95353,
-            "name": "전라북도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "id": 21039457,
+            "name": "전남광주통합특별시",
+            "iso3166_2": null,
+            "version": 6,
+            "timestamp": "2026-07-23T06:18:19Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/21039457/full.json",
+            "sourceSha256": "3e7b634f979771f9706524c7b46cd1a47f51e3c1fe47841394f7ade01a823226"
+          },
+          {
+            "id": 2398560,
+            "name": "제주특별자치도",
+            "iso3166_2": "KR-49",
+            "version": 45,
+            "timestamp": "2026-06-28T10:44:02Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2398560/full.json",
+            "sourceSha256": "eaad86d34106bd8ba976df60b709521bfc169f36dc1219380443f1dccf4a6083"
           }
         ]
       },
@@ -81,16 +154,49 @@
         "regionId": "gyeongsang",
         "sourceRecords": [
           {
-            "id": 145035,
-            "name": "경상남도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "id": 2304454,
+            "name": "경상북도",
+            "iso3166_2": "KR-47",
+            "version": 147,
+            "timestamp": "2026-08-10T14:29:18Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2304454/full.json",
+            "sourceSha256": "2f332e34a788902c06a2b8f30c38efa0116c24cda93de46d0f309deafae2e497"
           },
           {
-            "id": 157691,
-            "name": "경상북도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "id": 2393403,
+            "name": "경상남도",
+            "iso3166_2": "KR-48",
+            "version": 113,
+            "timestamp": "2026-06-28T10:44:02Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2393403/full.json",
+            "sourceSha256": "2d0e0c19c7345435634881744b95ca3aa1c2c24993f5548dbcdd9d1782951807"
+          },
+          {
+            "id": 2396450,
+            "name": "부산광역시",
+            "iso3166_2": "KR-26",
+            "version": 83,
+            "timestamp": "2026-06-28T10:44:02Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2396450/full.json",
+            "sourceSha256": "b3572a1b6206f57c848fe869330e4bcb346dcb5573e6ed7fd7804b361ac28510"
+          },
+          {
+            "id": 2395674,
+            "name": "대구광역시",
+            "iso3166_2": "KR-27",
+            "version": 58,
+            "timestamp": "2026-06-28T10:44:02Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2395674/full.json",
+            "sourceSha256": "d32c6016c85a9d48f5d12a5d4a73ddb6fbae2962d12d63f82fadf004a05ba74f"
+          },
+          {
+            "id": 2395867,
+            "name": "울산광역시",
+            "iso3166_2": "KR-31",
+            "version": 47,
+            "timestamp": "2026-06-28T10:44:02Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/2395867/full.json",
+            "sourceSha256": "10aaf92ef1db53b3d19e3b268e6bd9edbb6ea24548e83c4d96ae41ad35471db8"
           }
         ]
       },
@@ -98,10 +204,22 @@
         "regionId": "hwanghae",
         "sourceRecords": [
           {
-            "id": 56460,
-            "name": "황해도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "id": 356442,
+            "name": "황해북도",
+            "iso3166_2": "KP-06",
+            "version": 140,
+            "timestamp": "2026-02-10T08:34:28Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356442/full.json",
+            "sourceSha256": "28fc704275ce50dad47ad04794fc36f171e2d5eef2b0f16da4988ce14a0297ec"
+          },
+          {
+            "id": 356533,
+            "name": "황해남도",
+            "iso3166_2": "KP-05",
+            "version": 87,
+            "timestamp": "2026-02-10T08:34:28Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356533/full.json",
+            "sourceSha256": "f330c2f244a7ed1aa0a87d2142952d4da15d11e52d45134856a947f8b0349efc"
           }
         ]
       },
@@ -109,16 +227,49 @@
         "regionId": "pyeongan",
         "sourceRecords": [
           {
-            "id": 85432,
+            "id": 356419,
             "name": "평안남도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "iso3166_2": "KP-02",
+            "version": 104,
+            "timestamp": "2026-10-02T11:04:46Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356419/full.json",
+            "sourceSha256": "8bac71175921338f54beb47a24a2145dba76bda6d28e60a85f886726b6abb3ed"
           },
           {
-            "id": 136547,
+            "id": 356540,
             "name": "평안북도",
-            "geometryReference": "기호",
-            "sourceTrustCode": 2
+            "iso3166_2": "KP-03",
+            "version": 102,
+            "timestamp": "2026-09-27T11:21:24Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356540/full.json",
+            "sourceSha256": "51aa833f9a29343d51f1bf7581f82941fc12b0a0cc66a9141940fe85552a8c18"
+          },
+          {
+            "id": 356443,
+            "name": "평양시",
+            "iso3166_2": "KP-01",
+            "version": 110,
+            "timestamp": "2026-10-13T22:26:11Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356443/full.json",
+            "sourceSha256": "f944f3428e4c6bb28b980062a4b8c09e7ce8063e95d76d41e7de21c1f58a0213"
+          },
+          {
+            "id": 5453650,
+            "name": "남포시",
+            "iso3166_2": "KP-14",
+            "version": 43,
+            "timestamp": "2025-08-14T15:20:26Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/5453650/full.json",
+            "sourceSha256": "5a4d6b5d7d5dd40d0e2c4db25d9393ec3df60448b111071126176d16fc2261f4"
+          },
+          {
+            "id": 356392,
+            "name": "자강도",
+            "iso3166_2": "KP-04",
+            "version": 56,
+            "timestamp": "2026-09-27T11:21:24Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356392/full.json",
+            "sourceSha256": "ec2e6c44861eec0cbfa789c067e061fa38edebeceb641800373e735175243bcf"
           }
         ]
       },
@@ -126,16 +277,40 @@
         "regionId": "hamgyeong",
         "sourceRecords": [
           {
-            "id": 69703,
+            "id": 356386,
             "name": "함경남도",
-            "geometryReference": "기호",
-            "sourceTrustCode": 2
+            "iso3166_2": "KP-08",
+            "version": 46,
+            "timestamp": "2026-10-02T11:04:46Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356386/full.json",
+            "sourceSha256": "1958713b653a24c6cf2d7cdf7f936cf382e54cc229786108f3f2ba6bcdc10384"
           },
           {
-            "id": 80994,
+            "id": 3781418,
             "name": "함경북도",
-            "geometryReference": "추정",
-            "sourceTrustCode": 2
+            "iso3166_2": "KP-09",
+            "version": 61,
+            "timestamp": "2025-11-25T13:09:12Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/3781418/full.json",
+            "sourceSha256": "03ff4a4448c17529de422f1370183be14fb349ce91ce8b405589ed8265a08dde"
+          },
+          {
+            "id": 356379,
+            "name": "량강도",
+            "iso3166_2": "KP-10",
+            "version": 65,
+            "timestamp": "2025-11-25T05:43:07Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/356379/full.json",
+            "sourceSha256": "d492ff94ab77f0a7f88df5254723d7a3429f257b8a9cbff8a161437b65ed1e01"
+          },
+          {
+            "id": 6648083,
+            "name": "라선시",
+            "iso3166_2": "KP-13",
+            "version": 33,
+            "timestamp": "2025-08-14T15:20:26Z",
+            "sourceUrl": "https://api.openstreetmap.org/api/0.6/relation/6648083/full.json",
+            "sourceSha256": "b552befe3106120cce363ab97b0fb251137cd9f92752a6c3519510178158b408"
           }
         ]
       }
@@ -147,10 +322,11 @@
     "license": "ODbL 1.0",
     "licenseUrl": "https://opendatacommons.org/licenses/odbl/1-0/",
     "attributionUrl": "https://www.openstreetmap.org/copyright",
-    "sourceSha256": "6f76466497a3453908664bdcbdc9dd63efa755eaa61dc23e237b5a8951133e37",
+    "sourceSha256": "840226a4abdea29b1ee3132ffa222afd4b04bc424cfa0fcd5cda8485004363b3",
     "relationId": 2297419,
     "relationVersion": 117,
     "relationTimestamp": "2026-06-30T04:26:06Z",
+    "snapshotDate": "2026-10-16",
     "notes": "Current administrative polygon intersected with the existing Natural Earth base land; topology-preserving simplification 0.0003 degrees. No new sovereign or historic-territory attributes."
   },
   "land": {
@@ -207,6 +383,14 @@
           34.816514
         ]
       }
-    ]
+    ],
+    "detailedIslands": {
+      "file": "dokdo-islands.json",
+      "sourceSha256": "6bd1796b7b3ca43a9e79c0d3fa81514341836fc18c85a4a0952c835d33751084",
+      "source": "© OpenStreetMap contributors",
+      "license": "ODbL 1.0",
+      "sourceUrl": "https://www.openstreetmap.org/copyright",
+      "notes": "Existing detailed current Dokdo coastline included in Gyeongsang after containment in its current administrative polygon is verified. See dokdo-islands.sources.json for individual source way versions."
+    }
   }
 }

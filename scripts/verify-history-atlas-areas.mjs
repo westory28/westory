@@ -14,11 +14,37 @@ assert.equal(
   createHash("sha256").update(payload).digest("hex"),
   sources.assetSha256,
 );
-assert.equal(sources.historical.boundaryDate, "1910-05-10");
+assert.equal(sources.historical, undefined, "No historic boundary layer");
+assert.match(sources.administrative.snapshotDate, /^\d{4}-\d{2}-\d{2}$/);
+assert.equal(sources.administrative.license, "ODbL 1.0");
 assert.equal(
-  sources.historical.provinces.flatMap((p) => p.sourceRecords).length,
-  14,
+  sources.administrative.provinces.flatMap((p) => p.sourceRecords).length,
+  29,
 );
+assert.equal(
+  new Set(
+    sources.administrative.provinces.flatMap((p) =>
+      p.sourceRecords.map((r) => r.id),
+    ),
+  ).size,
+  29,
+  "Every current administrative division is assigned once",
+);
+assert(
+  sources.administrative.provinces
+    .find((p) => p.regionId === "jeolla")
+    .sourceRecords.some(
+      (r) => r.id === 21039457 && r.name === "전남광주통합특별시",
+    ),
+  "Include the current unified Jeonnam-Gwangju boundary",
+);
+for (const record of sources.administrative.provinces.flatMap(
+  (p) => p.sourceRecords,
+)) {
+  assert(
+    record.version > 0 && record.timestamp && record.sourceSha256.length === 64,
+  );
+}
 assert.equal(collection.features.length, 12);
 assert.equal(new Set(collection.features.map((f) => f.properties.id)).size, 12);
 
@@ -52,32 +78,59 @@ for (const feature of collection.features) {
 }
 
 let calls = 0;
-const exports = {};
-vm.runInNewContext(
-  ts.transpileModule(read("src/lib/historyAtlasAreas.ts"), {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
+const moduleCache = new Map();
+const fixtureFetch = async (assetUrl) => {
+  assert(/areas-(korea|world)\.json\?url$/.test(assetUrl));
+  calls++;
+  return {
+    ok: true,
+    json: async () =>
+      assetUrl.endsWith("areas-korea.json?url")
+        ? collection
+        : JSON.parse(read("src/data/atlas/areas-world.json")),
+  };
+};
+function loadModule(url, cache = moduleCache, fetchImpl = fixtureFetch) {
+  if (cache.has(url.href)) return cache.get(url.href);
+  const exports = {};
+  cache.set(url.href, exports);
+  vm.runInNewContext(
+    ts.transpileModule(readFileSync(url, "utf8"), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText,
+    {
+      exports,
+      require(name) {
+        if (name === "d3-geo") return { geoBounds, geoContains };
+        if (/areas-(korea|world)\.json\?url$/.test(name))
+          return { default: name };
+        assert(name.startsWith("."));
+        return loadModule(new URL(`${name}.ts`, url), cache, fetchImpl);
+      },
+      fetch: fetchImpl,
     },
-  }).outputText,
-  {
-    exports,
-    require(name) {
-      assert(name.endsWith("areas-korea.json?url"));
-      return { default: name };
-    },
-    fetch: async () => {
-      calls++;
-      return { ok: true, json: async () => collection };
-    },
-  },
-);
+  );
+  return exports;
+}
+const exports = loadModule(new URL("src/lib/historyAtlasAreas.ts", root));
 const {
   findAtlasArea,
   findAtlasProvinceArea,
   isAtlasAreaPlace,
   loadAtlasAreaGeometry,
+  matchesAtlasCurrentRegion,
 } = exports;
+const datasets = loadModule(new URL("src/data/historyAtlasContent.ts", root));
+const reviewedPlaces = new Map([
+  ...datasets.historyAtlasSourceDataset.places.map((place) => [
+    place.id,
+    place,
+  ]),
+  ...datasets.historyAtlasDataset.places.map((place) => [place.id, place]),
+]);
 const [first, second] = await Promise.all([
   loadAtlasAreaGeometry(),
   loadAtlasAreaGeometry(),
@@ -101,10 +154,105 @@ for (const [regionId, point] of [
     `Province lost its reference city: ${regionId}`,
   );
   assert(
-    area.properties.locationNote.includes("1910년"),
-    "Do not represent the reference layer as timeless boundaries",
+    area.properties.locationNote.includes("현재") &&
+      !area.properties.locationNote.includes("1910"),
+    "Use current administrative boundaries",
   );
 }
+for (const [placeId, included, excluded] of [
+  ["kr-6ff93702835e", "gyeongsang", "gangwon"], // 울진
+  ["kr-24588d9f490f", "gyeongsang", "gangwon"], // 평해
+  ["kr-70cb5c37802b", "chungcheong", "jeolla"], // 금산
+  ["kr-f264380b68d2", "gangwon", "hamgyeong"], // 원산
+  ["kr-43e23c90d08a", "gangwon", "hamgyeong"], // 안변
+  ["kr-3a8cd7d46ccd", "gyeongsang", "gangwon"], // 독도
+]) {
+  const place = reviewedPlaces.get(placeId);
+  assert(place?.coordinates, `Reviewed place missing: ${placeId}`);
+  assert(
+    geoContains(findAtlasProvinceArea(included, collection), place.coordinates),
+    `Current boundary must include ${place.name} in ${included}`,
+  );
+  assert(
+    !geoContains(
+      findAtlasProvinceArea(excluded, collection),
+      place.coordinates,
+    ),
+    `Do not restore the historic boundary for ${place.name}`,
+  );
+  assert(
+    matchesAtlasCurrentRegion(place, "korea", included, "", collection),
+    `Current filter excludes ${place.name}`,
+  );
+  assert(
+    !matchesAtlasCurrentRegion(place, "korea", excluded, "", collection),
+    `Historic filter retains ${place.name}`,
+  );
+}
+const provinceFeatures = collection.features.filter(
+  (feature) => feature.properties.regionId,
+);
+for (const [placeId, included, excluded] of [
+  ["kr-a34472ffacdf", "jeolla", "gyeongsang"], // 명량: strait outside land polygons
+  ["kr-f8f6a36df2ea", "gyeongsang", "jeolla"], // 노량: strait outside land polygons
+]) {
+  const place = reviewedPlaces.get(placeId);
+  assert(place?.coordinates);
+  assert(
+    !provinceFeatures.some((feature) =>
+      geoContains(feature, place.coordinates),
+    ),
+  );
+  assert(
+    matchesAtlasCurrentRegion(place, "korea", included, "", collection),
+    `Coastal fallback lost ${place.name}`,
+  );
+  assert(!matchesAtlasCurrentRegion(place, "korea", excluded, "", collection));
+}
+const uljin = reviewedPlaces.get("kr-6ff93702835e");
+for (const unavailable of [null, { type: "FeatureCollection", features: [] }]) {
+  assert(
+    matchesAtlasCurrentRegion(uljin, "korea", "gangwon", "", unavailable),
+    "Unavailable boundaries retain the reviewed catalogue",
+  );
+  assert(
+    !matchesAtlasCurrentRegion(uljin, "korea", "gyeongsang", "", unavailable),
+  );
+}
+const namgyeong = reviewedPlaces.get("kr-c27023f3c34a");
+assert(
+  matchesAtlasCurrentRegion(namgyeong, "korea", "hamgyeong", "", collection),
+);
+assert(
+  !matchesAtlasCurrentRegion(
+    namgyeong,
+    "korea",
+    "outside-korea",
+    "",
+    collection,
+  ),
+  "A place inside a current province must not also be outside Korea",
+);
+const locatedUnclassified = reviewedPlaces.get("kr-d31d44135bdf"); // 경원선 source catalogue
+assert(
+  matchesAtlasCurrentRegion(
+    locatedUnclassified,
+    "korea",
+    "gyeonggi",
+    "",
+    collection,
+  ),
+);
+assert(
+  !matchesAtlasCurrentRegion(
+    locatedUnclassified,
+    "korea",
+    "unclassified",
+    "",
+    collection,
+  ),
+  "Known current geography takes precedence over an unclassified source entry",
+);
 assert.equal(findAtlasProvinceArea("outside-korea", collection), null);
 assert.equal(findAtlasProvinceArea("unclassified", collection), null);
 assert.equal(findAtlasArea({ id: "seoul" }, collection), null);
@@ -171,6 +319,78 @@ assert(
   "Incheon must not include Seoul",
 );
 assert.equal(sources.incheon.license, "ODbL 1.0");
+
+// Switching from a flat map to the globe shares the successful subject loads.
+const [combined, world, combinedAgain] = await Promise.all([
+  loadAtlasAreaGeometry("all"),
+  loadAtlasAreaGeometry("world"),
+  loadAtlasAreaGeometry("all"),
+]);
+assert.equal(calls, 2, "Korea, world and globe share one fetch per subject");
+assert.equal(combined, combinedAgain);
+assert.equal(
+  combined.features.length,
+  collection.features.length + world.features.length,
+);
+assert.equal(
+  new Set(combined.features.map((feature) => feature.properties.id)).size,
+  combined.features.length,
+  "Combined data must not repeat a region id",
+);
+const pacific = reviewedPlaces.get("world-4af3e3ae890b");
+assert(pacific);
+for (const longitude of [-180, 180]) {
+  assert(
+    matchesAtlasCurrentRegion(
+      { ...pacific, coordinates: [longitude, 0] },
+      "world",
+      "water",
+      "water-pacific",
+      world,
+    ),
+    "Both longitude spellings of the Pacific date line belong to its range",
+  );
+}
+for (const name of ["마카오", "티루스", "아카풀코", "리버풀"]) {
+  const port = [...reviewedPlaces.values()].find(
+    (p) => p.name === name && p.id.startsWith("world-"),
+  );
+  assert(port, name);
+  assert(
+    !matchesAtlasCurrentRegion(port, "world", "water", "", world),
+    `${name}: shoreline resolution must not classify a port as a sea`,
+  );
+}
+
+// A transient failure of one globe layer must not poison all future loads or
+// refetch its already successful sibling layer.
+const retryCalls = { korea: 0, world: 0 };
+const retryAreas = loadModule(
+  new URL("src/lib/historyAtlasAreas.ts", root),
+  new Map(),
+  async (assetUrl) => {
+    const subject = assetUrl.endsWith("areas-korea.json?url")
+      ? "korea"
+      : "world";
+    retryCalls[subject]++;
+    return {
+      ok: subject !== "world" || retryCalls.world > 1,
+      json: async () => (subject === "korea" ? collection : world),
+    };
+  },
+);
+await assert.rejects(
+  retryAreas.loadAtlasAreaGeometry("all"),
+  /지역 범위를 불러오지 못했다/,
+);
+const [recovered, recoveredAgain] = await Promise.all([
+  retryAreas.loadAtlasAreaGeometry("all"),
+  retryAreas.loadAtlasAreaGeometry("all"),
+]);
+assert.equal(recovered, recoveredAgain);
+assert.equal(recovered.features.length, combined.features.length);
+assert.deepEqual(retryCalls, { korea: 1, world: 2 });
 console.log(
   "History atlas areas: 8 source-backed provinces, Incheon, Ganghwa, Jeju and Hansando verified.",
 );
+await import("./verify-history-atlas-world-areas.mjs");

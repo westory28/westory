@@ -640,16 +640,86 @@ const globeAst = ts.createSourceFile(
 );
 let regionHandler, chooseEntryHandler;
 const globeDeclarations = new Map();
+const globeEffects = [];
 const visitGlobe = (node) => {
   if (ts.isVariableDeclaration(node) && node.initializer)
     globeDeclarations.set(node.name.getText(globeAst), node.initializer);
   if (ts.isFunctionDeclaration(node) && node.name)
     globeDeclarations.set(node.name.text, node);
+  if (
+    ts.isCallExpression(node) &&
+    node.expression.getText(globeAst) === "useEffect"
+  )
+    globeEffects.push(node);
   ts.forEachChild(node, visitGlobe);
 };
 visitGlobe(globeAst);
 const selectionViewport = evaluateGlobe(
   globeDeclarations.get("selectionViewport").getText(globeAst),
+);
+const popupResizeEffect = globeEffects.find((effect) =>
+  effect.arguments[0].getText(globeAst).includes("observer.observe(popup)"),
+);
+assert(
+  popupResizeEffect,
+  "Collapsed source content must be observed for popup size changes",
+);
+let popupResize,
+  disconnected = false;
+const resizingPopup = { offsetWidth: 280, offsetHeight: 100 };
+let popupSize = { width: 0, height: 0 };
+const disposePopupObserver = evaluateGlobe(
+  popupResizeEffect.arguments[0].getText(globeAst),
+  {
+    detailOpen: true,
+    detailRef: { current: { parentElement: resizingPopup } },
+    ResizeObserver: class {
+      constructor(callback) {
+        popupResize = callback;
+      }
+      observe(target) {
+        assert.equal(target, resizingPopup);
+      }
+      disconnect() {
+        disconnected = true;
+      }
+    },
+    setPopupSize: (update) => {
+      popupSize = update(popupSize);
+    },
+  },
+)();
+for (const height of [100, 202, 100]) {
+  resizingPopup.offsetHeight = height;
+  popupResize();
+  equal(popupSize, { width: 280, height });
+  const stable = popupSize;
+  popupResize();
+  assert.equal(
+    popupSize,
+    stable,
+    "Unchanged popup dimensions must not trigger another camera update",
+  );
+}
+disposePopupObserver();
+assert(disconnected, "Popup observation is released after closing its detail");
+const shapeCameraEffect = globeEffects.find((effect) =>
+  effect.arguments[0]
+    .getText(globeAst)
+    .includes("geoCentroid(highlightedShape)"),
+);
+assert(
+  shapeCameraEffect.arguments[1].getText(globeAst).includes("popupSize"),
+  "Expanding or collapsing source details must re-fit the selected geometry",
+);
+assert(
+  globeEffects
+    .find((effect) =>
+      effect.arguments[0].getText(globeAst).includes("drawRef.current ="),
+    )
+    .arguments[1].getText(globeAst)
+    .includes("popupSize"),
+  "Source detail resizing must redraw labels and selection anchors",
 );
 // Exercise the actual current frame calculation against physical top-left cards,
 // including the wide-layout/narrow-map case and both sides of the 650px cutoff.
@@ -835,6 +905,102 @@ function evaluateGlobe(expression, dependencies = {}) {
 }
 const atlasModel = load("src/lib/historyAtlas.ts");
 const regionModel = load("src/lib/historyAtlasRegions.ts");
+const areaModel = load("src/lib/historyAtlasAreas.ts");
+const areaCollections = Object.fromEntries(
+  ["korea", "world"].map((subject) => [
+    subject,
+    JSON.parse(readFileSync(`src/data/atlas/areas-${subject}.json`, "utf8")),
+  ]),
+);
+const allAreas = {
+  type: "FeatureCollection",
+  features: Object.values(areaCollections).flatMap(
+    (collection) => collection.features,
+  ),
+};
+for (const [regionSubject, collection] of Object.entries(areaCollections)) {
+  for (const feature of collection.features.filter(
+    (feature) => feature.properties.regionId,
+  )) {
+    const key = feature.properties.regionId;
+    const parent =
+      regionSubject === "world"
+        ? regionModel.ATLAS_WORLD_REGION_GROUPS.find(
+            (group) =>
+              group.id === key ||
+              group.children.some((child) => child.id === key),
+          )
+        : null;
+    if (regionSubject === "world")
+      assert(
+        parent,
+        `${key}: world geometry corresponds to a visible region option`,
+      );
+    for (const subject of [regionSubject, "all"]) {
+      const regionId = `${subject === "all" ? regionSubject + ":" : ""}${parent?.id || key}`;
+      const subregionId = parent && parent.id !== key ? key : "";
+      const area = evaluateGlobe(
+        globeDeclarations.get("provinceArea").arguments[0].getText(globeAst),
+        {
+          selected: undefined,
+          areas: allAreas,
+          subject,
+          regionId,
+          subregionId,
+          ...areaModel,
+        },
+      )();
+      assert.equal(
+        area,
+        feature,
+        `${subject}/${regionId}/${subregionId}: the exact region geometry remains selected with no places`,
+      );
+    }
+    for (const width of [356, 920]) {
+      for (const popupHeight of [100, 202]) {
+        let camera;
+        evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
+          highlightedShape: feature,
+          mapRef: { current: { clientWidth: width, clientHeight: 480 } },
+          detailOpen: true,
+          detailRef: {
+            current: {
+              parentElement: {
+                offsetLeft: 8,
+                offsetTop: width < 650 ? 56 : 8,
+                offsetWidth: 280,
+                offsetHeight: popupHeight,
+              },
+            },
+          },
+          selectionViewport,
+          ...d3Geography,
+          GLOBE_MAX_ZOOM: m.GLOBE_MAX_ZOOM,
+          setCamera: (next) => {
+            camera = m.constrainGlobeView(next);
+          },
+        })();
+        assert(
+          camera && Object.values(camera).every(Number.isFinite),
+          `${key}: regional camera stays finite when source details resize`,
+        );
+        assert(
+          camera.zoom >= 1 && camera.zoom <= m.GLOBE_MAX_ZOOM,
+          "Regional ranges preserve the existing globe zoom limits",
+        );
+        const path = d3Geography.geoPath(
+          geoOrthographic()
+            .scale(200)
+            .rotate([-camera.longitude, -camera.latitude, camera.roll]),
+        )(feature);
+        assert(
+          path?.length,
+          `${key}: region geometry is visible independently of place-list results`,
+        );
+      }
+    }
+  }
+}
 const dataset = load("src/data/historyAtlasContent.ts").historyAtlasDataset;
 const itemFactory = evaluateGlobe(
   globeDeclarations.get("items").arguments[0].getText(globeAst),
@@ -847,7 +1013,7 @@ const itemFactory = evaluateGlobe(
 const actualItems = itemFactory();
 const matchesGlobeRegion = evaluateGlobe(
   globeDeclarations.get("matchesGlobeRegion").getText(globeAst),
-  regionModel,
+  { ...regionModel, ...areaModel },
 );
 const nameOf = evaluateGlobe(globeDeclarations.get("nameOf").getText(globeAst));
 const filterItems = (overrides = {}) =>
@@ -861,6 +1027,7 @@ const filterItems = (overrides = {}) =>
       regionId: "",
       subregionId: "",
       query: "",
+      areas: null,
       matchesGlobeRegion,
       nameOf,
       koreanNames: new Intl.Collator("ko-KR", { numeric: true }),

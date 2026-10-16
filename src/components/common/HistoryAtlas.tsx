@@ -9,7 +9,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
-import { geoArea, geoBounds, geoCentroid, geoPath } from "d3-geo";
+import { geoArea, geoCentroid, geoPath } from "d3-geo";
 import {
   ATLAS_SUBJECT_BOUNDS,
   ATLAS_SUBJECT_LABELS,
@@ -30,6 +30,7 @@ import {
   createAtlasPaths,
   createAtlasProjection,
   fitAtlasSelection,
+  fitAtlasRegionProjection,
   includeAtlasContextBounds,
   loadAtlasGeometry,
   reframeAtlasSelectionBounds,
@@ -42,7 +43,6 @@ import AtlasPlaceDetails from "./AtlasPlaceDetails";
 import AtlasAreaDetails from "./AtlasAreaDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
 import AtlasCompass from "./AtlasCompass";
-import { matchesAtlasRegion } from "../../lib/historyAtlasRegions";
 import InfoHelp from "./InfoHelp";
 import {
   atlasRiverCreditItems,
@@ -60,7 +60,9 @@ import {
 import "./historyAtlas.css";
 import {
   findAtlasArea,
-  findAtlasProvinceArea,
+  findAtlasRegionArea,
+  matchesAtlasCurrentRegion,
+  atlasAreaCameraBounds,
   isAtlasAreaPlace,
   loadAtlasAreaGeometry,
 } from "../../lib/historyAtlasAreas";
@@ -156,7 +158,7 @@ function AtlasHelp() {
             {
               label: "지역 범위",
               content:
-                "8도는 국사편찬위원회의 1910년 경계를 합친 탐색 범위이다. 인천은 현대 행정 경계의 육지, 강화도·제주도·한산도는 본섬의 해안선을 표시한다.",
+                "8도는 현재 도·광역시 경계를 묶은 탐색 범위이다. 세계 지역은 현재 지리 분류와 해역 자료를 사용하며, 역사적 영토를 뜻하지 않는다.",
             },
           ],
         },
@@ -166,12 +168,12 @@ function AtlasHelp() {
             ...atlasRiverCreditItems,
             ...atlasDokdoCreditItems,
             <a
-              key="hgis"
-              href="https://hgis.history.go.kr/pro_g1/dataset.do"
+              key="osm"
+              href="https://www.openstreetmap.org/copyright"
               target="_blank"
               rel="noreferrer"
             >
-              국사편찬위원회 역사지리정보DB · 도 경계
+              OpenStreetMap · 현재 행정 경계
             </a>,
             <a
               key="ne"
@@ -539,9 +541,23 @@ export default function HistoryAtlas({
         ({ entry, place }) =>
           (!unitId || entry.unitId === unitId) &&
           (!eraId || entry.eraIds?.includes(eraId)) &&
-          matchesAtlasRegion(place, subject, regionId, subregionId),
+          matchesAtlasCurrentRegion(
+            place,
+            subject,
+            regionId,
+            subregionId,
+            areaGeometry,
+          ),
       ),
-    [subjectEntries, subject, unitId, eraId, regionId, subregionId],
+    [
+      subjectEntries,
+      subject,
+      unitId,
+      eraId,
+      regionId,
+      subregionId,
+      areaGeometry,
+    ],
   );
   const entries = useMemo(
     () => searchEntries(scopeEntries, query),
@@ -549,8 +565,8 @@ export default function HistoryAtlas({
   );
   const selected = entries.find(({ entry }) => entry.id === selectedId);
   const provinceArea =
-    subject === "korea" && areaGeometry && !selected
-      ? findAtlasProvinceArea(regionId, areaGeometry)
+    areaGeometry && !selected
+      ? findAtlasRegionArea(subregionId || regionId, areaGeometry)
       : null;
   const overlayWidth = Math.min(wide ? 320 : 280, mapWidth - 16);
   const overlayMaxHeight = mapHeight * (wide ? 0.55 : 0.42);
@@ -607,10 +623,24 @@ export default function HistoryAtlas({
     currentPage * PAGE_SIZE,
     (currentPage + 1) * PAGE_SIZE,
   );
-  const projection = useMemo(
-    () => createAtlasProjection(subject, bounds, mapWidth, mapHeight),
-    [subject, bounds, mapWidth, mapHeight],
-  );
+  const projection = useMemo(() => {
+    const next = createAtlasProjection(subject, bounds, mapWidth, mapHeight);
+    return provinceArea
+      ? fitAtlasRegionProjection(next, provinceArea, {
+          width: mapWidth,
+          height: availableMapHeight,
+          overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
+        })
+      : next;
+  }, [
+    subject,
+    bounds,
+    mapWidth,
+    mapHeight,
+    provinceArea,
+    availableMapHeight,
+    overlayObstacle?.right,
+  ]);
   const paths = useMemo(
     () =>
       geometry?.subject === subject && geometry.bounds === bounds
@@ -862,7 +892,8 @@ export default function HistoryAtlas({
   useEffect(() => {
     let disposed = false;
     setAreaError(false);
-    loadAtlasAreaGeometry()
+    setAreaGeometry(null);
+    loadAtlasAreaGeometry(subject)
       .then((data) => {
         if (!disposed) setAreaGeometry(data);
       })
@@ -872,7 +903,7 @@ export default function HistoryAtlas({
     return () => {
       disposed = true;
     };
-  }, [geometryAttempt]);
+  }, [subject, geometryAttempt]);
 
   useEffect(() => {
     let disposed = false;
@@ -1004,6 +1035,10 @@ export default function HistoryAtlas({
     },
     [mapWidth, mapHeight, updateTransform],
   );
+
+  useEffect(() => {
+    if (provinceArea) setViewBounds(atlasAreaCameraBounds(provinceArea));
+  }, [provinceArea]);
 
   useEffect(() => {
     if (!provinceArea) return;
@@ -1276,7 +1311,13 @@ export default function HistoryAtlas({
         ({ entry, place }) =>
           (!nextUnitId || entry.unitId === nextUnitId) &&
           (!nextEraId || entry.eraIds?.includes(nextEraId)) &&
-          matchesAtlasRegion(place, subject, nextRegionId, nextSubregionId),
+          matchesAtlasCurrentRegion(
+            place,
+            subject,
+            nextRegionId,
+            nextSubregionId,
+            areaGeometry,
+          ),
       ),
       regionChanged ? "" : query,
     );
@@ -1292,19 +1333,13 @@ export default function HistoryAtlas({
       setSelectedId("");
       setDetailOpen(false);
       pendingFocusRef.current = null;
-      const area =
-        subject === "korea" && areaGeometry
-          ? findAtlasProvinceArea(nextRegionId, areaGeometry)
-          : null;
-      const extent = area ? geoBounds(area) : null;
+      const area = areaGeometry
+        ? findAtlasRegionArea(nextSubregionId || nextRegionId, areaGeometry)
+        : null;
+      const extent = area ? atlasAreaCameraBounds(area) : null;
       setViewBounds(
         extent
-          ? [
-              extent[0][0] - 0.25,
-              extent[0][1] - 0.25,
-              extent[1][0] + 0.25,
-              extent[1][1] + 0.25,
-            ]
+          ? extent
           : nextRegionId
             ? atlasRegionCameraBounds(coordinates, subject)
             : null,
@@ -1377,7 +1412,13 @@ export default function HistoryAtlas({
     }
     if (
       regionId &&
-      !matchesAtlasRegion(next.place, subject, regionId, subregionId)
+      !matchesAtlasCurrentRegion(
+        next.place,
+        subject,
+        regionId,
+        subregionId,
+        areaGeometry,
+      )
     ) {
       setRegionId("");
       setSubregionId("");
@@ -2003,9 +2044,7 @@ export default function HistoryAtlas({
             )}
             {paths &&
               areaError &&
-              (selected
-                ? isAtlasAreaPlace(selected.place)
-                : subject === "korea" && regionId) && (
+              (selected ? isAtlasAreaPlace(selected.place) : regionId) && (
                 <div
                   className="history-atlas__map-state"
                   role="alert"
@@ -2045,7 +2084,7 @@ export default function HistoryAtlas({
                 © OpenStreetMap contributors
               </a>
             </div>
-            {!wide && !entries.length && (
+            {!wide && !entries.length && !provinceArea && (
               <div
                 className="history-atlas__selection-card history-atlas__empty"
                 role="status"

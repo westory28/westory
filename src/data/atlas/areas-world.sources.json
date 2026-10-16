@@ -1,0 +1,2879 @@
+{
+  "reviewDate": "2026-10-16",
+  "scope": "Current geographic reference areas for all world region filters except unclassified; no historical polity boundaries.",
+  "coordinateSystem": "WGS84 longitude, latitude; D3 clockwise exterior rings",
+  "assetSha256": "eb477ed12a6cd41250349facba73d6fa426b929d600d74647c52c950b74171b6",
+  "naturalEarthRevision": "ca96624a56bd078437bca8184e78163e5039ad19",
+  "sources": [
+    {
+      "key": "mapUnits",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_50m_admin_0_map_units.geojson",
+      "sha256": "b8d421aca6e9e08e8cdf09cc26af111cc3e0deba4fe915611d58ade71e8a4db0",
+      "license": "Public domain"
+    },
+    {
+      "key": "physicalRegions",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_geography_regions_polys.geojson",
+      "sha256": "b7b26e50ea917d3696aec87f932def2bf5f890f5770e441d59c162c6f4c92a77",
+      "license": "Public domain"
+    },
+    {
+      "key": "marineRegions",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_geography_marine_polys.geojson",
+      "sha256": "53f865e8ffa966cdd402145c82c5cd14ee7ce974cd0eb9a3f59f03a4cfd2d66c",
+      "license": "Public domain"
+    },
+    {
+      "key": "geographicLines",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_geographic_lines.geojson",
+      "sha256": "e0d96b65c4f08856096550db5e4507d2822f05fe1cc07aadb16ad5ccb3a948e7",
+      "license": "Public domain"
+    }
+  ],
+  "m49": {
+    "url": "https://unstats.un.org/unsd/methodology/m49/",
+    "snapshot": "scripts/history-atlas-world-regions.m49.json",
+    "sha256": "14424c5e08759b7c27277608dba80235ea4b0fd4f51928e7f628bd20fa5d41ea",
+    "retrievedAt": "2026-10-15"
+  },
+  "processing": "Source polygons repaired with make_valid, dissolved by named memberships, topology-preserving simplification 0.02 degrees, 5 decimal precision, edges densified at 1 degree for spherical projection. Source conversion seams within 0.0005 degrees of the antimeridian and 0.01 degrees of a pole are snapped to the exact meridian/pole to preserve spherical closure. No minimum island area filter. The Arctic uses the source Arctic Circle's north-side cap. Overseas map units retain their own geographic classification; transcontinental portions use source continent/island outlines.",
+  "limitations": [
+    "Natural Earth generalizes current reference geography and uses de facto country boundaries; it is not a legal boundary dataset.",
+    "The UN M49 statistical baseline is adjusted for explicit physical transcontinental/island geography; it is not a claim that UN M49 subdivides those countries.",
+    "Overlapping seas may belong to multiple ocean filters. Other waters are the geometric difference of all eligible named marine polygons and the explicit marine groups.",
+    "Named marine source geometry excludes Caspian Sea, Garabogaz Bay, river reaches, reefs and unnamed internal-water labels.",
+    "Unclassified has no fabricated area. Source coastlines can differ slightly from the base map and recorded coastal point coordinates."
+  ],
+  "middleEastIso3": [
+    "ARE",
+    "BHR",
+    "CYP",
+    "EGY",
+    "IRN",
+    "IRQ",
+    "ISR",
+    "JOR",
+    "KWT",
+    "LBN",
+    "OMN",
+    "PSE",
+    "QAT",
+    "SAU",
+    "SYR",
+    "TUR",
+    "YEM"
+  ],
+  "transcontinentalClips": [
+    {
+      "unit": "Turkey",
+      "iso3": "TUR",
+      "sourceId": "TUR",
+      "coveredFraction": 0.9999999993491565,
+      "destinations": {
+        "Europe": "europe-south",
+        "Asia": "asia-west"
+      }
+    },
+    {
+      "unit": "Russia",
+      "iso3": "RUS",
+      "sourceId": "RUS",
+      "coveredFraction": 0.9996738510170389,
+      "destinations": {
+        "Europe": "europe-east",
+        "Asia": "asia-north"
+      }
+    },
+    {
+      "unit": "Kazakhstan",
+      "iso3": "KAZ",
+      "sourceId": "KAZ",
+      "coveredFraction": 0.9999990502104412,
+      "destinations": {
+        "Europe": "europe-east",
+        "Asia": "asia-central"
+      }
+    },
+    {
+      "unit": "Georgia",
+      "iso3": "GEO",
+      "sourceId": "GEG",
+      "coveredFraction": 0.9989466112135877,
+      "destinations": {
+        "Europe": "europe-east",
+        "Asia": "asia-west"
+      }
+    },
+    {
+      "unit": "Egypt",
+      "iso3": "EGY",
+      "sourceId": "EGY",
+      "coveredFraction": 0.9966151863169914,
+      "destinations": {
+        "Africa": "africa-north",
+        "Asia": "asia-west"
+      }
+    },
+    {
+      "unit": "Azerbaijan",
+      "iso3": "AZE",
+      "sourceId": "AZE",
+      "coveredFraction": 0.997066235184557,
+      "destinations": {
+        "Europe": "europe-east",
+        "Asia": "asia-west"
+      }
+    }
+  ],
+  "features": [
+    {
+      "regionId": "europe",
+      "name": "유럽",
+      "members": [
+        {
+          "childRegion": "europe-east"
+        },
+        {
+          "childRegion": "europe-north"
+        },
+        {
+          "childRegion": "europe-south"
+        },
+        {
+          "childRegion": "europe-west"
+        }
+      ]
+    },
+    {
+      "regionId": "europe-west",
+      "name": "서유럽",
+      "members": [
+        {
+          "unit": "Switzerland",
+          "iso3": "CHE",
+          "sourceId": "CHE"
+        },
+        {
+          "unit": "Netherlands",
+          "iso3": "NLD",
+          "sourceId": "NLD"
+        },
+        {
+          "unit": "Monaco",
+          "iso3": "MCO",
+          "sourceId": "MCO"
+        },
+        {
+          "unit": "Luxembourg",
+          "iso3": "LUX",
+          "sourceId": "LUX"
+        },
+        {
+          "unit": "Liechtenstein",
+          "iso3": "LIE",
+          "sourceId": "LIE"
+        },
+        {
+          "unit": "Germany",
+          "iso3": "DEU",
+          "sourceId": "DEU"
+        },
+        {
+          "unit": "France",
+          "iso3": "FRA",
+          "sourceId": "FXX"
+        },
+        {
+          "unit": "Flemish Region",
+          "iso3": "BEL",
+          "sourceId": "BFR"
+        },
+        {
+          "unit": "Walloon Region",
+          "iso3": "BEL",
+          "sourceId": "BWR"
+        },
+        {
+          "unit": "Brussels Capital Region",
+          "iso3": "BEL",
+          "sourceId": "BCR"
+        },
+        {
+          "unit": "Austria",
+          "iso3": "AUT",
+          "sourceId": "AUT"
+        }
+      ]
+    },
+    {
+      "regionId": "europe-east",
+      "name": "동유럽",
+      "members": [
+        {
+          "unit": "Ukraine",
+          "iso3": "UKR",
+          "sourceId": "UKR"
+        },
+        {
+          "unit": "Slovakia",
+          "iso3": "SVK",
+          "sourceId": "SVK"
+        },
+        {
+          "unit": "Russia",
+          "iso3": "RUS",
+          "sourceId": "RUS",
+          "physicalContinentClip": "Europe"
+        },
+        {
+          "unit": "Romania",
+          "iso3": "ROU",
+          "sourceId": "ROU"
+        },
+        {
+          "unit": "Poland",
+          "iso3": "POL",
+          "sourceId": "POL"
+        },
+        {
+          "unit": "Moldova",
+          "iso3": "MDA",
+          "sourceId": "MDA"
+        },
+        {
+          "unit": "Kazakhstan",
+          "iso3": "KAZ",
+          "sourceId": "KAZ",
+          "physicalContinentClip": "Europe"
+        },
+        {
+          "unit": "Hungary",
+          "iso3": "HUN",
+          "sourceId": "HUN"
+        },
+        {
+          "unit": "Georgia",
+          "iso3": "GEO",
+          "sourceId": "GEG",
+          "physicalContinentClip": "Europe"
+        },
+        {
+          "unit": "Czechia",
+          "iso3": "CZE",
+          "sourceId": "CZE"
+        },
+        {
+          "unit": "Bulgaria",
+          "iso3": "BGR",
+          "sourceId": "BGR"
+        },
+        {
+          "unit": "Belarus",
+          "iso3": "BLR",
+          "sourceId": "BLR"
+        },
+        {
+          "unit": "Azerbaijan",
+          "iso3": "AZE",
+          "sourceId": "AZE",
+          "physicalContinentClip": "Europe"
+        }
+      ]
+    },
+    {
+      "regionId": "europe-south",
+      "name": "남유럽",
+      "members": [
+        {
+          "unit": "Vatican",
+          "iso3": "VAT",
+          "sourceId": "VAT"
+        },
+        {
+          "unit": "Turkey",
+          "iso3": "TUR",
+          "sourceId": "TUR",
+          "physicalContinentClip": "Europe"
+        },
+        {
+          "unit": "Spain",
+          "iso3": "ESP",
+          "sourceId": "ESP"
+        },
+        {
+          "unit": "Slovenia",
+          "iso3": "SVN",
+          "sourceId": "SVN"
+        },
+        {
+          "unit": "Serbia",
+          "iso3": "SRB",
+          "sourceId": "SRS"
+        },
+        {
+          "unit": "Vojvodina",
+          "iso3": "SRB",
+          "sourceId": "SRV"
+        },
+        {
+          "unit": "San Marino",
+          "iso3": "SMR",
+          "sourceId": "SMR"
+        },
+        {
+          "unit": "Portugal",
+          "iso3": "PRT",
+          "sourceId": "PRX"
+        },
+        {
+          "unit": "Azores",
+          "iso3": "PRT",
+          "sourceId": "PAZ"
+        },
+        {
+          "unit": "Montenegro",
+          "iso3": "MNE",
+          "sourceId": "MNE"
+        },
+        {
+          "unit": "Malta",
+          "iso3": "MLT",
+          "sourceId": "MLT"
+        },
+        {
+          "unit": "North Macedonia",
+          "iso3": "MKD",
+          "sourceId": "MKD"
+        },
+        {
+          "unit": "Kosovo",
+          "iso3": "-99",
+          "sourceId": "KOS"
+        },
+        {
+          "unit": "Italy",
+          "iso3": "ITA",
+          "sourceId": "ITA"
+        },
+        {
+          "unit": "Greece",
+          "iso3": "GRC",
+          "sourceId": "GRC"
+        },
+        {
+          "unit": "Croatia",
+          "iso3": "HRV",
+          "sourceId": "HRV"
+        },
+        {
+          "unit": "Republic Srpska",
+          "iso3": "BIH",
+          "sourceId": "BIS"
+        },
+        {
+          "unit": "Bosnia and Herzegovina",
+          "iso3": "BIH",
+          "sourceId": "BHF"
+        },
+        {
+          "unit": "Andorra",
+          "iso3": "AND",
+          "sourceId": "AND"
+        },
+        {
+          "unit": "Albania",
+          "iso3": "ALB",
+          "sourceId": "ALB"
+        }
+      ]
+    },
+    {
+      "regionId": "europe-north",
+      "name": "북유럽",
+      "members": [
+        {
+          "unit": "Jersey",
+          "iso3": "JEY",
+          "sourceId": "JEY"
+        },
+        {
+          "unit": "Guernsey",
+          "iso3": "GGY",
+          "sourceId": "GGY"
+        },
+        {
+          "unit": "Isle of Man",
+          "iso3": "IMN",
+          "sourceId": "IMN"
+        },
+        {
+          "unit": "Wales",
+          "iso3": "GBR",
+          "sourceId": "WLS"
+        },
+        {
+          "unit": "Scotland",
+          "iso3": "GBR",
+          "sourceId": "SCT"
+        },
+        {
+          "unit": "Northern Ireland",
+          "iso3": "GBR",
+          "sourceId": "NIR"
+        },
+        {
+          "unit": "England",
+          "iso3": "GBR",
+          "sourceId": "ENG"
+        },
+        {
+          "unit": "Sweden",
+          "iso3": "SWE",
+          "sourceId": "SWE"
+        },
+        {
+          "unit": "Norway",
+          "iso3": "NOR",
+          "sourceId": "NOR"
+        },
+        {
+          "unit": "Jan Mayen",
+          "iso3": "NOR",
+          "sourceId": "NJM"
+        },
+        {
+          "unit": "Svalbard",
+          "iso3": "SJM",
+          "sourceId": "NSV"
+        },
+        {
+          "unit": "Lithuania",
+          "iso3": "LTU",
+          "sourceId": "LTU"
+        },
+        {
+          "unit": "Latvia",
+          "iso3": "LVA",
+          "sourceId": "LVA"
+        },
+        {
+          "unit": "Ireland",
+          "iso3": "IRL",
+          "sourceId": "IRL"
+        },
+        {
+          "unit": "Iceland",
+          "iso3": "ISL",
+          "sourceId": "ISL"
+        },
+        {
+          "unit": "Aland",
+          "iso3": "ALA",
+          "sourceId": "ALD"
+        },
+        {
+          "unit": "Finland",
+          "iso3": "FIN",
+          "sourceId": "FIN"
+        },
+        {
+          "unit": "Estonia",
+          "iso3": "EST",
+          "sourceId": "EST"
+        },
+        {
+          "unit": "Faroe Islands",
+          "iso3": "FRO",
+          "sourceId": "FRO"
+        },
+        {
+          "unit": "Denmark",
+          "iso3": "DNK",
+          "sourceId": "DNK"
+        }
+      ]
+    },
+    {
+      "regionId": "asia",
+      "name": "아시아",
+      "members": [
+        {
+          "childRegion": "asia-central"
+        },
+        {
+          "childRegion": "asia-east"
+        },
+        {
+          "childRegion": "asia-north"
+        },
+        {
+          "childRegion": "asia-south"
+        },
+        {
+          "childRegion": "asia-southeast"
+        },
+        {
+          "childRegion": "asia-west"
+        }
+      ]
+    },
+    {
+      "regionId": "asia-west",
+      "name": "서아시아",
+      "members": [
+        {
+          "unit": "Yemen",
+          "iso3": "YEM",
+          "sourceId": "YEM"
+        },
+        {
+          "unit": "United Arab Emirates",
+          "iso3": "ARE",
+          "sourceId": "ARE"
+        },
+        {
+          "unit": "Turkey",
+          "iso3": "TUR",
+          "sourceId": "TUR",
+          "physicalContinentClip": "Asia"
+        },
+        {
+          "unit": "Syria",
+          "iso3": "SYR",
+          "sourceId": "SYR"
+        },
+        {
+          "unit": "Saudi Arabia",
+          "iso3": "SAU",
+          "sourceId": "SAU"
+        },
+        {
+          "unit": "Qatar",
+          "iso3": "QAT",
+          "sourceId": "QAT"
+        },
+        {
+          "unit": "Oman",
+          "iso3": "OMN",
+          "sourceId": "OMN"
+        },
+        {
+          "unit": "Lebanon",
+          "iso3": "LBN",
+          "sourceId": "LBN"
+        },
+        {
+          "unit": "Kuwait",
+          "iso3": "KWT",
+          "sourceId": "KWT"
+        },
+        {
+          "unit": "Jordan",
+          "iso3": "JOR",
+          "sourceId": "JOR"
+        },
+        {
+          "unit": "Israel",
+          "iso3": "ISR",
+          "sourceId": "ISR"
+        },
+        {
+          "unit": "Gaza",
+          "iso3": "PSE",
+          "sourceId": "GAZ"
+        },
+        {
+          "unit": "West Bank",
+          "iso3": "PSE",
+          "sourceId": "WEB"
+        },
+        {
+          "unit": "Iraq",
+          "iso3": "IRQ",
+          "sourceId": "IRQ"
+        },
+        {
+          "unit": "Georgia",
+          "iso3": "GEO",
+          "sourceId": "GEG",
+          "physicalContinentClip": "Asia"
+        },
+        {
+          "unit": "Northern Cyprus",
+          "iso3": "-99",
+          "sourceId": "CYN"
+        },
+        {
+          "unit": "Cyprus",
+          "iso3": "CYP",
+          "sourceId": "CYP"
+        },
+        {
+          "unit": "Bahrain",
+          "iso3": "BHR",
+          "sourceId": "BHR"
+        },
+        {
+          "unit": "Azerbaijan",
+          "iso3": "AZE",
+          "sourceId": "AZE",
+          "physicalContinentClip": "Asia"
+        },
+        {
+          "unit": "Armenia",
+          "iso3": "ARM",
+          "sourceId": "ARM"
+        }
+      ]
+    },
+    {
+      "regionId": "asia-south",
+      "name": "남아시아",
+      "members": [
+        {
+          "unit": "Sri Lanka",
+          "iso3": "LKA",
+          "sourceId": "LKA"
+        },
+        {
+          "unit": "Pakistan",
+          "iso3": "PAK",
+          "sourceId": "PAK"
+        },
+        {
+          "unit": "Nepal",
+          "iso3": "NPL",
+          "sourceId": "NPL"
+        },
+        {
+          "unit": "Maldives",
+          "iso3": "MDV",
+          "sourceId": "MDV"
+        },
+        {
+          "unit": "Iran",
+          "iso3": "IRN",
+          "sourceId": "IRN"
+        },
+        {
+          "unit": "India",
+          "iso3": "IND",
+          "sourceId": "IND"
+        },
+        {
+          "unit": "Bhutan",
+          "iso3": "BTN",
+          "sourceId": "BTN"
+        },
+        {
+          "unit": "Bangladesh",
+          "iso3": "BGD",
+          "sourceId": "BGD"
+        },
+        {
+          "unit": "Afghanistan",
+          "iso3": "AFG",
+          "sourceId": "AFG"
+        },
+        {
+          "unit": "Siachen Glacier",
+          "iso3": "-99",
+          "sourceId": "KAS"
+        }
+      ]
+    },
+    {
+      "regionId": "asia-east",
+      "name": "동아시아",
+      "members": [
+        {
+          "unit": "Taiwan",
+          "iso3": "TWN",
+          "sourceId": "TWN"
+        },
+        {
+          "unit": "South Korea",
+          "iso3": "KOR",
+          "sourceId": "KOR"
+        },
+        {
+          "unit": "North Korea",
+          "iso3": "PRK",
+          "sourceId": "PRK"
+        },
+        {
+          "unit": "Mongolia",
+          "iso3": "MNG",
+          "sourceId": "MNG"
+        },
+        {
+          "unit": "Japan",
+          "iso3": "JPN",
+          "sourceId": "JPN"
+        },
+        {
+          "unit": "China",
+          "iso3": "CHN",
+          "sourceId": "CHN"
+        },
+        {
+          "unit": "Macao S.A.R",
+          "iso3": "MAC",
+          "sourceId": "MAC"
+        },
+        {
+          "unit": "Hong Kong S.A.R.",
+          "iso3": "HKG",
+          "sourceId": "HKG"
+        }
+      ]
+    },
+    {
+      "regionId": "asia-southeast",
+      "name": "동남아시아",
+      "members": [
+        {
+          "unit": "Vietnam",
+          "iso3": "VNM",
+          "sourceId": "VNM"
+        },
+        {
+          "unit": "East Timor",
+          "iso3": "TLS",
+          "sourceId": "TLS"
+        },
+        {
+          "unit": "Thailand",
+          "iso3": "THA",
+          "sourceId": "THA"
+        },
+        {
+          "unit": "Singapore",
+          "iso3": "SGP",
+          "sourceId": "SGP"
+        },
+        {
+          "unit": "Philippines",
+          "iso3": "PHL",
+          "sourceId": "PHL"
+        },
+        {
+          "unit": "Malaysia",
+          "iso3": "MYS",
+          "sourceId": "MYS"
+        },
+        {
+          "unit": "Laos",
+          "iso3": "LAO",
+          "sourceId": "LAO"
+        },
+        {
+          "unit": "Indonesia",
+          "iso3": "IDN",
+          "sourceId": "IDN"
+        },
+        {
+          "unit": "Cambodia",
+          "iso3": "KHM",
+          "sourceId": "KHM"
+        },
+        {
+          "unit": "Myanmar",
+          "iso3": "MMR",
+          "sourceId": "MMR"
+        },
+        {
+          "unit": "Brunei",
+          "iso3": "BRN",
+          "sourceId": "BRN"
+        }
+      ]
+    },
+    {
+      "regionId": "asia-central",
+      "name": "중앙아시아",
+      "members": [
+        {
+          "unit": "Uzbekistan",
+          "iso3": "UZB",
+          "sourceId": "UZB"
+        },
+        {
+          "unit": "Turkmenistan",
+          "iso3": "TKM",
+          "sourceId": "TKM"
+        },
+        {
+          "unit": "Tajikistan",
+          "iso3": "TJK",
+          "sourceId": "TJK"
+        },
+        {
+          "unit": "Kyrgyzstan",
+          "iso3": "KGZ",
+          "sourceId": "KGZ"
+        },
+        {
+          "unit": "Kazakhstan",
+          "iso3": "KAZ",
+          "sourceId": "KAZ",
+          "physicalContinentClip": "Asia"
+        }
+      ]
+    },
+    {
+      "regionId": "asia-north",
+      "name": "북아시아",
+      "members": [
+        {
+          "unit": "Russia",
+          "iso3": "RUS",
+          "sourceId": "RUS",
+          "physicalContinentClip": "Asia"
+        }
+      ]
+    },
+    {
+      "regionId": "africa",
+      "name": "아프리카",
+      "members": [
+        {
+          "childRegion": "africa-central"
+        },
+        {
+          "childRegion": "africa-east"
+        },
+        {
+          "childRegion": "africa-north"
+        },
+        {
+          "childRegion": "africa-south"
+        },
+        {
+          "childRegion": "africa-west"
+        }
+      ]
+    },
+    {
+      "regionId": "africa-north",
+      "name": "북아프리카",
+      "members": [
+        {
+          "unit": "Tunisia",
+          "iso3": "TUN",
+          "sourceId": "TUN"
+        },
+        {
+          "unit": "Sudan",
+          "iso3": "SDN",
+          "sourceId": "SDN"
+        },
+        {
+          "unit": "Spain",
+          "iso3": "ESP",
+          "sourceId": "ESP",
+          "physicalIslandRegion": "Africa",
+          "description": "카나리아 제도·아프리카 연안 지역"
+        },
+        {
+          "unit": "Madeira",
+          "iso3": "PRT",
+          "sourceId": "PMD",
+          "physicalIslandRegion": "Africa",
+          "description": "마데이라 제도"
+        },
+        {
+          "unit": "Morocco",
+          "iso3": "MAR",
+          "sourceId": "MAR"
+        },
+        {
+          "unit": "Western Sahara",
+          "iso3": "ESH",
+          "sourceId": "SAH"
+        },
+        {
+          "unit": "Libya",
+          "iso3": "LBY",
+          "sourceId": "LBY"
+        },
+        {
+          "unit": "Egypt",
+          "iso3": "EGY",
+          "sourceId": "EGY",
+          "physicalContinentClip": "Africa"
+        },
+        {
+          "unit": "Algeria",
+          "iso3": "DZA",
+          "sourceId": "DZA"
+        }
+      ]
+    },
+    {
+      "regionId": "africa-south",
+      "name": "남아프리카",
+      "members": [
+        {
+          "unit": "eSwatini",
+          "iso3": "SWZ",
+          "sourceId": "SWZ"
+        },
+        {
+          "unit": "South Africa",
+          "iso3": "ZAF",
+          "sourceId": "ZAF"
+        },
+        {
+          "unit": "Namibia",
+          "iso3": "NAM",
+          "sourceId": "NAM"
+        },
+        {
+          "unit": "Lesotho",
+          "iso3": "LSO",
+          "sourceId": "LSO"
+        },
+        {
+          "unit": "Botswana",
+          "iso3": "BWA",
+          "sourceId": "BWA"
+        }
+      ]
+    },
+    {
+      "regionId": "africa-east",
+      "name": "동아프리카",
+      "members": [
+        {
+          "unit": "Zimbabwe",
+          "iso3": "ZWE",
+          "sourceId": "ZWE"
+        },
+        {
+          "unit": "Zambia",
+          "iso3": "ZMB",
+          "sourceId": "ZMB"
+        },
+        {
+          "unit": "British Indian Ocean Territory",
+          "iso3": "IOT",
+          "sourceId": "IOT"
+        },
+        {
+          "unit": "Uganda",
+          "iso3": "UGA",
+          "sourceId": "UGA"
+        },
+        {
+          "unit": "Zanzibar",
+          "iso3": "TZA",
+          "sourceId": "TZZ"
+        },
+        {
+          "unit": "Tanzania",
+          "iso3": "TZA",
+          "sourceId": "TZA"
+        },
+        {
+          "unit": "South Sudan",
+          "iso3": "SSD",
+          "sourceId": "SDS"
+        },
+        {
+          "unit": "Somalia",
+          "iso3": "SOM",
+          "sourceId": "SOM"
+        },
+        {
+          "unit": "Somaliland",
+          "iso3": "-99",
+          "sourceId": "SOL"
+        },
+        {
+          "unit": "Seychelles",
+          "iso3": "SYC",
+          "sourceId": "SYC"
+        },
+        {
+          "unit": "Rwanda",
+          "iso3": "RWA",
+          "sourceId": "RWA"
+        },
+        {
+          "unit": "Mozambique",
+          "iso3": "MOZ",
+          "sourceId": "MOZ"
+        },
+        {
+          "unit": "Mauritius",
+          "iso3": "MUS",
+          "sourceId": "MUS"
+        },
+        {
+          "unit": "Malawi",
+          "iso3": "MWI",
+          "sourceId": "MWI"
+        },
+        {
+          "unit": "Madagascar",
+          "iso3": "MDG",
+          "sourceId": "MDG"
+        },
+        {
+          "unit": "Kenya",
+          "iso3": "KEN",
+          "sourceId": "KEN"
+        },
+        {
+          "unit": "Mayotte",
+          "iso3": "MYT",
+          "sourceId": "MYT"
+        },
+        {
+          "unit": "Reunion",
+          "iso3": "REU",
+          "sourceId": "REU"
+        },
+        {
+          "unit": "French Southern and Antarctic Lands",
+          "iso3": "ATF",
+          "sourceId": "ATF"
+        },
+        {
+          "unit": "Ethiopia",
+          "iso3": "ETH",
+          "sourceId": "ETH"
+        },
+        {
+          "unit": "Eritrea",
+          "iso3": "ERI",
+          "sourceId": "ERI"
+        },
+        {
+          "unit": "Djibouti",
+          "iso3": "DJI",
+          "sourceId": "DJI"
+        },
+        {
+          "unit": "Comoros",
+          "iso3": "COM",
+          "sourceId": "COM"
+        },
+        {
+          "unit": "Burundi",
+          "iso3": "BDI",
+          "sourceId": "BDI"
+        }
+      ]
+    },
+    {
+      "regionId": "africa-west",
+      "name": "서아프리카",
+      "members": [
+        {
+          "unit": "Saint Helena",
+          "iso3": "SHN",
+          "sourceId": "SHN"
+        },
+        {
+          "unit": "Togo",
+          "iso3": "TGO",
+          "sourceId": "TGO"
+        },
+        {
+          "unit": "Sierra Leone",
+          "iso3": "SLE",
+          "sourceId": "SLE"
+        },
+        {
+          "unit": "Senegal",
+          "iso3": "SEN",
+          "sourceId": "SEN"
+        },
+        {
+          "unit": "Nigeria",
+          "iso3": "NGA",
+          "sourceId": "NGA"
+        },
+        {
+          "unit": "Niger",
+          "iso3": "NER",
+          "sourceId": "NER"
+        },
+        {
+          "unit": "Mauritania",
+          "iso3": "MRT",
+          "sourceId": "MRT"
+        },
+        {
+          "unit": "Mali",
+          "iso3": "MLI",
+          "sourceId": "MLI"
+        },
+        {
+          "unit": "Liberia",
+          "iso3": "LBR",
+          "sourceId": "LBR"
+        },
+        {
+          "unit": "Guinea-Bissau",
+          "iso3": "GNB",
+          "sourceId": "GNB"
+        },
+        {
+          "unit": "Guinea",
+          "iso3": "GIN",
+          "sourceId": "GIN"
+        },
+        {
+          "unit": "Ghana",
+          "iso3": "GHA",
+          "sourceId": "GHA"
+        },
+        {
+          "unit": "Gambia",
+          "iso3": "GMB",
+          "sourceId": "GMB"
+        },
+        {
+          "unit": "Ivory Coast",
+          "iso3": "CIV",
+          "sourceId": "CIV"
+        },
+        {
+          "unit": "Cabo Verde",
+          "iso3": "CPV",
+          "sourceId": "CPV"
+        },
+        {
+          "unit": "Burkina Faso",
+          "iso3": "BFA",
+          "sourceId": "BFA"
+        },
+        {
+          "unit": "Benin",
+          "iso3": "BEN",
+          "sourceId": "BEN"
+        }
+      ]
+    },
+    {
+      "regionId": "africa-central",
+      "name": "중앙아프리카",
+      "members": [
+        {
+          "unit": "São Tomé and Principe",
+          "iso3": "STP",
+          "sourceId": "STP"
+        },
+        {
+          "unit": "Gabon",
+          "iso3": "GAB",
+          "sourceId": "GAB"
+        },
+        {
+          "unit": "Equatorial Guinea",
+          "iso3": "GNQ",
+          "sourceId": "GNQ"
+        },
+        {
+          "unit": "Democratic Republic of the Congo",
+          "iso3": "COD",
+          "sourceId": "COD"
+        },
+        {
+          "unit": "Republic of the Congo",
+          "iso3": "COG",
+          "sourceId": "COG"
+        },
+        {
+          "unit": "Chad",
+          "iso3": "TCD",
+          "sourceId": "TCD"
+        },
+        {
+          "unit": "Central African Republic",
+          "iso3": "CAF",
+          "sourceId": "CAF"
+        },
+        {
+          "unit": "Cameroon",
+          "iso3": "CMR",
+          "sourceId": "CMR"
+        },
+        {
+          "unit": "Angola",
+          "iso3": "AGO",
+          "sourceId": "AGO"
+        }
+      ]
+    },
+    {
+      "regionId": "middle-east",
+      "name": "중동",
+      "members": [
+        {
+          "unit": "Yemen",
+          "iso3": "YEM",
+          "sourceId": "YEM"
+        },
+        {
+          "unit": "United Arab Emirates",
+          "iso3": "ARE",
+          "sourceId": "ARE"
+        },
+        {
+          "unit": "Turkey",
+          "iso3": "TUR",
+          "sourceId": "TUR"
+        },
+        {
+          "unit": "Syria",
+          "iso3": "SYR",
+          "sourceId": "SYR"
+        },
+        {
+          "unit": "Saudi Arabia",
+          "iso3": "SAU",
+          "sourceId": "SAU"
+        },
+        {
+          "unit": "Qatar",
+          "iso3": "QAT",
+          "sourceId": "QAT"
+        },
+        {
+          "unit": "Oman",
+          "iso3": "OMN",
+          "sourceId": "OMN"
+        },
+        {
+          "unit": "Lebanon",
+          "iso3": "LBN",
+          "sourceId": "LBN"
+        },
+        {
+          "unit": "Kuwait",
+          "iso3": "KWT",
+          "sourceId": "KWT"
+        },
+        {
+          "unit": "Jordan",
+          "iso3": "JOR",
+          "sourceId": "JOR"
+        },
+        {
+          "unit": "Israel",
+          "iso3": "ISR",
+          "sourceId": "ISR"
+        },
+        {
+          "unit": "Gaza",
+          "iso3": "PSE",
+          "sourceId": "GAZ"
+        },
+        {
+          "unit": "West Bank",
+          "iso3": "PSE",
+          "sourceId": "WEB"
+        },
+        {
+          "unit": "Iraq",
+          "iso3": "IRQ",
+          "sourceId": "IRQ"
+        },
+        {
+          "unit": "Iran",
+          "iso3": "IRN",
+          "sourceId": "IRN"
+        },
+        {
+          "unit": "Egypt",
+          "iso3": "EGY",
+          "sourceId": "EGY"
+        },
+        {
+          "unit": "Northern Cyprus",
+          "iso3": "-99",
+          "sourceId": "CYN"
+        },
+        {
+          "unit": "Cyprus",
+          "iso3": "CYP",
+          "sourceId": "CYP"
+        },
+        {
+          "unit": "Bahrain",
+          "iso3": "BHR",
+          "sourceId": "BHR"
+        }
+      ]
+    },
+    {
+      "regionId": "america",
+      "name": "아메리카",
+      "members": [
+        {
+          "childRegion": "america-caribbean"
+        },
+        {
+          "childRegion": "america-central"
+        },
+        {
+          "childRegion": "america-north"
+        },
+        {
+          "childRegion": "america-south"
+        }
+      ]
+    },
+    {
+      "regionId": "america-north",
+      "name": "북아메리카",
+      "members": [
+        {
+          "unit": "United States of America",
+          "iso3": "USA",
+          "sourceId": "USA"
+        },
+        {
+          "unit": "Bermuda",
+          "iso3": "BMU",
+          "sourceId": "BMU"
+        },
+        {
+          "unit": "Saint Pierre and Miquelon",
+          "iso3": "SPM",
+          "sourceId": "SPM"
+        },
+        {
+          "unit": "Greenland",
+          "iso3": "GRL",
+          "sourceId": "GRL"
+        },
+        {
+          "unit": "Canada",
+          "iso3": "CAN",
+          "sourceId": "CAN"
+        }
+      ]
+    },
+    {
+      "regionId": "america-south",
+      "name": "남아메리카",
+      "members": [
+        {
+          "unit": "Venezuela",
+          "iso3": "VEN",
+          "sourceId": "VEN"
+        },
+        {
+          "unit": "Uruguay",
+          "iso3": "URY",
+          "sourceId": "URY"
+        },
+        {
+          "unit": "South Georgia and the Islands",
+          "iso3": "SGS",
+          "sourceId": "SGS"
+        },
+        {
+          "unit": "Falkland Islands",
+          "iso3": "FLK",
+          "sourceId": "FLK"
+        },
+        {
+          "unit": "Suriname",
+          "iso3": "SUR",
+          "sourceId": "SUR"
+        },
+        {
+          "unit": "Peru",
+          "iso3": "PER",
+          "sourceId": "PER"
+        },
+        {
+          "unit": "Paraguay",
+          "iso3": "PRY",
+          "sourceId": "PRY"
+        },
+        {
+          "unit": "Guyana",
+          "iso3": "GUY",
+          "sourceId": "GUY"
+        },
+        {
+          "unit": "French Guiana",
+          "iso3": "GUF",
+          "sourceId": "GUF"
+        },
+        {
+          "unit": "Ecuador",
+          "iso3": "ECU",
+          "sourceId": "ECU"
+        },
+        {
+          "unit": "Colombia",
+          "iso3": "COL",
+          "sourceId": "COL"
+        },
+        {
+          "unit": "Chile",
+          "iso3": "CHL",
+          "sourceId": "CHL"
+        },
+        {
+          "unit": "Brazil",
+          "iso3": "BRA",
+          "sourceId": "BRA"
+        },
+        {
+          "unit": "Bolivia",
+          "iso3": "BOL",
+          "sourceId": "BOL"
+        },
+        {
+          "unit": "Argentina",
+          "iso3": "ARG",
+          "sourceId": "ARG"
+        }
+      ]
+    },
+    {
+      "regionId": "america-central",
+      "name": "중앙아메리카",
+      "members": [
+        {
+          "unit": "Panama",
+          "iso3": "PAN",
+          "sourceId": "PAN"
+        },
+        {
+          "unit": "Nicaragua",
+          "iso3": "NIC",
+          "sourceId": "NIC"
+        },
+        {
+          "unit": "Mexico",
+          "iso3": "MEX",
+          "sourceId": "MEX"
+        },
+        {
+          "unit": "Honduras",
+          "iso3": "HND",
+          "sourceId": "HND"
+        },
+        {
+          "unit": "Guatemala",
+          "iso3": "GTM",
+          "sourceId": "GTM"
+        },
+        {
+          "unit": "El Salvador",
+          "iso3": "SLV",
+          "sourceId": "SLV"
+        },
+        {
+          "unit": "Costa Rica",
+          "iso3": "CRI",
+          "sourceId": "CRI"
+        },
+        {
+          "unit": "Belize",
+          "iso3": "BLZ",
+          "sourceId": "BLZ"
+        }
+      ]
+    },
+    {
+      "regionId": "america-caribbean",
+      "name": "카리브 지역",
+      "members": [
+        {
+          "unit": "United States Virgin Islands",
+          "iso3": "VIR",
+          "sourceId": "VIR"
+        },
+        {
+          "unit": "Puerto Rico",
+          "iso3": "PRI",
+          "sourceId": "PRI"
+        },
+        {
+          "unit": "Anguilla",
+          "iso3": "AIA",
+          "sourceId": "AIA"
+        },
+        {
+          "unit": "Cayman Islands",
+          "iso3": "CYM",
+          "sourceId": "CYM"
+        },
+        {
+          "unit": "British Virgin Islands",
+          "iso3": "VGB",
+          "sourceId": "VGB"
+        },
+        {
+          "unit": "Turks and Caicos Islands",
+          "iso3": "TCA",
+          "sourceId": "TCA"
+        },
+        {
+          "unit": "Montserrat",
+          "iso3": "MSR",
+          "sourceId": "MSR"
+        },
+        {
+          "unit": "Trinidad and Tobago",
+          "iso3": "TTO",
+          "sourceId": "TTO"
+        },
+        {
+          "unit": "Saint Vincent and the Grenadines",
+          "iso3": "VCT",
+          "sourceId": "VCT"
+        },
+        {
+          "unit": "Saint Lucia",
+          "iso3": "LCA",
+          "sourceId": "LCA"
+        },
+        {
+          "unit": "Saint Kitts and Nevis",
+          "iso3": "KNA",
+          "sourceId": "KNA"
+        },
+        {
+          "unit": "Aruba",
+          "iso3": "ABW",
+          "sourceId": "ABW"
+        },
+        {
+          "unit": "Caribbean Netherlands",
+          "iso3": "BES",
+          "sourceId": "NLY"
+        },
+        {
+          "unit": "Curaçao",
+          "iso3": "CUW",
+          "sourceId": "CUW"
+        },
+        {
+          "unit": "Jamaica",
+          "iso3": "JAM",
+          "sourceId": "JAM"
+        },
+        {
+          "unit": "Haiti",
+          "iso3": "HTI",
+          "sourceId": "HTI"
+        },
+        {
+          "unit": "Grenada",
+          "iso3": "GRD",
+          "sourceId": "GRD"
+        },
+        {
+          "unit": "Martinique",
+          "iso3": "MTQ",
+          "sourceId": "MTQ"
+        },
+        {
+          "unit": "Guadeloupe",
+          "iso3": "GLP",
+          "sourceId": "GLP"
+        },
+        {
+          "unit": "Saint Martin",
+          "iso3": "MAF",
+          "sourceId": "MAF"
+        },
+        {
+          "unit": "Saint Barthelemy",
+          "iso3": "BLM",
+          "sourceId": "BLM"
+        },
+        {
+          "unit": "Dominican Republic",
+          "iso3": "DOM",
+          "sourceId": "DOM"
+        },
+        {
+          "unit": "Dominica",
+          "iso3": "DMA",
+          "sourceId": "DMA"
+        },
+        {
+          "unit": "Cuba",
+          "iso3": "CUB",
+          "sourceId": "CUB"
+        },
+        {
+          "unit": "Barbados",
+          "iso3": "BRB",
+          "sourceId": "BRB"
+        },
+        {
+          "unit": "The Bahamas",
+          "iso3": "BHS",
+          "sourceId": "BHS"
+        },
+        {
+          "unit": "Antigua",
+          "iso3": "ATG",
+          "sourceId": "ACA"
+        },
+        {
+          "unit": "Barbuda",
+          "iso3": "ATG",
+          "sourceId": "ACB"
+        },
+        {
+          "unit": "Sint Maarten",
+          "iso3": "SXM",
+          "sourceId": "SXM"
+        }
+      ]
+    },
+    {
+      "regionId": "oceania",
+      "name": "오세아니아",
+      "members": [
+        {
+          "childRegion": "oceania-australia"
+        },
+        {
+          "childRegion": "oceania-pacific"
+        }
+      ]
+    },
+    {
+      "regionId": "oceania-australia",
+      "name": "오스트레일리아·뉴질랜드",
+      "members": [
+        {
+          "unit": "New Zealand",
+          "iso3": "NZL",
+          "sourceId": "NZL"
+        },
+        {
+          "unit": "Australia",
+          "iso3": "AUS",
+          "sourceId": "AUS"
+        },
+        {
+          "unit": "Christmas Island",
+          "iso3": "CXR",
+          "sourceId": "CXR"
+        },
+        {
+          "unit": "Cocos (Keeling) Islands",
+          "iso3": "CCK",
+          "sourceId": "CCK"
+        },
+        {
+          "unit": "Heard Island and McDonald Islands",
+          "iso3": "HMD",
+          "sourceId": "HMD"
+        },
+        {
+          "unit": "Norfolk Island",
+          "iso3": "NFK",
+          "sourceId": "NFK"
+        },
+        {
+          "unit": "Ashmore and Cartier Islands",
+          "iso3": "AUS",
+          "sourceId": "ATC"
+        }
+      ]
+    },
+    {
+      "regionId": "oceania-pacific",
+      "name": "태평양 제도",
+      "members": [
+        {
+          "unit": "Vanuatu",
+          "iso3": "VUT",
+          "sourceId": "VUT"
+        },
+        {
+          "unit": "Federated States of Micronesia",
+          "iso3": "FSM",
+          "sourceId": "FSM"
+        },
+        {
+          "unit": "Marshall Islands",
+          "iso3": "MHL",
+          "sourceId": "MHL"
+        },
+        {
+          "unit": "Northern Mariana Islands",
+          "iso3": "MNP",
+          "sourceId": "MNP"
+        },
+        {
+          "unit": "Guam",
+          "iso3": "GUM",
+          "sourceId": "GUM"
+        },
+        {
+          "unit": "American Samoa",
+          "iso3": "ASM",
+          "sourceId": "ASM"
+        },
+        {
+          "unit": "United States of America",
+          "iso3": "USA",
+          "sourceId": "USA",
+          "physicalIslandRegion": "Oceania",
+          "description": "하와이"
+        },
+        {
+          "unit": "Pitcairn Islands",
+          "iso3": "PCN",
+          "sourceId": "PCN"
+        },
+        {
+          "unit": "Tonga",
+          "iso3": "TON",
+          "sourceId": "TON"
+        },
+        {
+          "unit": "Solomon Islands",
+          "iso3": "SLB",
+          "sourceId": "SLB"
+        },
+        {
+          "unit": "Samoa",
+          "iso3": "WSM",
+          "sourceId": "WSM"
+        },
+        {
+          "unit": "Papua New Guinea",
+          "iso3": "PNG",
+          "sourceId": "PNX"
+        },
+        {
+          "unit": "Bougainville",
+          "iso3": "PNG",
+          "sourceId": "PNB"
+        },
+        {
+          "unit": "Palau",
+          "iso3": "PLW",
+          "sourceId": "PLW"
+        },
+        {
+          "unit": "Niue",
+          "iso3": "NIU",
+          "sourceId": "NIU"
+        },
+        {
+          "unit": "Tokelau",
+          "iso3": "TKL",
+          "sourceId": "TKL"
+        },
+        {
+          "unit": "Cook Islands",
+          "iso3": "COK",
+          "sourceId": "COK"
+        },
+        {
+          "unit": "Nauru",
+          "iso3": "NRU",
+          "sourceId": "NRU"
+        },
+        {
+          "unit": "Kiribati",
+          "iso3": "KIR",
+          "sourceId": "KIR"
+        },
+        {
+          "unit": "Indonesia",
+          "iso3": "IDN",
+          "sourceId": "IDN",
+          "physicalIslandRegion": "Oceania",
+          "description": "뉴기니섬 서부"
+        },
+        {
+          "unit": "Wallis and Futuna",
+          "iso3": "WLF",
+          "sourceId": "WLF"
+        },
+        {
+          "unit": "French Polynesia",
+          "iso3": "PYF",
+          "sourceId": "PYF"
+        },
+        {
+          "unit": "New Caledonia",
+          "iso3": "NCL",
+          "sourceId": "NCL"
+        },
+        {
+          "unit": "Fiji",
+          "iso3": "FJI",
+          "sourceId": "FJI"
+        },
+        {
+          "unit": "Chile",
+          "iso3": "CHL",
+          "sourceId": "CHL",
+          "physicalIslandRegion": "Oceania",
+          "description": "이스터섬"
+        },
+        {
+          "unit": "Tuvalu",
+          "iso3": "TUV",
+          "sourceId": "TUV"
+        }
+      ]
+    },
+    {
+      "regionId": "antarctica",
+      "name": "남극",
+      "members": [
+        {
+          "unit": "Antarctica",
+          "iso3": "ATA",
+          "sourceId": "ATA"
+        }
+      ]
+    },
+    {
+      "regionId": "arctic",
+      "name": "북극",
+      "members": [
+        {
+          "geographicLine": "Arctic Circle",
+          "northLatitude": 66.549985
+        }
+      ]
+    },
+    {
+      "regionId": "greenland",
+      "name": "그린란드",
+      "members": [
+        {
+          "unit": "Greenland",
+          "iso3": "GRL",
+          "sourceId": "GRL"
+        }
+      ]
+    },
+    {
+      "regionId": "water",
+      "name": "바다·대양",
+      "members": [
+        {
+          "childRegion": "water-pacific"
+        },
+        {
+          "childRegion": "water-atlantic"
+        },
+        {
+          "childRegion": "water-indian"
+        },
+        {
+          "childRegion": "water-southern"
+        },
+        {
+          "childRegion": "water-arctic"
+        },
+        {
+          "childRegion": "water-mediterranean"
+        },
+        {
+          "childRegion": "water-black"
+        },
+        {
+          "childRegion": "water-red"
+        },
+        {
+          "childRegion": "water-baltic"
+        },
+        {
+          "childRegion": "water-caribbean"
+        },
+        {
+          "childRegion": "water-east-asia"
+        },
+        {
+          "childRegion": "water-other"
+        }
+      ]
+    },
+    {
+      "regionId": "water-pacific",
+      "name": "태평양",
+      "members": [
+        {
+          "marineName": "North Pacific Ocean"
+        },
+        {
+          "marineName": "South Pacific Ocean"
+        },
+        {
+          "marineName": "Bering Sea"
+        },
+        {
+          "marineName": "Gulf of Alaska"
+        },
+        {
+          "marineName": "Philippine Sea"
+        },
+        {
+          "marineName": "Tasman Sea"
+        },
+        {
+          "marineName": "Coral Sea"
+        },
+        {
+          "marineName": "Sea of Okhotsk"
+        },
+        {
+          "marineName": "South China Sea"
+        },
+        {
+          "marineName": "Sea of Japan"
+        },
+        {
+          "marineName": "Yellow Sea"
+        },
+        {
+          "marineName": "East China Sea"
+        },
+        {
+          "marineName": "Bo Hai"
+        },
+        {
+          "marineName": "Korea Strait"
+        },
+        {
+          "marineName": "Taiwan Strait"
+        },
+        {
+          "marineName": "Luzon Strait"
+        },
+        {
+          "marineName": "Celebes Sea"
+        },
+        {
+          "marineName": "Sulu Sea"
+        },
+        {
+          "marineName": "Banda Sea"
+        },
+        {
+          "marineName": "Java Sea"
+        },
+        {
+          "marineName": "Molucca Sea"
+        },
+        {
+          "marineName": "Bismarck Sea"
+        },
+        {
+          "marineName": "Solomon Sea"
+        },
+        {
+          "marineName": "Ceram Sea"
+        },
+        {
+          "marineName": "Arafura Sea"
+        },
+        {
+          "marineName": "Gulf of Thailand"
+        },
+        {
+          "marineName": "Gulf of Tonkin"
+        },
+        {
+          "marineName": "Golfo de California"
+        },
+        {
+          "marineName": "Drake Passage"
+        }
+      ]
+    },
+    {
+      "regionId": "water-atlantic",
+      "name": "대서양",
+      "members": [
+        {
+          "marineName": "North Atlantic Ocean"
+        },
+        {
+          "marineName": "South Atlantic Ocean"
+        },
+        {
+          "marineName": "North Sea"
+        },
+        {
+          "marineName": "Norwegian Sea"
+        },
+        {
+          "marineName": "Labrador Sea"
+        },
+        {
+          "marineName": "Hudson Bay"
+        },
+        {
+          "marineName": "Gulf of Mexico"
+        },
+        {
+          "marineName": "Bay of Biscay"
+        },
+        {
+          "marineName": "English Channel"
+        },
+        {
+          "marineName": "Irish Sea"
+        },
+        {
+          "marineName": "Inner Seas"
+        },
+        {
+          "marineName": "Bristol Channel"
+        },
+        {
+          "marineName": "Gulf of Guinea"
+        },
+        {
+          "marineName": "Bahía de Campeche"
+        },
+        {
+          "marineName": "James Bay"
+        },
+        {
+          "marineName": "Hudson Strait"
+        },
+        {
+          "marineName": "Gulf of Saint Lawrence"
+        },
+        {
+          "marineName": "Río de la Plata"
+        },
+        {
+          "marineName": "Sargasso Sea"
+        },
+        {
+          "marineName": "Drake Passage"
+        },
+        {
+          "marineName": "Estrecho de Magellanes"
+        }
+      ]
+    },
+    {
+      "regionId": "water-indian",
+      "name": "인도양",
+      "members": [
+        {
+          "marineName": "INDIAN OCEAN"
+        },
+        {
+          "marineName": "Arabian Sea"
+        },
+        {
+          "marineName": "Bay of Bengal"
+        },
+        {
+          "marineName": "Andaman Sea"
+        },
+        {
+          "marineName": "Laccadive Sea"
+        },
+        {
+          "marineName": "Persian Gulf"
+        },
+        {
+          "marineName": "Gulf of Aden"
+        },
+        {
+          "marineName": "Gulf of Oman"
+        },
+        {
+          "marineName": "Mozambique Channel"
+        },
+        {
+          "marineName": "Timor Sea"
+        },
+        {
+          "marineName": "Arafura Sea"
+        },
+        {
+          "marineName": "Great Australian Bight"
+        },
+        {
+          "marineName": "Strait of Malacca"
+        },
+        {
+          "marineName": "Strait of Singapore"
+        }
+      ]
+    },
+    {
+      "regionId": "water-southern",
+      "name": "남극해",
+      "members": [
+        {
+          "marineName": "SOUTHERN OCEAN"
+        },
+        {
+          "marineName": "Weddell Sea"
+        },
+        {
+          "marineName": "Ross Sea"
+        },
+        {
+          "marineName": "Bellingshausen Sea"
+        },
+        {
+          "marineName": "Amundsen Sea"
+        },
+        {
+          "marineName": "Scotia Sea"
+        },
+        {
+          "marineName": "Drake Passage"
+        },
+        {
+          "marineName": "Davis Sea"
+        }
+      ]
+    },
+    {
+      "regionId": "water-arctic",
+      "name": "북극해",
+      "members": [
+        {
+          "marineName": "Arctic Ocean"
+        },
+        {
+          "marineName": "Beaufort Sea"
+        },
+        {
+          "marineName": "Chukchi Sea"
+        },
+        {
+          "marineName": "East Siberian Sea"
+        },
+        {
+          "marineName": "Laptev Sea"
+        },
+        {
+          "marineName": "Kara Sea"
+        },
+        {
+          "marineName": "Barents Sea"
+        },
+        {
+          "marineName": "White Sea"
+        },
+        {
+          "marineName": "Greenland Sea"
+        },
+        {
+          "marineName": "Lincoln Sea"
+        },
+        {
+          "marineName": "The North Western Passages"
+        },
+        {
+          "marineName": "Baffin Bay"
+        },
+        {
+          "marineName": "Davis Strait"
+        },
+        {
+          "marineName": "Amundsen Gulf"
+        },
+        {
+          "marineName": "Viscount Melville Sound"
+        },
+        {
+          "marineName": "M'Clure Strait"
+        }
+      ]
+    },
+    {
+      "regionId": "water-mediterranean",
+      "name": "지중해",
+      "members": [
+        {
+          "marineName": "Mediterranean Sea"
+        },
+        {
+          "marineName": "Tyrrhenian Sea"
+        },
+        {
+          "marineName": "Adriatic Sea"
+        },
+        {
+          "marineName": "Ionian Sea"
+        },
+        {
+          "marineName": "Balearic Sea"
+        },
+        {
+          "marineName": "Aegean Sea"
+        },
+        {
+          "marineName": "Sea of Crete"
+        },
+        {
+          "marineName": "Ligurian Sea"
+        },
+        {
+          "marineName": "Golfe du Lion"
+        },
+        {
+          "marineName": "Gulf of Gabès"
+        },
+        {
+          "marineName": "Gulf of Sidra"
+        },
+        {
+          "marineName": "Strait of Gibraltar"
+        },
+        {
+          "marineName": "Sea of Marmara"
+        }
+      ]
+    },
+    {
+      "regionId": "water-black",
+      "name": "흑해",
+      "members": [
+        {
+          "marineName": "Black Sea"
+        },
+        {
+          "marineName": "Sea of Azov"
+        },
+        {
+          "marineName": "Bosporus"
+        }
+      ]
+    },
+    {
+      "regionId": "water-red",
+      "name": "홍해",
+      "members": [
+        {
+          "marineName": "Red Sea"
+        },
+        {
+          "marineName": "Gulf of Suez"
+        }
+      ]
+    },
+    {
+      "regionId": "water-baltic",
+      "name": "발트해",
+      "members": [
+        {
+          "marineName": "Baltic Sea"
+        },
+        {
+          "marineName": "Gulf of Bothnia"
+        },
+        {
+          "marineName": "Gulf of Finland"
+        },
+        {
+          "marineName": "Gulf of Riga"
+        },
+        {
+          "marineName": "Kattegat"
+        },
+        {
+          "marineName": "Øresund"
+        },
+        {
+          "marineName": "Mecklenburger Bucht"
+        }
+      ]
+    },
+    {
+      "regionId": "water-caribbean",
+      "name": "카리브해",
+      "members": [
+        {
+          "marineName": "Caribbean Sea"
+        },
+        {
+          "marineName": "Gulf of Honduras"
+        },
+        {
+          "marineName": "Yucatan Channel"
+        }
+      ]
+    },
+    {
+      "regionId": "water-east-asia",
+      "name": "동아시아 해역",
+      "members": [
+        {
+          "marineName": "Sea of Japan"
+        },
+        {
+          "marineName": "Sea of Okhotsk"
+        },
+        {
+          "marineName": "Yellow Sea"
+        },
+        {
+          "marineName": "East China Sea"
+        },
+        {
+          "marineName": "South China Sea"
+        },
+        {
+          "marineName": "Bo Hai"
+        },
+        {
+          "marineName": "Korea Strait"
+        },
+        {
+          "marineName": "Taiwan Strait"
+        },
+        {
+          "marineName": "Luzon Strait"
+        },
+        {
+          "marineName": "East Korea Bay"
+        },
+        {
+          "marineName": "Hangzhou Bay"
+        },
+        {
+          "marineName": "La Pérouse Strait"
+        }
+      ]
+    },
+    {
+      "regionId": "water-other",
+      "name": "기타 해역",
+      "members": [
+        {
+          "marineName": "Albemarle Sound"
+        },
+        {
+          "marineName": "Alboran Sea"
+        },
+        {
+          "marineName": "Antongila Bay"
+        },
+        {
+          "marineName": "Bab el Mandeb"
+        },
+        {
+          "marineName": "Bahía Blanca"
+        },
+        {
+          "marineName": "Bahía Grande"
+        },
+        {
+          "marineName": "Baia de Maputo"
+        },
+        {
+          "marineName": "Baird Inlet"
+        },
+        {
+          "marineName": "Bali Sea"
+        },
+        {
+          "marineName": "Bass Strait"
+        },
+        {
+          "marineName": "Bathurst Inlet"
+        },
+        {
+          "marineName": "Bay Inútil"
+        },
+        {
+          "marineName": "Bay of Fundy"
+        },
+        {
+          "marineName": "Bay of Plenty"
+        },
+        {
+          "marineName": "Baía de Marajó"
+        },
+        {
+          "marineName": "Baía de São Marcos"
+        },
+        {
+          "marineName": "Bight of Benin"
+        },
+        {
+          "marineName": "Bight of Biafra"
+        },
+        {
+          "marineName": "Boca Grande"
+        },
+        {
+          "marineName": "Bohol Sea"
+        },
+        {
+          "marineName": "Boknafjorden"
+        },
+        {
+          "marineName": "Bransfield Strait"
+        },
+        {
+          "marineName": "Bras d'Or Lake"
+        },
+        {
+          "marineName": "Bristol Bay"
+        },
+        {
+          "marineName": "Canal Perigoso"
+        },
+        {
+          "marineName": "Canal do Norte"
+        },
+        {
+          "marineName": "Canal do Sul"
+        },
+        {
+          "marineName": "Chaun Bay"
+        },
+        {
+          "marineName": "Chesapeake Bay"
+        },
+        {
+          "marineName": "Cook Inlet"
+        },
+        {
+          "marineName": "Cook Strait"
+        },
+        {
+          "marineName": "Cordova Bay"
+        },
+        {
+          "marineName": "Cumberland Sound"
+        },
+        {
+          "marineName": "Dardanelles"
+        },
+        {
+          "marineName": "Darnley Bay"
+        },
+        {
+          "marineName": "Davao Gulf"
+        },
+        {
+          "marineName": "Delaware Bay"
+        },
+        {
+          "marineName": "Denmark Strait"
+        },
+        {
+          "marineName": "Disko Bay"
+        },
+        {
+          "marineName": "Dixon Entrance"
+        },
+        {
+          "marineName": "Dmitriy Laptev Strait"
+        },
+        {
+          "marineName": "Eclipse Sound"
+        },
+        {
+          "marineName": "Flores Sea"
+        },
+        {
+          "marineName": "Foxe Basin"
+        },
+        {
+          "marineName": "Franklin Bay"
+        },
+        {
+          "marineName": "Frobisher Bay"
+        },
+        {
+          "marineName": "Fury and Hecla Strait"
+        },
+        {
+          "marineName": "Geographe Bay"
+        },
+        {
+          "marineName": "George VI Sound"
+        },
+        {
+          "marineName": "Goldsmith Channel"
+        },
+        {
+          "marineName": "Golfo Corcovado"
+        },
+        {
+          "marineName": "Golfo San Jorge"
+        },
+        {
+          "marineName": "Golfo San Matías"
+        },
+        {
+          "marineName": "Golfo de Guayaquil"
+        },
+        {
+          "marineName": "Golfo de Panamá"
+        },
+        {
+          "marineName": "Golfo de Penas"
+        },
+        {
+          "marineName": "Golfo de Tehuantepec"
+        },
+        {
+          "marineName": "Golfo de Urabá"
+        },
+        {
+          "marineName": "Guba Gusinaya"
+        },
+        {
+          "marineName": "Gulf St. Vincent"
+        },
+        {
+          "marineName": "Gulf of Anadyr'"
+        },
+        {
+          "marineName": "Gulf of Aqaba"
+        },
+        {
+          "marineName": "Gulf of Boothia"
+        },
+        {
+          "marineName": "Gulf of Buli"
+        },
+        {
+          "marineName": "Gulf of Carpentaria"
+        },
+        {
+          "marineName": "Gulf of Kamchatka"
+        },
+        {
+          "marineName": "Gulf of Kau"
+        },
+        {
+          "marineName": "Gulf of Khambhät"
+        },
+        {
+          "marineName": "Gulf of Kutch"
+        },
+        {
+          "marineName": "Gulf of Maine"
+        },
+        {
+          "marineName": "Gulf of Mannar"
+        },
+        {
+          "marineName": "Gulf of Martaban"
+        },
+        {
+          "marineName": "Gulf of Masira"
+        },
+        {
+          "marineName": "Gulf of Ob"
+        },
+        {
+          "marineName": "Gulf of Olen‘k"
+        },
+        {
+          "marineName": "Gulf of Papua"
+        },
+        {
+          "marineName": "Gulf of Sakhalin"
+        },
+        {
+          "marineName": "Gulf of Tomini"
+        },
+        {
+          "marineName": "Gulf of Yana"
+        },
+        {
+          "marineName": "Hadley Bay"
+        },
+        {
+          "marineName": "Hall Basin"
+        },
+        {
+          "marineName": "Halmahera Sea"
+        },
+        {
+          "marineName": "Hamilton Inlet"
+        },
+        {
+          "marineName": "Hecate Strait"
+        },
+        {
+          "marineName": "Husky Lakes"
+        },
+        {
+          "marineName": "Inner Sea"
+        },
+        {
+          "marineName": "Jones Sound"
+        },
+        {
+          "marineName": "Joseph Bonaparte Gulf"
+        },
+        {
+          "marineName": "Kaliningrad"
+        },
+        {
+          "marineName": "Kane Basin"
+        },
+        {
+          "marineName": "Kangertittivaq"
+        },
+        {
+          "marineName": "Karaginskiy Gulf"
+        },
+        {
+          "marineName": "Karskiye Strait"
+        },
+        {
+          "marineName": "Kennedy Channel"
+        },
+        {
+          "marineName": "Khatanga Gulf"
+        },
+        {
+          "marineName": "Kotzebue Sound"
+        },
+        {
+          "marineName": "Kronotskiy Gulf"
+        },
+        {
+          "marineName": "Lago de Maracaibo"
+        },
+        {
+          "marineName": "Lagoa dos Patos"
+        },
+        {
+          "marineName": "Lake Pontchartrain"
+        },
+        {
+          "marineName": "Leyte Gulf"
+        },
+        {
+          "marineName": "Liddon Gulf"
+        },
+        {
+          "marineName": "Long Island Sound"
+        },
+        {
+          "marineName": "Lützow-Holm Bay"
+        },
+        {
+          "marineName": "Mackenzie Bay"
+        },
+        {
+          "marineName": "Makassar Strait"
+        },
+        {
+          "marineName": "Marguerite Bay"
+        },
+        {
+          "marineName": "Massachusetts Bay"
+        },
+        {
+          "marineName": "Matochkin Shar Strait"
+        },
+        {
+          "marineName": "McMurdo Sound"
+        },
+        {
+          "marineName": "Melville Bay"
+        },
+        {
+          "marineName": "Minto Inlet"
+        },
+        {
+          "marineName": "Monterey Bay"
+        },
+        {
+          "marineName": "Murchison Sound"
+        },
+        {
+          "marineName": "Norton Sound"
+        },
+        {
+          "marineName": "Ozero Mogotoyevo"
+        },
+        {
+          "marineName": "Palk Strait"
+        },
+        {
+          "marineName": "Pamlico Sound"
+        },
+        {
+          "marineName": "Peacock Sound"
+        },
+        {
+          "marineName": "Porpoise Bay"
+        },
+        {
+          "marineName": "Prince ALbert Sound"
+        },
+        {
+          "marineName": "Prince William Sound"
+        },
+        {
+          "marineName": "Prince of Wales Strait"
+        },
+        {
+          "marineName": "Prydz Bay"
+        },
+        {
+          "marineName": "Qiongzhou Strait"
+        },
+        {
+          "marineName": "Queen Charlotte Sound"
+        },
+        {
+          "marineName": "Queen Charlotte Strait"
+        },
+        {
+          "marineName": "Ragay Gulf"
+        },
+        {
+          "marineName": "Richard Collinson Inlet"
+        },
+        {
+          "marineName": "Robeson Channel"
+        },
+        {
+          "marineName": "Ronne Entrance"
+        },
+        {
+          "marineName": "Salish Sea"
+        },
+        {
+          "marineName": "Samar Sea"
+        },
+        {
+          "marineName": "San Francisco Bay"
+        },
+        {
+          "marineName": "Savu Sea"
+        },
+        {
+          "marineName": "Selat Bali"
+        },
+        {
+          "marineName": "Selat Dampier"
+        },
+        {
+          "marineName": "Seno Otway"
+        },
+        {
+          "marineName": "Seno de Skyring"
+        },
+        {
+          "marineName": "Shark Bay"
+        },
+        {
+          "marineName": "Shelikhova Gulf"
+        },
+        {
+          "marineName": "Sherman Basin"
+        },
+        {
+          "marineName": "Sibuyan Sea"
+        },
+        {
+          "marineName": "Skagerrak"
+        },
+        {
+          "marineName": "Smith Sound"
+        },
+        {
+          "marineName": "Sognefjorden"
+        },
+        {
+          "marineName": "St. Helena Bay"
+        },
+        {
+          "marineName": "Stettiner Haff"
+        },
+        {
+          "marineName": "Storfjorden"
+        },
+        {
+          "marineName": "Strait of Belle Isle"
+        },
+        {
+          "marineName": "Straits of Florida"
+        },
+        {
+          "marineName": "Sulzberger Bay"
+        },
+        {
+          "marineName": "Surigao Strait"
+        },
+        {
+          "marineName": "Tatar Strait"
+        },
+        {
+          "marineName": "Tayabas Bay"
+        },
+        {
+          "marineName": "Torres Strait"
+        },
+        {
+          "marineName": "Trondheimsfjorden"
+        },
+        {
+          "marineName": "Tsugaru Strait"
+        },
+        {
+          "marineName": "Uchiura Bay"
+        },
+        {
+          "marineName": "Uda Bay"
+        },
+        {
+          "marineName": "Ungava Bay"
+        },
+        {
+          "marineName": "Uummannaq Fjord"
+        },
+        {
+          "marineName": "Vestfjorden"
+        },
+        {
+          "marineName": "Vil'kitskogo Strait"
+        },
+        {
+          "marineName": "Vincennes Bay"
+        },
+        {
+          "marineName": "Visayan Sea"
+        },
+        {
+          "marineName": "Waddenzee"
+        },
+        {
+          "marineName": "Wager Bay"
+        },
+        {
+          "marineName": "Wrigley Gulf"
+        },
+        {
+          "marineName": "Wynniatt Bay"
+        },
+        {
+          "marineName": "Yenisey Gulf"
+        }
+      ]
+    }
+  ]
+}

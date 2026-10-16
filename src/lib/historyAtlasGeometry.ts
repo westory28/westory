@@ -191,6 +191,33 @@ export function createAtlasProjection(
   return projection.precision(0.3);
 }
 
+/** A regional overview keeps its full outline visible at the existing 50% zoom
+ * floor, even when a source popup leaves less than half the map's height.
+ * Adjust only the regional base projection; ordinary place views keep theirs.
+ */
+export function fitAtlasRegionProjection(
+  projection: ReturnType<typeof createAtlasProjection>,
+  region: GeoPermissibleObjects,
+  viewport: { width: number; height: number; overlayRight?: number },
+) {
+  const [[left, top], [right, bottom]] = geoPath(projection).bounds(region);
+  const center = projection(geoCentroid(region));
+  const spanWidth =
+    Math.max(right, center?.[0] ?? right) - Math.min(left, center?.[0] ?? left);
+  const spanHeight =
+    Math.max(bottom, center?.[1] ?? bottom) - Math.min(top, center?.[1] ?? top);
+  if (![spanWidth, spanHeight].every(Number.isFinite)) return projection;
+  const width = Math.max(1, viewport.width - (viewport.overlayRight || 0) - 48);
+  const height = Math.max(1, viewport.height - 48);
+  const adjustment = Math.min(
+    1,
+    (width * 0.85) / Math.max(1, spanWidth * 0.5),
+    (height * 0.85) / Math.max(1, spanHeight * 0.5),
+  );
+  if (adjustment < 1) projection.scale(projection.scale() * adjustment);
+  return projection;
+}
+
 /** A camera extent from located places, never a historical boundary polygon. */
 export function atlasRegionCameraBounds(
   input: readonly [number, number][],

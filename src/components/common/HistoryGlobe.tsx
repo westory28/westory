@@ -50,9 +50,10 @@ import {
 import { findAtlasLandform } from "../../lib/historyAtlasLandforms";
 import {
   findAtlasArea,
-  findAtlasProvinceArea,
+  findAtlasRegionArea,
   isAtlasAreaPlace,
   loadAtlasAreaGeometry,
+  matchesAtlasCurrentRegion,
   type AtlasAreaCollection,
 } from "../../lib/historyAtlasAreas";
 import type { MultiPolygon } from "geojson";
@@ -64,7 +65,6 @@ import AtlasCompass from "./AtlasCompass";
 import {
   ATLAS_KOREA_PROVINCES,
   ATLAS_WORLD_REGION_GROUPS,
-  matchesAtlasRegion,
 } from "../../lib/historyAtlasRegions";
 import InfoHelp from "./InfoHelp";
 import {
@@ -161,14 +161,27 @@ function matchesGlobeRegion(
   subject: GlobeSubject,
   groupId: string,
   subregionId = "",
+  areas: AtlasAreaCollection | null = null,
 ) {
   if (!groupId) return true;
   if (subject !== "all")
-    return matchesAtlasRegion(item.place, subject, groupId, subregionId);
+    return matchesAtlasCurrentRegion(
+      item.place,
+      subject,
+      groupId,
+      subregionId,
+      areas,
+    );
   const [regionSubject, regionGroup] = groupId.split(":");
   return (
     item.subject === regionSubject &&
-    matchesAtlasRegion(item.place, item.subject, regionGroup, subregionId)
+    matchesAtlasCurrentRegion(
+      item.place,
+      item.subject,
+      regionGroup,
+      subregionId,
+      areas,
+    )
   );
 }
 let geographyPromise: Promise<GlobeGeography> | undefined;
@@ -212,6 +225,7 @@ export default function HistoryGlobe({
   const pendingPanelFocus = useRef<"detail" | "list" | null>(null);
   const [wide, setWide] = useState(false);
   const [size, setSize] = useState({ width: 600, height: 400 });
+  const [popupSize, setPopupSize] = useState({ width: 0, height: 0 });
   const [subject, setSubject] = useState<GlobeSubject>(initialSubject);
   const [unitId, setUnitId] = useState("");
   const [eraId, setEraId] = useState("");
@@ -306,7 +320,7 @@ export default function HistoryGlobe({
         (subject === "all" || item.subject === subject) &&
         (!unitId || item.entry.unitId === unitId) &&
         (!eraId || item.entry.eraIds?.includes(eraId)) &&
-        matchesGlobeRegion(item, subject, regionId, subregionId) &&
+        matchesGlobeRegion(item, subject, regionId, subregionId, areas) &&
         (!normalized || item.search.includes(normalized)),
     );
     if (normalized) {
@@ -328,7 +342,7 @@ export default function HistoryGlobe({
     return [...unique.values()].sort((a, b) =>
       koreanNames.compare(nameOf(a), nameOf(b)),
     );
-  }, [items, subject, unitId, eraId, regionId, subregionId, query]);
+  }, [items, subject, unitId, eraId, regionId, subregionId, query, areas]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const pageItems = filtered.slice(
@@ -365,12 +379,9 @@ export default function HistoryGlobe({
   );
   const provinceArea = useMemo(() => {
     if (!areas || selected) return null;
-    const province =
-      subject === "all" ? regionId.replace(/^korea:/, "") : regionId;
-    return subject === "korea" || regionId.startsWith("korea:")
-      ? findAtlasProvinceArea(province, areas)
-      : null;
-  }, [areas, selected, subject, regionId]);
+    const region = (subregionId || regionId).replace(/^(korea|world):/, "");
+    return region ? findAtlasRegionArea(region, areas) : null;
+  }, [areas, selected, regionId, subregionId]);
   const selectedShape = selectedRiver || selectedLandform || selectedArea;
   const highlightedShape = selectedShape || provinceArea;
   const highlightedArea = selectedLandform || selectedArea || provinceArea;
@@ -487,7 +498,7 @@ export default function HistoryGlobe({
   useEffect(() => {
     let active = true;
     setAreaError(false);
-    loadAtlasAreaGeometry()
+    loadAtlasAreaGeometry("all")
       .then((value) => {
         if (active) setAreas(value);
       })
@@ -529,7 +540,14 @@ export default function HistoryGlobe({
       roll: 0,
       zoom: Math.min(GLOBE_MAX_ZOOM, scale / (Math.min(width, height) * 0.44)),
     });
-  }, [highlightedShape, selectionRevision, setCamera, size, detailOpen]);
+  }, [
+    highlightedShape,
+    selectionRevision,
+    setCamera,
+    size,
+    detailOpen,
+    popupSize,
+  ]);
   useEffect(() => {
     const root = rootRef.current,
       map = mapRef.current;
@@ -548,6 +566,21 @@ export default function HistoryGlobe({
     observer.observe(map);
     return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    const popup = detailOpen ? detailRef.current?.parentElement : null;
+    if (!popup) return;
+    const observer = new ResizeObserver(() => {
+      const width = popup.offsetWidth,
+        height = popup.offsetHeight;
+      setPopupSize((previous) =>
+        previous.width === width && previous.height === height
+          ? previous
+          : { width, height },
+      );
+    });
+    observer.observe(popup);
+    return () => observer.disconnect();
+  }, [detailOpen]);
   useEffect(() => {
     const visibility = () => {
       const paused = document.hidden || !inView.current;
@@ -1054,6 +1087,7 @@ export default function HistoryGlobe({
     detailOpen,
     selectableGeography,
     size,
+    popupSize,
     panel,
     wide,
   ]);
@@ -1077,7 +1111,8 @@ export default function HistoryGlobe({
       }
       if (
         subjectChanged ||
-        (regionId && !matchesGlobeRegion(next, subject, regionId, subregionId))
+        (regionId &&
+          !matchesGlobeRegion(next, subject, regionId, subregionId, areas))
       ) {
         setRegionId("");
         setSubregionId("");
@@ -1109,6 +1144,7 @@ export default function HistoryGlobe({
     },
     [
       itemsById,
+      areas,
       subject,
       unitId,
       eraId,
@@ -1176,7 +1212,7 @@ export default function HistoryGlobe({
               (subject === "all" || item.subject === subject) &&
               (!unitId || item.entry.unitId === unitId) &&
               (!eraId || item.entry.eraIds?.includes(eraId)) &&
-              matchesGlobeRegion(item, subject, group, subregion),
+              matchesGlobeRegion(item, subject, group, subregion, areas),
           )
           .flatMap(({ place }) =>
             place.coordinates ? [[place.id, place.coordinates] as const] : [],
@@ -1482,9 +1518,9 @@ export default function HistoryGlobe({
                   </a>
                   의 현대 국경·하천·사막과 지명을 표시한다. 점선은 분쟁·통제선
                   등이며 역사 시대의 영토를 뜻하지 않는다. 작은 섬과 해안선은
-                  세계 개관에 맞춰 단순화되어 있다. 8도는 1910년 도 경계를
-                  남·북도별로 합친 탐색 범위이며 조선 전 시기의 경계가 같았다는
-                  뜻은 아니다.
+                  세계 개관에 맞춰 단순화되어 있다. 8도는 현재 행정구역을 묶은
+                  탐색 범위이며, 세계 권역은 현재 국가 경계와 UN M49 등의 지리
+                  구분을 따른다. 역사 시대의 영토를 뜻하지 않는다.
                 </>
               ),
             },
@@ -1829,10 +1865,7 @@ export default function HistoryGlobe({
             </div>
           )}
           {areaError &&
-            (selected
-              ? isAtlasAreaPlace(selected.place)
-              : regionId &&
-                (subject === "korea" || regionId.startsWith("korea:"))) && (
+            (selected ? isAtlasAreaPlace(selected.place) : regionId) && (
               <div className="history-globe__loading" role="alert">
                 <span>지역 범위를 불러오지 못했다.</span>
                 <button onClick={() => setAreaAttempt((value) => value + 1)}>

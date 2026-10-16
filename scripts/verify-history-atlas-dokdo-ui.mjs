@@ -38,6 +38,7 @@ const atlas = load("src/lib/historyAtlas.ts");
 const geometry = load("src/lib/historyAtlasGeometry.ts");
 const globe = load("src/lib/historyGlobeMath.ts");
 const regions = load("src/lib/historyAtlasRegions.ts");
+const areaModel = load("src/lib/historyAtlasAreas.ts");
 const units = new Map(dataset.units.map((unit) => [unit.id, unit]));
 const places = new Map(dataset.places.map((place) => [place.id, place]));
 const items = dataset.entries.map((entry) => ({
@@ -484,11 +485,16 @@ for (const width of [286, 356, 640, 920]) {
     "The old name is hidden and no longer interactive on the back hemisphere",
   );
   assert.equal(halo.hidden, true);
-  if (width === 920) {
-    const provinces = JSON.parse(
-      readFileSync("src/data/atlas/areas-korea.json", "utf8"),
-    ).features.filter((feature) => feature.properties.regionId);
-    assert.equal(provinces.length, 8, "All eight provinces are represented");
+  if (width === 356 || width === 920) {
+    const provinces = ["korea", "world"].flatMap((subject) =>
+      JSON.parse(
+        readFileSync(`src/data/atlas/areas-${subject}.json`, "utf8"),
+      ).features.filter((feature) => feature.properties.regionId),
+    );
+    assert(
+      provinces.length > 8,
+      "Korean and world region geometries are represented",
+    );
     dependencies.mapItems = [];
     dependencies.selected = undefined;
     dependencies.detailOpen = false;
@@ -510,7 +516,7 @@ for (const width of [286, 356, 640, 920]) {
       );
       assert(
         provinceLabel,
-        `${province.properties.name}: the selected province has an accessible area badge`,
+        `${province.properties.name}/${width}: the selected region has an accessible area badge even with no listed places`,
       );
       assert.equal(provinceLabel.attributes.tabindex, "0");
       assert.equal(
@@ -520,12 +526,16 @@ for (const width of [286, 356, 640, 920]) {
       assert.equal(
         arcs.length,
         0,
-        "A province selection must not invent a central dot",
+        "A regional selection must not invent a central dot",
       );
       assert.equal(
         halo.hidden,
         true,
-        "A province selection has no point ripple",
+        "A regional selection has no point ripple",
+      );
+      assert(
+        dependencies.riverHaloRef.current.attributes.d?.length,
+        `${province.properties.name}: the actual region boundary is highlighted`,
       );
       globeCases += 1;
     }
@@ -558,6 +568,8 @@ evaluate(flat.expression("selectStory"), {
   query: "different query",
   ...atlas,
   ...regions,
+  ...areaModel,
+  areaGeometry: null,
   entryName: (item) => item.entry.displayName || item.place.name,
   requestPlaceFocus: (id) => {
     flatState.focus = id;

@@ -8,15 +8,24 @@ export default function AtlasAreaDetails({ area }: { area: AtlasAreaFeature }) {
       <div className="atlas-place-details__header">
         <h2>{area.properties.name}</h2>
       </div>
-      <p className="atlas-place-details__definition">
-        {area.properties.locationNote}
-      </p>
-      <section>
-        <h3>범위 출처</h3>
-        <a href={area.properties.sourceUrl} target="_blank" rel="noreferrer">
-          {area.properties.source}
-        </a>
-      </section>
+      <details
+        className="atlas-place-details__sources"
+        key={area.properties.id}
+      >
+        <summary>범위 출처</summary>
+        <ul>
+          <li>{area.properties.locationNote}</li>
+          <li>
+            <a
+              href={area.properties.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {area.properties.source} ↗
+            </a>
+          </li>
+        </ul>
+      </details>
     </article>
   );
 }
