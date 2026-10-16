@@ -309,7 +309,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
             query(collection(db, path), where("unitId", "==", node.id)),
           );
           return snapshot.docs.map((row) => {
-            const question = { id: Number(row.id), ...row.data() } as Question;
+            const data = row.data();
+            const question = {
+              ...data,
+              id: Number(data.id ?? row.id),
+            } as Question;
             archiveBodies.set(row.id, question);
             return quizQuestionCatalogEntry(question, row.id);
           });
@@ -340,10 +344,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
             ),
           ),
         );
-        return snapshot.docs.map((row) => ({
-          documentId: row.id,
-          question: { id: Number(row.id), ...row.data() } as Question,
-        }));
+        return snapshot.docs.map((row) => {
+          const data = row.data();
+          return {
+            documentId: row.id,
+            question: { ...data, id: Number(data.id ?? row.id) } as Question,
+          };
+        });
       },
     );
   }, [questionYear, questionSemester, node.id, type, reloadVersion]);
