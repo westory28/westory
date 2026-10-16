@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../../../lib/firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { getHistoryDictionaryCallable as getHttpsCallable } from "../../../lib/historyDictionarySession";
+import {
+  collection,
+  documentId,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
+import { isSemesterArchive } from "../../../lib/semesterArchive";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
   getAssessmentSemesterId,
@@ -32,6 +40,13 @@ import QuizLearningMetadataFields, {
 } from "./QuizLearningMetadataFields";
 import { useQuizDialog } from "./useQuizDialog";
 import { hasQuizDerivationContentChange } from "./quizDerivation";
+import {
+  createQuizQuestionPager,
+  QUIZ_QUESTION_PAGE_SIZE,
+  quizPageNumbers,
+  quizQuestionCatalogEntry,
+  type QuizQuestionCatalogEntry,
+} from "./quizQuestionPaging";
 import "./QuizWorkspace.css";
 
 interface TreeUnit {
@@ -176,11 +191,27 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const { year: questionYear, semester: questionSemester } =
     getYearSemester(config);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [catalog, setCatalog] = useState<QuizQuestionCatalogEntry[]>([]);
+  const [catalogScope, setCatalogScope] = useState("");
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const [pageState, setPageState] = useState({ filter: "", page: 1 });
+  const [pageLoading, setPageLoading] = useState(false);
+  const [pageError, setPageError] = useState("");
+  const [pageRetry, setPageRetry] = useState(0);
+  const questionListRef = useRef<HTMLDivElement>(null);
   const pendingQuestionId = useRef<number | null>(null);
   const [category, setCategory] = useState<string>("diagnostic");
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [questionSearch, setQuestionSearch] = useState("");
+  const [settledSearch, setSettledSearch] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setSettledSearch(questionSearch),
+      300,
+    );
+    return () => window.clearTimeout(timer);
+  }, [questionSearch]);
   const [normalSubUnitFilter, setNormalSubUnitFilter] = useState("");
   const [metadata, setMetadata] = useState<QuizLearningMetadata>({});
   const [derivationSource, setDerivationSource] = useState<Question | null>(
@@ -195,6 +226,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [epFilter, setEpFilter] = useState<CascadingFilter>(
     EMPTY_CASCADING_FILTER,
   );
+  const [examFilterReady, setExamFilterReady] = useState(false);
   const [epSource, setEpSource] = useState<CascadingFilter>(
     EMPTY_CASCADING_FILTER,
   );
@@ -257,6 +289,67 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const composerDialogRef = useRef<HTMLDivElement>(null);
   useQuizDialog(isComposerOpen, composerDialogRef, () => closeComposer());
 
+  const questionScope = JSON.stringify([
+    questionYear,
+    questionSemester,
+    node.id,
+    type,
+    reloadVersion,
+  ]);
+  const pager = useMemo(() => {
+    const semesterConfig = { year: questionYear, semester: questionSemester };
+    const path = getSemesterCollectionPath(semesterConfig, "quiz_questions");
+    // Archive windows intentionally block Functions. Preserve their existing
+    // scoped, read-only Firestore transport without weakening that guard.
+    const archiveBodies = new Map<string, Question>();
+    return createQuizQuestionPager<Question>(
+      async () => {
+        if (isSemesterArchive) {
+          const snapshot = await getDocs(
+            query(collection(db, path), where("unitId", "==", node.id)),
+          );
+          return snapshot.docs.map((row) => {
+            const question = { id: Number(row.id), ...row.data() } as Question;
+            archiveBodies.set(row.id, question);
+            return quizQuestionCatalogEntry(question, row.id);
+          });
+        }
+        const callable = await getHttpsCallable<
+          { semesterId: string; unitId: string },
+          { entries: QuizQuestionCatalogEntry[] }
+        >("getQuizEditorCatalog");
+        const result = await callable({
+          semesterId: getAssessmentSemesterId(semesterConfig),
+          unitId: node.id,
+        });
+        return result.data.entries;
+      },
+      async (entries) => {
+        if (isSemesterArchive)
+          return entries.flatMap((entry) => {
+            const question = archiveBodies.get(entry.documentId);
+            return question ? [{ documentId: entry.documentId, question }] : [];
+          });
+        const snapshot = await getDocs(
+          query(
+            collection(db, path),
+            where(
+              documentId(),
+              "in",
+              entries.map((entry) => entry.documentId),
+            ),
+          ),
+        );
+        return snapshot.docs.map((row) => ({
+          documentId: row.id,
+          question: { id: Number(row.id), ...row.data() } as Question,
+        }));
+      },
+    );
+  }, [questionYear, questionSemester, node.id, type, reloadVersion]);
+  const currentPager = useRef(pager);
+  currentPager.current = pager;
+
   useEffect(() => {
     if (type === "special") {
       setCategory("exam_prep");
@@ -264,38 +357,43 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       setCategory("diagnostic");
     }
     setEpFilter(EMPTY_CASCADING_FILTER);
+    setExamFilterReady(false);
     setNormalSubUnitFilter("");
+    setQuestionSearch("");
+    setSettledSearch("");
     setEpSource(EMPTY_CASCADING_FILTER);
     defaultExamPrepFocusKeyRef.current = "";
-    void fetchQuestions();
   }, [questionYear, questionSemester, node.id, type]);
 
-  const fetchQuestions = async () => {
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setLoadError("");
-    try {
-      const scopedRef = collection(
-        db,
-        getSemesterCollectionPath(config, "quiz_questions"),
-      );
-      const snap = await getDocs(
-        query(scopedRef, where("unitId", "==", node.id)),
-      );
-      const list: Question[] = [];
-      snap.forEach((d) => {
-        list.push({
-          id: parseInt(d.id, 10),
-          ...(d.data() as Omit<Question, "id">),
-        });
+    setCatalog([]);
+    setQuestions([]);
+    setCatalogScope("");
+    void pager
+      .catalog()
+      .then((entries) => {
+        if (!active) return;
+        setCatalog(entries);
+        setCatalogScope(questionScope);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setLoadError(
+          "문항 목록을 불러오지 못했습니다. 다시 불러오기를 눌러 주세요.",
+        );
+        console.error(error);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
-      setQuestions(list);
-    } catch (error) {
-      setLoadError("문제를 불러오지 못했습니다. 다시 불러오기를 눌러 주세요.");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      active = false;
+    };
+  }, [pager, questionScope]);
+  const fetchQuestions = () => setReloadVersion((value) => value + 1);
 
   const allBigUnits = useMemo(() => treeData, [treeData]);
   const filterMidUnits = useMemo(
@@ -379,7 +477,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const recentExamPrepFocus = useMemo(() => {
     if (type !== "special") return EMPTY_CASCADING_FILTER;
-    const latest = questions
+    const latest = catalog
       .filter((question) => question.category === "exam_prep")
       .slice()
       .sort((a, b) => {
@@ -394,12 +492,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       mid: latest.refMid || "",
       small: latest.refSmall || "",
     });
-  }, [questions, treeLookup, type]);
+  }, [catalog, treeLookup, type]);
 
   const recentNormalSubUnit = useMemo(() => {
     if (type === "special") return "";
     const validSubUnitIds = new Set(normalSubUnits.map((unit) => unit.id));
-    const latest = questions
+    const latest = catalog
       .filter(
         (question) =>
           question.category === category &&
@@ -414,10 +512,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       })[0];
 
     return latest?.subUnitId || "";
-  }, [category, normalSubUnits, questions, type]);
+  }, [category, normalSubUnits, catalog, type]);
 
   useEffect(() => {
-    if (type !== "special") return;
+    if (type !== "special" || loading || catalogScope !== questionScope) return;
     const nextKey = [
       node.id,
       recentExamPrepFocus.big,
@@ -428,7 +526,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     defaultExamPrepFocusKeyRef.current = nextKey;
     setEpFilter(recentExamPrepFocus);
     setEpSource(recentExamPrepFocus);
+    setExamFilterReady(true);
   }, [
+    loading,
+    catalogScope,
+    questionScope,
     node.id,
     recentExamPrepFocus.big,
     recentExamPrepFocus.mid,
@@ -450,20 +552,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const searchedQuestions = useMemo(() => {
-    const search = questionSearch.trim().toLowerCase();
-    if (!search) return questions;
-    return questions.filter((question) =>
-      [
-        question.question,
-        question.explanation,
-        question.passage,
-        ...(question.concepts || []),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(search),
-    );
-  }, [questions, questionSearch]);
+    const search = settledSearch.trim().toLowerCase();
+    return search
+      ? catalog.filter((question) => question.searchText.includes(search))
+      : catalog;
+  }, [catalog, settledSearch]);
   const subUnitQuestionCounts = useMemo(
     () =>
       searchedQuestions.reduce<Record<string, number>>((counts, question) => {
@@ -481,10 +574,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     (total, count) => total + count,
     0,
   );
-  const hasUnassignedQuestions = questions.some(
+  const hasUnassignedQuestions = catalog.some(
     (question) => !normalSubUnitIds.has(question.subUnitId || ""),
   );
-  const matchesNormalSubUnit = (question: Question) => {
+  const matchesNormalSubUnit = (question: QuizQuestionCatalogEntry) => {
     if (!normalSubUnitFilter) return true;
     return normalSubUnitFilter === UNASSIGNED_SUB_UNIT_FILTER
       ? !normalSubUnitIds.has(question.subUnitId || "")
@@ -512,14 +605,108 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   ]);
   const categoryQuestionCounts = useMemo(
     () =>
-      questions.reduce<Record<string, number>>((counts, question) => {
+      catalog.reduce<Record<string, number>>((counts, question) => {
         if (type !== "special" && !matchesNormalSubUnit(question))
           return counts;
         counts[question.category] = (counts[question.category] || 0) + 1;
         return counts;
       }, {}),
-    [questions, type, normalSubUnitFilter, normalSubUnitIds],
+    [catalog, type, normalSubUnitFilter, normalSubUnitIds],
   );
+
+  const pageFilter = JSON.stringify([
+    questionScope,
+    category,
+    normalSubUnitFilter,
+    epFilter,
+    settledSearch,
+  ]);
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredQuestions.length / QUIZ_QUESTION_PAGE_SIZE),
+  );
+  const page =
+    pageState.filter === pageFilter ? Math.min(pageState.page, pageCount) : 1;
+  useEffect(() => {
+    setPageState({ filter: pageFilter, page: 1 });
+  }, [pageFilter]);
+  useEffect(() => {
+    setPageState((previous) =>
+      previous.filter === pageFilter && previous.page > pageCount
+        ? { ...previous, page: pageCount }
+        : previous,
+    );
+  }, [pageCount, pageFilter]);
+  const pageStart = (page - 1) * QUIZ_QUESTION_PAGE_SIZE;
+  const pageEntries = filteredQuestions.slice(
+    pageStart,
+    pageStart + QUIZ_QUESTION_PAGE_SIZE,
+  );
+  const pageRequestKey = JSON.stringify(
+    pageEntries.map((entry) => [entry.documentId, entry.contentRevision]),
+  );
+  const [loadedPageKey, setLoadedPageKey] = useState("");
+  const activePageKey = `${questionScope}:${pageRequestKey}`;
+  const searching = questionSearch !== settledSearch;
+  useEffect(() => {
+    if (
+      loading ||
+      catalogScope !== questionScope ||
+      searching ||
+      (type === "special" && !examFilterReady)
+    )
+      return;
+    let active = true;
+    setPageLoading(true);
+    setPageError("");
+    void pager
+      .page(pageEntries)
+      .then((rows) => {
+        if (!active) return;
+        setQuestions((previous) => {
+          const merged = new Map(
+            previous.map((question) => [question.id, question]),
+          );
+          rows.forEach((question) => merged.set(question.id, question));
+          return [...merged.values()];
+        });
+        setLoadedPageKey(activePageKey);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error(error);
+        setPageError(
+          error instanceof Error
+            ? error.message
+            : "이 페이지의 문항을 불러오지 못했습니다.",
+        );
+      })
+      .finally(() => {
+        if (active) setPageLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    pager,
+    loading,
+    catalogScope,
+    questionScope,
+    searching,
+    examFilterReady,
+    type,
+    pageRequestKey,
+    activePageKey,
+    pageRetry,
+  ]);
+  const pageQuestions = pageEntries.flatMap((entry) => {
+    const question = questions.find((item) => item.id === entry.id);
+    return question ? [question] : [];
+  });
+  const changePage = (value: number) => {
+    setPageState({ filter: pageFilter, page: value });
+    questionListRef.current?.scrollTo({ top: 0 });
+  };
 
   const trimList = (values: string[]) =>
     values.map((v) => v.trim()).filter(Boolean);
@@ -1118,12 +1305,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         reason: "교사 문항 저장",
       });
       newQuestion.contentRevision = saved.contentRevision;
-      setQuestions((prev) =>
-        editingQuestionId
-          ? prev.map((q) => (q.id === targetId ? newQuestion : q))
-          : [...prev, newQuestion],
-      );
-      setEditingQuestionId(targetId);
+      if (currentPager.current === pager) {
+        setCatalog(
+          pager.upsert(quizQuestionCatalogEntry(newQuestion), newQuestion),
+        );
+        setQuestions((prev) =>
+          editingQuestionId
+            ? prev.map((q) => (q.id === targetId ? newQuestion : q))
+            : [...prev, newQuestion],
+        );
+        setEditingQuestionId(targetId);
+      }
       try {
         await refreshPublishedQuizDefinitions(config, node.id, category);
       } catch (error) {
@@ -1131,20 +1323,24 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
           "Saved question could not refresh published definitions",
           error,
         );
-        setFormError(
-          "문항은 저장되었지만 공개 평가에 반영하지 못했습니다. 저장을 다시 눌러 반영해 주세요.",
-        );
+        if (currentPager.current === pager)
+          setFormError(
+            "문항은 저장되었지만 공개 평가에 반영하지 못했습니다. 저장을 다시 눌러 반영해 주세요.",
+          );
         return;
       }
       pendingQuestionId.current = null;
-      resetForm();
-      setIsComposerOpen(false);
+      if (currentPager.current === pager) {
+        resetForm();
+        setIsComposerOpen(false);
+      }
     } catch (error: any) {
       console.error("Add question failed", error);
       const code = error?.code ? ` (${error.code})` : "";
       const message =
         error instanceof Error && error.message ? `\n${error.message}` : "";
-      setFormError(`문제 등록에 실패했습니다${code}.${message}`);
+      if (currentPager.current === pager)
+        setFormError(`문제 등록에 실패했습니다${code}.${message}`);
     } finally {
       savingQuestionRef.current = false;
       setSavingQuestion(false);
@@ -1164,11 +1360,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         ),
         reason: "교사 문항 삭제",
       });
-      setQuestions((prev) => prev.filter((q) => q.id !== id));
+      if (currentPager.current === pager) {
+        setQuestions((prev) => prev.filter((q) => q.id !== id));
+        setCatalog(pager.remove(String(id)));
+      }
       await refreshPublishedQuizDefinitions(config, node.id, category);
     } catch (error) {
       console.error("Delete question failed", error);
-      alert("현재 학기 문제를 삭제하지 못했습니다.");
+      if (currentPager.current === pager)
+        alert("현재 학기 문제를 삭제하지 못했습니다.");
     }
   };
 
@@ -1271,6 +1471,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
           <button
             type="button"
             onClick={openCreateComposer}
+            disabled={loading || catalogScope !== questionScope}
             className="quiz-authoring-primary"
           >
             <i className="fas fa-plus"></i>
@@ -1317,6 +1518,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         <span className="text-sm text-gray-500">
           {filteredQuestions.length}문항
         </span>
+        <button
+          type="button"
+          onClick={fetchQuestions}
+          disabled={loading || savingQuestion}
+          className="quiz-question-list-refresh"
+          aria-label="문항 목록 새로고침"
+        >
+          새로고침
+        </button>
       </div>
       {loadError && (
         <div role="alert" className="p-4 text-sm text-red-700">
@@ -1397,8 +1607,26 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
       <div className="flex-1 min-h-0 overflow-hidden p-6 bg-gray-50">
         <div className="h-full min-h-0 flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
-            {loading ? (
+          <div
+            ref={questionListRef}
+            className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3"
+            aria-busy={loading || pageLoading || searching}
+          >
+            {pageError && !loading && !searching ? (
+              <div role="alert" className="quiz-question-page-error">
+                {pageError}
+                <button
+                  type="button"
+                  onClick={() => setPageRetry((value) => value + 1)}
+                >
+                  다시 불러오기
+                </button>
+              </div>
+            ) : loading ||
+              pageLoading ||
+              searching ||
+              (filteredQuestions.length > 0 &&
+                loadedPageKey !== activePageKey) ? (
               <div className="text-center p-10 text-gray-400">
                 문제를 불러오는 중...
               </div>
@@ -1409,7 +1637,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   : "등록된 문제가 없습니다."}
               </div>
             ) : (
-              filteredQuestions.map((q, idx) => {
+              pageQuestions.map((q, localIndex) => {
+                const idx = pageStart + localIndex;
                 const choicePreviewOptions =
                   q.type === "choice" ? trimList(q.options || []) : [];
                 const choicePreviewImages = normalizeChoiceOptionImages(
@@ -1427,6 +1656,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 return (
                   <div
                     key={q.id}
+                    data-quiz-question-card={q.id}
                     className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
                   >
                     <div className="flex justify-between items-start mb-1.5">
@@ -1489,6 +1719,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                   }`}
                                 >
                                   <img
+                                    loading="lazy"
+                                    decoding="async"
                                     src={q.image}
                                     alt="문항 첨부 이미지"
                                     className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
@@ -1560,6 +1792,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                             </span>
                                             {optionImage ? (
                                               <img
+                                                loading="lazy"
+                                                decoding="async"
                                                 src={optionImage}
                                                 alt={`${optionIndex + 1}번 보기 이미지`}
                                                 className="max-h-full max-w-full object-contain"
@@ -1611,6 +1845,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         {q.image && (
                           <div className="flex justify-center rounded border border-gray-200 bg-gray-50 p-1.5">
                             <img
+                              loading="lazy"
+                              decoding="async"
                               src={q.image}
                               alt="문항 첨부 이미지"
                               className="max-h-36 max-w-full object-contain"
@@ -1652,6 +1888,58 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               })
             )}
           </div>
+          {!loading && filteredQuestions.length > 0 && (
+            <nav
+              className="quiz-question-pagination"
+              aria-label="문항 목록 페이지"
+            >
+              <span className="quiz-question-page-range" role="status">
+                {pageStart + 1}–
+                {Math.min(
+                  pageStart + QUIZ_QUESTION_PAGE_SIZE,
+                  filteredQuestions.length,
+                )}{" "}
+                / {filteredQuestions.length}문항
+              </span>
+              {pageCount > 1 && (
+                <div className="quiz-question-page-buttons">
+                  <button
+                    type="button"
+                    aria-label="이전 문항 페이지"
+                    disabled={page <= 1}
+                    onClick={() => changePage(page - 1)}
+                  >
+                    이전
+                  </button>
+                  {quizPageNumbers(page, pageCount).map((value, index) =>
+                    value === "gap" ? (
+                      <span key={`gap-${index}`} aria-hidden="true">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-label={`${value}페이지`}
+                        aria-current={value === page ? "page" : undefined}
+                        onClick={() => changePage(value)}
+                      >
+                        {value}
+                      </button>
+                    ),
+                  )}
+                  <button
+                    type="button"
+                    aria-label="다음 문항 페이지"
+                    disabled={page >= pageCount}
+                    onClick={() => changePage(page + 1)}
+                  >
+                    다음
+                  </button>
+                </div>
+              )}
+            </nav>
+          )}
         </div>
 
         {isComposerOpen && (

@@ -264,15 +264,21 @@ const buildItem = async (
   };
 };
 
-export const planCurrentAssessmentRelease = async (
+const planAssessmentRelease = async (
   config: ConfigLike,
+  quizTarget?: { sourceId: string; category: string },
 ): Promise<AssessmentReleasePlan> => {
   const resolved = getYearSemester(config);
   const [gradeClasses, history] = await Promise.all([
     getGrade3ClassIdsFromSchoolConfig(),
-    getDocs(
-      collection(db, getSemesterCollectionPath(resolved, "history_classrooms")),
-    ),
+    quizTarget
+      ? Promise.resolve(null)
+      : getDocs(
+          collection(
+            db,
+            getSemesterCollectionPath(resolved, "history_classrooms"),
+          ),
+        ),
   ]);
   const settings = await readAssessmentConfigMap(resolved, gradeClasses);
   const payloads: Data[] = [];
@@ -283,6 +289,11 @@ export const planCurrentAssessmentRelease = async (
     );
     if (!parsed) continue;
     const [, sourceId, category, rawRound] = parsed;
+    if (
+      quizTarget &&
+      (sourceId !== quizTarget.sourceId || category !== quizTarget.category)
+    )
+      continue;
     if (
       category === "exam_prep" &&
       !rawRound &&
@@ -311,7 +322,7 @@ export const planCurrentAssessmentRelease = async (
       ),
     );
   }
-  for (const document of history.docs) {
+  for (const document of history?.docs || []) {
     const data = document.data();
     if (
       !data.deletedAt &&
@@ -331,6 +342,9 @@ export const planCurrentAssessmentRelease = async (
     prepareCount: items.filter((item) => item.status === "PREPARE").length,
   };
 };
+
+export const planCurrentAssessmentRelease = (config: ConfigLike) =>
+  planAssessmentRelease(config);
 
 // Every write has a command receipt. A stale preview must be reviewed again.
 export const prepareCurrentAssessmentRelease = async (
@@ -534,14 +548,9 @@ export const refreshPublishedQuizDefinitions = async (
   sourceId: string,
   category: string,
 ) => {
-  const plan = await planCurrentAssessmentRelease(config);
-  const items = plan.items.filter(
-    (item) =>
-      item.kind === "QUIZ" &&
-      item.payload.sourceId === sourceId &&
-      item.payload.category === category,
-  );
-  for (const item of items) {
+  // Limit the plan before reading source questions and definition revisions.
+  const plan = await planAssessmentRelease(config, { sourceId, category });
+  for (const item of plan.items) {
     if (item.status === "BLOCKED") throw new Error(item.reason);
     if (item.status === "PREPARE")
       await saveAssessmentDefinition(config, item.payload, true, item);

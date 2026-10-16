@@ -169,12 +169,14 @@ export function useEntryMotion(root: RefObject<HTMLDivElement>) {
           const preview = stage.querySelector<HTMLElement>(
             "[data-entry-slide-stage]",
           );
-          const copy = stage.querySelector<HTMLElement>(".entry-confirm-copy");
+          const copy = stage.querySelector<HTMLElement>(
+            ".entry-confirm-copy, .entry-deck-heading",
+          );
           if (preview && copy) {
             // The compact preview has its own scroll track; it is not content overflow.
             const style = getComputedStyle(stage);
             contentHeight =
-              (innerWidth < 768
+              (innerWidth < 768 || scene.classList.contains("entry-lesson-deck")
                 ? copy.offsetHeight +
                   preview.offsetHeight +
                   parseFloat(style.rowGap)
