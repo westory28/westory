@@ -84,3 +84,9 @@ The earlier public-home version reused these panel crops as independent scroll-c
 ## Validation limits
 
 All PNG and optimized WebP previews were inspected visually for text legibility and layout, including the source's desktop and mobile arrangements. These checks verify static preview asset quality and isolation; authenticated live data, Google OAuth, permissions, or landing-page interactions must be tested separately by the integration workflow. Browser/esbuild launch required a reviewed sandbox escalation because default child-process launch returned `spawn EPERM`.
+
+## SVG 지구본 모션 (2026-10-16)
+
+`EntryMapMotion`은 기존 `src/data/atlas/land-globe.json`과 `globe-geography.json`의 Natural Earth 지형을 사용한다. `map-nile.json`은 기존 `rivers-world.json`에서 `name`/`name_en`/`name_alt`가 Nile, White Nile, Blue Nile인 7개 피처를 좌표 변경 없이 추출한 수계다. Natural Earth는 public domain이다. 새 네트워크 데이터 수집이나 계정 정보는 포함하지 않는다.
+
+한양·기자·금성·베이징·로마·아테네 좌표는 `historyAtlasContent.ts`, 한양 정의·1394년 이야기는 `historyAtlasPlaceProfiles.ts`와 `historyAtlasKoreaStories.ts`, 나일강 정의·농경 설명은 `historyAtlasPlaceProfiles.ts`와 `historyAtlasWorldExpansion.ts`를 사용했다. 설명은 승인된 10초 모션에 맞춰 축약했다. 현재 지형·경계이며 역사적 국경을 재현하지 않는다.
