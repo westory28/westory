@@ -11,6 +11,7 @@ import {
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import QuizPassage from "../../../components/common/QuizPassage";
+import QuizQuestionText from "../../../components/common/QuizQuestionText";
 import { normalizeMockExamCategory } from "../../../lib/mockExamRounds";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 
@@ -339,7 +340,7 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
                           className="w-full px-4 py-3 text-left hover:bg-gray-50 flex justify-between items-center"
                         >
                           <span className="font-bold text-gray-800">
-                            {item.question}
+                            <QuizQuestionText value={item.question} />
                           </span>
                           <i
                             className={`fas fa-chevron-down text-gray-400 transition ${expandedKey === item.key ? "rotate-180" : ""}`}

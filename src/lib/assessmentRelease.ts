@@ -1,4 +1,11 @@
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { type SystemConfig } from "../types";
 import {
@@ -92,7 +99,13 @@ const readDefinition = async (definitionId: string) => {
 const readSource = async (config: ConfigLike, payload: Data) => {
   if (payload.assessmentKind === "QUIZ") {
     const snapshot = await getDocs(
-      collection(db, getSemesterCollectionPath(config, "quiz_questions")),
+      query(
+        collection(db, getSemesterCollectionPath(config, "quiz_questions")),
+        where("unitId", "==", payload.sourceId),
+        ...(payload.category
+          ? [where("category", "==", payload.category)]
+          : []),
+      ),
     );
     const answerKey = snapshot.docs
       .map((document) => ({ id: document.id, data: document.data() }))
@@ -361,14 +374,32 @@ export const saveAssessmentDefinition = async (
   published: boolean,
   preview?: AssessmentReleaseItem,
   assertOwner?: () => Promise<void>,
+  expectedRevision?: number,
 ) => {
   const execute = async (commandType: string, data: Data) => {
     await assertOwner?.();
     return executeAssessmentManagementCommand<Data>(commandType, data);
   };
-  let current = await readDefinition(payload.definitionId);
+  let current: Data | null =
+    payload.assessmentKind === "QUIZ" && expectedRevision !== undefined
+      ? { revision: expectedRevision }
+      : await readDefinition(payload.definitionId);
   if (preview && Number(current?.revision || 0) !== preview.expectedRevision)
     throw new Error("평가가 변경되었습니다. 다시 확인해 주세요.");
+  if (payload.assessmentKind === "QUIZ") {
+    // The server reads the source once and commits settings/publication in the
+    // same transaction. There is no intermediate PAUSED or active-only state.
+    return execute("saveQuizAssessmentSettings", {
+      ...payload,
+      presentationSettings: {
+        ...payload.presentationSettings,
+        active: published,
+      },
+      expectedRevision: Number(current?.revision || 0),
+      ...(preview ? { expectedSourceHash: preview.sourceHash } : {}),
+      reason: "평가 공개 및 응시 설정 저장",
+    });
+  }
   if (
     current?.status === "PUBLISHED" &&
     payload.expectedSourceRevision !== undefined
@@ -465,6 +496,7 @@ export const saveQuizAssessmentSettings = (
   title: string,
   key: string,
   settings: Data,
+  expectedRevision?: number,
 ) =>
   saveAssessmentDefinition(
     config,
@@ -478,6 +510,9 @@ export const saveQuizAssessmentSettings = (
       settings,
     ),
     settings.active === true,
+    undefined,
+    undefined,
+    expectedRevision,
   );
 
 export const syncHistoryAssessmentDefinition = async (

@@ -32,6 +32,15 @@ try {
   }
   await seed('semester_assessment_attempts/own', { studentUid: 'student-a', semesterId: '2026-2', gradingSnapshot: [{ answer: 'private' }] });
   await assertFails(getDoc(doc(student, 'semester_assessment_attempts/own')));
+  // Source banks contain answers, including unpublished questions. Students
+  // receive only their authorized attempt presentation through the callable.
+  for (const path of ['quiz_questions/private', 'years/2026/semesters/2/quiz_questions/private']) {
+    await seed(path, { unitId: 'unit-a', category: 'diagnostic', question: '비공개 문항', answer: '비공개 정답' });
+    await assertFails(getDoc(doc(student, path)));
+    await assertFails(getDocs(query(collection(student, path.slice(0, path.lastIndexOf('/'))), where('unitId', '==', 'unit-a'))));
+    await assertSucceeds(getDoc(doc(teacher, path)));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), path)));
+  }
   for (const path of ['lesson_progress/student-a','lesson_progress/student-a/units/unit-one','years/2026/semesters/2/lesson_progress/student-a','years/2026/semesters/2/lesson_progress/student-a/units/unit-one']) {
     const proof = { studentUid:'student-a', semesterId:'2026-2', completed:true, answerRevision:1, contentRevision:1 };
     await assertFails(setDoc(doc(student, path), proof));
@@ -49,5 +58,5 @@ try {
   await seed('site_settings/student_maintenance', { enabled: true, blockedRoles: ['student'], bypassUids: [], title: '점검', message: '잠시 기다려 주세요.', startedAt: Timestamp.now(), updatedAt: Timestamp.now(), updatedBy: 'teacher-a', revision: 1 });
   await assertFails(getDoc(doc(student, 'semester_assessment_results/own')));
   await assertSucceeds(getDoc(doc(teacher, 'semester_assessment_results/own')));
-  console.log('PASS canonical assessment rules: current own results/answers, query scope, foreign/past/private-key isolation, learning-proof forgery denial, server-only writes, session/registration/maintenance (39 assertions; emulator only)');
+  console.log('PASS canonical assessment rules: current own results/answers, query scope, foreign/past/private-key/source-bank isolation, learning-proof forgery denial, server-only writes, session/registration/maintenance (47 assertions; emulator only)');
 } finally { await env.cleanup(); }

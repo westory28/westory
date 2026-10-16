@@ -24,6 +24,7 @@ const ASSESSMENT_COMMAND_TYPES = Object.freeze({
   CREATE_ASSESSMENT_DEFINITION: "createAssessmentDefinition",
   UPDATE_ASSESSMENT_DEFINITION: "updateAssessmentDefinition",
   TRANSITION_ASSESSMENT_DEFINITION: "transitionAssessmentDefinition",
+  SAVE_QUIZ_ASSESSMENT_SETTINGS: "saveQuizAssessmentSettings",
   START_ASSESSMENT_ATTEMPT: "startAssessmentAttempt",
   SUBMIT_ASSESSMENT_ATTEMPT: "submitAssessmentAttempt",
   RESET_ASSESSMENT_ATTEMPTS_BY_CLASS: "resetAssessmentAttemptsByClassV2",
@@ -205,6 +206,27 @@ const normalizeIso = (value, label, allowEmpty = true) => {
 };
 
 const normalizeAssessmentPayload = (commandType, rawPayload) => {
+  if (commandType === ASSESSMENT_COMMAND_TYPES.SAVE_QUIZ_ASSESSMENT_SETTINGS) {
+    const { expectedRevision, expectedSourceHash, reason, ...definitionInput } = rawPayload || {};
+    const definition = normalizeAssessmentPayload(ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION, definitionInput);
+    if (definition.assessmentKind !== "QUIZ" || definition.cutoverPlanId || definition.cutoverOperationKey) {
+      fail("invalid-argument", "Only current quiz settings can be saved together.", "ASSESSMENT_PAYLOAD_INVALID");
+    }
+    const settings = definition.presentationSettings;
+    if (definition.questionCount !== settings.questionCount || definition.durationSeconds !== settings.timeLimit
+      || definition.maxAttempts !== (settings.allowRetake ? 20 : 1) || definition.cooldownMinutes !== settings.cooldown
+      || canonicalJson([...definition.assignedClassIds].sort()) !== canonicalJson([...settings.visibleClassIds].sort())) {
+      fail("invalid-argument", "Quiz settings and response policy must agree.", "ASSESSMENT_PAYLOAD_INVALID");
+    }
+    if (settings.active && !settings.visibleClassIds.length) {
+      fail("invalid-argument", "공개할 학급을 선택해 주세요.", "ASSESSMENT_CLASS_NOT_ASSIGNED");
+    }
+    if (expectedSourceHash !== undefined && !/^[a-f0-9]{64}$/.test(expectedSourceHash)) {
+      fail("invalid-argument", "expectedSourceHash is invalid.", "ASSESSMENT_PAYLOAD_INVALID");
+    }
+    return { ...definition, expectedRevision: nonNegativeInteger(expectedRevision, "expectedRevision"),
+      ...(expectedSourceHash !== undefined ? { expectedSourceHash } : {}), reason: text(reason, "reason", 300) };
+  }
   if (Object.values(historyExemptions.COMMAND_TYPES).includes(commandType))
     return historyExemptions.normalizePayload(commandType, rawPayload);
   if (commandType === ASSESSMENT_COMMAND_TYPES.LOCK_HISTORY_CLASSROOM_ATTEMPT) {
@@ -455,11 +477,10 @@ const collectHistoryAnswerKey = (data) => {
 
 const loadDefinitionSource = async (transaction, payload) => {
   if (payload.assessmentKind === "QUIZ") {
-    const documents = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, {
-      field: "unitId",
-      operator: "==",
-      value: payload.sourceId,
-    });
+    const documents = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, { filters: [
+      { field: "unitId", operator: "==", value: payload.sourceId },
+      ...(payload.category ? [{ field: "category", operator: "==", value: payload.category }] : []),
+    ] });
     const questions = documents
       .filter((document) => !payload.category || String(document.data?.category || "") === payload.category)
       .map(extractQuizQuestion)
@@ -803,6 +824,52 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       fail("failed-precondition", "지도 연결이 종료되었습니다. 수업자료에서 학습지 빈칸을 수정해 주세요.", "ASSESSMENT_MAP_SOURCE_DISCONNECTED");
     }
 
+    if (commandType === ASSESSMENT_COMMAND_TYPES.SAVE_QUIZ_ASSESSMENT_SETTINGS) {
+      assertTeacherActor(actor);
+      await assertAssessmentSemesterWritable(transaction, payload.semesterId);
+      const path = definitionPath(payload.definitionId);
+      const snapshot = await transaction.get(path);
+      const current = snapshot.data || {};
+      if (Number(current.revision || 0) !== payload.expectedRevision) {
+        fail("aborted", "평가 설정이 변경되었습니다. 다시 열어 확인해 주세요.", "ASSESSMENT_REVISION_CONFLICT");
+      }
+      if (current.status === "CLOSED") fail("failed-precondition", "A closed assessment definition cannot be edited.", "ASSESSMENT_DEFINITION_CLOSED");
+      if (snapshot.exists && ["semesterId", "assessmentKind", "sourceId", "category", "examRound", "legacyConfigKey"].some(key => (current[key] || "") !== (payload[key] || ""))) {
+        fail("failed-precondition", "Assessment definition identity cannot be changed.", "ASSESSMENT_IDENTITY_IMMUTABLE");
+      }
+      const published = payload.presentationSettings.active;
+      // Closing access must succeed even if questions/classes have since been
+      // removed. Only publication needs to read and validate the source bank.
+      const source = published ? await loadDefinitionSource(transaction, payload) : null;
+      if (source && payload.questionCount > source.itemCount) {
+        fail("invalid-argument", "출제 문항 수가 등록된 문항 수보다 많습니다.", "ASSESSMENT_QUESTION_SET_INVALID");
+      }
+      if (source && payload.expectedSourceHash && payload.expectedSourceHash !== source.sourceHash) {
+        fail("aborted", "평가 문항이 바뀌었습니다. 다시 확인해 주세요.", "ASSESSMENT_SOURCE_REVISION_CONFLICT");
+      }
+      const assignedClassIds = published
+        ? await resolveAssignedClassIds(transaction, payload.semesterId, payload.assignedClassIds)
+        : current.assignedClassIds || [];
+      const { expectedRevision, expectedSourceHash: _expectedSourceHash, reason, ...definitionPayload } = payload;
+      const definition = {
+        schemaVersion: ASSESSMENT_SCHEMA_VERSION, policyVersion: ASSESSMENT_POLICY_VERSION,
+        ...definitionPayload, assignedClassIds,
+        status: published ? "PUBLISHED" : snapshot.exists && current.status !== "DRAFT" ? "PAUSED" : "DRAFT",
+        revision: expectedRevision + 1,
+        sourceHash: source?.sourceHash || current.sourceHash || "",
+        itemCount: source?.itemCount ?? current.itemCount ?? 0,
+        assignedStudentUids: [], updatedBy: actor.actorUid, updateReason: reason, commandId, updatedAt: timestamp,
+        ...(snapshot.exists ? {} : { createdBy: actor.actorUid, createdAt: timestamp }),
+      };
+      const legacyConfigPath = `${semesterRoot(payload.semesterId)}/assessment_config/settings`;
+      transaction.set(path, definition, { merge: true });
+      transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: payload.presentationSettings }, { merge: true });
+      return { target: { kind: "assessment-definition", id: payload.definitionId, refs: [path, legacyConfigPath] },
+        sourceHash: definition.sourceHash || null,
+        result: { definitionId: payload.definitionId, status: definition.status, revision: definition.revision,
+          sourceHash: definition.sourceHash, itemCount: definition.itemCount } };
+    }
+
     if (commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION) {
       assertTeacherActor(actor);
       const path = definitionPath(payload.definitionId);
@@ -941,7 +1008,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       ) {
         fail("permission-denied", "This assessment is not assigned to the student.", "ASSESSMENT_STUDENT_NOT_ASSIGNED");
       }
-      const allPrior = (await transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: payload.definitionId }))
+      const allPrior = (await transaction.query(ATTEMPT_COLLECTION, { filters: [
+        { field: "definitionId", operator: "==", value: payload.definitionId },
+        { field: "studentUid", operator: "==", value: actor.actorUid },
+      ] }))
         .filter((document) => document.data?.studentUid === actor.actorUid);
       const prior = allPrior.filter((document) => document.data?.resetAt == null)
         .sort((left, right) => Number(left.data?.attemptNumber || 0) - Number(right.data?.attemptNumber || 0));
@@ -1007,6 +1077,9 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         ...(definition.assessmentKind === "QUIZ" ? {
           sourceId: definition.sourceId || "", category: definition.category || "", examRound: definition.examRound || "",
           learningSnapshot: (source.learningSnapshot || []).filter(item => selectedIds.includes(item.id)),
+          questionDocumentIds: Object.fromEntries((source.quizDocuments || [])
+            .filter(document => selectedIds.includes(String(document.data?.id ?? document.path.split("/").at(-1))))
+            .map(document => [String(document.data?.id ?? document.path.split("/").at(-1)), document.path.split("/").at(-1)])),
         } : {}),
         ...(definition.assessmentKind === "HISTORY_CLASSROOM" ? { passThresholdPercent: source.passThresholdPercent } : {}),
         sourceHash: source.sourceHash,
@@ -1269,7 +1342,10 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
       }
       let ownAttempt = attemptSnapshot;
       if (!ownAttempt && actor.role === "student") {
-        const attempts = (await transaction.query(ATTEMPT_COLLECTION, { field: "definitionId", operator: "==", value: definitionId })).filter((document) => document.data?.studentUid === actor.uid && document.data?.resetAt == null).sort((left, right) => Number(right.data?.attemptNumber || 0) - Number(left.data?.attemptNumber || 0));
+        const attempts = (await transaction.query(ATTEMPT_COLLECTION, { filters: [
+          { field: "definitionId", operator: "==", value: definitionId },
+          { field: "studentUid", operator: "==", value: actor.uid },
+        ] })).filter((document) => document.data?.studentUid === actor.uid && document.data?.resetAt == null).sort((left, right) => Number(right.data?.attemptNumber || 0) - Number(left.data?.attemptNumber || 0));
         ownAttempt = attempts[0] || null;
       }
       const definition = definitionSnapshot.data || {};
@@ -1298,12 +1374,33 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
           && enrollment.data?.studentUid === actor.uid
           && enrollment.data?.semesterId === definition.semesterId
           && enrollment.data?.enrollmentStatus === "ACTIVE"
-          && (assignedClassIds.length === 0 || assignedClassIds.includes(enrollment.data?.classId))
+          && (definition.assessmentKind === "QUIZ" ? assignedClassIds.includes(enrollment.data?.classId) : assignedClassIds.length === 0 || assignedClassIds.includes(enrollment.data?.classId))
           && (assignedStudentUids.length === 0 || assignedStudentUids.includes(actor.uid));
         if (!eligible) status = "PERMISSION";
       }
       if (ownAttempt?.exists && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt.data?.status)) status = "RECOVERABLE";
       if (ownAttempt?.exists && ownAttempt.data?.status === "SUBMITTED") status = "SUBMITTED";
+      const attempt = ownAttempt?.exists ? serializeAttempt(ownAttempt.data, true) : null;
+      if (attempt && ownAttempt.data.assessmentKind === "QUIZ" && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt.data.status)) {
+        const frozenIds = new Set((attempt.questionPresentation || []).map(item => item.id));
+        const missingIds = attempt.questionIds.filter(id => !frozenIds.has(id));
+        if (missingIds.length) {
+          // Legacy/base64-heavy attempts may lack stored presentation snapshots.
+          // Read only this attempt's selected questions and require the exact
+          // grading revision before exposing answer-free presentation data.
+          const documents = await transaction.getAll(missingIds.map(id => `${semesterRoot(definition.semesterId)}/quiz_questions/${ownAttempt.data.questionDocumentIds?.[id] || id}`));
+          const grading = new Map((ownAttempt.data.gradingSnapshot || []).map(item => [String(item.id), item]));
+          const matching = documents.filter(document => {
+            if (!document.exists) return false;
+            const item = extractQuizQuestion(document), expected = grading.get(item.id);
+            return expected && item.answer === expected.answer && item.sourceRevision === String(expected.sourceRevision || "legacy")
+              && document.data.unitId === definition.sourceId && (!definition.category || document.data.category === definition.category);
+          });
+          const fallback = learning.captureQuestionSnapshots(matching, missingIds, {}, { responseOnly: true });
+          attempt.questionPresentation = [...(attempt.questionPresentation || []), ...learning.questionPresentation(fallback.questionSnapshots)];
+          attempt.questionSnapshotOmittedIds = fallback.questionSnapshotOmittedIds;
+        }
+      }
       return {
         status,
         definition: {
@@ -1319,9 +1416,11 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
           opensAt: definition.opensAt,
           closesAt: definition.closesAt,
           itemCount: definition.itemCount,
+          questionCount: definition.questionCount || definition.itemCount,
+          ...(definition.assessmentKind === "QUIZ" ? { presentationSettings: definition.presentationSettings || null } : {}),
           provenance: definition.semesterId,
         },
-        attempt: ownAttempt?.exists ? serializeAttempt(ownAttempt.data, true) : null,
+        attempt,
         serverNowIso: now().toISOString(),
         writeCount: 0,
       };
@@ -1424,12 +1523,19 @@ const createAssessmentReadinessAdapter = () => ({
         || Number(value.maxAttempts || 0) < 1
         || (value.assessmentKind === "QUIZ" && assignedClassIds.length === 0)
       );
+      // An unpublished quiz may save its settings before any questions exist.
+      // This exact empty-source shape is not a valid paused/closed publication
+      // or a substitute for a missing source snapshot on other definitions.
+      const unpreparedQuizDraft = value.assessmentKind === "QUIZ"
+        && value.status === "DRAFT"
+        && value.presentationSettings?.active === false
+        && value.sourceHash === ""
+        && value.itemCount === 0;
       if (
         !["DRAFT", "PUBLISHED", "PAUSED", "CLOSED"].includes(value.status)
         || !["QUIZ", "HISTORY_CLASSROOM"].includes(value.assessmentKind)
         || !value.definitionId
-        || !value.sourceHash
-        || Number(value.itemCount || 0) < 1
+        || (!unpreparedQuizDraft && (!value.sourceHash || Number(value.itemCount || 0) < 1))
         || new Set(assignedClassIds).size !== assignedClassIds.length
         || publishedInvalid
       ) invalidPublicationCount += 1;

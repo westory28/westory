@@ -26,7 +26,7 @@ class MemoryStore {
     const prefix = `${collectionPath}/`;
     return [...this.documents.entries()]
       .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
-      .filter(([, data]) => !filter || data?.[filter.field] === filter.value)
+      .filter(([, data]) => !filter || (filter.filters || [filter]).every(clause => data?.[clause.field] === clause.value))
       .map(([path, data]) => ({ exists: true, path, data: clone(data) }));
   }
 
@@ -47,7 +47,7 @@ class MemoryStore {
       const prefix = `${collectionPath}/`;
       return [...staged.entries()]
         .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
-        .filter(([, data]) => !filter || data?.[filter.field] === filter.value)
+        .filter(([, data]) => !filter || (filter.filters || [filter]).every(clause => data?.[clause.field] === clause.value))
         .map(([path, data]) => ({ exists: true, path, data: clone(data) }));
     };
     const transaction = {
@@ -671,6 +671,40 @@ const runKind = async (kind) => {
   assert.match(checks[0].evidence, /orphanClassRefs=0/);
   assert.match(checks[0].evidence, /duplicateKeys=0/);
   assert.match(checks[0].evidence, /blockingLegacyIssues=0/);
+
+  const emptyQuizId = `quiz:${semesterId}:unprepared-unit:formative`;
+  const emptyQuizPayload = definitionPayload("QUIZ");
+  await execute(admin, "saveQuizAssessmentSettings", {
+    ...emptyQuizPayload,
+    definitionId: emptyQuizId,
+    sourceId: "unprepared-unit",
+    legacyConfigKey: "unprepared-unit_formative",
+    assignedClassIds: [],
+    maxAttempts: 20,
+    presentationSettings: { ...emptyQuizPayload.presentationSettings, active: false, visibleClassIds: [] },
+    expectedRevision: 0,
+    reason: "Save private quiz before adding its questions",
+  });
+  const emptyQuizPath = `${assessment.DEFINITION_COLLECTION}/${emptyQuizId}`;
+  const emptyQuiz = clone(store.documents.get(emptyQuizPath));
+  assert.equal(emptyQuiz.status, "DRAFT");
+  assert.equal(emptyQuiz.sourceHash, "");
+  assert.equal(emptyQuiz.itemCount, 0);
+  const checkEmptyQuiz = () => readiness.evaluate({ transaction: { query: (...args) => store.query(...args) }, manifest });
+  assert.equal((await checkEmptyQuiz())[0].status, "PASS", "Private quiz settings may precede source preparation");
+  for (const invalidShape of [
+    { status: "PUBLISHED" }, { status: "PAUSED" }, { status: "CLOSED" },
+    { assessmentKind: "HISTORY_CLASSROOM" },
+    { presentationSettings: { ...emptyQuiz.presentationSettings, active: true } },
+    { sourceHash: undefined }, { itemCount: undefined },
+    { sourceHash: "has-snapshot", itemCount: 0 }, { sourceHash: "", itemCount: 1 },
+  ]) {
+    store.documents.set(emptyQuizPath, { ...emptyQuiz, ...invalidShape });
+    const invalidChecks = await checkEmptyQuiz();
+    assert.equal(invalidChecks[0].status, "FAIL", JSON.stringify(invalidShape));
+    assert.match(invalidChecks[0].evidence, /invalidPublication=1/);
+  }
+  store.documents.delete(emptyQuizPath);
 
   const classOne = clone(store.documents.get("semester_classes/class_one"));
   store.documents.delete("semester_classes/class_one");

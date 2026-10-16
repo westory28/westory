@@ -26,6 +26,11 @@ let calls = [];
 handler = async (name, payload) => { calls.push([name, payload]); return { status: 'READY', definition: { definitionId: 'quiz:2026-2:unit:formative' }, attempt: null }; };
 await exports.getAssessmentState({ definitionId: 'quiz:2026-2:unit:formative' });
 assert.deepEqual(calls.map(([name]) => name), ['getAssessmentState']);
+calls = [];
+await Promise.all(Array.from({ length: 4 }, () => exports.getAssessmentState({ definitionId: 'quiz:2026-2:unit:formative' })));
+assert.equal(calls.length, 1, 'Concurrent identical state reads share one callable');
+await exports.getAssessmentState({ definitionId: 'quiz:2026-2:unit:formative' });
+assert.equal(calls.length, 2, 'Completed state is never cached across a later publication change');
 
 handler = async (name, payload) => {
   calls.push([name, payload]);

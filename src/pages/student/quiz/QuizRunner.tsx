@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { PageLoading } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
+import QuizQuestionText from "../../../components/common/QuizQuestionText";
 import InfoHelp from "../../../components/common/InfoHelp";
 import {
   AssessmentTelemetryCollector,
@@ -14,35 +15,18 @@ import {
   loadQuizScoreComparison,
   type QuizScoreComparison,
 } from "../../../lib/quizScoreComparison";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
-import {
-  createDefaultAssessmentConfigEntry,
-  getAssessmentConfigKey,
-  getGrade3ClassIdsFromSchoolConfig,
-  isAssessmentVisibleToStudent,
-  readAssessmentConfigMap,
-  type AssessmentQuestionOrder,
-} from "../../../lib/assessmentConfig";
+import { type AssessmentQuestionOrder } from "../../../lib/assessmentConfig";
 import {
   formatMockExamRoundLabel,
   getMockExamResultCategory,
   isAdditionalMockExamRound,
   isMockExamCategory,
-  mockExamRoundMatches,
   normalizeMockExamRound,
 } from "../../../lib/mockExamRounds";
-import { db } from "../../../lib/firebase";
 import {
   getQuizSubmissionDeadlineMs,
   normalizeQuizSubmissionDoc,
@@ -50,7 +34,6 @@ import {
   type QuizSubmissionDoc,
 } from "../../../lib/quizSubmissions";
 import { emitSessionActivity } from "../../../lib/sessionActivity";
-import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 import { getYearSemester } from "../../../lib/semesterScope";
 import {
   buildAssessmentDefinitionId,
@@ -169,7 +152,6 @@ const QuizRunner: React.FC = () => {
   const [resumeNotice, setResumeNotice] = useState("");
 
   const [quizConfig, setQuizConfig] = useState<QuizConfig | null>(null);
-  const [questionBank, setQuestionBank] = useState<Question[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<Question[]>([]);
   const [historyCount, setHistoryCount] = useState(0);
   const [activeSubmission, setActiveSubmission] =
@@ -414,10 +396,7 @@ const QuizRunner: React.FC = () => {
         return result;
       }, {});
 
-  const questionsForAttempt = (
-    attempt: AssessmentAttemptState,
-    bank: Question[],
-  ): Question[] => {
+  const questionsForAttempt = (attempt: AssessmentAttemptState): Question[] => {
     const presentation = new Map(
       (attempt.questionPresentation || []).map((item) => [
         String(item.id),
@@ -427,12 +406,10 @@ const QuizRunner: React.FC = () => {
     const metadata = new Map(
       (attempt.learningSnapshot || []).map((item) => [String(item.id), item]),
     );
-    const fallback = new Map(bank.map((item) => [String(item.id), item]));
     return attempt.questionIds
       .map((id) => {
         const item = presentation.get(id);
-        // New attempts use the frozen server presentation. Legacy/oversized
-        // items remain compatible, with missing historical snapshots explicit.
+        // Only the server-authorized presentation is visible before submission.
         return item
           ? ({
               ...metadata.get(id),
@@ -440,7 +417,7 @@ const QuizRunner: React.FC = () => {
               id: Number(item.id),
               answer: "",
             } as Question)
-          : fallback.get(id);
+          : undefined;
       })
       .filter((item): item is Question => !!item);
   };
@@ -538,8 +515,8 @@ const QuizRunner: React.FC = () => {
   };
 
   const normalizeQuestionOrder = (
-    questionOrder: AssessmentQuestionOrder | undefined,
-    randomOrder: boolean | undefined,
+    questionOrder: unknown,
+    randomOrder: unknown,
   ): AssessmentQuestionOrder => {
     if (
       questionOrder === "random" ||
@@ -1115,7 +1092,6 @@ const QuizRunner: React.FC = () => {
     finalizedResultId,
     fallbackStudentUid,
     canonicalAttempt?.definitionId,
-    config,
     assessmentYear,
     assessmentSemester,
     score,
@@ -1199,7 +1175,6 @@ const QuizRunner: React.FC = () => {
       );
       setErrorMsg(null);
       setSelectedQuestions([]);
-      setQuestionBank([]);
       setActiveSubmission(null);
       setCanonicalAttempt(null);
       setHistoryCount(0);
@@ -1218,7 +1193,14 @@ const QuizRunner: React.FC = () => {
         void persistQuizProgress();
       }
     };
-  }, [config, unitId, category, examRound, fallbackStudentUid]);
+  }, [
+    assessmentYear,
+    assessmentSemester,
+    unitId,
+    category,
+    examRound,
+    fallbackStudentUid,
+  ]);
 
   useEffect(() => {
     if (view !== "quiz" || !canonicalAttempt) return;
@@ -1318,10 +1300,7 @@ const QuizRunner: React.FC = () => {
         return;
       }
 
-      const [grade3ClassIds, curriculumTree] = await Promise.all([
-        getGrade3ClassIdsFromSchoolConfig(),
-        readStudentCurriculumTree(config),
-      ]);
+      const curriculumTree = await readStudentCurriculumTree(config);
       unitOrderMapRef.current = buildUnitOrderMap(curriculumTree);
       const visitLabels = (items: StudentCurriculumTreeItem[]) => {
         items.forEach((item) => {
@@ -1331,72 +1310,24 @@ const QuizRunner: React.FC = () => {
       };
       curriculumLabelsRef.current = {};
       visitLabels(curriculumTree);
-      const assessmentConfigMap = await readAssessmentConfigMap(
-        config,
-        grade3ClassIds,
-      );
-      const configKey = getAssessmentConfigKey(
-        unitId || "",
-        category || "",
-        examRound || undefined,
-      );
-      const nextQuizConfig: QuizConfig =
-        assessmentConfigMap[configKey] ||
-        createDefaultAssessmentConfigEntry(grade3ClassIds);
-
+      const definition = assessmentState.definition;
+      const settings = definition.presentationSettings;
+      const nextQuizConfig: QuizConfig = {
+        active: definition.status === "PUBLISHED",
+        timeLimit: definition.durationSeconds,
+        allowRetake: definition.maxAttempts > 1,
+        cooldown: definition.cooldownMinutes,
+        questionCount: Math.min(
+          definition.questionCount || definition.itemCount,
+          definition.itemCount,
+        ),
+        hintLimit: Number(settings?.hintLimit) || 0,
+        questionOrder: normalizeQuestionOrder(
+          settings?.questionOrder,
+          settings?.randomOrder,
+        ),
+      };
       setQuizConfig(nextQuizConfig);
-
-      if (!nextQuizConfig.active) {
-        setBlockReason("현재 비활성화된 평가입니다.");
-        setView("intro");
-        return;
-      }
-
-      if (
-        !isAssessmentVisibleToStudent(assessmentConfigMap[configKey], userData)
-      ) {
-        setBlockReason("현재 학급에는 공개되지 않은 평가입니다.");
-        setView("intro");
-        return;
-      }
-
-      const questionRef = collection(
-        db,
-        getSemesterCollectionPath(config, "quiz_questions"),
-      );
-      const questionQuery =
-        unitId === "exam_prep"
-          ? query(questionRef, where("category", "==", "exam_prep"))
-          : query(
-              questionRef,
-              where("unitId", "==", unitId),
-              where("category", "==", category),
-            );
-
-      const questionSnap = await getDocs(questionQuery);
-      const fetchedQuestions: Question[] = [];
-      questionSnap.forEach((questionDoc) => {
-        const question = {
-          id: parseInt(questionDoc.id, 10),
-          ...questionDoc.data(),
-        } as Question;
-        if (
-          unitId === "exam_prep" &&
-          question.unitId &&
-          question.unitId !== "exam_prep"
-        ) {
-          return;
-        }
-        fetchedQuestions.push(question);
-      });
-
-      if (
-        !fetchedQuestions.length &&
-        !assessmentState.attempt?.questionPresentation?.length
-      ) {
-        throw new Error("등록된 문제가 없습니다.");
-      }
-      setQuestionBank(fetchedQuestions);
 
       const canonicalExistingAttempt = assessmentState.attempt;
       setCanonicalAttempt(canonicalExistingAttempt);
@@ -1409,7 +1340,7 @@ const QuizRunner: React.FC = () => {
         if (canonicalExistingAttempt)
           beginTelemetry(canonicalExistingAttempt, true);
         const restoredQuestions = canonicalExistingAttempt
-          ? questionsForAttempt(canonicalExistingAttempt, fetchedQuestions)
+          ? questionsForAttempt(canonicalExistingAttempt)
           : [];
 
         if (
@@ -1450,20 +1381,9 @@ const QuizRunner: React.FC = () => {
           return;
         }
       }
-      const solvedIds = new Set<number>();
-      const questionOrder = normalizeQuestionOrder(
-        nextQuizConfig.questionOrder,
-        nextQuizConfig.randomOrder,
-      );
-      const selection = selectQuestions(
-        fetchedQuestions,
-        solvedIds,
-        nextQuizConfig.questionCount || 10,
-        questionOrder,
-      );
-
-      setSelectedQuestions(selection.selected);
-      setOrderOptionMap(selection.orderOptionMap);
+      // A fresh attempt receives its selected questions only when the server starts it.
+      setSelectedQuestions([]);
+      setOrderOptionMap({});
       setCurrentIndex(0);
       setAnswers({});
       setHintUsedCount(0);
@@ -1485,7 +1405,7 @@ const QuizRunner: React.FC = () => {
       !unitId ||
       !category ||
       !fallbackStudentUid ||
-      !selectedQuestions.length
+      !quizConfig?.questionCount
     ) {
       return;
     }
@@ -1513,27 +1433,31 @@ const QuizRunner: React.FC = () => {
       const attempt = await startAssessmentAttempt({
         definitionId: assessmentDefinitionId,
       });
-      const committedQuestions = questionsForAttempt(attempt, questionBank);
-      if (committedQuestions.length !== attempt.questionIds.length) {
-        throw new Error("서버가 확정한 평가 문항을 불러오지 못했습니다.");
-      }
       const startedState = await getAssessmentState({
         attemptId: attempt.attemptId,
       });
+      const committedAttempt = startedState.attempt || attempt;
+      const committedQuestions = questionsForAttempt(committedAttempt);
+      if (committedQuestions.length !== attempt.questionIds.length) {
+        throw new Error(
+          "응시 문항이 변경되어 불러올 수 없습니다. 선생님께 확인해 주세요.",
+        );
+      }
       const committedSelection = selectQuestions(
         committedQuestions,
         new Set<number>(),
         committedQuestions.length,
         quizConfig?.questionOrder || "created",
       );
-      const committedSubmission = mapCanonicalAttemptToSubmission(attempt);
+      const committedSubmission =
+        mapCanonicalAttemptToSubmission(committedAttempt);
 
       setAnswers({});
       setCurrentIndex(0);
       setHintUsedCount(0);
       setRevealedHints({});
-      setCanonicalAttempt(attempt);
-      beginTelemetry(attempt, attempt.resumed);
+      setCanonicalAttempt(committedAttempt);
+      beginTelemetry(committedAttempt, attempt.resumed);
       setSelectedQuestions(committedSelection.selected);
       restoreSubmissionState(
         committedSubmission,
@@ -2153,7 +2077,7 @@ const QuizRunner: React.FC = () => {
                 tabIndex={-1}
                 className="student-quiz-question-heading"
               >
-                {question.question}
+                <QuizQuestionText value={question.question} />
               </h2>
               {openHintQuestionId === question.id &&
                 revealedHints[question.id] && (

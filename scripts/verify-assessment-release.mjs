@@ -58,7 +58,7 @@ function harness() {
   const auth = { currentUser: { uid: "teacher-a", getIdTokenResult: async () => ({ claims: { auth_time: 1234 } }) } };
   const transaction = {
     get: async (path) => snap(path), getAll: async (paths) => paths.map(snap),
-    query: async (path, filter) => list(path).filter((item) => !filter || item.data[filter.field] === filter.value),
+    query: async (path, filter) => list(path).filter((item) => !filter || (filter.filters || [filter]).every(clause => item.data[clause.field] === clause.value)),
     create: (path, data) => { assert.equal(docs.has(path), false); docs.set(path, clone(data)); },
     set: (path, data, options) => docs.set(path, options?.merge ? { ...docs.get(path), ...clone(data) } : clone(data)),
     delete: (path) => docs.delete(path),
@@ -71,7 +71,8 @@ function harness() {
       if (name === "firebase/firestore") return {
         doc: (_db, ...parts) => parts.join("/"), collection: (_db, ...parts) => parts.join("/"),
         getDoc: async (path) => { browserReads.push(path); const data = snap(path); afterRead?.(path); return { exists: () => data.exists, data: () => data.data }; },
-        getDocs: async (path) => { browserReads.push(path); return { docs: list(path).map((item) => ({ id: item.id, data: () => item.data })) }; },
+        query: (path, ...filters) => ({ path, filters }), where: (field, operator, value) => ({ field, operator, value }),
+        getDocs: async (input) => { const path = input.path || input; browserReads.push(path); return { docs: list(path).filter(item => !input.filters || input.filters.every(filter => item.data[filter.field] === filter.value)).map((item) => ({ id: item.id, data: () => item.data })) }; },
       };
       if (name === "./semesterScope") return { getYearSemester: (value) => value || config, getSemesterCollectionPath: (value, collection) => `years/${value.year}/semesters/${value.semester}/${collection}`, getSemesterDocPath: (value, collection, id) => `years/${value.year}/semesters/${value.semester}/${collection}/${id}` };
       if (name === "./mockExamRounds") return { DEFAULT_MOCK_EXAM_ROUND: "round_1" };
@@ -126,17 +127,17 @@ const newHistorySource = () => ({
   assert.equal(plan.blockedCount, 0);
   const result = await api.prepareCurrentAssessmentRelease(plan);
   assert.equal(result.preparedCount, 2);
-  assert.deepEqual(calls.map((call) => call.commandType), ["createAssessmentDefinition", "transitionAssessmentDefinition", "createAssessmentDefinition", "transitionAssessmentDefinition"]);
+  assert.deepEqual(calls.map((call) => call.commandType), ["saveQuizAssessmentSettings", "createAssessmentDefinition", "transitionAssessmentDefinition"]);
   for (const item of plan.items) {
     const definition = docs.get(`semester_assessment_definitions/${item.definitionId}`);
-    assert.equal(definition.revision, 2);
+    assert.equal(definition.revision, item.kind === "QUIZ" ? 1 : 2);
     assert.equal(definition.status, "PUBLISHED");
     assert.equal(definition.sourceHash, item.sourceHash, "browser fingerprint matches real server source hash");
   }
   const ready = await api.planCurrentAssessmentRelease(config);
   assert.equal(ready.prepareCount, 0);
   assert.equal((await api.prepareCurrentAssessmentRelease(ready)).preparedCount, 0);
-  assert.equal(calls.length, 4, "ready rerun has no writes");
+  assert.equal(calls.length, 3, "ready rerun has no writes");
   console.log("PASS read-only preview, real server validation/hash, DRAFT publication and zero-write ready rerun");
 }
 {
@@ -152,13 +153,31 @@ const newHistorySource = () => ({
   console.log("PASS stale source/settings preview and semester switch block before all writes");
 }
 {
-  const { api, docs, calls, hook } = harness();
+  const { api, docs, calls, readHook } = harness();
   const plan = await api.planCurrentAssessmentRelease(config);
-  hook((commandType) => { if (commandType === "createAssessmentDefinition") docs.get(`${root}/quiz_questions/q1`).answer = "RACE"; });
-  await assert.rejects(api.prepareCurrentAssessmentRelease(plan), /공개하지 않았습니다/);
+  const quiz = plan.items.find(item => item.kind === "QUIZ");
+  readHook(path => { if (path === `semester_assessment_definitions/${quiz.definitionId}`) docs.get(`${root}/quiz_questions/q1`).answer = "RACE"; });
+  await assert.rejects(api.saveAssessmentDefinition(config, quiz.payload, true, quiz), /바뀌었습니다/);
   assert.equal(calls.length, 1);
-  assert.equal(docs.get(`semester_assessment_definitions/${plan.items[0].definitionId}`).status, "DRAFT");
-  console.log("PASS content mutation between create and publish stays DRAFT");
+  assert.equal(docs.has(`semester_assessment_definitions/${quiz.definitionId}`), false);
+  console.log("PASS content mutation after preview rejects before atomic publication");
+}
+{
+  const { api, docs, calls, browserReads } = harness();
+  const save = next => api.saveQuizAssessmentSettings(config, "unit_1", "diagnostic", "", "진단평가", "unit_1_diagnostic", next);
+  await save(settings);
+  assert.equal(calls.length, 1);
+  assert.equal(browserReads.length, 1, "Only the definition revision is read by the browser; the server reads source once");
+  assert.equal(docs.get("semester_assessment_definitions/quiz:2026-2:unit_1:diagnostic").status, "PUBLISHED");
+  const before = structuredClone(docs.get("semester_assessment_definitions/quiz:2026-2:unit_1:diagnostic"));
+  await assert.rejects(save({ ...settings, questionCount: 2 }), /등록된 문항 수/);
+  assert.deepEqual(docs.get("semester_assessment_definitions/quiz:2026-2:unit_1:diagnostic"), before);
+  docs.delete(`${root}/quiz_questions/q1`);
+  docs.delete("semester_classes/class_a");
+  await save({ ...settings, active: false });
+  assert.equal(docs.get("semester_assessment_definitions/quiz:2026-2:unit_1:diagnostic").status, "PAUSED");
+  assert.equal(docs.get(`${root}/assessment_config/settings`).unit_1_diagnostic.active, false);
+  console.log("PASS one-command publication and pause, no question rereads, and failed edit preserves current publication");
 }
 {
   const { api, docs, calls } = harness();

@@ -33,6 +33,8 @@ export interface AssessmentDefinitionState {
   opensAt: string;
   closesAt: string;
   itemCount: number;
+  questionCount: number;
+  presentationSettings?: Record<string, unknown> | null;
   provenance: string;
 }
 
@@ -234,25 +236,48 @@ export const executeAssessmentManagementCommand = async <T>(
     "saveHistoryClassroomAssignment",
     "createAssessmentDefinition",
     "updateAssessmentDefinition",
+    "saveQuizAssessmentSettings",
     "transitionAssessmentDefinition",
   ].includes(commandType);
   if (!routineClassroomCommand) await ensureSensitiveOperation();
   return executeStudentAssessmentCommand<T>(commandType, payload);
 };
 
+const pendingStateReads = new WeakMap<
+  object,
+  Map<string, Promise<AssessmentStateResponse>>
+>();
+
 export const getAssessmentState = async (input: {
   definitionId?: string;
   attemptId?: string;
 }) => {
+  const owner = auth.currentUser;
   const assertOwner = await captureAssessmentOwner();
-  const callable = await getHttpsCallable<
-    typeof input,
-    AssessmentStateResponse
-  >("getAssessmentState");
   await assertOwner();
-  const response = await callable(input);
-  await assertOwner();
-  return response.data;
+  const key = stableStringify(input);
+  const reads =
+    pendingStateReads.get(owner!) ||
+    new Map<string, Promise<AssessmentStateResponse>>();
+  pendingStateReads.set(owner!, reads);
+  const pending = reads.get(key);
+  if (pending) return pending;
+  const request = (async () => {
+    const callable = await getHttpsCallable<
+      typeof input,
+      AssessmentStateResponse
+    >("getAssessmentState");
+    await assertOwner();
+    const response = await callable(input);
+    await assertOwner();
+    return response.data;
+  })();
+  reads.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (reads.get(key) === request) reads.delete(key);
+  }
 };
 
 export const startAssessmentAttempt = (input: { definitionId: string }) =>

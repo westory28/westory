@@ -210,14 +210,17 @@ const ManageQuiz: React.FC = () => {
           </div>
         )}
 
-        <QuizSettingsModal
-          isOpen={canWrite && settingsModalOpen}
-          onClose={() => setSettingsModalOpen(false)}
-          nodeId={selectedNode?.id || ""}
-          nodeTitle={selectedNode?.title || ""}
-          category={settingsCategory}
-          canEdit={canWrite}
-        />
+        {canWrite && settingsModalOpen && (
+          <QuizSettingsModal
+            key={`${selectedNode?.id || ""}:${settingsCategory}`}
+            isOpen={canWrite && settingsModalOpen}
+            onClose={() => setSettingsModalOpen(false)}
+            nodeId={selectedNode?.id || ""}
+            nodeTitle={selectedNode?.title || ""}
+            category={settingsCategory}
+            canEdit={canWrite}
+          />
+        )}
       </main>
     </PortalWorkspace>
   );

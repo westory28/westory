@@ -26,14 +26,17 @@ const analytics={version:1,quality:'complete',questions:Object.fromEntries(quest
 export const results=[{id:'synthetic-result',data:()=>({assessmentKind:'QUIZ',semesterId:'2026-1',studentUid:'synthetic-1',definitionId:'quiz:2026-1:mid-1:diagnostic',sourceId:'mid-1',category:'diagnostic',percent:25,submittedAtIso:'2026-10-15T02:00:00Z',learningSnapshot:questions.slice(0,4).map(q=>({...q,sourceRevision:"1"})),questionSnapshots:questions.slice(0,4),answerChecks:questions.slice(0,4).map((q,i)=>({id:String(q.id),correct:i===0})),answers:Object.fromEntries(questions.slice(0,4).map((q,i)=>[q.id,i===0?'왕권 강화':'지방 세력의 독립'])),analytics})}];
 students.push({id:'synthetic-3',data:()=>({role:'student',studentGrade:'2',studentClass:'1',studentNumber:'3',studentName:'가상학생다'})});
 results.push({id:'synthetic-result-grade2',data:()=>({...results[0].data(),studentUid:'synthetic-3',percent:75,submittedAtIso:'2026-10-15T03:00:00Z',answerChecks:questions.slice(0,4).map((q,i)=>({id:String(q.id),correct:i>0})),answers:Object.fromEntries(questions.slice(0,4).map((q,i)=>[q.id,i>0?'왕권 강화':'지방 세력의 독립']))})});
-export const fixtureState={writes:[],questions};window.assessmentTeacherFixture=fixtureState;
+export const fixtureState={writes:[],reads:[],questions,definitions:{}};window.assessmentTeacherFixture=fixtureState;
 export const db={};export const useAuth=()=>({config,userData:new URLSearchParams(location.search).get('scenario')==='readonly'?{role:'staff',staffPermissions:['quiz_read'],email:'synthetic-readonly@example.invalid'}:{role:'teacher',email:'westoria28@gmail.com'},currentUser:{uid:'synthetic-teacher',email:new URLSearchParams(location.search).get('scenario')==='readonly'?'synthetic-readonly@example.invalid':'westoria28@gmail.com'},interfaceConfig:{}});
 export const doc=(_db,...parts)=>({path:parts.join('/')});export const collection=doc;export const where=(field,op,value)=>({field,op,value});export const orderBy=()=>({});export const limit=()=>({});export const query=(ref,...constraints)=>({...ref,constraints});
-export const getDoc=async(ref)=>{if(new URLSearchParams(location.search).get('scenario')==='error')throw new Error('Synthetic read failure');return {exists:()=>true,data:()=>ref.path.includes('curriculum')?{tree}:{}}};
+export const getDoc=async(ref)=>{fixtureState.reads.push(ref.path);const scenario=new URLSearchParams(location.search).get('scenario');if(scenario==='error'||scenario==='settings-load-error'&&ref.path.includes('assessment_config'))throw new Error('Synthetic read failure');const definition=fixtureState.definitions[ref.path.split('/').at(-1)];return {exists:()=>ref.path.includes('semester_assessment_definitions')?Boolean(definition):true,data:()=>ref.path.includes('curriculum')?{tree}:ref.path.includes('school_config')?{grades:[{value:'3',label:'3학년'},{value:'test',label:'테스트 학년'}],classes:Array.from({length:10},(_,i)=>({value:String(i+1),label:(i+1)+'반'}))}:ref.path.includes('semester_assessment_definitions')?definition:{}}};
+export const getDocFromServer=getDoc;
 export const getDocs=async(ref)=>{if(new URLSearchParams(location.search).get('scenario')==='error')throw new Error('Synthetic read failure');let docs=ref.path.endsWith('quiz_questions')?questions.map(q=>({id:String(q.id),data:()=>q})):ref.path==='users'?students:ref.path==='semester_assessment_results'?results:[];if(new URLSearchParams(location.search).get('scenario')==='empty')docs=[];(ref.constraints||[]).forEach(c=>{if(c.field&&c.op==='==')docs=docs.filter(d=>d.data()[c.field]===c.value)});return {docs,empty:!docs.length,size:docs.length,forEach:fn=>docs.forEach(fn)}};
 export const onSnapshot=(ref,next,error)=>{let active=true;getDocs(ref).then(s=>{if(active)next(s)}).catch(e=>{if(active)error?.(e)});return()=>{active=false}};
 export const getHttpsCallable=async()=>async()=>({data:{}});
 export const getAssessmentSemesterId=()=> '2026-1';export const refreshPublishedQuizDefinitions=async()=>{};
+export const buildAssessmentDefinitionId=(semester,kind,source,category,round)=>[kind.toLowerCase(),semester,source,category,round].filter(Boolean).join(':');
+export const saveQuizAssessmentSettings=async(config,source,category,round,title,key,settings,expectedRevision)=>{fixtureState.writes.push({command:'saveQuizAssessmentSettings',settings,expectedRevision});await new Promise(resolve=>setTimeout(resolve,750));if(new URLSearchParams(location.search).get('scenario')==='settings-save-error')throw Error('합성 검증: 저장에 실패했습니다. 변경 내용은 유지됩니다.');const id=buildAssessmentDefinitionId('2026-1','QUIZ',source,category,round);const revision=Number(expectedRevision||0)+1;fixtureState.definitions[id]={revision,presentationSettings:settings,status:settings.active?'PUBLISHED':'DRAFT',questionCount:settings.questionCount,durationSeconds:settings.timeLimit,maxAttempts:settings.allowRetake?20:1,cooldownMinutes:settings.cooldown,assignedClassIds:settings.visibleClassIds.map(id=>'class_'+id.replace('-','_'))};return {revision,status:settings.active?'PUBLISHED':'DRAFT'}};
 export const executeAssessmentManagementCommand=async(command,payload)=>{fixtureState.writes.push({command,payload});if(command==='upsertQuizQuestion'){const q={...payload.question,contentRevision:Number(payload.expectedRevision||0)+1};const i=questions.findIndex(v=>String(v.id)===payload.questionId);if(i<0)questions.push(q);else questions[i]=q;return {contentRevision:q.contentRevision}}return {}};
 `;
 const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {HashRouter} from 'react-router-dom';import ManageQuiz from './src/pages/teacher/ManageQuiz.tsx';import './src/assets/index.css';import './src/pages/teacher/teacherSettings.css';import QuizVisualEditorFixture from './scripts/fixtures/QuizVisualEditorFixture.tsx';createRoot(document.getElementById('root')).render(<HashRouter><div className="teacher-layout">{new URLSearchParams(location.search).has('editor') ? <QuizVisualEditorFixture/> : <ManageQuiz/>}</div></HashRouter>);`;
@@ -54,7 +57,7 @@ const bundle = await build({
         plugin.onResolve(
           {
             filter:
-              /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/(firebase|assessmentRelease|assessmentLifecycle)$|^firebase\/firestore$/,
+              /(?:^|\/)contexts\/AuthContext$|(?:^|\/)(?:lib\/)?(firebase|assessmentRelease|assessmentLifecycle)$|^firebase\/firestore$/,
           },
           (args) => ({ path: "service", namespace: "fixture" }),
         );
@@ -65,8 +68,7 @@ const bundle = await build({
         }));
         plugin.onResolve(
           {
-            filter:
-              /\.\/components\/QuizSettingsModal$|\.\/StudentDetailModal$|\.\/StudentWrongNoteModal$/,
+            filter: /\.\/StudentDetailModal$|\.\/StudentWrongNoteModal$/,
           },
           () => ({ path: "modal", namespace: "empty-fixture" }),
         );

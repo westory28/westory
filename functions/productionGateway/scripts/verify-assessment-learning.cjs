@@ -28,7 +28,7 @@ class MemoryStore {
         .filter(
           (path) =>
             !filter ||
-            this.documents.get(path)?.[filter.field] === filter.value,
+            (filter.filters || [filter]).every(clause => this.documents.get(path)?.[clause.field] === clause.value),
         )
         .map((path) => this.get(path)),
     );
@@ -763,7 +763,9 @@ const runLifecycleCases = async () => {
   delete store.documents.get(`semester_assessment_attempts/${old.attemptId}`).questionSnapshots;
   delete store.documents.get(`semester_assessment_attempts/${old.attemptId}`).questionSnapshotOmittedIds;
   const legacyQuery = await query.getAssessmentState({auth: student, data: {attemptId: old.attemptId}});
-  assert.equal("questionPresentation" in legacyQuery.attempt, false);
+  assert.equal(legacyQuery.attempt.questionPresentation.length, old.questionIds.length, "Legacy attempt presentation is restored without exposing the bank");
+  assert.ok(legacyQuery.attempt.questionPresentation.every(item => !("answer" in item) && !("explanation" in item)));
+  assert.equal("questionSnapshots" in store.documents.get(`semester_assessment_attempts/${old.attemptId}`), false, "Response fallback must not rewrite historical snapshots");
   delete store.documents.get(`semester_assessment_attempts/${old.attemptId}`)
     .learningSnapshot;
   await execute(student, "submitAssessmentAttempt", {

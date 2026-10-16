@@ -110,21 +110,23 @@ const rankLearningCandidates = (source, priorAttempts) => {
 
 // An omitted snapshot is explicit; never truncate source material into a false
 // historical question. Reserve headroom for Firestore field/index overhead.
-const boundQuestionSnapshots = (candidates, questionIds, baseDocument = {}) => {
-  let remaining = Math.max(0, Math.min(128 * 1024, 750_000 - Buffer.byteLength(JSON.stringify(baseDocument), "utf8")));
+const boundQuestionSnapshots = (candidates, questionIds, baseDocument = {}, limits = {}) => {
+  let remaining = limits.responseOnly
+    ? 4 * 1024 * 1024
+    : Math.max(0, Math.min(128 * 1024, 750_000 - Buffer.byteLength(JSON.stringify(baseDocument), "utf8")));
   const byId = new Map(candidates.map(item => [String(item.id), item]));
   const questionSnapshots = [], questionSnapshotOmittedIds = [];
   for (const id of questionIds) {
     const snapshot = byId.get(String(id));
     const size = snapshot ? Buffer.byteLength(JSON.stringify(snapshot), "utf8") + 2 : Infinity;
-    if (size > 32 * 1024 || size > remaining) { questionSnapshotOmittedIds.push(String(id)); continue; }
+    if (size > (limits.responseOnly ? 900_000 : 32 * 1024) || size > remaining) { questionSnapshotOmittedIds.push(String(id)); continue; }
     questionSnapshots.push(snapshot);
     remaining -= size;
   }
   return { questionSnapshots, questionSnapshotOmittedIds };
 };
 
-const captureQuestionSnapshots = (documents, questionIds, baseDocument) => {
+const captureQuestionSnapshots = (documents, questionIds, baseDocument, limits) => {
   const candidates = [];
   const selected = new Set(questionIds.map(String));
   for (const document of documents) {
@@ -148,7 +150,7 @@ const captureQuestionSnapshots = (documents, questionIds, baseDocument) => {
     }
     candidates.push(snapshot);
   }
-  return boundQuestionSnapshots(candidates, questionIds, baseDocument);
+  return boundQuestionSnapshots(candidates, questionIds, baseDocument, limits);
 };
 
 const questionPresentation = (snapshots) => snapshots.map(snapshot => {

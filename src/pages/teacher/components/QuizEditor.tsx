@@ -9,7 +9,11 @@ import {
 import { executeAssessmentManagementCommand } from "../../../lib/assessmentLifecycle";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
-import { getSemesterCollectionPath } from "../../../lib/semesterScope";
+import QuizQuestionText from "../../../components/common/QuizQuestionText";
+import {
+  getSemesterCollectionPath,
+  getYearSemester,
+} from "../../../lib/semesterScope";
 import {
   QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES,
   QUIZ_CHOICE_OPTION_IMAGE_OPTIONS,
@@ -89,7 +93,7 @@ interface CascadingFilter {
 
 const ORDER_DELIMITER = "||";
 const MATCHING_PAIR_DELIMITER = "=>";
-const DEFAULT_CHOICE_OPTION_COUNT = 4;
+const DEFAULT_CHOICE_OPTION_COUNT = 5;
 const EXAM_PREP_CHOICE_OPTION_COUNT = 5;
 const DEFAULT_ORDER_OPTION_COUNT = 4;
 const getDefaultChoiceOptionCount = (category?: string) =>
@@ -168,6 +172,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   sourceQuestion,
 }) => {
   const { config } = useAuth();
+  const { year: questionYear, semester: questionSemester } =
+    getYearSemester(config);
   const [questions, setQuestions] = useState<Question[]>([]);
   const pendingQuestionId = useRef<number | null>(null);
   const [category, setCategory] = useState<string>("diagnostic");
@@ -259,7 +265,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setEpSource(EMPTY_CASCADING_FILTER);
     defaultExamPrepFocusKeyRef.current = "";
     void fetchQuestions();
-  }, [config, node, type]);
+  }, [questionYear, questionSemester, node.id, type]);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -1365,7 +1371,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       )}
                     </div>
                     <p className="font-bold text-gray-800 mb-2 text-[13px] leading-5">
-                      {q.question}
+                      <QuizQuestionText value={q.question} />
                     </p>
                     {q.type === "choice" &&
                       (hasChoiceSupportPanel || hasChoicePreview) && (
@@ -2163,7 +2169,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       </div>
                       <div className="bg-white rounded-lg border border-blue-100 p-4">
                         <h4 className="font-bold text-gray-800 mb-4">
-                          {formText}
+                          <QuizQuestionText value={formText} />
                         </h4>
                         {formType === "choice" ? (
                           <div

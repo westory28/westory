@@ -1093,7 +1093,7 @@ service cloud.firestore {
     }
 
     match /quiz_questions/{docId} {
-      allow read: if canUseWestory();
+      allow read: if canUseWestory() && hasQuizReadRole();
       allow write: if isAdmin();
     }
 
@@ -1258,7 +1258,7 @@ service cloud.firestore {
       }
 
       match /quiz_questions/{docId} {
-        allow read: if canUseWestory();
+        allow read: if canUseWestory() && hasQuizReadRole();
         allow write: if isAdmin();
       }
 
