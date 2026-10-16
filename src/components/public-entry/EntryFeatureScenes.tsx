@@ -7,10 +7,10 @@ import { useEntryScrollSlides } from "./useEntryScrollSlides";
 import { entryMaterial } from "./entryMaterial";
 import EntryGlow from "./EntryGlow";
 import EntryConfirmScene from "./EntryConfirmScene";
+import EntryMapMotion from "./EntryMapMotion";
 import lessonScreen from "../../assets/public-entry/lesson-real.webp";
 import worksheet from "../../assets/public-entry/worksheet-real.webp";
 import heritage from "../../assets/public-entry/heritage-real.webp";
-import mapImage from "../../assets/public-entry/map-real.webp";
 
 export function moveToEntrySection(id: string) {
   const section = document.getElementById(id);
@@ -257,14 +257,7 @@ function FeatureScene({
   );
 }
 
-const mapPlaces = [
-  { name: "개성", era: "고려의 수도", x: 37.6, y: 51.5 },
-  { name: "한성", era: "조선의 수도", x: 43.3, y: 55.6 },
-  { name: "경주", era: "신라의 수도", x: 68.0, y: 71.8 },
-];
 export function MapScene() {
-  const [selected, setSelected] = useState<number | null>(null);
-  const place = selected === null ? null : mapPlaces[selected];
   return (
     <FeatureScene
       id="entry-map"
@@ -274,62 +267,7 @@ export function MapScene() {
       description="같은 땅도 시대에 따라 다른 이야기를 품습니다. 직접 만든 역사 지도에서 지명을 확인하고, 장소와 사건의 관계를 살펴봅니다."
       className="entry-map-section"
     >
-      <div className="entry-map-composition">
-        <Device kind="tablet">
-          <div className="entry-map-toolbar">
-            <strong>한반도 역사 지리</strong>
-            <span>PDF 지명 확인</span>
-          </div>
-          <div className="entry-map-window">
-            <div
-              className="entry-map-sheet"
-              style={{
-                transform: place ? `scale(2.1)` : "scale(1)",
-                transformOrigin: place ? `${place.x}% ${place.y}%` : "50% 50%",
-              }}
-            >
-              <img
-                src={mapImage}
-                width="1037"
-                height="1383"
-                loading="lazy"
-                alt="실제 제작 한반도 역사 지리 지도"
-              />
-              {place && (
-                <span
-                  className="entry-map-pin"
-                  style={{ left: place.x + "%", top: place.y + "%" }}
-                  aria-hidden="true"
-                />
-              )}
-            </div>
-          </div>
-        </Device>
-        <div className="entry-map-label" aria-live="polite">
-          <span>{place ? place.era : "지명에서 시대까지"}</span>
-          <strong>{place?.name || "한반도 역사 지리"}</strong>
-        </div>
-      </div>
-      <div className="entry-place-controls" aria-label="지도 지명 탐색">
-        {mapPlaces.map((p, i) => (
-          <button
-            type="button"
-            aria-pressed={selected === i}
-            key={p.name}
-            onClick={() => setSelected(i)}
-          >
-            {p.name}
-            <span>↗</span>
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setSelected(null)}
-          aria-pressed={selected === null}
-        >
-          전체 지도
-        </button>
-      </div>
+      <EntryMapMotion />
     </FeatureScene>
   );
 }
