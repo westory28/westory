@@ -11,6 +11,14 @@ import React, {
 } from "react";
 import { geoArea, geoCentroid, geoPath } from "d3-geo";
 import {
+  ATLAS_COUNTRY_HELP,
+  ATLAS_COUNTRY_LICENSE_URL,
+  findAtlasCountry,
+  loadAtlasCountryGeometry,
+  type AtlasCountryFeature,
+  type AtlasCountryGeometry,
+} from "../../lib/historyAtlasCountries";
+import {
   ATLAS_SUBJECT_BOUNDS,
   ATLAS_SUBJECT_LABELS,
   matchesAtlasSearch,
@@ -146,6 +154,7 @@ function AtlasHelp() {
               content:
                 "현대 자연지형을 단순화한 지도이며 역사적 국경은 표시하지 않는다.",
             },
+            { label: "국가 경계", content: ATLAS_COUNTRY_HELP },
             {
               label: "강",
               content:
@@ -167,6 +176,23 @@ function AtlasHelp() {
           items: [
             ...atlasRiverCreditItems,
             ...atlasDokdoCreditItems,
+            <a
+              key="world-bank"
+              href="https://datacatalog.worldbank.org/search/dataset/0038272/world-bank-official-boundaries"
+              target="_blank"
+              rel="noreferrer"
+            >
+              World Bank Official Boundaries · CC BY 4.0 · 국가 경계
+              단순화·한반도 통합 표시
+            </a>,
+            <a
+              key="world-bank-license"
+              href={ATLAS_COUNTRY_LICENSE_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              국가 경계 자료 이용 조건 · CC BY 4.0
+            </a>,
             <a
               key="osm"
               href="https://www.openstreetmap.org/copyright"
@@ -220,10 +246,12 @@ const AtlasBackground = memo(function AtlasBackground({
   paths,
   transform,
   selectedRiver,
+  countries,
 }: {
   paths: { land: string; rivers: string } | null;
   transform: AtlasTransform;
   selectedRiver: string;
+  countries?: ReactNode;
 }) {
   if (!paths) return null;
   return (
@@ -232,6 +260,7 @@ const AtlasBackground = memo(function AtlasBackground({
       transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}
     >
       <path className="history-atlas__land" d={paths.land} />
+      {countries}
       <path className="history-atlas__rivers" d={paths.rivers} />
       {selectedRiver && (
         <>
@@ -248,9 +277,15 @@ function placeLabelLayout(
   width: number,
   height: number,
   obstacle: { left: number; top: number; right: number; bottom: number } | null,
+  reserved: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  } | null = null,
 ) {
   const boxes: { left: number; top: number; right: number; bottom: number }[] =
-    obstacle ? [obstacle] : [];
+    [obstacle, reserved].filter((box): box is NonNullable<typeof box> => !!box);
   const occupied = new Map<string, MapPoint[]>();
   const labelLimit = Math.max(12, Math.floor((width * height) / 7500));
   return [...points]
@@ -434,6 +469,10 @@ export default function HistoryAtlas({
     null,
   );
   const [selectedId, setSelectedId] = useState("");
+  const [countryId, setCountryId] = useState("");
+  const [countryGeometry, setCountryGeometry] =
+    useState<AtlasCountryGeometry | null>(null);
+  const [countryError, setCountryError] = useState(false);
   const [focusRevision, setFocusRevision] = useState(0);
   const pendingFocusRef = useRef<string | null>(null);
   const pendingVisualScaleRef = useRef<number | null>(null);
@@ -564,8 +603,11 @@ export default function HistoryAtlas({
     [scopeEntries, query],
   );
   const selected = entries.find(({ entry }) => entry.id === selectedId);
+  const selectedCountry = countryGeometry?.countries.features.find(
+    (country) => country.properties.id === countryId,
+  );
   const provinceArea =
-    areaGeometry && !selected
+    areaGeometry && !selected && !countryId
       ? findAtlasRegionArea(subregionId || regionId, areaGeometry)
       : null;
   const overlayWidth = Math.min(wide ? 320 : 280, mapWidth - 16);
@@ -625,8 +667,9 @@ export default function HistoryAtlas({
   );
   const projection = useMemo(() => {
     const next = createAtlasProjection(subject, bounds, mapWidth, mapHeight);
-    return provinceArea
-      ? fitAtlasRegionProjection(next, provinceArea, {
+    const fittedArea = selectedCountry || provinceArea;
+    return fittedArea
+      ? fitAtlasRegionProjection(next, fittedArea, {
           width: mapWidth,
           height: availableMapHeight,
           overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
@@ -638,6 +681,7 @@ export default function HistoryAtlas({
     mapWidth,
     mapHeight,
     provinceArea,
+    selectedCountry,
     availableMapHeight,
     overlayObstacle?.right,
   ]);
@@ -648,6 +692,18 @@ export default function HistoryAtlas({
         : null,
     [geometry, subject, bounds, projection],
   );
+  const countryPaths = useMemo(() => {
+    if (subject !== "world" || !countryGeometry) return null;
+    const path = geoPath(projection).digits(1);
+    return {
+      countries: countryGeometry.countries.features.map((country) => ({
+        country,
+        path: path(country) || "",
+      })),
+      borders: path(countryGeometry.borders) || "",
+      disputedBorders: path(countryGeometry.disputedBorders) || "",
+    };
+  }, [subject, countryGeometry, projection]);
   const riversByPlace = useMemo(() => {
     const result = new Map<
       string,
@@ -745,6 +801,30 @@ export default function HistoryAtlas({
         : selected?.place,
     [selected?.place, selectedShape, selectedLandform],
   );
+  const selectedCountryLabel = useMemo(() => {
+    if (!selectedCountry) return null;
+    const point = atlasShapeLabelAnchor(
+      selectedCountry,
+      (coordinate) => {
+        const projected = projection(coordinate as [number, number]);
+        return projected
+          ? [
+              projected[0] * transform.scale + transform.x,
+              projected[1] * transform.scale + transform.y,
+            ]
+          : null;
+      },
+      { left: 48, top: 64, right: mapWidth - 48, bottom: mapHeight - 56 },
+    );
+    if (!point) return null;
+    const width = selectedCountry.properties.name.length * 14 + 16;
+    return {
+      left: point[0] - width / 2,
+      right: point[0] + width / 2,
+      top: point[1] - 22,
+      bottom: point[1] + 22,
+    };
+  }, [selectedCountry, projection, transform, mapWidth, mapHeight]);
   const mapPoints = useMemo(() => {
     const points: MapPoint[] = [];
     mapPlaces.forEach((item) => {
@@ -798,7 +878,13 @@ export default function HistoryAtlas({
         shape: !!river,
       });
     });
-    return placeLabelLayout(points, mapWidth, mapHeight, overlayObstacle);
+    return placeLabelLayout(
+      points,
+      mapWidth,
+      mapHeight,
+      overlayObstacle,
+      selectedCountryLabel,
+    );
   }, [
     mapPlaces,
     projection,
@@ -811,6 +897,7 @@ export default function HistoryAtlas({
     overlayObstacle,
     riversByPlace,
     landformsByPlace,
+    selectedCountryLabel,
   ]);
   const minorDotsPath = useMemo(
     () =>
@@ -820,6 +907,103 @@ export default function HistoryAtlas({
         .join(""),
     [mapPoints],
   );
+  const countryLabels = useMemo(() => {
+    if (subject !== "world" || !countryGeometry) return [];
+    const boxes = mapPoints
+      .filter((point) => point.hitVisible && point.labelVisible)
+      .map((point) => ({
+        left: point.x - 22 + point.labelLeft,
+        top: point.y - 22 + point.labelTop,
+        right: point.x - 22 + point.labelLeft + point.labelWidth,
+        bottom: point.y - 22 + point.labelTop + 44,
+      }));
+    if (overlayObstacle) boxes.push(overlayObstacle);
+    // Keep labels clear of the map controls, compass and attribution.
+    boxes.push(
+      { left: 0, top: 0, right: mapWidth, bottom: 48 },
+      { left: 0, top: mapHeight - 40, right: mapWidth, bottom: mapHeight },
+    );
+    const baseScale = createAtlasProjection(
+      "world",
+      ATLAS_SUBJECT_BOUNDS.world,
+      mapWidth,
+      mapHeight,
+    ).scale();
+    const zoom = (projection.scale() / baseScale) * transform.scale;
+    const labels: {
+      country: AtlasCountryFeature;
+      x: number;
+      y: number;
+      width: number;
+    }[] = [];
+    const ordered = [...countryGeometry.countries.features].sort(
+      (a, b) =>
+        Number(b.properties.id === countryId) -
+          Number(a.properties.id === countryId) ||
+        a.properties.minZoom - b.properties.minZoom,
+    );
+    for (const country of ordered) {
+      const active = country.properties.id === countryId;
+      // Natural Earth's major-country label tier starts at 1.7; show it at
+      // the atlas's whole-world zoom while revealing smaller labels on zoom.
+      if (!active && zoom < country.properties.minZoom / 1.7) continue;
+      const project = (coordinate: number[]) => {
+        const point = projection(coordinate as [number, number]);
+        return point
+          ? ([
+              point[0] * transform.scale + transform.x,
+              point[1] * transform.scale + transform.y,
+            ] as [number, number])
+          : null;
+      };
+      const point = active
+        ? selectedCountryLabel && [
+            (selectedCountryLabel.left + selectedCountryLabel.right) / 2,
+            (selectedCountryLabel.top + selectedCountryLabel.bottom) / 2,
+          ]
+        : project(country.properties.coordinates);
+      if (!point) continue;
+      const width = country.properties.name.length * 14 + 16;
+      const box = {
+        left: point[0] - width / 2,
+        right: point[0] + width / 2,
+        top: point[1] - 22,
+        bottom: point[1] + 22,
+      };
+      if (
+        box.left < 4 ||
+        box.right > mapWidth - 4 ||
+        box.top < 48 ||
+        box.bottom > mapHeight - 40
+      )
+        continue;
+      if (
+        !active &&
+        boxes.some(
+          (other) =>
+            box.left < other.right &&
+            box.right > other.left &&
+            box.top < other.bottom &&
+            box.bottom > other.top,
+        )
+      )
+        continue;
+      boxes.push(box);
+      labels.push({ country, x: point[0], y: point[1], width });
+    }
+    return labels;
+  }, [
+    subject,
+    countryGeometry,
+    countryId,
+    mapPoints,
+    overlayObstacle,
+    projection,
+    transform,
+    mapWidth,
+    mapHeight,
+    selectedCountryLabel,
+  ]);
   const updateTransform = useCallback(
     (value: AtlasTransform, animate = false) => {
       setCameraMoving(animate);
@@ -904,6 +1088,26 @@ export default function HistoryAtlas({
       disposed = true;
     };
   }, [subject, geometryAttempt]);
+
+  useEffect(() => {
+    if (subject !== "world") return;
+    let disposed = false;
+    setCountryError(false);
+    loadAtlasCountryGeometry()
+      .then((data) => {
+        if (!disposed) setCountryGeometry(data);
+      })
+      .catch(() => {
+        if (!disposed) setCountryError(true);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [subject, geometryAttempt]);
+
+  useEffect(() => {
+    setCountryId("");
+  }, [subject, unitId, eraId, regionId, subregionId, query]);
 
   useEffect(() => {
     let disposed = false;
@@ -1039,8 +1243,28 @@ export default function HistoryAtlas({
   );
 
   useEffect(() => {
-    if (provinceArea) setViewBounds(atlasAreaCameraBounds(provinceArea));
+    if (!provinceArea) return;
+    const next = atlasAreaCameraBounds(provinceArea);
+    setViewBounds((current) =>
+      current && next && current.every((value, index) => value === next[index])
+        ? current
+        : next,
+    );
   }, [provinceArea]);
+
+  useEffect(() => {
+    if (!selectedCountry) return;
+    updateTransform(
+      fitAtlasSelection(
+        projection,
+        {
+          coordinates: selectedCountry.properties.coordinates,
+          geometry: selectedCountry,
+        },
+        { width: mapWidth, height: mapHeight },
+      ),
+    );
+  }, [selectedCountry, projection, mapWidth, mapHeight, updateTransform]);
 
   useEffect(() => {
     if (!provinceArea) return;
@@ -1287,12 +1511,14 @@ export default function HistoryAtlas({
     setFocusRevision((value) => value + 1);
   };
   const resetView = () => {
+    setCountryId("");
     setDetailOpen(false);
     setViewBounds(null);
     pendingFocusRef.current = null;
     resetMap();
   };
   const clearFilters = () => {
+    setCountryId("");
     setViewBounds(null);
     setUnitId("");
     setEraId("");
@@ -1309,6 +1535,7 @@ export default function HistoryAtlas({
     nextRegionId = regionId,
     nextSubregionId = subregionId,
   ) => {
+    setCountryId("");
     if (nextUnitId !== unitId) setViewBounds(null);
     const regionChanged =
       nextRegionId !== regionId || nextSubregionId !== subregionId;
@@ -1372,6 +1599,7 @@ export default function HistoryAtlas({
     if (next) setDetailOpen(true);
   };
   const changeQuery = (value: string) => {
+    setCountryId("");
     const matches = searchEntries(scopeEntries, value);
     const normalized = normalizeAtlasSearch(value);
     const bestRank = matches[0] ? searchRank(matches[0], normalized) : 0;
@@ -1397,6 +1625,7 @@ export default function HistoryAtlas({
     }
   };
   const focusPlace = (placeId: string) => {
+    setCountryId("");
     const next =
       entries.find(
         ({ entry, place }) =>
@@ -1414,6 +1643,7 @@ export default function HistoryAtlas({
     setMobilePanel(null);
   };
   const selectStory = (next: LocatedEntry) => {
+    setCountryId("");
     const cleared: string[] = [];
     const nextSubject = unitsById.get(next.entry.unitId)?.subject || subject;
     if (nextSubject !== subject) return;
@@ -1453,6 +1683,14 @@ export default function HistoryAtlas({
     setDetailOpen(true);
     requestPlaceFocus(next.place.id);
     setMobilePanel(null);
+  };
+  const selectCountry = (country: AtlasCountryFeature) => {
+    setCountryId(country.properties.id);
+    setSelectedId("");
+    setDetailOpen(false);
+    setProvinceDetailOpen(false);
+    setFilterNotice("");
+    pendingFocusRef.current = null;
   };
   const placeList = (
     <section className="history-atlas__places" aria-label="장소 목록">
@@ -1742,6 +1980,7 @@ export default function HistoryAtlas({
                 event.preventDefault();
                 resetView();
               } else if (event.key === "Escape") {
+                setCountryId("");
                 setDetailOpen(false);
               }
             }}
@@ -1805,7 +2044,7 @@ export default function HistoryAtlas({
                 event.detail === 0 ||
                 !(event.target instanceof Element) ||
                 event.target.closest(
-                  ".history-atlas__overlay, .history-atlas__selection-card, .history-atlas__reopen, .history-atlas__point-label, .history-atlas__province-label, .history-atlas__attribution",
+                  ".history-atlas__overlay, .history-atlas__selection-card, .history-atlas__reopen, .history-atlas__point-label, .history-atlas__province-label, .history-atlas__country-label, .history-atlas__attribution",
                 )
               )
                 return;
@@ -1902,6 +2141,31 @@ export default function HistoryAtlas({
                 paths={paths}
                 transform={transform}
                 selectedRiver={selectedRiverPath}
+                countries={
+                  countryPaths && (
+                    <g className="history-atlas__countries">
+                      {countryPaths.countries.map(({ country, path }) => (
+                        <path
+                          key={country.properties.id}
+                          data-country-id={country.properties.id}
+                          className={`history-atlas__country${country.properties.id === countryId ? " is-active" : ""}`}
+                          d={path}
+                          onClick={() => selectCountry(country)}
+                        >
+                          <title>{country.properties.name}</title>
+                        </path>
+                      ))}
+                      <path
+                        className="history-atlas__country-border"
+                        d={countryPaths.borders}
+                      />
+                      <path
+                        className="history-atlas__country-border is-disputed"
+                        d={countryPaths.disputedBorders}
+                      />
+                    </g>
+                  )
+                }
               />
               {paths && (
                 <g
@@ -1920,7 +2184,32 @@ export default function HistoryAtlas({
                     <path
                       className="history-atlas__landform is-area is-active"
                       d={provincePath}
-                      onClick={() => {
+                      onClick={(event) => {
+                        if (
+                          subject === "world" &&
+                          countryGeometry &&
+                          projection.invert
+                        ) {
+                          const rect = mapRef.current?.getBoundingClientRect();
+                          const coordinates =
+                            rect &&
+                            projection.invert([
+                              (event.clientX - rect.left - transform.x) /
+                                transform.scale,
+                              (event.clientY - rect.top - transform.y) /
+                                transform.scale,
+                            ]);
+                          const country =
+                            coordinates &&
+                            findAtlasCountry(
+                              coordinates,
+                              countryGeometry.countries,
+                            );
+                          if (country) {
+                            selectCountry(country);
+                            return;
+                          }
+                        }
                         setProvinceDetailOpen(true);
                         setDetailOpen(true);
                       }}
@@ -1947,6 +2236,32 @@ export default function HistoryAtlas({
                 />
               )}
             </svg>
+            {paths &&
+              countryLabels.map(({ country, x, y, width }) => (
+                <button
+                  key={country.properties.id}
+                  type="button"
+                  className={`history-atlas__country-label${country.properties.id === countryId ? " is-active" : ""}`}
+                  data-country-label={country.properties.id}
+                  style={{ left: x, top: y, width }}
+                  aria-label={`${country.properties.name} 영역 보기`}
+                  aria-pressed={country.properties.id === countryId}
+                  onClick={() => selectCountry(country)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Escape") return;
+                    event.stopPropagation();
+                    setCountryId("");
+                    mapRef.current?.focus({ preventScroll: true });
+                  }}
+                >
+                  <span>{country.properties.name}</span>
+                </button>
+              ))}
+            <span className="history-atlas__country-status" role="status">
+              {selectedCountry
+                ? `${selectedCountry.properties.name} 영역 선택`
+                : ""}
+            </span>
             {paths && provinceArea && provinceLabel && (
               <button
                 type="button"
@@ -2072,6 +2387,18 @@ export default function HistoryAtlas({
                 </div>
               )}
             <AtlasCompass />
+            {countryError && subject === "world" && (
+              <div className="history-atlas__country-error" role="alert">
+                국가 경계를 불러오지 못했다.
+                <button
+                  type="button"
+                  className="history-atlas__button"
+                  onClick={() => setGeometryAttempt((value) => value + 1)}
+                >
+                  다시 시도
+                </button>
+              </div>
+            )}
             <div className="history-atlas__attribution">
               <a
                 href="https://www.naturalearthdata.com/about/terms-of-use/"
@@ -2080,6 +2407,18 @@ export default function HistoryAtlas({
               >
                 Natural Earth
               </a>
+              {subject === "world" && (
+                <>
+                  {" · "}
+                  <a
+                    href="https://datacatalog.worldbank.org/search/dataset/0038272/world-bank-official-boundaries"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    World Bank
+                  </a>
+                </>
+              )}
               {" · "}
               <a
                 href="https://www.openstreetmap.org/copyright"

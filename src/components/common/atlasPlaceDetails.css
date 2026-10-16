@@ -26,6 +26,9 @@
   align-items: center;
   gap: 4px;
 }
+.atlas-place-details__title h2 {
+  min-width: 0;
+}
 .atlas-place-details__title .ws-info-help__button {
   justify-content: flex-start;
 }

@@ -292,6 +292,75 @@
   padding: 0;
   z-index: 1;
 }
+.history-atlas__country {
+  fill: transparent;
+  stroke: none;
+  pointer-events: fill;
+  cursor: pointer;
+}
+.history-atlas__country.is-active {
+  fill: var(--ws-accent-soft, #fffbeb);
+}
+.history-atlas__country-border {
+  fill: none;
+  stroke: var(--ws-accent-text, #92400e);
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.history-atlas__country-border.is-disputed {
+  stroke-dasharray: 4 4;
+}
+.history-atlas__country-label {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  text-shadow: 0 0 4px var(--ws-surface, #ffffff);
+}
+.history-atlas__country-label span {
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.history-atlas__country-label.is-active span {
+  background: var(--ws-accent-soft, #fffbeb);
+  color: var(--ws-accent-text, #92400e);
+  border-color: var(--ws-accent-text, #92400e);
+  font-weight: 700;
+  text-shadow: none;
+}
+.history-atlas__country-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.history-atlas__country-error {
+  position: absolute;
+  left: 8px;
+  bottom: 40px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  max-width: calc(100% - 16px);
+  background: var(--ws-surface, #ffffff);
+  border-radius: 8px;
+  font-size: 14px;
+}
 .history-atlas__dot {
   display: block;
   width: 10px;
@@ -565,7 +634,9 @@
 .history-atlas__overlay .history-atlas__detail {
   flex: 1;
   min-height: 0;
+  margin-right: 8px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   touch-action: pan-y;
   padding: 8px 12px 12px;
@@ -575,7 +646,7 @@
   top: -8px;
   z-index: 2;
   margin: -8px -12px 0;
-  padding: 8px 40px 4px 12px;
+  padding: 8px 64px 4px 12px;
   background: var(--ws-surface, #ffffff);
 }
 .history-atlas__side-panel .history-atlas__place-list {
@@ -599,7 +670,7 @@
 .history-atlas__overlay-heading {
   position: absolute;
   top: 8px;
-  right: 8px;
+  right: 32px;
   z-index: 3;
   display: flex;
   align-items: center;

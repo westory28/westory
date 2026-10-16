@@ -794,6 +794,7 @@ for (const empty of [false, true]) {
           "RegionId",
           "SubregionId",
           "SelectedId",
+          "SelectedCountryId",
           "Panel",
           "Page",
           "Notice",
@@ -812,6 +813,7 @@ for (const empty of [false, true]) {
   exports.changeRegion("jeolla", "");
   assert.equal(state.Query, "");
   assert.equal(state.SelectedId, null);
+  assert.equal(state.SelectedCountryId, null);
   assert.equal(state.Panel, "list");
   equal(
     state.Camera ?? null,
@@ -855,6 +857,7 @@ vm.runInNewContext(
     focusGlobeView: m.focusGlobeView,
     setNotice: () => {},
     setSelectedId: () => {},
+    setSelectedCountryId: () => {},
     setPanel: () => {},
     setPanelOpen: () => {},
     setProvinceDetailOpen: () => {},
@@ -943,6 +946,7 @@ for (const [regionSubject, collection] of Object.entries(areaCollections)) {
         globeDeclarations.get("provinceArea").arguments[0].getText(globeAst),
         {
           selected: undefined,
+          selectedCountry: null,
           areas: allAreas,
           subject,
           regionId,
@@ -1107,6 +1111,7 @@ const selectFromAll = evaluateGlobe(chooseEntryHandler, {
       "Notice",
       "Page",
       "SelectedId",
+      "SelectedCountryId",
       "SelectionRevision",
       "Panel",
       "PanelOpen",
@@ -1157,6 +1162,74 @@ for (const moved of [false, true]) {
     selectedShapeEntry,
     moved ? undefined : worldStory.entry.id,
     "Only a deliberate click selects terrain; dragging never opens a story",
+  );
+}
+
+const countrySelectionState = {};
+const chooseCountry = evaluateGlobe(
+  globeDeclarations.get("chooseCountry").arguments[0].getText(globeAst),
+  {
+    countries: { countries: { features: [{ properties: { id: "KOR" } }] } },
+    pendingPanelFocus: { current: "detail" },
+    ...Object.fromEntries(
+      [
+        "SelectedCountryId",
+        "SelectedId",
+        "RegionId",
+        "SubregionId",
+        "ProvinceDetailOpen",
+        "Panel",
+        "PanelOpen",
+        "Notice",
+        "SelectionRevision",
+      ].map((key) => [
+        `set${key}`,
+        (value) => {
+          countrySelectionState[key] =
+            typeof value === "function" ? value(0) : value;
+        },
+      ]),
+    ),
+  },
+);
+chooseCountry("KOR");
+assert.equal(countrySelectionState.SelectedCountryId, "KOR");
+assert.equal(
+  countrySelectionState.SelectedId,
+  null,
+  "Country selection clears the story highlight",
+);
+assert.equal(
+  countrySelectionState.RegionId,
+  "",
+  "Country selection clears the previous regional highlight",
+);
+assert.equal(countrySelectionState.Panel, "list");
+chooseCountry("missing-country");
+assert.equal(
+  countrySelectionState.SelectedCountryId,
+  "KOR",
+  "Unknown countries do not change selection",
+);
+for (const moved of [false, true]) {
+  let selectedCountry;
+  evaluateGlobe(endPointerExpression, {
+    gesture: { current: { moved, multiple: false } },
+    pointers: { current: new Map([[1, { x: 100, y: 100 }]]) },
+    localPointer: () => ({ x: 100, y: 100 }),
+    drawnPoints: { current: [] },
+    nearestGlobePoint: m.nearestGlobePoint,
+    hitGeography: { current: () => null },
+    hitCountry: { current: () => ({ properties: { id: "KOR" } }) },
+    chooseCountry: (id) => {
+      selectedCountry = id;
+    },
+    commitView() {},
+  })({ pointerId: 1, currentTarget: { hasPointerCapture: () => false } });
+  assert.equal(
+    selectedCountry,
+    moved ? undefined : "KOR",
+    "Country selection follows only deliberate background clicks, never dragging",
   );
 }
 

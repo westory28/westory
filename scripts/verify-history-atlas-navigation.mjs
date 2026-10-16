@@ -866,6 +866,7 @@ for (const subject of ["korea", "world"])
           },
           ...Object.fromEntries(
             [
+              "CountryId",
               "ListPage",
               "Query",
               "UnitId",
