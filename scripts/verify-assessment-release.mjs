@@ -52,6 +52,7 @@ function harness() {
   const list = (path) => [...docs.keys()].filter((key) => key.startsWith(`${path}/`) && key.split("/").length === path.split("/").length + 1).map(snap);
   const calls = [];
   const browserReads = [];
+  const browserQueries = [];
   const operations = new Map();
   let afterCommand;
   let afterRead;
@@ -72,7 +73,7 @@ function harness() {
         doc: (_db, ...parts) => parts.join("/"), collection: (_db, ...parts) => parts.join("/"),
         getDoc: async (path) => { browserReads.push(path); const data = snap(path); afterRead?.(path); return { exists: () => data.exists, data: () => data.data }; },
         query: (path, ...filters) => ({ path, filters }), where: (field, operator, value) => ({ field, operator, value }),
-        getDocs: async (input) => { const path = input.path || input; browserReads.push(path); return { docs: list(path).filter(item => !input.filters || input.filters.every(filter => item.data[filter.field] === filter.value)).map((item) => ({ id: item.id, data: () => item.data })) }; },
+        getDocs: async (input) => { const path = input.path || input; browserReads.push(path); browserQueries.push({ path, filters: clone(input.filters || []) }); return { docs: list(path).filter(item => !input.filters || input.filters.every(filter => item.data[filter.field] === filter.value)).map((item) => ({ id: item.id, data: () => item.data })) }; },
       };
       if (name === "./semesterScope") return { getYearSemester: (value) => value || config, getSemesterCollectionPath: (value, collection) => `years/${value.year}/semesters/${value.semester}/${collection}`, getSemesterDocPath: (value, collection, id) => `years/${value.year}/semesters/${value.semester}/${collection}/${id}` };
       if (name === "./mockExamRounds") return { DEFAULT_MOCK_EXAM_ROUND: "round_1" };
@@ -106,7 +107,7 @@ function harness() {
       throw new Error(name);
     },
   });
-  return { api: module.exports, docs, calls, browserReads, auth, hook: (callback) => { afterCommand = callback; }, readHook: (callback) => { afterRead = callback; },
+  return { api: module.exports, docs, calls, browserReads, browserQueries, auth, hook: (callback) => { afterCommand = callback; }, readHook: (callback) => { afterRead = callback; },
     command: (commandType, raw) => adapter.apply({ transaction, commandId: "direct-test", commandType,
       payload: serverModule.exports.normalizeAssessmentPayload(commandType, raw), timestamp: "2026-10-08T00:00:00.000Z",
       actor: { actorUid: "teacher-a", actorRole: "teacher" } }) };
@@ -140,6 +141,67 @@ const newHistorySource = () => ({
   assert.equal(calls.length, 3, "ready rerun has no writes");
   console.log("PASS read-only preview, real server validation/hash, DRAFT publication and zero-write ready rerun");
 }
+{
+  const { api, docs, calls, browserReads, browserQueries } = harness();
+  Object.assign(docs.get(`${root}/assessment_config/settings`), {
+    unit_1_formative: { ...settings },
+    unit_2_diagnostic: { ...settings },
+    unit_2_formative: { ...settings },
+  });
+  // These unrelated published configurations have no questions. They must not
+  // be planned or block a saved question's own published assessment refresh.
+  await api.refreshPublishedQuizDefinitions(config, "unit_1", "diagnostic");
+  assert.deepEqual(browserQueries, [{ path: `${root}/quiz_questions`, filters: [
+    { field: "unitId", operator: "==", value: "unit_1" },
+    { field: "category", operator: "==", value: "diagnostic" },
+  ] }]);
+  assert.deepEqual(browserReads.filter(path => path.startsWith("semester_assessment_definitions/")), [
+    "semester_assessment_definitions/quiz:2026-2:unit_1:diagnostic",
+    "semester_assessment_definitions/quiz:2026-2:unit_1:diagnostic",
+  ]);
+  assert.equal(browserReads.some(path => path.includes("history_classrooms")), false);
+  assert.deepEqual(calls.map(call => [call.commandType, call.payload.sourceId, call.payload.category]), [
+    ["saveQuizAssessmentSettings", "unit_1", "diagnostic"],
+  ]);
+  assert.equal(docs.get("semester_assessment_definitions/quiz:2026-2:unit_1:diagnostic").status, "PUBLISHED");
+  await api.refreshPublishedQuizDefinitions(config, "unit_1", "diagnostic");
+  assert.equal(calls.length, 1, "An unchanged targeted refresh has no writes");
+  assert.equal(browserQueries.length, 2, "Each refresh reads only the requested question bank once");
+  console.log("PASS targeted quiz refresh skips unrelated quiz definitions/questions and all history reads");
+}
+{
+  const { api, docs, calls, browserReads, browserQueries } = harness();
+  docs.get(`${root}/assessment_config/settings`).unit_1_diagnostic.active = false;
+  await api.refreshPublishedQuizDefinitions(config, "unit_1", "diagnostic");
+  await api.refreshPublishedQuizDefinitions(config, "missing_unit", "formative");
+  assert.equal(calls.length, 0);
+  assert.equal(browserReads.length, 0, "Unpublished or missing targets do not read source/definition/history documents");
+  assert.equal(browserQueries.length, 0);
+  console.log("PASS inactive and missing quiz refresh targets cause no source reads or writes");
+}
+for (const explicitFirstRound of [false, true]) {
+  const { api, docs, calls, browserReads, browserQueries } = harness();
+  docs.set(`${root}/quiz_questions/mock-q`, {
+    id: "mock-q", unitId: "unit_1", category: "exam_prep", question: "Q", type: "word", answer: "A", contentRevision: 1,
+  });
+  Object.assign(docs.get(`${root}/assessment_config/settings`), {
+    unit_1_exam_prep: { ...settings, timeLimit: 120 },
+    ...(explicitFirstRound ? { unit_1_exam_prep__round_1: { ...settings } } : {}),
+    unit_1_exam_prep__round_2: { ...settings, timeLimit: 180 },
+    unit_1_exam_prep__round_3: { ...settings, active: false },
+    unit_2_exam_prep__round_2: { ...settings },
+  });
+  await api.refreshPublishedQuizDefinitions(config, "unit_1", "exam_prep");
+  assert.deepEqual(calls.map(call => call.payload.examRound), ["round_1", "round_2"]);
+  assert.equal(calls[0].payload.legacyConfigKey, explicitFirstRound ? "unit_1_exam_prep__round_1" : "unit_1_exam_prep");
+  assert.equal(calls[0].payload.durationSeconds, explicitFirstRound ? 60 : 120);
+  assert.equal(browserQueries.length, 2, "Only the two active target rounds are planned");
+  assert.ok(browserQueries.every(read => read.path === `${root}/quiz_questions` &&
+    read.filters.some(filter => filter.field === "unitId" && filter.value === "unit_1") &&
+    read.filters.some(filter => filter.field === "category" && filter.value === "exam_prep")));
+  assert.equal(browserReads.some(path => path.includes("history_classrooms") || path.includes("unit_2")), false);
+}
+console.log("PASS targeted mock-exam refresh preserves all active rounds, legacy first-round fallback and explicit-round precedence");
 {
   const { api, docs, calls } = harness();
   const plan = await api.planCurrentAssessmentRelease(config);
