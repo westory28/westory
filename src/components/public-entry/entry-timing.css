@@ -319,3 +319,51 @@
   top: auto;
   height: auto;
 }
+
+/* Keep lesson slides on their own scroll track when the whole scene cannot fit. */
+.public-entry .entry-lesson-preview-track {
+  width: 100%;
+  min-width: 0;
+}
+.public-entry .entry-lesson-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.public-entry[data-motion="on"]
+  .entry-lesson-deck[data-stage-overflow="true"]
+  .entry-lesson-preview-track {
+  height: 280svh;
+}
+.public-entry[data-motion="on"]
+  .entry-lesson-deck[data-stage-overflow="true"]
+  .entry-lesson-preview {
+  position: sticky;
+  top: 80px;
+  padding-block: 8px;
+}
+.public-entry[data-motion="on"] .entry-lesson-preview .entry-slide-device {
+  max-width: min(840px, max(96px, calc((100svh - 360px) * 1.415)));
+}
+@media (max-width: 767px) {
+  .public-entry .entry-lesson-preview {
+    gap: 20px;
+  }
+  .public-entry[data-motion="on"] .entry-lesson-preview .entry-slide-device {
+    max-width: min(520px, max(96px, calc((100svh - 360px) * 1.415)));
+  }
+}
+@media (max-height: 799px) {
+  .public-entry[data-motion="on"] .entry-lesson-preview-track {
+    height: 280svh;
+  }
+  .public-entry[data-motion="on"] .entry-lesson-preview {
+    position: sticky;
+    top: 80px;
+    gap: 16px;
+    padding-block: 8px;
+  }
+  .public-entry[data-motion="on"] .entry-lesson-preview .entry-deck-content {
+    gap: 16px;
+  }
+}
