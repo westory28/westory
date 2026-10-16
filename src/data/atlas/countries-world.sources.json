@@ -1,0 +1,98 @@
+{
+  "source": "World Bank Official Boundaries",
+  "sourceUrl": "https://datacatalog.worldbank.org/search/dataset/0038272/world-bank-official-boundaries",
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "retrievedDate": "2026-10-16",
+  "coordinateSystem": "WGS84 longitude, latitude",
+  "sources": {
+    "countries": {
+      "file": "World Bank Official Boundaries - Admin 0.geojson",
+      "url": "https://datacatalogfiles.worldbank.org/ddh-published/0038272/2/DR0095369/World%20Bank%20Official%20Boundaries%20%28GeoJSON%29/World%20Bank%20Official%20Boundaries%20-%20Admin%200.geojson",
+      "sha256": "e338c1cac8482721ffe6b59b9bd67eb8c6d11710840aaac3d9a60634aa9d9bff"
+    },
+    "undeterminedAreas": {
+      "file": "World Bank Official Boundaries - NDLSA.geojson",
+      "url": "https://datacatalogfiles.worldbank.org/ddh-published/0038272/2/DR0095369/World%20Bank%20Official%20Boundaries%20%28GeoJSON%29/World%20Bank%20Official%20Boundaries%20-%20NDLSA.geojson",
+      "sha256": "3ff2a1aead884d470d260720b7a62673c619cccebc66473614837ee5e7a57166"
+    },
+    "boundaryLines": {
+      "file": "wb-admin0-lines.geojson",
+      "url": "https://services.arcgis.com/iQ1dY19aHwbSDYIF/ArcGIS/rest/services/World_Bank_Global_Administrative_Divisions/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson&outSR=4326",
+      "sha256": "0b02fb9a74ad90915a72ad817ac0f1cb4c96bc9816564071f9a0a5b4262e9cfa"
+    },
+    "labels": {
+      "file": "ne_10m_admin_0_countries_iso.geojson",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_admin_0_countries_iso.geojson",
+      "sha256": "60eb10aa951f5872507c9436937508b09be4b43dc9fa7aad7644f23ef12e1cad"
+    }
+  },
+  "nameSource": {
+    "source": "Natural Earth",
+    "revision": "ca96624a56bd078437bca8184e78163e5039ad19",
+    "license": "Public domain; localized names from Wikidata CC0"
+  },
+  "countryCount": 243,
+  "sourceCountryCount": 244,
+  "boundaryStyles": {
+    "Dashed": 42,
+    "Solid (unclassified default)": 337,
+    "Dotted": 1,
+    "Tightly Dashed": 1
+  },
+  "koreaDisplayOverride": {
+    "mergedIds": [
+      "KOR",
+      "PRK"
+    ],
+    "id": "KOR",
+    "name": "대한민국",
+    "removedBoundaryLineIds": [
+      70
+    ]
+  },
+  "undeterminedAreas": [
+    "Aksai Chin",
+    "Chumar East",
+    "Chumar West",
+    "Demchok",
+    "Jadh Ganga Valley",
+    "Kauirik",
+    "Lapthal",
+    "Shipki Pass",
+    "Arunachal Pradesh",
+    "Gilgit Baltistan",
+    "Jammu and Kashmir",
+    "Kalapani",
+    "Karakoram Range",
+    "Golan Heights",
+    "Ilemi Triangle",
+    "No Man's Land",
+    "Shebaa Farms Dispute",
+    "UN Buffer Zone",
+    "British Indian Ocean Territory",
+    "Abyei",
+    "South Georgia and South Sandwich Islands",
+    "Western Sahara",
+    "Doklam",
+    "Falkland Islands"
+  ],
+  "notes": [
+    "Uses the World Bank institutional boundary view consistently, not a claim of universal UN recognition or historical territorial extent. Crimea is in Ukraine; Western Sahara and Golan Heights are excluded from country fills; Taiwan follows the World Bank China polygon.",
+    "World Bank NDLSA (Non-Determined Legal Status Areas) polygons are subtracted from selectable country geometry; they are not assigned to neighboring countries by point proximity.",
+    "The entire Korean peninsula is displayed as 대한민국 at the user's request. This explicit application display override is not part of the World Bank source policy.",
+    "Country fragments are unioned by ISO_A3; source coastline/land boundaries are simplified at 0.01 degrees with topology preservation and rounded to six decimals. No rectangular territorial bounds or artificial buffers are added. D3 clockwise outer rings; edges are densified at one degree for spherical rendering.",
+    "Source boundary Style values Dashed, Dotted and Tightly Dashed remain a separate disputed/non-final line mesh. Blank source styles use the ordinary solid-line mesh; source line FID 70 (the Korean demarcation) is omitted after geometric verification.",
+    "Korean names and preferred label locations/priorities use Natural Earth ISO-country metadata only. Country ownership and line classification do not use Natural Earth's de facto polygons. Label points outside the World Bank polygon are moved to an interior representative point.",
+    "The public ArcGIS response was checked for exceededTransferLimit. Downloads are hash-pinned; a changed upstream download fails regeneration until reviewed. Run python scripts/build-history-atlas-countries.py --source-cache PATH.",
+    "A final 0.02-degree display generalization removes islets below screen resolution while preserving every country's largest component and source enclave holes. Country footprints below one square degree are protected from overlap by neighboring generalized mainland coastlines (e.g. Monaco). The pass follows coordinate rounding to prevent degenerate sub-meter rings from reversing D3 winding. Small-scale reference outlines, not cadastral boundaries."
+  ],
+  "policyReferences": [
+    "https://github.com/worldbank/WB_GAD/blob/main/notebooks/TUTORIAL_drawing_WB_maps.ipynb",
+    "https://github.com/nvkelso/natural-earth-vector/blob/ca96624a56bd078437bca8184e78163e5039ad19/packages/Natural_Earth_quick_start/LOCALIZATION.md"
+  ],
+  "assetSha256": "dd2db380944b5a7f31fd48029376029ac6a4cdf7fee08e49524c9c6cd8f34b63",
+  "assetBytes": 5157133,
+  "omittedSubresolutionIslets": 59861,
+  "displayToleranceDegrees": 0.02
+}

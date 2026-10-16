@@ -302,6 +302,10 @@ for (const width of [286, 356, 640, 920]) {
     drawnPoints,
     land: null,
     geography: null,
+    countries: null,
+    selectedCountry: null,
+    selectedPlaceCountry: null,
+    highlightedCountry: null,
     selectedRiver: null,
     selectedShape: null,
     selectedLandform: null,
@@ -310,6 +314,7 @@ for (const width of [286, 356, 640, 920]) {
     provinceArea: null,
     selectableGeography: [],
     hitGeography: { current: () => undefined },
+    hitCountry: { current: () => null },
     grid: geography.geoGraticule10(),
     nameOf: (item) => item.place.name,
   };
@@ -545,6 +550,7 @@ for (const width of [286, 356, 640, 920]) {
 
 let opened;
 evaluate(flat.expression("focusPlace"), {
+  setCountryId: () => {},
   entries: [],
   selected: undefined,
   dokdoItem,
@@ -584,6 +590,7 @@ evaluate(flat.expression("selectStory"), {
       "Query",
       "FilterNotice",
       "SelectedId",
+      "CountryId",
       "DetailOpen",
       "MobilePanel",
     ].map((key) => [
@@ -635,6 +642,7 @@ const chooseEntry = evaluate(sphere.expression("chooseEntry", true), {
       "Panel",
       "PanelOpen",
       "ProvinceDetailOpen",
+      "SelectedCountryId",
       "Camera",
     ].map((key) => [
       `set${key}`,

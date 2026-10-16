@@ -436,6 +436,7 @@ for (const viewport of viewports)
         entryName: (item) => item.place.name,
         ...Object.fromEntries(
           [
+            "CountryId",
             "SelectedId",
             "DetailOpen",
             "MobilePanel",

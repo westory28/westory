@@ -466,7 +466,9 @@
 }
 .history-globe__detail {
   min-height: 0;
+  margin-right: 8px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   padding: 0 12px 12px;
 }
@@ -475,13 +477,12 @@
   top: 0;
   z-index: 1;
   min-height: 0;
-  padding: 8px 0;
+  padding: 8px 64px 8px 0;
   border: 0;
   background: var(--ws-surface, #ffffff);
 }
 .history-globe__detail .atlas-place-details__title {
   min-height: 44px;
-  padding-right: 44px;
 }
 .history-globe__detail .atlas-place-details__context {
   margin-top: 8px;
@@ -489,7 +490,7 @@
 .history-globe .history-globe__back {
   position: absolute;
   top: 8px;
-  right: 8px;
+  right: 32px;
   z-index: 2;
   width: 44px;
   height: 44px;
@@ -567,4 +568,17 @@
   .history-globe__header h1 {
     font-size: 24px;
   }
+}
+
+.history-globe__labels g[data-globe-country] {
+  pointer-events: all;
+  cursor: pointer;
+}
+.history-globe__labels [data-geography-kind="country"].is-active > rect:first-child {
+  fill: var(--ws-accent-soft, #fffbeb);
+  stroke: var(--ws-accent-text, #92400e);
+  stroke-opacity: 0.6;
+}
+.history-globe__labels [data-geography-kind="country"].is-active text {
+  fill: var(--ws-accent-text, #92400e);
 }

@@ -49,6 +49,15 @@ import {
 } from "../../lib/historyAtlasRivers";
 import { findAtlasLandform } from "../../lib/historyAtlasLandforms";
 import {
+  ATLAS_COUNTRY_HELP,
+  ATLAS_COUNTRY_LICENSE_URL,
+  findAtlasCountry,
+  findAtlasCountryForPlace,
+  loadAtlasCountryGeometry,
+  type AtlasCountryFeature,
+  type AtlasCountryGeometry,
+} from "../../lib/historyAtlasCountries";
+import {
   findAtlasArea,
   findAtlasRegionArea,
   isAtlasAreaPlace,
@@ -233,6 +242,9 @@ export default function HistoryGlobe({
   const [subregionId, setSubregionId] = useState("");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedCountryId, setSelectedCountryId] = useState<string | null>(
+    null,
+  );
   const [selectionRevision, setSelectionRevision] = useState(0);
   const [page, setPage] = useState(0);
   const [panel, setPanel] = useState<"list" | "detail">("list");
@@ -241,6 +253,7 @@ export default function HistoryGlobe({
   const [notice, setNotice] = useState("");
   const [land, setLand] = useState<GeoPermissibleObjects | null>(null);
   const [geography, setGeography] = useState<GlobeGeography | null>(null);
+  const [countries, setCountries] = useState<AtlasCountryGeometry | null>(null);
   const [landError, setLandError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [rivers, setRivers] = useState<AtlasRiverCollection | null>(null);
@@ -258,6 +271,9 @@ export default function HistoryGlobe({
   const hitGeography = useRef<(x: number, y: number) => Item | undefined>(
     () => undefined,
   );
+  const hitCountry = useRef<
+    (x: number, y: number) => AtlasCountryFeature | null
+  >(() => null);
   const drawRef = useRef<() => void>(() => {});
   const raf = useRef<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -306,6 +322,20 @@ export default function HistoryGlobe({
     [items],
   );
   const selected = selectedId ? itemsById.get(selectedId) : undefined;
+  const selectedCountry = useMemo(
+    () =>
+      countries?.countries.features.find(
+        (country) => country.properties.id === selectedCountryId,
+      ) || null,
+    [countries, selectedCountryId],
+  );
+  const selectedPlaceCountry = useMemo(
+    () =>
+      selected && countries
+        ? findAtlasCountryForPlace(selected.place, countries.countries)
+        : null,
+    [selected, countries],
+  );
   const dokdoItem = useMemo(
     () =>
       items.find(
@@ -378,13 +408,16 @@ export default function HistoryGlobe({
     [selected, areas],
   );
   const provinceArea = useMemo(() => {
-    if (!areas || selected) return null;
+    if (!areas || selected || selectedCountry) return null;
     const region = (subregionId || regionId).replace(/^(korea|world):/, "");
     return region ? findAtlasRegionArea(region, areas) : null;
-  }, [areas, selected, regionId, subregionId]);
-  const selectedShape = selectedRiver || selectedLandform || selectedArea;
-  const highlightedShape = selectedShape || provinceArea;
-  const highlightedArea = selectedLandform || selectedArea || provinceArea;
+  }, [areas, selected, selectedCountry, regionId, subregionId]);
+  const highlightedCountry = selectedCountry || selectedPlaceCountry;
+  const selectedShape =
+    selectedRiver || selectedPlaceCountry || selectedLandform || selectedArea;
+  const highlightedShape = selectedCountry || selectedShape || provinceArea;
+  const highlightedArea =
+    highlightedCountry || selectedLandform || selectedArea || provinceArea;
   const detailOpen =
     (selected && panel === "detail") || (provinceArea && provinceDetailOpen);
   const selectableGeography = useMemo(
@@ -467,11 +500,12 @@ export default function HistoryGlobe({
   useEffect(() => {
     let active = true;
     setLandError(false);
-    Promise.all([loadLand(), loadGeography()])
-      .then(([value, detail]) => {
+    Promise.all([loadLand(), loadGeography(), loadAtlasCountryGeometry()])
+      .then(([value, detail, countryGeometry]) => {
         if (active) {
           setLand(value);
           setGeography(detail);
+          setCountries(countryGeometry);
         }
       })
       .catch(() => {
@@ -681,16 +715,28 @@ export default function HistoryGlobe({
         path(geography.deserts);
         context.fillStyle = color("--ws-accent-soft");
         context.fill();
+      }
+      if (highlightedCountry) {
         context.beginPath();
-        path(geography.borders);
-        context.strokeStyle = color("--ws-text-soft");
+        path(highlightedCountry);
+        context.fillStyle = color("--ws-accent-soft");
+        context.fill();
+      }
+      if (countries) {
+        context.beginPath();
+        path(countries.borders);
+        context.strokeStyle = color("--ws-accent-text");
+        context.globalAlpha = 0.45;
         context.lineWidth = 0.9;
         context.stroke();
         context.beginPath();
-        path(geography.disputedBorders);
+        path(countries.disputedBorders);
         context.setLineDash([4, 4]);
         context.stroke();
         context.setLineDash([]);
+        context.globalAlpha = 1;
+      }
+      if (geography) {
         context.beginPath();
         path(geography.rivers);
         context.strokeStyle = color("--ws-primary");
@@ -711,7 +757,7 @@ export default function HistoryGlobe({
         context.stroke();
       }
       context.globalAlpha = 1;
-      if (highlightedShape) {
+      if (highlightedShape && !highlightedCountry) {
         context.beginPath();
         path(highlightedShape);
         if (highlightedArea) {
@@ -726,7 +772,7 @@ export default function HistoryGlobe({
       }
       riverHaloRef.current?.setAttribute(
         "d",
-        highlightedShape
+        highlightedShape && !highlightedCountry
           ? geoPath(projection).digits(1)(highlightedShape) || ""
           : "",
       );
@@ -759,6 +805,21 @@ export default function HistoryGlobe({
           context.restore();
         }
         return undefined;
+      };
+      hitCountry.current = (x, y) => {
+        if (!countries || !projection.invert) return null;
+        const [centerX, centerY] = projection.translate();
+        // Orthographic inversion outside the sphere can otherwise return a
+        // plausible longitude/latitude and select an invisible country.
+        if (Math.hypot(x - centerX, y - centerY) > projection.scale())
+          return null;
+        const coordinates = projection.invert([x, y]);
+        return coordinates && coordinates.every(Number.isFinite)
+          ? findAtlasCountry(
+              coordinates as [number, number],
+              countries.countries,
+            )
+          : null;
       };
       const points: Point[] = [];
       const addPoint = (item: Item, coordinates: [number, number] | null) => {
@@ -873,6 +934,7 @@ export default function HistoryGlobe({
         group.style.display = "none";
         group.removeAttribute("data-globe-label");
         group.removeAttribute("data-globe-region");
+        group.removeAttribute("data-globe-country");
         group.removeAttribute("data-geography-kind");
         group.classList.remove("is-active");
         group.setAttribute("role", "img");
@@ -880,11 +942,76 @@ export default function HistoryGlobe({
         group.setAttribute("tabindex", "-1");
       }
       let labelIndex = 0;
+      let geographicLabelCount = 0;
+      const drawCountryLabel = (
+        country: AtlasCountryFeature,
+        active: boolean,
+      ) => {
+        const {
+          name,
+          coordinates,
+          minZoom,
+          id: countryId,
+        } = country.properties;
+        if (!active && camera.zoom < minZoom / 1.7) return false;
+        const xy =
+          active && shapeAnchor
+            ? shapeAnchor
+            : isGlobePointVisible(coordinates, camera)
+              ? projection(coordinates)
+              : null;
+        if (!xy) return false;
+        context.font = `${active ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
+        const textWidth = Math.min(width - 32, context.measureText(name).width);
+        const [centerX, y] = xy;
+        const x = active
+          ? Math.max(8, Math.min(width - textWidth - 16, centerX))
+          : centerX - textWidth / 2;
+        if (x < 8 || x + textWidth > width - 8 || y < 80 || y > height - 36)
+          return false;
+        if (
+          boxes.some(
+            (box) =>
+              Math.abs(box.y - y) < (box.h + 44) / 2 &&
+              x < box.x + box.w + 12 &&
+              x + textWidth > box.x - 12,
+          )
+        )
+          return false;
+        boxes.push({ x, y, w: textWidth, h: 44 });
+        const group = labelNodes[labelIndex++] as SVGGElement;
+        group.style.display = "";
+        group.classList.toggle("is-active", active);
+        group.setAttribute("data-globe-country", countryId);
+        group.setAttribute("data-geography-kind", "country");
+        group.setAttribute("role", "button");
+        group.setAttribute("tabindex", "0");
+        group.setAttribute("aria-label", `${name} 영역 보기`);
+        group.setAttribute("aria-pressed", String(active));
+        group.setAttribute("transform", `translate(${x},${y})`);
+        const background = group.children[0] as SVGRectElement;
+        background.style.display = active ? "" : "none";
+        background.setAttribute("width", String(textWidth + 16));
+        const text = group.children[1] as SVGTextElement;
+        text.textContent = name;
+        text.setAttribute("textLength", String(textWidth));
+        (group.children[2] as SVGRectElement).style.display = "none";
+        (group.children[3] as SVGRectElement).setAttribute(
+          "width",
+          String(Math.max(44, textWidth + 16)),
+        );
+        geographicLabelCount += 1;
+        return true;
+      };
+      if (selectedCountry) drawCountryLabel(selectedCountry, true);
       const labelledPlaces = new Set<string>();
       for (const point of labels) {
         const isDokdo = point.item.place.id === ATLAS_DOKDO_ID;
-        const label = nameOf(point.item);
         const activeLabel = point.item.place.id === selected?.place.id;
+        const label =
+          activeLabel && selectedPlaceCountry
+            ? selectedPlaceCountry.properties.name
+            : nameOf(point.item);
         const emphasized = activeLabel;
         context.font = `${emphasized ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
         const textWidth = Math.min(
@@ -940,6 +1067,8 @@ export default function HistoryGlobe({
         labelledPlaces.add(point.item.place.id);
         group.classList.toggle("is-active", activeLabel);
         group.setAttribute("data-globe-label", point.item.entry.id);
+        if (activeLabel && selectedPlaceCountry)
+          group.setAttribute("data-geography-kind", "country");
         group.setAttribute("role", "button");
         group.setAttribute("aria-label", `${label} 설명 보기`);
         group.setAttribute("aria-pressed", String(activeLabel));
@@ -947,7 +1076,8 @@ export default function HistoryGlobe({
         group.setAttribute("transform", `translate(${x},${y})`);
         background.style.display = emphasized ? "" : "none";
         background.setAttribute("width", String(textWidth + 16));
-        ripple.style.display = activeLabel ? "" : "none";
+        ripple.style.display =
+          activeLabel && !selectedPlaceCountry ? "" : "none";
         ripple.setAttribute("width", String(textWidth + 16));
         text.textContent = label;
         text.setAttribute("textLength", String(textWidth));
@@ -985,15 +1115,20 @@ export default function HistoryGlobe({
           String(Math.max(44, textWidth + 16)),
         );
       }
+      for (const country of countries?.countries.features || []) {
+        if (geographicLabelCount >= 28) break;
+        if (country === highlightedCountry) continue;
+        drawCountryLabel(country, false);
+      }
       // Geographic labels share collision boxes with place names; selected
       // places always get priority. Draw these static labels in the same frame.
       context.font = "500 14px 'Noto Sans KR', sans-serif";
       context.textAlign = "center";
       context.textBaseline = "middle";
-      let geographicLabelCount = 0;
       for (const label of geography?.labels || []) {
         if (geographicLabelCount >= 28) break;
         if (
+          label.kind === "country" ||
           camera.zoom < label.minZoom ||
           !isGlobePointVisible(label.coordinates, camera)
         )
@@ -1062,9 +1197,7 @@ export default function HistoryGlobe({
         context.fillStyle = color(
           label.kind === "desert" || label.kind === "terrain"
             ? "--ws-accent-text"
-            : label.kind === "country"
-              ? "--ws-text-muted"
-              : "--ws-primary-text",
+            : "--ws-primary-text",
         );
         context.fillText(label.name, x, y);
         geographicLabelCount += 1;
@@ -1074,6 +1207,10 @@ export default function HistoryGlobe({
   }, [
     land,
     geography,
+    countries,
+    selectedCountry,
+    selectedPlaceCountry,
+    highlightedCountry,
     mapItems,
     requestDraw,
     selected,
@@ -1092,6 +1229,27 @@ export default function HistoryGlobe({
     wide,
   ]);
 
+  const chooseCountry = useCallback(
+    (countryId: string) => {
+      if (
+        !countries?.countries.features.some(
+          (country) => country.properties.id === countryId,
+        )
+      )
+        return;
+      pendingPanelFocus.current = null;
+      setSelectedCountryId(countryId);
+      setSelectedId(null);
+      setRegionId("");
+      setSubregionId("");
+      setProvinceDetailOpen(false);
+      setPanel("list");
+      setPanelOpen(false);
+      setNotice("");
+      setSelectionRevision((value) => value + 1);
+    },
+    [countries],
+  );
   const chooseEntry = useCallback(
     (entryId: string) => {
       const next = itemsById.get(entryId);
@@ -1134,6 +1292,7 @@ export default function HistoryGlobe({
         );
       } else setNotice("");
       pendingPanelFocus.current = "detail";
+      setSelectedCountryId(null);
       setProvinceDetailOpen(false);
       setSelectedId(entryId);
       setSelectionRevision((value) => value + 1);
@@ -1158,6 +1317,7 @@ export default function HistoryGlobe({
     const item = itemsById.get(entryId);
     if (!item) return;
     pendingPanelFocus.current = "detail";
+    setSelectedCountryId(null);
     setProvinceDetailOpen(false);
     setSelectedId(entryId);
     setSelectionRevision((value) => value + 1);
@@ -1175,6 +1335,7 @@ export default function HistoryGlobe({
     setSelectionRevision((value) => value + 1);
   };
   const resetFilters = () => {
+    setSelectedCountryId(null);
     setProvinceDetailOpen(false);
     setUnitId("");
     setEraId("");
@@ -1196,6 +1357,7 @@ export default function HistoryGlobe({
     );
   };
   const changeRegion = (group: string, subregion: string) => {
+    setSelectedCountryId(null);
     setProvinceDetailOpen(false);
     setRegionId(group);
     setSubregionId(subregion);
@@ -1227,6 +1389,7 @@ export default function HistoryGlobe({
     if (next) setCamera(next);
   };
   const returnToList = () => {
+    setSelectedCountryId(null);
     setProvinceDetailOpen(false);
     const index = filtered.findIndex(
       (item) => item.place.id === selected?.place.id,
@@ -1351,6 +1514,11 @@ export default function HistoryGlobe({
       } else {
         const feature = hitGeography.current(pointer.x, pointer.y);
         if (feature) chooseEntry(feature.entry.id);
+        else {
+          const country = hitCountry.current(pointer.x, pointer.y);
+          if (country) chooseCountry(country.properties.id);
+          else setSelectedCountryId(null);
+        }
       }
     }
     if (pointers.current.size) startGesture(original || undefined);
@@ -1392,7 +1560,11 @@ export default function HistoryGlobe({
     if (event.key === "-" || event.key === "_")
       next = { ...current, zoom: current.zoom / 1.3 };
     if (event.key.toLowerCase() === "n") next = { ...current, roll: 0 };
-    if (event.key === "Home") next = GLOBE_INITIAL_VIEW;
+    if (event.key === "Home") {
+      setSelectedCountryId(null);
+      next = GLOBE_INITIAL_VIEW;
+    }
+    if (event.key === "Escape") setSelectedCountryId(null);
     if (next) {
       event.preventDefault();
       setCamera(next);
@@ -1516,11 +1688,33 @@ export default function HistoryGlobe({
                   >
                     Natural Earth
                   </a>
-                  의 현대 국경·하천·사막과 지명을 표시한다. 점선은 분쟁·통제선
-                  등이며 역사 시대의 영토를 뜻하지 않는다. 작은 섬과 해안선은
+                  의 현대 해안선·하천·사막과 지명을 표시한다. 작은 섬과 해안선은
                   세계 개관에 맞춰 단순화되어 있다. 8도는 현재 행정구역을 묶은
                   탐색 범위이며, 세계 권역은 현재 국가 경계와 UN M49 등의 지리
                   구분을 따른다. 역사 시대의 영토를 뜻하지 않는다.
+                </>
+              ),
+            },
+            {
+              title: "국가 영역",
+              text: (
+                <>
+                  {ATLAS_COUNTRY_HELP}{" "}
+                  <a
+                    href="https://datacatalog.worldbank.org/search/dataset/0038272/world-bank-official-boundaries"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    World Bank Official Boundaries
+                  </a>
+                  {" · "}
+                  <a
+                    href={ATLAS_COUNTRY_LICENSE_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    CC BY 4.0
+                  </a>
                 </>
               ),
             },
@@ -1573,6 +1767,7 @@ export default function HistoryGlobe({
               value={unitId}
               onChange={(event) => {
                 setUnitId(event.target.value);
+                setSelectedCountryId(null);
                 setProvinceDetailOpen(false);
                 setSelectedId(null);
                 setPanel("list");
@@ -1600,6 +1795,7 @@ export default function HistoryGlobe({
               value={eraId}
               onChange={(event) => {
                 setEraId(event.target.value);
+                setSelectedCountryId(null);
                 setProvinceDetailOpen(false);
                 setSelectedId(null);
                 setPanel("list");
@@ -1689,6 +1885,7 @@ export default function HistoryGlobe({
             placeholder="지명·옛 이름"
             onChange={(event) => {
               setQuery(event.target.value);
+              setSelectedCountryId(null);
               setProvinceDetailOpen(false);
               setSelectedId(null);
               setPage(0);
@@ -1714,7 +1911,10 @@ export default function HistoryGlobe({
             role="img"
             aria-label={
               "역사 지구본. 방향키로 회전, 더하기와 빼기로 확대·축소." +
-              (selected ? " 선택한 장소: " + nameOf(selected) : "")
+              (selected ? " 선택한 장소: " + nameOf(selected) : "") +
+              (selectedCountry
+                ? " 선택한 국가: " + selectedCountry.properties.name
+                : "")
             }
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -1757,16 +1957,33 @@ export default function HistoryGlobe({
                 onClick={(event) => {
                   const entryId = event.currentTarget.dataset.globeLabel;
                   if (entryId) chooseEntry(entryId);
+                  else if (event.currentTarget.dataset.globeCountry)
+                    chooseCountry(event.currentTarget.dataset.globeCountry);
                   else if (event.currentTarget.dataset.globeRegion)
                     openProvinceDetails();
                 }}
                 onKeyDown={(event) => {
+                  if (
+                    event.key === "Escape" &&
+                    event.currentTarget.dataset.globeCountry
+                  ) {
+                    event.preventDefault();
+                    setSelectedCountryId(null);
+                    canvasRef.current?.focus({ preventScroll: true });
+                    return;
+                  }
                   if (event.key !== "Enter" && event.key !== " ") return;
                   const entryId = event.currentTarget.dataset.globeLabel;
-                  if (!entryId && !event.currentTarget.dataset.globeRegion)
+                  const countryId = event.currentTarget.dataset.globeCountry;
+                  if (
+                    !entryId &&
+                    !countryId &&
+                    !event.currentTarget.dataset.globeRegion
+                  )
                     return;
                   event.preventDefault();
                   if (entryId) chooseEntry(entryId);
+                  else if (countryId) chooseCountry(countryId);
                   else openProvinceDetails();
                 }}
               >
@@ -1844,7 +2061,10 @@ export default function HistoryGlobe({
               </div>
               <button
                 aria-label="지구본 전체 보기"
-                onClick={() => setCamera(GLOBE_INITIAL_VIEW)}
+                onClick={() => {
+                  setSelectedCountryId(null);
+                  setCamera(GLOBE_INITIAL_VIEW);
+                }}
               >
                 전체
               </button>
@@ -1905,6 +2125,14 @@ export default function HistoryGlobe({
             </div>
           )}
           <div className="history-globe__attribution">
+            <a
+              href="https://datacatalog.worldbank.org/search/dataset/0038272/world-bank-official-boundaries"
+              target="_blank"
+              rel="noreferrer"
+            >
+              World Bank
+            </a>{" "}
+            ·{" "}
             <a
               href="https://www.naturalearthdata.com/about/terms-of-use/"
               target="_blank"
