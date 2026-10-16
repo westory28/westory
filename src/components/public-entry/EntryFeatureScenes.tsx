@@ -134,73 +134,80 @@ export function LessonScene() {
             lines={["한 장의 자료에서,", "깊어지는 생각."]}
           />
         </div>
-        <div
-          className="entry-deck-content"
-          role="region"
-          aria-roledescription="슬라이드쇼"
-          aria-label="실제 학습지 3장"
-        >
-          <div className="entry-slide-copy" aria-live="polite">
-            <span className="entry-slide-count">0{slide + 1} / 03</span>
-            <h3>
-              {lessonSlides[slide].title[0]} <br />
-              <span>{lessonSlides[slide].title[1]}</span>
-            </h3>
-            <p>{lessonSlides[slide].description}</p>
-          </div>
-          <div className="entry-slide-device">
-            <Device kind="laptop">
-              {lessonSlides.map((item, index) => (
-                <div
-                  className="entry-material-slide"
-                  key={item.label}
-                  data-active={slide === index}
-                  role="group"
-                  aria-roledescription="슬라이드"
-                  aria-label={`${index + 1} / 3 ${item.label}`}
-                  aria-hidden={slide !== index}
-                >
-                  <img
-                    src={item.image}
-                    alt={item.alt}
-                    width="1500"
-                    height="1060"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </div>
-              ))}
-            </Device>
-          </div>
-        </div>
-        <div className="entry-slide-controls" aria-label="학습지 슬라이드 선택">
-          <button
-            type="button"
-            aria-label="이전 학습지"
-            onClick={() => setSlide((slide + 2) % 3)}
-          >
-            ←
-          </button>
-          <div>
-            {lessonSlides.map((item, index) => (
+        <div className="entry-lesson-preview-track" data-entry-slide-track>
+          <div className="entry-lesson-preview" data-entry-slide-stage>
+            <div
+              className="entry-deck-content"
+              role="region"
+              aria-roledescription="슬라이드쇼"
+              aria-label="실제 학습지 3장"
+            >
+              <div className="entry-slide-copy" aria-live="polite">
+                <span className="entry-slide-count">0{slide + 1} / 03</span>
+                <h3>
+                  {lessonSlides[slide].title[0]} <br />
+                  <span>{lessonSlides[slide].title[1]}</span>
+                </h3>
+                <p>{lessonSlides[slide].description}</p>
+              </div>
+              <div className="entry-slide-device">
+                <Device kind="laptop">
+                  {lessonSlides.map((item, index) => (
+                    <div
+                      className="entry-material-slide"
+                      key={item.label}
+                      data-active={slide === index}
+                      role="group"
+                      aria-roledescription="슬라이드"
+                      aria-label={`${index + 1} / 3 ${item.label}`}
+                      aria-hidden={slide !== index}
+                    >
+                      <img
+                        src={item.image}
+                        alt={item.alt}
+                        width="1500"
+                        height="1060"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                  ))}
+                </Device>
+              </div>
+            </div>
+            <div
+              className="entry-slide-controls"
+              aria-label="학습지 슬라이드 선택"
+            >
               <button
                 type="button"
-                key={item.label}
-                aria-pressed={slide === index}
-                onClick={() => setSlide(index)}
+                aria-label="이전 학습지"
+                onClick={() => setSlide((slide + 2) % 3)}
               >
-                <span aria-hidden="true">0{index + 1}</span>
-                {item.label}
+                ←
               </button>
-            ))}
+              <div>
+                {lessonSlides.map((item, index) => (
+                  <button
+                    type="button"
+                    key={item.label}
+                    aria-pressed={slide === index}
+                    onClick={() => setSlide(index)}
+                  >
+                    <span aria-hidden="true">0{index + 1}</span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                aria-label="다음 학습지"
+                onClick={() => setSlide((slide + 1) % 3)}
+              >
+                →
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            aria-label="다음 학습지"
-            onClick={() => setSlide((slide + 1) % 3)}
-          >
-            →
-          </button>
         </div>
       </div>
     </section>
