@@ -16,6 +16,10 @@ Object.assign(exports, require('./lessonPdfBeta'));
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';
+exports.getQuizEditorCatalog = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
+  require('./quizEditorCatalog').createQuizEditorCatalogHandler({ db }),
+);
 exports.checkStudentAttendance = onCall(
   { region: REGION },
   require('./studentAttendance').createStudentAttendanceHandler({ db }),

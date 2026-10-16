@@ -43,6 +43,13 @@ for (const name of lifecycleNames) {
   assert.equal(typeof callable.run, "function", `${name} must expose its callable handler.`);
 }
 
+const catalog = deployedFunctions.getQuizEditorCatalog;
+assert.equal(typeof catalog, "function", "index.js must export getQuizEditorCatalog.");
+assert.deepEqual(catalog.__endpoint?.region, ["asia-northeast3"]);
+assert.equal(catalog.__endpoint?.platform, "gcfv2");
+assert.ok(Object.hasOwn(catalog.__endpoint, "callableTrigger"));
+assert.equal(typeof catalog.run, "function");
+
 console.log(JSON.stringify({
   suite: "login-functions-deployment-exports",
   passed: true,
