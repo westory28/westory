@@ -7,6 +7,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as geography from "d3-geo";
 import "./verify-history-atlas-dokdo-ui.mjs";
+import "./verify-history-atlas-interactions.mjs";
 
 const cache = new Map();
 const load = (filename) => {

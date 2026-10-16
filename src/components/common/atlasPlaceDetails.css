@@ -24,7 +24,10 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+}
+.atlas-place-details__title .ws-info-help__button {
+  justify-content: flex-start;
 }
 .atlas-place-details__definition {
   margin-top: 8px !important;

@@ -121,7 +121,7 @@ function AtlasHelp() {
           rows: [
             {
               label: "이동",
-              content: "마우스 드래그 · 터치 두 손가락 또는 ‘지도 이동’",
+              content: "마우스 드래그 · 한 손가락 드래그",
             },
             {
               label: "확대·축소",
@@ -436,6 +436,7 @@ export default function HistoryAtlas({
   const [selectedId, setSelectedId] = useState("");
   const [focusRevision, setFocusRevision] = useState(0);
   const pendingFocusRef = useRef<string | null>(null);
+  const pendingVisualScaleRef = useRef<number | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [mapWidth, setMapWidth] = useState(640);
   const [overlayHeight, setOverlayHeight] = useState<number | null>(null);
@@ -456,7 +457,6 @@ export default function HistoryAtlas({
   const [transform, setTransform] = useState<AtlasTransform>(ATLAS_IDENTITY);
   const [cameraMoving, setCameraMoving] = useState(false);
   const [motionPaused, setMotionPaused] = useState(false);
-  const [moveMode, setMoveMode] = useState(false);
   const transformRef = useRef(transform);
   const movedRef = useRef(false);
   const dragRef = useRef<{
@@ -921,7 +921,6 @@ export default function HistoryAtlas({
 
   useEffect(() => {
     resetMap();
-    setMoveMode(false);
   }, [subject, bounds, mapWidth, mapHeight, resetMap]);
 
   useEffect(() => {
@@ -981,6 +980,9 @@ export default function HistoryAtlas({
 
   useEffect(() => {
     if (detailOpen && selected) {
+      if (!pendingFocusRef.current)
+        pendingVisualScaleRef.current =
+          projection.scale() * transformRef.current.scale;
       pendingFocusRef.current = selected.place.id;
       setFocusRevision((value) => value + 1);
     }
@@ -1121,6 +1123,12 @@ export default function HistoryAtlas({
           coordinates: coordinates as [number, number],
           contextBounds: contextExtent,
           geometry: selectedShape,
+          minimumScale:
+            subject === "korea" &&
+            !selectedShape &&
+            pendingVisualScaleRef.current !== null
+              ? pendingVisualScaleRef.current / projection.scale()
+              : undefined,
         },
         {
           width: mapWidth,
@@ -1183,16 +1191,15 @@ export default function HistoryAtlas({
         event.target instanceof Element &&
         event.target.closest(".history-atlas__overlay")
       ) {
+        if (!touch && event.touches.length === 1) movedRef.current = false;
         touch = null;
         return;
       }
       if (event.touches.length === 0) return;
-      movedRef.current = false;
-      if (event.touches.length > 1 || moveMode) {
-        if (event.cancelable && event.touches.length > 1)
-          event.preventDefault();
-        touch = { ...touchPoint(event), start: transformRef.current };
-      } else touch = null;
+      movedRef.current =
+        event.touches.length > 1 || (!!touch && movedRef.current);
+      if (event.cancelable && event.touches.length > 1) event.preventDefault();
+      touch = { ...touchPoint(event), start: transformRef.current };
     };
     const move = (event: TouchEvent) => {
       if (!touch || event.touches.length === 0) return;
@@ -1201,12 +1208,15 @@ export default function HistoryAtlas({
         return;
       }
       const next = touchPoint(event);
-      if (event.cancelable) event.preventDefault();
+      const distance = Math.hypot(next.x - touch.x, next.y - touch.y);
       if (
-        Math.hypot(next.x - touch.x, next.y - touch.y) > 5 ||
-        Math.abs(next.distance - touch.distance) > 5
+        !movedRef.current &&
+        distance <= 5 &&
+        Math.abs(next.distance - touch.distance) <= 5
       )
-        movedRef.current = true;
+        return;
+      movedRef.current = true;
+      if (event.cancelable) event.preventDefault();
       const zoomed = zoomAtlasAt(
         touch.start,
         next.count > 1 && touch.distance > 0
@@ -1236,6 +1246,10 @@ export default function HistoryAtlas({
         movedRef.current = moved;
       }
     };
+    const cancel = () => {
+      touch = null;
+      movedRef.current = true;
+    };
     const wheel = (event: WheelEvent) => {
       if (
         event.target instanceof Element &&
@@ -1255,18 +1269,20 @@ export default function HistoryAtlas({
     node.addEventListener("touchstart", begin, { passive: false });
     node.addEventListener("touchmove", move, { passive: false });
     node.addEventListener("touchend", end);
-    node.addEventListener("touchcancel", end);
+    node.addEventListener("touchcancel", cancel);
     node.addEventListener("wheel", wheel, { passive: false });
     return () => {
       node.removeEventListener("touchstart", begin);
       node.removeEventListener("touchmove", move);
       node.removeEventListener("touchend", end);
-      node.removeEventListener("touchcancel", end);
+      node.removeEventListener("touchcancel", cancel);
       node.removeEventListener("wheel", wheel);
     };
-  }, [mapWidth, mapHeight, moveMode, updateTransform, zoom]);
+  }, [mapWidth, mapHeight, updateTransform, zoom]);
 
   const requestPlaceFocus = (placeId: string) => {
+    pendingVisualScaleRef.current =
+      projection.scale() * transformRef.current.scale;
     pendingFocusRef.current = placeId;
     setFocusRevision((value) => value + 1);
   };
@@ -1660,16 +1676,6 @@ export default function HistoryAtlas({
             <div className="history-atlas__map-actions">
               <button
                 type="button"
-                className="history-atlas__move"
-                aria-label="지도 이동"
-                title="지도 이동"
-                aria-pressed={moveMode}
-                onClick={() => setMoveMode(!moveMode)}
-              >
-                ↔
-              </button>
-              <button
-                type="button"
                 aria-label="지도 축소"
                 className="history-atlas__zoom-out"
                 disabled={transform.scale <= 0.5}
@@ -1702,7 +1708,7 @@ export default function HistoryAtlas({
           </div>
           <div
             ref={mapRef}
-            className={`history-atlas__map${moveMode ? " history-atlas__map--move" : ""}${overlayObstacle ? " history-atlas__map--detail" : ""}`}
+            className={`history-atlas__map${overlayObstacle ? " history-atlas__map--detail" : ""}`}
             style={{ height: mapHeight }}
             role="region"
             aria-label={`${ATLAS_SUBJECT_LABELS[subject]} 지도. 방향키로 이동, 더하기와 빼기로 확대·축소, Home으로 전체 보기`}
@@ -1736,7 +1742,6 @@ export default function HistoryAtlas({
                 event.preventDefault();
                 resetView();
               } else if (event.key === "Escape") {
-                setMoveMode(false);
                 setDetailOpen(false);
               }
             }}
@@ -1843,7 +1848,7 @@ export default function HistoryAtlas({
                     mapRef.current?.focus({ preventScroll: true });
                   }}
                   onPointerDown={(event) => {
-                    movedRef.current = false;
+                    if (event.pointerType !== "touch") movedRef.current = false;
                     event.stopPropagation();
                   }}
                 >

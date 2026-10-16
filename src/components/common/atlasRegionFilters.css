@@ -21,6 +21,9 @@
 .atlas-region-filter__heading .ws-info-help {
   margin-block: -4px;
 }
+.atlas-region-filter__heading .ws-info-help__button {
+  justify-content: flex-start;
+}
 
 /* Keep the map filters in one compact row in both renderers. */
 :is(.history-atlas, .history-globe)

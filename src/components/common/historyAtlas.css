@@ -79,6 +79,12 @@
   font-size: 28px;
   font-weight: 800;
 }
+.history-atlas__heading-title {
+  gap: 4px;
+}
+.history-atlas__heading-title .ws-info-help__button {
+  justify-content: flex-start;
+}
 .history-atlas__actions {
   flex-wrap: wrap;
 }
@@ -245,13 +251,10 @@
   width: 100%;
   overflow: hidden;
   background: var(--atlas-water);
-  touch-action: pan-y;
+  touch-action: none;
   cursor: grab;
   user-select: none;
   isolation: isolate;
-}
-.history-atlas__map--move {
-  touch-action: none;
 }
 .history-atlas__map:active {
   cursor: grabbing;
@@ -564,6 +567,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 8px 12px 12px;
 }
 .history-atlas__overlay .atlas-place-details__header {
@@ -939,34 +943,6 @@
 }
 .history-atlas--large .history-atlas__workspace {
   grid-template-columns: minmax(0, 1fr) 300px;
-}
-@media (pointer: fine) and (min-width: 960px) {
-  .history-atlas__map-actions .history-atlas__move {
-    display: none;
-  }
-}
-@media (any-pointer: coarse) {
-  .history-atlas__map-actions .history-atlas__move {
-    display: block;
-  }
-}
-@media (max-width: 1023px) {
-  /* The teacher's floating memo launcher must not cover the map compass. */
-  .teacher-layout:has(.history-atlas-page) {
-    position: relative;
-  }
-  .teacher-layout:has(.history-atlas-page) > button[data-patch-memo-root] {
-    position: absolute;
-    top: calc(
-      var(--space-6, 24px) + env(safe-area-inset-top, 0px) +
-        var(--teacher-header-height, 64px) / 2 - 16px
-    );
-    right: calc(env(safe-area-inset-right, 0px) + 64px);
-    bottom: auto;
-    width: 32px;
-    height: 32px;
-    box-shadow: none;
-  }
 }
 @media (max-width: 639px) {
   .history-atlas__subjects button {

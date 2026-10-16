@@ -419,6 +419,7 @@ export function fitAtlasSelection(
     coordinates: [number, number];
     contextBounds?: AtlasUnit["bounds"] | null;
     geometry?: GeoPermissibleObjects | null;
+    minimumScale?: number;
   },
   viewport: {
     width: number;
@@ -459,7 +460,7 @@ export function fitAtlasSelection(
   const availableLeft = overlayRight + 24;
   const availableWidth = Math.max(1, width - availableLeft - 24);
   const availableHeight = Math.max(1, height - 48);
-  const scale = Math.max(
+  const fittedScale = Math.max(
     0.5,
     Math.min(
       ATLAS_MAX_ZOOM,
@@ -467,11 +468,23 @@ export function fitAtlasSelection(
       (availableHeight * 0.85) / Math.max(1, bottom - top),
     ),
   );
+  const minimumScale =
+    !selection.geometry && Number.isFinite(selection.minimumScale)
+      ? selection.minimumScale!
+      : 0.5;
+  const scale = Math.min(ATLAS_MAX_ZOOM, Math.max(fittedScale, minimumScale));
+  // A zoomed-in point keeps its geographical scale and only moves out of the
+  // popup's way. Rivers and areas always retain the complete-geometry fit.
+  const center =
+    minimumScale > fittedScale ? projection(selection.coordinates) : null;
   return constrainAtlasTransform(
     {
       scale,
-      x: availableLeft + availableWidth / 2 - ((left + right) / 2) * scale,
-      y: viewportTop + height / 2 - ((top + bottom) / 2) * scale,
+      x:
+        availableLeft +
+        availableWidth / 2 -
+        (center?.[0] ?? (left + right) / 2) * scale,
+      y: viewportTop + height / 2 - (center?.[1] ?? (top + bottom) / 2) * scale,
     },
     width,
     viewport.mapHeight ?? height,
