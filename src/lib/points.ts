@@ -1038,7 +1038,9 @@ export const updateStudentProfileIcon = async ({
   emojiId,
 }: UpdateStudentProfileIconInput) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("updateStudentProfileIcon");
+  const callable = await getHistoryDictionaryCallable(
+    "updateStudentProfileIcon",
+  );
   const result = await callable({
     year,
     semester,

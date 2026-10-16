@@ -1,4 +1,5 @@
 import { auth } from "./firebase";
+import { resolveStudentHallProfileEmojis } from "./studentProfileEmoji";
 import {
   assertWisOwner,
   queryWisState,
@@ -69,5 +70,16 @@ export const listStudentPointOrders = async (
     .slice(0, options?.limitCount || 100)
     .map((order) => wisOrder(order, state.account));
 };
-export const getStudentPointHallOfFame = async (config: WisConfig) =>
-  wisHallOfFame(await getStudentWisState(config, "hall-of-fame"));
+export const getStudentPointHallOfFame = async (config: WisConfig) => {
+  const owner = auth.currentUser;
+  const [state, policy] = await Promise.all([
+    getStudentWisState(config, "hall-of-fame"),
+    import("./points").then(({ getPointPolicy }) => getPointPolicy(config)),
+  ]);
+  if (auth.currentUser !== owner)
+    throw new Error("로그인 계정이 바뀌었습니다.");
+  const snapshot = wisHallOfFame(state);
+  return snapshot
+    ? resolveStudentHallProfileEmojis(snapshot, policy.rankPolicy)
+    : null;
+};

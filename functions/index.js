@@ -8416,49 +8416,11 @@ exports.approveHistoryDictionaryTermForRequests = onCall({ region: REGION }, asy
   };
 });
 
-exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const emojiId = String(request.data?.emojiId || '').trim();
-
-  if (!emojiId) {
-    throw new HttpsError('invalid-argument', 'A valid emojiId is required.');
-  }
-
-  const result = await db.runTransaction(async (transaction) => {
-    const { ref: userRef, profile } = await getUserProfile(uid);
-    const { wallet } = await ensureWallet(transaction, year, semester, uid, profile);
-    const policy = await loadPolicy(transaction, year, semester);
-    const emojiEntry = getProfileEmojiEntryById(emojiId, policy.rankPolicy.emojiRegistry);
-
-    if (!emojiEntry || emojiEntry.enabled === false) {
-      throw new HttpsError('invalid-argument', 'A valid emojiId is required.');
-    }
-
-    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
-    const currentTierCode = getCurrentTierCodeForRankTotal(currentRankEarnedTotal, policy.rankPolicy);
-    const allowedEmojiIds = getAllowedEmojiIdsForTier(policy.rankPolicy, currentTierCode);
-
-    if (!allowedEmojiIds.includes(emojiId)) {
-      throw new HttpsError('failed-precondition', 'This profile emoji is locked for the current rank.');
-    }
-
-    transaction.set(userRef, {
-      profileEmojiId: emojiEntry.id,
-      profileIcon: emojiEntry.emoji,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    return {
-      emojiId,
-      profileIcon: emojiEntry.emoji,
-      tierCode: currentTierCode,
-    };
-  });
-
-  await markWisHallOfFameDirtySafely(year, semester);
-  return result;
-});
+exports.updateStudentProfileIcon = onCall({ region: REGION },
+  require('./studentProfileEmoji').createStudentProfileEmojiHandler({
+    db, loadPolicy, getProfileEmojiEntryById,
+    getCurrentTierCodeForRankTotal, getAllowedEmojiIdsForTier,
+  }));
 
 // Notice images use the guarded server transport; direct Storage writes stay closed.
 exports.uploadNoticeImageContent = require('./noticeImages').uploadNoticeImageContent;

@@ -24,6 +24,8 @@ import {
 } from "../../lib/studentMenuAccess";
 import { runAfterNextPaint } from "../../lib/browserTasks";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
+import type { PointRankPolicy } from "../../types";
+import { resolveStudentProfileEmoji } from "../../lib/studentProfileEmoji";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
 import {
   readLocalOnly,
@@ -157,6 +159,8 @@ const Header: React.FC<{
   const [remainingSeconds, setRemainingSeconds] = useState(
     SESSION_DURATION_SECONDS,
   );
+  const [studentEmojiPolicy, setStudentEmojiPolicy] =
+    useState<PointRankPolicy | null>(null);
   const [studentRank, setStudentRank] = useState<PointRankDisplay | null>(null);
   const [studentWis, setStudentWis] = useState<{
     key: string;
@@ -244,8 +248,17 @@ const Header: React.FC<{
       : home
     : "/student/mypage";
   const profileLabel = `${displayName} ${isTeacherPortal ? "교사" : "학생"}`;
-  const studentProfileIcon = userData?.profileIcon || profileFallbackIcon;
   const studentWisKey = `${config?.year}:${config?.semester}:${currentUser?.uid}`;
+  const studentProfileIcon =
+    studentEmojiPolicy &&
+    studentWis.key === studentWisKey &&
+    studentWis.status === "ready"
+      ? resolveStudentProfileEmoji(
+          studentEmojiPolicy,
+          studentRank?.metricValue || 0,
+          userData,
+        ).entry?.emoji || profileFallbackIcon
+      : getDefaultProfileEmojiValue();
   const resolveTarget = (url: string) => resolveMenuTarget(url, portal);
   const mobileUnreadLabel =
     mobileUnreadCount > 99 ? "99+" : String(mobileUnreadCount);
@@ -696,6 +709,7 @@ const Header: React.FC<{
         if (cancelled) return;
 
         setStudentRank(snapshot.rank);
+        setStudentEmojiPolicy(snapshot.policy.rankPolicy);
         const balance = Number(snapshot.wallet?.balance ?? 0);
         setStudentWis({
           key,

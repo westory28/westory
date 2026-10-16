@@ -23,22 +23,17 @@ import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { getStudentPointWallet as getPointWalletByUid } from "../../lib/studentWis";
 import {
   getPointPolicy,
-  getPointRankManualAdjustEarnedPointsByUid,
   POINT_POLICY_FALLBACK,
   updateStudentProfileIcon,
 } from "../../lib/points";
 import {
-  getPointRankAllowedEmojiIds,
   getPointRankDefaultEmojiValue,
-  getPointRankDisplay,
-  getPointRankEmojiEntryById,
-  getPointRankEmojiEntryByValue,
   getPointRankEmojiRegistry,
   getPointRankTierDisplayItems,
   getPointRankTierMeta,
   getPointRankUnlockTierCodeForEmoji,
-  needsPointRankLegacyFallback,
 } from "../../lib/pointRanks";
+import { resolveStudentProfileEmoji } from "../../lib/studentProfileEmoji";
 import { formatWisAmount } from "../../lib/pointFormatters";
 import {
   formatPerformanceScore,
@@ -809,7 +804,14 @@ const MyPage: React.FC = () => {
     POINT_POLICY_FALLBACK,
   );
   const [pointWallet, setPointWallet] = useState<PointWallet | null>(null);
-  const [rankManualAdjustPoints, setRankManualAdjustPoints] = useState(0);
+  const [loadedPointRankKey, setLoadedPointRankKey] = useState("");
+  const [pointRankError, setPointRankError] = useState("");
+  const pointRankRequestRef = useRef(0);
+  const pointRankScopeKey = `${user?.uid}:${config?.year}:${config?.semester}`;
+  const pointRankScopeRef = useRef(pointRankScopeKey);
+  pointRankScopeRef.current = pointRankScopeKey;
+  const pointRankReady =
+    loadedPointRankKey === pointRankScopeKey && !!pointWallet;
 
   const [goalScore, setGoalScore] = useState("");
   const [subjectGoals, setSubjectGoals] = useState<Record<string, number>>({});
@@ -987,7 +989,6 @@ const MyPage: React.FC = () => {
       : [];
     await Promise.all([
       loadProfileAndEmoji(),
-      loadPointRankState(),
       canUseScore ? loadScoreData() : resetScoreData(),
       canUseScore ? loadPerformanceScoreData() : resetPerformanceScoreData(),
       canUseQuiz
@@ -1089,28 +1090,48 @@ const MyPage: React.FC = () => {
   };
 
   const loadPointRankState = async () => {
+    const requestId = ++pointRankRequestRef.current;
+    const scopeKey = pointRankScopeKey;
+    setLoadedPointRankKey("");
+    setPointRankError("");
     if (!user || !config) return;
-
-    const [nextWallet, nextPolicy] = await Promise.all([
-      getPointWalletByUid(config, user.uid),
-      getPointPolicy(config),
-    ]);
-    const nextRankManualAdjustPoints =
-      nextWallet && needsPointRankLegacyFallback(nextWallet)
-        ? await getPointRankManualAdjustEarnedPointsByUid(config, user.uid)
-        : 0;
-
-    setPointWallet(nextWallet);
-    setPointPolicy(nextPolicy);
-    setRankManualAdjustPoints(nextRankManualAdjustPoints);
+    try {
+      const [nextWallet, nextPolicy] = await Promise.all([
+        getPointWalletByUid(config, user.uid),
+        getPointPolicy(config),
+      ]);
+      if (
+        requestId !== pointRankRequestRef.current ||
+        scopeKey !== pointRankScopeRef.current
+      )
+        return;
+      if (!nextWallet)
+        throw new Error("현재 학기의 위스 계정을 확인하지 못했습니다.");
+      setPointWallet(nextWallet);
+      setPointPolicy(nextPolicy);
+      setLoadedPointRankKey(scopeKey);
+    } catch (error) {
+      if (
+        requestId !== pointRankRequestRef.current ||
+        scopeKey !== pointRankScopeRef.current
+      )
+        return;
+      console.error("Failed to load current semester emoji rank:", error);
+      setPointWallet(null);
+      setPointRankError("현재 학기 위스를 불러오지 못했습니다.");
+    }
   };
 
   useEffect(() => {
-    if (!user || !config) return undefined;
-    return subscribePointsUpdated(() => {
+    void loadPointRankState();
+    const unsubscribe = subscribePointsUpdated(() => {
       void loadPointRankState();
     });
-  }, [user?.uid, config?.year, config?.semester]);
+    return () => {
+      pointRankRequestRef.current += 1;
+      unsubscribe();
+    };
+  }, [user?.uid, config?.year, config?.semester, iconModalOpen]);
 
   const loadUnitTitles = async () => {
     if (!config) {
@@ -1538,35 +1559,39 @@ const MyPage: React.FC = () => {
     [pointPolicy.rankPolicy],
   );
   const safePointWallet = pointWallet || DEFAULT_POINT_WALLET;
-  const currentRank = getPointRankDisplay({
-    rankPolicy: pointPolicy.rankPolicy,
-    wallet: safePointWallet,
-    earnedPointsFromTransactions: rankManualAdjustPoints,
-  });
-  const allowedEmojiIds = useMemo(
+  const emojiState = useMemo(
     () =>
-      getPointRankAllowedEmojiIds(
+      resolveStudentProfileEmoji(
         pointPolicy.rankPolicy,
-        currentRank?.tierCode || null,
+        pointRankReady ? Number(safePointWallet.rankEarnedTotal || 0) : 0,
+        pointRankReady
+          ? {
+              profileEmojiId:
+                profile?.profileEmojiId || userData?.profileEmojiId,
+              profileIcon,
+            }
+          : null,
       ),
-    [currentRank?.tierCode, pointPolicy.rankPolicy],
+    [
+      pointPolicy.rankPolicy,
+      pointRankReady,
+      safePointWallet.rankEarnedTotal,
+      profile?.profileEmojiId,
+      userData?.profileEmojiId,
+      profileIcon,
+    ],
   );
-  const storedProfileEmojiId = String(
-    profile?.profileEmojiId || userData?.profileEmojiId || "",
-  ).trim();
-  const selectedEmojiEntry = storedProfileEmojiId
-    ? getPointRankEmojiEntryById(pointPolicy.rankPolicy, storedProfileEmojiId)
-    : getPointRankEmojiEntryByValue(pointPolicy.rankPolicy, profileIcon);
-  const selectedEmojiAllowed = selectedEmojiEntry
-    ? selectedEmojiEntry.enabled !== false &&
-      allowedEmojiIds.includes(selectedEmojiEntry.id)
-    : false;
-  const hasLegacySelectedEmoji = Boolean(profileIcon) && !selectedEmojiEntry;
+  const currentRank = pointRankReady ? emojiState.rank : null;
+  const allowedEmojiIds = useMemo(
+    () => (pointRankReady ? emojiState.allowedEmojiIds : []),
+    [pointRankReady, emojiState.allowedEmojiIds],
+  );
+  const selectedEmojiEntry = pointRankReady ? emojiState.entry : null;
   const defaultProfileEmojiValue =
     getPointRankDefaultEmojiValue(pointPolicy.rankPolicy) ||
     getDefaultProfileEmojiValue();
   const displayProfileIcon =
-    selectedEmojiEntry?.emoji || profileIcon || defaultProfileEmojiValue;
+    selectedEmojiEntry?.emoji || defaultProfileEmojiValue;
   const emojiCards = useMemo(
     () =>
       orderedEmojiEntries.map((entry) => {
@@ -1695,7 +1720,13 @@ const MyPage: React.FC = () => {
   };
 
   const saveProfileIcon = async (nextEmojiId: string) => {
-    if (!user || !config) return;
+    if (
+      !user ||
+      !config ||
+      !pointRankReady ||
+      !allowedEmojiIds.includes(nextEmojiId)
+    )
+      return;
     setSavingIcon(true);
     try {
       const result = await updateStudentProfileIcon({
@@ -4115,10 +4146,6 @@ const MyPage: React.FC = () => {
                 <h3 className="text-lg font-bold text-gray-900">
                   프로필 아이콘 선택
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  등급별로 해금되는 이모지를 확인하고 현재 프로필 아이콘을
-                  선택할 수 있습니다.
-                </p>
               </div>
               <button
                 type="button"
@@ -4138,23 +4165,24 @@ const MyPage: React.FC = () => {
                 {currentRank && <PointRankBadge rank={currentRank} size="sm" />}
                 <span className="text-xs text-gray-500">{`선택 가능 ${allowedEmojiIds.length}개 / 전체 ${emojiCards.length}개`}</span>
               </div>
-              <div className="mt-2 text-xs leading-5 text-gray-500">
-                잠금 이모지는 더 높은 등급에서 열립니다. 이미 쓰고 있는 잠금
-                이모지는 바로 깨지지 않지만, 다른 아이콘으로 바꾸면 다시 선택할
-                수 없습니다.
-              </div>
+              {!pointRankReady && (
+                <div
+                  className="mt-2 text-xs leading-5 text-gray-500"
+                  role="status"
+                >
+                  {pointRankError || "현재 학기 위스를 불러오는 중입니다."}
+                  {pointRankError && (
+                    <button
+                      type="button"
+                      className="ml-2 text-blue-600 underline"
+                      onClick={() => void loadPointRankState()}
+                    >
+                      다시 시도
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-
-            {(hasLegacySelectedEmoji ||
-              (selectedEmojiEntry && !selectedEmojiAllowed)) && (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                <span className="mr-2 text-lg leading-none">
-                  {displayProfileIcon}
-                </span>
-                현재 사용 중인 아이콘은 지금 정책으로는 다시 선택할 수 없습니다.
-                다른 아이콘으로 바꾸면 이전 아이콘으로 되돌릴 수 없어요.
-              </div>
-            )}
 
             <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
               {emojiGroups.map((group, groupIndex) => {
