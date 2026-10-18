@@ -1853,3 +1853,373 @@
     max-width: calc(100% - 270px);
   }
 }
+
+/* Wide game canvas and user-requested short, deliberate interactions. */
+@font-face {
+  font-family: "Yut Brush";
+  src: url("/assets/weplay/yut/fonts/NanumBrushScript-results.ttf")
+    format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+.yut-game {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.yut-topbar {
+  z-index: 200;
+}
+.yut-emote-menu {
+  z-index: 110;
+}
+.yut-emote-bubble {
+  top: 14%;
+  bottom: auto;
+  left: 76%;
+  transform: none;
+  border-radius: 12px 12px 12px 2px;
+  z-index: 20;
+}
+.yut-player--seat-1 .yut-emote-bubble,
+.yut-player--seat-3 .yut-emote-bubble {
+  left: auto;
+  right: 70%;
+  border-radius: 12px 12px 2px 12px;
+}
+.yut-sprite {
+  transform-origin: 50% 90%;
+  animation: yut-character-breathe 2800ms ease-in-out infinite;
+}
+.yut-sprite--turn {
+  animation-duration: 1800ms;
+}
+.yut-sprite--throw {
+  transform: rotate(-4deg);
+  animation: none;
+}
+.yut-sprite--win {
+  animation: yut-character-celebrate 900ms ease-in-out infinite;
+}
+.yut-sprite--caught {
+  transform: rotate(8deg);
+  filter: saturate(0.6);
+}
+.yut-game[data-motion-paused="true"] .yut-sprite {
+  animation-play-state: paused;
+}
+@keyframes yut-character-breathe {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.35deg);
+  }
+  50% {
+    transform: translateY(-1.5px) rotate(0.35deg);
+  }
+}
+@keyframes yut-character-celebrate {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(2deg);
+  }
+}
+.yut-landing-result {
+  animation: yut-ink-arrive 360ms ease-out;
+}
+.yut-landing-result strong {
+  font-family: "Yut Brush", "Noto Serif KR", serif;
+  font-weight: 400;
+  font-size: clamp(96px, 11vw, 168px);
+  line-height: 0.95;
+  text-shadow:
+    2px 3px 0 #6a331a,
+    0 5px 1px #26180c,
+    0 0 22px #e8b65e88;
+}
+.yut-match .yut-player-last {
+  font-family: "Yut Brush", serif;
+  font-size: 34px;
+  font-weight: 400;
+}
+@keyframes yut-ink-arrive {
+  from {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translate(-50%, -50%) scale(1.22);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+.yut-create-start {
+  margin-top: 8px;
+}
+.yut-private-quota {
+  margin-top: 6px !important;
+  font-size: 12px;
+  color: #654726;
+  text-align: center;
+}
+.yut-private-option {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 48px;
+  margin-top: 12px;
+}
+.yut-private-option input {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  accent-color: #536143;
+}
+.yut-move-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.yut-move-confirm .yut-button {
+  min-width: 120px;
+}
+.yut-floating-fullscreen {
+  display: none;
+}
+@media (max-width: 1023px) {
+  .yut-floating-fullscreen {
+    position: fixed;
+    z-index: 101;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #d3b477;
+    border-radius: 6px;
+    background: #251c14ed;
+    color: #fff1d2;
+    box-shadow: 0 3px 12px #0009;
+    font-size: 12px;
+  }
+  .yut-floating-fullscreen svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .yut-entry {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    padding-block: 8px;
+  }
+  .yut-entry-menu {
+    padding: 8px 12px;
+  }
+  .yut-entry-menu > .yut-button:not(.yut-single-start) {
+    width: calc(50% - 3px);
+    padding-inline: 6px;
+    gap: 5px;
+    font-size: 12px;
+  }
+  .yut-create-start {
+    margin-top: 0;
+    margin-left: 6px;
+  }
+  .yut-entry-meta {
+    padding-top: 4px;
+  }
+  .yut-practice {
+    padding-block: 0;
+  }
+  .yut-match .yut-player-last {
+    font-size: 25px;
+  }
+  .yut-landing-result strong {
+    font-size: 96px;
+  }
+  .yut-move-confirm {
+    gap: 8px;
+  }
+  .yut-move-confirm .yut-button {
+    min-width: 96px;
+    min-height: 44px;
+    padding: 6px 16px;
+  }
+  .yut-floating-fullscreen span {
+    display: none;
+  }
+  .yut-floating-fullscreen {
+    padding: 10px;
+    right: 8px;
+    bottom: 8px;
+  }
+}
+@media (orientation: landscape) and (max-width: 700px) {
+  .yut-entry {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 14px;
+    padding-inline: 14px;
+  }
+  .yut-entry-title h1 {
+    font-size: 30px;
+    letter-spacing: 2px;
+  }
+}
+
+/* A wide diamond keeps the board large within a classroom laptop's height. */
+.yut-topbar {
+  height: 44px;
+}
+.yut-match {
+  padding: 8px 24px 4px;
+}
+.yut-match-heading {
+  min-height: 42px;
+}
+.yut-match-heading h1 {
+  font-size: 23px;
+}
+.yut-board-area {
+  --yut-board-ratio: 21 / 10;
+  max-width: min(1120px, calc(100% - 40px));
+}
+.yut-match .yut-players {
+  inset: 10px 0 92px;
+}
+.yut-match .yut-player {
+  width: 180px;
+}
+.yut-match .yut-player .yut-sprite {
+  width: 64px;
+}
+.yut-match .yut-action-dock {
+  min-height: 92px;
+  height: 92px;
+  margin-top: -8px;
+}
+.yut-match .yut-throw-result:empty {
+  display: none;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .yut-match {
+    padding: 4px 14px;
+  }
+  .yut-match-heading {
+    min-height: 32px;
+  }
+  .yut-match-heading h1 {
+    font-size: 18px;
+  }
+  .yut-board-area {
+    --yut-board-ratio: 14 / 5;
+    max-width: calc(100% - 32px);
+  }
+  .yut-match .yut-players {
+    inset: 6px 0 76px;
+  }
+  .yut-match .yut-player {
+    width: 134px;
+  }
+  .yut-match .yut-player .yut-sprite {
+    width: 50px;
+    height: 64px;
+  }
+  .yut-match .yut-action-dock {
+    min-height: 76px;
+    height: 76px;
+    margin-top: -12px;
+  }
+}
+
+.yut-sprite {
+  position: relative;
+  --eye-x: 56%;
+  --eye-y: 24.5%;
+  --face-tone: #bb723a;
+}
+.yut-character--nong {
+  --eye-x: 47%;
+  --eye-y: 26%;
+  --face-tone: #c88d4c;
+}
+.yut-character--gong {
+  --eye-x: 56%;
+  --eye-y: 22.5%;
+  --face-tone: #f0ac93;
+}
+.yut-character--sang {
+  --eye-x: 46%;
+  --eye-y: 21.5%;
+  --face-tone: #c99452;
+}
+.yut-sprite::before,
+.yut-sprite::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+}
+.yut-sprite::before {
+  left: calc(var(--eye-x) - 2%);
+  top: var(--eye-y);
+  width: 7%;
+  height: 4%;
+  border-top: 1px solid #33221a;
+  border-radius: 60% 60% 0 0;
+  background: var(--face-tone);
+}
+.yut-sprite--win::before,
+.yut-isometric-piece.is-capture .yut-sprite::before,
+.yut-isometric-piece.is-win .yut-sprite::before {
+  opacity: 1;
+}
+.yut-sprite--win::after {
+  left: calc(var(--eye-x) + 7%);
+  top: calc(var(--eye-y) + 10%);
+  width: 8%;
+  height: 3%;
+  border-bottom: 1px solid #33221a;
+  border-radius: 0 0 70% 70%;
+  opacity: 1;
+}
+.yut-sprite--caught::after,
+.yut-isometric-piece.is-caught .yut-sprite::after {
+  left: calc(var(--eye-x) + 12%);
+  top: calc(var(--eye-y) + 3%);
+  width: 6%;
+  height: 8%;
+  border: 1px solid #488ca1;
+  border-radius: 60% 0 60% 60%;
+  transform: rotate(-25deg);
+  background: #bce9ec;
+  opacity: 1;
+}
+.yut-sprite--throw::before {
+  opacity: 1;
+  border: 1px solid #33221a;
+  border-radius: 50%;
+  background: #fff2cb;
+}
+.yut-isometric-piece:is(.is-capture, .is-win) .yut-sprite::before,
+.yut-isometric-piece.is-caught .yut-sprite::after {
+  animation: yut-face-reaction 300ms ease both;
+  animation-delay: var(--reaction-delay, 0ms);
+}
+@keyframes yut-face-reaction {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  100% {
+    opacity: 1;
+  }
+}

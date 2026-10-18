@@ -24,6 +24,9 @@ async function command(label, action, data = {}) {
   return deployed.commandYutRoom.run(request(label, { action, requestKey: key(), ...data }));
 }
 async function roomCommand(label, room, action, data = {}) {
+  // Authorization/concurrency cases advance past visual grace without sleeping.
+  // Exact animation/throw/move boundaries are exercised by the shared core tests.
+  if (['throw', 'move'].includes(action) && room.turnUid === uid(label)) await db.doc(`${base}/yut_rooms/${room.id}`).update({ phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000 });
   return command(label, action, { roomId: room.id, expectedRevision: room.revision, ...data });
 }
 const denied = (promise, codes = ['permission-denied']) => assert.rejects(promise, (error) => codes.includes(error.code));
@@ -47,7 +50,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     'semester_classes/class_one': { semesterId: '2026-2', status: 'ACTIVE', grade: '1', classNumber: '1', displayName: '1학년 1반' },
     'semester_classes/class_two': { semesterId: '2026-2', status: 'ACTIVE', grade: '1', classNumber: '2', displayName: '1학년 2반' },
   };
-  for (const label of ['a', 'b', 'c', 'd', 'e', 'outsider', 'teacher', 'staff']) {
+  for (const label of ['a', 'b', 'c', 'd', 'e', 'outsider', 'teacher', 'staff', 'qa', 'qb', 'qc', 'p1', 'p2', 'p3', 'p4']) {
     const role = label === 'teacher' ? 'teacher' : label === 'staff' ? 'staff' : 'student';
     seed[`users/${uid(label)}`] = { role, name: '테스트학생', registrationApprovalStatus: 'APPROVED', studentNumber: '1' };
     seed[sessionPath(label)] = { status: 'active', authTime, schemaVersion: 2, authorityGeneration: proof.authorityGeneration, protocolVersion: 2, sessionRevision: proof.revision, authorityModeAtOpen: 'ENFORCE', generalExpiresAt: Timestamp.fromMillis(Date.now() + 3600000) };
@@ -65,7 +68,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     await denied(deployed.getYutLobby.run(request('a')));
     await denied(command('a', 'create'));
     const defaultManagement = await deployed.getYutManagement.run(request('teacher'));
-    assert.deepEqual(defaultManagement.settings, { enabled: false, version: 0 });
+    assert.deepEqual(defaultManagement.settings, { enabled: false, version: 0, allowSolo: true, allowMultiplayer: true, allowPrivateRooms: true, defaultPlayerCount: 4, throwSeconds: 5, moveSeconds: 25 });
     assert.deepEqual(defaultManagement.rooms, []);
     await denied(deployed.getYutManagement.run(request('a')));
     await denied(deployed.saveYutSettings.run(request('a', { enabled: true, expectedVersion: 0 })));
@@ -203,7 +206,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     await denied(roomCommand('a', room, 'move', { pieceId: '1', route: 'a' }), ['failed-precondition']);
     await denied(roomCommand('b', room, 'skip'), ['failed-precondition']);
     await db.doc(`${base}/yut_players/${uid('a')}`).update({ lastCommandAtMs: 0 });
-    const moves = await Promise.allSettled([1, 2].map((piece) => deployed.commandYutRoom.run(request('a', { action: 'move', requestKey: key(), roomId: room.id, expectedRevision: room.revision, pieceId: String(piece), route: 'outer' }))));
+    const moves = await Promise.allSettled([1, 2].map(() => deployed.commandYutRoom.run(request('a', { action: 'move', requestKey: key(), roomId: room.id, expectedRevision: room.revision, pieceId: '1', route: 'outer' }))));
     assert.equal(moves.filter((result) => result.status === 'fulfilled').length, 1);
     room = moves.find((result) => result.status === 'fulfilled').value.room;
     assert.deepEqual(room.players[0].lastThrow, aLastThrow, 'moving preserves the player last throw');
@@ -318,7 +321,90 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     const bounded = await deployed.getYutManagement.run(request('teacher'));
     assert.equal(bounded.rooms.length, 100);
     assert.equal(bounded.truncated, true, 'monitor uses a bounded projection with an explicit truncation flag');
-    console.log('PASS Yut default-closed publication, teacher/staff read-write boundaries and CAS, bounded management projection, stable host-controlled seats, retained throws and visual-only power, seven fixed emotes, canonical guards, concurrency, Firestore privacy, revocation, maintenance, semester and close');
+    let modeSettings = (await deployed.getYutManagement.run(request('teacher'))).settings;
+    const saveModes = async (patch) => {
+      modeSettings = (await deployed.saveYutSettings.run(request('teacher', { enabled: true, expectedVersion: modeSettings.version, ...patch }))).settings;
+      return modeSettings;
+    };
+    await denied(deployed.saveYutSettings.run(request('teacher', { enabled: true, expectedVersion: modeSettings.version, throwSeconds: 2 })), ['invalid-argument']);
+    await denied(deployed.saveYutSettings.run(request('teacher', { enabled: true, expectedVersion: modeSettings.version, defaultPlayerCount: 5 })), ['invalid-argument']);
+    await saveModes({ allowSolo: true, allowMultiplayer: true, allowPrivateRooms: true, defaultPlayerCount: 3, throwSeconds: 5, moveSeconds: 25 });
+    assert.equal((await deployed.getYutLobby.run(request('qa'))).privatePlaysRemaining, 5);
+    for (let round = 1; round <= 5; round += 1) {
+      let privateRoom = (await command('qa', 'create', { visibility: 'private', maxPlayers: 2 })).room;
+      assert.equal(privateRoom.pieceCount, 1); assert.equal(privateRoom.players[0].pieces.length, 1);
+      assert.equal(privateRoom.maxPlayers, 2);
+      privateRoom = (await command('qb', 'join', { code: privateRoom.code })).room;
+      const rejoined = await command('qb', 'join', { code: privateRoom.code });
+      assert.equal(rejoined.room.id, privateRoom.id);
+      assert.equal((await deployed.getYutLobby.run(request('qb'))).privatePlaysRemaining, 6 - round, 'waiting rejoin never spends a private play');
+      privateRoom = (await roomCommand('qb', privateRoom, 'ready', { ready: true })).room;
+      const startKey = key();
+      privateRoom = (await roomCommand('qa', privateRoom, 'start', { requestKey: startKey })).room;
+      assert.equal(privateRoom.turnDeadlineMs - privateRoom.phaseStartsAtMs, 5000);
+      assert.equal(privateRoom.phaseStartsAtMs - privateRoom.lastEvent.atMs, 2000);
+      const startRetry = await deployed.commandYutRoom.run(request('qa', { action: 'start', requestKey: startKey, roomId: privateRoom.id, expectedRevision: privateRoom.revision - 1 }));
+      assert.equal(startRetry.room.id, privateRoom.id);
+      assert.equal((await deployed.getYutLobby.run(request('qa'))).privatePlaysRemaining, 5 - round);
+      assert.equal((await deployed.getYutLobby.run(request('qb'))).privatePlaysRemaining, 5 - round, 'every student is charged exactly once at start');
+      await roomCommand('teacher', privateRoom, 'close');
+    }
+    await denied(command('qa', 'create', { visibility: 'private' }));
+    let quotaRoom = (await command('qc', 'create', { visibility: 'private', maxPlayers: 2 })).room;
+    await denied(command('qa', 'join', { code: quotaRoom.code }), ['resource-exhausted']);
+    const quotaDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+    await db.doc(`${base}/yut_players/${uid('qa')}`).update({ privatePlayDay: quotaDay, privatePlayCount: 4 });
+    quotaRoom = (await command('qa', 'join', { code: quotaRoom.code })).room;
+    quotaRoom = (await roomCommand('qa', quotaRoom, 'ready', { ready: true })).room;
+    await db.doc(`${base}/yut_players/${uid('qa')}`).update({ privatePlayCount: 5 });
+    await denied(roomCommand('qc', quotaRoom, 'start'), ['resource-exhausted']);
+    assert.equal((await deployed.getYutLobby.run(request('qc'))).privatePlaysRemaining, 5, 'failed start spends no other participant quota');
+    await roomCommand('teacher', quotaRoom, 'close');
+    const yesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(Date.now() - 86400000));
+    await db.doc(`${base}/yut_players/${uid('qa')}`).update({ privatePlayDay: yesterday, privatePlayCount: 5 });
+    assert.equal((await deployed.getYutLobby.run(request('qa'))).privatePlaysRemaining, 5, 'a new Korean date restores the daily allowance');
+    const { createYutHandlers } = require('../yut');
+    let boundaryTime = Date.parse(`${quotaDay}T14:59:59.999Z`);
+    const boundaryHandlers = createYutHandlers({ db, now: () => boundaryTime });
+    await db.doc(`${base}/yut_players/${uid('qa')}`).update({ privatePlayDay: quotaDay, privatePlayCount: 5 });
+    assert.equal((await boundaryHandlers.getYutLobby(request('qa'))).privatePlaysRemaining, 0, 'quota remains spent one millisecond before Korean midnight');
+    boundaryTime += 1;
+    assert.equal((await boundaryHandlers.getYutLobby(request('qa'))).privatePlaysRemaining, 5, 'quota resets exactly at 15:00 UTC / Korean midnight');
+    await db.doc(`${base}/yut_players/${uid('qa')}`).update({ privatePlayDay: yesterday, privatePlayCount: 5 });
+    const hiddenRoom = (await command('qa', 'create', { visibility: 'private' })).room;
+    assert.equal(hiddenRoom.maxPlayers, 3, 'teacher default capacity applies to omitted create option');
+    const publicOne = (await command('p1', 'match', { maxPlayers: 2 })).room;
+    assert.equal(publicOne.visibility, 'public'); assert.equal(publicOne.maxPlayers, 2); assert.notEqual(publicOne.id, hiddenRoom.id);
+    const publicTwo = (await command('p2', 'match', { maxPlayers: 4 })).room;
+    assert.equal(publicTwo.id, publicOne.id, 'a match joins any open public capacity before creating');
+    const paired = await Promise.all(['p3', 'p4'].map((label) => command(label, 'match', { maxPlayers: 3 })));
+    assert.equal(paired[0].room.id, paired[1].room.id, 'simultaneous empty-queue requests share one new public room');
+    assert.notEqual(paired[0].room.id, publicOne.id, 'a full public room is excluded');
+    assert.equal((await db.doc(`${base}/yut_rooms/${publicOne.id}`).get()).data().players.length, 2);
+    const repeatMatch = await command('p1', 'match');
+    assert.equal(repeatMatch.room.id, publicOne.id, 'existing public match reconnects without another room');
+    const reconnectKey = key();
+    const reconnected = await command('p3', 'match', { requestKey: reconnectKey });
+    await roomCommand('p3', reconnected.room, 'leave');
+    assert.equal((await command('p3', 'match', { requestKey: reconnectKey })).room, null, 'retrying an old reconnect after leaving cannot rejoin or create another room');
+    assert.equal((await deployed.getYutLobby.run(request('p3'))).room, null);
+    assert.equal((await rest('p1', `${base}/yut_matchmaking/queue`)).status, 403);
+    await saveModes({ allowPrivateRooms: false });
+    assert.equal((await rest('qa', `${base}/yut_rooms/${hiddenRoom.id}`)).status, 403, 'private-mode gate also blocks a cached subscription');
+    assert.equal((await deployed.getYutLobby.run(request('qa'))).room, null);
+    await denied(command('qb', 'join', { code: hiddenRoom.code }));
+    assert.equal((await rest('p1', `${base}/yut_rooms/${publicOne.id}`)).status, 200, 'public rooms remain available');
+    const afterPrivateClosed = (await command('qa', 'match')).room;
+    assert.equal(afterPrivateClosed.visibility, 'public', 'a disabled private-mode pointer cannot prevent a public match');
+    assert.equal((await db.doc(`${base}/yut_rooms/${hiddenRoom.id}`).get()).data().participantUids.includes(uid('qa')), false);
+    await saveModes({ allowMultiplayer: false });
+    assert.equal((await rest('p1', `${base}/yut_rooms/${publicOne.id}`)).status, 403);
+    assert.equal((await deployed.getYutLobby.run(request('p1'))).settings.allowSolo, true);
+    await denied(command('p1', 'match'));
+    await roomCommand('p1', publicTwo, 'leave');
+    assert.equal((await db.doc(`${base}/yut_rooms/${publicOne.id}`).get()).data().participantUids.includes(uid('p1')), false, 'leave still cleans up when multiplayer is disabled');
+    await saveModes({ enabled: false });
+    console.log('PASS Yut publication/mode gates, settings CAS, bounded management, one-piece phase timing, seats/emotes, KST private-start quota, idempotent reconnect, concurrent public matchmaking, canonical session/enrollment guards, Firestore privacy and revocation');
   } finally {
     // This emulator/project was checked before importing any Admin SDK code.
     await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: 'DELETE' });

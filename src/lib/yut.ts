@@ -16,6 +16,8 @@ export type {
 } from "../../functions/yutCore.mjs";
 export interface YutLobby {
   enabled: boolean;
+  settings?: YutSettings;
+  privatePlaysRemaining?: number | null;
   room: YutRoom | null;
   classes: { id: string; label: string }[];
   classId: string;
@@ -24,8 +26,70 @@ export interface YutLobby {
 export interface YutSettings {
   enabled: boolean;
   version: number;
+  allowSolo: boolean;
+  allowMultiplayer: boolean;
+  allowPrivateRooms: boolean;
+  defaultPlayerCount: 2 | 3 | 4;
+  throwSeconds: number;
+  moveSeconds: number;
   updatedAtMs?: number;
 }
+export const YUT_PRIVATE_DAILY_LIMIT = 5;
+export const DEFAULT_YUT_SETTINGS: Readonly<YutSettings> = {
+  enabled: false,
+  version: 0,
+  allowSolo: true,
+  allowMultiplayer: true,
+  allowPrivateRooms: true,
+  defaultPlayerCount: 4,
+  throwSeconds: 5,
+  moveSeconds: 25,
+};
+export function normalizeYutSettings(
+  value?: Partial<YutSettings> | null,
+): YutSettings {
+  const validVersion =
+    Number.isInteger(value?.version) && Number(value?.version) >= 0;
+  const seconds = (
+    input: number | undefined,
+    fallback: number,
+    minimum: number,
+    maximum: number,
+  ) =>
+    Number.isInteger(input) &&
+    Number(input) >= minimum &&
+    Number(input) <= maximum
+      ? Number(input)
+      : fallback;
+  return {
+    enabled: validVersion && value?.enabled === true,
+    version: validVersion ? Number(value?.version) : 0,
+    allowSolo: value?.allowSolo !== false,
+    allowMultiplayer: value?.allowMultiplayer !== false,
+    allowPrivateRooms: value?.allowPrivateRooms !== false,
+    defaultPlayerCount:
+      value?.defaultPlayerCount === 2 || value?.defaultPlayerCount === 3
+        ? value.defaultPlayerCount
+        : 4,
+    throwSeconds: seconds(value?.throwSeconds, 5, 3, 15),
+    moveSeconds: seconds(value?.moveSeconds, 25, 15, 60),
+    ...(Number.isFinite(value?.updatedAtMs)
+      ? { updatedAtMs: value?.updatedAtMs }
+      : {}),
+  };
+}
+export type YutSettingsUpdate = Pick<YutSettings, "enabled"> &
+  Partial<
+    Pick<
+      YutSettings,
+      | "allowSolo"
+      | "allowMultiplayer"
+      | "allowPrivateRooms"
+      | "defaultPlayerCount"
+      | "throwSeconds"
+      | "moveSeconds"
+    >
+  > & { expectedVersion: number };
 export interface YutManagedRoom {
   id: string;
   code: string;
@@ -35,6 +99,14 @@ export interface YutManagedRoom {
   createdAtMs: number;
   expiresAtMs: number;
   turnUid: string | null;
+  visibility?: "public" | "private";
+  maxPlayers?: 2 | 3 | 4;
+  pieceCount?: number;
+  throwSeconds?: number;
+  moveSeconds?: number;
+  phaseStartsAtMs?: number;
+  turnDeadlineMs?: number;
+  phase?: "throw" | "move";
   players: {
     uid: string;
     name: string;
@@ -53,6 +125,7 @@ export interface YutManagement {
 export interface YutCommand {
   action:
     | "create"
+    | "match"
     | "join"
     | "ready"
     | "start"
@@ -68,6 +141,8 @@ export interface YutCommand {
   expectedRevision?: number;
   code?: string;
   classId?: string;
+  visibility?: "public" | "private";
+  maxPlayers?: 2 | 3 | 4;
   ready?: boolean;
   pieceId?: string;
   route?: YutRoute;
@@ -91,16 +166,22 @@ async function call<T>(
 export const getYutLobby = (config: WeplayConfig) =>
   call<YutLobby>("getYutLobby", config);
 export const getYutManagement = (config: WeplayConfig) =>
-  call<YutManagement>("getYutManagement", config);
+  call<YutManagement>("getYutManagement", config).then((response) => ({
+    ...response,
+    settings: normalizeYutSettings(response.settings),
+  }));
 export const saveYutSettings = (
   config: WeplayConfig,
-  data: { enabled: boolean; expectedVersion: number },
+  data: YutSettingsUpdate,
 ) =>
   call<{ settings: YutSettings; serverNowMs: number }>(
     "saveYutSettings",
     config,
     data,
-  );
+  ).then((response) => ({
+    ...response,
+    settings: normalizeYutSettings(response.settings),
+  }));
 export const commandYutRoom = (config: WeplayConfig, data: YutCommand) =>
   call<{ room: YutRoom | null; serverNowMs: number }>(
     "commandYutRoom",

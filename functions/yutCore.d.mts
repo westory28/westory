@@ -7,23 +7,27 @@ export interface YutPiece { id: string; node: YutNode; lane: YutRoute }
 export interface YutPlayer { uid: string; name: string; role: YutRole; ready: boolean; active: boolean; pieces: YutPiece[]; lastThrow?: { value: number; label: string; atMs: number; power?: number } }
 export interface YutRoom {
   id: string; code: string; classId: string; classLabel: string; hostUid: string;
+  visibility?: 'public' | 'private'; maxPlayers?: number; pieceCount?: number; throwSeconds?: number; moveSeconds?: number;
   status: 'waiting' | 'playing' | 'finished' | 'closed'; revision: number;
   syncRevision?: number; emotes?: Record<string, YutEmote>; blockedSeats?: number[];
   players: YutPlayer[]; participantUids: string[]; turnUid: string | null;
   phase: 'throw' | 'move'; pendingThrow: { value: number; label: string; sticks: boolean[] } | null;
-  extraThrows: number; turnDeadlineMs: number; winnerUid: string | null;
-  lastEvent: { kind: string; text: string; atMs: number };
+  extraThrows: number; phaseStartsAtMs?: number; turnDeadlineMs: number; winnerUid: string | null;
+  lastEvent: { kind: string; text: string; atMs: number; move?: { uid: string; pieceId: string; route: YutRoute; path: YutNode[]; capturedUids: string[] } };
   createdAtMs: number; updatedAtMs: number; expiresAtMs: number;
 }
-export interface YutMove { pieceId: string; route: YutRoute; targetNode: YutNode; stackSize: number }
+export interface YutMove { pieceId: string; route: YutRoute; targetNode: YutNode; stackSize: number; path?: YutNode[] }
 export const YUT_TURN_MS: number;
+export const YUT_THROW_ANIMATION_MS: number;
+export const YUT_MOVE_ANIMATION_MS: number;
+export const YUT_START_ANIMATION_MS: number;
 export const YUT_ROOM_MS: number;
 export const YUT_ROLES: YutRole[];
 export const YUT_EMOTE_KINDS: YutEmoteKind[];
 export const YUT_EMOTE_COOLDOWN_MS: number;
 export const YUT_EMOTE_VISIBLE_MS: number;
 export function addYutEmote(room: YutRoom, uid: string, kind: YutEmoteKind, id: string, nowMs: number): YutRoom;
-export function createYutRoom(options: { id: string; code: string; classId: string; classLabel: string; host: { uid: string; name: string }; nowMs: number }): YutRoom;
+export function createYutRoom(options: { id: string; code: string; classId: string; classLabel: string; host: { uid: string; name: string }; nowMs: number; visibility?: 'public' | 'private'; maxPlayers?: 2 | 3 | 4; throwSeconds?: number; moveSeconds?: number }): YutRoom;
 export function addYutPlayer(room: YutRoom, player: { uid: string; name: string }, nowMs: number): YutRoom;
 export function setYutSeat(room: YutRoom, uid: string, seat: number, blocked: boolean, nowMs: number): YutRoom;
 export function readyYutPlayer(room: YutRoom, uid: string, ready: boolean, nowMs: number): YutRoom;

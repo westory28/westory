@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
-import { getYutLobby } from "../../../lib/yut";
+import { getYutLobby, type YutSettings } from "../../../lib/yut";
 
 type Status = "checking" | "open" | "closed" | "error";
 
@@ -10,7 +10,11 @@ export default function useYutPublication(portal: "student" | "teacher") {
   const scope = `${currentUser?.uid}/${config?.year}/${config?.semester}`;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
-  const [access, setAccess] = useState<{ scope: string; status: Status }>({
+  const [access, setAccess] = useState<{
+    scope: string;
+    status: Status;
+    settings?: YutSettings;
+  }>({
     scope: "",
     status: "checking",
   });
@@ -42,6 +46,7 @@ export default function useYutPublication(portal: "student" | "teacher") {
           setAccess({
             scope,
             status: lobby.enabled === true ? "open" : "closed",
+            settings: lobby.enabled === true ? lobby.settings : undefined,
           });
       } catch (error) {
         if (active && scopeRef.current === scope) {
@@ -75,5 +80,11 @@ export default function useYutPublication(portal: "student" | "teacher") {
       : access.scope === scope
         ? access.status
         : "checking";
-  return { status, scope, retry: () => setRevision((value) => value + 1) };
+  return {
+    status,
+    scope,
+    settings:
+      access.scope === scope && status === "open" ? access.settings : undefined,
+    retry: () => setRevision((value) => value + 1),
+  };
 }

@@ -1,5 +1,8 @@
 // Shared, deterministic rules. Online randomness and authority live in yut.js.
-export const YUT_TURN_MS = 60_000;
+export const YUT_TURN_MS = 5_000;
+export const YUT_THROW_ANIMATION_MS = 3_600;
+export const YUT_MOVE_ANIMATION_MS = 1_500;
+export const YUT_START_ANIMATION_MS = 2_000;
 export const YUT_ROOM_MS = 24 * 60 * 60_000;
 export const YUT_ROLES = ['sa', 'nong', 'gong', 'sang'];
 export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg', 'angry'];
@@ -12,21 +15,30 @@ const diagonals = {
 };
 const fail = (message) => { throw new Error(message); };
 const copy = (room) => JSON.parse(JSON.stringify(room));
-const event = (room, kind, text, nowMs) => {
+const event = (room, kind, text, nowMs, move) => {
   room.syncRevision = (room.syncRevision ?? room.revision) + 1;
   room.revision += 1;
   room.updatedAtMs = nowMs;
-  room.lastEvent = { kind, text, atMs: nowMs };
+  room.lastEvent = { kind, text, atMs: nowMs, ...(move ? { move } : {}) };
   return room;
 };
 const playerFor = (room, uid) => room.players.find((player) => player.uid === uid && player.active);
-const piecesFor = () => [1, 2].map((id) => ({ id: String(id), node: 'home', lane: 'outer' }));
-export function createYutRoom({ id, code, classId, classLabel, host, nowMs }) {
+const piecesFor = (count = 1) => Array.from({ length: count }, (_, index) => ({ id: String(index + 1), node: 'home', lane: 'outer' }));
+const beginPhase = (room, phase, nowMs, graceMs) => {
+  room.phase = phase;
+  room.phaseStartsAtMs = nowMs + graceMs;
+  room.turnDeadlineMs = room.phaseStartsAtMs + (phase === 'throw' ? room.throwSeconds ?? 5 : room.moveSeconds ?? 25) * 1000;
+};
+export function createYutRoom({ id, code, classId, classLabel, host, nowMs, visibility = 'private', maxPlayers = 4, throwSeconds = 5, moveSeconds = 25 }) {
+  if (!['public', 'private'].includes(visibility) || ![2, 3, 4].includes(maxPlayers)
+    || !Number.isInteger(throwSeconds) || throwSeconds < 3 || throwSeconds > 15
+    || !Number.isInteger(moveSeconds) || moveSeconds < 15 || moveSeconds > 60) fail('게임 설정을 확인해 주세요.');
   return {
-    id, code, classId, classLabel, hostUid: host.uid, status: 'waiting', revision: 0, syncRevision: 0, emotes: {}, blockedSeats: [],
+    id, code, classId, classLabel, visibility, maxPlayers, pieceCount: 1, throwSeconds, moveSeconds,
+    hostUid: host.uid, status: 'waiting', revision: 0, syncRevision: 0, emotes: {}, blockedSeats: [0, 1, 2, 3].filter((seat) => seat >= maxPlayers),
     players: [{ ...host, role: 'sa', ready: true, active: true, pieces: piecesFor() }],
     participantUids: [host.uid], turnUid: null, phase: 'throw', pendingThrow: null,
-    extraThrows: 0, turnDeadlineMs: 0, winnerUid: null,
+    extraThrows: 0, phaseStartsAtMs: 0, turnDeadlineMs: 0, winnerUid: null,
     lastEvent: { kind: 'create', text: '새 판이 열렸습니다.', atMs: nowMs },
     createdAtMs: nowMs, updatedAtMs: nowMs, expiresAtMs: nowMs + YUT_ROOM_MS,
   };
@@ -52,7 +64,7 @@ export function addYutPlayer(source, player, nowMs) {
   const role = YUT_ROLES.find((value, seat) => !(source.blockedSeats || []).includes(seat) && !source.players.some((entry) => entry.role === value));
   if (!role) fail('열린 자리가 모두 찼습니다.');
   const room = copy(source);
-  room.players.push({ uid: player.uid, name: player.name, role, ready: false, active: true, pieces: piecesFor() });
+  room.players.push({ uid: player.uid, name: player.name, role, ready: false, active: true, pieces: piecesFor(room.pieceCount ?? room.players[0]?.pieces.length ?? 2) });
   room.participantUids.push(player.uid);
   return event(room, 'join', `${player.name} 님이 들어왔습니다.`, nowMs);
 }
@@ -66,6 +78,7 @@ export function setYutSeat(source, uid, seat, blocked, nowMs) {
   if (YUT_ROLES.length - blockedSeats.size < 2) fail('자리는 2개 이상 열어 두어야 합니다.');
   const room = copy(source);
   room.blockedSeats = [...blockedSeats].sort((a, b) => a - b);
+  room.maxPlayers = YUT_ROLES.length - blockedSeats.size;
   return event(room, 'seat', blocked ? '빈자리를 닫았습니다.' : '빈자리를 열었습니다.', nowMs);
 }
 export function readyYutPlayer(source, uid, ready, nowMs) {
@@ -81,12 +94,13 @@ export function startYutGame(source, nowMs) {
   const room = copy(source);
   room.status = 'playing';
   room.turnUid = room.players[0].uid;
-  room.turnDeadlineMs = nowMs + YUT_TURN_MS;
+  beginPhase(room, 'throw', nowMs, YUT_START_ANIMATION_MS);
   return event(room, 'start', '윷판이 시작되었습니다.', nowMs);
 }
 const assertTurn = (room, uid, phase, nowMs) => {
   if (room.status !== 'playing' || room.turnUid !== uid || !playerFor(room, uid)) fail('지금은 자신의 차례가 아닙니다.');
   if (room.phase !== phase) fail(phase === 'throw' ? '먼저 말을 옮겨 주세요.' : '먼저 윷을 던져 주세요.');
+  if (nowMs < (room.phaseStartsAtMs || 0)) fail('연출이 끝나면 진행해 주세요.');
   if (nowMs >= room.turnDeadlineMs) fail('차례 시간이 지났습니다. 다음 차례로 넘겨 주세요.');
 };
 export function throwYut(source, uid, sticks, nowMs, power) {
@@ -96,7 +110,7 @@ export function throwYut(source, uid, sticks, nowMs, power) {
   const room = copy(source), count = sticks.filter(Boolean).length, value = count || 5;
   room.pendingThrow = { value, label: labels[value], sticks: [...sticks] };
   playerFor(room, uid).lastThrow = { value, label: labels[value], atMs: nowMs, ...(power === undefined ? {} : { power }) };
-  room.phase = 'move';
+  beginPhase(room, 'move', nowMs, YUT_THROW_ANIMATION_MS);
   if (value >= 4) room.extraThrows += 1;
   return event(room, 'throw', `${playerFor(room, uid).name} · ${labels[value]}`, nowMs);
 }
@@ -108,6 +122,7 @@ const routesFor = (piece) => {
 };
 function advance(piece, steps, route) {
   let node = piece.node, lane = route;
+  const path = [];
   for (let step = 0; step < steps && node !== 'finish'; step += 1) {
     if (node === 'home') { node = 'o1'; lane = 'outer'; }
     else if (lane !== 'outer' && diagonals[lane].includes(node)) {
@@ -120,8 +135,9 @@ function advance(piece, steps, route) {
       node = index === 20 ? 'finish' : `o${index + 1}`;
       lane = 'outer';
     }
+    path.push(node);
   }
-  return { node, lane };
+  return { node, lane, path };
 }
 export function getLegalYutMoves(room, uid) {
   const player = playerFor(room, uid);
@@ -131,7 +147,7 @@ export function getLegalYutMoves(room, uid) {
     if (piece.node === 'finish') continue;
     for (const route of routesFor(piece)) {
       const destination = advance(piece, room.pendingThrow.value, route);
-      moves.push({ pieceId: piece.id, route, targetNode: destination.node,
+      moves.push({ pieceId: piece.id, route, targetNode: destination.node, path: destination.path,
         stackSize: piece.node === 'home' ? 1 : player.pieces.filter((other) => other.node === piece.node).length });
     }
   }
@@ -143,8 +159,8 @@ function nextTurn(room, nowMs) {
     const player = room.players[(index + offset) % room.players.length];
     if (player.active) { room.turnUid = player.uid; break; }
   }
-  room.phase = 'throw'; room.pendingThrow = null; room.extraThrows = 0;
-  room.turnDeadlineMs = nowMs + YUT_TURN_MS;
+  room.pendingThrow = null; room.extraThrows = 0;
+  beginPhase(room, 'throw', nowMs, YUT_MOVE_ANIMATION_MS);
 }
 export function moveYut(source, uid, pieceId, route, nowMs) {
   assertTurn(source, uid, 'move', nowMs);
@@ -153,25 +169,27 @@ export function moveYut(source, uid, pieceId, route, nowMs) {
   const origin = piece.node, destination = advance(piece, room.pendingThrow.value, route);
   const moving = player.pieces.filter((entry) => entry.id === pieceId || (origin !== 'home' && entry.node === origin));
   let captured = 0;
+  const capturedUids = new Set();
   if (destination.node !== 'finish') {
     for (const opponent of room.players.filter((entry) => entry.uid !== uid && entry.active)) {
       for (const target of opponent.pieces.filter((entry) => entry.node === destination.node)) {
-        target.node = 'home'; target.lane = 'outer'; captured += 1;
+        target.node = 'home'; target.lane = 'outer'; captured += 1; capturedUids.add(opponent.uid);
       }
     }
   }
-  for (const target of moving) Object.assign(target, destination);
+  for (const target of moving) Object.assign(target, { node: destination.node, lane: destination.lane });
   // A newly formed stack has one continuing route, regardless of arrival side.
   for (const target of player.pieces.filter((entry) => entry.node === destination.node)) target.lane = destination.lane;
   if (captured) room.extraThrows += 1;
   room.pendingThrow = null;
+  const movement = { uid, pieceId, route, path: destination.path, capturedUids: [...capturedUids] };
   if (player.pieces.every((entry) => entry.node === 'finish')) {
-    room.status = 'finished'; room.winnerUid = uid; room.turnUid = null; room.turnDeadlineMs = 0; room.extraThrows = 0;
-    return event(room, 'finish', `${player.name} 님이 승리했습니다.`, nowMs);
+    room.status = 'finished'; room.winnerUid = uid; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0; room.extraThrows = 0;
+    return event(room, 'finish', `${player.name} 님이 승리했습니다.`, nowMs, movement);
   }
-  if (room.extraThrows > 0) { room.extraThrows -= 1; room.phase = 'throw'; }
+  if (room.extraThrows > 0) { room.extraThrows -= 1; beginPhase(room, 'throw', nowMs, YUT_MOVE_ANIMATION_MS); }
   else nextTurn(room, nowMs);
-  return event(room, captured ? 'capture' : 'move', captured ? `${player.name} · 말 ${captured}개 잡기! 한 번 더 던집니다.` : `${player.name} 님이 말을 옮겼습니다.`, nowMs);
+  return event(room, captured ? 'capture' : 'move', captured ? `${player.name} · 말 ${captured}개 잡기! 한 번 더 던집니다.` : `${player.name} 님이 말을 옮겼습니다.`, nowMs, movement);
 }
 export function skipYutTurn(source, nowMs) {
   if (source.status !== 'playing' || nowMs < source.turnDeadlineMs) fail('차례 시간이 지나야 넘길 수 있습니다.');
@@ -184,16 +202,16 @@ export function leaveYutRoom(source, uid, nowMs) {
   room.participantUids = room.participantUids.filter((value) => value !== uid);
   if (room.emotes) delete room.emotes[uid];
   if (room.status === 'waiting') room.players = room.players.filter((entry) => entry.uid !== uid);
-  else { player.active = false; player.pieces = piecesFor(); }
+  else { player.active = false; player.pieces = piecesFor(player.pieces.length); }
   const remaining = room.players.filter((entry) => entry.active && entry.uid !== uid);
   if (room.hostUid === uid) { room.hostUid = remaining[0]?.uid || ''; if (remaining[0]) remaining[0].ready = true; }
-  if (!remaining.length) { room.status = 'closed'; room.turnUid = null; room.turnDeadlineMs = 0; }
+  if (!remaining.length) { room.status = 'closed'; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0; }
   else if (room.status === 'playing' && remaining.length === 1) {
-    room.status = 'finished'; room.winnerUid = remaining[0].uid; room.turnUid = null; room.turnDeadlineMs = 0;
+    room.status = 'finished'; room.winnerUid = remaining[0].uid; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0;
   } else if (room.status === 'playing' && room.turnUid === uid) nextTurn(room, nowMs);
   return event(room, 'leave', `${player.name} 님이 나갔습니다.`, nowMs);
 }
 export function closeYutRoom(source, nowMs) {
-  const room = copy(source); room.status = 'closed'; room.turnUid = null; room.turnDeadlineMs = 0; room.pendingThrow = null;
+  const room = copy(source); room.status = 'closed'; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0; room.pendingThrow = null;
   return event(room, 'close', '방이 닫혔습니다.', nowMs);
 }

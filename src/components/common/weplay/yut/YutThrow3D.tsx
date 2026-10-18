@@ -129,6 +129,10 @@ export default function YutThrow3D({
                 {
                   "--throw-play-state": hidden ? "paused" : "running",
                   "--throw-apex": `${-35 - (Number.isFinite(power) ? Math.max(0, Math.min(1, power)) : 0.65) * 40}%`,
+                  "--stick-delay": `${[0, 45, 20, 90][index]}ms`,
+                  "--stick-drift": `${[-20, 8, -10, 24][index]}px`,
+                  "--stick-rest": `${[-14, 9, -6, 18][index]}deg`,
+                  "--stick-start": `${[-28, 20, -16, 34][index]}deg`,
                 } as CSSProperties
               }
             >

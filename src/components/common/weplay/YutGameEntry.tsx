@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import type { YutSettings } from "../../../lib/yut";
 import useYutPublication from "./useYutPublication";
 import WeplayStudioIntro from "./WeplayStudioIntro";
 import WeplayMusicButton from "./WeplayMusicButton";
@@ -11,8 +12,10 @@ const YutGame = lazy(() => import("./yut/YutGame"));
 
 export default function YutGameEntry({
   portal,
+  initialSettings,
 }: {
   portal: "student" | "teacher";
+  initialSettings?: YutSettings;
 }) {
   const access = useYutPublication(portal);
   const [introduced, setIntroduced] = useState(false);
@@ -76,6 +79,9 @@ export default function YutGameEntry({
       ) : (
         <Suspense fallback={<p role="status">윷판을 준비하고 있습니다.</p>}>
           <YutGame
+            initialSettings={
+              portal === "student" ? access.settings : initialSettings
+            }
             music={music}
             onMusicActiveChange={setMusicActive}
             portal={portal}

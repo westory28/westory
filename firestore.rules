@@ -1274,6 +1274,8 @@ service cloud.firestore {
           let slot = get(/databases/$(database)/documents/semester_enrollment_slots/$(slotId)).data;
           let classroom = get(/databases/$(database)/documents/semester_classes/$(enrollment.classId)).data;
           return settings.enabled == true && settings.version is int && settings.version >= 0 && settings.version <= 9007199254740991
+            && settings.get('allowMultiplayer', true) == true
+            && (resource.data.get('visibility', 'private') == 'public' || settings.get('allowPrivateRooms', true) == true)
             && enrollment.studentUid == request.auth.uid
             && enrollment.semesterId == year + '-' + semester
             && enrollment.enrollmentStatus == 'ACTIVE' && enrollment.get('readOnly', false) == false

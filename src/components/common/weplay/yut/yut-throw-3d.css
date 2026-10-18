@@ -74,44 +74,29 @@
     #c39e69;
 }
 .yut-throw-3d__fallback.has-result .yut-throw-3d__wood {
-  animation: yut-fallback-flight 2250ms cubic-bezier(0.25, 0.6, 0.35, 1) both !important;
+  animation: yut-fallback-flight 2100ms var(--stick-delay, 0ms) ease-in-out both !important;
   animation-play-state: var(--throw-play-state, running) !important;
-}
-.yut-throw-3d__fallback.has-result .yut-throw-3d__wood:nth-child(even) {
-  animation-name: yut-fallback-flight-reverse !important;
 }
 @keyframes yut-fallback-flight {
   0% {
-    transform: translateY(80%) rotate(-40deg) scale(0.8);
+    transform: translate(0, 65%) rotate(var(--stick-start)) rotateY(0deg)
+      scale(0.88);
   }
-  35% {
-    transform: translateY(var(--throw-apex, -58%)) rotate(510deg) scale(1.12);
-  }
-  72% {
-    transform: translateY(0) rotate(1068deg) scale(1);
-  }
-  84% {
-    transform: translateY(-12%) rotate(1075deg);
-  }
-  100% {
-    transform: translateY(0) rotate(1068deg);
-  }
-}
-@keyframes yut-fallback-flight-reverse {
-  0% {
-    transform: translateY(90%) rotate(40deg) scale(0.8);
-  }
-  38% {
-    transform: translateY(var(--throw-apex, -50%)) rotate(-490deg) scale(1.12);
+  36% {
+    transform: translate(calc(var(--stick-drift) * 0.6), var(--throw-apex))
+      rotate(calc(var(--stick-rest) * 0.6)) rotateY(160deg) scale(1.04);
   }
   75% {
-    transform: translateY(12px) rotate(-1070deg) scale(1);
+    transform: translate(var(--stick-drift), 0) rotate(var(--stick-rest))
+      rotateY(360deg);
   }
-  87% {
-    transform: translateY(-8%) rotate(-1078deg);
+  85% {
+    transform: translate(var(--stick-drift), -5%) rotate(var(--stick-rest))
+      rotateY(366deg);
   }
   100% {
-    transform: translateY(12px) rotate(-1070deg);
+    transform: translate(var(--stick-drift), 0) rotate(var(--stick-rest))
+      rotateY(360deg);
   }
 }
 .yut-throw-3d__wood i {

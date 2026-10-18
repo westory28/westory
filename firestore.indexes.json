@@ -4,6 +4,16 @@
       "collectionGroup": "yut_rooms",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "joinable", "order": "ASCENDING" },
+        { "fieldPath": "expiresAtMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "yut_rooms",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "expiresAtMs", "order": "DESCENDING" }
       ]

@@ -16,11 +16,89 @@ const smooth = (n: number) => {
   return t * t * (3 - 2 * t);
 };
 const layout = [
-  { x: -1.25, z: -0.22, yaw: -0.22 },
-  { x: -0.42, z: 0.34, yaw: 0.16 },
-  { x: 0.43, z: -0.25, yaw: -0.14 },
-  { x: 1.26, z: 0.28, yaw: 0.22 },
+  {
+    x: -1.18,
+    z: -0.16,
+    yaw: -0.32,
+    delay: 0,
+    flight: 1.42,
+    lift: 1.14,
+    start: -0.32,
+    spin: 1,
+  },
+  {
+    x: -0.39,
+    z: 0.38,
+    yaw: 0.21,
+    delay: 0.045,
+    flight: 1.56,
+    lift: 1.32,
+    start: 0.18,
+    spin: -1,
+  },
+  {
+    x: 0.43,
+    z: -0.29,
+    yaw: -0.12,
+    delay: 0.02,
+    flight: 1.35,
+    lift: 1.07,
+    start: 0.34,
+    spin: 1,
+  },
+  {
+    x: 1.23,
+    z: 0.27,
+    yaw: 0.36,
+    delay: 0.09,
+    flight: 1.48,
+    lift: 1.23,
+    start: -0.16,
+    spin: -1,
+  },
 ];
+
+/** Cosmetic trajectory only. Each stick has a different release and contact time. */
+export function sampleYutPose(
+  time: number,
+  index: number,
+  flat: boolean,
+  power = 0.65,
+) {
+  const end = layout[index],
+    strength = clamp(power);
+  const progress = clamp((time - end.delay) / end.flight);
+  const targetRoll = flat ? Math.PI : 0;
+  if (progress >= 1) {
+    const settle = clamp((time - end.delay - end.flight) / 0.52);
+    const envelope = (1 - settle) ** 2;
+    return {
+      x: end.x + Math.sin(settle * Math.PI) * 0.035 * end.spin,
+      y:
+        0.122 +
+        Math.sin(settle * Math.PI) * (0.07 + strength * 0.07) * envelope,
+      z: end.z - Math.sin(settle * Math.PI) * 0.045 * envelope,
+      pitch: Math.sin(settle * TAU) * 0.045 * envelope,
+      yaw: end.yaw,
+      roll: targetRoll + Math.sin(settle * TAU) * 0.1 * envelope,
+    };
+  }
+  const arc = 4 * progress * (1 - progress);
+  const terminalRoll = targetRoll + TAU * end.spin;
+  return {
+    x:
+      (index - 1.5) * 0.14 * (1 - progress) +
+      end.x * progress +
+      arc * end.start * 0.16,
+    y: 0.122 + arc * (end.lift + strength * 0.48),
+    z: 1.55 * (1 - progress) + end.z * progress,
+    pitch:
+      -0.24 * (1 - progress) +
+      Math.sin(progress * Math.PI) * (0.16 + index * 0.025),
+    yaw: end.yaw + end.start * (1 - progress),
+    roll: end.start + (terminalRoll - end.start) * smooth(progress),
+  };
+}
 
 /** Testable final orientation: local flat-face normal (0,-1,0) becomes +Y. */
 export function finalYutRotation(flat: boolean, index: number) {
@@ -514,78 +592,25 @@ export class YutThrowScene {
   private pose() {
     const time = this.elapsed;
     for (let index = 0; index < 4; index++) {
-      const stick = this.groups[index],
-        end = layout[index];
-      const progress = clamp((time - index * 0.035) / 1.43);
-      const flat = this.result?.[index] || false;
-      const targetRoll = flat ? Math.PI : 0;
-      if (time >= 1.43 + index * 0.035) {
-        const bounce = clamp((time - 1.43 - index * 0.035) / 0.68);
-        const envelope = Math.pow(1 - bounce, 3);
-        stick.position.set(
-          end.x,
-          0.122 +
-            Math.abs(Math.sin(bounce * Math.PI * 2.7)) *
-              (0.14 + this.power * 0.2) *
-              envelope,
-          end.z,
-        );
-        stick.rotation.set(
-          Math.sin(bounce * TAU) * 0.14 * envelope,
-          end.yaw,
-          targetRoll + Math.sin(bounce * TAU * 1.4) * 0.22 * envelope,
-          "YXZ",
-        );
-        stick.scale.setScalar(1);
-      } else {
-        const arc = Math.sin(Math.PI * progress);
-        stick.position.set(
-          (index - 1.5) * 0.13 * (1 - progress) +
-            end.x * progress +
-            Math.sin(progress * Math.PI) * (index - 1.5) * 0.16,
-          0.122 +
-            4 *
-              progress *
-              (1 - progress) *
-              (1.6 + this.power * 1.05 + index * 0.09),
-          1.7 * (1 - progress) +
-            end.z * progress +
-            arc * (0.4 + this.power * 0.45),
-        );
-        stick.scale.setScalar(1 + arc * 0.12);
-        const rotationProgress = smooth(progress);
-        stick.rotation.set(
-          TAU *
-            (1 + Math.round(this.power * 2) + (index % 2)) *
-            rotationProgress,
-          end.yaw + TAU * rotationProgress,
-          TAU *
-            (2 + Math.round(this.power * 2) + (index % 2)) *
-            rotationProgress +
-            targetRoll * smooth((progress - 0.55) / 0.45),
-          "YXZ",
-        );
-      }
-      const points = this.trailPoints[index];
-      points.unshift(stick.position.clone());
-      if (points.length > 18) points.pop();
-      const attr = this.trails[index].geometry.getAttribute("position");
-      for (let n = 0; n < 18; n++) {
-        const p = points[Math.min(n, points.length - 1)];
-        attr.setXYZ(n, p.x, p.y, p.z);
-      }
-      attr.needsUpdate = true;
-      this.trails[index].visible =
-        !this.media.matches && time > 0.12 && time < 1.55;
-      (this.trails[index].material as THREE.LineBasicMaterial).opacity =
-        0.26 * Math.sin(progress * Math.PI);
+      const pose = sampleYutPose(
+        time,
+        index,
+        this.result?.[index] || false,
+        this.power,
+      );
+      const stick = this.groups[index];
+      stick.position.set(pose.x, pose.y, pose.z);
+      stick.rotation.set(pose.pitch, pose.yaw, pose.roll, "YXZ");
+      stick.scale.setScalar(1);
+      // A hand-thrown wooden stick has no luminous contrail.
+      this.trails[index].visible = false;
     }
-    const dustTime = clamp((time - 1.45) / 0.8);
+    const dustTime = clamp((time - 1.43) / 0.65);
     this.dust.visible = !this.media.matches && dustTime > 0 && dustTime < 1;
     for (let n = 0; n < 96; n++) {
       const origin = layout[n % 4],
         angle = n * 2.399;
-      const speed = 0.3 + ((n * 17) % 31) / 25;
+      const speed = 0.12 + ((n * 17) % 31) / 80;
       this.dustPositions[n * 3] = origin.x + Math.cos(angle) * dustTime * speed;
       this.dustPositions[n * 3 + 1] =
         0.025 + Math.sin(dustTime * Math.PI) * (0.05 + (n % 5) * 0.035);
@@ -594,7 +619,7 @@ export class YutThrowScene {
     }
     this.dust.geometry.getAttribute("position").needsUpdate = true;
     (this.dust.material as THREE.PointsMaterial).opacity =
-      0.72 * Math.pow(1 - dustTime, 1.6);
+      0.18 * Math.pow(1 - dustTime, 2);
   }
 
   private render() {

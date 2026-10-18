@@ -1,45 +1,30 @@
 import React from "react";
 
 export type YutProfession = "sa" | "nong" | "gong" | "sang";
+export type YutSpritePose = "idle" | "turn" | "throw" | "win" | "caught";
 export const PROFESSIONS: Record<
   YutProfession,
-  { name: string; job: string; color: string; clan: string; animal: string }
+  { color: string; clan: string; animal: string }
 > = {
-  sa: { name: "사", job: "선비", color: "#7c9aa1", clan: "마가", animal: "말" },
-  nong: {
-    name: "농",
-    job: "농부",
-    color: "#88a382",
-    clan: "우가",
-    animal: "소",
-  },
-  gong: {
-    name: "공",
-    job: "장인",
-    color: "#bc8068",
-    clan: "저가",
-    animal: "돼지",
-  },
-  sang: {
-    name: "상",
-    job: "상인",
-    color: "#c1a568",
-    clan: "구가",
-    animal: "개",
-  },
+  sa: { color: "#7c9aa1", clan: "마가", animal: "말" },
+  nong: { color: "#88a382", clan: "우가", animal: "소" },
+  gong: { color: "#bc8068", clan: "저가", animal: "돼지" },
+  sang: { color: "#c1a568", clan: "구가", animal: "개" },
 };
 
 /** Four original costumed animal sprites from the shared transparent 2 × 2 atlas. */
 export function YutSprite({
   role,
   className = "",
+  pose = "idle",
 }: {
   role: YutProfession;
   className?: string;
+  pose?: YutSpritePose;
 }) {
   return (
     <span
-      className={`yut-sprite yut-character--${role} ${className}`}
+      className={`yut-sprite yut-character--${role} yut-sprite--${pose} ${className}`}
       aria-hidden="true"
       style={{
         backgroundImage: `url(${import.meta.env.BASE_URL}assets/weplay/yut/characters.webp)`,

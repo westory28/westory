@@ -44,7 +44,7 @@
 }
 .yut-board-center-overlay {
   position: absolute;
-  z-index: 2;
+  z-index: 8;
   width: 48%;
   height: 44%;
   left: 50%;
@@ -75,10 +75,7 @@
   background: transparent;
   opacity: 1 !important;
   transform: translate(-50%, -88%);
-  transition:
-    left 320ms ease,
-    top 320ms ease,
-    filter 180ms ease;
+  transition: filter 180ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 .yut-isometric-piece .yut-isometric-pawn {
@@ -95,6 +92,134 @@
   width: 100%;
   height: 100%;
   margin: 0;
+}
+.yut-pawn-body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 92%;
+}
+.yut-isometric-piece.is-moving {
+  z-index: 5;
+}
+.yut-isometric-piece.is-land .yut-pawn-body {
+  animation: yut-pawn-land 300ms var(--reaction-delay) both;
+}
+.yut-isometric-piece.is-capture .yut-pawn-body {
+  animation: yut-pawn-cheer 300ms var(--reaction-delay) both;
+}
+.yut-isometric-piece.is-win .yut-pawn-body {
+  animation: yut-pawn-cheer 300ms var(--reaction-delay) both;
+}
+.yut-isometric-piece.is-caught .yut-pawn-body {
+  animation: yut-pawn-caught 300ms var(--reaction-delay) both;
+}
+.yut-pawn-expression {
+  position: absolute;
+  top: 14%;
+  right: 0;
+  color: #fff0ba;
+  font: 800 22px/1 serif;
+  text-shadow: 0 2px 3px #23180d;
+  animation: yut-pawn-reaction 300ms var(--reaction-delay) both;
+}
+.yut-isometric-piece.is-caught .yut-pawn-expression {
+  color: #ffd1b3;
+}
+.yut-route-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1;
+  animation: yut-route-reveal 360ms ease-out both;
+}
+.yut-route-preview polyline {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.yut-route-glow {
+  stroke: #ffe49a;
+  stroke-width: 14;
+  opacity: 0.3;
+  filter: blur(4px);
+}
+.yut-route-line {
+  stroke: #ffe49a;
+  stroke-width: 3;
+  opacity: 0.9;
+}
+.yut-route-preview ellipse {
+  fill: #ffe49a33;
+  stroke: #fff0b9;
+  stroke-width: 2;
+}
+.yut-isometric-board .yut-isometric-destination.is-previewed {
+  background: #7a5a22;
+  border-color: #fff2bf;
+  box-shadow:
+    0 0 0 5px #ffe49a55,
+    0 3px 10px #152e2740;
+}
+@keyframes yut-route-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes yut-pawn-land {
+  0% {
+    transform: scale(1.06, 0.9);
+  }
+  55% {
+    transform: scale(0.97, 1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes yut-pawn-cheer {
+  0% {
+    transform: translateY(0) rotate(-5deg);
+  }
+  45% {
+    transform: translateY(-12px) rotate(6deg) scale(1.06);
+  }
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+}
+@keyframes yut-pawn-caught {
+  0% {
+    transform: rotate(0);
+    opacity: 1;
+  }
+  35% {
+    transform: rotate(-12deg) translateY(-5px);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(14deg) translateY(12px) scale(0.7);
+    opacity: 0;
+  }
+}
+@keyframes yut-pawn-reaction {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 .yut-pawn-foot-shadow {
   position: absolute;

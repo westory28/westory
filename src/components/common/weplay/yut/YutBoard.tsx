@@ -1,5 +1,11 @@
-import React, { useId } from "react";
-import type { YutMove, YutNode, YutRoom } from "../../../../lib/yut";
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import type { YutMove, YutNode, YutRoom, YutRole } from "../../../../lib/yut";
 import { PROFESSIONS, YutSprite } from "./YutArt";
 import "./yut-board.css";
 
@@ -70,34 +76,6 @@ function BoardSurface({ prefix }: { prefix: string }) {
           <rect width="627" height="627" fill="#242618" opacity=".25" />
         </pattern>
         <pattern
-          id={`${prefix}-earth`}
-          width="228"
-          height="196"
-          patternUnits="userSpaceOnUse"
-          viewBox="0 0 627 627"
-          preserveAspectRatio="none"
-        >
-          <image href={materials} width="1254" height="1254" y="-627" />
-          <rect width="627" height="627" fill="#36432b" opacity=".16" />
-        </pattern>
-        <pattern
-          id={`${prefix}-dirt`}
-          width="150"
-          height="126"
-          patternUnits="userSpaceOnUse"
-          viewBox="0 0 627 627"
-          preserveAspectRatio="none"
-        >
-          <image
-            href={materials}
-            width="1254"
-            height="1254"
-            x="-627"
-            y="-627"
-          />
-          <rect width="627" height="627" fill="#6d6245" opacity=".22" />
-        </pattern>
-        <pattern
           id={`${prefix}-stone`}
           width="37"
           height="29"
@@ -137,152 +115,48 @@ function BoardSurface({ prefix }: { prefix: string }) {
             strokeWidth="2"
           />
         </pattern>
-        <clipPath id={`${prefix}-ground-clip`}>
-          <polygon points="132,255 360,98 588,255 360,412" />
-        </clipPath>
       </defs>
-      <ellipse
-        cx="360"
-        cy="409"
-        rx="292"
-        ry="102"
-        fill="#0d130c"
-        opacity=".38"
-      />
-      <path
-        d="M12 255 360 14 708 255 708 278 360 520 12 278Z"
-        fill={`url(#${prefix}-wood)`}
-        stroke="#332a1e"
-        strokeWidth="3"
-      />
-      <path d="M360 495 708 255V278L360 520Z" fill="#24251a" opacity=".36" />
-      <path
-        d="M15 266 360 505 705 266M15 274 360 513 705 274"
-        fill="none"
-        stroke="#ab8b50"
-        strokeWidth="1.4"
-        opacity=".7"
-      />
-      <polygon
-        points="12,255 360,14 708,255 360,495"
-        fill={`url(#${prefix}-wood)`}
-        stroke="#b59b61"
-        strokeWidth="2"
-      />
-      <polygon
-        points="27,255 360,25 693,255 360,485"
-        fill="none"
-        stroke="#302c1e"
-        strokeWidth="4"
-      />
-      <polygon
-        points="30,255 360,28 690,255 360,482"
-        fill="none"
-        stroke="#c2a975"
-        strokeWidth="1"
-      />
-      <polygon
-        points="132,255 360,98 588,255 360,412"
-        fill={`url(#${prefix}-earth)`}
-        stroke="#413e29"
-        strokeWidth="3"
-      />
-      <g clipPath={`url(#${prefix}-ground-clip)`}>
+      {/* Only the raised rim casts a shadow. The middle is deliberately open. */}
+      <g className="yut-board-rim">
         <path
-          d="M143 256H577M360 109V402"
-          stroke="#465132"
-          strokeWidth="28"
-          opacity=".65"
+          d="M12 255 360 14 708 255 708 278 360 520 12 278Z M132 255 360 98 588 255 360 412Z"
+          fillRule="evenodd"
+          fill={`url(#${prefix}-wood)`}
+          stroke="#332a1e"
+          strokeWidth="3"
+        />
+        <path d="M360 495 708 255V278L360 520Z" fill="#24251a" opacity=".36" />
+        <path
+          d="M15 266 360 505 705 266M15 274 360 513 705 274"
+          fill="none"
+          stroke="#ab8b50"
+          strokeWidth="1.4"
+          opacity=".7"
         />
         <path
-          d="M143 255H577M360 109V402"
-          stroke={`url(#${prefix}-dirt)`}
-          strokeWidth="24"
+          d="M12 255 360 14 708 255 360 495Z M132 255 360 98 588 255 360 412Z"
+          fillRule="evenodd"
+          fill={`url(#${prefix}-wood)`}
+          stroke="#b59b61"
+          strokeWidth="2"
         />
-        {Array.from({ length: 32 }, (_, i) => {
-          const x = 158 + ((i * 73) % 405),
-            y = 117 + ((i * 53) % 279);
-          return (
-            <g key={i} transform={`translate(${x} ${y})`}>
-              <path
-                d="m-7 3 3-7 1 5 3-10 1 9 5-6-2 8"
-                stroke="#3e5130"
-                strokeWidth="3"
-                fill="none"
-              />
-              <path
-                d="m-6 2 3-5m3 3 1-6m2 7 3-5"
-                stroke="#a3a866"
-                strokeWidth="1"
-                fill="none"
-              />
-            </g>
-          );
-        })}
-        <g transform="translate(264 181)">
-          <ellipse cy="24" rx="37" ry="13" fill="#242c1e" opacity=".4" />
-          <path
-            d="m-25 14 25-16 26 16-26 16Z"
-            fill="#777760"
-            stroke="#b2a685"
-          />
-          <path
-            d="M-21 15V-5M20 15V-5M0 25V4"
-            stroke="#473421"
-            strokeWidth="5"
-          />
-          <path
-            d="M-19 13V-4M22 13V-4M2 23V4"
-            stroke="#a3824c"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M-35-3Q-20-9-15-18L0-29 16-18Q22-8 35-3L0 19Z"
-            fill="#364436"
-            stroke="#222d24"
-            strokeWidth="2"
-          />
-          <path
-            d="m-31-4 31 18L31-4M-22-8 22 5M-14-15 22-1M-5-22 21-7"
-            fill="none"
-            stroke="#718168"
-            strokeWidth="2"
-          />
-          <path
-            d="M-35-3 0 19 35-3M0-29V14"
-            stroke="#a79965"
-            fill="none"
-            strokeWidth="1.4"
-          />
-        </g>
-        <g transform="translate(461 328)">
-          <ellipse cy="7" rx="27" ry="9" fill="#283122" opacity=".4" />
-          <path
-            d="m-23 3 6-12 13-4 15 10-4 13-20 2Zm22-1 10-15 12 1 8 13-9 10-17-2Z"
-            fill="#777a65"
-            stroke="#4b5441"
-            strokeWidth="2"
-          />
-          <path
-            d="m-17-8 11-3 8 5m11-6 8 1 5 6"
-            stroke="#b0ad87"
-            strokeWidth="2"
-            fill="none"
-          />
-          <path
-            d="m-28 11 3-12 3 9 5-6m30 9 4-12 2 8 5-5"
-            stroke="#65753d"
-            strokeWidth="3"
-            fill="none"
-          />
-        </g>
+        <polygon
+          points="27,255 360,25 693,255 360,485"
+          fill="none"
+          stroke="#302c1e"
+          strokeWidth="4"
+        />
+        <polygon
+          points="30,255 360,28 690,255 360,482"
+          fill="none"
+          stroke="#c2a975"
+          strokeWidth="1"
+        />
       </g>
-      <polygon
-        points="132,255 360,98 588,255 360,412"
-        fill="none"
-        stroke="#b29b62"
-        strokeWidth="1.2"
-      />
+      <g className="yut-board-crossing" fill="none">
+        <path d="M143 255H577M360 109V402" stroke="#392d1ddd" strokeWidth="7" />
+        <path d="M143 255H577M360 109V402" stroke="#d6bd7c" strokeWidth="3" />
+      </g>
       {Object.entries(positions)
         .filter(([node]) => !node.startsWith("o") && node !== "finish")
         .map(([node, [x, y]]) => (
@@ -444,12 +318,112 @@ function BoardSurface({ prefix }: { prefix: string }) {
   );
 }
 
-function Pawn({ role }: { role: keyof typeof PROFESSIONS }) {
+type PieceMotion = {
+  origin: YutNode;
+  path: YutNode[];
+  kind: "land" | "capture" | "win" | "caught";
+  travelMs: number;
+};
+const nodePosition = (node: YutNode): [number, number] =>
+  positions[node === "home" ? "o20" : node] || positions.center;
+const directionArrow = (origin: YutNode, target: YutNode) => {
+  const start = nodePosition(origin),
+    end = nodePosition(target);
+  const dx = end[0] - start[0],
+    dy = end[1] - start[1];
+  if (Math.abs(dx) < 8) return dy < 0 ? "↑" : "↓";
+  if (Math.abs(dy) < 8) return dx < 0 ? "←" : "→";
+  return dy < 0 ? (dx < 0 ? "↖" : "↗") : dx < 0 ? "↙" : "↘";
+};
+
+function MovingPawn({
+  role,
+  node,
+  name,
+  selected,
+  selectable,
+  motion,
+  onSelect,
+}: {
+  role: YutRole;
+  node: YutNode;
+  name: string;
+  selected: boolean;
+  selectable: boolean;
+  motion?: PieceMotion;
+  onSelect: () => void;
+}) {
+  const button = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    if (!motion || !button.current || motion.kind === "caught") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const nodes = [motion.origin, ...motion.path];
+    const frames: Keyframe[] = [];
+    const steps = nodes.length - 1;
+    nodes.forEach((point, index) => {
+      const current = nodePosition(point);
+      frames.push({
+        ...pointStyle(current),
+        offset: index / steps,
+        transform: "translate(-50%, -88%) translateY(0) rotate(0deg)",
+      });
+      if (index < steps) {
+        const next = nodePosition(nodes[index + 1]);
+        frames.push({
+          ...pointStyle([
+            (current[0] + next[0]) / 2,
+            (current[1] + next[1]) / 2,
+          ]),
+          offset: (index + 0.5) / steps,
+          transform: `translate(-50%, -88%) translateY(-14px) rotate(${next[0] >= current[0] ? 5 : -5}deg)`,
+        });
+      }
+    });
+    const animation = button.current.animate(frames, {
+      duration: motion.travelMs,
+      easing: "linear",
+    });
+    return () => animation.cancel();
+  }, [motion]);
+  if ((node === "home" || node === "finish") && !motion) return null;
   return (
-    <span className="yut-isometric-pawn" aria-hidden="true">
-      <i className="yut-pawn-foot-shadow" />
-      <YutSprite role={role} />
-    </span>
+    <button
+      ref={button}
+      type="button"
+      className={`yut-board-piece yut-isometric-piece${selected ? " is-selected" : ""}${motion ? ` is-moving is-${motion.kind}` : ""}`}
+      style={
+        {
+          ...pointStyle(
+            nodePosition(motion?.kind === "caught" ? motion.origin : node),
+          ),
+          "--piece-color": PROFESSIONS[role].color,
+          "--reaction-delay": `${motion?.travelMs || 0}ms`,
+        } as React.CSSProperties
+      }
+      disabled={!selectable || Boolean(motion)}
+      aria-pressed={selectable ? selected : undefined}
+      aria-label={`${name} ${PROFESSIONS[role].clan}, ${yutNodeLabel(node)}${selectable ? ", 선택" : ""}`}
+      onClick={onSelect}
+      data-motion={motion?.kind || "idle"}
+    >
+      <span className="yut-isometric-pawn" aria-hidden="true">
+        <i className="yut-pawn-foot-shadow" />
+        <span className="yut-pawn-body">
+          <YutSprite role={role} />
+        </span>
+        {motion && (
+          <span className="yut-pawn-expression">
+            {motion.kind === "win"
+              ? "✦"
+              : motion.kind === "capture"
+                ? "!"
+                : motion.kind === "caught"
+                  ? "!"
+                  : "♪"}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }
 
@@ -463,6 +437,8 @@ export default function YutBoard({
   disabled,
   children,
   revealMoves = true,
+  selectedMove = null,
+  onMotionChange,
 }: {
   room: YutRoom;
   uid: string;
@@ -473,11 +449,85 @@ export default function YutBoard({
   disabled: boolean;
   children?: React.ReactNode;
   revealMoves?: boolean;
+  selectedMove?: YutMove | null;
+  onMotionChange?: (moving: boolean) => void;
 }) {
   const prefix = `yut-board-${useId().replace(/:/g, "")}`;
+  const previous = useRef(room);
+  const callback = useRef(onMotionChange);
+  callback.current = onMotionChange;
+  const [motions, setMotions] = useState<Record<string, PieceMotion>>({});
+  useLayoutEffect(() => {
+    const before = previous.current;
+    previous.current = room;
+    const next: Record<string, PieceMotion> = {};
+    if (
+      before.id === room.id &&
+      before.revision !== room.revision &&
+      !document.hidden
+    ) {
+      const eventMove = room.lastEvent?.move;
+      for (const player of room.players.filter((entry) => entry.active)) {
+        for (const piece of player.pieces) {
+          const old = before.players
+            .find((entry) => entry.uid === player.uid)
+            ?.pieces.find((entry) => entry.id === piece.id);
+          if (!old || old.node === piece.node) continue;
+          const caught = piece.node === "home";
+          const path =
+            !caught && eventMove?.uid === player.uid && eventMove.path?.length
+              ? eventMove.path
+              : [piece.node];
+          next[`${player.uid}-${piece.id}`] = {
+            origin: old.node,
+            path,
+            kind: caught
+              ? "caught"
+              : piece.node === "finish"
+                ? "win"
+                : room.lastEvent.kind === "capture"
+                  ? "capture"
+                  : "land",
+            travelMs: Math.min(
+              1200,
+              Math.max(
+                240,
+                (caught ? eventMove?.path?.length || 1 : path.length) * 240,
+              ),
+            ),
+          };
+        }
+      }
+    }
+    setMotions(next);
+    const active = Object.values(next);
+    callback.current?.(active.length > 0);
+    if (!active.length) return;
+    const timer = window.setTimeout(
+      () => {
+        setMotions({});
+        callback.current?.(false);
+      },
+      Math.max(...active.map((item) => item.travelMs)) + 300,
+    );
+    return () => window.clearTimeout(timer);
+  }, [room.id, room.revision]);
+  useEffect(() => () => callback.current?.(false), []);
   const destinations = revealMoves
     ? moves.filter((move) => move.pieceId === selectedPiece)
     : [];
+  const piece = room.players
+    .find((player) => player.uid === uid)
+    ?.pieces.find((item) => item.id === selectedPiece);
+  const previewPath =
+    selectedMove && revealMoves && piece
+      ? [
+          piece.node,
+          ...(selectedMove.path?.length
+            ? selectedMove.path
+            : [selectedMove.targetNode]),
+        ]
+      : [];
   return (
     <div className="yut-isometric-board-wrap">
       <div
@@ -486,73 +536,80 @@ export default function YutBoard({
         aria-label="윷판"
       >
         <BoardSurface prefix={prefix} />
+        {previewPath.length > 1 && (
+          <svg
+            className="yut-route-preview"
+            viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <polyline
+              className="yut-route-glow"
+              points={previewPath
+                .map((node) => nodePosition(node).join(","))
+                .join(" ")}
+            />
+            <polyline
+              className="yut-route-line"
+              points={previewPath
+                .map((node) => nodePosition(node).join(","))
+                .join(" ")}
+            />
+            {previewPath.slice(1).map((node, i) => (
+              <ellipse
+                key={i}
+                cx={nodePosition(node)[0]}
+                cy={nodePosition(node)[1]}
+                rx="24"
+                ry="16"
+              />
+            ))}
+          </svg>
+        )}
         {children && <div className="yut-board-center-overlay">{children}</div>}
         {room.players
           .filter((player) => player.active)
-          .flatMap((player) => {
-            const nodes = [
-              ...new Set(
-                player.pieces
-                  .filter(
-                    (piece) => piece.node !== "home" && piece.node !== "finish",
-                  )
-                  .map((piece) => piece.node),
-              ),
-            ];
-            return nodes.map((node) => {
-              const pieces = player.pieces.filter(
-                (piece) => piece.node === node,
-              );
-              const selectable =
-                player.uid === uid &&
-                moves.some((move) =>
-                  pieces.some((piece) => piece.id === move.pieceId),
-                );
-              const selected =
-                player.uid === uid &&
-                pieces.some((piece) => piece.id === selectedPiece);
-              return (
-                <button
-                  key={`${player.uid}-${node}`}
-                  type="button"
-                  className={`yut-board-piece yut-isometric-piece${selected ? " is-selected" : ""}`}
-                  style={
-                    {
-                      ...pointStyle(positions[node] || positions.center),
-                      "--piece-color": PROFESSIONS[player.role].color,
-                    } as React.CSSProperties
-                  }
-                  onClick={() => onSelectPiece(pieces[0].id)}
-                  disabled={disabled || !selectable || !revealMoves}
-                  aria-pressed={selectable ? selected : undefined}
-                  aria-label={`${player.name} ${PROFESSIONS[player.role].job}, 말 ${pieces.map((piece) => piece.id).join("·")}, ${yutNodeLabel(node)}${selectable ? ", 선택" : ""}`}
-                >
-                  <Pawn role={player.role} />
-                  <span className="yut-isometric-piece-count">
-                    {pieces.length > 1 ? "×2" : pieces[0].id}
-                  </span>
-                </button>
-              );
-            });
-          })}
+          .flatMap((player) =>
+            player.pieces.map((item) => (
+              <MovingPawn
+                key={`${player.uid}-${item.id}`}
+                role={player.role}
+                node={item.node}
+                name={player.name}
+                selected={player.uid === uid && item.id === selectedPiece}
+                selectable={
+                  !disabled &&
+                  revealMoves &&
+                  player.uid === uid &&
+                  moves.some((move) => move.pieceId === item.id)
+                }
+                motion={motions[`${player.uid}-${item.id}`]}
+                onSelect={() => onSelectPiece(item.id)}
+              />
+            )),
+          )}
         {destinations.map((move) => (
           <button
             key={`${move.route}-${move.targetNode}`}
             type="button"
-            className="yut-destination yut-isometric-destination"
-            style={pointStyle(positions[move.targetNode] || positions.o20)}
+            className={`yut-destination yut-isometric-destination${selectedMove?.route === move.route ? " is-previewed" : ""}`}
+            style={pointStyle(nodePosition(move.targetNode))}
             disabled={disabled}
             onClick={() => onMove(move)}
-            aria-label={`말 ${move.pieceId}, ${move.route === "outer" ? "바깥길" : "지름길"}, ${yutNodeLabel(move.targetNode)}${yutNodeLabel(move.targetNode).endsWith("칸") ? "으로" : "로"} 이동`}
+            aria-pressed={selectedMove?.route === move.route}
+            aria-label={`${move.route === "outer" ? "바깥길" : "지름길"}, ${yutNodeLabel(move.targetNode)} 경로 선택`}
           >
             <span
               className="yut-isometric-destination-symbol"
               aria-hidden="true"
             >
-              {move.targetNode === "finish" ? "✓" : "↓"}
+              {directionArrow(
+                piece?.node || "home",
+                move.path?.[0] || move.targetNode,
+              )}
             </span>
             <span className="yut-isometric-destination-label">
-              {move.targetNode === "finish" ? "완주" : "이동"}
+              {move.route === "outer" ? "바깥길" : "지름길"}
             </span>
           </button>
         ))}

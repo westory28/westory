@@ -63,9 +63,18 @@ for (let seed = 1; seed <= 60; seed++) {
     room,
     "bots cannot act for the human",
   );
-  let actions = 0;
+  assert.ok(
+    room.players.every((player) => player.pieces.length === 1),
+    "new game uses one pawn per player",
+  );
+  let actions = 0,
+    actionTime = start;
   while (room.status === "playing" && actions < 1500) {
-    const nowMs = start + ++actions * 25,
+    ++actions;
+    const nowMs = (actionTime = Math.max(
+        actionTime + 25,
+        (room.phaseStartsAtMs || 0) + 1,
+      )),
       previous = JSON.stringify(room);
     if (room.turnUid === YUT_PREVIEW_UID) {
       if (room.phase === "throw")
@@ -174,14 +183,14 @@ const low = previewYutCommand(
   { action: "throw", power: 0.15 },
   YUT_PREVIEW_UID,
   randomFor(777),
-  600001,
+  powerRoom.phaseStartsAtMs + 1,
 );
 const high = previewYutCommand(
   powerRoom,
   { action: "throw", power: 0.95 },
   YUT_PREVIEW_UID,
   randomFor(777),
-  600001,
+  powerRoom.phaseStartsAtMs + 1,
 );
 assert.deepEqual(
   low.pendingThrow,

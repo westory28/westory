@@ -24,6 +24,8 @@ export function createYutPreview(
     playerCount?: 2 | 3 | 4;
     random?: () => number;
     nowMs?: number;
+    throwSeconds?: number;
+    moveSeconds?: number;
   } = {},
 ): YutRoom {
   const random = options.random || Math.random;
@@ -37,6 +39,10 @@ export function createYutPreview(
     classLabel: single ? "싱글 모드" : "교사 체험",
     host: { uid: YUT_PREVIEW_UID, name: "나" },
     nowMs,
+    maxPlayers: playerCount,
+    visibility: "private",
+    throwSeconds: options.throwSeconds,
+    moveSeconds: options.moveSeconds,
   });
   const strategies: BotStrategy[] = ["capture", "race", "stack"];
   for (let index = strategies.length - 1; index > 0; index--) {
@@ -153,6 +159,7 @@ export function advanceYutPreviewBot(
     room.turnUid === YUT_PREVIEW_UID
   )
     return room;
+  if (nowMs < (room.phaseStartsAtMs || 0)) return room;
   if (nowMs >= room.turnDeadlineMs) return skipYutTurn(room, nowMs);
   if (room.phase === "throw")
     return previewYutCommand(

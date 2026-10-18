@@ -30,14 +30,14 @@ const service = `
 import {useSyncExternalStore} from 'react';
 const params=new URLSearchParams(location.search), scenario=params.get('case')||'closed';
 const listeners=new Set();
-const qa=window.yutAccessQA={calls:[],enabled:scenario==='open'||scenario==='pending',hold:scenario==='pending',fail:scenario==='failure',missing:scenario==='missing',settings:{enabled:false,version:0},rooms:[{id:'room-a',code:'AB2345',status:'playing',revision:4,hostUid:'student-a',createdAtMs:Date.now()-60000,expiresAtMs:Date.now()+60000,turnUid:'student-a',players:[{uid:'student-a',name:'검증 학생',role:'sa',classLabel:'3학년 2반',studentNumber:7,active:true},{uid:'student-b',name:'둘째 학생',role:'nong',classLabel:'3학년 2반',studentNumber:8,active:true}]}],auth:{config:{year:'2026',semester:'2'},currentUser:{uid:'qa-user',email:'qa@example.invalid'},userData:{role:scenario==='readonly'?'student':scenario==='denied'?'student':params.get('portal')==='student'?'student':'teacher',teacherPortalEnabled:scenario==='readonly',staffPermissions:scenario==='readonly'?['lesson_read']:[]}}};
+const qa=window.yutAccessQA={calls:[],enabled:scenario==='open'||scenario==='pending',hold:scenario==='pending',fail:scenario==='failure',missing:scenario==='missing',settings:{enabled:false,version:0,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:4,throwSeconds:5,moveSeconds:25},rooms:[{id:'room-a',code:'AB2345',status:'playing',revision:4,hostUid:'student-a',createdAtMs:Date.now()-60000,expiresAtMs:Date.now()+60000,turnUid:'student-a',players:[{uid:'student-a',name:'검증 학생',role:'sa',classLabel:'3학년 2반',studentNumber:7,active:true},{uid:'student-b',name:'둘째 학생',role:'nong',classLabel:'3학년 2반',studentNumber:8,active:true}]}],auth:{config:{year:'2026',semester:'2'},currentUser:{uid:'qa-user',email:'qa@example.invalid'},userData:{role:scenario==='readonly'?'student':scenario==='denied'?'student':params.get('portal')==='student'?'student':'teacher',teacherPortalEnabled:scenario==='readonly',staffPermissions:scenario==='readonly'?['lesson_read']:[]}}};
 qa.changeAuth=next=>{qa.auth={...qa.auth,...next};listeners.forEach(fn=>fn());};
 export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>qa.auth);
-export async function getYutLobby(config){qa.calls.push({name:'getYutLobby',config:structuredClone(config)});const result={enabled:qa.enabled,room:null,classes:[],classId:'',serverNowMs:Date.now()};if(qa.hold){qa.hold=false;await new Promise(resolve=>qa.release=resolve);}if(qa.fail)throw Object.assign(new Error('연결을 확인해 주세요.'),{code:'functions/unavailable'});if(qa.missing)delete result.enabled;return result;}
+export async function getYutLobby(config){qa.calls.push({name:'getYutLobby',config:structuredClone(config)});const result={enabled:qa.enabled,settings:{...structuredClone(qa.settings),enabled:qa.enabled},room:null,classes:[],classId:'',serverNowMs:Date.now()};if(qa.hold){qa.hold=false;await new Promise(resolve=>qa.release=resolve);}if(qa.fail)throw Object.assign(new Error('연결을 확인해 주세요.'),{code:'functions/unavailable'});if(qa.missing)delete result.enabled;return result;}
 export async function getYutManagement(config){qa.calls.push({name:'getYutManagement',config:structuredClone(config)});if(qa.fail)throw new Error('관리 정보를 확인하지 못했습니다.');return {settings:structuredClone(qa.settings),rooms:structuredClone(qa.rooms),truncated:false,serverNowMs:Date.now()};}
-export async function saveYutSettings(config,data){qa.calls.push({name:'saveYutSettings',config:structuredClone(config),data});if(qa.fail)throw new Error('저장하지 못했습니다.');if(data.expectedVersion!==qa.settings.version)throw Object.assign(new Error('conflict'),{code:'functions/aborted'});qa.settings={enabled:data.enabled,version:qa.settings.version+1,updatedAtMs:Date.now()};return {settings:structuredClone(qa.settings),serverNowMs:Date.now()};}
+export async function saveYutSettings(config,data){qa.calls.push({name:'saveYutSettings',config:structuredClone(config),data});if(qa.fail)throw new Error('저장하지 못했습니다.');if(data.expectedVersion!==qa.settings.version)throw Object.assign(new Error('conflict'),{code:'functions/aborted'});const {expectedVersion,...options}=data;qa.settings={...qa.settings,...options,version:qa.settings.version+1,updatedAtMs:Date.now()};return {settings:structuredClone(qa.settings),serverNowMs:Date.now()};}
 export async function commandYutRoom(config,data){qa.calls.push({name:'commandYutRoom',config:structuredClone(config),data});qa.rooms=qa.rooms.filter(room=>room.id!==data.roomId);return {room:null,serverNowMs:Date.now()};}
-export const yutErrorMessage=error=>error.message;
+export const YUT_PRIVATE_DAILY_LIMIT=5;export const yutErrorMessage=error=>error.message;
 export const WEPLAY_GAMES=[{id:'history-rain',name:'내가 충무공이라고?!'},{id:'joseon-yut',name:'마우저구 윷놀이'}];
 `;
 const entry = `
@@ -97,7 +97,7 @@ const bundled = await build({
             args.path === "service"
               ? service
               : args.path === "game"
-                ? `import React from 'react';export default function Game({onBack,preview}){return <section data-testid='game-mounted'><h1>검증용 게임 대기</h1><span>{preview?'교사 체험':'온라인 대기'}</span><button onClick={onBack}>게임 관리</button></section>}`
+                ? `import React from 'react';export default function Game({onBack,preview,initialSettings}){window.yutAccessQA.preview=initialSettings;return <section data-testid='game-mounted'><h1>검증용 게임 대기</h1><span>{preview?'교사 체험':'온라인 대기'}</span><button onClick={onBack}>게임 관리</button></section>}`
                 : args.path === "music"
                   ? `export default function useMusic(){return {start(){},toggle(){},enabled:false,failed:false};}`
                   : `export default function Footer(){return null;}`,
@@ -217,6 +217,32 @@ try {
   await goto("portal=student&case=open");
   await page.getByRole("button", { name: /건너뛰기/ }).click();
   await page.getByTestId("game-mounted").waitFor();
+  assert.equal(
+    await page.evaluate(() => window.yutAccessQA.preview.allowSolo),
+    true,
+  );
+  await page.evaluate(() => {
+    window.yutAccessQA.settings.allowSolo = false;
+    window.yutAccessQA.settings.allowMultiplayer = false;
+    window.yutAccessQA.settings.allowPrivateRooms = false;
+  });
+  await page.waitForFunction(
+    () => window.yutAccessQA.preview?.allowSolo === false,
+    undefined,
+    { timeout: 18000 },
+  );
+  assert.deepEqual(
+    await page.evaluate(() => [
+      window.yutAccessQA.preview.allowSolo,
+      window.yutAccessQA.preview.allowMultiplayer,
+      window.yutAccessQA.preview.allowPrivateRooms,
+    ]),
+    [false, false, false],
+  );
+  assert.equal(await page.getByTestId("game-mounted").count(), 1);
+  checks.push(
+    "The 15-second student publication refresh passes live solo, multiplayer and private-room restrictions into the mounted game without waiting for re-entry.",
+  );
   await page.evaluate(() => {
     window.yutAccessQA.enabled = false;
   });
@@ -288,33 +314,87 @@ try {
   );
   await page.getByRole("checkbox", { name: "학생에게 공개" }).focus();
   await page.keyboard.press("Space");
+  assert.equal(
+    await page.getByLabel("기본 인원", { exact: true }).inputValue(),
+    "4",
+  );
+  assert.equal(
+    await page.getByLabel("윷 던지기 제한 시간", { exact: true }).inputValue(),
+    "5",
+  );
+  assert.equal(
+    await page.getByLabel("말 이동 제한 시간", { exact: true }).inputValue(),
+    "25",
+  );
+  await page.getByText("학생 하루 5회", { exact: true }).waitFor();
+  await page.getByLabel("윷 던지기 제한 시간", { exact: true }).fill("");
+  assert.equal(
+    await page
+      .getByRole("button", { name: "게임 설정 저장", exact: true })
+      .isEnabled(),
+    false,
+  );
   await page.getByRole("button", { name: "새로고침", exact: true }).click();
   assert.equal(
     await page.getByRole("checkbox", { name: "학생에게 공개" }).isChecked(),
     true,
   );
+  assert.equal(
+    await page.getByLabel("윷 던지기 제한 시간", { exact: true }).inputValue(),
+    "",
+  );
+  await page.getByLabel("기본 인원", { exact: true }).selectOption("3");
+  await page.getByLabel("윷 던지기 제한 시간", { exact: true }).fill("7");
+  await page.getByLabel("말 이동 제한 시간", { exact: true }).fill("35");
   await page
-    .getByRole("button", { name: "공개 설정 저장", exact: true })
+    .getByRole("checkbox", { name: "싱글 플레이 허용", exact: true })
+    .uncheck();
+  await page
+    .getByRole("checkbox", { name: "멀티플레이 허용", exact: true })
+    .uncheck();
+  assert.equal(
+    await page
+      .getByRole("checkbox", { name: "비공개 방 허용", exact: true })
+      .isEnabled(),
+    false,
+  );
+  await page
+    .getByRole("checkbox", { name: "멀티플레이 허용", exact: true })
+    .check();
+  await page
+    .getByRole("checkbox", { name: "비공개 방 허용", exact: true })
+    .uncheck();
+  await page
+    .getByRole("button", { name: "게임 설정 저장", exact: true })
     .click();
-  await page.getByText("학생 공개로 저장했습니다.", { exact: true }).waitFor();
+  await page.getByText("게임 설정을 저장했습니다.", { exact: true }).waitFor();
   assert.deepEqual(
     await page.evaluate(
       () =>
         window.yutAccessQA.calls.find((call) => call.name === "saveYutSettings")
           .data,
     ),
-    { enabled: true, expectedVersion: 0 },
+    {
+      enabled: true,
+      allowSolo: false,
+      allowMultiplayer: true,
+      allowPrivateRooms: false,
+      defaultPlayerCount: 3,
+      throwSeconds: 7,
+      moveSeconds: 35,
+      expectedVersion: 0,
+    },
   );
   await page.getByRole("checkbox", { name: "학생에게 공개" }).uncheck();
   await page.evaluate(() => {
     window.yutAccessQA.settings.version++;
   });
   await page
-    .getByRole("button", { name: "공개 설정 저장", exact: true })
+    .getByRole("button", { name: "게임 설정 저장", exact: true })
     .click();
   await page
     .getByText(
-      "다른 곳에서 공개 설정이 바뀌었습니다. 최신 설정을 불러온 뒤 다시 확인해 주세요.",
+      "다른 곳에서 게임 설정이 바뀌었습니다. 최신 설정을 불러온 뒤 다시 확인해 주세요.",
       { exact: true },
     )
     .waitFor();
@@ -324,11 +404,28 @@ try {
   await page.getByRole("checkbox", { name: "학생에게 공개" }).check();
   await page.getByText("3학년 2반 · 7번", { exact: true }).waitFor();
   await page.getByText("현재 차례", { exact: true }).waitFor();
+  await page.getByText("비공개 방", { exact: true }).waitFor();
+  await page.evaluate(() => {
+    window.yutAccessQA.rooms[0].visibility = "public";
+    window.yutAccessQA.rooms[0].maxPlayers = 3;
+    window.yutAccessQA.settings.enabled = false;
+    window.yutAccessQA.settings.version++;
+  });
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await page.getByText("공개 방", { exact: true }).waitFor();
+  await page.getByText("2/3명", { exact: true }).waitFor();
+  assert.equal(
+    await page.getByRole("checkbox", { name: "학생에게 공개" }).isChecked(),
+    false,
+  );
+  await page.getByLabel("윷 던지기 제한 시간", { exact: true }).fill("9");
   checks.push(
-    "Teacher card opens management; default closed, keyboard toggle, refresh preserves draft, CAS save and conflict recovery.",
+    "Teacher options default closed/4 players/5-second throw/25-second move; editable modes/count/timers, fixed private daily cap, invalid input preserved across refresh, full CAS payload and conflict recovery; public/private room metadata.",
   );
   for (const width of [390, 768, 1280, 1366]) {
     await page.setViewportSize({ width, height: width === 1366 ? 768 : 900 });
+    await page.mouse.move(0, 0);
+    await page.keyboard.press("Escape");
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -344,6 +441,14 @@ try {
   await page.getByRole("button", { name: /건너뛰기/ }).click();
   await page.getByText("교사 체험", { exact: true }).waitFor();
   assert.equal(
+    await page.evaluate(() => window.yutAccessQA.preview.throwSeconds),
+    9,
+  );
+  assert.equal(
+    await page.evaluate(() => window.yutAccessQA.preview.defaultPlayerCount),
+    3,
+  );
+  assert.equal(
     await page.evaluate(
       () =>
         window.yutAccessQA.calls.filter(
@@ -354,6 +459,10 @@ try {
   );
   await page.getByRole("button", { name: "게임 관리", exact: true }).click();
   await page.getByRole("checkbox", { name: "학생에게 공개" }).waitFor();
+  assert.equal(
+    await page.getByLabel("윷 던지기 제한 시간", { exact: true }).inputValue(),
+    "9",
+  );
   await page
     .getByRole("button", { name: "AB2345 방 닫기", exact: true })
     .click();
@@ -379,8 +488,16 @@ try {
     false,
   );
   assert.equal(
+    await page.getByLabel("말 이동 제한 시간", { exact: true }).isEnabled(),
+    false,
+  );
+  assert.equal(
+    await page.getByLabel("기본 인원", { exact: true }).isEnabled(),
+    false,
+  );
+  assert.equal(
     await page
-      .getByRole("button", { name: "공개 설정 저장", exact: true })
+      .getByRole("button", { name: "게임 설정 저장", exact: true })
       .count(),
     0,
   );

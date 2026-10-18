@@ -29,9 +29,9 @@ const source = (f) =>
       .join(root, "src/components/common/weplay/yut", f)
       .replaceAll("\\", "/"),
   );
-const harness = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import YutThrow3D from ${source("YutThrow3D.tsx")};import YutBoard from ${source("YutBoard.tsx")};import ${source("yut.css")};import{finalYutRotation,createYutGeometry}from ${source("YutThrowScene.ts")};import{Vector3}from'three';
-const room={id:'visual-qa',status:'playing',phase:'move',turnUid:'qa',pendingThrow:{value:2,label:'개',sticks:[true,false,true,false]},players:[{uid:'qa',name:'나',role:'sa',active:true,pieces:[{id:'1',node:'o5',lane:'outer'},{id:'2',node:'o6',lane:'outer'}]},{uid:'friend',name:'친구',role:'nong',active:true,pieces:[{id:'1',node:'o10',lane:'outer'},{id:'2',node:'o15',lane:'outer'}]}]};
-function App(){const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={room} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={moves} onMove={()=>window.qa.moves++} disabled={false}>{mounted&&<YutThrow3D {...state} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/>}</YutBoard></div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
+const harness = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import YutThrow3D from ${source("YutThrow3D.tsx")};import YutBoard from ${source("YutBoard.tsx")};import ${source("yut.css")};import{finalYutRotation,createYutGeometry,sampleYutPose}from ${source("YutThrowScene.ts")};import{Vector3}from'three';
+const room={id:'visual-qa',revision:0,lastEvent:{kind:'create',atMs:0,text:''},status:'playing',phase:'move',turnUid:'qa',pendingThrow:{value:2,label:'개',sticks:[true,false,true,false]},players:[{uid:'qa',name:'나',role:'sa',active:true,pieces:[{id:'1',node:'o5',lane:'outer'},{id:'2',node:'o6',lane:'outer'}]},{uid:'friend',name:'친구',role:'nong',active:true,pieces:[{id:'1',node:'o10',lane:'outer'},{id:'2',node:'o15',lane:'outer'}]}]};
+function App(){const[boardRoom,setBoardRoom]=useState(room);const[selectedMove,setSelectedMove]=useState(null);window.qa.board=setBoardRoom;window.qa.poses=(time,power)=>[0,1,2,3].map(i=>sampleYutPose(time,i,i%2===0,power));const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1,path:['o6','o7']},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1,path:['a1','a2']},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={boardRoom} selectedMove={selectedMove} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={moves} onMove={move=>{window.qa.moves++;setSelectedMove(move)}} disabled={false}>{mounted&&<YutThrow3D {...state} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/>}</YutBoard></div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
   bundle: true,
@@ -168,6 +168,92 @@ try {
     );
     report.checks.push(
       "5fps WebGL still settles in real time (2.25 seconds plus frame scheduling), without stretching the player's turn",
+    );
+    await context.close();
+  }
+  {
+    const { context, page } = await fresh({
+      viewport: { width: 1280, height: 900 },
+    });
+    const poses = await page.evaluate(() => window.qa.poses(0.68, 0.65));
+    assert.equal(
+      new Set(poses.map((pose) => pose.y.toFixed(3))).size,
+      4,
+      "four individual flight heights",
+    );
+    assert.ok(
+      poses.every((pose) => pose.y > 0.12 && pose.y < 2.2),
+      "gentle hand-toss arc",
+    );
+    const settled = await page.evaluate(() => window.qa.poses(2.25, 0.65));
+    assert.ok(
+      settled.every(
+        (pose) =>
+          Math.abs(pose.y - 0.122) < 1e-8 && Math.abs(pose.pitch) < 1e-8,
+      ),
+      "every stick rests by the fixed deadline",
+    );
+    await page.getByRole("button", { name: /지름길.*경로 선택/ }).click();
+    assert.equal(await page.locator(".yut-route-preview").count(), 1);
+    assert.equal(
+      await page
+        .locator(".yut-route-preview polyline")
+        .first()
+        .getAttribute("points"),
+      "650,255 553.33,255 456.67,255",
+    );
+    await page.screenshot({
+      path: path.join(evidence, "selected-shortcut.png"),
+    });
+    await page.evaluate(() =>
+      window.qa.board((old) => ({
+        ...old,
+        revision: 1,
+        lastEvent: {
+          kind: "capture",
+          atMs: 1,
+          text: "",
+          move: {
+            uid: "qa",
+            pieceId: "1",
+            route: "a",
+            path: ["a1", "a2", "center"],
+            capturedUids: [],
+          },
+        },
+        players: old.players.map((p, i) =>
+          i
+            ? p
+            : {
+                ...p,
+                pieces: p.pieces.map((v, j) =>
+                  j ? v : { ...v, node: "center", lane: "a" },
+                ),
+              },
+        ),
+      })),
+    );
+    await page.waitForFunction(
+      () => !!document.querySelector('[data-motion="capture"]'),
+    );
+    const animation = await page
+      .locator('[data-motion="capture"]')
+      .evaluate((node) =>
+        node
+          .getAnimations()
+          .map((animation) => ({
+            duration: animation.effect.getTiming().duration,
+            frames: animation.effect.getKeyframes().length,
+          })),
+      );
+    assert.ok(
+      animation.some((item) => item.duration === 720 && item.frames === 7),
+      "three distinct 240ms hops",
+    );
+    await page.waitForTimeout(1100);
+    assert.equal(await page.locator('[data-motion="capture"]').count(), 0);
+    report.checks.push(
+      "transparent board center, selected shortcut path, distinct gentle stick trajectories and node-by-node capture hops",
     );
     await context.close();
   }
