@@ -14,6 +14,15 @@ const koreaDay = (atMs) => new Date(atMs + 9 * 3600000).toISOString().slice(0, 1
 const privateUsed = (player, day) => player.privatePlayDay === day
   ? Number.isSafeInteger(player.privatePlayCount) && player.privatePlayCount >= 0 ? Math.min(5, player.privatePlayCount) : 5 : 0;
 const modeAllowed = (actor, room) => actor.manager || (actor.settings.allowMultiplayer && (room.visibility === 'public' || actor.settings.allowPrivateRooms));
+const studentClassLabel = (classroom) => {
+  const grade = text(classroom.grade, 10).replace(/\s*학년$/, ''), classNumber = text(classroom.classNumber, 10).replace(/\s*반$/, '');
+  return grade && classNumber ? `${grade}학년 ${classNumber}반` : text(classroom.displayName, 60);
+};
+const studentDisplayName = (profile, enrollment, classroom) => {
+  const name = text(enrollment.studentName || profile.name || profile.studentName, 40) || '학생';
+  const classLabel = studentClassLabel(classroom);
+  return classLabel ? `${name}(${classLabel})` : name;
+};
 const publicRoom = (room) => {
   if (!room) return null;
   // Internal enrollment IDs are for rules checks; commands expose only game state.
@@ -70,9 +79,45 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     const enrollment = (await reader.get(db.doc(`semester_enrollments/${slot.activeEnrollmentId}`))).data() || {};
     if (enrollment.studentUid !== uid || enrollment.semesterId !== scope.id || enrollment.enrollmentStatus !== 'ACTIVE' || enrollment.readOnly === true || !identifier(enrollment.classId)) fail('permission-denied', '현재 학기의 수강 정보를 확인해 주세요.');
     const classroom = await readClass(reader, scope, enrollment.classId);
-    const rawName = text(profile.name || profile.studentName, 20), number = text(enrollment.studentNumber || profile.studentNumber || profile.number, 3).replace(/[^0-9]/g, '');
     return { uid, manager: false, settings, classId: enrollment.classId, enrollmentId: slot.activeEnrollmentId, slotId, classroom,
-      name: `${number ? `${number}번 ` : ''}${rawName ? `${rawName[0]}${'○'.repeat(Math.min(3, Math.max(1, rawName.length - 1)))}` : '학생'}` };
+      name: studentDisplayName(profile, enrollment, classroom) };
+  };
+  // Refresh old room labels from the same canonical records used for access.
+  // This changes only display synchronization, never the gameplay revision/clock.
+  const refreshRoomNames = async (reader, scope, room, actor) => {
+    const upgrade = room.playerNamesVersion !== 1;
+    const players = await Promise.all(room.players.map(async (player) => {
+      if (!player.active || !room.participantUids.includes(player.uid)) return player;
+      if (player.uid === actor.uid) return player.name === actor.name ? player : { ...player, name: actor.name };
+      // New joins already use authority.name. A migrated room needs no further
+      // roster reads: each participant refreshes their own label when acting.
+      if (!upgrade) return player;
+      const profile = (await reader.get(db.doc(`users/${player.uid}`))).data() || {};
+      if (profile.isDeleted || profile.deletedAt || profile.weplayDeletionPending) return { ...player, name: '탈퇴한 참가자' };
+      if (profile.role !== 'student' || (Object.hasOwn(profile, 'registrationApprovalStatus') && profile.registrationApprovalStatus !== 'APPROVED')) return player;
+      const enrollmentId = room.enrollmentIds?.[player.uid], slotId = room.enrollmentSlotIds?.[player.uid];
+      if (!identifier(enrollmentId) || !identifier(slotId)) return player;
+      const [enrollmentSnap, slotSnap] = await Promise.all([
+        reader.get(db.doc(`semester_enrollments/${enrollmentId}`)), reader.get(db.doc(`semester_enrollment_slots/${slotId}`)),
+      ]);
+      const enrollment = enrollmentSnap.data() || {}, slot = slotSnap.data() || {};
+      if (enrollment.studentUid !== player.uid || enrollment.semesterId !== scope.id || enrollment.enrollmentStatus !== 'ACTIVE'
+        || enrollment.readOnly === true || !identifier(enrollment.classId) || slot.studentUid !== player.uid
+        || slot.semesterId !== scope.id || slot.activeEnrollmentId !== enrollmentId || (slot.status !== undefined && slot.status !== 'ACTIVE')) return player;
+      const classroom = (await reader.get(db.doc(`semester_classes/${enrollment.classId}`))).data() || {};
+      if (classroom.semesterId !== scope.id || classroom.status !== 'ACTIVE' || classroom.readOnly === true) return player;
+      const name = studentDisplayName(profile, enrollment, classroom);
+      return player.name === name ? player : { ...player, name };
+    }));
+    const changed = players.some((player, index) => player.name !== room.players[index].name);
+    if (!changed && !upgrade) return room;
+    return { ...room, players, playerNamesVersion: 1, ...(changed ? { syncRevision: (room.syncRevision ?? room.revision) + 1 } : {}) };
+  };
+  const persistNames = (transaction, scope, before, after) => {
+    if (before !== after) transaction.update(ref(scope, 'yut_rooms', before.id), {
+      players: after.players, playerNamesVersion: after.playerNamesVersion,
+      ...(after.syncRevision !== before.syncRevision ? { syncRevision: after.syncRevision } : {}),
+    });
   };
   const checkRoomAccess = (actor, room) => {
     if (!room || room.expiresAtMs <= now()) fail('not-found', '방을 찾을 수 없거나 이용 시간이 지났습니다.');
@@ -88,12 +133,16 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       if (identifier(pointer.roomId)) {
         const stored = (await transaction.get(ref(scope, 'yut_rooms', pointer.roomId))).data();
         if (stored?.participantUids?.includes(actor.uid) && stored.status !== 'closed' && stored.expiresAtMs > now()
-          && matchesMembership(stored, actor) && modeAllowed(actor, stored)) room = publicRoom(stored);
+          && matchesMembership(stored, actor) && modeAllowed(actor, stored)) {
+          const refreshed = await refreshRoomNames(transaction, scope, stored, actor);
+          persistNames(transaction, scope, stored, refreshed);
+          room = publicRoom(refreshed);
+        }
       }
       // Cached teacher clients require a nonempty selection before creating a
       // room. This virtual option exposes no actual class directory and is
       // ignored by create; current clients no longer show a class selector.
-      return { room, enabled: actor.settings.enabled, settings: actor.settings,
+      return { room, playerName: actor.name, enabled: actor.settings.enabled, settings: actor.settings,
         privatePlaysRemaining: actor.manager ? null : 5 - privateUsed(pointer, koreaDay(now())),
         classes: actor.manager ? [{ id: 'school', label: '전체 학생' }] : [],
         classId: actor.manager ? 'school' : '', serverNowMs: now() };
@@ -137,9 +186,9 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
             || slot.semesterId !== scope.id || slot.activeEnrollmentId !== enrollmentId || (slot.status !== undefined && slot.status !== 'ACTIVE')) return result;
           const classroom = await read(`semester_classes/${enrollment.classId}`);
           if (classroom.semesterId !== scope.id || classroom.status !== 'ACTIVE' || classroom.readOnly === true) return result;
-          return { ...result, name: text(enrollment.studentName || profile.name || profile.studentName || player.name, 40),
+          return { ...result, name: studentDisplayName(profile, enrollment, classroom),
             studentNumber: text(enrollment.studentNumber, 10),
-            classLabel: text(classroom.displayName || `${classroom.grade || ''}학년 ${classroom.classNumber || ''}반`, 60) };
+            classLabel: studentClassLabel(classroom) };
         })),
       })));
       return { settings: actor.settings, rooms, truncated: active.length > 100, serverNowMs };
@@ -208,7 +257,13 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         if (previous.fingerprint !== fingerprint) fail('already-exists', '같은 요청 번호로 다른 동작을 보낼 수 없습니다.');
         const old = previous.roomId ? (await transaction.get(ref(scope, 'yut_rooms', previous.roomId))).data() : null;
         if (old && !modeAllowed(actor, old)) fail('permission-denied', '지금은 이 게임 모드가 열려 있지 않습니다.');
-        return { room: old?.participantUids?.includes(actor.uid) && old.expiresAtMs > receivedAt && matchesMembership(old, actor) ? publicRoom(old) : null, serverNowMs: receivedAt };
+        let room = null;
+        if (old?.participantUids?.includes(actor.uid) && old.expiresAtMs > receivedAt && matchesMembership(old, actor)) {
+          const refreshed = await refreshRoomNames(transaction, scope, old, actor);
+          persistNames(transaction, scope, old, refreshed);
+          room = publicRoom(refreshed);
+        }
+        return { room, serverNowMs: receivedAt };
       }
       if (action !== 'emote' && Number(player.lastCommandAtMs || 0) + 250 > receivedAt) fail('resource-exhausted', '잠시 후 다시 눌러 주세요.');
       let room, roomId, codeRef = null, transferredRoom = null, matchQueue = null;
@@ -221,9 +276,11 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
               if (!actor.manager && current.visibility !== 'public' && current.status === 'waiting' && privateUsed(player, koreaDay(receivedAt)) >= 5) fail('resource-exhausted', '오늘의 비밀 방 5판을 모두 이용했습니다.');
               // Record even a no-op reconnect: a delayed retry after leaving
               // must not silently join or create a room again.
+              const refreshed = await refreshRoomNames(transaction, scope, current, actor);
+              persistNames(transaction, scope, current, refreshed);
               transaction.set(playerRef, { ...player, lastCommandAtMs: receivedAt,
                 commands: [...history, { key: data.requestKey, fingerprint, roomId: current.id }].slice(-32) });
-              return { room: publicRoom(current), serverNowMs: receivedAt };
+              return { room: publicRoom(refreshed), serverNowMs: receivedAt };
             } else fail('failed-precondition', '참가 중인 방에서 먼저 나와 주세요.');
           }
         }
@@ -258,6 +315,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
           if (existingCode && existingCode.expiresAtMs > receivedAt) fail('unavailable', '참가 코드를 다시 만들고 있습니다. 한 번 더 눌러 주세요.');
           room = core.createYutRoom({ id: roomId, code: generatedCode, classId: '', classLabel: '함께하는 윷판', host: { uid: actor.uid, name: actor.name }, nowMs: receivedAt,
             visibility, maxPlayers: data.maxPlayers ?? actor.settings.defaultPlayerCount, throwSeconds: actor.settings.throwSeconds, moveSeconds: actor.settings.moveSeconds });
+          room.playerNamesVersion = 1;
           room.enrollmentIds = { [actor.uid]: actor.enrollmentId };
           room.enrollmentSlotIds = { [actor.uid]: actor.slotId };
           player.createCount = player.createDay === day ? Number(player.createCount || 0) + 1 : 1;
@@ -275,6 +333,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         }
         room.enrollmentIds = { ...(room.enrollmentIds || {}), [actor.uid]: actor.enrollmentId };
         room.enrollmentSlotIds = { ...(room.enrollmentSlotIds || {}), [actor.uid]: actor.slotId };
+        room = await refreshRoomNames(transaction, scope, room, actor);
       } else {
         roomId = data.roomId;
         room = (await transaction.get(ref(scope, 'yut_rooms', roomId))).data();
@@ -287,6 +346,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         if (['start', 'close'].includes(action) && room.hostUid !== actor.uid && !(action === 'close' && actor.canWrite)) fail('permission-denied', '방장만 시작하거나 방을 닫을 수 있습니다.');
         if (action === 'claimReward' && (actor.manager || room.status !== 'finished' || room.finishReason !== 'completion'
           || room.winnerUid !== actor.uid || room.reward?.status !== 'pending')) fail('failed-precondition', '완주한 우승자의 미지급 보상만 다시 받을 수 있습니다.');
+        room = await refreshRoomNames(transaction, scope, room, actor);
         if (action === 'start') {
           room.winnerRewardPolicy = await rewards.snapshot(transaction, scope);
           // Every participant still needs an active enrollment in this semester,

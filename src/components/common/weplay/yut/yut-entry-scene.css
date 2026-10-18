@@ -1,0 +1,85 @@
+@font-face {
+  font-family: "Yut Title Brush";
+  src: url("/assets/weplay/yut/fonts/EastSeaDokdo-title.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+.yut-game .yut-entry {
+  background: #241b13;
+}
+.yut-game .yut-entry-scene {
+  overflow: hidden;
+  background: #35251b;
+  z-index: 0;
+  right: calc(max(280px, 30%) + 36px);
+}
+.yut-game .yut-entry-scene::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(0deg, #20150d99, transparent 30%);
+  pointer-events: none;
+}
+.yut-entry-scene-frame {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+}
+.yut-entry-scene-frame--1,
+.yut-entry-scene-frame--2 {
+  opacity: 0;
+  animation: yut-entry-pose-b 8s steps(1, end) infinite;
+}
+.yut-entry-scene-frame--2 {
+  animation-name: yut-entry-pose-c;
+}
+/* Different characters react at each beat; the shared thumbnail separates the beats. */
+@keyframes yut-entry-pose-b {
+  0%,
+  20%,
+  30%,
+  100% {
+    opacity: 0;
+  }
+  24% {
+    opacity: 1;
+  }
+}
+@keyframes yut-entry-pose-c {
+  0%,
+  61%,
+  74%,
+  100% {
+    opacity: 0;
+  }
+  66% {
+    opacity: 1;
+  }
+}
+.yut-game[data-motion-paused="true"] .yut-entry-scene-frame,
+.yut-entry-scene[data-scene-visible="false"] .yut-entry-scene-frame {
+  animation-play-state: paused !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .yut-entry-scene-frame--1,
+  .yut-entry-scene-frame--2 {
+    display: none;
+    animation: none !important;
+  }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .yut-game .yut-entry-scene {
+    right: calc(max(280px, 34%) + 20px);
+  }
+}
+@media (max-width: 820px) {
+  .yut-entry-scene-frame {
+    object-fit: contain;
+  }
+}

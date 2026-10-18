@@ -537,6 +537,7 @@ function MovingPawn({
           <span className="yut-pawn-facing" data-facing={facing}>
             <YutPawnArt
               role={role}
+              motionKey={`${role}:${pieceIds.join("-")}`}
               carried={
                 motion
                   ? motion.carried || (motion.boarding && landed)

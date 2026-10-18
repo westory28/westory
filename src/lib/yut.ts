@@ -18,6 +18,7 @@ export type {
 } from "../../functions/yutCore.mjs";
 export interface YutLobby {
   enabled: boolean;
+  playerName?: string;
   settings?: YutSettings;
   privatePlaysRemaining?: number | null;
   room: YutRoom | null;

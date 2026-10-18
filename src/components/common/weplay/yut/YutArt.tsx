@@ -41,19 +41,32 @@ export function YutSprite({
   role,
   className = "",
   pose = "idle",
+  motionKey,
 }: {
   role: YutProfession;
   className?: string;
   pose?: YutSpritePose;
+  motionKey?: string;
 }) {
   const action = pose === "turn" || pose === "throw" ? "idle" : pose;
   const atlas = frameAtlases[action];
   const row = atlas.rows[["sa", "nong", "gong", "sang"].indexOf(role)];
+  const roleIndex = ["sa", "nong", "gong", "sang"].indexOf(role);
+  const phase = Array.from(motionKey || role).reduce(
+    (hash, character) => (hash * 31 + character.charCodeAt(0)) % 997,
+    0,
+  );
   return (
     <span
       className={`yut-sprite yut-character--${role} yut-sprite--${pose} yut-frame-sprite yut-frame--${action} ${className}`}
       data-sprite-action={action}
       data-sprite-frames="3"
+      style={
+        {
+          "--idle-duration": `${1400 + roleIndex * 110 + (phase % 4) * 40}ms`,
+          "--idle-delay": `${-(roleIndex * 330 + ((phase * 307) % 600))}ms`,
+        } as React.CSSProperties
+      }
       aria-hidden="true"
     >
       {row.frames.map(([x, y, width, height, dx, dy], index) => (
@@ -93,6 +106,7 @@ export function YutPawnArt({
   walking = false,
   pose = "idle",
   className = "",
+  motionKey,
 }: {
   role: YutProfession;
   carried?: boolean;
@@ -100,6 +114,7 @@ export function YutPawnArt({
   walking?: boolean;
   pose?: YutSpritePose;
   className?: string;
+  motionKey?: string;
 }) {
   const action =
     pose === "lose" || pose === "caught" || pose === "win"
@@ -117,7 +132,7 @@ export function YutPawnArt({
       data-carried={carried}
       data-boarding={boarding}
     >
-      <YutSprite role={role} pose={action} />
+      <YutSprite role={role} pose={action} motionKey={motionKey} />
     </span>
   );
 }

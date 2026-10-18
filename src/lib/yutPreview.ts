@@ -27,6 +27,7 @@ export function createYutPreview(
     nowMs?: number;
     throwSeconds?: number;
     moveSeconds?: number;
+    playerName?: string;
   } = {},
 ): YutRoom {
   const random = options.random || Math.random;
@@ -38,7 +39,7 @@ export function createYutPreview(
     code: single ? "싱글" : "체험",
     classId: "",
     classLabel: single ? "싱글 모드" : "교사 체험",
-    host: { uid: YUT_PREVIEW_UID, name: "나" },
+    host: { uid: YUT_PREVIEW_UID, name: options.playerName?.trim() || "나" },
     nowMs,
     maxPlayers: playerCount,
     visibility: "private",

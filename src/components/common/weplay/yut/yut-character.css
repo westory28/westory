@@ -36,6 +36,8 @@
 }
 .yut-game .yut-frame--idle .yut-drawn-frame {
   animation-name: yut-idle-first !important;
+  animation-duration: var(--idle-duration, 1400ms) !important;
+  animation-delay: var(--idle-delay, 0ms) !important;
 }
 .yut-game .yut-frame--idle .yut-drawn-frame[data-frame-index="1"] {
   animation-name: yut-idle-second !important;
@@ -46,6 +48,13 @@
 .yut-game .yut-frame--walk,
 .yut-game .yut-frame--carry {
   --pose-duration: 660ms;
+}
+.yut-game
+  .yut-pawn-art.is-carried:not(.is-walking)[data-boarding="false"]
+  .yut-frame--carry
+  .yut-drawn-frame {
+  animation-duration: var(--idle-duration, 1400ms) !important;
+  animation-delay: var(--idle-delay, 0ms) !important;
 }
 .yut-game .yut-frame--boarding {
   --pose-duration: 700ms;

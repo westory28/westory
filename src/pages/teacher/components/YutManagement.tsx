@@ -732,7 +732,6 @@ export default function YutManagement() {
                             <strong>{player.name}</strong>
                             <span>
                               {[
-                                player.classLabel,
                                 player.studentNumber
                                   ? `${player.studentNumber}번`
                                   : "",

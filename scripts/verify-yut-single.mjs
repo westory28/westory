@@ -37,6 +37,17 @@ const randomFor = (seed) => {
   };
 };
 const profiles = new Set();
+assert.equal(
+  createYutPreview({ mode: "single", playerName: "방재석(3학년 2반)" })
+    .players[0].name,
+  "방재석(3학년 2반)",
+  "local student display uses the server-provided label",
+);
+assert.equal(
+  createYutPreview().players[0].name,
+  "나",
+  "teacher preview keeps its default label",
+);
 const winners = new Set();
 let played = 0;
 let stackedMoves = 0;

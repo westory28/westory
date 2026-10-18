@@ -20,7 +20,13 @@ try {
     ),
   );
 }
-const evidence = path.join(root, "output/yut-movement-20261018");
+const entryPolishOnly = process.env.YUT_MOVEMENT_QA_SECTION === "entry-polish";
+const evidence = path.join(
+  root,
+  entryPolishOnly
+    ? "output/yut-entry-polish-20261018"
+    : "output/yut-movement-20261018",
+);
 await fs.mkdir(evidence, { recursive: true });
 const source = (p) => JSON.stringify(path.join(root, p).replaceAll("\\", "/"));
 const service = `import * as core from ${source("functions/yutCore.mjs")};
@@ -31,8 +37,9 @@ export const DEFAULT_YUT_SETTINGS={enabled:true,version:1,allowSolo:true,allowMu
 export const normalizeYutSettings=value=>({...DEFAULT_YUT_SETTINGS,...value});
 const sticks=value=>Array.from({length:4},(_,index)=>value!==5&&index<value);
 function seed(kind){
+  if(kind==='entry')return null;
   const four=kind.endsWith('four')||kind==='two-capture-many';
-  let room=core.createYutRoom({id:'qa-'+kind,code:'AB1234',classId:'',classLabel:'검증 윷판',host:{uid:'qa',name:'검증 학생'},nowMs:Date.now(),maxPlayers:four?4:2,moveSeconds:Number(params.get('move-seconds')||25)});
+  let room=core.createYutRoom({id:'qa-'+kind,code:'AB1234',classId:'',classLabel:'검증 윷판',host:{uid:'qa',name:${JSON.stringify(entryPolishOnly ? "검증 학생(3학년 2반)" : "검증 학생")}},nowMs:Date.now(),maxPlayers:four?4:2,moveSeconds:Number(params.get('move-seconds')||25)});
   room=core.addYutPlayer(room,{uid:'other',name:'상대 학생'},Date.now());room=core.readyYutPlayer(room,'other',true,Date.now());
   if(four){room=core.addYutPlayer(room,{uid:'third',name:'셋째 학생'},Date.now());room=core.readyYutPlayer(room,'third',true,Date.now());room=core.addYutPlayer(room,{uid:'fourth',name:'넷째 학생'},Date.now());room=core.readyYutPlayer(room,'fourth',true,Date.now());}
   if(kind.startsWith('waiting'))return room;
@@ -53,16 +60,16 @@ function seed(kind){
   room=core.throwYut(room,'qa',sticks(value),Date.now()-4000);room.turnDeadlineMs=Date.now()+room.moveSeconds*1000;
   if(kind==='capture-initial')room=core.moveYut(room,'qa','1','a',Date.now());return room;
 }
-const qa=window.qa={room:seed(params.get('scenario')||'finish'),delay:0,fail:false,claimPaid:false,calls:[],motion:[],frames:[],steps:[]};
+const qa=window.qa={room:seed(params.get('scenario')||'finish'),delay:0,fail:false,throwValue:1,claimPaid:false,calls:[],motion:[],frames:[],steps:[]};
 qa.emit=room=>{qa.room=room;listeners.forEach(listener=>listener(room));};
 qa.move=(route='a',pieceId='1',stack=false)=>{const room=core.moveYut(qa.room,'qa',pieceId,route,Date.now(),stack);if(room.status==='finished')room.reward={status:'pending',uid:'qa',amount:7,policyVersion:1,reason:'account-unavailable'};qa.emit(room)};
 qa.bump=()=>qa.emit({...qa.room,revision:qa.room.revision+1,syncRevision:qa.room.syncRevision+1,lastEvent:{kind:'leave',atMs:Date.now(),text:'연결 상태 갱신'}});
 qa.repeat=()=>qa.emit({...qa.room,syncRevision:qa.room.syncRevision+1});
 qa.prepareThrow=value=>{const room={...qa.room,turnUid:'qa',phase:'throw',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+25000};qa.emit(core.throwYut(room,'qa',sticks(value),Date.now()-4000));};
 qa.preparePiece=(pieceId,node,value)=>{const room=JSON.parse(JSON.stringify(qa.room));if(node)room.players[0].pieces.find(piece=>piece.id===pieceId).node=node;Object.assign(room,{turnUid:'qa',phase:'throw',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+25000});qa.emit(core.throwYut(room,'qa',sticks(value),Date.now()-4000));};
-export const getYutLobby=async()=>{if(params.has('slow-lobby'))await new Promise(r=>setTimeout(r,700));return{enabled:true,settings:DEFAULT_YUT_SETTINGS,privatePlaysRemaining:5,room:qa.room,classes:[],classId:'',serverNowMs:Date.now()}};
+export const getYutLobby=async()=>{if(params.has('slow-lobby'))await new Promise(r=>setTimeout(r,700));return{enabled:true,settings:DEFAULT_YUT_SETTINGS,privatePlaysRemaining:5,playerName:'김테스트(3학년 2반)',room:qa.room,classes:[],classId:'',serverNowMs:Date.now()}};
 export const subscribeYutRoom=(_config,_id,onRoom)=>{listeners.add(onRoom);return()=>listeners.delete(onRoom)};
-export const commandYutRoom=async(_config,data)=>{qa.calls.push(data);if(qa.delay)await new Promise(r=>setTimeout(r,qa.delay));if(qa.fail){qa.fail=false;throw new Error('검증용 연결 오류')}if(data.action==='move')qa.move(data.route,data.pieceId,data.stack);else if(data.action==='claimReward'){qa.emit({...qa.room,syncRevision:(qa.room.syncRevision||0)+1,reward:{...qa.room.reward,status:qa.claimPaid?'paid':'pending'}})}else if(data.action==='start')qa.emit(core.startYutGame(qa.room,Date.now()));else if(data.action==='throw')qa.emit(core.throwYut(qa.room,'qa',[true,false,false,false],Date.now(),data.power));else if(data.action==='leave')qa.emit(null);return{room:qa.room,serverNowMs:Date.now()}};
+export const commandYutRoom=async(_config,data)=>{qa.calls.push(data);if(qa.delay)await new Promise(r=>setTimeout(r,qa.delay));if(qa.fail){qa.fail=false;throw new Error('검증용 연결 오류')}if(data.action==='move')qa.move(data.route,data.pieceId,data.stack);else if(data.action==='claimReward'){qa.emit({...qa.room,syncRevision:(qa.room.syncRevision||0)+1,reward:{...qa.room.reward,status:qa.claimPaid?'paid':'pending'}})}else if(data.action==='start')qa.emit(core.startYutGame(qa.room,Date.now()));else if(data.action==='throw')qa.emit(core.throwYut(qa.room,'qa',sticks(qa.throwValue||1),Date.now(),data.power));else if(data.action==='leave')qa.emit(null);return{room:qa.room,serverNowMs:Date.now()}};
 export const yutErrorMessage=error=>error.message;
 export const getLegalYutMoves=core.getLegalYutMoves;
 `;
@@ -165,19 +172,21 @@ const twoPiecesOnly = process.env.YUT_MOVEMENT_QA_SECTION === "two-pieces";
 const artOnly = process.env.YUT_MOVEMENT_QA_SECTION === "art";
 const report = {
   passed: false,
-  section: artOnly
-    ? "art"
-    : twoPiecesOnly
-      ? process.env.YUT_TWO_QA_PHASE
-        ? "two-pieces-" + process.env.YUT_TWO_QA_PHASE
-        : "two-pieces"
-      : captureOnly
-        ? "capture"
-        : gaugeOnly
-          ? "gauge"
-          : presentationOnly
-            ? "presentation"
-            : "all",
+  section: entryPolishOnly
+    ? "entry-polish"
+    : artOnly
+      ? "art"
+      : twoPiecesOnly
+        ? process.env.YUT_TWO_QA_PHASE
+          ? "two-pieces-" + process.env.YUT_TWO_QA_PHASE
+          : "two-pieces"
+        : captureOnly
+          ? "capture"
+          : gaugeOnly
+            ? "gauge"
+            : presentationOnly
+              ? "presentation"
+              : "all",
   checks: [],
   errors: [],
   paths: {},
@@ -192,8 +201,18 @@ async function open(
     viewport: { width, height },
     reducedMotion,
   });
+  page.qaAssetRequests = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/assets/weplay/yut/"))
+      page.qaAssetRequests.push(request.url());
+  });
   page.on("pageerror", (error) => report.errors.push(error.message));
   await page.addInitScript(() => {
+    if (new URLSearchParams(location.search).has("save-data"))
+      Object.defineProperty(navigator, "connection", {
+        configurable: true,
+        value: { saveData: true },
+      });
     localStorage.setItem("westory.weplay.musicMuted", "false");
     window.motionAudio = [];
     const NativeAudioContext = window.AudioContext;
@@ -268,8 +287,13 @@ async function inspectSpriteFrames(locator) {
           animation,
           time: animation.currentTime,
           state: animation.playState,
+          delay: animation.effect.getTiming().delay,
         }));
-        animations.forEach((animation) => animation.pause());
+        animations.forEach((animation) => {
+          animation.pause();
+          if (animation.effect.getTiming().delay < 0)
+            animation.effect.updateTiming({ delay: 0 });
+        });
         const poses = [0.04, 0.4, 0.85].map((progress) => {
           animations.forEach(
             (animation) =>
@@ -300,6 +324,7 @@ async function inspectSpriteFrames(locator) {
           iterations: animation.effect.getTiming().iterations,
         }));
         previous.forEach((item) => {
+          item.animation.effect.updateTiming({ delay: item.delay });
           item.animation.currentTime = item.time;
           if (item.state === "running") item.animation.play();
         });
@@ -693,6 +718,635 @@ async function verifyTwoViewports() {
   }
   report.checks.push(
     "Two numbered home pieces, circular HUD portraits, tile targets and portrait orientation gates fit 390/768/844/1280 viewports",
+  );
+}
+async function verifyRuleControl(page, label) {
+  const info = page.getByRole("button", {
+    name: "게임 규칙 보기",
+    exact: true,
+  });
+  await info.waitFor();
+  const geometry = await info.evaluate((node) => {
+    const box = node.getBoundingClientRect(),
+      hit = document.elementFromPoint(
+        box.x + box.width / 2,
+        box.y + box.height / 2,
+      );
+    return { box: box.toJSON(), reachable: hit === node || node.contains(hit) };
+  });
+  assert.ok(
+    geometry.reachable,
+    label + ": artwork or floating controls must not cover the rules button",
+  );
+  assert.ok(
+    geometry.box.width >= 42 && geometry.box.height >= 42,
+    label + ": rules control keeps a usable target",
+  );
+  await info.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "윷판의 약속", exact: true });
+  await dialog.waitFor();
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press("Tab");
+    assert.ok(
+      await dialog.evaluate(
+        (node) =>
+          node.matches(":modal") &&
+          (node.contains(document.activeElement) ||
+            document.activeElement === document.body),
+      ),
+      "Native rules dialog prevents focus from reaching background controls (browser chrome may receive Tab)",
+    );
+  }
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "detached" });
+  assert.equal(
+    await info.evaluate((node) => document.activeElement === node),
+    true,
+    "Closing rules restores the trigger focus",
+  );
+  report.paths["rules-" + label] = geometry;
+}
+async function verifyPlayerLabels(page, label) {
+  const labels = await page.locator(".yut-player").evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const card = node.getBoundingClientRect(),
+        name = node.querySelector(".yut-player-name"),
+        classroom = node.querySelector(".yut-player-class");
+      const badge = node.querySelector(".yut-player-last"),
+        count = node.querySelector(
+          ".yut-player-details > span:not(.yut-player-status)",
+        ),
+        range = document.createRange();
+      let badgeCountOverlap = 0;
+      if (badge && count) {
+        range.selectNodeContents(count);
+        const a = range.getBoundingClientRect(),
+          b = badge.getBoundingClientRect();
+        badgeCountOverlap =
+          Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+          Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+      }
+      return {
+        card: card.toJSON(),
+        name: name?.textContent,
+        classroom: classroom?.textContent,
+        badgeCountOverlap,
+        contained: [name, classroom].filter(Boolean).every((child) => {
+          const box = child.getBoundingClientRect();
+          return (
+            box.left >= card.left &&
+            box.right <= card.right + 1 &&
+            box.top >= card.top &&
+            box.bottom <= card.bottom + 1 &&
+            child.scrollWidth <= child.clientWidth + 1
+          );
+        }),
+      };
+    }),
+  );
+  report.paths["player-labels-" + label] = labels;
+  assert.ok(
+    labels.every((item) => item.contained),
+    label + ": full player name and class remain within their cards",
+  );
+  assert.ok(
+    labels.every((item) => item.badgeCountOverlap === 0),
+    label + ": last result badge does not cover the completion count",
+  );
+  assert.ok(labels.some((item) => item.classroom === "(3학년 2반)"));
+  report.paths["player-labels-" + label] = labels;
+}
+async function verifyFullscreenControls(page, label) {
+  const fullscreen = page.getByRole("button", {
+    name: "게임 전체 화면",
+    exact: true,
+  });
+  if (!(await fullscreen.isVisible())) return;
+  await fullscreen.click();
+  await page.waitForFunction(() => document.fullscreenElement !== null);
+  await verifyRuleControl(page, "fullscreen-" + label);
+  const buttons = await page
+    .locator(".yut-floating-controls button,.yut-floating-fullscreen")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const box = node.getBoundingClientRect(),
+          hit = document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          );
+        return {
+          name: node.getAttribute("aria-label"),
+          reachable: hit === node || node.contains(hit),
+          box: box.toJSON(),
+        };
+      }),
+    );
+  assert.ok(
+    buttons.every((button) => button.reachable),
+    "Fullscreen controls do not cover each other",
+  );
+  report.paths["fullscreen-" + label] = buttons;
+  await page.screenshot({
+    path: path.join(evidence, "fullscreen-" + label + ".png"),
+  });
+  await page
+    .getByRole("button", { name: "전체 화면 나가기", exact: true })
+    .last()
+    .click();
+  await page.waitForFunction(() => document.fullscreenElement === null);
+}
+async function verifyEntryPolish() {
+  if (process.env.YUT_ENTRY_QA_PHASE === "art") {
+    await verifyEntryArtwork();
+    await verifyIdleOffsets();
+    return;
+  }
+  if (process.env.YUT_ENTRY_QA_PHASE === "bonus") {
+    await verifyBonusReveal();
+    return;
+  }
+  if (process.env.YUT_ENTRY_QA_PHASE === "controls") {
+    await verifyExplicitPieceControls();
+    return;
+  }
+  for (const [width, height, reduced] of [
+    [390, 844, "no-preference"],
+    [768, 1024, "no-preference"],
+    [768, 600, "no-preference"],
+    [844, 390, "no-preference"],
+    [1280, 800, "no-preference"],
+    [844, 390, "reduce"],
+  ]) {
+    const page = await open("scenario=entry", reduced, width, height),
+      label = width + "-" + height + "-" + reduced;
+    await verifyRuleControl(page, label);
+    if (width < height) {
+      await page.locator(".yut-orientation-gate").waitFor();
+      assert.equal(await page.locator(".yut-entry").count(), 0);
+      await page.screenshot({
+        path: path.join(evidence, "entry-" + label + ".png"),
+      });
+      await page.close();
+      continue;
+    }
+    const toggle = page.locator(".yut-single-toggle");
+    await toggle.waitFor();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(await page.locator("#yut-single-options").isVisible(), false);
+    assert.equal(await page.locator(".yut-waiting").count(), 0);
+    await page.screenshot({
+      path: path.join(evidence, "entry-" + label + ".png"),
+    });
+    await toggle.press("Enter");
+    assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+    const options = page.locator("#yut-single-options");
+    await options.waitFor();
+    for (const count of [2, 3, 4])
+      assert.equal(
+        await options
+          .getByRole("button", { name: count + "명", exact: true })
+          .count(),
+        1,
+      );
+    await options
+      .getByRole("button", { name: "3명", exact: true })
+      .press("Enter");
+    await page.waitForTimeout(200);
+    assert.equal(
+      await options
+        .getByRole("button", { name: "3명", exact: true })
+        .getAttribute("aria-pressed"),
+      "true",
+    );
+    assert.equal(
+      await page.locator(".yut-waiting").count(),
+      0,
+      "Choosing solo count never starts a room",
+    );
+    assert.equal(
+      await page.evaluate(() => window.qa.calls.length),
+      0,
+      "Accordion choices never issue room commands",
+    );
+    await page.screenshot({
+      path: path.join(evidence, "single-options-" + label + ".png"),
+    });
+    await verifyFullscreenControls(page, label);
+    const code = page.getByPlaceholder("6자리 코드");
+    await code.fill("AB1234");
+    const join = page.getByRole("button", { name: "들어가기", exact: true });
+    await join.scrollIntoViewIfNeeded();
+    assert.ok(
+      await join.evaluate((node) => {
+        const box = node.getBoundingClientRect(),
+          hit = document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          );
+        return hit === node || node.contains(hit);
+      }),
+      "Fullscreen toggle does not cover the private-room join button",
+    );
+    await code.fill("");
+    await toggle.press("Enter");
+    assert.equal(await page.locator("#yut-single-options").isVisible(), false);
+    await toggle.press("Enter");
+    await page.getByRole("button", { name: "싱글 시작", exact: true }).click();
+    await page.locator(".yut-board").waitFor();
+    assert.equal(
+      await page.locator(".yut-player").count(),
+      3,
+      "Solo confirmation uses the selected player count",
+    );
+    assert.equal(
+      await page.evaluate(() => window.qa.calls.length),
+      0,
+      "Solo game stays local",
+    );
+    assert.ok(
+      await page.locator(".yut-player").filter({ hasText: "김테스트" }).count(),
+    );
+    await verifyPlayerLabels(page, "solo-" + label);
+    await verifyRuleControl(page, "solo-" + label);
+    await page.screenshot({
+      path: path.join(evidence, "solo-playing-" + label + ".png"),
+    });
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    );
+    await page.close();
+  }
+  report.checks.push(
+    "Entry and local solo accordion fit 390/768/844/1280 viewports; choosing a count is reversible and only explicit start opens the matching local game with trusted lobby name; floating rules control remains reachable with keyboard focus recovery",
+  );
+  await verifyExplicitPieceControls();
+  await verifyTwoChoices();
+  await verifyBonusReveal();
+  await verifyEntryArtwork();
+  await verifyIdleOffsets();
+}
+async function verifyEntryArtwork() {
+  for (const [label, reduced, query] of [
+    ["normal", "no-preference", ""],
+    ["reduce", "reduce", ""],
+    ["save-data", "no-preference", "&save-data"],
+  ]) {
+    const page = await open("scenario=entry" + query, reduced, 1280, 800),
+      scene = page.locator(".yut-entry-scene");
+    await scene.waitFor();
+    assert.match(
+      await scene.locator("img").first().getAttribute("src"),
+      /catalog-toss\.webp$/,
+    );
+    if (label === "normal") {
+      await page.waitForFunction(
+        () =>
+          document.querySelector(".yut-entry-scene")?.dataset.sceneReady ===
+          "true",
+      );
+      assert.equal(await scene.locator("img").count(), 3);
+      const before = page.qaAssetRequests.filter((url) =>
+        /(?:catalog-toss|entry-toss-[bc])\.webp/.test(url),
+      );
+      assert.equal(before.length, 3, "Each whole-scene image is loaded once");
+      const frames = await scene.evaluate((node) => {
+        const animated = Array.from(node.querySelectorAll("img")).slice(1),
+          animations = animated.flatMap((frame) => frame.getAnimations());
+        animations.forEach((animation) => animation.pause());
+        const samples = [0, 2100, 5400, 10100, 13400, 18100].map((time) => {
+          animations.forEach((animation) => (animation.currentTime = time));
+          return animated.map((frame) =>
+            Number(getComputedStyle(frame).opacity),
+          );
+        });
+        animations.forEach((animation) => animation.play());
+        return { samples, sources: animated.map((frame) => frame.src) };
+      });
+      assert.deepEqual(frames.samples, [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 0],
+        [0, 1],
+        [1, 0],
+      ]);
+      await hidePage(page, true);
+      await page.waitForFunction(
+        () =>
+          document.querySelector(".yut-game")?.dataset.motionPaused === "true",
+      );
+      assert.ok(
+        await scene
+          .locator("img")
+          .evaluateAll((nodes) =>
+            nodes
+              .slice(1)
+              .every(
+                (node) =>
+                  getComputedStyle(node).animationPlayState === "paused",
+              ),
+          ),
+      );
+      await hidePage(page, false);
+      await scene.evaluate(
+        (node) => (node.style.transform = "translateX(-10000px)"),
+      );
+      await page.waitForFunction(
+        () =>
+          document.querySelector(".yut-entry-scene")?.dataset.sceneVisible ===
+          "false",
+      );
+      assert.ok(
+        await scene
+          .locator("img")
+          .evaluateAll((nodes) =>
+            nodes
+              .slice(1)
+              .every(
+                (node) =>
+                  getComputedStyle(node).animationPlayState === "paused",
+              ),
+          ),
+      );
+      await scene.evaluate((node) => (node.style.transform = ""));
+      await page.waitForFunction(
+        () =>
+          document.querySelector(".yut-entry-scene")?.dataset.sceneVisible ===
+          "true",
+      );
+      await page.waitForTimeout(400);
+      assert.equal(
+        page.qaAssetRequests.filter((url) =>
+          /(?:catalog-toss|entry-toss-[bc])\.webp/.test(url),
+        ).length,
+        before.length,
+        "Repeated whole-art frames do not request images again",
+      );
+      report.paths.entryArtwork = frames;
+    } else {
+      await page.waitForTimeout(400);
+      assert.equal(await scene.locator("img").count(), 1);
+      assert.equal(
+        page.qaAssetRequests.filter((url) => /entry-toss-[bc]\.webp/.test(url))
+          .length,
+        0,
+        "Reduced motion/save-data skips animated-art downloads",
+      );
+    }
+    await page.screenshot({
+      path: path.join(evidence, "art-" + label + ".png"),
+    });
+    await page.close();
+  }
+  report.checks.push(
+    "Whole-scene entry frames loop through distinct images without repeated requests; hidden/offscreen pauses, and reduced motion/save-data avoid extra image downloads",
+  );
+}
+async function verifyIdleOffsets() {
+  for (const scenario of ["waiting-four", "two-home"]) {
+    const page = await open("scenario=" + scenario);
+    const sprites = page.locator(
+      scenario === "waiting-four"
+        ? ".yut-seat .yut-frame-sprite"
+        : '.yut-board-piece[aria-label^="검증 학생"] .yut-frame-sprite',
+    );
+    const read = () =>
+      sprites.evaluateAll((nodes) =>
+        nodes.map((node) => ({
+          duration: getComputedStyle(node)
+            .getPropertyValue("--idle-duration")
+            .trim(),
+          delay: getComputedStyle(node).getPropertyValue("--idle-delay").trim(),
+          transform: getComputedStyle(node).transform,
+          states: Array.from(node.querySelectorAll(".yut-drawn-frame")).map(
+            (frame) => getComputedStyle(frame).animationPlayState,
+          ),
+        })),
+      );
+    await sprites.first().waitFor();
+    const initial = await read();
+    assert.ok(initial.length >= 2);
+    assert.ok(
+      new Set(initial.map((item) => item.duration + "/" + item.delay)).size >=
+        2,
+      "Different characters/pieces use distinct stable idle timing",
+    );
+    assert.ok(initial.every((item) => item.transform === "none"));
+    if (scenario === "two-home") {
+      const transitions = await sprites.evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const frames = Array.from(node.querySelectorAll(".yut-drawn-frame")),
+            animations = frames.flatMap((frame) => frame.getAnimations()),
+            previous = animations.map((animation) => ({
+              time: animation.currentTime,
+              state: animation.playState,
+            }));
+          animations.forEach((animation) => animation.pause());
+          const samples = Array.from({ length: 101 }, (_, index) => {
+            animations.forEach(
+              (animation) => (animation.currentTime = index * 20),
+            );
+            return frames.findIndex(
+              (frame) => Number(getComputedStyle(frame).opacity) === 1,
+            );
+          });
+          animations.forEach((animation, index) => {
+            animation.currentTime = previous[index].time;
+            if (previous[index].state === "running") animation.play();
+          });
+          return {
+            firstChangeMs:
+              samples.findIndex((frame) => frame !== samples[0]) * 20,
+            samples,
+          };
+        }),
+      );
+      report.paths.idlePieceTransitions = transitions;
+      assert.notEqual(
+        transitions[0].firstChangeMs,
+        transitions[1].firstChangeMs,
+        "Same-role pieces change idle poses at separate times",
+      );
+      assert.ok(
+        transitions[0].samples.filter(
+          (frame, index) => frame !== transitions[1].samples[index],
+        ).length >
+          transitions[0].samples.length / 2,
+        "Same-role pieces show different poses for most of the sampled loop",
+      );
+    }
+    await page.evaluate(() => window.qa.repeat());
+    await page.waitForTimeout(80);
+    assert.deepEqual(
+      await read(),
+      initial,
+      "Snapshot refresh does not reset per-character idle offsets",
+    );
+    await hidePage(page, true);
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".yut-game")?.dataset.motionPaused === "true",
+    );
+    assert.ok(
+      (await read()).every((item) =>
+        item.states.every((state) => state === "paused"),
+      ),
+    );
+    report.paths["idle-" + scenario] = initial;
+    await page.close();
+  }
+  report.checks.push(
+    "Idle whole-frame durations/offsets differ by character and same-role piece, remain stable across snapshots, and pause while hidden",
+  );
+}
+async function verifyExplicitPieceControls() {
+  for (const [width, height] of [
+    [768, 600],
+    [844, 390],
+    [1280, 800],
+  ]) {
+    const page = await open(
+      "scenario=two-home",
+      "no-preference",
+      width,
+      height,
+    );
+    const choices = page.getByRole("group", {
+      name: "이동할 말 선택",
+      exact: true,
+    });
+    await choices.waitFor();
+    const first = choices.getByRole("button", {
+        name: "1번 말 출발",
+        exact: true,
+      }),
+      second = choices.getByRole("button", {
+        name: "2번 말 출발",
+        exact: true,
+      });
+    assert.equal(await first.getAttribute("aria-pressed"), "true");
+    await page.locator(".yut-isometric-destination").first().click();
+    await second.press("Enter");
+    assert.equal(await second.getAttribute("aria-pressed"), "true");
+    assert.equal(await first.getAttribute("aria-pressed"), "false");
+    assert.equal(
+      await page.locator(".yut-isometric-destination.is-previewed").count(),
+      0,
+    );
+    assert.equal(
+      await page.getByRole("button", { name: "결정", exact: true }).isEnabled(),
+      false,
+    );
+    await verifyRuleControl(page, "piece-controls-" + width);
+    await verifyPlayerLabels(page, "piece-" + width);
+    const bounds = await choices.boundingBox(),
+      frame = await page.locator(".weplay-game-frame").boundingBox();
+    assert.ok(
+      bounds.x >= frame.x &&
+        bounds.x + bounds.width <= frame.x + frame.width &&
+        bounds.y >= frame.y &&
+        bounds.y + bounds.height <= frame.y + frame.height,
+      "Explicit piece choices fit the game frame",
+    );
+    await page.screenshot({
+      path: path.join(evidence, "piece-choices-" + width + ".png"),
+    });
+    await page.locator(".yut-isometric-destination").first().press("Enter");
+    assert.ok(
+      await page
+        .locator(".yut-piece-choices button,.yut-move-confirm button")
+        .evaluateAll((nodes) =>
+          nodes.every((node) => {
+            const box = node.getBoundingClientRect(),
+              hit = document.elementFromPoint(
+                box.x + box.width / 2,
+                box.y + box.height / 2,
+              );
+            return hit === node || node.contains(hit);
+          }),
+        ),
+      "Floating controls do not cover piece selection or confirm",
+    );
+    await page
+      .getByRole("button", { name: "결정", exact: true })
+      .press("Enter");
+    await page.waitForFunction(
+      () => window.qa.room.players[0].pieces[1].node === "o2",
+    );
+    assert.equal(
+      await page.evaluate(() => window.qa.room.players[0].pieces[0].node),
+      "home",
+    );
+    assert.deepEqual(
+      await page.evaluate(() =>
+        window.qa.calls
+          .filter((call) => call.action === "move")
+          .map((call) => call.pieceId),
+      ),
+      ["2"],
+    );
+    report.paths["explicit-pieces-" + width] = { bounds, frame };
+    await page.close();
+  }
+  report.checks.push(
+    "Explicit 1/2 piece buttons expose selection to keyboard users, clear stale destinations, fit mobile/desktop, and send only the confirmed second-piece move",
+  );
+}
+async function verifyBonusReveal() {
+  for (const value of [1, 4, 5]) {
+    const page = await open("scenario=waiting", "no-preference", 844, 390);
+    await page
+      .getByRole("button", { name: "윷판 펼치기", exact: true })
+      .click();
+    await page.evaluate((value) => (window.qa.throwValue = value), value);
+    const toss = page.getByRole("button", { name: "윷 던지기", exact: true });
+    await toss.waitFor();
+    await page.waitForFunction(
+      () => !document.querySelector('[aria-label="윷 던지기"]').disabled,
+    );
+    await toss.press("Space");
+    const reveal = page.locator(
+      '.yut-landing-result[data-result="' + value + '"]',
+    );
+    await reveal.waitFor();
+    await page.waitForTimeout(400);
+    const styles = await reveal.evaluate((node) => {
+      const strong = node.querySelector("strong"),
+        style = getComputedStyle(strong);
+      return {
+        bonus: node.classList.contains("is-bonus"),
+        fontSize: parseFloat(style.fontSize),
+        weight: style.fontWeight,
+        color: style.color,
+        shadow: style.textShadow,
+        text: node.textContent,
+        box: node.getBoundingClientRect().toJSON(),
+      };
+    });
+    assert.equal(styles.bonus, value >= 4);
+    if (value >= 4) assert.match(styles.text, /한 번 더/);
+    assert.ok(
+      styles.box.x >= 0 &&
+        styles.box.right <= 844 &&
+        styles.box.y >= 0 &&
+        styles.box.bottom <= 390,
+      "Throw reveal fits the landscape frame",
+    );
+    await page.screenshot({
+      path: path.join(evidence, "result-" + value + ".png"),
+    });
+    report.paths["result-" + value] = styles;
+    await page.close();
+  }
+  assert.ok(
+    report.paths["result-4"].color !== report.paths["result-1"].color &&
+      report.paths["result-5"].shadow !== report.paths["result-1"].shadow,
+    "Yut/Mo use distinct gold result type and emphasis from ordinary throws",
+  );
+  report.checks.push(
+    "Real throw reveal distinguishes normal results from gold Yut/Mo bonus announcements without leaving the mobile frame",
   );
 }
 async function verifyTwoChoices() {
@@ -1186,7 +1840,9 @@ async function verifyTwoGroupAndFinish() {
   await game.close();
 }
 try {
-  if (artOnly) {
+  if (entryPolishOnly) {
+    await verifyEntryPolish();
+  } else if (artOnly) {
     await verifyArtSheets();
   } else if (twoPiecesOnly) {
     await verifyTwoPieces();
@@ -2127,19 +2783,23 @@ try {
   await fs.writeFile(
     path.join(
       evidence,
-      artOnly
-        ? "report-art.json"
-        : twoPiecesOnly
-          ? process.env.YUT_TWO_QA_PHASE
-            ? "report-two-pieces-" + process.env.YUT_TWO_QA_PHASE + ".json"
-            : "report-two-pieces.json"
-          : captureOnly
-            ? "report-capture-timing.json"
-            : gaugeOnly
-              ? "report-gauge.json"
-              : presentationOnly
-                ? "report-presentation.json"
-                : "report.json",
+      entryPolishOnly
+        ? process.env.YUT_ENTRY_QA_PHASE
+          ? "report-" + process.env.YUT_ENTRY_QA_PHASE + ".json"
+          : "report.json"
+        : artOnly
+          ? "report-art.json"
+          : twoPiecesOnly
+            ? process.env.YUT_TWO_QA_PHASE
+              ? "report-two-pieces-" + process.env.YUT_TWO_QA_PHASE + ".json"
+              : "report-two-pieces.json"
+            : captureOnly
+              ? "report-capture-timing.json"
+              : gaugeOnly
+                ? "report-gauge.json"
+                : presentationOnly
+                  ? "report-presentation.json"
+                  : "report.json",
     ),
     JSON.stringify(report, null, 2),
   );

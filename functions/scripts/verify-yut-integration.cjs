@@ -48,7 +48,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     'site_settings/semester_active': { semesterId: '2026-2', revision: 1 },
     'semester_manifests/2026-2': { semesterId: '2026-2', status: 'ACTIVE', revision: 1 },
     'semester_classes/class_one': { semesterId: '2026-2', status: 'ACTIVE', grade: '1', classNumber: '1', displayName: '1학년 1반' },
-    'semester_classes/class_two': { semesterId: '2026-2', status: 'ACTIVE', grade: '1', classNumber: '2', displayName: '1학년 2반' },
+    'semester_classes/class_two': { semesterId: '2026-2', status: 'ACTIVE', grade: '3', classNumber: '2', displayName: '이전 학급 표시' },
   };
   for (const label of ['a', 'b', 'c', 'd', 'e', 'outsider', 'teacher', 'staff', 'qa', 'qb', 'qc', 'p1', 'p2', 'p3', 'p4']) {
     const role = label === 'teacher' ? 'teacher' : label === 'staff' ? 'staff' : 'student';
@@ -60,6 +60,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
       seed[`semester_enrollments/enrollment_${label}`] = { studentUid: uid(label), semesterId: '2026-2', enrollmentStatus: 'ACTIVE', classId: label === 'outsider' ? 'class_two' : 'class_one', studentName: `정규학생-${label}`, studentNumber: '7' };
     }
   }
+  seed['semester_enrollments/enrollment_outsider'].studentName = '방재석';
   try {
     const batch = db.batch(); for (const [path, data] of Object.entries(seed)) batch.set(db.doc(path), data); await batch.commit();
     await denied(deployed.getYutLobby.run({ data: request('a').data }), ['unauthenticated']);
@@ -87,10 +88,12 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     assert.equal(teacherLobby.classId, 'school', 'cached teacher client may still create without a real class selection');
     assert.deepEqual((await deployed.getYutLobby.run(request('a'))).classes, []);
     assert.equal((await deployed.getYutLobby.run(request('a'))).enabled, true);
-    const creation = request('a', { action: 'create', requestKey: key(), classId: 'class_two' });
+    assert.equal((await deployed.getYutLobby.run(request('a'))).playerName, '정규학생-a(1학년 1반)');
+    const creation = request('a', { action: 'create', requestKey: key(), classId: 'class_two', name: '위조 이름', grade: '9', classNumber: '99' });
     const [created, retry] = await Promise.all([deployed.commandYutRoom.run(creation), deployed.commandYutRoom.run(creation)]);
     let room = created.room;
-    assert.equal(retry.room.id, room.id); assert.equal(room.classId, ''); assert.match(room.players[0].name, /○/);
+    assert.equal(retry.room.id, room.id); assert.equal(room.classId, '');
+    assert.equal(room.players[0].name, '정규학생-a(1학년 1반)', 'canonical enrollment/class records override request and profile labels');
     const createReceipt = (await db.doc(`${base}/yut_players/${uid('a')}`).get()).data().commands[0];
     assert.equal(createReceipt.fingerprint, createHash('sha256').update(JSON.stringify(['create', '', null, '', 'class_two', null, '', ''])).digest('hex'), 'existing game request fingerprint stays compatible across deployment');
     assert.equal(Object.hasOwn(room, 'enrollmentIds'), false);
@@ -107,9 +110,45 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     await db.doc(`${base}/yut_rooms/${room.id}`).update({ classId: 'class_one', classLabel: '1학년 1반', syncRevision: FieldValue.delete(), emotes: FieldValue.delete() });
     room = (await command('outsider', 'join', { code: room.code })).room;
     assert.equal(room.players.length, 2, 'another active class joins a legacy room by code');
+    assert.equal(room.players.find(player => player.uid === uid('outsider')).name, '방재석(3학년 2반)');
     const crossClassRead = await rest('outsider', `${base}/yut_rooms/${room.id}`);
     assert.equal(crossClassRead.status, 200, `cross-class participant read: ${await crossClassRead.text()}`);
     assert.equal(room.syncRevision, room.revision, 'legacy gameplay advances sync revision');
+    // Existing rooms migrate their labels on restore without restarting a turn.
+    const roomPath = db.doc(`${base}/yut_rooms/${room.id}`);
+    const legacyPlayers = room.players.map(player => ({ ...player, name: '7번 정○○' }));
+    await roomPath.update({ players: legacyPlayers, playerNamesVersion: FieldValue.delete() });
+    const restored = (await deployed.getYutLobby.run(request('a', { name: '위조 복원 이름' }))).room;
+    assert.deepEqual(restored.players.map(player => player.name), ['정규학생-a(1학년 1반)', '방재석(3학년 2반)']);
+    assert.equal(restored.revision, room.revision);
+    assert.equal(restored.syncRevision, room.syncRevision + 1);
+    assert.equal(restored.turnDeadlineMs, room.turnDeadlineMs);
+    assert.deepEqual(restored.lastEvent, room.lastEvent);
+    assert.deepEqual((await roomPath.get()).data().players, restored.players, 'realtime readers receive refreshed legacy labels');
+    assert.equal((await roomPath.get()).data().playerNamesVersion, 1);
+    assert.equal((await deployed.getYutLobby.run(request('a'))).room.syncRevision, restored.syncRevision, 'unchanged names do not create repeated writes');
+    const identityReads = [];
+    const countedHandlers = require('../yut').createYutHandlers({
+      db: {
+        doc: db.doc.bind(db), collection: db.collection.bind(db),
+        runTransaction: callback => db.runTransaction(transaction => callback(new Proxy(transaction, {
+          get(target, property) {
+            if (property === 'get') return reference => { identityReads.push(reference.path); return target.get(reference); };
+            const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value;
+          },
+        }))),
+      },
+    });
+    const countedRestore = await countedHandlers.getYutLobby(request('a'));
+    assert.equal(countedRestore.room.syncRevision, restored.syncRevision);
+    assert.equal(identityReads.includes(`users/${uid('outsider')}`), false, 'migrated room never rereads other participant profiles');
+    assert.equal(identityReads.includes('semester_enrollments/enrollment_outsider'), false, 'migrated room never rereads other participant enrollments');
+    assert.equal(identityReads.filter(path => path === 'semester_classes/class_one').length, 1, 'only actor authority reads the current classroom');
+    await roomPath.update({ playerNamesVersion: FieldValue.delete() });
+    const unchangedUpgrade = (await deployed.getYutLobby.run(request('a'))).room;
+    assert.equal(unchangedUpgrade.syncRevision, restored.syncRevision, 'version-only upgrade does not change synchronization revision');
+    assert.equal(unchangedUpgrade.revision, restored.revision);
+    room = restored;
     await roomCommand('outsider', room, 'leave');
     room = (await deployed.getYutLobby.run(request('a'))).room;
     await denied(roomCommand('a', room, 'seat', { seat: 0, blocked: true }), ['failed-precondition']);
@@ -158,7 +197,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     await denied(roomCommand('a', room, 'seat', { seat: 1, blocked: false }), ['failed-precondition']);
     const managed = await deployed.getYutManagement.run(request('teacher'));
     assert.equal(managed.rooms.length, 1);
-    assert.equal(managed.rooms[0].players[0].name, '정규학생-a', 'teacher sees canonical name only in management projection');
+    assert.equal(managed.rooms[0].players[0].name, '정규학생-a(1학년 1반)', 'teacher monitor uses the same canonical display format');
     assert.equal(managed.rooms[0].players[0].studentNumber, '7');
     assert.equal(managed.rooms[0].players[0].classLabel, '1학년 1반');
     assert.equal(Object.hasOwn(managed.rooms[0], 'enrollmentIds'), false);
