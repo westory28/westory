@@ -491,6 +491,10 @@ Icon-only controls:
 
 ### Tables and Lists
 
+- Student information columns use shared header/body centerlines and centered values, including the name/icon group, status and email. The roster uses a 1120px minimum table, symmetric 24px cell padding (16px for selection), 48px selection and 192px actions. Divide the remaining width across grade/class/number/name/status/email at 12/12/12/18/16/30 percent so the identity columns grow with the table instead of clustering at the left. Keep at least 8px between row actions, wrap long values and contain narrow-screen overflow inside the table region.
+- Roster search expands inline immediately before its magnifier, shifting the button to the right without adding a row or moving the table vertically. Use a single non-wrapping toolbar with 8px gaps, 44px controls, 148px enrollment filter and a search input clamped to 160px/22vw/320px. Keep horizontal overflow local on narrow screens, preserve keyboard focus and return focus to the magnifier when Escape closes and clears search.
+- Student information grids use at least 12px column gaps and 64px short identity columns. History classroom exemption holdings use a 52rem local scroll minimum; request rows use 50rem with a 160px action column and 8px between review buttons. Compact performance-score tables retain their mobile card layout and score-cell density, but desktop identity cells use 16px side padding with 80px grade/class/number and 128px name minimums; keep any overflow inside the table wrapper.
+
 - Teacher comparisons and operations can use tables.
 - Student flows should prefer lists, steps, or simple cards.
 - Sticky table header only for genuinely long lists.
