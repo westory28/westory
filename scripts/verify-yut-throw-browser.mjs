@@ -416,11 +416,11 @@ try {
       ),
       "every stick rests by the fixed deadline",
     );
-    await page.getByRole("button", { name: /지름길.*경로 선택/ }).click();
+    await page.getByRole("button", { name: /지름길.*발판 선택/ }).click();
     assert.equal(await page.locator(".yut-route-preview").count(), 1);
     assert.equal(
       await page
-        .locator(".yut-route-preview polyline")
+        .locator(".yut-route-preview .yut-route-line")
         .first()
         .getAttribute("points"),
       "650,255 553.33,255 456.67,255",

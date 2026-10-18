@@ -4,10 +4,12 @@ import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 import { getSemesterDocPath, getYearSemester } from "./semesterScope";
 import type { WeplayConfig } from "./weplay";
 import type { YutRoom, YutRoute } from "../../functions/yutCore.mjs";
+export { getYutThrowProbabilities } from "../../functions/yutCore.mjs";
 
 export type {
   YutRoom,
   YutPlayer,
+  YutPiece,
   YutMove,
   YutRole,
   YutNode,
@@ -147,6 +149,7 @@ export interface YutCommand {
   ready?: boolean;
   pieceId?: string;
   route?: YutRoute;
+  stack?: boolean;
   seat?: number;
   blocked?: boolean;
   power?: number;

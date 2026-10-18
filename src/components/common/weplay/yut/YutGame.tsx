@@ -30,11 +30,18 @@ import {
   type YutLocalMode,
 } from "../../../../lib/yutPreview";
 import type useYutMusic from "../useYutMusic";
-import { PROFESSIONS, YutSprite, YutIcon } from "./YutArt";
+import {
+  PROFESSIONS,
+  YUT_CHARACTER_SHEETS,
+  YutSprite,
+  YutPortrait,
+  YutIcon,
+} from "./YutArt";
 import YutBoard, { yutNodeLabel } from "./YutBoard";
 import YutThrow3D from "./YutThrow3D";
 import { YutTurnGauge } from "./YutReactions";
 import YutVictoryCast from "./YutVictoryCast";
+import YutStackChoice from "./YutStackChoice";
 import WeplayGameLoading from "../WeplayGameLoading";
 import useYutSoundEffects from "../useYutSoundEffects";
 import "@fontsource/noto-serif-kr/600.css";
@@ -136,13 +143,15 @@ export function YutVictory({
   );
 }
 
-/** The gauge changes the toss animation only; the server still chooses the result. */
+/** V2 strength changes probabilities; the server still draws and validates the result. */
 export function YutPowerThrow({
   disabled,
   onThrow,
+  rulesVersion = 2,
 }: {
   disabled: boolean;
   onThrow: (power: number) => void;
+  rulesVersion?: number;
 }) {
   const [charging, setCharging] = useState(false);
   const [power, setPower] = useState(0);
@@ -205,7 +214,7 @@ export function YutPowerThrow({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(power * 100)}
-        aria-valuetext="투척 연출의 세기이며 윷 결과에 영향을 주지 않습니다."
+        aria-valuetext={`힘 ${Math.round(power * 100)}%. ${rulesVersion === 1 ? "투척 연출의 세기이며 결과 확률에 영향을 주지 않습니다." : "힘에 따라 확률이 달라지며 결과는 확정되지 않습니다."}`}
       >
         <span style={{ width: `${power * 100}%` }} />
         <i />
@@ -268,7 +277,9 @@ export function YutPowerThrow({
       </button>
       <span id="yut-power-help" className="yut-power-help">
         {charging
-          ? "힘은 투척 연출에만 반영됩니다"
+          ? rulesVersion === 1
+            ? "힘은 투척 연출에만 반영됩니다"
+            : "세게 던질수록 윷·모 확률이 높아집니다"
           : "누르고 있다가 떼기 · Space도 가능"}
       </span>
       <span className="yut-sr-only">
@@ -286,6 +297,8 @@ function GameDialog({
   throwSeconds = 5,
   moveSeconds = 25,
   blocked = false,
+  pieceCount = 2,
+  rulesVersion = 2,
 }: {
   kind: "rules" | "leave";
   onClose: () => void;
@@ -293,6 +306,8 @@ function GameDialog({
   throwSeconds?: number;
   moveSeconds?: number;
   blocked?: boolean;
+  pieceCount?: number;
+  rulesVersion?: number;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -327,15 +342,29 @@ function GameDialog({
       {kind === "rules" ? (
         <>
           <ol className="yut-rules">
-            <li>내 말을 한 바퀴 돌려 먼저 완주하면 이깁니다.</li>
+            <li>
+              내 말 {pieceCount}개를 모두 먼저 완주시키면 이깁니다. 남은 칸보다
+              큰 결과가 나와도 출발 발판에 도착하며 완주합니다.
+            </li>
             <li>
               도·개·걸·윷·모는 각각 1·2·3·4·5칸입니다. 먼저 말을 옮긴 뒤 다음
               윷을 던집니다.
             </li>
             <li>윷·모가 나오거나 다른 사람의 말을 잡으면 한 번 더 던집니다.</li>
             <li>
-              모서리와 가운데에서는 길을 고를 수 있습니다. 화살표로 길을 고른 뒤
-              결정 버튼을 눌러 이동합니다.
+              번호가 붙은 말을 고르고, 빛나는 발판을 선택한 뒤 결정 버튼을 눌러
+              이동합니다. 모서리와 가운데에서는 지름길을 고를 수 있습니다.
+            </li>
+            <li>
+              {rulesVersion === 1
+                ? "내 말이 있는 칸에 도착하면 자동으로 업습니다."
+                : "내 말이 있는 칸에 도착하면 업고 가기와 따로 가기를 고릅니다."}{" "}
+              업힌 말은 함께 움직이며, 잡히면 함께 출발 전으로 돌아갑니다.
+            </li>
+            <li>
+              {rulesVersion === 1
+                ? "윷가락 앞뒤가 나올 확률은 같습니다. 힘은 투척 연출에만 반영됩니다."
+                : "약하게 던지면 도·개, 세게 던지면 윷·모의 확률이 높아집니다. 힘을 맞춰도 결과가 확정되지는 않습니다."}
             </li>
             <li>
               윷은 {throwSeconds}초 안에 던져 주세요. 시간이 지나면 다음 차례로
@@ -492,14 +521,30 @@ export default function YutGame({
   const { config, currentUser } = useAuth();
   const sounds = useYutSoundEffects();
   useEffect(() => {
-    // Warm the two tiny reaction atlases before their brief first appearance.
-    for (const file of [
-      "characters-surprised.webp",
-      "characters-defeated.webp",
-    ]) {
+    const warm = (file: string, priority: "high" | "low" = "low") => {
       const image = new Image();
+      image.decoding = "async";
+      image.fetchPriority = priority;
       image.src = `${import.meta.env.BASE_URL}assets/weplay/yut/${file}`;
+    };
+    // Give the first visible/walking poses priority; short later reactions are
+    // warmed during idle time so their first frame is ready when it is needed.
+    YUT_CHARACTER_SHEETS.slice(0, 4).forEach((action, index) =>
+      warm(`animation-${action}.webp`, index < 2 ? "high" : "low"),
+    );
+    const later = () => {
+      YUT_CHARACTER_SHEETS.slice(4).forEach((action) =>
+        warm(`animation-${action}.webp`),
+      );
+      warm("stack-choice-carry.webp");
+      warm("stack-choice-separate.webp");
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const idle = window.requestIdleCallback(later, { timeout: 1500 });
+      return () => window.cancelIdleCallback(idle);
     }
+    const timer = window.setTimeout(later, 200);
+    return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
     // Load before the first result exists, so its short reveal never swaps fonts.
@@ -521,6 +566,11 @@ export default function YutGame({
   const [fullscreen, setFullscreen] = useState(false);
   const [moving, setMoving] = useState(false);
   const [selectedMove, setSelectedMove] = useState<YutMove | null>(null);
+  const [stackChoice, setStackChoice] = useState<{
+    move: YutMove;
+    roomId: string;
+    revision: number;
+  } | null>(null);
   const autoSkipKey = useRef("");
   const [boardMaxWidth, setBoardMaxWidth] = useState(720);
   const [emoteOpen, setEmoteOpen] = useState(false);
@@ -1139,6 +1189,14 @@ export default function YutGame({
     }
   };
   const player = room?.players.find((item) => item.uid === uid);
+  // Legacy matches without rulesVersion keep V1 until they finish. A waiting
+  // room upgrades on start, so lobby/waiting/preview instructions default to V2.
+  const rulesVersion =
+    room &&
+    ["playing", "finished"].includes(room.status) &&
+    room.rulesVersion !== 2
+      ? 1
+      : 2;
   const turn = room?.players.find((item) => item.uid === room.turnUid);
   const myTurn = room?.turnUid === uid;
   const moves = room ? getLegalYutMoves(room, uid) : [];
@@ -1329,12 +1387,58 @@ export default function YutGame({
         }));
     }
   }, [toss]);
+  const selectPiece = useCallback((pieceId: string) => {
+    setSelectedPiece(pieceId);
+    setSelectedMove(null);
+    setStackChoice(null);
+  }, []);
   useEffect(() => {
     if (moves.length && !moves.some((move) => move.pieceId === selectedPiece))
-      setSelectedPiece(moves[0].pieceId);
-  }, [room?.revision, uid, selectedPiece]);
-  const movePiece = (move: YutMove) => setSelectedMove(move);
-  useEffect(() => setSelectedMove(null), [room?.id, room?.revision, uid]);
+      selectPiece(moves[0].pieceId);
+  }, [room?.revision, uid, selectedPiece, selectPiece]);
+  const movePiece = (move: YutMove) => {
+    if (move.pieceId === selectedPiece) setSelectedMove(move);
+  };
+  useEffect(() => {
+    setSelectedMove(null);
+    setStackChoice(null);
+  }, [room?.id, room?.revision, uid, selectedPiece]);
+  useEffect(() => {
+    if (seconds === 0 || portrait || hidden || busy) setStackChoice(null);
+  }, [seconds, portrait, hidden, busy]);
+  const confirmMove = (move: YutMove, stack?: boolean) => {
+    const current = roomRef.current;
+    if (
+      !current ||
+      move.pieceId !== selectedPiece ||
+      current.status !== "playing" ||
+      current.turnUid !== uid ||
+      busy ||
+      seconds === 0
+    )
+      return;
+    const legal = getLegalYutMoves(current, uid).find(
+      (candidate) =>
+        candidate.pieceId === move.pieceId &&
+        candidate.route === move.route &&
+        candidate.targetNode === move.targetNode,
+    );
+    if (!legal) return;
+    if (legal.canStack && stack === undefined) {
+      setStackChoice({
+        move: legal,
+        roomId: current.id,
+        revision: current.revision,
+      });
+      return;
+    }
+    setStackChoice(null);
+    void command("move", {
+      pieceId: legal.pieceId,
+      route: legal.route,
+      ...(stack !== undefined ? { stack } : {}),
+    });
+  };
   const beginLocal = (mode: YutLocalMode) => {
     music.start();
     if (
@@ -1857,17 +1961,19 @@ export default function YutGame({
                     >
                       <div className="yut-avatar">
                         {emoteBubble(person.uid)}
-                        <YutSprite
+                        <YutPortrait
                           role={person.role}
                           pose={
                             room.status === "finished" &&
                             room.winnerUid === person.uid
                               ? "win"
-                              : activeTurn
-                                ? settling
-                                  ? "throw"
-                                  : "turn"
-                                : "idle"
+                              : room.status === "finished"
+                                ? "lose"
+                                : activeTurn
+                                  ? settling
+                                    ? "throw"
+                                    : "turn"
+                                  : "idle"
                           }
                         />
                       </div>
@@ -1918,7 +2024,7 @@ export default function YutGame({
                   room={displayRoom || room}
                   uid={uid}
                   selectedPiece={selectedPiece}
-                  onSelectPiece={setSelectedPiece}
+                  onSelectPiece={selectPiece}
                   moves={moves}
                   onMove={movePiece}
                   selectedMove={selectedMove}
@@ -2054,6 +2160,7 @@ export default function YutGame({
                   </button>
                 ) : primaryAction === "throw" ? (
                   <YutPowerThrow
+                    rulesVersion={rulesVersion}
                     disabled={
                       busy ||
                       settling ||
@@ -2076,7 +2183,7 @@ export default function YutGame({
                     <span className="yut-move-hint">
                       {selectedMove
                         ? `${yutNodeLabel(selectedMove.targetNode)}까지`
-                        : "화살표로 이동할 길을 고르세요"}
+                        : "말과 빛나는 발판을 고르세요"}
                     </span>
                     <button
                       type="button"
@@ -2089,11 +2196,7 @@ export default function YutGame({
                         seconds === 0
                       }
                       onClick={() => {
-                        if (selectedMove)
-                          void command("move", {
-                            pieceId: selectedMove.pieceId,
-                            route: selectedMove.route,
-                          });
+                        if (selectedMove) confirmMove(selectedMove);
                       }}
                     >
                       결정
@@ -2136,14 +2239,35 @@ export default function YutGame({
         )}
         {dialog && dialog !== "create" && (
           <GameDialog
+            rulesVersion={rulesVersion}
             kind={dialog}
             blocked={networkBusy}
             throwSeconds={room?.throwSeconds ?? settings.throwSeconds}
             moveSeconds={room?.moveSeconds ?? settings.moveSeconds}
+            pieceCount={
+              rulesVersion === 1
+                ? (room?.pieceCount ?? room?.players[0]?.pieces.length ?? 1)
+                : 2
+            }
             onClose={() => setDialog(null)}
             onConfirm={() => {
               setDialog(null);
               void command("leave");
+            }}
+          />
+        )}
+        {stackChoice && player && (
+          <YutStackChoice
+            role={player.role}
+            blocked={networkBusy}
+            onClose={() => setStackChoice(null)}
+            onConfirm={(stack) => {
+              if (
+                roomRef.current?.id === stackChoice.roomId &&
+                roomRef.current?.revision === stackChoice.revision
+              )
+                confirmMove(stackChoice.move, stack);
+              else setStackChoice(null);
             }}
           />
         )}

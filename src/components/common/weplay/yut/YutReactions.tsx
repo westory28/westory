@@ -1,9 +1,14 @@
 import React from "react";
 import type { YutRole } from "../../../../lib/yut";
-import { PROFESSIONS } from "./YutArt";
+import { PROFESSIONS, YutSprite } from "./YutArt";
 import "./yut-reactions.css";
 
-export type YutCaughtPlayer = { uid: string; name: string; role: YutRole };
+export type YutCaughtPlayer = {
+  uid: string;
+  name: string;
+  role: YutRole;
+  pieceIds?: string[];
+};
 
 export function YutCaptureReaction({
   players,
@@ -25,11 +30,16 @@ export function YutCaptureReaction({
           {players.map((player) => (
             <span
               key={player.uid}
-              className={`yut-capture-portrait yut-reaction-role--${player.role}`}
-              style={{
-                backgroundImage: `url(${import.meta.env.BASE_URL}assets/weplay/yut/characters-surprised.webp)`,
-              }}
-            />
+              className="yut-capture-portrait"
+              data-caught-count={player.pieceIds?.length || 1}
+            >
+              <YutSprite
+                role={player.role}
+                pose={
+                  (player.pieceIds?.length || 1) > 1 ? "pair-caught" : "caught"
+                }
+              />
+            </span>
           ))}
         </div>
       </div>

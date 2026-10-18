@@ -64,7 +64,7 @@ async function start(winner = 'a', opponent = 'b') {
 async function nearFinish(room, winner = 'a') {
   // Synthetic persisted board, never a client-supplied score. The actual exported
   // callable still validates the turn, route, deadline, completion and reward.
-  const players = room.players.map(p => ({ ...p, pieces: [{ id: '1', node: p.uid === winner ? 'o20' : 'o19', lane: 'outer' }] }));
+  const players = room.players.map(p => ({ ...p, pieces: p.pieces.map((piece, index) => ({ id: piece.id, node: p.uid === winner ? (index ? 'finish' : 'o20') : 'o19', lane: 'outer' })) }));
   await patch(roomPath(room), { players, turnUid: winner, phase: 'move', phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000, pendingThrow: { value: 1, label: '도', sticks: [true, false, false, false] } });
   return get(roomPath(room));
 }
@@ -96,7 +96,21 @@ async function test(name, run) { await seed(); await run(); groups += 1; console
     await denied(api.saveWeplayPolicy.run(request('manager', { policy: saved })), ['failed-precondition']);
     await noMoney();
   });
-  await test('first completion ends all play and pays only its winner atomically once under concurrent retries', async () => {
+  await test('first piece alone never ends a two-piece game or pays its reward', async () => {
+    await policy({ yutWinnerReward: { enabled: true, amount: 7 } });
+    let room = await nearFinish(await start());
+    room.players[0].pieces[1].node = 'home';
+    await patch(roomPath(room), { players: room.players });
+    room = (await finish(room)).room;
+    assert.equal(room.status, 'playing'); assert.equal(room.winnerUid, null);
+    assert.equal(room.reward, undefined);
+    await noMoney();
+    room = await nearFinish(room);
+    room = (await finish(room)).room;
+    assert.equal(room.status, 'finished'); assert.equal(room.reward.status, 'paid');
+    assert.equal((await get(accountPath('a'))).balance, 107);
+  });
+  await test('first full completion ends all play and pays only its winner atomically once under concurrent retries', async () => {
     await policy({ yutWinnerReward: { enabled: true, amount: 7 } });
     let room = await nearFinish(await start());
     const requestKey = randomUUID();

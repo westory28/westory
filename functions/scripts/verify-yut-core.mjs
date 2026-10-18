@@ -1,22 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut as coreMoveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, setYutSeat, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS } from '../yutCore.mjs';
+import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut as coreMoveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, setYutSeat, getYutThrowProbabilities, sampleYutSticks, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS } from '../yutCore.mjs';
 const now = 10000;
-function game(count = 2, pieces = 1) {
+function game(count = 2, pieces = 1, version = 1) {
   let room = createYutRoom({ id: 'room', code: 'ABC234', classId: 'class', classLabel: '1학년 1반', host: { uid: 'a', name: '가' }, nowMs: now });
   for (let index = 1; index < count; index += 1) {
     const uid = String.fromCharCode(97 + index);
     room = readyYutPlayer(addYutPlayer(room, { uid, name: uid }, now), uid, true, now);
   }
-  if (pieces === 2) {
-    delete room.pieceCount;
-    for (const player of room.players) player.pieces.push({ id: '2', node: 'home', lane: 'outer' });
-  }
-  return startYutGame(room, now - 2000);
+  room = startYutGame(room, now - 2000);
+  if (version !== 2) delete room.rulesVersion;
+  room.pieceCount = pieces;
+  for (const player of room.players) player.pieces = player.pieces.slice(0, pieces);
+  return room;
 }
 const roll = (room, value) => throwYut(room, room.turnUid, Array.from({ length: 4 }, (_, index) => index < (value === 5 ? 0 : value)), Math.max(now + 1, room.phaseStartsAtMs || 0));
 const moveYut = (room, uid, piece, route, atMs) => coreMoveYut(room, uid, piece, route, Math.max(atMs, room.phaseStartsAtMs || 0));
-test('new matches use one piece and independent 5-second throw / 25-second move deadlines after animations', () => {
+test('legacy matches retain independent 5-second throw / 25-second move deadlines after animations', () => {
   let room = game();
   assert.equal(room.players.every((player) => player.pieces.length === 1), true);
   assert.equal(room.turnDeadlineMs - room.phaseStartsAtMs, 5000);
@@ -33,6 +33,113 @@ test('new matches use one piece and independent 5-second throw / 25-second move 
   assert.equal(room.phaseStartsAtMs, moveAt + 1500);
   assert.equal(room.turnDeadlineMs, moveAt + 1500 + 5000);
   assert.deepEqual(room.lastEvent.move, { uid: 'a', pieceId: '1', route: 'outer', path: ['o1'], capturedUids: [] });
+});
+
+test('new and waiting-upgraded matches use two independent pieces; overshoot stops at finish and both must finish', () => {
+  let room = game(2, 2, 2);
+  assert.equal(room.rulesVersion, 2); assert.equal(room.pieceCount, 2);
+  assert.deepEqual(room.players[0].pieces.map(({ id, node, stackId }) => ({ id, node, stackId })), [{ id: '1', node: 'home', stackId: undefined }, { id: '2', node: 'home', stackId: undefined }]);
+  room.players[0].pieces[0].node = 'o19';
+  room = moveYut(roll(room, 5), 'a', '1', 'outer', now + 2);
+  assert.equal(room.status, 'playing'); assert.equal(room.winnerUid, null);
+  assert.deepEqual(room.lastEvent.move.path, ['o20', 'finish']);
+  assert.deepEqual(room.lastEvent.move.movingPieceIds, ['1']);
+  room = roll(room, 5);
+  assert.equal(getLegalYutMoves(room, 'a').some(move => move.pieceId === '1'), false);
+  room.players[0].pieces[1].node = 'o20';
+  room = moveYut(room, 'a', '2', 'outer', now + 3);
+  assert.equal(room.status, 'finished'); assert.equal(room.winnerUid, 'a');
+  assert.deepEqual(room.lastEvent.move.path, ['finish']);
+  const waiting = game(2, 1); waiting.status = 'waiting';
+  const started = startYutGame(waiting, now);
+  assert.equal(started.rulesVersion, 2); assert.equal(started.pieceCount, 2);
+  assert.equal(started.players.every(player => player.pieces.length === 2 && player.pieces.every(piece => piece.node === 'home' && !piece.stackId)), true);
+  assert.equal(waiting.players[0].pieces.length, 1, 'upgrade does not mutate source');
+});
+
+test('v2 same-tile pieces stay independent and keep their routes until explicit stacking', () => {
+  const source = game(2, 2, 2);
+  source.players[0].pieces[0].node = 'o4';
+  Object.assign(source.players[0].pieces[1], { node: 'o5', lane: 'a' });
+  const thrown = roll(source, 1), at = thrown.phaseStartsAtMs;
+  assert.equal(getLegalYutMoves(thrown, 'a')[0].canStack, true);
+  let separate = coreMoveYut(thrown, 'a', '1', 'outer', at, false);
+  assert.equal(separate.players[0].pieces.every(piece => !piece.stackId), true);
+  assert.equal(separate.players[0].pieces[1].lane, 'a');
+  assert.equal(separate.lastEvent.move.stacked, false);
+  assert.equal(separate.phaseStartsAtMs, at + 1500);
+  separate.turnUid = 'a'; separate.phase = 'throw';
+  const separatedRoll = roll(separate, 1);
+  assert.equal(getLegalYutMoves(separatedRoll, 'a').every(move => move.stackSize === 1), true);
+  separate = moveYut(separatedRoll, 'a', '1', 'outer', now + 2);
+  assert.deepEqual(separate.players[0].pieces.map(piece => piece.node), ['o6', 'o5']);
+  let stacked = coreMoveYut(thrown, 'a', '1', 'outer', at, true);
+  assert.equal(stacked.players[0].pieces[0].stackId, stacked.players[0].pieces[1].stackId);
+  assert.ok(stacked.players[0].pieces[0].stackId);
+  assert.equal(stacked.lastEvent.move.stacked, true);
+  assert.equal(stacked.turnUid, 'b');
+  assert.equal(stacked.phaseStartsAtMs, at + 2100);
+  assert.equal(stacked.turnDeadlineMs, at + 2100 + 5000);
+  assert.throws(() => throwYut(stacked, 'b', [true, false, false, false], at + 2099), /연출/);
+  assert.equal(throwYut(stacked, 'b', [true, false, false, false], at + 2100).phase, 'move');
+  stacked.turnUid = 'a'; stacked.phase = 'throw';
+  stacked = roll(stacked, 1);
+  assert.equal(getLegalYutMoves(stacked, 'a').every(move => move.stackSize === 2), true);
+  stacked = moveYut(stacked, 'a', '2', 'a', now + 3);
+  assert.deepEqual(stacked.lastEvent.move.movingPieceIds, ['1', '2']);
+  assert.deepEqual(stacked.players[0].pieces.map(piece => piece.node), ['a1', 'a1']);
+  assert.equal(stacked.phaseStartsAtMs, stacked.lastEvent.atMs + 1500, 'moving an existing stack does not repeat the stacking pose');
+  const invalid = roll(game(2, 2, 2), 1);
+  assert.throws(() => coreMoveYut(invalid, 'a', '1', 'outer', invalid.phaseStartsAtMs, true), /업을 말/);
+  assert.throws(() => coreMoveYut(thrown, 'a', '1', 'outer', at, 'yes'), /업을 말/);
+});
+
+test('new stacking reserves 2100ms for a bonus turn too; simultaneous capture uses the larger 2700ms grace', () => {
+  for (const capture of [false, true]) {
+    let room = game(2, 2, 2);
+    room.players[0].pieces[0].node = 'o1'; room.players[0].pieces[1].node = 'o5';
+    if (capture) room.players[1].pieces[0].node = 'o5';
+    room = roll(room, 4);
+    const at = room.phaseStartsAtMs;
+    room = coreMoveYut(room, 'a', '1', 'outer', at, true);
+    assert.equal(room.turnUid, 'a');
+    assert.equal(room.phaseStartsAtMs, at + (capture ? 2700 : 2100));
+    assert.equal(room.turnDeadlineMs - room.phaseStartsAtMs, 5000);
+    assert.equal(room.lastEvent.move.stacked, true);
+  }
+});
+
+test('v2 capture reports both pieces and releases their group; a finishing stack completes both together', () => {
+  let room = game(2, 2, 2);
+  room.players[1].pieces.forEach(piece => Object.assign(piece, { node: 'o2', stackId: 'stack-1-2' }));
+  room = moveYut(roll(room, 2), 'a', '1', 'outer', now + 1);
+  assert.deepEqual(room.lastEvent.move.capturedPieces, [{ uid: 'b', pieceId: '1' }, { uid: 'b', pieceId: '2' }]);
+  assert.equal(room.players[1].pieces.every(piece => piece.node === 'home' && !piece.stackId), true);
+  assert.equal(room.extraThrows, 0, 'capturing two pieces still grants one bonus throw');
+  room.players[0].pieces.forEach(piece => Object.assign(piece, { node: 'o19', stackId: 'stack-1-2' }));
+  room = moveYut(roll(room, 5), 'a', '2', 'outer', now + 2);
+  assert.equal(room.status, 'finished');
+  assert.deepEqual(room.lastEvent.move.movingPieceIds, ['1', '2']);
+  assert.equal(room.players[0].pieces.every(piece => piece.node === 'finish' && !piece.stackId), true);
+});
+
+test('power probabilities interpolate exact weak/middle/strong tables and sampled faces match each outcome', () => {
+  const tables = [[30, 33, 22, 10, 5], [12, 25, 35, 18, 10], [8, 17, 25, 27, 23]];
+  for (const [index, power] of [0.12, 0.56, 1].entries()) {
+    assert.deepEqual(getYutThrowProbabilities(power), tables[index]);
+    const counts = [0, 0, 0, 0, 0];
+    for (let sample = 0; sample < 10000; sample += 1) {
+      let draws = 0;
+      const sticks = sampleYutSticks(power, () => draws++ ? 0.45 : (sample + 0.5) / 10000);
+      assert.equal(sticks.length, 4); assert.equal(sticks.every(value => typeof value === 'boolean'), true);
+      counts[(sticks.filter(Boolean).length || 5) - 1] += 1;
+    }
+    assert.deepEqual(counts, tables[index].map(value => value * 100));
+  }
+  assert.deepEqual(getYutThrowProbabilities(0), tables[0]);
+  assert.deepEqual(getYutThrowProbabilities(2), tables[2]);
+  assert.deepEqual(getYutThrowProbabilities(0.34), tables[0].map((value, index) => (value + tables[1][index]) / 2));
+  assert.deepEqual(getYutThrowProbabilities(0.78), tables[1].map((value, index) => (value + tables[2][index]) / 2));
 });
 test('captures reserve 2700ms for movement and reaction, then preserve the full configured throw time', () => {
   for (const throwSeconds of [3, 5, 15]) {

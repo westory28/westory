@@ -153,6 +153,8 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     await denied(roomCommand('a', room, 'start'), ['failed-precondition']);
     for (const player of room.players.slice(1)) room = (await roomCommand(player.uid.slice(4), room, 'ready', { ready: true })).room;
     room = (await roomCommand('a', room, 'start')).room;
+    assert.equal(room.rulesVersion, 2); assert.equal(room.pieceCount, 2);
+    assert.equal(room.players.every(player => player.pieces.length === 2), true);
     await denied(roomCommand('a', room, 'seat', { seat: 1, blocked: false }), ['failed-precondition']);
     const managed = await deployed.getYutManagement.run(request('teacher'));
     assert.equal(managed.rooms.length, 1);
@@ -212,6 +214,29 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     assert.deepEqual(room.players[0].lastThrow, aLastThrow, 'moving preserves the player last throw');
     assert.equal((await deployed.getYutLobby.run(request('b'))).room.revision, room.revision);
     const path = `${base}/yut_rooms/${room.id}`;
+    // Synthetic persisted positions exercise the actual session/authority/CAS
+    // command wrapper; clients still cannot write positions or grouping fields.
+    const stackPlayers = room.players.map(player => ({ ...player, pieces: player.pieces.map((piece, index) => ({ id: piece.id, node: player.uid === uid('a') ? (index ? 'o5' : 'o4') : 'home', lane: 'outer' })) }));
+    await db.doc(path).update({ players: stackPlayers, turnUid: uid('a'), phase: 'move', phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000, pendingThrow: { value: 1, label: '도', sticks: [true, false, false, false] } });
+    room = (await db.doc(path).get()).data();
+    await denied(roomCommand('a', room, 'move', { pieceId: '1', route: 'outer', stack: 'yes' }), ['invalid-argument']);
+    await denied(roomCommand('outsider', room, 'move', { pieceId: '1', route: 'outer', stack: true }));
+    await denied(roomCommand('b', room, 'move', { pieceId: '1', route: 'outer', stack: true }), ['failed-precondition']);
+    await db.doc(`${base}/yut_players/${uid('a')}`).update({ lastCommandAtMs: 0 });
+    const stackRequest = request('a', { action: 'move', requestKey: key(), roomId: room.id, expectedRevision: room.revision, pieceId: '1', route: 'outer', stack: true });
+    const stackRetries = await Promise.all([deployed.commandYutRoom.run(stackRequest), deployed.commandYutRoom.run(stackRequest)]);
+    assert.equal(stackRetries[0].room.revision, room.revision + 1);
+    assert.deepEqual(stackRetries[0].room.players, stackRetries[1].room.players);
+    assert.ok(stackRetries[0].room.players[0].pieces[0].stackId);
+    assert.equal(stackRetries[0].room.players[0].pieces[0].stackId, stackRetries[0].room.players[0].pieces[1].stackId);
+    assert.equal(stackRetries[0].room.lastEvent.move.stacked, true);
+    await denied(deployed.commandYutRoom.run(request('a', { ...stackRequest.data, stack: false })), ['already-exists']);
+    room = stackRetries[0].room;
+    await db.doc(path).update({ players: stackPlayers, turnUid: uid('a'), phase: 'move', phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000, pendingThrow: { value: 1, label: '도', sticks: [true, false, false, false] } });
+    room = (await roomCommand('a', room, 'move', { pieceId: '1', route: 'outer' })).room;
+    assert.equal(room.players[0].pieces.every(piece => !piece.stackId), true, 'omitting stack never merges new-version pieces');
+    assert.equal(room.lastEvent.move.stacked, false);
+    assert.deepEqual(room.lastEvent.move.movingPieceIds, ['1']);
     const publicationBeforeMalformed = (await db.doc(`${base}/weplay_games/joseon-yut`).get()).data();
     await db.doc(`${base}/weplay_games/joseon-yut`).update({ version: 'malformed' });
     assert.equal((await rest('a', path)).status, 403, 'malformed publication fails closed for existing rooms');
@@ -332,7 +357,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     assert.equal((await deployed.getYutLobby.run(request('qa'))).privatePlaysRemaining, 5);
     for (let round = 1; round <= 5; round += 1) {
       let privateRoom = (await command('qa', 'create', { visibility: 'private', maxPlayers: 2 })).room;
-      assert.equal(privateRoom.pieceCount, 1); assert.equal(privateRoom.players[0].pieces.length, 1);
+      assert.equal(privateRoom.pieceCount, 2); assert.equal(privateRoom.players[0].pieces.length, 2);
       assert.equal(privateRoom.maxPlayers, 2);
       privateRoom = (await command('qb', 'join', { code: privateRoom.code })).room;
       const rejoined = await command('qb', 'join', { code: privateRoom.code });
@@ -404,7 +429,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     await roomCommand('p1', publicTwo, 'leave');
     assert.equal((await db.doc(`${base}/yut_rooms/${publicOne.id}`).get()).data().participantUids.includes(uid('p1')), false, 'leave still cleans up when multiplayer is disabled');
     await saveModes({ enabled: false });
-    console.log('PASS Yut publication/mode gates, settings CAS, bounded management, one-piece phase timing, seats/emotes, KST private-start quota, idempotent reconnect, concurrent public matchmaking, canonical session/enrollment guards, Firestore privacy and revocation');
+    console.log('PASS Yut publication/mode gates, settings CAS, bounded management, two-piece explicit stacks and idempotent move choices, phase timing, seats/emotes, KST private-start quota, idempotent reconnect, concurrent public matchmaking, canonical session/enrollment guards, Firestore privacy and revocation');
   } finally {
     // This emulator/project was checked before importing any Admin SDK code.
     await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: 'DELETE' });

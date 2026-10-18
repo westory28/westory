@@ -182,7 +182,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (action === 'ready' && typeof data.ready !== 'boolean') fail('invalid-argument', '준비 상태를 확인해 주세요.');
     if (action === 'seat' && (!Number.isInteger(data.seat) || data.seat < 0 || data.seat > 3 || typeof data.blocked !== 'boolean')) fail('invalid-argument', '변경할 자리를 확인해 주세요.');
     if (action === 'throw' && data.power !== undefined && (!Number.isFinite(data.power) || data.power < 0 || data.power > 1)) fail('invalid-argument', '던지는 세기를 확인해 주세요.');
-    if (action === 'move' && (!['1', '2'].includes(data.pieceId) || !['outer', 'a', 'b'].includes(data.route))) fail('invalid-argument', '이동할 말과 길을 선택해 주세요.');
+    if (action === 'move' && (!['1', '2'].includes(data.pieceId) || !['outer', 'a', 'b'].includes(data.route) || (data.stack !== undefined && typeof data.stack !== 'boolean'))) fail('invalid-argument', '이동할 말과 길을 선택해 주세요.');
     if (action === 'claimReward' && Object.keys(data).some((field) => !['year', 'semester', '_session', 'action', 'requestKey', 'roomId', 'expectedRevision'].includes(field))) fail('invalid-argument', '우승 보상 요청을 확인해 주세요.');
     // Preserve existing command fingerprints across deployment, including a
     // retry whose first response was lost before this version was deployed.
@@ -190,11 +190,13 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (action === 'emote') fingerprintFields.push(data.kind);
     if (action === 'seat') fingerprintFields.push(data.seat, data.blocked);
     if (action === 'throw' && data.power !== undefined) fingerprintFields.push('power', data.power);
+    if (action === 'move' && data.stack !== undefined) fingerprintFields.push('stack', data.stack);
     if (['create', 'match'].includes(action) && (data.visibility !== undefined || data.maxPlayers !== undefined)) fingerprintFields.push(data.visibility ?? null, data.maxPlayers ?? null);
     const fingerprint = hash(JSON.stringify(fingerprintFields));
     const generatedCode = Array.from({ length: 6 }, () => alphabet[random(alphabet.length)]).join('');
     // Draw once before transaction retries; a transaction retry cannot reroll.
     const sticks = action === 'throw' ? Array.from({ length: 4 }, () => random(2) === 1) : null;
+    const weightedSticks = action === 'throw' ? core.sampleYutSticks(data.power, () => random(0x100000000) / 0x100000000) : null;
     return db.runTransaction(async (transaction) => {
       const actor = await authority(transaction, request, scope), receivedAt = now();
       if (!actor.manager && !actor.settings.allowMultiplayer && !['leave', 'close'].includes(action)) fail('permission-denied', '지금은 함께하기가 열려 있지 않습니다.');
@@ -322,8 +324,8 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
           if (action === 'seat') room = core.setYutSeat(room, actor.uid, data.seat, data.blocked, receivedAt);
           if (action === 'start') room = core.startYutGame(room, receivedAt);
           if (action === 'start' && room.visibility !== 'public') room.privatePlayChargedAtMs = receivedAt;
-          if (action === 'throw') room = core.throwYut(room, actor.uid, sticks, receivedAt, data.power);
-          if (action === 'move') room = core.moveYut(room, actor.uid, data.pieceId, data.route, receivedAt);
+          if (action === 'throw') room = core.throwYut(room, actor.uid, room.rulesVersion === 2 ? weightedSticks : sticks, receivedAt, data.power);
+          if (action === 'move') room = core.moveYut(room, actor.uid, data.pieceId, data.route, receivedAt, data.stack);
           if (action === 'skip') room = core.skipYutTurn(room, receivedAt);
           if (action === 'leave') room = core.leaveYutRoom(room, actor.uid, receivedAt);
           if (action === 'close') room = core.closeYutRoom(room, receivedAt);

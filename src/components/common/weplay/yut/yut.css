@@ -1208,7 +1208,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .yut-game *:not(.yut-throw-3d, .yut-throw-3d *),
+  .yut-game *:not(.yut-throw-3d, .yut-throw-3d *, .yut-frame-sprite, .yut-drawn-frame),
   .yut-game *:not(.yut-throw-3d, .yut-throw-3d *)::before,
   .yut-game *:not(.yut-throw-3d, .yut-throw-3d *)::after {
     animation: none !important;
@@ -1890,45 +1890,6 @@
   right: 70%;
   border-radius: 12px 12px 2px 12px;
 }
-.yut-sprite {
-  transform-origin: 50% 90%;
-  animation: yut-character-breathe 2800ms ease-in-out infinite;
-}
-.yut-sprite--turn {
-  animation-duration: 1800ms;
-}
-.yut-sprite--throw {
-  transform: rotate(-4deg);
-  animation: none;
-}
-.yut-sprite--win {
-  animation: yut-character-celebrate 900ms ease-in-out infinite;
-}
-.yut-sprite--caught {
-  transform: rotate(8deg);
-  filter: saturate(0.6);
-}
-.yut-game[data-motion-paused="true"] .yut-sprite {
-  animation-play-state: paused;
-}
-@keyframes yut-character-breathe {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-0.35deg);
-  }
-  50% {
-    transform: translateY(-1.5px) rotate(0.35deg);
-  }
-}
-@keyframes yut-character-celebrate {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-2deg);
-  }
-  50% {
-    transform: translateY(-4px) rotate(2deg);
-  }
-}
 .yut-landing-result {
   animation: yut-ink-arrive 360ms ease-out;
 }
@@ -2139,90 +2100,6 @@
     min-height: 76px;
     height: 76px;
     margin-top: -12px;
-  }
-}
-
-.yut-sprite {
-  position: relative;
-  --eye-x: 56%;
-  --eye-y: 24.5%;
-  --face-tone: #bb723a;
-}
-.yut-character--nong {
-  --eye-x: 47%;
-  --eye-y: 26%;
-  --face-tone: #c88d4c;
-}
-.yut-character--gong {
-  --eye-x: 56%;
-  --eye-y: 22.5%;
-  --face-tone: #f0ac93;
-}
-.yut-character--sang {
-  --eye-x: 46%;
-  --eye-y: 21.5%;
-  --face-tone: #c99452;
-}
-.yut-sprite::before,
-.yut-sprite::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  opacity: 0;
-}
-.yut-sprite::before {
-  left: calc(var(--eye-x) - 2%);
-  top: var(--eye-y);
-  width: 7%;
-  height: 4%;
-  border-top: 1px solid #33221a;
-  border-radius: 60% 60% 0 0;
-  background: var(--face-tone);
-}
-.yut-sprite--win::before,
-.yut-isometric-piece.is-capture .yut-sprite::before,
-.yut-isometric-piece.is-win .yut-sprite::before {
-  opacity: 1;
-}
-.yut-sprite--win::after {
-  left: calc(var(--eye-x) + 7%);
-  top: calc(var(--eye-y) + 10%);
-  width: 8%;
-  height: 3%;
-  border-bottom: 1px solid #33221a;
-  border-radius: 0 0 70% 70%;
-  opacity: 1;
-}
-.yut-sprite--caught::after,
-.yut-isometric-piece.is-caught .yut-sprite::after {
-  left: calc(var(--eye-x) + 12%);
-  top: calc(var(--eye-y) + 3%);
-  width: 6%;
-  height: 8%;
-  border: 1px solid #488ca1;
-  border-radius: 60% 0 60% 60%;
-  transform: rotate(-25deg);
-  background: #bce9ec;
-  opacity: 1;
-}
-.yut-sprite--throw::before {
-  opacity: 1;
-  border: 1px solid #33221a;
-  border-radius: 50%;
-  background: #fff2cb;
-}
-.yut-isometric-piece:is(.is-capture, .is-win) .yut-sprite::before,
-.yut-isometric-piece.is-caught .yut-sprite::after {
-  animation: yut-face-reaction 300ms ease both;
-  animation-delay: var(--reaction-delay, 0ms);
-}
-@keyframes yut-face-reaction {
-  0% {
-    opacity: 0;
-  }
-  15%,
-  100% {
-    opacity: 1;
   }
 }
 

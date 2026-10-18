@@ -1,51 +1,230 @@
-/* Only the folded sleeves change pose; head, torso and shoes remain pixel-still. */
-.yut-waiting-figure {
-  display: none;
+/* Each SVG viewport contains a complete painted pose. No body-part masks. */
+.yut-game .yut-frame-sprite,
+.yut-stack-choice .yut-frame-sprite {
+  display: block;
+  position: relative;
+  aspect-ratio: 1;
+  height: auto !important;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+  background: none !important;
+  transform: none !important;
+  animation: none !important;
+  --pose-duration: 1400ms;
+  --pose-repeat: infinite;
+}
+.yut-game .yut-frame-sprite::before,
+.yut-game .yut-frame-sprite::after {
+  display: none !important;
+}
+.yut-game .yut-drawn-frame {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  overflow: visible;
-}
-.yut-seat .yut-sprite--idle {
-  animation: none !important;
+  opacity: 0;
+  pointer-events: none;
   transform: none;
-  background-image: none !important;
+  animation: yut-frame-first var(--pose-duration) steps(1, end)
+    var(--pose-repeat) both !important;
 }
-.yut-seat .yut-sprite--idle .yut-waiting-figure {
+.yut-game .yut-drawn-frame[data-frame-index="1"] {
+  animation-name: yut-frame-second !important;
+}
+.yut-game .yut-drawn-frame[data-frame-index="2"] {
+  animation-name: yut-frame-third !important;
+}
+.yut-game .yut-frame--idle .yut-drawn-frame {
+  animation-name: yut-idle-first !important;
+}
+.yut-game .yut-frame--idle .yut-drawn-frame[data-frame-index="1"] {
+  animation-name: yut-idle-second !important;
+}
+.yut-game .yut-frame--idle .yut-drawn-frame[data-frame-index="2"] {
+  animation-name: yut-idle-third !important;
+}
+.yut-game .yut-frame--walk,
+.yut-game .yut-frame--carry {
+  --pose-duration: 660ms;
+}
+.yut-game .yut-frame--boarding {
+  --pose-duration: 700ms;
+  --pose-repeat: 1;
+}
+.yut-game .yut-frame--win {
+  --pose-duration: 780ms;
+  --pose-repeat: 3;
+}
+.yut-game .yut-frame--caught,
+.yut-game .yut-frame--pair-caught {
+  --pose-repeat: 1;
+}
+.yut-game .yut-frame--lose {
+  --pose-duration: 700ms;
+  --pose-repeat: 1;
+}
+.yut-game .yut-frame--lose .yut-drawn-frame[data-frame-index="1"] {
+  animation:
+    yut-frame-second 700ms steps(1, end) 1 both,
+    yut-prone-first 1800ms 700ms steps(1, end) infinite !important;
+}
+.yut-game .yut-frame--lose .yut-drawn-frame[data-frame-index="2"] {
+  animation:
+    yut-frame-third 700ms steps(1, end) 1 both,
+    yut-prone-second 1800ms 700ms steps(1, end) infinite !important;
+}
+.yut-pawn-art {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+}
+.yut-game .yut-pawn-art .yut-frame-sprite {
+  position: relative;
+  inset: auto;
+  width: 100%;
+}
+.yut-stack-option-art {
   display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  background-repeat: no-repeat;
+  background-size: 200% 200%;
+  image-rendering: pixelated;
 }
-.yut-waiting-arm {
-  transform-box: view-box;
+.yut-portrait {
+  display: block;
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  overflow: hidden;
+  border: 2px solid #9b773f;
+  border-radius: 50%;
+  background: radial-gradient(circle at 45% 30%, #e7cc8f, #8a6637);
+  box-shadow:
+    inset 0 0 0 2px #f3dfa380,
+    0 2px 4px #30201655;
 }
-.yut-seat .yut-waiting-arm {
-  animation: yut-sleeve-pose 3200ms steps(1, end) infinite;
+.yut-game .yut-portrait .yut-frame-sprite {
+  position: absolute;
+  width: 190% !important;
+  max-width: none;
+  left: 50%;
+  top: -3%;
+  margin: 0;
+  transform: translateX(-50%) !important;
+  animation: none !important;
+  background-position-x: 0%;
 }
-.yut-character--nong .yut-waiting-arm {
-  animation-delay: -800ms;
+.yut-game .yut-button,
+.yut-game .yut-single-count button,
+.yut-dialog .yut-button,
+.yut-stack-choice .yut-button {
+  font-size: 20px;
+  font-weight: 800;
 }
-.yut-character--gong .yut-waiting-arm {
-  animation-delay: -1600ms;
+@keyframes yut-frame-first {
+  0% {
+    opacity: 1;
+  }
+  33.333%,
+  100% {
+    opacity: 0;
+  }
 }
-.yut-character--sang .yut-waiting-arm {
-  animation-delay: -2400ms;
+@keyframes yut-frame-second {
+  0% {
+    opacity: 0;
+  }
+  33.333% {
+    opacity: 1;
+  }
+  66.667%,
+  100% {
+    opacity: 0;
+  }
 }
-@keyframes yut-sleeve-pose {
+@keyframes yut-frame-third {
+  0%,
+  33.333% {
+    opacity: 0;
+  }
+  66.667%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes yut-idle-first {
   0%,
   50%,
   100% {
-    transform: rotate(0deg);
+    opacity: 1;
+  }
+  25%,
+  75% {
+    opacity: 0;
+  }
+}
+@keyframes yut-idle-second {
+  0%,
+  50%,
+  100% {
+    opacity: 0;
   }
   25% {
-    transform: rotate(4deg);
+    opacity: 1;
+  }
+}
+@keyframes yut-idle-third {
+  0%,
+  50%,
+  100% {
+    opacity: 0;
   }
   75% {
-    transform: rotate(-4deg);
+    opacity: 1;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .yut-game .yut-seat .yut-waiting-arm {
-    animation: yut-sleeve-pose 4800ms steps(1, end) infinite !important;
+@keyframes yut-prone-first {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
   }
 }
-.yut-game[data-motion-paused="true"] .yut-seat .yut-waiting-arm {
+@keyframes yut-prone-second {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.yut-game .yut-portrait .yut-drawn-frame {
+  animation: none !important;
+  opacity: 0;
+}
+.yut-game .yut-portrait .yut-drawn-frame[data-frame-index="0"] {
+  opacity: 1;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .yut-portrait {
+    width: 50px;
+    height: 50px;
+    flex-basis: 50px;
+  }
+  .yut-game .yut-button,
+  .yut-game .yut-single-count button,
+  .yut-dialog .yut-button,
+  .yut-stack-choice .yut-button {
+    font-size: 18px;
+  }
+}
+.yut-game[data-motion-paused="true"] .yut-drawn-frame {
   animation-play-state: paused !important;
 }

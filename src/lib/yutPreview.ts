@@ -8,6 +8,7 @@ import {
   startYutGame,
   throwYut,
   setYutSeat,
+  sampleYutSticks,
   type YutRoom,
   type YutMove,
 } from "../../functions/yutCore.mjs";
@@ -68,7 +69,7 @@ export function previewYutCommand(
   room: YutRoom,
   data: Pick<
     YutCommand,
-    "action" | "pieceId" | "route" | "power" | "seat" | "blocked"
+    "action" | "pieceId" | "route" | "power" | "seat" | "blocked" | "stack"
   >,
   uid = YUT_PREVIEW_UID,
   random = Math.random,
@@ -79,12 +80,14 @@ export function previewYutCommand(
     return throwYut(
       room,
       uid,
-      Array.from({ length: 4 }, () => random() < 0.5),
+      room.rulesVersion === 2
+        ? sampleYutSticks(data.power ?? 0.65, random)
+        : Array.from({ length: 4 }, () => random() < 0.5),
       nowMs,
       data.power ?? 0.65,
     );
   if (data.action === "move" && data.pieceId && data.route)
-    return moveYut(room, uid, data.pieceId, data.route, nowMs);
+    return moveYut(room, uid, data.pieceId, data.route, nowMs, data.stack);
   if (data.action === "skip") return skipYutTurn(room, nowMs);
   if (
     data.action === "seat" &&
@@ -143,9 +146,16 @@ export function chooseYutBotMove(
   });
   scored.sort((a, b) => b.score - a.score);
   // A little unpredictability keeps three opponents from following one fixed script.
-  return random() < 0.14
-    ? moves[Math.floor(random() * moves.length)]
-    : scored[0].move;
+  const selected =
+    random() < 0.14
+      ? moves[Math.floor(random() * moves.length)]
+      : scored[0].move;
+  return {
+    ...selected,
+    stack: Boolean(
+      selected.canStack && (strategy === "stack" || random() < 0.65),
+    ),
+  };
 }
 
 export function advanceYutPreviewBot(
@@ -164,7 +174,7 @@ export function advanceYutPreviewBot(
   if (room.phase === "throw")
     return previewYutCommand(
       room,
-      { action: "throw" },
+      { action: "throw", power: 0.12 + random() * 0.88 },
       room.turnUid,
       random,
       nowMs,

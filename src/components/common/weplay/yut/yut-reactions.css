@@ -11,7 +11,7 @@
   z-index: 20;
   top: 48%;
   left: 50%;
-  width: min(260px, 45%);
+  width: min(290px, 45%);
   transform: translate(-50%, -50%);
   pointer-events: none;
   text-align: center;
@@ -49,7 +49,7 @@
 }
 .yut-capture-portraits {
   position: absolute;
-  inset: 18% 18% 13%;
+  inset: 14% 14% 10%;
   display: flex;
   align-items: end;
 }
@@ -57,21 +57,9 @@
   flex: 1;
   min-width: 0;
   aspect-ratio: 1;
-  background-repeat: no-repeat;
-  background-size: 200% 200%;
-  image-rendering: pixelated;
 }
-.yut-reaction-role--sa {
-  background-position: 0 0;
-}
-.yut-reaction-role--nong {
-  background-position: 100% 0;
-}
-.yut-reaction-role--gong {
-  background-position: 0 100%;
-}
-.yut-reaction-role--sang {
-  background-position: 100% 100%;
+.yut-game .yut-capture-portrait .yut-frame-sprite {
+  width: 100%;
 }
 .yut-capture-name {
   display: inline-block;

@@ -579,7 +579,7 @@ export default function YutManagement() {
                 </div>
                 <div>
                   <dt>말 수</dt>
-                  <dd>1개</dd>
+                  <dd>2개</dd>
                 </div>
                 <div>
                   <dt>위스 보상</dt>
@@ -608,10 +608,10 @@ export default function YutManagement() {
             >
               <h2 id="yut-preview-title">교사 체험</h2>
               <img
-                src={`${import.meta.env.BASE_URL}assets/weplay/yut/courtyard.webp`}
+                src={`${import.meta.env.BASE_URL}assets/weplay/yut/catalog-toss.webp`}
                 alt=""
-                width={1672}
-                height={941}
+                width={1448}
+                height={1086}
               />
               <div className="yut-management-preview-actions">
                 {validDraft && !saving ? (

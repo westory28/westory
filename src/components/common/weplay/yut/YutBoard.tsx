@@ -7,7 +7,7 @@ import React, {
   useState,
 } from "react";
 import type { YutMove, YutNode, YutRoom, YutRole } from "../../../../lib/yut";
-import { PROFESSIONS, YutSprite } from "./YutArt";
+import { PROFESSIONS, YutPawnArt } from "./YutArt";
 import { YutCaptureReaction, type YutCaughtPlayer } from "./YutReactions";
 import "./yut-board.css";
 
@@ -31,7 +31,7 @@ Object.assign(positions, {
   b2: [360, 188.33],
   b4: [360, 321.67],
   b5: [360, 388.33],
-  finish: [450, 490],
+  finish: [360, 455],
 });
 const zones = [
   { light: "#9d9e7b", face: "#777f59", edge: "#48523d", ink: "#303d2d" },
@@ -311,6 +311,12 @@ function BoardSurface({ prefix }: { prefix: string }) {
 
 type PieceMotion = {
   id: string;
+  uid: string;
+  pieceIds: string[];
+  joinedPieceIds: string[];
+  carried: boolean;
+  boarding: boolean;
+  originOffset: number;
   origin: YutNode;
   path: YutNode[];
   kind: "land" | "capture" | "win" | "caught";
@@ -318,20 +324,29 @@ type PieceMotion = {
 };
 const nodePosition = (node: YutNode): [number, number] =>
   positions[node === "home" ? "o20" : node] || positions.center;
-const directionArrow = (origin: YutNode, target: YutNode) => {
-  const start = nodePosition(origin),
-    end = nodePosition(target);
-  const dx = end[0] - start[0],
-    dy = end[1] - start[1];
-  if (Math.abs(dx) < 8) return dy < 0 ? "↑" : "↓";
-  if (Math.abs(dy) < 8) return dx < 0 ? "←" : "→";
-  return dy < 0 ? (dx < 0 ? "↖" : "↗") : dx < 0 ? "↙" : "↘";
-};
+type BoardPiece = YutRoom["players"][number]["pieces"][number];
+const groupPieces = (room: YutRoom, pieces: BoardPiece[], piece: BoardPiece) =>
+  pieces.filter((candidate) => {
+    if (candidate.id === piece.id) return true;
+    if (
+      ["home", "finish"].includes(piece.node) ||
+      candidate.node !== piece.node
+    )
+      return false;
+    return room.rulesVersion === 2
+      ? Boolean(piece.stackId && candidate.stackId === piece.stackId)
+      : true;
+  });
 
 function MovingPawn({
   role,
   node,
   name,
+  pieceIds,
+  offset,
+  landed,
+  defeated,
+  showHome,
   selected,
   selectable,
   motion,
@@ -343,6 +358,11 @@ function MovingPawn({
   role: YutRole;
   node: YutNode;
   name: string;
+  pieceIds: string[];
+  offset: number;
+  landed: boolean;
+  defeated: boolean;
+  showHome: boolean;
   selected: boolean;
   selectable: boolean;
   motion?: PieceMotion;
@@ -370,11 +390,22 @@ function MovingPawn({
       );
       return () => window.clearTimeout(finishedTimer);
     }
-    // Tile traversal is game feedback. Reduced motion removes tilt and squash,
+    // Whole-frame artwork stays undeformed. Reduced motion lowers the hop,
     // while retaining each landing so the player can follow the chosen route.
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
+    const style = getComputedStyle(element);
+    const homeSide = pieceIds[0] === "1" ? -1 : 1;
+    const homeOffset =
+      motion.origin === "home"
+        ? (parseFloat(style.getPropertyValue("--yut-home-extra-gap")) || 0) *
+          homeSide
+        : 0;
+    const homeDrop =
+      motion.origin === "home"
+        ? parseFloat(style.getPropertyValue("--yut-home-drop")) || 0
+        : 0;
     const nodes = [motion.origin, ...motion.path];
     const steps = nodes.length - 1;
     if (!steps) return;
@@ -386,18 +417,23 @@ function MovingPawn({
         for (let index = 0; index < steps && active; index++) {
           const current = nodePosition(nodes[index]),
             next = nodePosition(nodes[index + 1]);
-          const tilt = reduced ? 0 : next[0] >= current[0] ? 5 : -5;
           // Mirror only the artwork. Vertical steps retain the last horizontal
           // heading, while every turn in a shortcut is resolved independently.
           if (Math.abs(next[0] - current[0]) > 0.01)
             setFacing(next[0] < current[0] ? "left" : "right");
           const previousAnimation = animation;
+          const startOffset =
+            index === 0 ? motion.originOffset + homeOffset : 0;
+          const endOffset = index === steps - 1 ? offset : 0;
+          const startDrop = index === 0 ? homeDrop : 0;
           animation = element.animate(
             [
               {
                 ...pointStyle(current),
                 offset: 0,
                 transform: "translate(-50%, -88%)",
+                marginLeft: `${startOffset}px`,
+                marginTop: `${startDrop}px`,
               },
               {
                 ...pointStyle([
@@ -405,19 +441,23 @@ function MovingPawn({
                   (current[1] + next[1]) / 2,
                 ]),
                 offset: 0.4,
-                transform: `translate(-50%, -88%) translateY(-${reduced ? 12 : 32}px) rotate(${tilt}deg)`,
+                transform: `translate(-50%, -88%) translateY(-${reduced ? 12 : 32}px)`,
+                marginLeft: `${(startOffset + endOffset) / 2}px`,
+                marginTop: `${startDrop / 2}px`,
               },
               {
                 ...pointStyle(next),
                 offset: 0.78,
-                transform: reduced
-                  ? "translate(-50%, -88%)"
-                  : "translate(-50%, -88%) scale(1.04,.96)",
+                transform: "translate(-50%, -88%)",
+                marginLeft: `${endOffset}px`,
+                marginTop: "0px",
               },
               {
                 ...pointStyle(next),
                 offset: 1,
                 transform: "translate(-50%, -88%)",
+                marginLeft: `${endOffset}px`,
+                marginTop: "0px",
               },
             ],
             {
@@ -439,7 +479,7 @@ function MovingPawn({
           arrival.current(motion.id);
           finishedTimer = window.setTimeout(
             () => complete.current(motion.id),
-            motion.kind === "capture" ? 1400 : 300,
+            motion.kind === "capture" ? 1400 : motion.boarding ? 700 : 300,
           );
         }
       } catch {
@@ -455,7 +495,11 @@ function MovingPawn({
     };
     // The stable event ID survives clock ticks and new room object identities.
   }, [motion?.id]);
-  if ((node === "home" || node === "finish") && !motion) return null;
+  if (
+    (node === "home" && !motion && !showHome) ||
+    (node === "finish" && !motion)
+  )
+    return null;
   return (
     <button
       ref={button}
@@ -468,21 +512,48 @@ function MovingPawn({
           ),
           "--piece-color": PROFESSIONS[role].color,
           "--reaction-delay": `${motion?.travelMs || 0}ms`,
+          marginLeft:
+            node === "home" && !motion && !defeated
+              ? `calc(${offset}px + var(--yut-home-extra-gap, 0px) * ${pieceIds[0] === "1" ? -1 : 1})`
+              : `${offset}px`,
+          marginTop:
+            node === "home" && !motion && !defeated
+              ? "var(--yut-home-drop, 0px)"
+              : undefined,
         } as React.CSSProperties
       }
       disabled={!selectable || Boolean(motion)}
       aria-pressed={selectable ? selected : undefined}
-      aria-label={`${name} ${PROFESSIONS[role].clan}, ${yutNodeLabel(node)}${selectable ? ", 선택" : ""}`}
+      aria-label={`${name} ${PROFESSIONS[role].clan} ${pieceIds.join("·")}번 말${pieceIds.length > 1 ? " 업힌 말" : ""}, ${yutNodeLabel(node)}${selectable ? ", 선택" : ""}`}
       onClick={onSelect}
       data-motion={motion?.kind || "idle"}
       data-motion-id={motion?.id}
       data-pawn-node={node}
+      data-piece-ids={pieceIds.join(",")}
     >
       <span className="yut-isometric-pawn" aria-hidden="true">
         <i className="yut-pawn-foot-shadow" />
         <span className="yut-pawn-body">
           <span className="yut-pawn-facing" data-facing={facing}>
-            <YutSprite role={role} />
+            <YutPawnArt
+              role={role}
+              carried={
+                motion
+                  ? motion.carried || (motion.boarding && landed)
+                  : pieceIds.length > 1
+              }
+              boarding={Boolean(motion?.boarding && landed)}
+              walking={Boolean(motion && !landed && motion.kind !== "caught")}
+              pose={
+                defeated
+                  ? "lose"
+                  : motion?.kind === "caught"
+                    ? "caught"
+                    : motion?.kind === "win" && landed
+                      ? "win"
+                      : "idle"
+              }
+            />
           </span>
         </span>
         {motion && (
@@ -495,6 +566,11 @@ function MovingPawn({
                   ? "!"
                   : "♪"}
           </span>
+        )}
+      </span>
+      <span className="yut-pawn-number" aria-hidden="true">
+        {(motion?.boarding && landed ? motion.joinedPieceIds : pieceIds).join(
+          "·",
         )}
       </span>
     </button>
@@ -533,6 +609,7 @@ export default function YutBoard({
   const callback = useRef(onMotionChange);
   callback.current = onMotionChange;
   const [motions, setMotions] = useState<Record<string, PieceMotion>>({});
+  const [landedMotions, setLandedMotions] = useState<Set<string>>(new Set());
   const [capture, setCapture] = useState<{
     id: string;
     players: YutCaughtPlayer[];
@@ -544,11 +621,13 @@ export default function YutBoard({
     if (!activeMotions.current.delete(id) || activeMotions.current.size) return;
     window.clearTimeout(motionTimer.current);
     setMotions({});
+    setLandedMotions(new Set());
     setCapture(null);
     captureGroup.current = null;
     callback.current?.(false);
   }, []);
   const arrive = useCallback((id: string) => {
+    setLandedMotions((previous) => new Set(previous).add(id));
     if (captureGroup.current?.id === id && !document.hidden)
       setCapture(captureGroup.current);
   }, []);
@@ -563,6 +642,7 @@ export default function YutBoard({
       window.clearTimeout(motionTimer.current);
       activeMotions.current.clear();
       setMotions({});
+      setLandedMotions(new Set());
       setCapture(null);
       captureGroup.current = null;
       callback.current?.(false);
@@ -576,18 +656,64 @@ export default function YutBoard({
     ) {
       const eventMove = room.lastEvent?.move;
       for (const player of room.players.filter((entry) => entry.active)) {
+        const oldPlayer = before.players.find(
+          (entry) => entry.uid === player.uid,
+        );
+        if (!oldPlayer) continue;
+        const included = new Set<string>();
         for (const piece of player.pieces) {
-          const old = before.players
-            .find((entry) => entry.uid === player.uid)
-            ?.pieces.find((entry) => entry.id === piece.id);
-          if (!old || old.node === piece.node) continue;
+          const old = oldPlayer.pieces.find((entry) => entry.id === piece.id);
+          if (!old || old.node === piece.node || included.has(piece.id))
+            continue;
           const caught = piece.node === "home";
+          const pieceIds = (
+            !caught &&
+            eventMove?.uid === player.uid &&
+            eventMove.movingPieceIds?.length
+              ? eventMove.movingPieceIds
+              : groupPieces(before, oldPlayer.pieces, old).map(
+                  (entry) => entry.id,
+                )
+          )
+            .slice()
+            .sort();
+          pieceIds.forEach((id) => included.add(id));
+          const joinedPieceIds = groupPieces(room, player.pieces, piece)
+            .map((entry) => entry.id)
+            .sort();
+          const oldPeers = oldPlayer.pieces.filter(
+            (entry) =>
+              entry.node !== "finish" &&
+              nodePosition(entry.node).join(",") ===
+                nodePosition(old.node).join(","),
+          );
+          const oldGroups = [
+            ...new Set(
+              oldPeers.map(
+                (entry) =>
+                  groupPieces(before, oldPeers, entry)
+                    .map((member) => member.id)
+                    .sort()[0],
+              ),
+            ),
+          ];
+          const originOffset =
+            (oldGroups.indexOf(pieceIds[0]) - (oldGroups.length - 1) / 2) * 44;
           const path =
             !caught && eventMove?.uid === player.uid && eventMove.path?.length
               ? eventMove.path
               : [piece.node];
-          next[`${player.uid}-${piece.id}`] = {
-            id: `${room.id}:${room.revision}:${player.uid}:${piece.id}`,
+          next[`${player.uid}-${pieceIds[0]}`] = {
+            id: `${room.id}:${room.revision}:${player.uid}:${pieceIds.join(",")}`,
+            uid: player.uid,
+            pieceIds,
+            joinedPieceIds,
+            carried: pieceIds.length > 1,
+            boarding:
+              !caught &&
+              Boolean(eventMove?.stacked) &&
+              joinedPieceIds.length > pieceIds.length,
+            originOffset,
             origin: old.node,
             path,
             kind: caught
@@ -613,18 +739,28 @@ export default function YutBoard({
     // a move already on screen. Only a new move or leaving the board replaces it.
     if (!active.length) return;
     window.clearTimeout(motionTimer.current);
+    setLandedMotions(new Set());
     setCapture(null);
     const attacker = active.find((motion) => motion.kind === "capture");
     const caught = room.players.filter((player) =>
-      player.pieces.some(
-        (piece) => next[`${player.uid}-${piece.id}`]?.kind === "caught",
+      active.some(
+        (motion) => motion.uid === player.uid && motion.kind === "caught",
       ),
     );
     captureGroup.current =
       attacker && caught.length
         ? {
             id: attacker.id,
-            players: caught.map(({ uid, name, role }) => ({ uid, name, role })),
+            players: caught.map(({ uid, name, role }) => ({
+              uid,
+              name,
+              role,
+              pieceIds: active
+                .filter(
+                  (motion) => motion.uid === uid && motion.kind === "caught",
+                )
+                .flatMap((motion) => motion.pieceIds),
+            })),
           }
         : null;
     activeMotions.current = new Set(active.map((motion) => motion.id));
@@ -634,6 +770,7 @@ export default function YutBoard({
       () => {
         activeMotions.current.clear();
         setMotions({});
+        setLandedMotions(new Set());
         setCapture(null);
         captureGroup.current = null;
         callback.current?.(false);
@@ -651,6 +788,7 @@ export default function YutBoard({
       captureGroup.current = null;
       setCapture(null);
       setMotions({});
+      setLandedMotions(new Set());
       callback.current?.(false);
     };
     document.addEventListener("visibilitychange", hide);
@@ -678,6 +816,49 @@ export default function YutBoard({
             : [selectedMove.targetNode]),
         ]
       : [];
+  const pawns = room.players
+    .filter((player) => player.active)
+    .flatMap((player) => {
+      const movingGroups = Object.values(motions).filter(
+        (motion) => motion.uid === player.uid,
+      );
+      const hiddenIds = new Set(
+        movingGroups.flatMap((motion) =>
+          motion.boarding && landedMotions.has(motion.id)
+            ? motion.joinedPieceIds
+            : motion.pieceIds,
+        ),
+      );
+      const remaining = player.pieces.filter((item) => !hiddenIds.has(item.id));
+      const defeated =
+        room.status === "finished" && player.uid !== room.winnerUid;
+      const used = new Set<string>();
+      const groups = remaining.flatMap((item) => {
+        if (used.has(item.id) || item.node === "finish") return [];
+        const grouped = defeated ? [item] : groupPieces(room, remaining, item);
+        grouped.forEach((entry) => used.add(entry.id));
+        const ids = grouped.map((entry) => entry.id).sort();
+        if (item.node === "home" && !defeated && player.uid !== uid) return [];
+        return [
+          {
+            player,
+            ids,
+            node: item.node,
+            motion: undefined as PieceMotion | undefined,
+          },
+        ];
+      });
+      return [
+        ...groups,
+        ...movingGroups.map((motion) => ({
+          player,
+          ids: motion.pieceIds,
+          node: player.pieces.find((item) => item.id === motion.pieceIds[0])!
+            .node,
+          motion,
+        })),
+      ];
+    });
   return (
     <div className="yut-isometric-board-wrap">
       <div
@@ -686,13 +867,25 @@ export default function YutBoard({
         aria-label="윷판"
       >
         <BoardSurface prefix={prefix} />
-        {previewPath.length > 1 && (
+        {(previewPath.length > 1 || destinations.length > 0) && (
           <svg
             className="yut-route-preview"
             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
             preserveAspectRatio="none"
             aria-hidden="true"
           >
+            {destinations.map((move) => (
+              <polyline
+                key={`${move.route}-${move.targetNode}`}
+                className="yut-route-available"
+                points={[
+                  piece?.node || "home",
+                  ...(move.path?.length ? move.path : [move.targetNode]),
+                ]
+                  .map((node) => nodePosition(node).join(","))
+                  .join(" ")}
+              />
+            ))}
             <polyline
               className="yut-route-glow"
               points={previewPath
@@ -717,30 +910,59 @@ export default function YutBoard({
           </svg>
         )}
         {children && <div className="yut-board-center-overlay">{children}</div>}
-        {room.players
-          .filter((player) => player.active)
-          .flatMap((player) =>
-            player.pieces.map((item) => (
-              <MovingPawn
-                key={`${player.uid}-${item.id}`}
-                role={player.role}
-                node={item.node}
-                name={player.name}
-                selected={player.uid === uid && item.id === selectedPiece}
-                selectable={
-                  !disabled &&
-                  revealMoves &&
-                  player.uid === uid &&
-                  moves.some((move) => move.pieceId === item.id)
-                }
-                motion={motions[`${player.uid}-${item.id}`]}
-                onSelect={() => onSelectPiece(item.id)}
-                onMotionComplete={completeMotion}
-                onArrive={arrive}
-                onStep={onStep}
-              />
-            )),
-          )}
+        {pawns.map(({ player, ids, node, motion }) => {
+          const displayPosition = nodePosition(
+            motion?.kind === "caught" ? motion.origin : node,
+          ).join(",");
+          const peers = pawns.filter(
+            (pawn) =>
+              nodePosition(
+                pawn.motion?.kind === "caught" ? pawn.motion.origin : pawn.node,
+              ).join(",") === displayPosition &&
+              !pawn.motion?.boarding &&
+              pawn.motion?.kind !== "capture",
+          );
+          const peerIndex = peers.findIndex(
+            (pawn) => pawn.player.uid === player.uid && pawn.ids[0] === ids[0],
+          );
+          const offset =
+            motion?.kind === "win" ||
+            motion?.kind === "capture" ||
+            motion?.boarding
+              ? 0
+              : peers.some((pawn) => pawn.motion?.kind === "win")
+                ? (peerIndex % 2 === 0 ? -1 : 1) *
+                  (Math.floor(peerIndex / 2) + 1) *
+                  44
+                : (peerIndex - (peers.length - 1) / 2) * 44;
+          return (
+            <MovingPawn
+              key={`${player.uid}-${ids[0]}`}
+              role={player.role}
+              node={node}
+              name={player.name}
+              pieceIds={ids}
+              offset={offset}
+              landed={Boolean(motion && landedMotions.has(motion.id))}
+              defeated={
+                room.status === "finished" && player.uid !== room.winnerUid
+              }
+              showHome={player.uid === uid || room.status === "finished"}
+              selected={player.uid === uid && ids.includes(selectedPiece)}
+              selectable={
+                !disabled &&
+                revealMoves &&
+                player.uid === uid &&
+                moves.some((move) => ids.includes(move.pieceId))
+              }
+              motion={motion}
+              onSelect={() => onSelectPiece(ids[0])}
+              onMotionComplete={completeMotion}
+              onArrive={arrive}
+              onStep={onStep}
+            />
+          );
+        })}
         {capture && (
           <YutCaptureReaction key={capture.id} players={capture.players} />
         )}
@@ -749,24 +971,38 @@ export default function YutBoard({
             key={`${move.route}-${move.targetNode}`}
             type="button"
             className={`yut-destination yut-isometric-destination${selectedMove?.route === move.route ? " is-previewed" : ""}`}
-            style={pointStyle(nodePosition(move.targetNode))}
+            style={
+              {
+                ...pointStyle(nodePosition(move.targetNode)),
+                "--destination-width":
+                  move.targetNode.startsWith("o") ||
+                  move.targetNode === "finish"
+                    ? "12%"
+                    : "7.5%",
+                "--destination-height":
+                  move.targetNode.startsWith("o") ||
+                  move.targetNode === "finish"
+                    ? "11%"
+                    : "7%",
+              } as React.CSSProperties
+            }
             disabled={disabled}
             onClick={() => onMove(move)}
             aria-pressed={selectedMove?.route === move.route}
-            aria-label={`${move.route === "outer" ? "바깥길" : "지름길"}, ${yutNodeLabel(move.targetNode)} 경로 선택`}
+            aria-label={`${move.route === "outer" ? "바깥길" : "지름길"}, ${yutNodeLabel(move.targetNode)} 발판 선택`}
           >
-            <span
-              className="yut-isometric-destination-symbol"
+            <svg
+              viewBox="0 0 100 70"
+              preserveAspectRatio="none"
               aria-hidden="true"
             >
-              {directionArrow(
-                piece?.node || "home",
-                move.path?.[0] || move.targetNode,
+              {move.targetNode.startsWith("o") ||
+              move.targetNode === "finish" ? (
+                <path d="M50 3 97 35 50 67 3 35Z" />
+              ) : (
+                <ellipse cx="50" cy="35" rx="47" ry="32" />
               )}
-            </span>
-            <span className="yut-isometric-destination-label">
-              {move.route === "outer" ? "바깥길" : "지름길"}
-            </span>
+            </svg>
           </button>
         ))}
       </div>

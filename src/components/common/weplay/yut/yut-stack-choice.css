@@ -1,0 +1,70 @@
+.yut-dialog.yut-stack-choice {
+  width: min(540px, calc(100vw - 32px));
+}
+.yut-stack-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 8px 0 20px;
+}
+.yut-dialog.yut-stack-choice .yut-stack-option {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px;
+  border: 2px solid #92703e;
+  border-radius: 12px;
+  color: #3b2819;
+  background: #e9d5a7;
+  box-shadow: 0 4px 0 #493321;
+  font:
+    800 18px/1.4 "Pretendard",
+    sans-serif;
+}
+.yut-stack-option-picture {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.yut-dialog.yut-stack-choice .yut-stack-option.is-selected {
+  border-color: #faf0bd;
+  outline: 3px solid #5b6c3e;
+  outline-offset: 1px;
+  background: #f5e5bd;
+}
+.yut-stack-option.is-selected strong::before {
+  content: "✓ ";
+}
+.yut-dialog.yut-stack-choice .yut-stack-option:focus-visible {
+  outline: 3px solid #345e48;
+  outline-offset: 4px;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .yut-dialog.yut-stack-choice {
+    width: min(440px, calc(100vw - 32px));
+    max-height: calc(100svh - 20px);
+    padding: 12px 16px;
+  }
+  .yut-stack-options {
+    gap: 12px;
+    margin: 4px 0 12px;
+  }
+  .yut-dialog.yut-stack-choice .yut-stack-option {
+    padding: 8px;
+    gap: 4px;
+    font-size: 16px;
+  }
+  .yut-stack-option-picture {
+    width: min(100%, 114px);
+  }
+  .yut-stack-choice .yut-dialog-top {
+    margin-bottom: 8px;
+  }
+  .yut-stack-choice .yut-dialog-actions {
+    margin-top: 12px;
+  }
+}

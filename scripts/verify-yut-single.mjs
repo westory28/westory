@@ -39,6 +39,7 @@ const randomFor = (seed) => {
 const profiles = new Set();
 const winners = new Set();
 let played = 0;
+let stackedMoves = 0;
 for (let seed = 1; seed <= 60; seed++) {
   const playerCount = 2 + ((seed - 1) % 3);
   const random = randomFor(seed),
@@ -64,8 +65,8 @@ for (let seed = 1; seed <= 60; seed++) {
     "bots cannot act for the human",
   );
   assert.ok(
-    room.players.every((player) => player.pieces.length === 1),
-    "new game uses one pawn per player",
+    room.players.every((player) => player.pieces.length === 2),
+    "new game uses two pawns per player",
   );
   let actions = 0,
     actionTime = start;
@@ -112,6 +113,7 @@ for (let seed = 1; seed <= 60; seed++) {
         "bot does not mutate previous state",
       );
     }
+    if (room.lastEvent.move?.stacked) stackedMoves++;
   }
   assert.equal(room.status, "finished", `seed ${seed} completes a full match`);
   assert.ok(
@@ -129,6 +131,10 @@ for (let seed = 1; seed <= 60; seed++) {
 }
 assert.ok(profiles.size > 1, "strategy assignments vary across games");
 assert.ok(winners.size > 1, "different opponents can win");
+assert.ok(
+  stackedMoves > 0,
+  "bot strategies explicitly choose stacking in actual matches",
+);
 const preview = createYutPreview({
   mode: "preview",
   random: randomFor(88),
@@ -180,30 +186,29 @@ const powerRoom = createYutPreview({
 });
 const low = previewYutCommand(
   powerRoom,
-  { action: "throw", power: 0.15 },
+  { action: "throw", power: 0.12 },
   YUT_PREVIEW_UID,
-  randomFor(777),
+  () => 0.5,
   powerRoom.phaseStartsAtMs + 1,
 );
 const high = previewYutCommand(
   powerRoom,
-  { action: "throw", power: 0.95 },
+  { action: "throw", power: 1 },
   YUT_PREVIEW_UID,
-  randomFor(777),
+  () => 0.5,
   powerRoom.phaseStartsAtMs + 1,
 );
-assert.deepEqual(
-  low.pendingThrow,
-  high.pendingThrow,
-  "visual power cannot influence the result",
-);
-assert.equal(low.players[0].lastThrow.power, 0.15);
-assert.equal(high.players[0].lastThrow.power, 0.95);
+assert.equal(low.pendingThrow.value, 2);
+assert.equal(high.pendingThrow.value, 4);
+assert.equal(low.pendingThrow.sticks.filter(Boolean).length, 2);
+assert.equal(high.pendingThrow.sticks.filter(Boolean).length, 4);
+assert.equal(low.players[0].lastThrow.power, 0.12);
+assert.equal(high.players[0].lastThrow.power, 1);
 assert.equal(
   addYutEmote(preview, YUT_PREVIEW_UID, "angry", "local_angry_123456", 500020)
     .emotes[YUT_PREVIEW_UID].kind,
   "angry",
 );
 console.log(
-  "PASS: persisted visual power without result bias; seventh angry emote.",
+  "PASS: power uses shared weighted outcomes and exact result faces; seventh angry emote.",
 );
