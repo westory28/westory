@@ -34,6 +34,31 @@ test('new matches use one piece and independent 5-second throw / 25-second move 
   assert.equal(room.turnDeadlineMs, moveAt + 1500 + 5000);
   assert.deepEqual(room.lastEvent.move, { uid: 'a', pieceId: '1', route: 'outer', path: ['o1'], capturedUids: [] });
 });
+test('captures reserve 2700ms for movement and reaction, then preserve the full configured throw time', () => {
+  for (const throwSeconds of [3, 5, 15]) {
+    for (let value = 1; value <= 5; value += 1) {
+      let room = game();
+      room.throwSeconds = throwSeconds;
+      room.players[0].pieces[0].node = 'o1';
+      room.players[1].pieces[0].node = `o${value + 1}`;
+      room = roll(room, value);
+      const moveAt = room.phaseStartsAtMs;
+      room = coreMoveYut(room, 'a', '1', 'outer', moveAt);
+      assert.equal(room.lastEvent.kind, 'capture');
+      assert.equal(room.turnUid, 'a');
+      assert.equal(room.extraThrows, value >= 4 ? 1 : 0);
+      assert.equal(room.phaseStartsAtMs, moveAt + 2700);
+      assert.equal(room.turnDeadlineMs, moveAt + 2700 + throwSeconds * 1000);
+      assert.throws(() => throwYut(room, 'a', [true, false, false, false], room.phaseStartsAtMs - 1), /연출/);
+      assert.equal(throwYut(room, 'a', [true, false, false, false], room.phaseStartsAtMs).phase, 'move');
+      assert.throws(() => skipYutTurn(room, room.turnDeadlineMs - 1));
+      const skipped = skipYutTurn(room, room.turnDeadlineMs);
+      assert.equal(skipped.turnUid, 'b');
+      assert.equal(skipped.phaseStartsAtMs, room.turnDeadlineMs + 1500);
+    }
+  }
+});
+
 test('host controls empty waiting seats; role seats stay fixed through leave and rejoin', () => {
   const original = createYutRoom({ id: 'r', code: 'ABC234', classId: '', classLabel: '', host: { uid: 'a', name: 'a' }, nowMs: now });
   assert.throws(() => setYutSeat(original, 'b', 1, true, now));
@@ -135,6 +160,7 @@ test('stack moves and captures all opposing stacked pieces; yut plus capture giv
   assert.equal(room.turnUid, 'a'); assert.equal(room.extraThrows, 1);
   room = moveYut(roll(room, 1), 'a', '1', 'outer', now + 3);
   assert.equal(room.turnUid, 'a'); assert.equal(room.extraThrows, 0);
+  assert.equal(room.phaseStartsAtMs, room.lastEvent.atMs + 1500);
   room = moveYut(roll(room, 1), 'a', '1', 'outer', now + 4);
   assert.equal(room.turnUid, 'b');
 });

@@ -33,6 +33,8 @@ import type useYutMusic from "../useYutMusic";
 import { PROFESSIONS, YutSprite, YutIcon } from "./YutArt";
 import YutBoard, { yutNodeLabel } from "./YutBoard";
 import YutThrow3D from "./YutThrow3D";
+import { YutTurnGauge } from "./YutReactions";
+import YutVictoryCast from "./YutVictoryCast";
 import WeplayGameLoading from "../WeplayGameLoading";
 import useYutSoundEffects from "../useYutSoundEffects";
 import "@fontsource/noto-serif-kr/600.css";
@@ -94,9 +96,7 @@ export function YutVictory({
           />
         ))}
       </div>
-      <div className="yut-victory-emblem" aria-hidden="true">
-        {winner && <YutSprite role={winner.role} pose="win" />}
-      </div>
+      <YutVictoryCast room={room} />
       <span className="yut-victory-ribbon">이번 판의 우승</span>
       <h2>{winner?.name || "참가자"}</h2>
       <strong className="yut-victory-congratulation">축하합니다!</strong>
@@ -491,6 +491,16 @@ export default function YutGame({
 }) {
   const { config, currentUser } = useAuth();
   const sounds = useYutSoundEffects();
+  useEffect(() => {
+    // Warm the two tiny reaction atlases before their brief first appearance.
+    for (const file of [
+      "characters-surprised.webp",
+      "characters-defeated.webp",
+    ]) {
+      const image = new Image();
+      image.src = `${import.meta.env.BASE_URL}assets/weplay/yut/${file}`;
+    }
+  }, []);
   useEffect(() => {
     // Load before the first result exists, so its short reveal never swaps fonts.
     void document.fonts
@@ -1157,6 +1167,23 @@ export default function YutGame({
       (room.lastEvent.move &&
         serverClock < room.lastEvent.atMs + YUT_MOVE_ANIMATION_MS)),
   );
+  const applauded = useRef(new Set<string>());
+  useEffect(() => {
+    if (!room || room.status !== "finished" || !room.winnerUid || finishing)
+      return;
+    const key = `${room.id}:${room.winnerUid}`;
+    if (applauded.current.has(key)) return;
+    applauded.current.add(key);
+    if (!hidden && !portrait) sounds.applause();
+  }, [
+    room?.id,
+    room?.status,
+    room?.winnerUid,
+    finishing,
+    hidden,
+    portrait,
+    sounds.applause,
+  ]);
   useEffect(() => {
     if (
       !room ||
@@ -1360,19 +1387,6 @@ export default function YutGame({
                         ? "내 차례"
                         : `${displayTurn?.name || "친구"}의 차례`}
                     </span>
-                    <strong
-                      className={`yut-topbar-clock ${seconds <= 3 ? "is-low" : ""}`}
-                      aria-label={
-                        settling || moving || phaseWaiting
-                          ? "연출 중"
-                          : `남은 시간 ${seconds}초`
-                      }
-                    >
-                      {settling || moving || phaseWaiting ? "—" : seconds}
-                      <small>
-                        {settling || moving || phaseWaiting ? "" : "초"}
-                      </small>
-                    </strong>
                   </>
                 )}
               </div>
@@ -1925,6 +1939,24 @@ export default function YutGame({
                     !phaseWaiting
                   }
                 >
+                  {room.status === "playing" &&
+                    !settling &&
+                    !moving &&
+                    !phaseWaiting &&
+                    !busy && (
+                      <YutTurnGauge
+                        remainingMs={Math.max(
+                          0,
+                          room.turnDeadlineMs - serverClock,
+                        )}
+                        totalMs={
+                          (room.phase === "throw"
+                            ? room.throwSeconds || 5
+                            : room.moveSeconds || 25) * 1000
+                        }
+                        phase={room.phase}
+                      />
+                    )}
                   {room.status !== "finished" || settling || finishing ? (
                     <>
                       {(settling || pending === "throw") && (

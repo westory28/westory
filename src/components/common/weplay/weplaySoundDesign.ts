@@ -57,7 +57,12 @@ export function renderWeplaySound(
   cue: WeplaySoundCue,
   sampleRate = SAMPLE_RATE,
 ) {
-  if (cue === "yut-throw" || cue === "yut-impact" || cue === "yut-step")
+  if (
+    cue === "yut-throw" ||
+    cue === "yut-impact" ||
+    cue === "yut-step" ||
+    cue === "yut-applause"
+  )
     return renderYutSound(cue, sampleRate);
   const duration = cue === "word" ? 0.23 : cue === "cannon" ? 1.12 : 2.44;
   const samples = new Float32Array(Math.round(duration * sampleRate));

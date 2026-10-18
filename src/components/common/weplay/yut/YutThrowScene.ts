@@ -25,20 +25,29 @@ export function yutThrowPlan(index: number, power = 0.65, throwKey = "") {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 4294967296;
   };
-  const strength = Number.isFinite(power) ? clamp(power) : 0.65;
-  const spread = 0.84 + strength * 0.38;
+  // The gauge's shortest press is 0.12. Use its whole playable range so a tap
+  // is a low forward toss, while a full hold is a clearly higher, wider throw.
+  const strength = clamp(
+    ((Number.isFinite(power) ? power : 0.65) - 0.12) / 0.88,
+  );
+  const spread = 0.69 + strength * 0.77;
   return {
+    strength,
     x: ([-1.2, -0.4, 0.4, 1.2][index] + (random() - 0.5) * 0.13) * spread,
-    z: ([-0.24, 0.3, -0.3, 0.25][index] + (random() - 0.5) * 0.22) * spread,
-    yaw: (index % 2 ? 1 : -1) * (0.1 + random() * 0.17),
-    delay: random() * 0.045,
-    flight: 0.83 + random() * 0.17 + strength * 0.025,
-    lift: 0.55 + strength * 0.76 + random() * 0.14,
-    start: (random() - 0.5) * 0.44,
-    pitch: (random() - 0.5) * 0.28,
-    curve: (random() - 0.5) * (0.12 + strength * 0.18),
+    z:
+      ([-0.24, 0.3, -0.3, 0.25][index] + (random() - 0.5) * 0.22) *
+        (0.7 + strength * 0.6) +
+      0.78 -
+      strength * 1.02,
+    yaw: (index % 2 ? 1 : -1) * (0.055 + random() * 0.07 + strength * 0.16),
+    delay: random() * (0.02 + strength * 0.035),
+    flight: 0.63 + random() * 0.09 + strength * 0.31,
+    lift: 0.18 + strength * 1.72 + random() * (0.06 + strength * 0.08),
+    start: (random() - 0.5) * (0.18 + strength * 0.3),
+    pitch: (random() - 0.5) * (0.08 + strength * 0.32),
+    curve: (random() - 0.5) * (0.04 + strength * 0.42),
     spin: index % 2 ? -1 : 1,
-    settle: 0.23 + random() * 0.055,
+    settle: 0.18 + random() * 0.035 + strength * 0.08,
   };
 }
 
@@ -51,7 +60,7 @@ export function sampleYutPose(
   throwKey = "",
 ) {
   const end = yutThrowPlan(index, power, throwKey),
-    strength = clamp(power);
+    strength = end.strength;
   const progress = clamp((time - end.delay) / end.flight);
   const targetRoll = flat ? Math.PI : 0;
   if (progress >= 1) {
@@ -68,19 +77,25 @@ export function sampleYutPose(
       roll: targetRoll + Math.sin(settle * TAU) * 0.075 * envelope,
     };
   }
-  const arc = 4 * progress * (1 - progress);
+  const arcProgress = progress ** (0.72 + strength * 0.28);
+  const arc = 4 * arcProgress * (1 - arcProgress);
+  const spreadProgress =
+    progress + Math.sin(progress * Math.PI) * strength * 0.18;
   // One turn at most about the stick's long axis, with a small independent tilt.
   const terminalRoll = flat ? Math.PI * end.spin : TAU * end.spin;
   return {
     x:
-      (index - 1.5) * 0.14 * (1 - progress) +
-      end.x * progress +
+      (index - 1.5) * 0.14 * (1 - spreadProgress) +
+      end.x * spreadProgress +
       arc * end.curve,
     y: 0.122 + arc * end.lift,
     z: 1.55 * (1 - progress) + end.z * progress,
     pitch: -0.12 * (1 - progress) + Math.sin(progress * Math.PI) * end.pitch,
     yaw: end.yaw + end.start * (1 - progress),
-    roll: end.start + (terminalRoll - end.start) * smooth(progress),
+    roll:
+      end.start +
+      (terminalRoll - end.start) *
+        (progress * (1 - strength) + smooth(progress) * strength),
   };
 }
 

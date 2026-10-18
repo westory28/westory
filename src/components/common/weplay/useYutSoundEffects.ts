@@ -17,5 +17,6 @@ export default function useYutSoundEffects() {
     (index = 0) => play("yut-step", [1, 1.06, 1.12, 1.06, 1.16][index % 5]),
     [play],
   );
-  return { throw: toss, impact, step, unlock };
+  const applause = useCallback(() => play("yut-applause"), [play]);
+  return { throw: toss, impact, step, applause, unlock };
 }

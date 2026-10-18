@@ -1,0 +1,149 @@
+.yut-victory-cast {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 172px;
+  grid-column: 1 / -1;
+  flex: 0 0 auto;
+  --defeated-size: 72px;
+}
+.yut-victory-cast-winner {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 50%;
+  width: 112px;
+  height: 112px;
+  transform: translateX(-50%);
+}
+.yut-victory-cast-winner-figure {
+  position: relative;
+  animation: yut-award-hops 2200ms ease-in-out both;
+}
+.yut-victory-cast-winner .yut-sprite {
+  width: 112px;
+  height: 112px;
+  animation: none !important;
+  transform: none !important;
+}
+.yut-victory-cast-winner-shadow {
+  position: absolute;
+  left: 28%;
+  right: 28%;
+  bottom: 3%;
+  height: 8%;
+  border-radius: 50%;
+  background: #1c140c80;
+}
+.yut-victory-cast-others {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 8px;
+}
+.yut-victory-cast-other {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 80px;
+  min-width: 0;
+}
+.yut-defeated-sprite {
+  display: block;
+  width: var(--defeated-size);
+  height: var(--defeated-size);
+  background-repeat: no-repeat;
+  background-size: 200% 200%;
+  image-rendering: pixelated;
+}
+.yut-defeated-sprite--sa {
+  background-position: left top;
+}
+.yut-defeated-sprite--nong {
+  background-position: right top;
+}
+.yut-defeated-sprite--gong {
+  background-position: left bottom;
+  transform: translateY(calc(var(--defeated-size) * 0.16));
+}
+.yut-defeated-sprite--sang {
+  background-position: right bottom;
+  transform: translateY(calc(var(--defeated-size) * 0.16));
+}
+.yut-victory-cast-name {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #e9d7ad;
+  font:
+    600 12px/18px "Pretendard",
+    "Noto Sans KR",
+    sans-serif;
+}
+@keyframes yut-award-hops {
+  0%,
+  22%,
+  46%,
+  70%,
+  92%,
+  100% {
+    transform: translateY(0);
+  }
+  12% {
+    transform: translateY(-22px);
+  }
+  36% {
+    transform: translateY(-30px);
+  }
+  60% {
+    transform: translateY(-22px);
+  }
+  82% {
+    transform: translateY(-14px);
+  }
+}
+@keyframes yut-award-small-hops {
+  0%,
+  35%,
+  65%,
+  100% {
+    transform: translateY(0);
+  }
+  25%,
+  55% {
+    transform: translateY(-6px);
+  }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .yut-victory-cast {
+    height: 112px;
+    --defeated-size: 52px;
+  }
+  .yut-victory-cast-winner {
+    top: -6px;
+    width: 76px;
+    height: 76px;
+  }
+  .yut-victory-cast-winner .yut-sprite {
+    width: 76px;
+    height: 76px;
+  }
+  .yut-victory-cast-other {
+    width: 60px;
+  }
+  .yut-victory-cast-name {
+    line-height: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yut-game .yut-victory .yut-victory-cast-winner-figure {
+    animation: yut-award-small-hops 2200ms steps(1, end) both !important;
+  }
+}
+.yut-game[data-motion-paused="true"] .yut-victory-cast-winner-figure {
+  animation-play-state: paused !important;
+}

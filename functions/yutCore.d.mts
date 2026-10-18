@@ -23,6 +23,7 @@ export interface YutMove { pieceId: string; route: YutRoute; targetNode: YutNode
 export const YUT_TURN_MS: number;
 export const YUT_THROW_ANIMATION_MS: number;
 export const YUT_MOVE_ANIMATION_MS: number;
+export const YUT_CAPTURE_ANIMATION_MS: number;
 export const YUT_START_ANIMATION_MS: number;
 export const YUT_ROOM_MS: number;
 export const YUT_ROLES: YutRole[];

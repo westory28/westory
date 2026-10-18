@@ -1,0 +1,168 @@
+.yut-pawn-facing {
+  position: absolute;
+  inset: 0;
+}
+.yut-pawn-facing[data-facing="left"] {
+  transform: scaleX(-1);
+}
+
+.yut-capture-reaction {
+  position: absolute;
+  z-index: 20;
+  top: 48%;
+  left: 50%;
+  width: min(260px, 45%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  text-align: center;
+  filter: drop-shadow(0 7px 7px #17140ee6);
+}
+.yut-capture-burst {
+  position: relative;
+  aspect-ratio: 280 / 230;
+  animation: yut-capture-pop 160ms steps(2, end) both;
+}
+.yut-capture-burst > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.yut-capture-burst path {
+  fill: #f3deb0;
+  stroke: #493021;
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+.yut-capture-burst > strong {
+  position: absolute;
+  z-index: 1;
+  top: 4%;
+  right: 16%;
+  color: #7f3525;
+  font:
+    600 64px/0.9 "Yut Brush",
+    "Noto Serif KR",
+    serif;
+  text-shadow: 1px 2px #fff1c8;
+}
+.yut-capture-portraits {
+  position: absolute;
+  inset: 18% 18% 13%;
+  display: flex;
+  align-items: end;
+}
+.yut-capture-portrait {
+  flex: 1;
+  min-width: 0;
+  aspect-ratio: 1;
+  background-repeat: no-repeat;
+  background-size: 200% 200%;
+  image-rendering: pixelated;
+}
+.yut-reaction-role--sa {
+  background-position: 0 0;
+}
+.yut-reaction-role--nong {
+  background-position: 100% 0;
+}
+.yut-reaction-role--gong {
+  background-position: 0 100%;
+}
+.yut-reaction-role--sang {
+  background-position: 100% 100%;
+}
+.yut-capture-name {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: -3px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: #39291f;
+  color: #fff1cf;
+  font-size: 14px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.yut-turn-gauge {
+  position: absolute;
+  z-index: 9;
+  top: 47%;
+  left: 50%;
+  width: clamp(200px, 26vw, 260px);
+  max-width: 70%;
+  transform: translate(-50%, -50%);
+  padding: 8px 12px 12px;
+  border: 1px solid #bfa16a;
+  border-radius: 12px;
+  background: #241d16ed;
+  color: #fff1cf;
+  box-shadow: 0 5px 12px #0e130ecc;
+  pointer-events: none;
+}
+.yut-turn-gauge-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+.yut-turn-gauge-label strong {
+  font-size: 22px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.yut-turn-gauge-label small {
+  font-size: 12px;
+  margin-left: 4px;
+}
+.yut-turn-gauge-track {
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid #ad8c51;
+  border-radius: 6px;
+  background: #0f140f;
+}
+.yut-turn-gauge-track i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: linear-gradient(#f2d898, #c49342);
+  transition: transform 250ms linear;
+}
+.yut-turn-gauge.is-low .yut-turn-gauge-track i {
+  background: #d58457;
+}
+@keyframes yut-capture-pop {
+  from {
+    transform: scale(0.85);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@media (max-height: 540px) and (orientation: landscape) {
+  .yut-capture-reaction {
+    width: 200px;
+    max-width: 40%;
+  }
+  .yut-capture-burst > strong {
+    font-size: 52px;
+  }
+  .yut-turn-gauge {
+    width: 200px;
+    padding: 5px 10px 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yut-capture-burst {
+    animation: none;
+  }
+  .yut-turn-gauge-track i {
+    transition: none;
+  }
+}

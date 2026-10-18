@@ -182,14 +182,18 @@ export default function YutThrow3D({
                 style={
                   {
                     "--throw-play-state": hidden ? "paused" : "running",
-                    "--throw-apex": `${plan.lift * 34}%`,
+                    "--throw-apex": `${plan.lift * 28}%`,
+                    "--stick-flight-name":
+                      plan.strength < 0.35
+                        ? "yut-fallback-low-flight"
+                        : "yut-fallback-flight",
                     "--stick-delay": `${plan.delay * 1000}ms`,
                     "--stick-flight": `${plan.flight * 1000}ms`,
                     "--stick-settle": `${plan.settle * 1000}ms`,
                     "--stick-contact": `${(plan.delay + plan.flight) * 1000}ms`,
                     "--stick-land-x": `${50 + plan.x * 24}%`,
                     "--stick-land-y": `${53 + plan.z * 26}%`,
-                    "--stick-mid-x": `${50 + plan.x * 12}%`,
+                    "--stick-mid-x": `${50 + plan.x * (12 + plan.strength * 6)}%`,
                     "--stick-start-x": `${50 + (index - 1.5) * 3}%`,
                     "--stick-rest": `${(plan.yaw * 180) / Math.PI}deg`,
                     "--stick-start": `${(plan.start * 180) / Math.PI}deg`,

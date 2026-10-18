@@ -31,7 +31,7 @@ import Throw from ${source("src/components/common/weplay/yut/YutThrow3D.tsx")};
 import {renderYutSound} from ${source("src/components/common/weplay/yutSoundDesign.ts")};
 import {setWeplayAudioMuted} from ${source("src/components/common/weplay/weplayAudioPreference.ts")};
 const qa=window.soundQa;qa.render=renderYutSound;qa.mute=setWeplayAudioMuted;qa.releases=[];qa.impacts=[];qa.completions=[];
-function Owner({name}){const sound=useSounds();qa[name]=sound;return <section>{['throw','impact','step'].map(cue=><button key={cue} onClick={()=>{sound.unlock();sound[cue]();}}>{name+' '+cue}</button>)}</section>}
+function Owner({name}){const sound=useSounds();qa[name]=sound;return <section>{['throw','impact','step','applause'].map(cue=><button key={cue} onClick={()=>{sound.unlock();sound[cue]();}}>{name+' '+cue}</button>)}</section>}
 function Toss({data}){const sound=useSounds();return <div style={{position:'relative',width:600,height:400}}><Throw {...data} onRelease={()=>{qa.releases.push(data.throwKey);sound.throw(data.power);}} onImpact={index=>{qa.impacts.push({key:data.throwKey,index});sound.impact(index);}} onComplete={()=>qa.completions.push(data.throwKey)}/></div>}
 function App(){const[count,setCount]=useState(1),[toss,setToss]=useState(null),[revision,setRevision]=useState(0);const music=useMusic();qa.setCount=setCount;qa.setToss=setToss;qa.bump=()=>setRevision(value=>value+1);return <main data-revision={revision}><button onClick={music.toggle}>음악 전환</button><output data-music={music.enabled}/><button onClick={()=>setToss({throwKey:'toss-a',sticks:[true,false,true,false],rolling:false,power:.65})}>투척 시작</button>{count>0&&<Owner name="yut"/>}{count>1&&<Owner name="guide"/>}{toss&&<Toss data={toss}/>}</main>}
 createRoot(document.getElementById('root')).render(<App/>);`;
@@ -159,7 +159,7 @@ try {
   const { context, page } = await open();
   assert.equal(await page.evaluate(() => window.soundQa.contexts.length), 0);
   report.designs = await page.evaluate(() =>
-    ["yut-throw", "yut-impact", "yut-step"].map((cue) => {
+    ["yut-throw", "yut-impact", "yut-step", "yut-applause"].map((cue) => {
       const { samples, sampleRate } = window.soundQa.render(cue);
       let peak = 0,
         sum = 0;
@@ -180,7 +180,7 @@ try {
   );
   assert.deepEqual(
     report.designs.map((item) => item.duration),
-    [0.28, 0.17, 0.14],
+    [0.28, 0.17, 0.14, 1.65],
   );
   for (const item of report.designs) {
     assert.ok(
@@ -189,8 +189,13 @@ try {
     );
     assert.ok(item.first === 0 && item.last === 0);
   }
+  assert.ok(
+    report.designs[3].peak < 0.22 &&
+      report.designs[3].rms < report.designs[1].rms * 0.6,
+    "Applause stays quieter than the short impact cue",
+  );
   const previewSamples = await page.evaluate(() => {
-    const cues = ["yut-throw", "yut-impact", "yut-step"].map(
+    const cues = ["yut-throw", "yut-impact", "yut-step", "yut-applause"].map(
       (cue) => window.soundQa.render(cue).samples,
     );
     const result = new Float32Array(
@@ -230,36 +235,37 @@ try {
     4,
     "Three legacy buffers plus only the requested Yut cue",
   );
-  for (const cue of ["impact", "step"])
+  for (const cue of ["impact", "step", "applause"])
     await page.getByRole("button", { name: "yut " + cue, exact: true }).click();
   assert.deepEqual(
     await page.evaluate(() =>
       window.soundQa.sources.map((item) => item.duration),
     ),
-    [0.28, 0.17, 0.14],
+    [0.28, 0.17, 0.14, 1.65],
   );
-  assert.equal(await page.evaluate(() => window.soundQa.buffers.length), 6);
+  assert.equal(await page.evaluate(() => window.soundQa.buffers.length), 7);
   await page.evaluate(() => window.soundQa.yut.step(4));
   assert.equal(
     await page.evaluate(() => window.soundQa.buffers.length),
-    6,
+    7,
     "Repeated cue reuses its buffer",
   );
   const rates = await page.evaluate(() =>
     window.soundQa.sources.map((item) => Math.round(item.rate * 100) / 100),
   );
-  assert.deepEqual(rates, [0.97, 0.94, 1, 1.16]);
+  assert.deepEqual(rates, [0.97, 0.94, 1, 1, 1.16]);
   report.checks.push(
-    "Three original finite nonzero PCM cues have silent boundaries and no clipping; native AudioContext lazily caches Yut buffers and uses per-action pitch variation.",
+    "Four original finite nonzero PCM cues have silent boundaries and no clipping; applause is quiet and 1.65 seconds long; native AudioContext lazily caches Yut buffers and uses per-action pitch variation.",
   );
   await page.evaluate(() => {
     window.soundQa.setHidden(true);
     window.soundQa.yut.impact();
+    window.soundQa.yut.applause();
   });
   await page.waitForFunction(
     () => window.soundQa.contexts[0].state === "suspended",
   );
-  assert.equal(await sourceCount(page), 4);
+  assert.equal(await sourceCount(page), 5);
   assert.ok(
     await page.evaluate(() =>
       window.soundQa.sources.every(
@@ -268,9 +274,9 @@ try {
     ),
   );
   await page.evaluate(() => window.soundQa.setHidden(false));
-  assert.equal(await sourceCount(page), 4);
+  assert.equal(await sourceCount(page), 5);
   await page.getByRole("button", { name: "yut step", exact: true }).click();
-  await page.waitForFunction(() => window.soundQa.sources.length === 5);
+  await page.waitForFunction(() => window.soundQa.sources.length === 6);
   await page.getByRole("button", { name: "음악 전환", exact: true }).click();
   await page.waitForFunction(
     () => document.querySelector("output").dataset.music === "true",
@@ -283,10 +289,11 @@ try {
     "true",
   );
   await page.getByRole("button", { name: "yut throw", exact: true }).click();
-  assert.equal(await sourceCount(page), 5);
+  await page.getByRole("button", { name: "yut applause", exact: true }).click();
+  assert.equal(await sourceCount(page), 6);
   await page.getByRole("button", { name: "음악 전환", exact: true }).click();
   await page.getByRole("button", { name: "yut impact", exact: true }).click();
-  await page.waitForFunction(() => window.soundQa.sources.length === 6);
+  await page.waitForFunction(() => window.soundQa.sources.length === 7);
   report.checks.push(
     "The existing music preference immediately mutes Yut effects; hidden stops/disconnects/suspends playback and returning never replays stale cues.",
   );

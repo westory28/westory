@@ -30,7 +30,8 @@ const source = (f) =>
       .replaceAll("\\", "/"),
   );
 const harness = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import YutThrow3D from ${source("YutThrow3D.tsx")};import YutBoard from ${source("YutBoard.tsx")};import ${source("yut.css")};import{YutThrowScene,finalYutRotation,createYutGeometry,sampleYutPose,yutThrowPlan}from ${source("YutThrowScene.ts")};import{Vector3,Raycaster}from'three';
-const render=YutThrowScene.prototype.render;YutThrowScene.prototype.render=function(){render.call(this);if(this.elapsed>=1.4&&this.result){window.qa.renderedFaces=this.groups.map(group=>{const origin=this.camera.position.clone(),direction=group.position.clone().sub(origin).normalize();const hit=new Raycaster(origin,direction).intersectObjects(group.children,false)[0];return hit?.object===group.children[1];});}};
+const render=YutThrowScene.prototype.render;YutThrowScene.prototype.render=function(){render.call(this);window.qa.scene=this;window.qa.projected=this.groups.map(group=>{const p=group.position.clone().project(this.camera);return {x:(p.x+1)*this.host.clientWidth/2,y:(1-p.y)*this.host.clientHeight/2};});if(this.elapsed>=1.4&&this.result){window.qa.renderedFaces=this.groups.map(group=>{const origin=this.camera.position.clone(),direction=group.position.clone().sub(origin).normalize();const hit=new Raycaster(origin,direction).intersectObjects(group.children,false)[0];return hit?.object===group.children[1];});}};
+window.qa.freeze=time=>{const scene=window.qa.scene;scene.cancelFrame();scene.running=false;scene.elapsed=time;scene.pose();scene.render();const el=document.querySelector('.yut-throw-3d');el.style.opacity='1';el.style.transition='none';return {power:scene.power,camera:[scene.camera.fov,...scene.camera.position.toArray(),...scene.camera.projectionMatrix.elements],points:window.qa.projected};};
 window.qa.plan=yutThrowPlan;window.qa.pose=sampleYutPose;window.qa.finalNormal=(flat,index,power,key)=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,index,power,key)).y;
 const room={id:'visual-qa',revision:0,lastEvent:{kind:'create',atMs:0,text:''},status:'playing',phase:'move',turnUid:'qa',pendingThrow:{value:2,label:'개',sticks:[true,false,true,false]},players:[{uid:'qa',name:'나',role:'sa',active:true,pieces:[{id:'1',node:'o5',lane:'outer'},{id:'2',node:'o6',lane:'outer'}]},{uid:'friend',name:'친구',role:'nong',active:true,pieces:[{id:'1',node:'o10',lane:'outer'},{id:'2',node:'o15',lane:'outer'}]}]};
 function App(){const[boardRoom,setBoardRoom]=useState(room);const[selectedMove,setSelectedMove]=useState(null);window.qa.board=setBoardRoom;window.qa.poses=(time,power)=>[0,1,2,3].map(i=>sampleYutPose(time,i,i%2===0,power));const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1,path:['o6','o7']},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1,path:['a1','a2']},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={boardRoom} selectedMove={selectedMove} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={moves} onMove={move=>{window.qa.moves++;setSelectedMove(move)}} disabled={false}>{mounted&&<YutThrow3D {...state} onRelease={()=>window.qa.releases++} onImpact={index=>window.qa.impacts.push(index)} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/>}</YutBoard></div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
@@ -193,6 +194,105 @@ try {
       "200 seeded events: deterministic variations, monotone power height/spread, all four final normals and contact deadlines",
     );
     await context.close();
+  }
+  for (const fallback of [false, true]) {
+    const snapshots = [];
+    for (const power of [0.12, 1]) {
+      const { context, page } = await fresh(
+        {
+          viewport: { width: 1280, height: 900 },
+          reducedMotion: fallback ? "reduce" : "no-preference",
+        },
+        fallback,
+      );
+      await page.evaluate(
+        (power) =>
+          window.qa.update({
+            throwKey: "strength-comparison",
+            sticks: [true, false, true, false],
+            power,
+          }),
+        power,
+      );
+      await page.waitForFunction(
+        (fallback) =>
+          fallback
+            ? !!document.querySelector(".yut-throw-3d__wood")
+            : !!window.qa.scene,
+        fallback,
+      );
+      const capture = async (seconds) => {
+        const sample = fallback
+          ? await page.evaluate((seconds) => {
+              const root = document.querySelector(".yut-throw-3d");
+              root.style.opacity = "1";
+              root.style.transition = "none";
+              const nodes = [
+                ...document.querySelectorAll(".yut-throw-3d__wood"),
+              ];
+              for (const node of nodes)
+                for (const animation of node.getAnimations()) {
+                  animation.pause();
+                  animation.currentTime = seconds * 1000;
+                }
+              return { power: Number(root.dataset.power) };
+            }, seconds)
+          : await page.evaluate(
+              (seconds) => window.qa.freeze(seconds),
+              seconds,
+            );
+        if (fallback)
+          sample.points = await page
+            .locator(".yut-throw-3d__wood")
+            .evaluateAll((nodes) =>
+              nodes.map((node) => {
+                const r = node.getBoundingClientRect();
+                return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+              }),
+            );
+        const span =
+          Math.max(...sample.points.map((p) => p.x)) -
+          Math.min(...sample.points.map((p) => p.x));
+        const centerY = sample.points.reduce((total, p) => total + p.y, 0) / 4;
+        await page.screenshot({
+          path: path.join(
+            evidence,
+            `${fallback ? "css" : "webgl"}-power-${power}-${seconds === 0.45 ? "flight" : "rest"}.png`,
+          ),
+        });
+        return { ...sample, span, centerY };
+      };
+      snapshots.push({
+        power,
+        flight: await capture(0.45),
+        rest: await capture(1.4),
+      });
+      await context.close();
+    }
+    const [weak, strong] = snapshots;
+    assert.equal(weak.flight.power, 0.12);
+    assert.equal(strong.flight.power, 1);
+    if (!fallback)
+      assert.deepEqual(
+        weak.flight.camera,
+        strong.flight.camera,
+        "power must never auto-fit the camera",
+      );
+    assert.ok(
+      strong.flight.span > weak.flight.span * 1.6,
+      `strong flight must spread clearly (${strong.flight.span}/${weak.flight.span})`,
+    );
+    assert.ok(
+      weak.flight.centerY - strong.flight.centerY > 65,
+      `strong flight must rise visibly (${weak.flight.centerY - strong.flight.centerY}px)`,
+    );
+    assert.ok(
+      strong.rest.span > weak.rest.span * 1.75,
+      "strong landing must spread clearly",
+    );
+    report.checks.push(
+      `${fallback ? "reduced-motion CSS" : "fixed-camera WebGL"} same-seed 0.12 vs 1: flight width ${(strong.flight.span / weak.flight.span).toFixed(2)}x, height difference ${(weak.flight.centerY - strong.flight.centerY).toFixed(0)}px, landing width ${(strong.rest.span / weak.rest.span).toFixed(2)}x`,
+    );
   }
   for (const fallback of [false, true]) {
     const { context, page } = await fresh(
@@ -371,8 +471,11 @@ try {
       animation.some((item) => item.duration === 220 && item.frames === 4),
       "sequential 220ms hops with painted landings",
     );
-    await page.waitForTimeout(1100);
-    assert.equal(await page.locator('[data-motion="capture"]').count(), 0);
+    await page.waitForFunction(
+      () => !document.querySelector('[data-motion="capture"]'),
+      null,
+      { timeout: 3500 },
+    );
     report.checks.push(
       "transparent board center, selected shortcut path, distinct gentle stick trajectories and node-by-node capture hops",
     );

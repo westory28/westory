@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import type { YutMove, YutNode, YutRoom, YutRole } from "../../../../lib/yut";
 import { PROFESSIONS, YutSprite } from "./YutArt";
+import { YutCaptureReaction, type YutCaughtPlayer } from "./YutReactions";
 import "./yut-board.css";
 
 const WIDTH = 720;
@@ -337,6 +338,7 @@ function MovingPawn({
   onSelect,
   onMotionComplete,
   onStep,
+  onArrive,
 }: {
   role: YutRole;
   node: YutNode;
@@ -347,12 +349,16 @@ function MovingPawn({
   onSelect: () => void;
   onMotionComplete: (id: string) => void;
   onStep?: (index: number) => void;
+  onArrive: (id: string) => void;
 }) {
   const button = useRef<HTMLButtonElement>(null);
+  const [facing, setFacing] = useState<"left" | "right">("right");
   const complete = useRef(onMotionComplete);
   complete.current = onMotionComplete;
   const step = useRef(onStep);
   step.current = onStep;
+  const arrival = useRef(onArrive);
+  arrival.current = onArrive;
   useLayoutEffect(() => {
     const element = button.current;
     if (!motion || !element) return;
@@ -381,6 +387,10 @@ function MovingPawn({
           const current = nodePosition(nodes[index]),
             next = nodePosition(nodes[index + 1]);
           const tilt = reduced ? 0 : next[0] >= current[0] ? 5 : -5;
+          // Mirror only the artwork. Vertical steps retain the last horizontal
+          // heading, while every turn in a shortcut is resolved independently.
+          if (Math.abs(next[0] - current[0]) > 0.01)
+            setFacing(next[0] < current[0] ? "left" : "right");
           const previousAnimation = animation;
           animation = element.animate(
             [
@@ -425,11 +435,13 @@ function MovingPawn({
             landingFrame = requestAnimationFrame(() => resolve());
           });
         }
-        if (active)
+        if (active) {
+          arrival.current(motion.id);
           finishedTimer = window.setTimeout(
             () => complete.current(motion.id),
-            300,
+            motion.kind === "capture" ? 1400 : 300,
           );
+        }
       } catch {
         /* Replaced moves and unmount cancel their own animation. */
       }
@@ -469,7 +481,9 @@ function MovingPawn({
       <span className="yut-isometric-pawn" aria-hidden="true">
         <i className="yut-pawn-foot-shadow" />
         <span className="yut-pawn-body">
-          <YutSprite role={role} />
+          <span className="yut-pawn-facing" data-facing={facing}>
+            <YutSprite role={role} />
+          </span>
         </span>
         {motion && (
           <span className="yut-pawn-expression">
@@ -519,13 +533,24 @@ export default function YutBoard({
   const callback = useRef(onMotionChange);
   callback.current = onMotionChange;
   const [motions, setMotions] = useState<Record<string, PieceMotion>>({});
+  const [capture, setCapture] = useState<{
+    id: string;
+    players: YutCaughtPlayer[];
+  } | null>(null);
+  const captureGroup = useRef<typeof capture>(null);
   const motionTimer = useRef<number | undefined>(undefined);
   const activeMotions = useRef(new Set<string>());
   const completeMotion = useCallback((id: string) => {
     if (!activeMotions.current.delete(id) || activeMotions.current.size) return;
     window.clearTimeout(motionTimer.current);
     setMotions({});
+    setCapture(null);
+    captureGroup.current = null;
     callback.current?.(false);
+  }, []);
+  const arrive = useCallback((id: string) => {
+    if (captureGroup.current?.id === id && !document.hidden)
+      setCapture(captureGroup.current);
   }, []);
   useLayoutEffect(() => {
     const before = previous.current;
@@ -538,6 +563,8 @@ export default function YutBoard({
       window.clearTimeout(motionTimer.current);
       activeMotions.current.clear();
       setMotions({});
+      setCapture(null);
+      captureGroup.current = null;
       callback.current?.(false);
       return;
     }
@@ -586,6 +613,20 @@ export default function YutBoard({
     // a move already on screen. Only a new move or leaving the board replaces it.
     if (!active.length) return;
     window.clearTimeout(motionTimer.current);
+    setCapture(null);
+    const attacker = active.find((motion) => motion.kind === "capture");
+    const caught = room.players.filter((player) =>
+      player.pieces.some(
+        (piece) => next[`${player.uid}-${piece.id}`]?.kind === "caught",
+      ),
+    );
+    captureGroup.current =
+      attacker && caught.length
+        ? {
+            id: attacker.id,
+            players: caught.map(({ uid, name, role }) => ({ uid, name, role })),
+          }
+        : null;
     activeMotions.current = new Set(active.map((motion) => motion.id));
     setMotions(next);
     callback.current?.(true);
@@ -593,6 +634,8 @@ export default function YutBoard({
       () => {
         activeMotions.current.clear();
         setMotions({});
+        setCapture(null);
+        captureGroup.current = null;
         callback.current?.(false);
       },
       // Finish from the actual animation, not wall-clock time before its first
@@ -600,6 +643,19 @@ export default function YutBoard({
       6000,
     );
   }, [room.id, room.revision]);
+  useEffect(() => {
+    const hide = () => {
+      if (!document.hidden) return;
+      window.clearTimeout(motionTimer.current);
+      activeMotions.current.clear();
+      captureGroup.current = null;
+      setCapture(null);
+      setMotions({});
+      callback.current?.(false);
+    };
+    document.addEventListener("visibilitychange", hide);
+    return () => document.removeEventListener("visibilitychange", hide);
+  }, []);
   useEffect(
     () => () => {
       window.clearTimeout(motionTimer.current);
@@ -680,10 +736,14 @@ export default function YutBoard({
                 motion={motions[`${player.uid}-${item.id}`]}
                 onSelect={() => onSelectPiece(item.id)}
                 onMotionComplete={completeMotion}
+                onArrive={arrive}
                 onStep={onStep}
               />
             )),
           )}
+        {capture && (
+          <YutCaptureReaction key={capture.id} players={capture.players} />
+        )}
         {destinations.map((move) => (
           <button
             key={`${move.route}-${move.targetNode}`}

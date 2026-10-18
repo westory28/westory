@@ -2,6 +2,8 @@
 export const YUT_TURN_MS = 5_000;
 export const YUT_THROW_ANIMATION_MS = 3_600;
 export const YUT_MOVE_ANIMATION_MS = 1_500;
+// Up to 1.1s of tile hops, then a 1.4s capture reaction and a small frame margin.
+export const YUT_CAPTURE_ANIMATION_MS = 2_700;
 export const YUT_START_ANIMATION_MS = 2_000;
 export const YUT_ROOM_MS = 24 * 60 * 60_000;
 export const YUT_ROLES = ['sa', 'nong', 'gong', 'sang'];
@@ -188,7 +190,7 @@ export function moveYut(source, uid, pieceId, route, nowMs) {
     room.finishReason = 'completion';
     return event(room, 'finish', `${player.name} 님이 승리했습니다.`, nowMs, movement);
   }
-  if (room.extraThrows > 0) { room.extraThrows -= 1; beginPhase(room, 'throw', nowMs, YUT_MOVE_ANIMATION_MS); }
+  if (room.extraThrows > 0) { room.extraThrows -= 1; beginPhase(room, 'throw', nowMs, captured ? YUT_CAPTURE_ANIMATION_MS : YUT_MOVE_ANIMATION_MS); }
   else nextTurn(room, nowMs);
   return event(room, captured ? 'capture' : 'move', captured ? `${player.name} · 말 ${captured}개 잡기! 한 번 더 던집니다.` : `${player.name} 님이 말을 옮겼습니다.`, nowMs, movement);
 }
