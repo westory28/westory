@@ -140,6 +140,78 @@ function CropQualityProbe(){
  const passed=done&&rows.length===20&&rows.every(row=>row.passed);
  return <section aria-labelledby="crop-quality-title"><h1 id="crop-quality-title" className="text-xl font-bold mb-4">상품 사진 크롭 검증</h1><button type="button" className="rounded-lg bg-blue-600 px-5 py-3 text-white" disabled={busy} onClick={run}>{busy?'크롭·픽셀 검증 중…':'실제 크롭 검증 실행'}</button><p role="status" data-testid="crop-summary" className="my-4 font-bold">{done?(passed?'PASS':'FAIL'):busy?'RUNNING':'대기'} · {rows.filter(row=>row.passed).length}/{rows.length} 통과 · 예정 20건</p><ol>{rows.map((row,index)=><li key={index} className="border-b border-gray-200 py-3" data-testid={'crop-case-'+index}><p className="font-semibold">{row.passed?'PASS':'FAIL'} · {row.label}</p><pre className="text-xs whitespace-pre-wrap break-all mt-2">{JSON.stringify(row,null,2)}</pre></li>)}</ol></section>;
 }
+function WatermarkQualityProbe(){
+ const [rows,setRows]=useState([]);const [busy,setBusy]=useState(false);const [done,setDone]=useState(false);const runId=useRef(0);const previewUrls=useRef([]);
+ const clearPreviews=()=>{previewUrls.current.forEach(url=>URL.revokeObjectURL(url));previewUrls.current=[]};
+ useEffect(()=>()=>{runId.current+=1;clearPreviews()},[]);
+ const run=async()=>{
+  const id=++runId.current;const completed=[];clearPreviews();setRows([]);setBusy(true);setDone(false);
+  const add=(label,passed,values,blob)=>{
+   if(runId.current!==id)return;
+   let imageUrl='';if(blob){imageUrl=URL.createObjectURL(blob);previewUrls.current.push(imageUrl)}
+   completed.push({label,passed,...values,imageUrl});setRows([...completed]);
+  };
+  const solidFile=async(width,height,background)=>{
+   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const context=canvas.getContext('2d');if(!context)throw new Error('검증 canvas 생성 실패');context.fillStyle=background?'#ffffff':'#000000';context.fillRect(0,0,width,height);
+   const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('검증 PNG 생성 실패')),'image/png'));return new File([blob],'watermark-'+width+'x'+height+'-'+background+'.png',{type:'image/png'});
+  };
+  const decode=async(blob)=>{
+   const url=URL.createObjectURL(blob);
+   try{const img=new Image();img.src=url;await img.decode();const canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;const context=canvas.getContext('2d');if(!context)throw new Error('픽셀 검증 canvas 생성 실패');context.drawImage(img,0,0);return {width:canvas.width,height:canvas.height,bytes:blob.size,type:blob.type,pixels:context.getImageData(0,0,canvas.width,canvas.height).data}}
+   finally{URL.revokeObjectURL(url)}
+  };
+  const inspect=(decoded,background)=>{
+   const {width,height,pixels}=decoded;const short=Math.min(width,height);let blueCount=0,orangeCount=0,blueX=0,orangeX=0,backgroundChanges=0,nonOpaque=0;let minX=width,minY=height,maxX=-1,maxY=-1;
+   for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    const offset=(y*width+x)*4;const r=pixels[offset],g=pixels[offset+1],b=pixels[offset+2],alpha=pixels[offset+3];
+    const isBlue=b-r>60&&b-g>30&&b>100&&r<150&&g<180;const isOrange=r-g>25&&g-b>35&&r>140&&b<140;
+    if(isBlue){blueCount++;blueX+=x}if(isOrange){orangeCount++;orangeX+=x}
+    if(isBlue||isOrange){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y)}
+    if(alpha!==255)nonOpaque++;
+    if((x<width-short*.34||y<height-short*.20)&&Math.max(Math.abs(r-background),Math.abs(g-background),Math.abs(b-background))>12)backgroundChanges++;
+   }
+   const bounds=maxX>=0?{left:minX,top:minY,right:maxX,bottom:maxY,width:maxX-minX+1,height:maxY-minY+1,rightGap:width-1-maxX,bottomGap:height-1-maxY}:null;
+   const minimumColorPixels=Math.max(3,Math.floor(short*short*.00003));
+   const insideBottomRight=!!bounds&&bounds.left>=width-short*.30-3&&bounds.top>=height-short*.16-3&&bounds.rightGap>=short*.02-2&&bounds.rightGap<=short*.08+2&&bounds.bottomGap>=short*.02-2&&bounds.bottomGap<=short*.09+2&&bounds.width>=short*.17&&bounds.width<=short*.28+3;
+   return {width,height,bytes:decoded.bytes,type:decoded.type,blueCount,orangeCount,minimumColorPixels,blueBeforeOrange:blueCount>0&&orangeCount>0&&blueX/blueCount<orangeX/orangeCount,bounds,insideBottomRight,backgroundChanges,nonOpaque,colorsPresent:blueCount>=minimumColorPixels&&orangeCount>=minimumColorPixels};
+  };
+  const validOutput=(value,limits)=>value.colorsPresent&&value.blueBeforeOrange&&value.insideBottomRight&&value.backgroundChanges===0&&value.nonOpaque===0&&value.bytes<=limits.maxBytes&&['image/webp','image/jpeg'].includes(value.type);
+  try{
+   for(const [width,height] of [[320,320],[640,640],[1200,1200],[1200,640],[640,1200]]){
+    for(const background of [255,0]){
+     const file=await solidFile(width,height,background);
+     for(const variant of ['detail','preview']){
+      if(runId.current!==id)return;const label=width+'×'+height+' '+(background?'흰':'검정')+' 배경 '+variant;
+      try{
+       const blob=await optimizeProductImage(file,variant);const value=inspect(await decode(blob),background);const limits=PRODUCT_IMAGE_LIMITS[variant];const scale=Math.min(1,limits.maxSize/Math.max(width,height));const expectedWidth=Math.max(1,Math.round(width*scale)),expectedHeight=Math.max(1,Math.round(height*scale));
+       add(label,validOutput(value,limits)&&value.width===expectedWidth&&value.height===expectedHeight,{...value,input:{width,height,background},expectedWidth,expectedHeight,maximumBytes:limits.maxBytes},blob);
+      }catch(error){add(label,false,{error:String(error)})}
+     }
+    }
+   }
+   for(const background of [255,0]){
+    const backgroundLabel=background?'흰':'검정';const input=await solidFile(960,640,background);let raw=null;
+    try{
+     raw=await cropProductImage(input,{zoom:1,x:.5,y:.5});const decoded=await decode(raw);const value=inspect(decoded,background);let changedPixels=0;
+     for(let offset=0;offset<decoded.pixels.length;offset+=4)if(decoded.pixels[offset]!==background||decoded.pixels[offset+1]!==background||decoded.pixels[offset+2]!==background||decoded.pixels[offset+3]!==255)changedPixels++;
+     add(backgroundLabel+' 원본 크롭에 워터마크 없음',value.width===640&&value.height===640&&value.blueCount===0&&value.orangeCount===0&&changedPixels===0,{...value,changedPixels},raw);
+    }catch(error){add(backgroundLabel+' 원본 크롭에 워터마크 없음',false,{error:String(error)})}
+    for(const variant of ['detail','preview']){
+     if(runId.current!==id)return;const label=backgroundLabel+' 같은 원본 크롭 재시도 '+variant;
+     try{
+      if(!raw)throw new Error('원본 크롭 실패');const firstBlob=await optimizeProductImage(raw,variant);const retryBlob=await optimizeProductImage(raw,variant);const first=await decode(firstBlob),retry=await decode(retryBlob);const value=inspect(first,background);let differentChannels=0;
+      if(first.pixels.length!==retry.pixels.length)differentChannels=Math.max(first.pixels.length,retry.pixels.length);else for(let index=0;index<first.pixels.length;index++)if(first.pixels[index]!==retry.pixels[index])differentChannels++;
+      const after=await decode(raw);let rawChangedPixels=0;for(let offset=0;offset<after.pixels.length;offset+=4)if(after.pixels[offset]!==background||after.pixels[offset+1]!==background||after.pixels[offset+2]!==background||after.pixels[offset+3]!==255)rawChangedPixels++;
+      add(label,validOutput(value,PRODUCT_IMAGE_LIMITS[variant])&&first.width===640&&first.height===640&&retry.width===first.width&&retry.height===first.height&&differentChannels===0&&rawChangedPixels===0,{...value,retryBytes:retry.bytes,differentChannels,rawChangedPixels},firstBlob);
+     }catch(error){add(label,false,{error:String(error)})}
+    }
+   }
+  }catch(error){add('워터마크 검증 준비',false,{error:String(error)})}
+  finally{if(runId.current===id){window.wisShopFixture.watermarkResult={passed:completed.length===26&&completed.every(row=>row.passed),rows:completed};setBusy(false);setDone(true)}}
+ };
+ const passed=done&&rows.length===26&&rows.every(row=>row.passed);
+ return <section aria-labelledby="watermark-quality-title"><h1 id="watermark-quality-title" className="text-xl font-bold mb-4">상품 사진 워터마크 검증</h1><button type="button" className="rounded-lg bg-blue-600 px-5 py-3 text-white" disabled={busy} onClick={run}>{busy?'워터마크 픽셀 검증 중…':'실제 워터마크 검증 실행'}</button><p role="status" data-testid="watermark-summary" className="my-4 font-bold">{done?(passed?'PASS':'FAIL'):busy?'RUNNING':'대기'} · {rows.filter(row=>row.passed).length}/{rows.length} 통과 · 예정 26건</p><ol className="grid gap-4 md:grid-cols-2">{rows.map((row,index)=><li key={index} className="min-w-0 border-b border-gray-200 py-3" data-testid={'watermark-case-'+index}><p className="font-semibold">{row.passed?'PASS':'FAIL'} · {row.label}</p>{row.imageUrl&&<img src={row.imageUrl} alt={row.label+' 실제 출력'} className="mt-2 border border-gray-300" style={{width:Math.min(row.width||320,320),maxWidth:'100%',height:'auto'}}/>}<pre className="text-xs whitespace-pre-wrap break-all mt-2">{JSON.stringify({...row,imageUrl:undefined},null,2)}</pre></li>)}</ol></section>;
+}
 function App(){
  const {confirm}=useAppDialog();
  const [view,setView]=useState(params.get('view')||'student-shop');
@@ -207,11 +279,12 @@ function App(){
  };
  const changeView=value=>{setView(value);setSelectedProductId('');setOrderFilter('all');setSelectedOrderId('');setOrderFeedback('')};
  return <>
-  <nav className="fixture-toolbar" aria-label="합성 검증 화면 선택">{[['student-shop','학생 상점'],['student-orders','학생 주문'],['teacher-products','교사 상품'],['teacher-orders','교사 주문'],['image-quality','이미지 검증'],['crop-quality','크롭 검증']].map(([key,label])=><button key={key} type="button" aria-pressed={view===key} onClick={()=>changeView(key)}>{label}</button>)}<span>합성 데이터 · {scenario}{readOnly?' · 읽기 전용':''}</span></nav>
+  <nav className="fixture-toolbar" aria-label="합성 검증 화면 선택">{[['student-shop','학생 상점'],['student-orders','학생 주문'],['teacher-products','교사 상품'],['teacher-orders','교사 주문'],['image-quality','이미지 검증'],['crop-quality','크롭 검증'],['watermark-quality','워터마크 검증']].map(([key,label])=><button key={key} type="button" aria-pressed={view===key} onClick={()=>changeView(key)}>{label}</button>)}<span>합성 데이터 · {scenario}{readOnly?' · 읽기 전용':''}</span></nav>
   <main className={view.startsWith('teacher')?'fixture-main teacher-layout':'fixture-main student-layout'}>
    {scenario==='archive'&&<div className="fixture-archive" role="status">2025학년도 2학기 · 이전 학기 조회</div>}
    {view==='image-quality'&&<ImageQualityProbe/>}
    {view==='crop-quality'&&<CropQualityProbe/>}
+   {view==='watermark-quality'&&<WatermarkQualityProbe/>}
    {view==='student-shop'&&<StudentPointShopTab wallet={wallet} products={products.filter(p=>p.isActive)} selectedProduct={selectedProduct} purchaseMemo={memo} purchaseSubmitting={purchaseSubmitting} purchaseFeedback={purchaseFeedback} purchaseQuantity={purchaseQuantity} onPurchaseQuantityChange={setPurchaseQuantity} onSelectProduct={selectProduct} onPurchaseMemoChange={setMemo} onCloseRequest={()=>!purchaseSubmitting&&setSelectedProductId('')} onSubmitPurchaseRequest={submitPurchase} onOpenOrders={()=>changeView('student-orders')}/>}
    {view==='student-orders'&&<StudentPointOrdersTab orders={filteredOrders} orderFilter={orderFilter} onOrderFilterChange={setOrderFilter} onCancelOrder={readOnly?undefined:cancelOrder} cancellingOrderId={savingOrderId} feedback={orderFeedback} onOpenShop={()=>changeView('student-shop')}/>}
    {view==='teacher-products'&&<PointProductsTab products={products} productForm={productForm} productFeedback={productFeedback} canManage={!readOnly} readOnly={readOnly} productImagePreviewUrl={productImagePreviewUrl} productImageUploading={productSaving} productSaving={productSaving} productOrderDirty={false} productOrderSaving={false} productOrderFeedback="" onProductFormChange={setProductForm} onProductImageChange={file=>{if(file){setProductImagePreviewUrl(URL.createObjectURL(file));record('local-image',file.name)}}} onEditProduct={editProduct} onResetForm={()=>{setProductForm(emptyForm());setProductImagePreviewUrl('');setProductFeedback('')}} onToggleProduct={p=>{record('toggle',p.id);setProducts(list=>list.map(item=>item.id===p.id?{...item,isActive:!item.isActive}:item))}} onDeleteProduct={p=>{record('delete',p.id);setProducts(list=>list.filter(item=>item.id!==p.id))}} onReorderProducts={()=>{}} onSaveProductOrder={()=>{}} onSubmit={saveProduct}/>}
@@ -329,6 +402,7 @@ console.log(
       "teacher-orders",
       "image-quality",
       "crop-quality",
+      "watermark-quality",
     ],
     scenarios: ["normal", "empty", "error", "loading", "readonly", "archive"],
     viewportWidths: [320, 390, 768, 1280, 1440],

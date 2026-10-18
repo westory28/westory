@@ -590,7 +590,9 @@ await check(
     auth.currentUser = owner;
   },
 );
-const images = load("src/lib/pointProductImages.ts", {});
+const images = load("src/lib/pointProductImages.ts", {
+  "./pointProductWatermark": load("src/lib/pointProductWatermark.ts", {}),
+});
 await check(
   "기존 저해상도 미리보기 대신 상세이미지, 새 640px 미리보기는 목록 전용 사용",
   () => {

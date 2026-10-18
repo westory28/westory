@@ -1,3 +1,8 @@
+import {
+  drawProductWatermark,
+  prepareProductWatermarkFont,
+} from "./pointProductWatermark";
+
 const imageFromFile = (file: File) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -40,6 +45,7 @@ export const optimizeProductImage = async (
   const originalMax = Math.max(image.naturalWidth, image.naturalHeight);
   if (!originalMax || image.naturalWidth * image.naturalHeight > 40_000_000)
     throw new Error("이미지 해상도를 4천만 화소 이하로 줄여 주세요.");
+  await prepareProductWatermarkFont();
   let maxSize = Math.min(originalMax, limits.maxSize);
   for (let attempt = 0; attempt < 6; attempt++) {
     const canvas = document.createElement("canvas");
@@ -58,6 +64,7 @@ export const optimizeProductImage = async (
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    drawProductWatermark(context, canvas.width, canvas.height);
     for (const quality of [0.88, 0.82, 0.76, 0.7]) {
       let blob = await encode(canvas, quality, "image/webp");
       if (blob.type !== "image/webp")

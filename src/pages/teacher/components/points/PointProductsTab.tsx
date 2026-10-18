@@ -10,6 +10,7 @@ import { formatWisAmount } from "../../../../lib/pointFormatters";
 import { getProductCardImage } from "../../../../lib/pointProductImages";
 import type { ProductImageCrop } from "../../../../lib/pointProductCrop";
 import ProductImageCropper from "./ProductImageCropper";
+import ProductImageWatermark from "./ProductImageWatermark";
 import type { PointProduct } from "../../../../types";
 import "./TeacherWisShop.css";
 
@@ -535,6 +536,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                     ) : (
                       <i className="fas fa-image" aria-hidden="true" />
                     )}
+                    {selectedImage && <ProductImageWatermark />}
                   </div>
                 )}
                 <label className="teacher-wis-shop__field">
