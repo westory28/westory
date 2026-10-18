@@ -1,5 +1,5 @@
 .teacher-weplay-content { color: var(--ws-text, #1f2937); container-type: inline-size; }
-.teacher-weplay-workspace.teacher-sub-workspace { grid-template-columns: minmax(0, 1fr); }
+.teacher-layout .teacher-weplay-workspace.teacher-sub-workspace { grid-template-columns: minmax(0, 1fr); }
 .teacher-weplay-workspace.teacher-sub-workspace--page > .teacher-weplay-content,
 .teacher-weplay-workspace > .teacher-sub-workspace-footer { grid-column: 1; }
 .teacher-weplay-navigation, .teacher-weplay-header-actions { display: flex; align-items: center; gap: 8px; }

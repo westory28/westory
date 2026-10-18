@@ -121,6 +121,7 @@ import Weplay from ${source("src/pages/student/Weplay.tsx")};
 import {AppToastProvider} from ${source("src/components/common/AppToastProvider.tsx")};
 import {AppDialogProvider} from ${source("src/components/common/AppDialogProvider.tsx")};
 import ${source("src/assets/index.css")};
+import ${source("src/pages/teacher/teacherSettings.css")};
 import {qa} from 'qa-service';
 function Fixture(){const location=useLocation();qa.navigate=useNavigate();return <MainLayout>{location.pathname==='/teacher/weplay'?<ManageWeplay/>:location.pathname==='/student/weplay'?<Weplay/>:<h1>다른 화면</h1>}</MainLayout>}
 const app=<HashRouter><AppToastProvider><AppDialogProvider><Fixture/></AppDialogProvider></AppToastProvider></HashRouter>;
@@ -1097,7 +1098,7 @@ async function verifyOpeningLayout() {
   await verifyLinkedIntro();
 }
 async function verifyCommonGameFrame() {
-  for (const width of [390, 768, 1280, 1366]) {
+  for (const width of [390, 768, 1280, 1366, 1920]) {
     for (const portal of ["student", "teacher"]) {
       const bounds = [];
       for (const game of ["history-rain", "joseon-yut"]) {
@@ -1144,7 +1145,7 @@ async function verifyCommonGameFrame() {
       assert.equal(bounds[0].height,bounds[1].height);
     }
   }
-  checks.push('Both portals: naval/Yut share stage width, height and page gutters at390/768/1280/1366; opening/lobby/play keep the same viewport; local brush font loads in actual throw result.');
+  checks.push('Both portals: naval/Yut share stage width, height and page gutters at390/768/1280/1366/1920, including late-loaded settings styles; opening/lobby/play keep the same viewport; brush font loads before the first throw.');
 }
 try {
   if (audioOnly) await verifyAudioBrowser();

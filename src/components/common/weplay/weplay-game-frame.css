@@ -9,6 +9,7 @@
   font-size: 16px;
 }
 .weplay-game-page > .weplay-heading { min-height: 44px; }
+.weplay-page.weplay-game-page { max-width: var(--ws-page-max, 1536px); }
 .weplay-game-frame {
   --weplay-stage-height: clamp(420px, calc(100svh - 180px), 720px);
   position: relative;
