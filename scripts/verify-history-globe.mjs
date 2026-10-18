@@ -540,8 +540,8 @@ assert(
 );
 assert(!source.includes("setInterval("), "No idle animation or polling timer");
 assert(
-  source.includes("GLOBE_FRAME_INTERVAL"),
-  "Input frame cap remains wired",
+  !source.includes("GLOBE_FRAME_INTERVAL"),
+  "Rotation follows the display frame instead of a forced 30fps timer",
 );
 for (const latitude of [-89.5, -60, 0, 37, 89.5]) {
   for (const longitude of [-179, 0, 127, 179]) {
@@ -1204,7 +1204,7 @@ assert.equal(
   "",
   "Country selection clears the previous regional highlight",
 );
-assert.equal(countrySelectionState.Panel, "list");
+assert.equal(countrySelectionState.Panel, "detail");
 chooseCountry("missing-country");
 assert.equal(
   countrySelectionState.SelectedCountryId,
@@ -1381,6 +1381,154 @@ assert.equal(
   undefined,
   "Backside terrain cannot be clicked through the sphere",
 );
+
+// Exercise the actual scheduler: bursts coalesce, draw on the next display
+// frame, stop when hidden, and never leave a self-perpetuating idle loop.
+const scheduled = new Map();
+let drawCalls = 0;
+const rafState = { current: null },
+  dirtyState = { current: false };
+const documentState = { hidden: false },
+  visibleState = { current: true };
+const requestDraw = evaluateGlobe(
+  globeDeclarations.get("requestDraw").arguments[0].getText(globeAst),
+  {
+    raf: rafState,
+    dirty: dirtyState,
+    document: documentState,
+    inView: visibleState,
+    drawRef: {
+      current: () => {
+        drawCalls += 1;
+      },
+    },
+    requestAnimationFrame: (callback) => {
+      scheduled.set(1, callback);
+      return 1;
+    },
+  },
+);
+for (let event = 0; event < 40; event += 1) requestDraw();
+assert.equal(
+  scheduled.size,
+  1,
+  "A burst of pointer events queues exactly one display frame",
+);
+const nextFrame = scheduled.get(1);
+scheduled.clear();
+nextFrame();
+assert.equal(drawCalls, 1);
+assert.equal(rafState.current, null);
+assert.equal(scheduled.size, 0, "A completed draw never queues an idle frame");
+documentState.hidden = true;
+requestDraw();
+assert.equal(scheduled.size, 0, "Hidden tabs never draw");
+documentState.hidden = false;
+visibleState.current = false;
+requestDraw();
+assert.equal(scheduled.size, 0, "Offscreen globes never draw");
+visibleState.current = true;
+requestDraw();
+scheduled.get(1)();
+scheduled.clear();
+assert.equal(drawCalls, 2, "Visible globe resumes with its latest camera");
+
+const { globeInteractionGeometry } = load("src/lib/historyGlobeRendering.ts");
+const detailedBorders = JSON.parse(
+  readFileSync("src/data/atlas/countries-world.json", "utf8"),
+).borders;
+const originalBorders = JSON.stringify(detailedBorders);
+const simplifiedBorders = globeInteractionGeometry(detailedBorders, 512);
+assert.equal(
+  globeInteractionGeometry(detailedBorders, 512),
+  simplifiedBorders,
+  "Repeated frames reuse prepared lines",
+);
+assert.equal(
+  JSON.stringify(detailedBorders),
+  originalBorders,
+  "The precise boundary source is never mutated",
+);
+const pointCount = (lines) =>
+  lines.reduce((total, line) => total + line.length, 0);
+assert(
+  pointCount(simplifiedBorders.coordinates) <
+    pointCount(detailedBorders.coordinates) * 0.8,
+  "Interactive boundaries reduce projection work materially",
+);
+for (
+  let lineIndex = 0;
+  lineIndex < detailedBorders.coordinates.length;
+  lineIndex += 1
+) {
+  const original = detailedBorders.coordinates[lineIndex],
+    reduced = simplifiedBorders.coordinates[lineIndex];
+  assert.equal(reduced[0], original[0]);
+  assert.equal(reduced.at(-1), original.at(-1));
+  let sourceIndex = 0;
+  for (let index = 1; index < reduced.length; index += 1) {
+    const [ax, ay] = reduced[index - 1],
+      [bx, by] = reduced[index];
+    const dx = bx - ax,
+      dy = by - ay,
+      length = dx * dx + dy * dy;
+    while (original[sourceIndex] !== reduced[index]) {
+      const [x, y] = original[sourceIndex++];
+      const ratio = length
+        ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / length))
+        : 0;
+      const pixelError =
+        ((Math.hypot(x - ax - ratio * dx, y - ay - ratio * dy) * Math.PI) /
+          180) *
+        512;
+      assert(
+        pixelError <= 0.350001,
+        "Temporary line simplification remains below half a display pixel",
+      );
+    }
+  }
+}
+assert.equal(
+  globeInteractionGeometry(gobi, 512).features[0].geometry,
+  gobi.features[0].geometry,
+  "Polygon areas preserve their exact geometry at every frame",
+);
+const seam = {
+  type: "LineString",
+  coordinates: [
+    [179, 10],
+    [180, 11],
+    [-180, 11],
+    [-179, 10],
+  ],
+};
+equal(globeInteractionGeometry(seam, 256), seam);
+const terrainSource = JSON.parse(
+  readFileSync("src/data/atlas/terrain.json", "utf8"),
+);
+const terrainPreview = globeInteractionGeometry(terrainSource, 512, true);
+for (let index = 0; index < terrainSource.features.length; index += 1) {
+  const original = terrainSource.features[index],
+    preview = terrainPreview.features[index];
+  assert.equal(
+    preview.properties,
+    original.properties,
+    "Temporary terrain detail preserves names and sources",
+  );
+  assert(
+    geoArea(preview) < 2 * Math.PI,
+    "Simplified terrain never turns into its spherical complement",
+  );
+  const polygons =
+    preview.geometry.type === "Polygon"
+      ? [preview.geometry.coordinates]
+      : preview.geometry.coordinates;
+  for (const polygon of polygons)
+    for (const ring of polygon) {
+      assert(ring.length >= 4, "Tiny terrain areas retain a valid polygon");
+      equal(ring[0], ring.at(-1));
+    }
+}
 
 console.log(
   `History globe projection, hemisphere, interaction, compass, ${regionCameraCases} region camera fits, actual all-subject filter/tag and river/desert hit handlers, pixel-budget, assets, menu migration and access checks passed.`,

@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getHistoryDictionaryPanel } from "../../constants/historyDictionaryPanels";
 import { getHistoryDictionaryErrorMessage } from "../../lib/historyDictionarySession";
@@ -13,6 +7,12 @@ import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
 import HistoryDictionaryCatalogBrowser from "../../components/common/HistoryDictionaryCatalogBrowser";
+import HistoryDictionaryInitialFilter from "../../components/common/HistoryDictionaryInitialFilter";
+import {
+  getHistoryDictionaryInitial,
+  getHistoryDictionaryInitialCounts,
+  matchesHistoryDictionaryInitial,
+} from "../../lib/historyDictionaryInitials";
 import {
   approveHistoryDictionaryTermForRequests,
   deleteStudentHistoryDictionaryWordByTeacher,
@@ -37,54 +37,7 @@ const OPEN_REQUEST_STATUSES = new Set(["requested", "needs_approval"]);
 const DEFAULT_STUDENT_LEVEL = "중학생 수준";
 const EXCEL_TEMPLATE_HEADERS = ["단어", "학생용 풀이", "관련 단원", "태그"];
 const MAX_EXCEL_UPLOAD_ROWS = 200;
-const ALL_INITIAL = "전체";
-const NUMBER_INITIAL = "숫자";
-const HANGUL_INITIALS = [
-  "ㄱ",
-  "ㄲ",
-  "ㄴ",
-  "ㄷ",
-  "ㄸ",
-  "ㄹ",
-  "ㅁ",
-  "ㅂ",
-  "ㅃ",
-  "ㅅ",
-  "ㅆ",
-  "ㅇ",
-  "ㅈ",
-  "ㅉ",
-  "ㅊ",
-  "ㅋ",
-  "ㅌ",
-  "ㅍ",
-  "ㅎ",
-];
-const BASE_INITIAL_BY_TENSE: Record<string, string> = {
-  ㄲ: "ㄱ",
-  ㄸ: "ㄷ",
-  ㅃ: "ㅂ",
-  ㅆ: "ㅅ",
-  ㅉ: "ㅈ",
-};
-const INITIAL_FILTERS = [
-  ALL_INITIAL,
-  NUMBER_INITIAL,
-  "ㄱ",
-  "ㄴ",
-  "ㄷ",
-  "ㄹ",
-  "ㅁ",
-  "ㅂ",
-  "ㅅ",
-  "ㅇ",
-  "ㅈ",
-  "ㅊ",
-  "ㅋ",
-  "ㅌ",
-  "ㅍ",
-  "ㅎ",
-];
+const ALL_INITIAL = "";
 
 interface HistoryDictionaryUploadRow {
   id: string;
@@ -123,20 +76,6 @@ const getTimestampMs = (value: unknown) => {
       ? (value as { toDate: () => Date }).toDate()
       : null;
   return date?.getTime() || 0;
-};
-
-const getWordInitial = (value: string) => {
-  const first = String(value || "")
-    .trim()
-    .charAt(0);
-  if (!first) return "";
-  if (/^\d$/.test(first)) return NUMBER_INITIAL;
-  const code = first.charCodeAt(0);
-  if (code >= 0xac00 && code <= 0xd7a3) {
-    const initial = HANGUL_INITIALS[Math.floor((code - 0xac00) / 588)] || "";
-    return BASE_INITIAL_BY_TENSE[initial] || initial;
-  }
-  return first.toUpperCase();
 };
 
 const normalizeTag = (value: string) =>
@@ -217,9 +156,7 @@ const ManageHistoryDictionary: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const termListRef = useRef<HTMLDivElement>(null);
-  const termSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const studentWordListRef = useRef<HTMLDivElement>(null);
-  const studentWordSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const editorSourceRef = useRef("");
   const [requests, setRequests] = useState<HistoryDictionaryRequest[]>([]);
   const [notificationRequests, setNotificationRequests] = useState<
@@ -252,10 +189,7 @@ const ManageHistoryDictionary: React.FC = () => {
   const [loadedPanels, setLoadedPanels] = useState<Record<string, boolean>>({});
   const showCatalog = activePanel === "terms" && termsView === "catalog";
   const [activeInitial, setActiveInitial] = useState(ALL_INITIAL);
-  const [scrollActiveInitial, setScrollActiveInitial] = useState(ALL_INITIAL);
   const [activeStudentWordInitial, setActiveStudentWordInitial] =
-    useState(ALL_INITIAL);
-  const [scrollStudentWordInitial, setScrollStudentWordInitial] =
     useState(ALL_INITIAL);
 
   useEffect(() => {
@@ -431,9 +365,10 @@ const ManageHistoryDictionary: React.FC = () => {
     const keyword = termSearch.trim().toLowerCase();
     return [...terms]
       .filter((item) => {
-        const matchesInitial =
-          activeInitial === ALL_INITIAL ||
-          getWordInitial(item.word) === activeInitial;
+        const matchesInitial = matchesHistoryDictionaryInitial(
+          item.word,
+          activeInitial,
+        );
         const matchesSearch =
           !keyword ||
           item.word.toLowerCase().includes(keyword) ||
@@ -448,9 +383,10 @@ const ManageHistoryDictionary: React.FC = () => {
     const keyword = studentWordSearch.trim().toLowerCase();
     return studentWords
       .filter((item) => {
-        const matchesInitial =
-          activeStudentWordInitial === ALL_INITIAL ||
-          getWordInitial(item.word) === activeStudentWordInitial;
+        const matchesInitial = matchesHistoryDictionaryInitial(
+          item.word,
+          activeStudentWordInitial,
+        );
         const matchesSearch =
           !keyword ||
           item.word.toLowerCase().includes(keyword) ||
@@ -464,138 +400,40 @@ const ManageHistoryDictionary: React.FC = () => {
       .sort((a, b) => a.word.localeCompare(b.word, "ko-KR"));
   }, [activeStudentWordInitial, studentWordSearch, studentWords]);
 
-  const initialCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    terms.forEach((item) => {
-      const initial = getWordInitial(item.word);
-      counts.set(initial, (counts.get(initial) || 0) + 1);
-    });
-    return counts;
-  }, [terms]);
+  const initialCounts = useMemo(
+    () => getHistoryDictionaryInitialCounts(terms.map((item) => item.word)),
+    [terms],
+  );
 
   const groupedVisibleTerms = useMemo(() => {
     const groups = new Map<string, HistoryDictionaryTerm[]>();
     visibleTerms.forEach((item) => {
-      const initial = getWordInitial(item.word) || "기타";
+      const initial = getHistoryDictionaryInitial(item.word) || "기타";
       groups.set(initial, [...(groups.get(initial) || []), item]);
     });
     return Array.from(groups.entries());
   }, [visibleTerms]);
-  const studentWordInitialCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    studentWords.forEach((item) => {
-      const initial = getWordInitial(item.word);
-      counts.set(initial, (counts.get(initial) || 0) + 1);
-    });
-    return counts;
-  }, [studentWords]);
+  const studentWordInitialCounts = useMemo(
+    () =>
+      getHistoryDictionaryInitialCounts(studentWords.map((item) => item.word)),
+    [studentWords],
+  );
   const groupedVisibleStudentWords = useMemo(() => {
     const groups = new Map<string, StudentHistoryDictionaryWord[]>();
     visibleStudentWords.forEach((item) => {
-      const initial = getWordInitial(item.word) || "기타";
+      const initial = getHistoryDictionaryInitial(item.word) || "기타";
       groups.set(initial, [...(groups.get(initial) || []), item]);
     });
     return Array.from(groups.entries());
   }, [visibleStudentWords]);
-  const highlightedInitial =
-    activeInitial === ALL_INITIAL && scrollActiveInitial !== ALL_INITIAL
-      ? scrollActiveInitial
-      : activeInitial;
-  const highlightedStudentWordInitial =
-    activeStudentWordInitial === ALL_INITIAL &&
-    scrollStudentWordInitial !== ALL_INITIAL
-      ? scrollStudentWordInitial
-      : activeStudentWordInitial;
-
-  useEffect(() => {
-    if (activeInitial !== ALL_INITIAL) return;
-    setScrollActiveInitial(groupedVisibleTerms[0]?.[0] || ALL_INITIAL);
-  }, [activeInitial, groupedVisibleTerms]);
-
-  useEffect(() => {
-    if (activeStudentWordInitial !== ALL_INITIAL) return;
-    setScrollStudentWordInitial(
-      groupedVisibleStudentWords[0]?.[0] || ALL_INITIAL,
-    );
-  }, [activeStudentWordInitial, groupedVisibleStudentWords]);
-
   const handleInitialFilterClick = (initial: string) => {
     setActiveInitial(initial);
-    setScrollActiveInitial(initial);
-    termListRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    termListRef.current?.scrollTo({ top: 0 });
   };
-
   const handleStudentWordInitialFilterClick = (initial: string) => {
     setActiveStudentWordInitial(initial);
-    setScrollStudentWordInitial(initial);
-    studentWordListRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    studentWordListRef.current?.scrollTo({ top: 0 });
   };
-
-  const handleTermListScroll = useCallback(() => {
-    if (activeInitial !== ALL_INITIAL) return;
-    const container = termListRef.current;
-    if (!container) return;
-
-    const containerTop = container.getBoundingClientRect().top;
-    const sections = groupedVisibleTerms
-      .map(([initial]) => ({
-        initial,
-        element: termSectionRefs.current[initial],
-      }))
-      .filter((item): item is { initial: string; element: HTMLElement } =>
-        Boolean(item.element),
-      );
-    if (!sections.length) {
-      setScrollActiveInitial(ALL_INITIAL);
-      return;
-    }
-
-    let nextInitial = sections[0].initial;
-    for (const section of sections) {
-      const offset = section.element.getBoundingClientRect().top - containerTop;
-      if (offset <= 16) {
-        nextInitial = section.initial;
-      } else {
-        break;
-      }
-    }
-    setScrollActiveInitial((prev) =>
-      prev === nextInitial ? prev : nextInitial,
-    );
-  }, [activeInitial, groupedVisibleTerms]);
-
-  const handleStudentWordListScroll = useCallback(() => {
-    if (activeStudentWordInitial !== ALL_INITIAL) return;
-    const container = studentWordListRef.current;
-    if (!container) return;
-
-    const containerTop = container.getBoundingClientRect().top;
-    const sections = groupedVisibleStudentWords
-      .map(([initial]) => ({
-        initial,
-        element: studentWordSectionRefs.current[initial],
-      }))
-      .filter((item): item is { initial: string; element: HTMLElement } =>
-        Boolean(item.element),
-      );
-    if (!sections.length) {
-      setScrollStudentWordInitial(ALL_INITIAL);
-      return;
-    }
-
-    let nextInitial = sections[0].initial;
-    for (const section of sections) {
-      const offset = section.element.getBoundingClientRect().top - containerTop;
-      if (offset <= 16) {
-        nextInitial = section.initial;
-      } else {
-        break;
-      }
-    }
-    setScrollStudentWordInitial((prev) =>
-      prev === nextInitial ? prev : nextInitial,
-    );
-  }, [activeStudentWordInitial, groupedVisibleStudentWords]);
 
   const selectedRequest =
     (selectedRequestId
@@ -1284,7 +1122,7 @@ const ManageHistoryDictionary: React.FC = () => {
           className={`${showCatalog ? "hidden" : "grid"} gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]`}
         >
           {activePanel === "terms" ? (
-            <aside className="min-w-0">
+            <aside className="history-dictionary-initial-region min-w-0">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-extrabold text-slate-950">
                   등록된 단어
@@ -1299,31 +1137,13 @@ const ManageHistoryDictionary: React.FC = () => {
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-3 lg:grid-cols-[4.75rem_minmax(0,1fr)]">
-                <div className="grid grid-cols-5 gap-2 lg:grid-cols-1">
-                  {INITIAL_FILTERS.map((initial) => {
-                    const active = highlightedInitial === initial;
-                    const count =
-                      initial === ALL_INITIAL
-                        ? terms.length
-                        : initialCounts.get(initial) || 0;
-                    return (
-                      <button
-                        key={initial}
-                        type="button"
-                        onClick={() => handleInitialFilterClick(initial)}
-                        className={`flex h-11 items-center justify-center rounded-lg border text-sm font-extrabold transition ${
-                          active
-                            ? "border-blue-600 bg-blue-600 text-white shadow-sm"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"
-                        }`}
-                        title={`${initial} ${count}개`}
-                      >
-                        {initial}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="history-dictionary-initial-layout mt-5">
+                <HistoryDictionaryInitialFilter
+                  value={activeInitial}
+                  onChange={handleInitialFilterClick}
+                  counts={initialCounts}
+                  label="교사 등록 단어 첫 글자"
+                />
 
                 <div className="min-w-0">
                   <label className="relative block">
@@ -1349,7 +1169,6 @@ const ManageHistoryDictionary: React.FC = () => {
 
                   <div
                     ref={termListRef}
-                    onScroll={handleTermListScroll}
                     className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1"
                   >
                     {!visibleTerms.length &&
@@ -1361,16 +1180,7 @@ const ManageHistoryDictionary: React.FC = () => {
                       )}
                     <div className="space-y-3">
                       {groupedVisibleTerms.map(([initial, items]) => (
-                        <section
-                          key={initial}
-                          ref={(node) => {
-                            if (node) {
-                              termSectionRefs.current[initial] = node;
-                            } else {
-                              delete termSectionRefs.current[initial];
-                            }
-                          }}
-                        >
+                        <section key={initial}>
                           <div className="mb-2 px-2 text-sm font-extrabold text-slate-900">
                             {initial}
                           </div>
@@ -1441,40 +1251,20 @@ const ManageHistoryDictionary: React.FC = () => {
               </div>
             </aside>
           ) : activePanel === "studentWords" ? (
-            <aside className="min-w-0">
+            <aside className="history-dictionary-initial-region min-w-0">
               <div>
                 <h2 className="text-lg font-extrabold text-slate-950">
                   학생 등록 단어
                 </h2>
               </div>
 
-              <div className="mt-5 grid gap-3 lg:grid-cols-[4.75rem_minmax(0,1fr)]">
-                <div className="grid grid-cols-5 gap-2 lg:grid-cols-1">
-                  {INITIAL_FILTERS.map((initial) => {
-                    const active = highlightedStudentWordInitial === initial;
-                    const count =
-                      initial === ALL_INITIAL
-                        ? studentWords.length
-                        : studentWordInitialCounts.get(initial) || 0;
-                    return (
-                      <button
-                        key={`student-word-${initial}`}
-                        type="button"
-                        onClick={() =>
-                          handleStudentWordInitialFilterClick(initial)
-                        }
-                        className={`flex h-11 items-center justify-center rounded-lg border text-sm font-extrabold transition ${
-                          active
-                            ? "border-blue-600 bg-blue-600 text-white shadow-sm"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"
-                        }`}
-                        title={`${initial} ${count}개`}
-                      >
-                        {initial}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="history-dictionary-initial-layout mt-5">
+                <HistoryDictionaryInitialFilter
+                  value={activeStudentWordInitial}
+                  onChange={handleStudentWordInitialFilterClick}
+                  counts={studentWordInitialCounts}
+                  label="학생 등록 단어 첫 글자"
+                />
 
                 <div className="min-w-0">
                   <label className="relative block">
@@ -1502,7 +1292,6 @@ const ManageHistoryDictionary: React.FC = () => {
 
                   <div
                     ref={studentWordListRef}
-                    onScroll={handleStudentWordListScroll}
                     className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1"
                   >
                     {!visibleStudentWords.length &&
@@ -1514,16 +1303,7 @@ const ManageHistoryDictionary: React.FC = () => {
                       )}
                     <div className="space-y-3">
                       {groupedVisibleStudentWords.map(([initial, items]) => (
-                        <section
-                          key={`student-word-section-${initial}`}
-                          ref={(node) => {
-                            if (node) {
-                              studentWordSectionRefs.current[initial] = node;
-                            } else {
-                              delete studentWordSectionRefs.current[initial];
-                            }
-                          }}
-                        >
+                        <section key={`student-word-section-${initial}`}>
                           <div className="mb-2 px-2 text-sm font-extrabold text-slate-900">
                             {initial}
                           </div>

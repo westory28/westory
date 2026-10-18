@@ -12,7 +12,6 @@ export const GLOBE_INITIAL_VIEW: GlobeView = {
   zoom: 1,
 };
 export const GLOBE_MAX_ZOOM = 6;
-export const GLOBE_FRAME_INTERVAL = 1000 / 30;
 export const GLOBE_PIXEL_BUDGET = 2_000_000;
 
 export function wrapGlobeLongitude(value: number): number {

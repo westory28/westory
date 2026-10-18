@@ -1,0 +1,1239 @@
+{
+  "coordinateSystem": "WGS84; D3 clockwise exterior rings",
+  "buildScript": "scripts/build-history-atlas-terrain.py",
+  "snapshotDate": "2026-10-18",
+  "assets": {
+    "terrain.json": "04f5e8943bf6411f5fc2f6f2baca19b134bfc01a4037aeffaaa185d803edf602",
+    "traditional-region-splits.json": "a8a1a7d3260badc80cc5279de0fe28fa0b75b33c57adc365518c73c5a50092d0"
+  },
+  "naturalEarth": {
+    "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_geography_regions_polys.geojson",
+    "revision": "ca96624a56bd078437bca8184e78163e5039ad19",
+    "sha256": "b7b26e50ea917d3696aec87f932def2bf5f890f5770e441d59c162c6f4c92a77",
+    "license": "Public domain",
+    "licenseUrl": "https://www.naturalearthdata.com/about/terms-of-use/",
+    "processing": "Physical label polygons, source categories Range/mtn, Plateau, Desert, Plain, Basin; topology-preserving simplification 0.025 degrees; precision 5 decimals. Natural Earth states these regions are only roughly accurate at 1:50 million despite their 10m layer name. Korean Hamgyong is replaced with GMBA geometry.",
+    "labelEdits": [
+      {
+        "id": 1159102607,
+        "sourceName": "Wasatch Range",
+        "originalKorean": "와사치 레인지",
+        "displayName": "와사치 산맥"
+      },
+      {
+        "id": 1159102609,
+        "sourceName": "Lebombo Mts.",
+        "originalKorean": "레봄보 마운틴스",
+        "displayName": "레봄보 산맥"
+      },
+      {
+        "id": 1730070733,
+        "sourceName": "Ruwenzori Range",
+        "originalKorean": "루웬조리 레인지",
+        "displayName": "루웬조리 산맥"
+      },
+      {
+        "id": 1159102615,
+        "sourceName": "Moyen Atlas",
+        "originalKorean": "모옌 아틀라스",
+        "displayName": "중앙아틀라스산맥"
+      },
+      {
+        "id": 1159102617,
+        "sourceName": "Loma Mts.",
+        "originalKorean": "로마 마운틴스",
+        "displayName": "로마 산맥"
+      },
+      {
+        "id": 1730070745,
+        "sourceName": "Mbang Mts.",
+        "originalKorean": "음방 마운틴스",
+        "displayName": "음방 산맥"
+      },
+      {
+        "id": 1730070787,
+        "sourceName": "Horn Plat.",
+        "originalKorean": "혼 플래투",
+        "displayName": "혼 고원"
+      },
+      {
+        "id": 1159102641,
+        "sourceName": "Khomas Highland",
+        "originalKorean": "코마스 하이랜드",
+        "displayName": "코마스 고지"
+      },
+      {
+        "id": 1159102643,
+        "sourceName": "Ennedi Plat.",
+        "originalKorean": "엔네디 플래투",
+        "displayName": "엔네디 고원"
+      },
+      {
+        "id": 1159102645,
+        "sourceName": "Jos Plateau",
+        "originalKorean": "조스 플래투",
+        "displayName": "조스 고원"
+      },
+      {
+        "id": 1159102981,
+        "sourceName": "Maya Mts.",
+        "originalKorean": "마야 마운틴스",
+        "displayName": "마야 산맥"
+      },
+      {
+        "id": 1159102985,
+        "sourceName": "Bitterroot Range",
+        "originalKorean": "비터루트 레인지",
+        "displayName": "비터루트 산맥"
+      },
+      {
+        "id": 1730071505,
+        "sourceName": "Ogo Mts.",
+        "originalKorean": "오고 마운틴스",
+        "displayName": "오고 산맥"
+      },
+      {
+        "id": 1730071513,
+        "sourceName": "Guinea Highlands",
+        "originalKorean": "기니 하이랜즈",
+        "displayName": "기니 고지"
+      },
+      {
+        "id": 1730071517,
+        "sourceName": "Ahmar Mts.",
+        "originalKorean": "아마르 마운틴스",
+        "displayName": "아마르 산맥"
+      },
+      {
+        "id": 1159103005,
+        "sourceName": "Er Rif",
+        "originalKorean": "어 리프",
+        "displayName": "리프산맥"
+      },
+      {
+        "id": 1730071533,
+        "sourceName": "Atlas Tellien",
+        "originalKorean": "아틀라스 텔리엔",
+        "displayName": "텔아틀라스산맥"
+      },
+      {
+        "id": 1159103011,
+        "sourceName": "Inyanga Mts.",
+        "originalKorean": "인양가 마운틴스",
+        "displayName": "인양가 산맥"
+      },
+      {
+        "id": 1159103013,
+        "sourceName": "Australian Alps",
+        "originalKorean": "오스트레일리안 알프스",
+        "displayName": "오스트레일리아 알프스"
+      },
+      {
+        "id": 1159103015,
+        "sourceName": "Flinders Ranges",
+        "originalKorean": "플린더스 레인지스",
+        "displayName": "플린더스 산맥"
+      },
+      {
+        "id": 1159103017,
+        "sourceName": "Blue Mts.",
+        "originalKorean": "블루마운틴스",
+        "displayName": "블루 산맥"
+      },
+      {
+        "id": 1159103019,
+        "sourceName": "Gregory Ra.",
+        "originalKorean": "그레고리 레인지",
+        "displayName": "그레고리 산맥"
+      },
+      {
+        "id": 1730071561,
+        "sourceName": "Selwyn Ra.",
+        "originalKorean": "셀윈 레인지",
+        "displayName": "셀윈 산맥"
+      },
+      {
+        "id": 1159103023,
+        "sourceName": "MacDonnell Ranges",
+        "originalKorean": "맥도넬 레인지스",
+        "displayName": "맥도넬 산맥"
+      },
+      {
+        "id": 1159103027,
+        "sourceName": "Darling Range",
+        "originalKorean": "달링 레인지",
+        "displayName": "달링 산맥"
+      },
+      {
+        "id": 1730071573,
+        "sourceName": "Hamersley Ra.",
+        "originalKorean": "해머슬리 레인지",
+        "displayName": "해머슬리 산맥"
+      },
+      {
+        "id": 1730071579,
+        "sourceName": "Owen Stanley Ra.",
+        "originalKorean": "오웬 스탠리 레인지",
+        "displayName": "오웬 스탠리 산맥"
+      },
+      {
+        "id": 1730071583,
+        "sourceName": "Maoke Mts.",
+        "originalKorean": "마오케 마운틴스",
+        "displayName": "마오케 산맥"
+      },
+      {
+        "id": 1159103035,
+        "sourceName": "Barisan Mountains",
+        "originalKorean": "바리산 마운틴스",
+        "displayName": "바리산 산맥"
+      },
+      {
+        "id": 1159103037,
+        "sourceName": "Hentiyn Mts.",
+        "originalKorean": "헨티인 마운틴스",
+        "displayName": "헨티인 산맥"
+      },
+      {
+        "id": 1159103039,
+        "sourceName": "Bureinskiy Ra.",
+        "originalKorean": "부레인스키 레인지",
+        "displayName": "부레인스키 산맥"
+      },
+      {
+        "id": 1159103041,
+        "sourceName": "Yam Alin’ Range",
+        "originalKorean": "얌 알린 레인지",
+        "displayName": "얌 알린 산맥"
+      },
+      {
+        "id": 1730071603,
+        "sourceName": "Chukchi Range",
+        "originalKorean": "축치 레인지",
+        "displayName": "축치 산맥"
+      },
+      {
+        "id": 1159103047,
+        "sourceName": "Suntar-Khayata Range",
+        "originalKorean": "순타르-카야타 레인지",
+        "displayName": "순타르-카야타 산맥"
+      },
+      {
+        "id": 1730071613,
+        "sourceName": "Dzhugdzhur Range",
+        "originalKorean": "주그주르 레인지",
+        "displayName": "주그주르 산맥"
+      },
+      {
+        "id": 1159103051,
+        "sourceName": "Momskiy Mts.",
+        "originalKorean": "맘스키 마운틴스",
+        "displayName": "맘스키 산맥"
+      },
+      {
+        "id": 1159103053,
+        "sourceName": "Central Bruhui Range",
+        "originalKorean": "센트럴 브루후이 레인지",
+        "displayName": "센트럴 브루후이 산맥"
+      },
+      {
+        "id": 1159103055,
+        "sourceName": "Karatau Range",
+        "originalKorean": "가라타우 레인지",
+        "displayName": "가라타우 산맥"
+      },
+      {
+        "id": 1730071631,
+        "sourceName": "Arvalli Ra.",
+        "originalKorean": "아르발리 레인지",
+        "displayName": "아르발리 산맥"
+      },
+      {
+        "id": 1159103059,
+        "sourceName": "Sulaiman Ra.",
+        "originalKorean": "술라이만 레인지",
+        "displayName": "술라이만 산맥"
+      },
+      {
+        "id": 1159103065,
+        "sourceName": "Kirthar Ra.",
+        "originalKorean": "키르타르 레인지",
+        "displayName": "키르타르 산맥"
+      },
+      {
+        "id": 1730071649,
+        "sourceName": "Lebanon Mts.",
+        "originalKorean": "레바논 마운틴스",
+        "displayName": "레바논 산맥"
+      },
+      {
+        "id": 1730071657,
+        "sourceName": "Paropamisus Ra.",
+        "originalKorean": "파로파미수스 레인지",
+        "displayName": "파로파미수스 산맥"
+      },
+      {
+        "id": 1730071661,
+        "sourceName": "Al Hajar Mts.",
+        "originalKorean": "알 하자르 마운틴스",
+        "displayName": "알 하자르 산맥"
+      },
+      {
+        "id": 1730071667,
+        "sourceName": "Tuwayq Mts.",
+        "originalKorean": "투와이크 마운틴스",
+        "displayName": "투와이크 산맥"
+      },
+      {
+        "id": 1159103085,
+        "sourceName": "Tatra Mts.",
+        "originalKorean": "타트라 마운틴스",
+        "displayName": "타트라 산맥"
+      },
+      {
+        "id": 1159103105,
+        "sourceName": "Grampian Mts.",
+        "originalKorean": "그램피언 마운틴스",
+        "displayName": "그램피언 산맥"
+      },
+      {
+        "id": 1159103107,
+        "sourceName": "Cambrian Mts.",
+        "originalKorean": "캄브리안 마운틴스",
+        "displayName": "캄브리안 산맥"
+      },
+      {
+        "id": 1730071739,
+        "sourceName": "Birch Mts.",
+        "originalKorean": "버치 마운틴",
+        "displayName": "버치 산맥"
+      },
+      {
+        "id": 1159103113,
+        "sourceName": "Caribou Mts.",
+        "originalKorean": "카리부 마운틴스",
+        "displayName": "카리부 산맥"
+      },
+      {
+        "id": 1159103117,
+        "sourceName": "Cassiar Mts.",
+        "originalKorean": "카시아 마운틴스",
+        "displayName": "카시아 산맥"
+      },
+      {
+        "id": 1159103119,
+        "sourceName": "Ogilvie Mts.",
+        "originalKorean": "오길비 마운틴스",
+        "displayName": "오길비 산맥"
+      },
+      {
+        "id": 1159103121,
+        "sourceName": "Wrangell Mts.",
+        "originalKorean": "랭겔 마운틴스",
+        "displayName": "랭겔 산맥"
+      },
+      {
+        "id": 1159103125,
+        "sourceName": "Klamath Mts.",
+        "originalKorean": "클라마스 마운틴스",
+        "displayName": "클라마스 산맥"
+      },
+      {
+        "id": 1159103127,
+        "sourceName": "Ouachita Mts.",
+        "originalKorean": "와치타 마운틴스",
+        "displayName": "와치타 산맥"
+      },
+      {
+        "id": 1159103129,
+        "sourceName": "Salmon River Mts.",
+        "originalKorean": "새먼 리버 마운틴스",
+        "displayName": "새먼 리버 산맥"
+      },
+      {
+        "id": 1730071801,
+        "sourceName": "Tumuc-Humac Mts.",
+        "originalKorean": "투묵-휴막 마운틴스",
+        "displayName": "투묵-휴막 산맥"
+      },
+      {
+        "id": 1159103215,
+        "sourceName": "Jilf al Kabir Plateau",
+        "originalKorean": "질프 알 카비르 플래투",
+        "displayName": "질프 알 카비르 고원"
+      },
+      {
+        "id": 1730071967,
+        "sourceName": "Jabal al Abyad Plateau",
+        "originalKorean": "자발 알 아비아드 플래투",
+        "displayName": "자발 알 아비아드 고원"
+      },
+      {
+        "id": 1159103219,
+        "sourceName": "Libyan Plateau",
+        "originalKorean": "리비안 플래투",
+        "displayName": "리비안 고원"
+      },
+      {
+        "id": 1159103221,
+        "sourceName": "Buckland Tableland",
+        "originalKorean": "버클랜드 테이블랜드",
+        "displayName": "버클랜드 고원"
+      },
+      {
+        "id": 1159103225,
+        "sourceName": "Atherton Tableland",
+        "originalKorean": "애서튼 테이블랜드",
+        "displayName": "애서튼 고원"
+      },
+      {
+        "id": 1730071987,
+        "sourceName": "Barkly Tableland",
+        "originalKorean": "바클리 테이블랜드",
+        "displayName": "바클리 고원"
+      },
+      {
+        "id": 1730071991,
+        "sourceName": "Okhotsk-Kolyma Upland",
+        "originalKorean": "오호츠크-콜리마 업랜드",
+        "displayName": "오호츠크-콜리마 고지"
+      },
+      {
+        "id": 1159103231,
+        "sourceName": "Chota Nägpur Plateau",
+        "originalKorean": "초타 나그푸르 플래투",
+        "displayName": "초타 나그푸르 고원"
+      },
+      {
+        "id": 1730071999,
+        "sourceName": "Stavropol’ Plateau",
+        "originalKorean": "스타브로폴 플래투",
+        "displayName": "스타브로폴 고원"
+      },
+      {
+        "id": 1159103235,
+        "sourceName": "Volga Upland",
+        "originalKorean": "볼가 업랜드",
+        "displayName": "볼가 고지"
+      },
+      {
+        "id": 1159103237,
+        "sourceName": "Dnieper Upland",
+        "originalKorean": "드니퍼 업랜드",
+        "displayName": "드니퍼 고지"
+      },
+      {
+        "id": 1730072015,
+        "sourceName": "Azov Upland",
+        "originalKorean": "아조프 업랜드",
+        "displayName": "아조프 고지"
+      },
+      {
+        "id": 1159103265,
+        "sourceName": "Eastern Desert",
+        "originalKorean": "이스턴 사막",
+        "displayName": "동부 사막"
+      },
+      {
+        "id": 1159103275,
+        "sourceName": "Strzelecki Desert",
+        "originalKorean": "스트젤레츠키 데저트",
+        "displayName": "스트젤레츠키 사막"
+      },
+      {
+        "id": 1159103281,
+        "sourceName": "Tanami Desert",
+        "originalKorean": "타나미 데저트",
+        "displayName": "타나미 사막"
+      },
+      {
+        "id": 1730072141,
+        "sourceName": "Hasa Plain",
+        "originalKorean": "하사 플레인",
+        "displayName": "하사 평원"
+      },
+      {
+        "id": 1730072149,
+        "sourceName": "Baltic Plains",
+        "originalKorean": "발틱 플레인스",
+        "displayName": "발틱 평원"
+      },
+      {
+        "id": 1159103521,
+        "sourceName": "Anti Atlas",
+        "originalKorean": "안티 아틀라스",
+        "displayName": "안티아틀라스산맥"
+      },
+      {
+        "id": 1730072577,
+        "sourceName": "Muchinga Mts.",
+        "originalKorean": "무칭가 마운틴스",
+        "displayName": "무칭가 산맥"
+      },
+      {
+        "id": 1159103535,
+        "sourceName": "SELWYN MTS.",
+        "originalKorean": "셀윈 마운틴스",
+        "displayName": "셀윈 산맥"
+      },
+      {
+        "id": 1159103537,
+        "sourceName": "COLUMBIA MTS.",
+        "originalKorean": "콜럼비아 마운틴스",
+        "displayName": "콜럼비아 산맥"
+      },
+      {
+        "id": 1730072611,
+        "sourceName": "TORNGAT MTS.",
+        "originalKorean": "토르가트 마운틴스",
+        "displayName": "토르가트 산맥"
+      },
+      {
+        "id": 1730072617,
+        "sourceName": "NEW GUINEA HIGHLANDS",
+        "originalKorean": "뉴 기니 하이랜즈",
+        "displayName": "뉴기니 고지"
+      },
+      {
+        "id": 1159103549,
+        "sourceName": "SREDINNYY RANGE",
+        "originalKorean": "스레디니 레인지",
+        "displayName": "스레디니 산맥"
+      },
+      {
+        "id": 1159103551,
+        "sourceName": "Koryak Range",
+        "originalKorean": "코랴크 레인지",
+        "displayName": "코랴크 산맥"
+      },
+      {
+        "id": 1159103553,
+        "sourceName": "KOLYMA RANGE",
+        "originalKorean": "콜리마 레인지",
+        "displayName": "콜리마 산맥"
+      },
+      {
+        "id": 1159103555,
+        "sourceName": "CHERSKIY RANGE",
+        "originalKorean": "체르스키 레인지",
+        "displayName": "체르스키 산맥"
+      },
+      {
+        "id": 1730072659,
+        "sourceName": "Western Sayan Mts.",
+        "originalKorean": "웨스턴 사얀 마운틴스",
+        "displayName": "서사얀산맥"
+      },
+      {
+        "id": 1159103567,
+        "sourceName": "Tannu-Ola Ra.",
+        "originalKorean": "탄누올라 레인지",
+        "displayName": "탄누올라 산맥"
+      },
+      {
+        "id": 1159103571,
+        "sourceName": "Lüliang Mts.",
+        "originalKorean": "뤼량 마운틴스",
+        "displayName": "뤼량 산맥"
+      },
+      {
+        "id": 1159103575,
+        "sourceName": "Dalou Mts.",
+        "originalKorean": "달로우 마운틴스",
+        "displayName": "달로우 산맥"
+      },
+      {
+        "id": 1159103577,
+        "sourceName": "Dângrêk Ra.",
+        "originalKorean": "당그레크 레인지",
+        "displayName": "당그레크 산맥"
+      },
+      {
+        "id": 1159103587,
+        "sourceName": "Satpura Range",
+        "originalKorean": "삿푸라 레인지",
+        "displayName": "삿푸라 산맥"
+      },
+      {
+        "id": 1730072715,
+        "sourceName": "Salt Ra.",
+        "originalKorean": "솔트 레인지",
+        "displayName": "솔트 산맥"
+      },
+      {
+        "id": 1159103591,
+        "sourceName": "Borohoro Mts.",
+        "originalKorean": "보로호로 마운틴",
+        "displayName": "보로호로 산맥"
+      },
+      {
+        "id": 1730072723,
+        "sourceName": "Alataw Mts.",
+        "originalKorean": "알라타우 마운틴스",
+        "displayName": "알라타우 산맥"
+      },
+      {
+        "id": 1730072741,
+        "sourceName": "KUH RUD MOUNTAINS",
+        "originalKorean": "쿠 루드 마운틴스",
+        "displayName": "쿠 루드 산맥"
+      },
+      {
+        "id": 1159103645,
+        "sourceName": "Great Salt Lake Desert",
+        "originalKorean": "그레이트 솔트 레이크 데저트",
+        "displayName": "그레이트솔트레이크 사막"
+      },
+      {
+        "id": 1159103651,
+        "sourceName": "TAKLIMAKAN DESERT",
+        "originalKorean": "타커라마간 사막",
+        "displayName": "타클라마칸 사막"
+      },
+      {
+        "id": 1730072935,
+        "sourceName": "Huíla Plateau",
+        "originalKorean": "우일라 플래투",
+        "displayName": "우일라 고원"
+      },
+      {
+        "id": 1159103695,
+        "sourceName": "Bié Plateau",
+        "originalKorean": "비에 플래투",
+        "displayName": "비에 고원"
+      },
+      {
+        "id": 1159103699,
+        "sourceName": "Ozark Plateau",
+        "originalKorean": "오자크 플래투",
+        "displayName": "오자크 고원"
+      },
+      {
+        "id": 1730072951,
+        "sourceName": "Edwards Plateau",
+        "originalKorean": "에드워즈 플래투",
+        "displayName": "에드워즈 고원"
+      },
+      {
+        "id": 1159103703,
+        "sourceName": "FRASER PLATEAU",
+        "originalKorean": "프레이저 플래투",
+        "displayName": "프레이저 고원"
+      },
+      {
+        "id": 1159103705,
+        "sourceName": "Superior Upland",
+        "originalKorean": "슈페리어 업랜드",
+        "displayName": "슈페리어 고지"
+      },
+      {
+        "id": 1730072967,
+        "sourceName": "KIMBERLEY PLATEAU",
+        "originalKorean": "킴벌리 플래투",
+        "displayName": "킴벌리 고원"
+      },
+      {
+        "id": 1730072971,
+        "sourceName": "KAZAKH UPLAND",
+        "originalKorean": "카작 업랜드",
+        "displayName": "카자흐 고지"
+      },
+      {
+        "id": 1159103713,
+        "sourceName": "Ustyurt Plateau",
+        "originalKorean": "우스튜르트 플래투",
+        "displayName": "우스튜르트 고원"
+      },
+      {
+        "id": 1730072981,
+        "sourceName": "STANOVOY UPLAND",
+        "originalKorean": "스타노보이 업랜드",
+        "displayName": "스타노보이 고지"
+      },
+      {
+        "id": 1159103717,
+        "sourceName": "Loess Plateau",
+        "originalKorean": "황투고원",
+        "displayName": "황토 고원"
+      },
+      {
+        "id": 1730072989,
+        "sourceName": "Junggar Basin",
+        "originalKorean": "중가 베이신",
+        "displayName": "중가르 분지"
+      },
+      {
+        "id": 1730073315,
+        "sourceName": "ATLAS SAHARIEN",
+        "originalKorean": "아틀라스 사하리엔",
+        "displayName": "사하라아틀라스산맥"
+      },
+      {
+        "id": 1159103879,
+        "sourceName": "HAUT ATLAS",
+        "originalKorean": "오트 아틀라스",
+        "displayName": "하이아틀라스산맥"
+      },
+      {
+        "id": 1159103883,
+        "sourceName": "CRYSTAL MOUNTAINS",
+        "originalKorean": "크리스탈 마운틴스",
+        "displayName": "크리스탈 산맥"
+      },
+      {
+        "id": 1159103885,
+        "sourceName": "TIBESTI MTS.",
+        "originalKorean": "티베스티 마운틴스",
+        "displayName": "티베스티 산맥"
+      },
+      {
+        "id": 1159103887,
+        "sourceName": "AHAGGAR MTS.",
+        "originalKorean": "아하가르 마운틴스",
+        "displayName": "아하가르 산맥"
+      },
+      {
+        "id": 1159103891,
+        "sourceName": "AÏR MTS.",
+        "originalKorean": "에어 마운틴스",
+        "displayName": "에어 산맥"
+      },
+      {
+        "id": 1730073347,
+        "sourceName": "MITUMBA MTS.",
+        "originalKorean": "미툼바 마운틴스",
+        "displayName": "미툼바 산맥"
+      },
+      {
+        "id": 1730073365,
+        "sourceName": "Central Highlands",
+        "originalKorean": "센트럴 하이랜즈",
+        "displayName": "센트럴 고지"
+      },
+      {
+        "id": 1730073373,
+        "sourceName": "EASTERN SAYAN MTS.",
+        "originalKorean": "이스턴 사얀 마운틴스",
+        "displayName": "동사얀산맥"
+      },
+      {
+        "id": 1730073379,
+        "sourceName": "YABLONOVYY RANGE",
+        "originalKorean": "야블로노비 레인지",
+        "displayName": "야블로노비 산맥"
+      },
+      {
+        "id": 1159103923,
+        "sourceName": "Tarbagatay Ra.",
+        "originalKorean": "타르바가타이 레인지",
+        "displayName": "타르바가타이 산맥"
+      },
+      {
+        "id": 1159103927,
+        "sourceName": "ALTUN MTS.",
+        "originalKorean": "알툰 마운틴스",
+        "displayName": "알툰 산맥"
+      },
+      {
+        "id": 1730073417,
+        "sourceName": "HEJAZ MTS.",
+        "originalKorean": "헤자즈 마운틴스",
+        "displayName": "헤자즈 산맥"
+      },
+      {
+        "id": 1730073421,
+        "sourceName": "ASIR MTS.",
+        "originalKorean": "아시르 마운틴스",
+        "displayName": "아시르 산맥"
+      },
+      {
+        "id": 1730073425,
+        "sourceName": "ELBURZ MTS.",
+        "originalKorean": "엘버즈 마운틴스",
+        "displayName": "엘버즈 산맥"
+      },
+      {
+        "id": 1159103939,
+        "sourceName": "APPENNINI",
+        "originalKorean": "아펜니니",
+        "displayName": "아펜니노산맥"
+      },
+      {
+        "id": 1159103947,
+        "sourceName": "COAST RANGES",
+        "originalKorean": "코스트 레인지스",
+        "displayName": "코스트 산맥"
+      },
+      {
+        "id": 1159103955,
+        "sourceName": "CHUGACH MTS.",
+        "originalKorean": "추가치 마운틴스",
+        "displayName": "추가치 산맥"
+      },
+      {
+        "id": 1159103957,
+        "sourceName": "MACKENZIE MTS.",
+        "originalKorean": "매켄지 마운틴스",
+        "displayName": "매켄지 산맥"
+      },
+      {
+        "id": 1159104019,
+        "sourceName": "KATANGA PLATEAU",
+        "originalKorean": "카탕가 플래투",
+        "displayName": "카탕가 고원"
+      },
+      {
+        "id": 1159104021,
+        "sourceName": "CENTRAL RUSSIAN UPLAND",
+        "originalKorean": "센트럴 러시안 업랜드",
+        "displayName": "중앙 러시아 고지"
+      },
+      {
+        "id": 1730073599,
+        "sourceName": "Aldan Upland",
+        "originalKorean": "알단 업랜드",
+        "displayName": "알단 고지"
+      },
+      {
+        "id": 1159104025,
+        "sourceName": "PUTORANA PLATEAU",
+        "originalKorean": "푸토라나 플래투",
+        "displayName": "푸토라나 고원"
+      },
+      {
+        "id": 1159104027,
+        "sourceName": "YUNGUI PLATEAU",
+        "originalKorean": "윈구이고원",
+        "displayName": "윈구이 고원"
+      },
+      {
+        "id": 1159104029,
+        "sourceName": "Khorat Plat.",
+        "originalKorean": "코랏 분지",
+        "displayName": "코랏 고원"
+      },
+      {
+        "id": 1159104031,
+        "sourceName": "SHAN PLATEAU",
+        "originalKorean": "샨 플래투",
+        "displayName": "샨 고원"
+      },
+      {
+        "id": 1730073629,
+        "sourceName": "ALTI-PLANICIE MEXICANA",
+        "originalKorean": "알티 플래니시 멕시카나",
+        "displayName": "멕시코 고원"
+      },
+      {
+        "id": 1730073633,
+        "sourceName": "ALLEGHENY PLATEAU",
+        "originalKorean": "앨러게니 플래투",
+        "displayName": "앨러게니 고원"
+      },
+      {
+        "id": 1730073637,
+        "sourceName": "CUMBERLAND PLAT.",
+        "originalKorean": "컴벌랜드 플래투",
+        "displayName": "컴벌랜드 고원"
+      },
+      {
+        "id": 1159104043,
+        "sourceName": "YUKON PLATEAU",
+        "originalKorean": "유콘 플래투",
+        "displayName": "유콘 고원"
+      },
+      {
+        "id": 1159104055,
+        "sourceName": "NULLARBOR PLAIN",
+        "originalKorean": "널라버 플레인",
+        "displayName": "널러버 평원"
+      },
+      {
+        "id": 1159104061,
+        "sourceName": "WESTERN DESERT",
+        "originalKorean": "웨스턴 데저트",
+        "displayName": "서부 사막"
+      },
+      {
+        "id": 1159104089,
+        "sourceName": "MURRAY-DARLING BASIN",
+        "originalKorean": "머레이 달링 베이신",
+        "displayName": "머리·달링 분지"
+      },
+      {
+        "id": 1159104093,
+        "sourceName": "TARIM BASIN",
+        "originalKorean": "타리무 분지",
+        "displayName": "타림 분지"
+      },
+      {
+        "id": 1730073913,
+        "sourceName": "CHAÎNE ANNAMITIQUE",
+        "originalKorean": "체인 아나미틱",
+        "displayName": "안남산맥"
+      },
+      {
+        "id": 1159104193,
+        "sourceName": "BROOKS RANGE",
+        "originalKorean": "브룩스 레인지",
+        "displayName": "브룩스 산맥"
+      },
+      {
+        "id": 1159104197,
+        "sourceName": "COAST MOUNTAINS",
+        "originalKorean": "코스트 마운틴스",
+        "displayName": "코스트 산맥"
+      },
+      {
+        "id": 1159104201,
+        "sourceName": "ALASKA RANGE",
+        "originalKorean": "알래스카 레인지",
+        "displayName": "알래스카 산맥"
+      },
+      {
+        "id": 1159104203,
+        "sourceName": "MANCHURIAN PLAIN",
+        "originalKorean": "맨추리안 플레인",
+        "displayName": "만주 평원"
+      },
+      {
+        "id": 1159104211,
+        "sourceName": "COASTAL PLAIN",
+        "originalKorean": "코스탈 플레인",
+        "displayName": "해안 평원"
+      },
+      {
+        "id": 1730073989,
+        "sourceName": "CENTRAL LOWLAND",
+        "originalKorean": "센트럴 로우랜드",
+        "displayName": "중앙 저지대"
+      },
+      {
+        "id": 1159104235,
+        "sourceName": "PLANALTO DO MATO GROSSO",
+        "originalKorean": "플라날토 도 마토 그로소",
+        "displayName": "마투그로수 고원"
+      },
+      {
+        "id": 1159104243,
+        "sourceName": "BETPAQDALA DESERT",
+        "originalKorean": "벳팩달라 데저트",
+        "displayName": "벳팩달라 사막"
+      },
+      {
+        "id": 1159104315,
+        "sourceName": "KAZAKH STEPPE",
+        "originalKorean": "카작 스텝",
+        "displayName": "카자흐 스텝"
+      },
+      {
+        "id": 1159104319,
+        "sourceName": "GREAT PLAINS",
+        "originalKorean": "그레이트플레인스",
+        "displayName": "그레이트 평원"
+      },
+      {
+        "id": 1159104341,
+        "sourceName": "WESTERN PLATEAU",
+        "originalKorean": "웨스턴 플래투",
+        "displayName": "서부 고원"
+      },
+      {
+        "id": 1159104373,
+        "sourceName": "Admiralty Mountains",
+        "originalKorean": "애드미럴티 마운틴스",
+        "displayName": "애드미럴티 산맥"
+      },
+      {
+        "id": 1159104377,
+        "sourceName": "Prince Albert Mountains",
+        "originalKorean": "프린스 앨버트 마운틴스",
+        "displayName": "프린스 앨버트 산맥"
+      },
+      {
+        "id": 1159104379,
+        "sourceName": "Queen Alexandra Range",
+        "originalKorean": "퀸 알렉산드라 레인지",
+        "displayName": "퀸 알렉산드라 산맥"
+      },
+      {
+        "id": 1159104397,
+        "sourceName": "American Highland",
+        "originalKorean": "아메리칸 하이랜드",
+        "displayName": "아메리칸 고지"
+      },
+      {
+        "id": 1159104435,
+        "sourceName": "Pensacola Mountains",
+        "originalKorean": "펜사콜라 마운틴스",
+        "displayName": "펜사콜라 산맥"
+      },
+      {
+        "id": 1159104437,
+        "sourceName": "Ellsworth Mountains",
+        "originalKorean": "엘스워스 마운틴스",
+        "displayName": "엘스워스 산맥"
+      },
+      {
+        "id": 1159104475,
+        "sourceName": "Jones Mountains",
+        "originalKorean": "존스 마운틴스",
+        "displayName": "존스 산맥"
+      },
+      {
+        "id": 1159104477,
+        "sourceName": "Hollick-Kenyon Plateau",
+        "originalKorean": "홀릭-케년 플래투",
+        "displayName": "홀릭-케년 고원"
+      },
+      {
+        "id": 1159104485,
+        "sourceName": "Flood Range",
+        "originalKorean": "플루드 레인지",
+        "displayName": "플루드 산맥"
+      },
+      {
+        "id": 1159104487,
+        "sourceName": "Ford Ranges",
+        "originalKorean": "포드 레인지스",
+        "displayName": "포드 산맥"
+      },
+      {
+        "id": 1159104493,
+        "sourceName": "Queen Maude Mountains",
+        "originalKorean": "퀸 모드 마운틴스",
+        "displayName": "퀸 모드 산맥"
+      },
+      {
+        "id": 1159104499,
+        "sourceName": "Rockefeller Plateau",
+        "originalKorean": "록펠러 플래투",
+        "displayName": "록펠러 고원"
+      },
+      {
+        "id": 1159104503,
+        "sourceName": "Executive Committee Range",
+        "originalKorean": "이그제큐티브 커미티 레인지",
+        "displayName": "이그제큐티브 커미티 산맥"
+      },
+      {
+        "id": 1159104507,
+        "sourceName": "Prince Charles Mountains",
+        "originalKorean": "프린스 찰스 마운틴스",
+        "displayName": "프린스 찰스 산맥"
+      },
+      {
+        "id": 1159104511,
+        "sourceName": "Scott Mountains",
+        "originalKorean": "스콧 마운틴스",
+        "displayName": "스콧 산맥"
+      },
+      {
+        "id": 1159104513,
+        "sourceName": "Napier Mountains",
+        "originalKorean": "네이피어 마운틴스",
+        "displayName": "네이피어 산맥"
+      },
+      {
+        "id": 1159104515,
+        "sourceName": "Shackleton Range",
+        "originalKorean": "섀클턴 레인지",
+        "displayName": "섀클턴 산맥"
+      },
+      {
+        "id": 1159104525,
+        "sourceName": "Polar Plateau",
+        "originalKorean": "폴라 플래투",
+        "displayName": "남극 고원"
+      },
+      {
+        "id": 1730074691,
+        "sourceName": "Queen Maud Mountains",
+        "originalKorean": "퀸 모드 마운틴스",
+        "displayName": "퀸 모드 산맥"
+      },
+      {
+        "id": 1159104635,
+        "sourceName": "N.I. Volcanic Plateau",
+        "originalKorean": "N.I. 볼캐닉 플래투",
+        "displayName": "북섬 화산 고원"
+      }
+    ],
+    "labelPolicy": "Source NAME_KO is retained except the explicitly recorded Korean classroom-name aliases and translations of generic English landform words (mountains/range, plateau, plain, desert, basin). Proper-name changes are listed per source ID. Duplicate NE_ID records are dissolved into one multipart feature."
+  },
+  "gmba": {
+    "url": "https://data.earthenv.org/mountains/standard/GMBA_Inventory_v2.0_standard_basic.zip",
+    "sha256": "91b7a37e4331cea01fb8938d535d0fbfcec8aae4173e4b073e46e2896b74f198",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "citation": "Snethlage, M.A. et al. (2022). GMBA Mountain Inventory v2. GMBA-EarthEnv.",
+    "datasetUrl": "https://doi.org/10.48601/earthenv-t9k2-1407",
+    "publicationUrl": "https://doi.org/10.1038/s41597-022-01256-y",
+    "processing": "Standard/basic mountain-definition polygons; dissolve children under their named parent. Topology-preserving simplification 0.008 degrees; precision 5 decimals. No fabricated ridge line or buffer geometry.",
+    "records": [
+      {
+        "GMBA_V2_ID": 11382,
+        "MapName": "Hamgyong Mountains",
+        "Path": "Eurasia > East Asia > Korean Peninsula > Hamgyong Mountains",
+        "Feature": "Mountain range with well-recognized name"
+      },
+      {
+        "GMBA_V2_ID": 11461,
+        "MapName": "Kangnam Mountains",
+        "Path": "Eurasia > East Asia > Korean Peninsula > Kangnam Mountains",
+        "Feature": "Mountain range with well-recognized name"
+      },
+      {
+        "GMBA_V2_ID": 11664,
+        "MapName": "Rangnim Mountains",
+        "Path": "Eurasia > East Asia > Korean Peninsula > Rangnim Mountains",
+        "Feature": "Mountain range with well-recognized name"
+      },
+      {
+        "GMBA_V2_ID": 20728,
+        "MapName": "Ahobiryong Mountains",
+        "Path": "Eurasia > East Asia > Korean Peninsula > Ahobiryong Mountains",
+        "Feature": "Mountain range with well-recognized name"
+      },
+      {
+        "GMBA_V2_ID": 11441,
+        "MapName": "Jiri Massif",
+        "Path": "Eurasia > East Asia > Korean Peninsula > Sobaek Mountains > Jiri Massif",
+        "Feature": "Mountain range with well-recognized name"
+      },
+      {
+        "GMBA_V2_ID": 20729,
+        "MapName": "Yeongnam Alps",
+        "Path": "Eurasia > East Asia > Korean Peninsula > T'aeback-Sanmaek > Yeongnam Alps",
+        "Feature": "Mountain range with well-recognized name"
+      },
+      {
+        "GMBA_V2_ID": 20730,
+        "MapName": "Dongdae Mountains",
+        "Path": "Eurasia > East Asia > Korean Peninsula > T'aeback-Sanmaek > Dongdae Mountains",
+        "Feature": "Mountain range with well-recognized name"
+      },
+      {
+        "GMBA_V2_ID": 20731,
+        "MapName": "Sobaek Mountains (nn)",
+        "Path": "Eurasia > East Asia > Korean Peninsula > Sobaek Mountains > Sobaek Mountains (nn)",
+        "Feature": "Support polygon - unnamed"
+      },
+      {
+        "GMBA_V2_ID": 20872,
+        "MapName": "T'aeback-Sanmaek (nn)",
+        "Path": "Eurasia > East Asia > Korean Peninsula > T'aeback-Sanmaek > T'aeback-Sanmaek (nn)",
+        "Feature": "Support polygon - unnamed"
+      }
+    ],
+    "groups": {
+      "taebaek": [
+        "태백산맥",
+        [
+          20729,
+          20730,
+          20872
+        ]
+      ],
+      "sobaek": [
+        "소백산맥",
+        [
+          11441,
+          20731
+        ]
+      ],
+      "hamgyeong": [
+        "함경산맥",
+        [
+          11382
+        ]
+      ],
+      "nangnim": [
+        "낭림산맥",
+        [
+          11664
+        ]
+      ],
+      "gangnam": [
+        "강남산맥",
+        [
+          11461
+        ]
+      ],
+      "ahobiryong": [
+        "아호비령산맥",
+        [
+          20728
+        ]
+      ]
+    }
+  },
+  "gaemaElevation": {
+    "source": "Mapzen Terrain Tiles; USGS GMTED2010 and SRTM, NOAA ETOPO1",
+    "sourceUrl": "https://registry.opendata.aws/terrain-tiles/",
+    "license": "Public domain for the USGS/NOAA source products used in this region",
+    "licenseUrl": "https://github.com/tilezen/joerd/blob/master/docs/attribution.md",
+    "attribution": "Mapzen; GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey; Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration.",
+    "processing": "Terrarium z7 RGB decoding, every second pixel (~2 km), >=1000 m connected highland nearest [127.4,40.8], intersect current Pyeongan/Hamgyeong reference land; topology-preserving 0.012 degree simplification. Pixel cells are intermediate raster polygonization only; output follows the connected elevation contour. This is terrain context around Gaema, NOT a definitive named-plateau boundary.",
+    "nameReference": "https://encykorea.aks.ac.kr/Article/E0001619",
+    "sources": [
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/108/47.png",
+        "sha256": "fb4980af1ffbf4cd62f85d8809c3798da69d86727ba8095f7afc22d3e87e3c73"
+      },
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/108/48.png",
+        "sha256": "a2aeb9cd9590002dfcb023a74494c759641de5cbef63299f0abbca26d660cbd2"
+      },
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/108/49.png",
+        "sha256": "69a496b77cc13822d67ae62f900eba089237bc062824df598468daa152a4e61a"
+      },
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/109/47.png",
+        "sha256": "36fafe9e81e53ff6343949e85f56c72975b6d10cac3f793f5eac66954009ec52"
+      },
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/109/48.png",
+        "sha256": "b1337bed55cbf76f6c803e65e98a86954d4f12674302639cdd7d6e939c1ab301"
+      },
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/109/49.png",
+        "sha256": "47506b6fe3f204bc4a3f6cd800df7cfc2f00a4727a7ee0b9ff7aadeb688b0863"
+      },
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/110/47.png",
+        "sha256": "b68a7466176d8457c356e6509708ef84c27b86f4411dd9fa341a26ba17d1d352"
+      },
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/110/48.png",
+        "sha256": "c4bbf5145831513b0a7cc6670444c62a03071033fc65cc55e1575049c7a3c573"
+      },
+      {
+        "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/7/110/49.png",
+        "sha256": "7cfda8fae4b2bf356450f87c74a6cb1b53f2600f17567ffab9631be33f0f0ac6"
+      }
+    ]
+  },
+  "traditionalRegions": {
+    "nameReferences": [
+      "https://encykorea.aks.ac.kr/Article/E0062616",
+      "https://encykorea.aks.ac.kr/Article/E0008487"
+    ],
+    "geometrySource": "areas-korea.json current province grouping; OSM Nominatim relation lookup for Jeju and Kaesong splits",
+    "geometryLicense": "ODbL 1.0; Natural Earth public domain coastlines",
+    "geometryLicenseUrl": "https://www.openstreetmap.org/copyright",
+    "parentAssetSha256": "6b4bf825d380eb9f2bcf8f676d08aea0c8c7f1be5e648329e2e4d8ff91c7b076",
+    "supplementSources": [
+      {
+        "url": "https://nominatim.openstreetmap.org/lookup?format=jsonv2&polygon_geojson=1&osm_ids=R2398560",
+        "sha256": "1e1b74d272dfd2a188cb340de70667352b5f2dc43a832831eb7be8b31b13d0e2"
+      },
+      {
+        "url": "https://nominatim.openstreetmap.org/lookup?format=jsonv2&polygon_geojson=1&osm_ids=R5455268",
+        "sha256": "e395344f0cbd5949cad1f9f258307aeebb12beaa319c74f71017514d5e61b296"
+      }
+    ],
+    "notes": "Traditional cultural/geographical names are mapped to modern source-based reference regions, not asserted as historically exact boundaries. Gwanseo=Pyeongan, Gwanbuk=Hamgyeong, Haeseo=Hwanghae, Gwandong=Gangwon, Hoseo=Chungcheong, Honam=Jeolla excluding Jeju, Yeongnam=Gyeongsang. Giho=modern Gyeonggi/Seoul/Incheon plus Hoseo and overlaps Hoseo; exclude it from non-overlapping default overlay. Kaesong is excluded from this modern Giho definition but kept in the existing eight-province navigation grouping."
+  }
+}

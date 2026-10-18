@@ -92,6 +92,10 @@ const appCss = await fs.readFile(
   path.join(root, "src/assets/index.css"),
   "utf8",
 );
+const legacyCss = await fs.readFile(
+  path.join(root, "assets/css/style.css"),
+  "utf8",
+);
 const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>위스토리 사전 검증</title><script src="https://cdn.tailwindcss.com"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><link rel="stylesheet" href="/fixture.css"><style>*{box-sizing:border-box}body{margin:0;font-family:'Noto Sans KR',sans-serif;background:#f8fafc}#root{width:min(100%,var(--fixture-width));margin:0 auto}#qa-feedback,#qa-calls{max-width:var(--fixture-width);margin:8px auto;font-size:12px;overflow-wrap:anywhere}body:has(.history-dictionary-dialog[open]) #root{width:100%}</style></head><body><div id="root"></div><output id="qa-feedback" aria-live="polite"></output><output id="qa-calls"></output><script type="module" src="/fixture.js"></script></body></html>`;
 const server = http.createServer((request, response) => {
   const route = request.url?.split("?")[0];
@@ -108,7 +112,7 @@ const server = http.createServer((request, response) => {
     route === "/fixture.js"
       ? js
       : route === "/fixture.css"
-        ? appCss.replace(/@import[^;]+;/g, "") + "\n" + css
+        ? legacyCss + "\n" + appCss.replace(/@import[^;]+;/g, "") + "\n" + css
         : html,
   );
 });

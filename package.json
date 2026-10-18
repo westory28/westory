@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm run typecheck && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-atlas",
+    "prebuild": "npm run typecheck && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas",
     "verify:entry-map-motion": "node scripts/verify-entry-map-motion.mjs",
     "typecheck": "tsc --noEmit",
     "verify:student-profile-emoji": "node scripts/verify-student-profile-emoji.mjs",
@@ -35,7 +35,9 @@
     "verify:teacher-patch-note-commands": "node scripts/verify-teacher-patch-note-commands.mjs && node scripts/verify-teacher-patch-note-sync.mjs && node scripts/verify-teacher-patch-memo-controller.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
-    "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs && node scripts/verify-history-atlas-regions.mjs && node scripts/verify-history-atlas-profiles.mjs && node scripts/verify-history-atlas-stories.mjs && node scripts/verify-history-atlas-curation.mjs && node scripts/verify-history-atlas-korea-restoration.mjs && node scripts/verify-history-atlas-restoration.mjs && node scripts/verify-history-atlas-countries.mjs"
+    "verify:history-dictionary": "node scripts/verify-history-dictionary-catalog.mjs && node scripts/verify-history-dictionary-classification.mjs && node scripts/verify-history-dictionary-browse.mjs && node scripts/verify-history-dictionary-initials.mjs && node scripts/verify-history-dictionary-navigation.mjs && node scripts/verify-history-dictionary-session.mjs && node scripts/verify-history-dictionary-contract.mjs",
+    "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs && node scripts/verify-history-atlas-regions.mjs && node scripts/verify-history-atlas-profiles.mjs && node scripts/verify-history-atlas-stories.mjs && node scripts/verify-history-atlas-curation.mjs && node scripts/verify-history-atlas-korea-restoration.mjs && node scripts/verify-history-atlas-restoration.mjs && node scripts/verify-history-atlas-countries.mjs && node scripts/verify-history-atlas-terrain.mjs && node scripts/verify-history-atlas-country-profiles.mjs",
+    "verify:history-map-ui": "node scripts/verify-history-map-ui.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",
