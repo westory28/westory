@@ -489,7 +489,10 @@ const Header: React.FC<{
           id,
           name: item.name,
           icon: studentIcons[id] || "lesson",
-          directUrl: children.length ? undefined : resolveTarget(item.url),
+          directUrl:
+            id === "weplay" || !children.length
+              ? resolveTarget(item.url)
+              : undefined,
           children: children.length
             ? children
             : [{ name: item.name, resolvedUrl: resolveTarget(item.url) }],

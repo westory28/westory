@@ -24,7 +24,9 @@ import {createRoot} from 'react-dom/client';
 import useWeplayMusic from ${source('src/components/common/weplay/useWeplayMusic.ts')};
 import WeplayMusicButton from ${source('src/components/common/weplay/WeplayMusicButton.tsx')};
 function Player(){
-  const music=useWeplayMusic();
+  const [active,setActive]=useState(true);
+  window.musicQa.setActive=setActive;
+  const music=useWeplayMusic(active);
   useEffect(()=>{if(new URLSearchParams(location.search).has('autostart'))music.start()},[music.start]);
   return <section><WeplayMusicButton {...music}/><button onClick={music.start}>게임 시작</button><output data-enabled={music.enabled} data-failed={music.failed}/></section>;
 }
@@ -137,6 +139,14 @@ try {
   assert.ok(Math.abs(active.volume - 0.28) < 0.001);
   assert.equal(active.error, null);
   checks.push({ name: 'native HTMLAudioElement plays after gesture', ...active });
+  await page.evaluate(() => window.musicQa.setActive(false));
+  await waitPaused(page);
+  await page.evaluate(() => {window.musicQa.setHidden(true); window.musicQa.setHidden(false);});
+  assert.equal(await page.evaluate(() => window.musicQa.players.at(-1).paused),true);
+  await page.evaluate(() => window.musicQa.setActive(true));
+  await waitPlaying(page);
+  assert.equal(await page.evaluate(() => window.musicQa.players.length),1);
+  checks.push({ name:'catalogue pauses music; selected game resumes the same player',passed:true });
   await page.evaluate(() => { window.musicQa.players.at(-1).currentTime = 44.85; });
   await page.waitForFunction(() => {
     const player = window.musicQa.players.at(-1);

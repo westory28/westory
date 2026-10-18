@@ -17,7 +17,6 @@ import {
   weplayErrorMessage,
   WEPLAY_GAMES,
   WEPLAY_DIFFICULTY_LABELS,
-  getWeplayNormalWordCount,
   type WeplayGameSettings,
   type WeplayManagement,
   type WeplayDifficulty,
@@ -28,13 +27,13 @@ import { createWeplayPreviewTransport } from "../../lib/weplayPreview";
 import HistoryRainGame, {
   type HistoryRainTransport,
 } from "../../components/common/weplay/HistoryRainGame";
-import TeacherSubNavigation from "./components/TeacherSubNavigation";
+import WeplayGameCatalog from "../../components/common/weplay/WeplayGameCatalog";
+import WeplayLaunchPanel from "../../components/common/weplay/WeplayLaunchPanel";
 import NavalBattleResult from "../../components/common/weplay/NavalBattleResult";
 import WeplayGuide from "../../components/common/weplay/WeplayGuide";
 import useWeplayGuide from "../../components/common/weplay/useWeplayGuide";
 import useWeplayMusic from "../../components/common/weplay/useWeplayMusic";
 import WeplayMusicButton from "../../components/common/weplay/WeplayMusicButton";
-import TeacherNavigationIcon from "../../components/layout/TeacherNavigationIcon";
 import "../../components/common/weplay/weplay.css";
 import "./ManageWeplay.css";
 import WeplayWordPool, { getWeplayWordPool } from "./components/WeplayWordPool";
@@ -45,11 +44,16 @@ import { getWeplayGameTitle } from "../../lib/weplayTitle";
 export default function ManageWeplay() {
   const { config, currentUser, userData, menuConfig } = useAuth();
   const gameTitle = getWeplayGameTitle(menuConfig);
-  const music = useWeplayMusic();
-  const [params] = useSearchParams();
-  const game =
-    WEPLAY_GAMES.find((item) => item.id === params.get("game")) ||
-    WEPLAY_GAMES[0];
+  const [params, setParams] = useSearchParams();
+  const selectedGame = WEPLAY_GAMES.find(
+    (item) => item.id === params.get("game"),
+  );
+  const game = selectedGame || WEPLAY_GAMES[0];
+  const music = useWeplayMusic(!!selectedGame);
+  const previewView = !!selectedGame && params.get("view") === "preview";
+  const viewKey = selectedGame ? `${game.id}/${previewView}` : "catalog";
+  const previousView = useRef(viewKey);
+  const mainRef = useRef<HTMLElement>(null);
   const canRead = canReadLessonManagement(userData, currentUser?.email);
   const canWrite = canWriteLessonManagement(userData, currentUser?.email);
   const [data, setData] = useState<WeplayManagement | null>(null);
@@ -63,7 +67,7 @@ export default function ManageWeplay() {
   const [removedSourceCount, setRemovedSourceCount] = useState(0);
   const [difficultyError, setDifficultyError] = useState("");
   const [settingsRevision, setSettingsRevision] = useState(0);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [mode, setMode] = useState<WeplaySession["mode"]>("practice");
   const [difficulty, setDifficulty] = useState<WeplayDifficulty>("mild");
   const [preview, setPreview] = useState<{
     session: WeplaySession;
@@ -71,12 +75,16 @@ export default function ManageWeplay() {
   } | null>(null);
   const [result, setResult] = useState<WeplayResult | null>(null);
   const generation = useRef(0);
-  const scope = `${currentUser?.uid}/${config?.year}/${config?.semester}/${game.id}`;
+  const previewGeneration = useRef(0);
+  const previewViewRef = useRef(previewView);
+  previewViewRef.current = previewView;
+  const scope = `${currentUser?.uid}/${config?.year}/${config?.semester}/${game.id}/${canRead}/${canWrite}`;
   const [loadedScope, setLoadedScope] = useState("");
   const guide = useWeplayGuide(
     currentUser?.uid,
     userData,
-    loadedScope === scope &&
+    !!selectedGame &&
+      loadedScope === scope &&
       canRead &&
       !!data &&
       !loading &&
@@ -98,7 +106,7 @@ export default function ManageWeplay() {
     setReloadRequired(false);
     try {
       const response = await getWeplayManagement(config, game.id);
-      if (token !== generation.current) return;
+      if (token !== generation.current || scopeRef.current !== scope) return;
       response.settings = normalizeWeplayGameSettings(response.settings);
       setData(response);
       setLoadedScope(scope);
@@ -111,7 +119,7 @@ export default function ManageWeplay() {
       setRemovedSourceCount(response.settings.unitIds.length - unitIds.length);
       setDraft({ ...response.settings, unitIds });
     } catch (caught) {
-      if (token === generation.current)
+      if (token === generation.current && scopeRef.current === scope)
         setError(
           weplayErrorMessage(
             caught,
@@ -119,9 +127,17 @@ export default function ManageWeplay() {
           ),
         );
     } finally {
-      if (token === generation.current) setLoading(false);
+      if (token === generation.current && scopeRef.current === scope)
+        setLoading(false);
     }
-  }, [config?.year, config?.semester, currentUser?.uid, game.id]);
+  }, [
+    config?.year,
+    config?.semester,
+    currentUser?.uid,
+    game.id,
+    canRead,
+    canWrite,
+  ]);
   useEffect(() => {
     setPreview(null);
     setResult(null);
@@ -136,8 +152,22 @@ export default function ManageWeplay() {
     else setLoading(false);
     return () => {
       generation.current++;
+      previewGeneration.current++;
     };
   }, [load, canRead]);
+  useEffect(() => {
+    if (previewView) return;
+    previewGeneration.current++;
+    setPreview(null);
+    setResult(null);
+    setStarting(false);
+  }, [previewView]);
+  useEffect(() => {
+    if (previousView.current !== viewKey) {
+      mainRef.current?.focus({ preventScroll: true });
+      previousView.current = viewKey;
+    }
+  }, [viewKey]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -171,7 +201,15 @@ export default function ManageWeplay() {
   };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!draft || !canWrite || saving || !dirty || difficultyError) return;
+    if (
+      !draft ||
+      !canWrite ||
+      loadedScope !== scope ||
+      saving ||
+      !dirty ||
+      difficultyError
+    )
+      return;
     const requestedScope = scope;
     setSaving(true);
     setError("");
@@ -204,9 +242,20 @@ export default function ManageWeplay() {
     }
   };
   const startPreview = async () => {
-    if (starting || previewCount < 3 || !draft || difficultyError) return;
+    if (
+      !canRead ||
+      !previewView ||
+      loadedScope !== scope ||
+      starting ||
+      saving ||
+      previewCount < 3 ||
+      !draft ||
+      difficultyError
+    )
+      return;
     music.start();
     const requestedScope = scope;
+    const request = ++previewGeneration.current;
     setStarting(true);
     setError("");
     try {
@@ -217,11 +266,20 @@ export default function ManageWeplay() {
         selectedLessons.map((item) => item.unitId),
         draft,
       );
-      if (scopeRef.current !== requestedScope) return;
+      if (
+        scopeRef.current !== requestedScope ||
+        !previewViewRef.current ||
+        previewGeneration.current !== request
+      )
+        return;
       setResult(null);
       setPreview({ session, transport: createWeplayPreviewTransport(session) });
     } catch (caught) {
-      if (scopeRef.current === requestedScope)
+      if (
+        scopeRef.current === requestedScope &&
+        previewViewRef.current &&
+        previewGeneration.current === request
+      )
         setError(
           weplayErrorMessage(
             caught,
@@ -229,12 +287,19 @@ export default function ManageWeplay() {
           ),
         );
     } finally {
-      if (scopeRef.current === requestedScope) setStarting(false);
+      if (
+        scopeRef.current === requestedScope &&
+        previewViewRef.current &&
+        previewGeneration.current === request
+      )
+        setStarting(false);
     }
   };
   const exitPreview = () => {
+    previewGeneration.current++;
     setPreview(null);
     setResult(null);
+    setStarting(false);
     setError("");
   };
   if (!canRead)
@@ -245,160 +310,193 @@ export default function ManageWeplay() {
     );
   return (
     <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-weplay-workspace">
-      <TeacherSubNavigation
-        title="위플레이 관리"
-        activeLabel={gameTitle}
-        open={menuOpen}
-        onOpenChange={setMenuOpen}
+      <main
+        ref={mainRef}
+        tabIndex={-1}
+        className="teacher-sub-content teacher-weplay-content"
       >
-        {WEPLAY_GAMES.map((item) => (
-          <Link
-            key={item.id}
-            to={`/teacher/weplay?game=${item.id}`}
-            className={`teacher-settings-section${item.id === game.id ? " is-active" : ""}`}
-            aria-current={item.id === game.id ? "page" : undefined}
-            onClick={() => setMenuOpen(false)}
-            title={gameTitle}
+        {!selectedGame && (
+          <WeplayGameCatalog portal="teacher" gameTitle={gameTitle} />
+        )}
+        <div hidden={!selectedGame}>
+          <nav
+            className="teacher-weplay-navigation"
+            aria-label="위플레이 화면 이동"
           >
-            <TeacherNavigationIcon name="game" />
-            <span>{gameTitle}</span>
-          </Link>
-        ))}
-      </TeacherSubNavigation>
-      <main className="teacher-sub-content teacher-weplay-content">
-        <div className="teacher-weplay-title">
-          <h1>{gameTitle}</h1>
-          <button
-            type="button"
-            className="weplay-guide-launch"
-            onClick={guide.openGuide}
-            disabled={!currentUser || starting}
-          >
-            <InfoHelpIcon />
-            게임 안내
-          </button>
-          {canReadPoints(userData, currentUser?.email) && (
-            <Link
-              className="teacher-weplay-button"
-              to="/teacher/points?tab=policy&section=policy-weplay"
-            >
-              위스 설정
+            <Link className="teacher-weplay-button" to="/teacher/weplay">
+              전체 게임
             </Link>
-          )}
-          <WeplayMusicButton {...music} />
-        </div>
-        {!preview && <WeplayTitleEditor title={gameTitle} />}
-        {loading ? (
-          <p role="status">게임 정보를 불러오는 중입니다.</p>
-        ) : !data || !draft ? (
-          <>
-            <p role="alert" className="teacher-weplay-error">
-              {error || "현재 학기를 확인해 주세요."}
-            </p>
-            <button
-              className="teacher-weplay-button"
-              onClick={() => void load()}
-            >
-              다시 불러오기
-            </button>
-          </>
-        ) : (
-          <>
-            {error && (
-              <p role="alert" className="teacher-weplay-error">
-                {error}
-              </p>
+            {previewView && (
+              <Link
+                className="teacher-weplay-button"
+                to={`/teacher/weplay?game=${game.id}`}
+              >
+                게임 관리
+              </Link>
             )}
-            {reloadRequired && (
+          </nav>
+          <div className="teacher-weplay-title">
+            <h1>{gameTitle}</h1>
+            <button
+              type="button"
+              className="weplay-guide-launch"
+              onClick={guide.openGuide}
+              disabled={!currentUser || starting}
+            >
+              <InfoHelpIcon />
+              게임 안내
+            </button>
+            {canReadPoints(userData, currentUser?.email) && (
+              <Link
+                className="teacher-weplay-button"
+                to="/teacher/points?tab=policy&section=policy-weplay"
+              >
+                위스 설정
+              </Link>
+            )}
+            <WeplayMusicButton {...music} />
+          </div>
+          <div hidden={previewView}>
+            <WeplayTitleEditor title={gameTitle} />
+          </div>
+          {loading || (data && loadedScope !== scope) ? (
+            <p role="status">게임 정보를 불러오는 중입니다.</p>
+          ) : !data || !draft ? (
+            <>
+              <p role="alert" className="teacher-weplay-error">
+                {error || "현재 학기를 확인해 주세요."}
+              </p>
               <button
                 className="teacher-weplay-button"
                 onClick={() => void load()}
               >
-                최신 설정 불러오기
+                다시 불러오기
               </button>
-            )}
-            {preview ? (
-              <section
-                className="teacher-weplay-preview"
-                aria-label="교사 게임 체험"
-              >
-                <div className="teacher-weplay-section-title">
-                  <h2>교사 체험</h2>
-                  <button
-                    className="teacher-weplay-button"
-                    disabled={starting}
-                    onClick={exitPreview}
-                  >
-                    {result ? "관리로 돌아가기" : "체험 종료"}
-                  </button>
-                </div>
-                <div className="weplay-page">
-                  {result?.battle ? (
-                    <NavalBattleResult
-                      gameTitle={gameTitle}
-                      result={result}
-                      preview
-                      replaying={starting}
-                      onReplay={() => void startPreview()}
-                    />
-                  ) : result ? (
-                    <div className="weplay-panel">
-                      <h2>
-                        체험 결과 ·{" "}
-                        {WEPLAY_DIFFICULTY_LABELS[result.difficulty]}
-                      </h2>
-                      <p className="weplay-result">
-                        <strong>
-                          {result.correctCount} / {result.totalWords}개
-                        </strong>
-                        <span>{result.score.toLocaleString()}점</span>
-                      </p>
-                      {result.battle && (
-                        <p>
-                          {result.battle.outcome === "defeat"
-                            ? "함선 침몰"
-                            : "해역 방어 완료"}
-                          {" · "}적선 {result.battle.sunkShips}척 격침 · 필살기{" "}
-                          {result.battle.specialCount}회
-                        </p>
-                      )}
-                      <p>위스·랭킹·학생 기록에 반영되지 않습니다.</p>
-                      {result.missedWords.length > 0 && (
-                        <details>
-                          <summary>놓친 단어</summary>
-                          <p>
-                            {[
-                              ...new Set(
-                                result.missedWords.map((word) => word.text),
-                              ),
-                            ].join(" · ")}
-                          </p>
-                        </details>
-                      )}
+            </>
+          ) : (
+            <>
+              {error && (
+                <p role="alert" className="teacher-weplay-error">
+                  {error}
+                </p>
+              )}
+              {reloadRequired && (
+                <button
+                  className="teacher-weplay-button"
+                  onClick={() => void load()}
+                >
+                  최신 설정 불러오기
+                </button>
+              )}
+              {previewView && (
+                <section
+                  className="teacher-weplay-preview"
+                  aria-label="교사 게임 체험"
+                >
+                  <div className="teacher-weplay-section-title">
+                    <h2>{preview ? "교사 체험" : "대기 화면 미리보기"}</h2>
+                    {preview && (
                       <button
-                        className="weplay-primary"
+                        className="teacher-weplay-button"
                         disabled={starting}
-                        onClick={() => void startPreview()}
+                        onClick={exitPreview}
                       >
-                        {starting ? "준비 중…" : "다시 체험"}
+                        {result ? "대기 화면" : "체험 종료"}
                       </button>
-                    </div>
-                  ) : (
-                    <HistoryRainGame
-                      gameTitle={gameTitle}
-                      onShowGuide={guide.openGuide}
-                      key={preview.session.id}
-                      session={preview.session}
-                      config={config}
-                      transport={preview.transport}
-                      preview
-                      onComplete={setResult}
-                    />
+                    )}
+                  </div>
+                  <div className="weplay-page">
+                    {!preview ? (
+                      <WeplayLaunchPanel
+                        mode={mode}
+                        difficulty={difficulty}
+                        starting={starting}
+                        disabled={
+                          saving || previewCount < 3 || !!difficultyError
+                        }
+                        launchIssue={
+                          difficultyError ||
+                          (previewCount < 3
+                            ? "선택한 난이도의 단어 길이에 맞는 단어가 3개 이상 필요합니다."
+                            : "")
+                        }
+                        challengeCost={0}
+                        preview
+                        onModeChange={setMode}
+                        onDifficultyChange={setDifficulty}
+                        onStart={() => void startPreview()}
+                      />
+                    ) : result?.battle ? (
+                      <NavalBattleResult
+                        gameTitle={gameTitle}
+                        result={result}
+                        preview
+                        replaying={starting}
+                        onReplay={exitPreview}
+                      />
+                    ) : result ? (
+                      <div className="weplay-panel">
+                        <h2>
+                          체험 결과 ·{" "}
+                          {WEPLAY_DIFFICULTY_LABELS[result.difficulty]}
+                        </h2>
+                        <p className="weplay-result">
+                          <strong>
+                            {result.correctCount} / {result.totalWords}개
+                          </strong>
+                          <span>{result.score.toLocaleString()}점</span>
+                        </p>
+                        {result.battle && (
+                          <p>
+                            {result.battle.outcome === "defeat"
+                              ? "함선 침몰"
+                              : "해역 방어 완료"}
+                            {" · "}적선 {result.battle.sunkShips}척 격침 ·
+                            필살기 {result.battle.specialCount}회
+                          </p>
+                        )}
+                        <p>위스·랭킹·학생 기록에 반영되지 않습니다.</p>
+                        {result.missedWords.length > 0 && (
+                          <details>
+                            <summary>놓친 단어</summary>
+                            <p>
+                              {[
+                                ...new Set(
+                                  result.missedWords.map((word) => word.text),
+                                ),
+                              ].join(" · ")}
+                            </p>
+                          </details>
+                        )}
+                        <button
+                          className="weplay-primary"
+                          disabled={starting}
+                          onClick={exitPreview}
+                        >
+                          {starting ? "준비 중…" : "다시 체험"}
+                        </button>
+                      </div>
+                    ) : (
+                      <HistoryRainGame
+                        gameTitle={gameTitle}
+                        onShowGuide={guide.openGuide}
+                        key={preview.session.id}
+                        session={preview.session}
+                        config={config}
+                        transport={preview.transport}
+                        preview
+                        onComplete={setResult}
+                      />
+                    )}
+                  </div>
+                  {!preview && dirty && (
+                    <p className="teacher-weplay-note">
+                      저장 전 설정으로 체험합니다.
+                    </p>
                   )}
-                </div>
-              </section>
-            ) : (
-              <>
+                </section>
+              )}
+              <div hidden={previewView}>
                 {!canWrite && (
                   <p className="teacher-weplay-notice">
                     읽기 전용입니다. 게임 체험은 이용할 수 있습니다.
@@ -477,71 +575,35 @@ export default function ManageWeplay() {
                 >
                   <div className="teacher-weplay-preview-toolbar">
                     <h2 id="weplay-preview-title">교사 체험</h2>
-                    <div
-                      className="teacher-weplay-difficulty"
-                      role="group"
-                      aria-label="체험 난이도"
-                    >
-                      {(
-                        Object.keys(
-                          WEPLAY_DIFFICULTY_LABELS,
-                        ) as WeplayDifficulty[]
-                      ).map((level) => (
-                        <button
-                          key={level}
-                          className="teacher-weplay-button"
-                          aria-pressed={difficulty === level}
-                          disabled={starting}
-                          onClick={() => setDifficulty(level)}
-                        >
-                          {WEPLAY_DIFFICULTY_LABELS[level]}
-                        </button>
-                      ))}
-                    </div>
-                    <span className="teacher-weplay-note">
-                      {draft.difficulties[difficulty].durationSeconds}초 ·{" "}
-                      {getWeplayNormalWordCount(
-                        draft.difficulties[difficulty].durationSeconds,
-                      )}
-                      개 단어
-                    </span>
                     <button
                       className="teacher-weplay-button is-primary"
-                      disabled={
-                        starting ||
-                        saving ||
-                        previewCount < 3 ||
-                        !!difficultyError
-                      }
-                      onClick={() => void startPreview()}
+                      disabled={saving}
+                      onClick={() => {
+                        setError("");
+                        setParams({ game: game.id, view: "preview" });
+                      }}
                     >
-                      {starting ? "준비 중…" : "체험 시작"}
+                      체험하기
                     </button>
                   </div>
                   <p className="teacher-weplay-note">
                     위스·랭킹·학생 기록에 반영되지 않습니다.
                     {dirty && " 저장 전 설정으로 체험합니다."}
                   </p>
-                  {previewCount < 3 && (
-                    <p className="teacher-weplay-notice">
-                      선택한 난이도의 단어 길이에 맞는 단어가 3개 이상
-                      필요합니다.
-                    </p>
-                  )}
                 </section>
-              </>
-            )}
-          </>
-        )}
-        <WeplayGuide
-          gameTitle={gameTitle}
-          open={guide.open}
-          saving={guide.saving}
-          error={guide.error}
-          gameRunning={!!preview}
-          onFinish={() => void guide.finishGuide()}
-          onCloseForNow={guide.closeForNow}
-        />
+              </div>
+            </>
+          )}
+          <WeplayGuide
+            gameTitle={gameTitle}
+            open={!!selectedGame && guide.open}
+            saving={guide.saving}
+            error={guide.error}
+            gameRunning={!!preview}
+            onFinish={() => void guide.finishGuide()}
+            onCloseForNow={guide.closeForNow}
+          />
+        </div>
       </main>
     </PortalWorkspace>
   );

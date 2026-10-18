@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import WeplayGameCatalog from "../../components/common/weplay/WeplayGameCatalog";
+import WeplayLaunchPanel from "../../components/common/weplay/WeplayLaunchPanel";
 import { useAuth } from "../../contexts/AuthContext";
 import {
+  WEPLAY_GAMES,
   getWeplayLobby,
   startWeplayGame,
   weplayErrorMessage,
@@ -29,8 +33,12 @@ import "./weplay/lobby.css";
 const signed = (value: number) => `${value > 0 ? "+" : ""}${value}`;
 export default function Weplay() {
   const { config, currentUser, userData, menuConfig } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const selectedGame = WEPLAY_GAMES.find(
+    (game) => game.id === params.get("game"),
+  );
   const gameTitle = getWeplayGameTitle(menuConfig);
-  const music = useWeplayMusic();
+  const music = useWeplayMusic(!!selectedGame);
   const [lobby, setLobby] = useState<WeplayLobby | null>(null);
   const [session, setSession] = useState<WeplaySession | null>(null);
   const [result, setResult] = useState<WeplayResult | null>(null);
@@ -51,7 +59,8 @@ export default function Weplay() {
   const guide = useWeplayGuide(
     currentUser?.uid,
     userData,
-    loadedScope === scope &&
+    !!selectedGame &&
+      loadedScope === scope &&
       !!lobby &&
       !loading &&
       !starting &&
@@ -103,6 +112,24 @@ export default function Weplay() {
       generation.current += 1;
     };
   }, [load]);
+  useEffect(() => {
+    setRecordsView(null);
+    if (
+      selectedGame &&
+      loadedScope === scope &&
+      lobby?.activeSession &&
+      !result &&
+      !session
+    ) {
+      setSession(lobby.activeSession);
+    }
+  }, [selectedGame?.id]);
+  // A running paid session stays visible when browser history returns to the catalogue.
+  useEffect(() => {
+    if (session && !selectedGame) {
+      setParams({ game: WEPLAY_GAMES[0].id }, { replace: true });
+    }
+  }, [session, selectedGame?.id, setParams]);
   const start = async () => {
     if (starting || !lobby || lobby.gameEnabled === false) return;
     music.start();
@@ -150,6 +177,9 @@ export default function Weplay() {
     setRankingDifficulty(next.difficulty);
     setResult(next);
     setSession(null);
+    setLobby((previous) =>
+      previous ? { ...previous, activeSession: null } : previous,
+    );
     void load(false);
   };
   const cannotChallenge =
@@ -191,12 +221,31 @@ export default function Weplay() {
               : lobby.balance < lobby.policy.challengeCost
                 ? "도전에 필요한 위스가 부족합니다."
                 : "";
+  if (!selectedGame && !session) {
+    return (
+      <main className="weplay-page">
+        <WeplayGameCatalog gameTitle={gameTitle} portal="student" />
+      </main>
+    );
+  }
   return (
     <main className="weplay-page">
+      {!session && !starting && (
+        <Link
+          className="weplay-catalog-back"
+          to="/student/weplay"
+          onClick={() => {
+            setResult(null);
+            setRecordsView(null);
+          }}
+        >
+          ← 전체 게임
+        </Link>
+      )}
       <header className="weplay-heading">
         <div>
           <span>위플레이</span>
-          <h1>{gameTitle}</h1>
+          <h1 tabIndex={-1}>{gameTitle}</h1>
         </div>
         <div className="weplay-heading-actions">
           {lobby && !session && (
@@ -333,109 +382,29 @@ export default function Weplay() {
             </nav>
           )}
           {lobby && !result && (
-            <section
-              className={`weplay-panel weplay-launch is-${mode}`}
-              aria-label="게임 시작"
-            >
-              <div className="weplay-launch-art">
-                <img
-                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/lobby-turtle-ship.webp`}
-                  alt="목재 덮개와 쇠못, 낮은 용머리와 노를 갖춘 거북선 재현 일러스트"
-                  width={1200}
-                  height={900}
-                />
-              </div>
-              <div className="weplay-launch-controls">
-                <div
-                  className="weplay-mode weplay-mode-choice"
-                  role="group"
-                  aria-label="게임 모드"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={mode === "practice"}
-                    disabled={starting}
-                    onClick={() => {
-                      setMode("practice");
-                      requestKey.current = "";
-                    }}
-                  >
-                    <span className="weplay-choice-top">
-                      <strong>연습하기</strong>
-                      <span className="weplay-choice-mark" aria-hidden="true">
-                        {mode === "practice" ? "✓" : ""}
-                      </span>
-                    </span>
-                    <span className="weplay-choice-note">위스 변동 없음</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={mode === "challenge"}
-                    className="weplay-challenge-choice"
-                    disabled={starting}
-                    onClick={() => {
-                      setMode("challenge");
-                      requestKey.current = "";
-                    }}
-                  >
-                    <span className="weplay-choice-top">
-                      <strong>도전하기</strong>
-                      <span className="weplay-choice-mark" aria-hidden="true">
-                        {mode === "challenge" ? "✓" : ""}
-                      </span>
-                    </span>
-                    <span className="weplay-choice-note">위스 획득·차감</span>
-                  </button>
-                </div>
-                <h2 className="weplay-selected-mode">난이도</h2>
-                <div
-                  className="weplay-mode weplay-difficulty"
-                  role="group"
-                  aria-label="난이도"
-                >
-                  {(
-                    Object.keys(WEPLAY_DIFFICULTY_LABELS) as WeplayDifficulty[]
-                  ).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      disabled={starting}
-                      aria-pressed={difficulty === value}
-                      onClick={() => {
-                        setDifficulty(value);
-                        setRankingDifficulty(value);
-                        requestKey.current = "";
-                      }}
-                    >
-                      {WEPLAY_DIFFICULTY_LABELS[value]}
-                    </button>
-                  ))}
-                </div>
-                <div className="weplay-launch-feedback" aria-live="polite">
-                  {launchIssue && <p>{launchIssue}</p>}
-                </div>
-                <button
-                  type="button"
-                  className="weplay-primary weplay-start"
-                  disabled={
-                    starting ||
-                    loading ||
-                    lobby.gameEnabled === false ||
-                    availableCount < 3 ||
-                    (mode === "challenge" && cannotChallenge)
-                  }
-                  onClick={() => void start()}
-                >
-                  <span>
-                    {starting
-                      ? "시작 준비 중…"
-                      : mode === "practice"
-                        ? "연습 시작"
-                        : `위스 도전 시작 · ${lobby.policy.challengeCost}위스`}
-                  </span>
-                </button>
-              </div>
-            </section>
+            <WeplayLaunchPanel
+              mode={mode}
+              difficulty={difficulty}
+              starting={starting}
+              disabled={
+                loading ||
+                lobby.gameEnabled === false ||
+                availableCount < 3 ||
+                (mode === "challenge" && cannotChallenge)
+              }
+              launchIssue={launchIssue}
+              challengeCost={lobby.policy.challengeCost}
+              onModeChange={(value) => {
+                setMode(value);
+                requestKey.current = "";
+              }}
+              onDifficultyChange={(value) => {
+                setDifficulty(value);
+                setRankingDifficulty(value);
+                requestKey.current = "";
+              }}
+              onStart={() => void start()}
+            />
           )}
           {lobby && recordsView && (
             <WeplayRecordsDialog

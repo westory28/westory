@@ -5,7 +5,7 @@ import {
   setWeplayAudioMuted,
 } from "./weplayAudioPreference";
 
-export default function useWeplayMusic() {
+export default function useWeplayMusic(active = true) {
   const [muted, setMuted] = useState(isWeplayAudioMuted);
   const [started, setStarted] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -13,8 +13,16 @@ export default function useWeplayMusic() {
   const wanted = useRef(false);
   const muteRef = useRef(muted);
   const alive = useRef(true);
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const play = useCallback(() => {
-    if (!alive.current || !wanted.current || muteRef.current || document.hidden)
+    if (
+      !activeRef.current ||
+      !alive.current ||
+      !wanted.current ||
+      muteRef.current ||
+      document.hidden
+    )
       return;
     const player = (audio.current ||= new Audio(
       `${import.meta.env.BASE_URL}assets/weplay/naval/tide-of-victory.wav`,
@@ -23,12 +31,22 @@ export default function useWeplayMusic() {
     player.volume = 0.28;
     void player.play().then(
       () => {
-        if (!alive.current || muteRef.current || document.hidden)
+        if (
+          !activeRef.current ||
+          !alive.current ||
+          muteRef.current ||
+          document.hidden
+        )
           player.pause();
         else setFailed(false);
       },
       () => {
-        if (alive.current && !muteRef.current && !document.hidden)
+        if (
+          activeRef.current &&
+          alive.current &&
+          !muteRef.current &&
+          !document.hidden
+        )
           setFailed(true);
       },
     );
@@ -71,5 +89,9 @@ export default function useWeplayMusic() {
       audio.current = null;
     };
   }, [play]);
+  useEffect(() => {
+    if (active) play();
+    else audio.current?.pause();
+  }, [active, play]);
   return { start, toggle, enabled: started && !muted && !failed, failed };
 }

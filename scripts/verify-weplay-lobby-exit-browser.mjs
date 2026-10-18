@@ -58,6 +58,7 @@ export const getHttpsCallable=async name=>async data=>{
   if(name==='previewWeplayGame'){const response=await fetch('/session',{method:'POST',body:JSON.stringify({...data,now:Date.now()})});qa.session=await response.json();return {data:qa.session};}
   throw new Error('Unexpected student/Firebase callable in teacher preview: '+name);
 };
+export const getHistoryDictionaryCallable=getHttpsCallable;
 export const db={};
 export const getFirebaseStorage=async()=>({});
 `;
@@ -97,7 +98,7 @@ function Fixture({session}){
 const params=new URLSearchParams(location.search);
 const[result,setResult]=useState(view==='result'?{sessionId:'result-fixture',difficulty:session.difficulty,mode:params.get('mode')==='challenge'?'challenge':'practice',correctCount:37,totalWords:60,score:12500,reward:5,cost:2,netWis:3,balance:103,finishedAtMs:Date.now(),missedWords:session.words.filter(word=>word.kind==='normal').slice(0,3),battleVersion:1,battle:{...simulateWeplayBattle(session,0),outcome:params.get('outcome')==='defeat'?'defeat':'victory',sunkShips:3,cannonShots:18,specialCount:2}}:null);
 const[replaying,setReplaying]=useState(false);
-return <MemoryRouter><AppToastProvider><AppDialogProvider>{view==='lobby'?<StudentWeplay/>:!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page'>{!result&&<Game session={session} config={config} preview transport={qa.transport} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
+return <MemoryRouter initialEntries={[(view==='lobby'?'/student/weplay':'/teacher/weplay')+(params.has('catalog')?'':'?game=history-rain')]}><AppToastProvider><AppDialogProvider>{view==='lobby'?<StudentWeplay/>:!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page'>{!result&&<Game session={session} config={config} preview transport={qa.transport} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
 function render(session){createRoot(document.getElementById('root')).render(<Fixture session={session}/>);}
 setup().catch(error=>{qa.error=error.message;throw error;});
 `;
@@ -106,7 +107,7 @@ const bundled = await build({
   format: 'esm', platform: 'browser', target: 'es2022', outfile: path.join(os.tmpdir(), 'westory-naval-qa.js'), external: ['/assets/*'],
   loader: { '.svg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env.BASE_URL': '"/"' },
   plugins: [{ name: 'naval-service-fixture', setup(plugin) {
-    plugin.onResolve({ filter: /^fixture:|(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/firebase$|^\.\/firebase$/ }, () => ({ path: 'service', namespace: 'fixture' }));
+    plugin.onResolve({ filter: /^fixture:|(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/firebase$|(?:^|\/)historyDictionarySession$|^\.\/firebase$/ }, () => ({ path: 'service', namespace: 'fixture' }));
     plugin.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: service, loader: 'ts', resolveDir: root }));
   } }],
 });
@@ -244,6 +245,68 @@ async function exitDialog(page) {
 }
 let failure = null;
 try {
+  for (const width of [390, 768, 1280]) {
+    for (const view of ['lobby', 'management']) {
+      const page = await open(view, width, 'catalog=1');
+      const card = page.locator('.weplay-game-card');
+      await card.waitFor();
+      assert.equal(await card.count(), 1);
+      assert.equal(await page.locator('.teacher-sub-navigation:visible').count(), 0);
+      assert.equal(await page.locator('.weplay-launch:visible').count(), 0);
+      assert.equal(await page.evaluate(() => window.navalQa.calls.some(c => /^(start|preview)WeplayGame$/.test(c.name))), false);
+      await capture(page, 'catalog-'+view+'-'+width);
+      await card.focus(); await page.keyboard.press('Enter');
+      if (view === 'lobby') {
+        await page.locator('.weplay-launch').waitFor();
+        await page.getByRole('link', {name:'← 전체 게임',exact:true}).click();
+        await card.waitFor();
+      } else {
+        await page.getByRole('button', {name:'체험하기',exact:true}).click();
+        await page.getByRole('region', {name:'게임 대기 화면 미리보기'}).waitFor();
+        assert.equal(await page.evaluate(() => window.navalQa.calls.filter(c => c.name==='previewWeplayGame').length),0);
+        await page.getByRole('button', {name:'도전하기 체험 · 위스 변동 없음',exact:true}).click();
+        await page.getByRole('button', {name:'매운맛',exact:true}).click();
+        await capture(page,'teacher-preview-lobby-'+width);
+        await page.getByRole('link', {name:'게임 관리',exact:true}).click();
+        await page.getByRole('link', {name:'전체 게임',exact:true}).click();
+        await card.waitFor();
+      }
+      await page.close();
+    }
+  }
+  checks.push('Student and teacher catalogue at 390/768/1280: one keyboard-accessible card, no internal sidebar, game entry/return; teacher lobby has no preview RPC');
+  const teacherDraft = await open('management',1280);
+  const duration = teacherDraft.locator('input[type="number"]').first();
+  await duration.fill('');
+  await teacherDraft.getByRole('link',{name:'전체 게임',exact:true}).click();
+  await teacherDraft.locator('.weplay-game-card').click();
+  assert.equal(await duration.inputValue(),'');
+  await duration.fill('120');
+  await teacherDraft.getByRole('button',{name:'체험하기',exact:true}).click();
+  await teacherDraft.getByRole('button',{name:'연습 체험 시작',exact:true}).click();
+  await teacherDraft.getByRole('textbox',{name:'단어 입력'}).waitFor();
+  assert.equal(await teacherDraft.evaluate(() => window.navalQa.calls.find(c => c.name==='previewWeplayGame').data.settings.difficulties.mild.durationSeconds),120);
+  await teacherDraft.getByRole('button',{name:'체험 종료',exact:true}).click();
+  await teacherDraft.getByRole('region',{name:'게임 대기 화면 미리보기'}).waitFor();
+  assert.equal(await teacherDraft.evaluate(() => window.navalQa.writes.length),0);
+  assert.equal(await teacherDraft.evaluate(() => window.navalQa.calls.some(c => /^(start|submit|finish)Weplay/.test(c.name))),false);
+  await teacherDraft.close();
+  checks.push('Teacher incomplete draft survives catalogue; unsaved settings reach preview; exit returns to lobby without writes or student RPCs');
+  const readonly = await open('readonly',768);
+  assert.equal(await readonly.getByRole('button',{name:'게임 설정 저장',exact:true}).count(),0);
+  await readonly.getByRole('button',{name:'체험하기',exact:true}).click();
+  await readonly.evaluate(() => {window.navalQa.hold.previewWeplayGame=true;});
+  await readonly.getByRole('button',{name:'연습 체험 시작',exact:true}).click();
+  await readonly.waitForFunction(() => !!window.navalQa.releaseCall);
+  await readonly.getByRole('link',{name:'게임 관리',exact:true}).click();
+  await readonly.evaluate(() => window.navalQa.releaseCall());
+  await readonly.clock.runFor(100);
+  await readonly.getByRole('button',{name:'체험하기',exact:true}).click();
+  await readonly.getByRole('region',{name:'게임 대기 화면 미리보기'}).waitFor();
+  assert.equal(await readonly.locator('.naval-game:visible').count(),0);
+  assert.equal(await readonly.evaluate(() => window.navalQa.writes.length),0);
+  await readonly.close();
+  checks.push('Read-only staff can preview but cannot save; leaving while preview starts discards its delayed response');
   for (const width of [320, 390, 768, 1280]) {
     const lobby = await open('lobby', width);
     await lobby.locator('.weplay-launch').waitFor();
@@ -315,7 +378,7 @@ try {
     const rankingHelp = dialog.getByRole('button', { name: '랭킹 기준 안내', exact: true });
     await rankingHelp.hover();
     await dialog.getByRole('tooltip').waitFor();
-    assert.match(await dialog.getByRole('tooltip').textContent(), /같은 점수는 먼저/);
+    assert.match(await dialog.getByRole('tooltip').textContent(), /동점일 때먼저 달성한 기록/);
     await page.mouse.move(2, 2);
     await dialog.getByRole('tooltip').waitFor({ state: 'hidden' });
     await rankingHelp.focus();
@@ -494,7 +557,8 @@ try {
   checks.push('Legacy 60-second game confirms early exit and preserves its accepted answer/legacy result without naval conversion');
 
   const teacher = await open('management', 1280);
-  await teacher.getByRole('button', { name: '체험 시작', exact: true }).click();
+  await teacher.getByRole('button', { name: '체험하기', exact: true }).click();
+  await teacher.getByRole('button', { name: '연습 체험 시작', exact: true }).click();
   await teacher.getByRole('textbox', { name: '단어 입력' }).waitFor(); await advanceTo(teacher, 200);
   dialog = await exitDialog(teacher); assert.match(await dialog.textContent(), /위스·랭킹·학생 기록에 반영되지 않습니다/);
   await capture(teacher, 'exit-teacher-confirm-1280');
@@ -563,7 +627,7 @@ try {
   await capture(fast, 'exit-fast-consecutive-attacks-result-390'); await fast.close();
   checks.push('Fast spicy [3,2,1] timing: voluntary exit during a recurring 1.2-second attack finishes within 200ms when no answer is pending, despite active effects');
 
-  const resumed = await open('lobby', 390, 'resume=challenge');
+  const resumed = await open('lobby', 390, 'catalog=1&resume=challenge');
   await resumed.getByRole('textbox', { name: '단어 입력' }).waitFor(); await advanceTo(resumed, 200);
   dialog = await exitDialog(resumed); assert.match(await dialog.textContent(), /참가비는 반환되지 않으며/);
   await dialog.getByRole('button', { name: '현재 기록으로 종료', exact: true }).click(); await resumed.clock.runFor(300);

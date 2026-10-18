@@ -1,4 +1,8 @@
 .teacher-weplay-content { color: var(--ws-text, #1f2937); }
+.teacher-weplay-workspace.teacher-sub-workspace { grid-template-columns: minmax(0, 1fr); }
+.teacher-weplay-workspace.teacher-sub-workspace--page > .teacher-weplay-content,
+.teacher-weplay-workspace > .teacher-sub-workspace-footer { grid-column: 1; }
+.teacher-weplay-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .teacher-weplay-title, .teacher-weplay-section-title, .teacher-weplay-actions, .teacher-weplay-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .teacher-weplay-title, .teacher-weplay-section-title { justify-content: space-between; margin-bottom: 16px; }
 .teacher-weplay-title h1 { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 24px; font-weight: 800; }
