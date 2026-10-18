@@ -1492,6 +1492,8 @@
 }
 .yut-match .yut-throw-result > strong {
   color: #f5d181;
+  font-family: "Yut Brush", "Noto Serif KR", serif;
+  font-weight: 400;
 }
 .yut-match .yut-move-hint {
   color: #fff0d0;
@@ -1857,7 +1859,7 @@
 /* Wide game canvas and user-requested short, deliberate interactions. */
 @font-face {
   font-family: "Yut Brush";
-  src: url("/assets/weplay/yut/fonts/NanumBrushScript-results.ttf")
+  src: url("/assets/weplay/yut/fonts/EastSeaDokdo-results.ttf")
     format("truetype");
   font-style: normal;
   font-weight: 400;
@@ -1933,7 +1935,7 @@
 .yut-landing-result strong {
   font-family: "Yut Brush", "Noto Serif KR", serif;
   font-weight: 400;
-  font-size: clamp(96px, 11vw, 168px);
+  font-size: clamp(112px, 12vw, 184px);
   line-height: 0.95;
   text-shadow:
     2px 3px 0 #6a331a,
@@ -1942,7 +1944,7 @@
 }
 .yut-match .yut-player-last {
   font-family: "Yut Brush", serif;
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 400;
 }
 @keyframes yut-ink-arrive {

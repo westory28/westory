@@ -564,7 +564,7 @@ export default function YutManagement() {
                 </div>
                 <div>
                   <dt>위스 보상</dt>
-                  <dd>없음</dd>
+                  <dd>위스 운영 정책에서 설정</dd>
                 </div>
               </dl>
               {saveError && (

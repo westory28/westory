@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { YutSettings } from "../../../lib/yut";
 import useYutPublication from "./useYutPublication";
 import WeplayStudioIntro from "./WeplayStudioIntro";
+import WeplayGameFrame from "./WeplayGameFrame";
+import WeplayGameLoading from "./WeplayGameLoading";
 import WeplayMusicButton from "./WeplayMusicButton";
 import useYutMusic from "./useYutMusic";
 import "./weplay.css";
@@ -52,46 +54,49 @@ export default function YutGameEntry({
     );
   }
   return (
-    <main
-      className={introduced ? "weplay-yut-page" : "weplay-page"}
-      tabIndex={-1}
-    >
-      {!introduced ? (
-        <>
-          <header className="weplay-heading">
-            <h1 tabIndex={-1}>마우저구 윷놀이</h1>
-            <div className="weplay-game-navigation">
-              <Link
-                className="weplay-catalog-back"
-                to={
-                  portal === "teacher"
-                    ? "/teacher/weplay?game=joseon-yut"
-                    : "/student/weplay"
-                }
-              >
-                {portal === "teacher" ? "게임 관리" : "전체 게임"}
-              </Link>
-              <WeplayMusicButton {...music} />
-            </div>
-          </header>
+    <main className="weplay-game-page weplay-yut-page" tabIndex={-1}>
+      <header className="weplay-heading">
+        <h1 tabIndex={-1}>마우저구 윷놀이</h1>
+        {!introduced && (
+          <div className="weplay-game-navigation">
+            <Link
+              className="weplay-catalog-back"
+              to={
+                portal === "teacher"
+                  ? "/teacher/weplay?game=joseon-yut"
+                  : "/student/weplay"
+              }
+            >
+              {portal === "teacher" ? "게임 관리" : "전체 게임"}
+            </Link>
+            <WeplayMusicButton {...music} />
+          </div>
+        )}
+      </header>
+      <WeplayGameFrame theme="yut">
+        {!introduced ? (
           <WeplayStudioIntro onComplete={() => setIntroduced(true)} />
-        </>
-      ) : (
-        <Suspense fallback={<p role="status">윷판을 준비하고 있습니다.</p>}>
-          <YutGame
-            initialSettings={
-              portal === "student" ? access.settings : initialSettings
+        ) : (
+          <Suspense
+            fallback={
+              <WeplayGameLoading theme="yut" label="윷판을 준비하고 있습니다" />
             }
-            music={music}
-            onMusicActiveChange={setMusicActive}
-            portal={portal}
-            preview={portal === "teacher" && params.get("view") === "preview"}
-            onBack={() =>
-              setParams(portal === "teacher" ? { game: "joseon-yut" } : {})
-            }
-          />
-        </Suspense>
-      )}
+          >
+            <YutGame
+              initialSettings={
+                portal === "student" ? access.settings : initialSettings
+              }
+              music={music}
+              onMusicActiveChange={setMusicActive}
+              portal={portal}
+              preview={portal === "teacher" && params.get("view") === "preview"}
+              onBack={() =>
+                setParams(portal === "teacher" ? { game: "joseon-yut" } : {})
+              }
+            />
+          </Suspense>
+        )}
+      </WeplayGameFrame>
     </main>
   );
 }

@@ -44,6 +44,8 @@ import { getWeplayGameTitle } from "../../lib/weplayTitle";
 import YutManagement from "./components/YutManagement";
 import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
 import { prepareWeplayIntroAudio } from "../../components/common/weplay/weplayIntroAudio";
+import WeplayGameFrame from "../../components/common/weplay/WeplayGameFrame";
+import { withWeplayRequestTimeout } from "../../components/common/weplay/requestTimeout";
 
 export default function ManageWeplay() {
   const [params] = useSearchParams();
@@ -95,6 +97,8 @@ function NavalWeplayManagement() {
   } | null>(null);
   const [result, setResult] = useState<WeplayResult | null>(null);
   const generation = useRef(0);
+  const loadRequest = useRef<{ scope: string; token: number } | null>(null);
+  const startingRef = useRef(false);
   const previewGeneration = useRef(0);
   const previewViewRef = useRef(previewView);
   previewViewRef.current = previewView;
@@ -121,12 +125,16 @@ function NavalWeplayManagement() {
     (!!difficultyError ||
       JSON.stringify(draft) !== JSON.stringify(data.settings));
   const load = useCallback(async () => {
+    if (loadRequest.current?.scope === scope) return;
     const token = ++generation.current;
+    loadRequest.current = { scope, token };
     setLoading(true);
     setError("");
     setReloadRequired(false);
     try {
-      const response = await getWeplayManagement(config, game.id);
+      const response = await withWeplayRequestTimeout(
+        getWeplayManagement(config, game.id),
+      );
       if (token !== generation.current || scopeRef.current !== scope) return;
       response.settings = normalizeWeplayGameSettings(response.settings);
       setData(response);
@@ -148,6 +156,7 @@ function NavalWeplayManagement() {
           ),
         );
     } finally {
+      if (loadRequest.current?.token === token) loadRequest.current = null;
       if (token === generation.current && scopeRef.current === scope)
         setLoading(false);
     }
@@ -168,16 +177,20 @@ function NavalWeplayManagement() {
     setRemovedSourceCount(0);
     setSaving(false);
     setStarting(false);
+    startingRef.current = false;
     if (canRead && currentUser && config?.year && config?.semester) void load();
     else setLoading(false);
     return () => {
       generation.current++;
+      loadRequest.current = null;
       previewGeneration.current++;
+      startingRef.current = false;
     };
   }, [load, canRead]);
   useEffect(() => {
     if (previewView) return;
     previewGeneration.current++;
+    startingRef.current = false;
     setPreview(null);
     setResult(null);
     setStarting(false);
@@ -276,6 +289,7 @@ function NavalWeplayManagement() {
       !canRead ||
       !previewView ||
       loadedScope !== scope ||
+      startingRef.current ||
       starting ||
       saving ||
       previewCount < 3 ||
@@ -283,18 +297,21 @@ function NavalWeplayManagement() {
       difficultyError
     )
       return;
+    startingRef.current = true;
     music.start();
     const requestedScope = scope;
     const request = ++previewGeneration.current;
     setStarting(true);
     setError("");
     try {
-      const session = await previewWeplayGame(
-        config,
-        game.id,
-        difficulty,
-        selectedLessons.map((item) => item.unitId),
-        draft,
+      const session = await withWeplayRequestTimeout(
+        previewWeplayGame(
+          config,
+          game.id,
+          difficulty,
+          selectedLessons.map((item) => item.unitId),
+          draft,
+        ),
       );
       if (
         scopeRef.current !== requestedScope ||
@@ -321,12 +338,15 @@ function NavalWeplayManagement() {
         scopeRef.current === requestedScope &&
         previewViewRef.current &&
         previewGeneration.current === request
-      )
+      ) {
+        startingRef.current = false;
         setStarting(false);
+      }
     }
   };
   const exitPreview = () => {
     previewGeneration.current++;
+    startingRef.current = false;
     setPreview(null);
     setResult(null);
     setStarting(false);
@@ -343,7 +363,7 @@ function NavalWeplayManagement() {
       <main
         ref={mainRef}
         tabIndex={-1}
-        className="teacher-sub-content teacher-weplay-content"
+        className={`teacher-sub-content teacher-weplay-content${previewView ? " is-game-preview" : ""}`}
       >
         {!selectedGame && (
           <WeplayGameCatalog portal="teacher" gameTitle={gameTitle} />
@@ -433,92 +453,97 @@ function NavalWeplayManagement() {
                     </div>
                   )}
                   <div className="weplay-page">
-                    {!introComplete ? (
-                      <WeplayStudioIntro
-                        onComplete={() => setIntroComplete(true)}
-                      />
-                    ) : !preview ? (
-                      <WeplayLaunchPanel
-                        mode={mode}
-                        difficulty={difficulty}
-                        starting={starting}
-                        disabled={
-                          saving || previewCount < 3 || !!difficultyError
-                        }
-                        launchIssue={
-                          difficultyError ||
-                          (previewCount < 3
-                            ? "선택한 난이도의 단어 길이에 맞는 단어가 3개 이상 필요합니다."
-                            : "")
-                        }
-                        challengeCost={0}
-                        preview
-                        onModeChange={setMode}
-                        onDifficultyChange={setDifficulty}
-                        onStart={() => void startPreview()}
-                      />
-                    ) : result?.battle ? (
-                      <NavalBattleResult
-                        gameTitle={gameTitle}
-                        result={result}
-                        preview
-                        replaying={starting}
-                        onReplay={exitPreview}
-                      />
-                    ) : result ? (
-                      <div className="weplay-panel">
-                        <h2>
-                          체험 결과 ·{" "}
-                          {WEPLAY_DIFFICULTY_LABELS[result.difficulty]}
-                        </h2>
-                        <p className="weplay-result">
-                          <strong>
-                            {result.correctCount} / {result.totalWords}개
-                          </strong>
-                          <span>{result.score.toLocaleString()}점</span>
-                        </p>
-                        {result.battle && (
-                          <p>
-                            {result.battle.outcome === "defeat"
-                              ? "함선 침몰"
-                              : "해역 방어 완료"}
-                            {" · "}적선 {result.battle.sunkShips}척 격침 ·
-                            필살기 {result.battle.specialCount}회
+                    <WeplayGameFrame
+                      busy={starting}
+                      label="체험을 준비하고 있습니다"
+                    >
+                      {!introComplete ? (
+                        <WeplayStudioIntro
+                          onComplete={() => setIntroComplete(true)}
+                        />
+                      ) : !preview ? (
+                        <WeplayLaunchPanel
+                          mode={mode}
+                          difficulty={difficulty}
+                          starting={starting}
+                          disabled={
+                            saving || previewCount < 3 || !!difficultyError
+                          }
+                          launchIssue={
+                            difficultyError ||
+                            (previewCount < 3
+                              ? "선택한 난이도의 단어 길이에 맞는 단어가 3개 이상 필요합니다."
+                              : "")
+                          }
+                          challengeCost={0}
+                          preview
+                          onModeChange={setMode}
+                          onDifficultyChange={setDifficulty}
+                          onStart={() => void startPreview()}
+                        />
+                      ) : result?.battle ? (
+                        <NavalBattleResult
+                          gameTitle={gameTitle}
+                          result={result}
+                          preview
+                          replaying={starting}
+                          onReplay={exitPreview}
+                        />
+                      ) : result ? (
+                        <div className="weplay-panel">
+                          <h2>
+                            체험 결과 ·{" "}
+                            {WEPLAY_DIFFICULTY_LABELS[result.difficulty]}
+                          </h2>
+                          <p className="weplay-result">
+                            <strong>
+                              {result.correctCount} / {result.totalWords}개
+                            </strong>
+                            <span>{result.score.toLocaleString()}점</span>
                           </p>
-                        )}
-                        <p>위스·랭킹·학생 기록에 반영되지 않습니다.</p>
-                        {result.missedWords.length > 0 && (
-                          <details>
-                            <summary>놓친 단어</summary>
+                          {result.battle && (
                             <p>
-                              {[
-                                ...new Set(
-                                  result.missedWords.map((word) => word.text),
-                                ),
-                              ].join(" · ")}
+                              {result.battle.outcome === "defeat"
+                                ? "함선 침몰"
+                                : "해역 방어 완료"}
+                              {" · "}적선 {result.battle.sunkShips}척 격침 ·
+                              필살기 {result.battle.specialCount}회
                             </p>
-                          </details>
-                        )}
-                        <button
-                          className="weplay-primary"
-                          disabled={starting}
-                          onClick={exitPreview}
-                        >
-                          {starting ? "준비 중…" : "다시 체험"}
-                        </button>
-                      </div>
-                    ) : (
-                      <HistoryRainGame
-                        gameTitle={gameTitle}
-                        onShowGuide={guide.openGuide}
-                        key={preview.session.id}
-                        session={preview.session}
-                        config={config}
-                        transport={preview.transport}
-                        preview
-                        onComplete={setResult}
-                      />
-                    )}
+                          )}
+                          <p>위스·랭킹·학생 기록에 반영되지 않습니다.</p>
+                          {result.missedWords.length > 0 && (
+                            <details>
+                              <summary>놓친 단어</summary>
+                              <p>
+                                {[
+                                  ...new Set(
+                                    result.missedWords.map((word) => word.text),
+                                  ),
+                                ].join(" · ")}
+                              </p>
+                            </details>
+                          )}
+                          <button
+                            className="weplay-primary"
+                            disabled={starting}
+                            onClick={exitPreview}
+                          >
+                            {starting ? "준비 중…" : "다시 체험"}
+                          </button>
+                        </div>
+                      ) : (
+                        <HistoryRainGame
+                          gameTitle={gameTitle}
+                          onShowGuide={guide.openGuide}
+                          key={preview.session.id}
+                          session={preview.session}
+                          config={config}
+                          transport={preview.transport}
+                          preview
+                          onComplete={setResult}
+                        />
+                      )}
+                    </WeplayGameFrame>
                   </div>
                   {introComplete && !preview && dirty && (
                     <p className="teacher-weplay-note">

@@ -37,6 +37,8 @@
 .teacher-weplay-difficulty button { flex: 1; }
 .teacher-weplay-difficulty button[aria-pressed="true"] { color: var(--ws-primary-text, #1e3a8a); border-color: var(--ws-primary, #2563eb); background: var(--ws-primary-soft, #eff6ff); }
 .teacher-weplay-preview .weplay-page { max-width: none; padding: 0; }
+.teacher-weplay-workspace .teacher-weplay-content.is-game-preview { box-sizing: border-box; width: 100%; max-width: var(--ws-page-max, 1536px); margin-inline: auto; padding: 24px; }
+@media (max-width: 767px) { .teacher-weplay-workspace .teacher-weplay-content.is-game-preview { padding: 16px; } }
 @media (max-width: 767px) { .teacher-weplay-section { padding: 16px; } .teacher-weplay-difficulty button { padding-inline: 8px; } }
 @container (min-width: 800px) { .teacher-weplay-management { grid-template-columns: minmax(0, 2fr) minmax(256px, 1fr); } }
 .teacher-weplay-pool { border-block: 1px solid var(--ws-border, #e5e7eb); margin-top: 16px; }

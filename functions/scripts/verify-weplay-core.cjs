@@ -12,6 +12,11 @@ const catalog = () => extractLessonWords([{ unitId: 'unit1', title: '고대 국�
 
 test('policy rejects invalid money, fractional limits, overlapping/missing result thresholds', () => {
   assert.equal(validatePolicy(policy()).challengeCost, 2);
+  assert.deepEqual(validatePolicy(policy()).yutWinnerReward, { enabled: false, amount: 0 });
+  const legacy = policy(); delete legacy.yutWinnerReward;
+  assert.deepEqual(validatePolicy(legacy).yutWinnerReward, { enabled: false, amount: 0 });
+  for (const reward of [null, { enabled: 'true', amount: 5 }, { enabled: true, amount: -1 }, { enabled: true, amount: 0.5 }, { enabled: true, amount: 10001 }, { enabled: true, amount: '5' }, { enabled: true, amount: 5, uid: 'forged' }]) assert.throws(() => validatePolicy({ ...policy(), yutWinnerReward: reward }));
+  assert.deepEqual(validatePolicy({ ...policy(), yutWinnerReward: { enabled: true, amount: 10000 } }).yutWinnerReward, { enabled: true, amount: 10000 });
   for (const value of [-1, 0.5, NaN, Infinity, 10001, '2', null]) {
     assert.throws(() => validatePolicy({ ...policy(), challengeCost: value }));
   }

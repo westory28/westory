@@ -134,6 +134,7 @@ export interface YutCommand {
     | "skip"
     | "leave"
     | "close"
+    | "claimReward"
     | "seat"
     | "emote";
   requestKey: string;

@@ -32,6 +32,7 @@ const DEFAULT_POLICY = {
     medium: { first: 10, second: 5, third: 3 },
     spicy: { first: 10, second: 5, third: 3 },
   },
+  yutWinnerReward: { enabled: false, amount: 0 },
   version: 0,
 };
 
@@ -43,6 +44,13 @@ const integer = (value, min, max, name) => {
   }
   return value;
 };
+
+function validateYutWinnerReward(input) {
+  if (input === undefined) return { enabled: false, amount: 0 };
+  if (!input || typeof input.enabled !== 'boolean'
+    || Object.keys(input).some((key) => !['enabled', 'amount'].includes(key))) throw new Error('윷놀이 우승 보상 설정을 확인해 주세요.');
+  return { enabled: input.enabled, amount: integer(input.amount, 0, 10000, '윷놀이 우승 지급액') };
+}
 
 function validatePolicy(input) {
   if (!input || typeof input.enabled !== 'boolean') throw new Error('도전 운영 여부를 확인해 주세요.');
@@ -63,6 +71,7 @@ function validatePolicy(input) {
     dailyChallengeLimit: integer(input.dailyChallengeLimit, 0, 20, '일일 도전 횟수'),
     resultRewards,
     rankingPeriod: input.rankingPeriod,
+    yutWinnerReward: validateYutWinnerReward(input.yutWinnerReward),
     rankingRewards: Object.fromEntries(DIFFICULTIES.map((difficulty) => [difficulty, {
       first: integer(input.rankingRewards?.[difficulty]?.first, 0, 10000, '1위 보상'),
       second: integer(input.rankingRewards?.[difficulty]?.second, 0, 10000, '2위 보상'),
@@ -288,4 +297,4 @@ const compareEntries = (a, b) => Number(b.score || 0) - Number(a.score || 0)
   || Number(a.achievedAtMs || 0) - Number(b.achievedAtMs || 0)
   || String(a.uid).localeCompare(String(b.uid));
 
-module.exports = { TOTAL_WORDS, BATTLE_NORMAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, MAX_CATALOG_WORD_LENGTH, DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, readDifficulties, validateDifficulties, validateDifficultySettings, gameCatalog, filterDifficultyWords, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };
+module.exports = { TOTAL_WORDS, BATTLE_NORMAL_WORDS, GAME_DURATION_MS, START_DELAY_MS, ANSWER_GRACE_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES, FALL_DURATIONS, GAME_ID, MAX_CATALOG_WORD_LENGTH, DEFAULT_GAME_SETTINGS, DEFAULT_DIFFICULTY_SETTINGS, DEFAULT_POLICY, hash, normalizeAnswer, validatePolicy, validateYutWinnerReward, readPolicy, validateUnitIds, validateGameSettings, readGameSettings, readDifficulties, validateDifficulties, validateDifficultySettings, gameCatalog, filterDifficultyWords, filterGameLessons, uniqueWordCount, effectiveLessons, extractLessonWords, buildWords, assessAnswer, gameReward, periodBounds, compareEntries };

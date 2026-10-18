@@ -19,6 +19,7 @@ const { chromium } = require(
 );
 const core = require("../functions/weplayCore.js");
 const audioOnly = process.argv.includes("--audio-only");
+const frameOnly = process.argv.includes("--frame-only");
 const evidence = path.resolve(
   process.env.WEPLAY_QA_EVIDENCE_DIR ||
     path.join(
@@ -88,11 +89,13 @@ export const getHttpsCallable=async name=>async data=>{
  throw new Error('Unexpected service call: '+name);
 };
 export const getYutLobby=async()=>{qa.calls.push({name:'getYutLobby'});return {enabled:true,room:null,classes:[{id:'qa-class',label:'1학년 1반'}],classId:'qa-class',serverNowMs:Date.now()}};
-export const getYutManagement=async()=>{qa.calls.push({name:'getYutManagement'});return {settings:{enabled:true,version:1},rooms:[],truncated:false,serverNowMs:Date.now()}};
+export const getYutManagement=async()=>{qa.calls.push({name:'getYutManagement'});return {settings:normalizeYutSettings(),rooms:[],truncated:false,serverNowMs:Date.now()}};
 export const saveYutSettings=async()=>{throw new Error('Unexpected Yut settings write')};
 export const commandYutRoom=async()=>{throw new Error('Unexpected Yut command')};
 export const subscribeYutRoom=()=>()=>{};
 export const yutErrorMessage=error=>error?.message||'다시 시도해 주세요.';
+export const YUT_PRIVATE_DAILY_LIMIT=5;
+export const normalizeYutSettings=value=>({enabled:true,version:1,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:4,throwSeconds:5,moveSeconds:25,...(value||{})});
 `,
   "qa-null": "export default ()=>null;",
   "qa-rank":
@@ -630,7 +633,7 @@ async function introSample(page) {
   });
 }
 async function verifyLinkedIntro() {
-  for (const width of [390, 768, 1280]) {
+  for (const width of [390, 768, 1280, 1366]) {
     for (const reducedMotion of ["no-preference", "reduce"]) {
       const page = await open(
         "/student/weplay?game=history-rain",
@@ -970,11 +973,11 @@ async function verifyOpeningLayout() {
       else {
         await page.locator(".yut-game").waitFor();
         assert.equal(
-          await page.locator(".weplay-yut-page > .yut-game").count(),
+          await page.locator(".weplay-yut-page .weplay-game-frame .yut-game").count(),
           1,
         );
         assert.equal(await page.locator(".weplay-page .yut-game").count(), 0);
-        assert((await page.locator(".yut-game").boundingBox()).width <= 1360);
+        assert((await page.locator(".yut-game").boundingBox()).width < 1280);
         const music = page.getByRole("button", {
           name: /음악 켜기|음악 끄기/,
         });
@@ -1064,7 +1067,7 @@ async function verifyOpeningLayout() {
     await page.getByRole("button", { name: /건너뛰기/ }).click();
     await page.locator(".yut-orientation-gate").waitFor();
     assert.equal(
-      await page.getByRole("button", { name: "싱글 모드 시작" }).count(),
+      await page.getByRole("button", { name: /혼자서 시작/ }).count(),
       0,
     );
     await capture(page, "student-yut-portrait-" + width);
@@ -1076,9 +1079,9 @@ async function verifyOpeningLayout() {
       height: width === 390 ? 390 : 768,
     });
     await page.clock.runFor(50);
-    await page.getByRole("button", { name: "싱글 모드 시작" }).waitFor();
+    await page.getByRole("button", { name: /혼자서 시작/ }).waitFor();
     assert.equal(await page.locator(".yut-orientation-gate").count(), 0);
-    assert.equal(await page.locator(".weplay-yut-page > .yut-game").count(), 1);
+    assert.equal(await page.locator(".weplay-yut-page .weplay-game-frame .yut-game").count(), 1);
     await capture(page, "student-yut-landscape-" + width);
     assert.deepEqual(
       await page.evaluate(() =>
@@ -1093,8 +1096,58 @@ async function verifyOpeningLayout() {
   );
   await verifyLinkedIntro();
 }
+async function verifyCommonGameFrame() {
+  for (const width of [390, 768, 1280, 1366]) {
+    for (const portal of ["student", "teacher"]) {
+      const bounds = [];
+      for (const game of ["history-rain", "joseon-yut"]) {
+        const page = await open(`/${portal}/weplay?game=${game}${portal === "teacher" ? "&view=preview" : ""}`, width);
+        const frame = page.locator('.weplay-game-frame');
+        await page.locator('.weplay-studio-intro').waitFor();
+        const opening = await frame.boundingBox();
+        assert(opening.x >= 16 && opening.x + opening.width <= width - 15, 'Game stage must keep page gutters');
+        const intro = await page.locator('.weplay-studio-intro').boundingBox();
+        assert(Math.abs(intro.width-opening.width)<2 && Math.abs(intro.height-opening.height)<2);
+        await page.getByRole('button',{name:/건너뛰기/}).click();
+        await page.clock.runFor(100);
+        await page.locator(game === 'joseon-yut' ? '.yut-game' : '.weplay-launch').waitFor();
+        const lobby = await frame.boundingBox();
+        assert.equal(lobby.width, opening.width); assert.equal(lobby.height, opening.height);
+        const inner = await page.locator(game === 'joseon-yut' ? '.yut-game' : '.weplay-launch').boundingBox();
+        assert(Math.abs(inner.width-opening.width)<2, JSON.stringify({game,inner,opening}));
+        if(game === 'joseon-yut' && width >= 1280) {
+          if(portal === 'student') await page.getByRole('button',{name:/혼자서 시작/}).click();
+          else await page.getByRole('button',{name:'윷판 펼치기',exact:true}).click();
+          await page.clock.runFor(2500);
+          await page.getByRole('button',{name:'윷 던지기',exact:true}).click();
+          await page.clock.runFor(2300);
+          await page.evaluate(()=>document.fonts.ready);
+          await page.clock.runFor(400);
+          const brush = await page.locator('.yut-landing-result strong').evaluate(el=>({font:getComputedStyle(el).fontFamily,loaded:document.fonts.check('120px "Yut Brush"','도개걸윷모')}));
+          assert(brush.font.includes('Yut Brush') && brush.loaded, JSON.stringify(brush));
+          await capture(page,`frame-${portal}-${game}-${width}-brush`);
+          await page.clock.runFor(1500);
+          const gameBox = await page.locator('.yut-game').boundingBox();
+          assert.equal(gameBox.height,opening.height);
+        } else if(game === 'history-rain' && width >= 1280) {
+          await page.getByRole('button',{name:portal === 'teacher' ? '연습 체험 시작' : '연습 시작',exact:true}).click();
+          await page.clock.runFor(100);
+          await page.locator('.naval-scene').waitFor();
+          assert.equal((await frame.boundingBox()).height,opening.height);
+        }
+        await capture(page,`frame-${portal}-${game}-${width}`);
+        geometry.push({portal,game,width,opening,lobby}); bounds.push(opening);
+        await page.close();
+      }
+      assert(Math.abs(bounds[0].width-bounds[1].width)<2, JSON.stringify({portal,width,bounds}));
+      assert.equal(bounds[0].height,bounds[1].height);
+    }
+  }
+  checks.push('Both portals: naval/Yut share stage width, height and page gutters at390/768/1280/1366; opening/lobby/play keep the same viewport; local brush font loads in actual throw result.');
+}
 try {
   if (audioOnly) await verifyAudioBrowser();
+  else if(frameOnly) await verifyCommonGameFrame();
   else await verifyOpeningLayout();
   assert.deepEqual(errors, []);
   assert.deepEqual(externalRequests, []);

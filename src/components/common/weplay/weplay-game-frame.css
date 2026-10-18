@@ -1,0 +1,82 @@
+.weplay-game-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--ws-page-max, 1536px);
+  margin: 0 auto;
+  padding: 24px;
+  min-width: 0;
+  color: var(--ws-text, #1f2937);
+  font-size: 16px;
+}
+.weplay-game-page > .weplay-heading { min-height: 44px; }
+.weplay-game-frame {
+  --weplay-stage-height: clamp(420px, calc(100svh - 180px), 720px);
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--weplay-stage-height);
+  min-width: 0;
+  margin: 0 0 24px;
+  border-radius: var(--radius-lg, 12px);
+}
+.weplay-game-frame__body { height: 100%; min-width: 0; overflow: auto; border-radius: inherit; }
+.weplay-game-frame__body[inert] { pointer-events: none; user-select: none; }
+.weplay-game-frame .weplay-studio-intro { --intro-stage-height: var(--weplay-stage-height); height: 100%; }
+.weplay-game-frame .weplay-launch { min-height: 100%; margin: 0; }
+.weplay-game-frame .naval-game { display: flex; flex-direction: column; height: 100%; margin: 0; }
+.weplay-game-frame .naval-scene { flex: 1; min-height: 0; max-height: none; aspect-ratio: auto; }
+.weplay-game-frame .naval-feedback { flex: none; }
+/* The keyboard layout needs its measured scene height and document scroll space. */
+.weplay-game-frame:has(.naval-game--compact) { height: auto; }
+.weplay-game-frame:has(.naval-game--compact) .weplay-game-frame__body { height: auto; overflow: visible; }
+.weplay-game-frame .naval-game--compact { display: block; height: auto; }
+.weplay-game-frame .naval-game--compact .naval-scene { flex: none; height: var(--naval-viewport-height); min-height: var(--naval-viewport-height); max-height: var(--naval-viewport-height); }
+.weplay-game-frame .naval-game--compact > .weplay-game-loading { bottom: var(--naval-keyboard-inset, 0px); }
+.weplay-game-frame .yut-game { width: 100%; max-width: none; height: 100%; min-height: 0; margin: 0; display: flex; flex-direction: column; }
+.weplay-game-frame .yut-topbar { flex: none; }
+.weplay-game-frame :is(.yut-entry, .yut-waiting, .yut-orientation-gate) { flex: 1; min-height: 0; overflow: auto; }
+.weplay-game-frame .yut-match { flex: 1; min-height: 0; overflow: hidden; }
+.weplay-game-frame .yut-match-stage { margin-inline: auto; }
+.weplay-game-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  border-radius: inherit;
+  background: #111913b8;
+  color: #fff2d4;
+  cursor: wait;
+}
+.weplay-game-loading__plaque {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  min-width: min(260px, 100%);
+  padding: 24px 32px;
+  border: 2px solid #b28c4d;
+  border-radius: 8px;
+  outline: none;
+  background: #173644;
+  box-shadow: 0 12px 32px #0006, inset 0 0 0 4px #101c22;
+}
+.is-yut .weplay-game-loading__plaque { background: #51331d url('/assets/weplay/yut/materials.webp') left top / 200% 200%; box-shadow: 0 12px 32px #0006, inset 0 0 0 4px #3b281b; }
+.weplay-game-loading__seal { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid #d8ae66; border-radius: 50%; color: #f3d293; font: 800 24px/1 Georgia, serif; }
+.weplay-game-loading__plaque strong { font: 600 16px/1.5 'Noto Serif KR', serif; }
+.weplay-game-loading__dots { display: flex; gap: 8px; }
+.weplay-game-loading__dots i { width: 6px; height: 6px; border-radius: 50%; background: #d8ae66; animation: weplay-game-wait 1100ms ease-in-out infinite; }
+.weplay-game-loading__dots i:nth-child(2) { animation-delay: 160ms; }
+.weplay-game-loading__dots i:nth-child(3) { animation-delay: 320ms; }
+@keyframes weplay-game-wait { 50% { opacity: .3; transform: translateY(-3px); } }
+@media (max-width: 767px) {
+  .weplay-game-page { padding: 16px; }
+  .weplay-game-frame { --weplay-stage-height: 560px; margin-bottom: 16px; }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .weplay-game-frame { --weplay-stage-height: calc(100svh - 32px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .weplay-game-loading__dots i { animation: none; }
+}

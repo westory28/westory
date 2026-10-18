@@ -21,6 +21,7 @@ import {
 } from "../../../lib/weplayBattle";
 import type { HistoryRainGameProps } from "./HistoryRainGame";
 import WeplayExitDialog from "./WeplayExitDialog";
+import WeplayGameLoading from "./WeplayGameLoading";
 import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 import NavalSpecialAttack, { NAVAL_SPECIAL_TIMING } from "./NavalSpecialAttack";
 import NavalCannonShot from "./NavalCannonShot";
@@ -29,6 +30,30 @@ import useWeplaySoundEffects from "./useWeplaySoundEffects";
 import "./naval-battle.css";
 
 const ART = `${import.meta.env?.BASE_URL || "/"}assets/weplay/naval/`;
+const awaitBattleResponse = async <T,>(request: Promise<T>): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      request,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              Object.assign(
+                new Error(
+                  "연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요.",
+                ),
+                { code: "deadline-exceeded" },
+              ),
+            ),
+          15000,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 type BattleEvent = { wordId: string; elapsedMs: number };
 type Effect = {
   id: number;
@@ -125,6 +150,7 @@ export default function NavalBattleGame({
   const initialViewportHeight = useRef(window.innerHeight);
   const refreshViewport = useRef<() => void>(() => undefined);
   const pending = useRef(new Set<string>());
+  const [pendingCount, setPendingCount] = useState(0);
   const retryData = useRef(
     new Map<
       string,
@@ -522,7 +548,7 @@ export default function NavalBattleGame({
   ]);
 
   const finish = async (options?: WeplayFinishOptions) => {
-    if (finishingRef.current || guideDemo) return;
+    if (finishingRef.current || pending.current.size || guideDemo) return;
     if (exitOpenRef.current) {
       exitRequestedRef.current = true;
       setExitRequested(true);
@@ -532,9 +558,11 @@ export default function NavalBattleGame({
     setError("");
     setExitError("");
     try {
-      const result = await (transport
-        ? transport.finish(options)
-        : finishWeplayGame(config, session.id, options));
+      const result = await awaitBattleResponse(
+        transport
+          ? transport.finish(options)
+          : finishWeplayGame(config, session.id, options),
+      );
       if (alive.current) onComplete(result);
     } catch (caught) {
       if (alive.current)
@@ -572,7 +600,12 @@ export default function NavalBattleGame({
   }, [ended, exitRequested]);
 
   const cancelExit = () => {
-    if (exitRequestedRef.current) return;
+    if (
+      exitRequestedRef.current ||
+      pending.current.size ||
+      finishingRef.current
+    )
+      return;
     exitOpenRef.current = false;
     setExitOpen(false);
     requestAnimationFrame(() => {
@@ -581,6 +614,7 @@ export default function NavalBattleGame({
     });
   };
   const confirmExit = () => {
+    if (pending.current.size || finishingRef.current) return;
     if (exitRequestedRef.current) {
       if (exitError) void finish({ exitEarly: true });
       return;
@@ -608,12 +642,16 @@ export default function NavalBattleGame({
     answer: string;
   }) => {
     if (
-      pending.current.has(data.wordId) ||
+      pending.current.size ||
+      finishingRef.current ||
+      exitOpenRef.current ||
+      exitRequestedRef.current ||
       feedbackLedger.hasConfirmed(data.wordId) ||
       guideDemo
     )
       return;
     pending.current.add(data.wordId);
+    setPendingCount(pending.current.size);
     setAnswer("");
     const word = session.words.find((item) => item.id === data.wordId);
     const submittedAt =
@@ -637,9 +675,9 @@ export default function NavalBattleGame({
       sound.play("word");
     }
     try {
-      const response = await (transport
-        ? transport.answer(data)
-        : submitWeplayAnswer(config, data));
+      const response = await awaitBattleResponse(
+        transport ? transport.answer(data) : submitWeplayAnswer(config, data),
+      );
       if (!alive.current) return;
       feedbackLedger.acknowledge(response.acceptedEvents || []);
       const confirmed = feedbackLedger.hasConfirmed(data.wordId);
@@ -680,12 +718,14 @@ export default function NavalBattleGame({
       }
     } finally {
       pending.current.delete(data.wordId);
-      if (alive.current)
+      if (alive.current) {
+        setPendingCount(pending.current.size);
         setRetryWord(
           [...retryData.current.keys()].find(
             (wordId) => !pending.current.has(wordId),
           ) || null,
         );
+      }
     }
     if (!exitOpenRef.current && !exitRequestedRef.current)
       input.current?.focus({ preventScroll: true });
@@ -695,6 +735,8 @@ export default function NavalBattleGame({
     sound.unlock();
     if (
       composing.current ||
+      pending.current.size ||
+      finishingRef.current ||
       !started ||
       ended ||
       exitOpenRef.current ||
@@ -750,11 +792,13 @@ export default function NavalBattleGame({
     : session.mode === "practice"
       ? "연습"
       : "위스 도전";
+  const networkBusy = !guideDemo && (pendingCount > 0 || finishing);
   return (
     <section
       className={`naval-game${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}${pageHidden ? " naval-game--hidden" : ""}${guideDemo ? " naval-game--guide" : ""}${guideDemo && guideInteractive ? " naval-game--guide-interactive" : ""}`}
       style={
         {
+          position: "relative",
           "--naval-ocean-art": `url(${ART}sea-battle.webp)`,
           "--naval-explosion-art": `url(${ART}explosion.webp)`,
           "--naval-keyboard-inset": `${keyboardInset}px`,
@@ -764,8 +808,10 @@ export default function NavalBattleGame({
         } as React.CSSProperties
       }
       aria-label={`${gameTitle} 해전 게임`}
+      aria-busy={networkBusy}
     >
       <div
+        {...(networkBusy ? { inert: "" } : {})}
         className={`naval-scene${effects.some((effect) => effect.kind === "sunk") ? " has-sinking" : ""}`}
       >
         <div className="naval-ocean" aria-hidden="true" />
@@ -1142,7 +1188,10 @@ export default function NavalBattleGame({
               id={inputId}
               ref={input}
               value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
+              onChange={(event) => {
+                if (!pending.current.size && !finishingRef.current)
+                  setAnswer(event.target.value);
+              }}
               onFocus={() => {
                 refreshViewport.current();
                 requestAnimationFrame(keepInputVisible);
@@ -1164,6 +1213,7 @@ export default function NavalBattleGame({
               spellCheck={false}
               disabled={
                 !started ||
+                networkBusy ||
                 ended ||
                 exitRequested ||
                 (guideDemo && !guideInteractive?.wordId)
@@ -1188,6 +1238,7 @@ export default function NavalBattleGame({
               type="submit"
               disabled={
                 !started ||
+                networkBusy ||
                 ended ||
                 exitRequested ||
                 !answer.trim() ||
@@ -1203,8 +1254,9 @@ export default function NavalBattleGame({
             className="weplay-exit-button"
             data-weplay-guide="exit"
             type="button"
-            disabled={finishing || exitRequested || guideDemo}
+            disabled={networkBusy || exitRequested || guideDemo}
             onClick={() => {
+              if (pending.current.size || finishingRef.current) return;
               exitOpenRef.current = true;
               setExitOpen(true);
             }}
@@ -1217,8 +1269,11 @@ export default function NavalBattleGame({
               type="button"
               data-weplay-guide="help"
               aria-label="게임 도움말"
-              disabled={finishing || exitRequested || guideDemo}
-              onClick={onShowGuide}
+              disabled={networkBusy || exitRequested || guideDemo}
+              onClick={() => {
+                if (!pending.current.size && !finishingRef.current)
+                  onShowGuide();
+              }}
             >
               도움말
             </button>
@@ -1228,8 +1283,11 @@ export default function NavalBattleGame({
               type="checkbox"
               checked={reducedMotion}
               aria-label="움직임 줄이기"
-              disabled={guideDemo}
-              onChange={(event) => setReducedMotion(event.target.checked)}
+              disabled={networkBusy || guideDemo}
+              onChange={(event) => {
+                if (!pending.current.size && !finishingRef.current)
+                  setReducedMotion(event.target.checked);
+              }}
             />
             효과 줄이기
           </label>
@@ -1248,7 +1306,7 @@ export default function NavalBattleGame({
         </div>
       </div>
       <WeplayExitDialog
-        open={exitOpen}
+        open={exitOpen && !networkBusy}
         confirmed={exitRequested}
         error={exitError}
         preview={preview}
@@ -1257,13 +1315,17 @@ export default function NavalBattleGame({
         onConfirm={confirmExit}
       />
       {error && (
-        <div className="weplay-error" role="alert">
+        <div
+          className="weplay-error"
+          role="alert"
+          {...(networkBusy ? { inert: "" } : {})}
+        >
           <p>{error}</p>
           {ended ? (
             <button
               type="button"
               onClick={() => void finish()}
-              disabled={finishing}
+              disabled={networkBusy}
             >
               {finishing ? "확인 중…" : "정산 다시 시도"}
             </button>
@@ -1271,6 +1333,7 @@ export default function NavalBattleGame({
             retryWord && (
               <button
                 type="button"
+                disabled={networkBusy}
                 onClick={() => {
                   const data = retryData.current.get(retryWord);
                   if (data) void send(data);
@@ -1281,6 +1344,12 @@ export default function NavalBattleGame({
             )
           )}
         </div>
+      )}
+      {networkBusy && (
+        <WeplayGameLoading
+          theme="naval"
+          label={finishing ? "전투 결과 확인 중…" : "장전 확인 중…"}
+        />
       )}
     </section>
   );

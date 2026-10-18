@@ -105,7 +105,7 @@ setup().catch(error=>{qa.error=error.message;throw error;});
 const bundled = await build({
   stdin: { contents: harness, loader: 'tsx', resolveDir: root }, bundle: true, write: false,
   format: 'esm', platform: 'browser', target: 'es2022', outfile: path.join(os.tmpdir(), 'westory-naval-qa.js'), external: ['/assets/*'],
-  loader: { '.svg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env.BASE_URL': '"/"' },
+  loader: { '.svg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env.BASE_URL': '"/"' },
   plugins: [{ name: 'naval-service-fixture', setup(plugin) {
     plugin.onResolve({ filter: /^fixture:|(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/firebase$|(?:^|\/)historyDictionarySession$|^\.\/firebase$/ }, () => ({ path: 'service', namespace: 'fixture' }));
     plugin.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: service, loader: 'ts', resolveDir: root }));
@@ -169,7 +169,7 @@ async function open(view = 'battle', width = 1280, query = '', options = {}) {
 }
 async function skipStudioIntro(page) {
   const skip = page.getByRole('button', {name: /건너뛰기/});
-  if (await skip.isVisible()) await skip.click();
+  if (await skip.isVisible()) { await skip.click(); await page.clock.runFor(32); }
 }
 async function capture(page, name) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${name}: horizontal overflow`);
@@ -250,6 +250,7 @@ async function exitDialog(page) {
 }
 let failure = null;
 try {
+  if (process.env.WEPLAY_QA_EXIT_ONLY !== '1') {
   for (const width of [390, 768, 1280]) {
     for (const view of ['lobby', 'management']) {
       const page = await open(view, width, 'catalog=1');
@@ -264,7 +265,7 @@ try {
       await skipStudioIntro(page);
       if (view === 'lobby') {
         await page.locator('.weplay-launch').waitFor();
-        await page.getByRole('link', {name:'← 전체 게임',exact:true}).click();
+        await page.getByRole('link', {name:'전체 게임',exact:true}).click();
         await card.waitFor();
       } else {
         await page.getByRole('button', {name:'체험하기',exact:true}).click();
@@ -463,14 +464,16 @@ try {
   }
   checks.push('Student title uses the teacher-defined menu title; missing or legacy default names resolve to 내가 충무공이라고?!');
 
+  }
   // Set WEPLAY_QA_LOBBY_ONLY=1 for a focused repeat after a lobby-only visual fix.
   if (process.env.WEPLAY_QA_LOBBY_ONLY !== '1') {
+  if (process.env.WEPLAY_QA_EXIT_ONLY !== '1') {
   const shimmer = await open('lobby', 1280);
   const start = shimmer.locator('.weplay-start'); await start.waitFor();
   assert.equal(await start.evaluate(element => getComputedStyle(element, '::before').animationName), 'none');
   await start.hover();
   assert.equal(await start.evaluate(element => getComputedStyle(element, '::before').animationName), 'weplay-start-shimmer');
-  await shimmer.mouse.move(0, 0); await start.focus();
+  await shimmer.mouse.move(0, 0); await shimmer.keyboard.press('Tab'); await start.focus();
   assert.equal(await start.evaluate(element => getComputedStyle(element, '::before').animationName), 'weplay-start-shimmer');
   await shimmer.waitForTimeout(400); await capture(shimmer, 'lobby-start-keyboard-shimmer-1280');
   await shimmer.evaluate(() => { window.navalQa.hold.startWeplayGame = true; });
@@ -492,6 +495,7 @@ try {
   await capture(poor, 'lobby-disabled-challenge-390'); await poor.close();
   checks.push('Start shimmer works on hover and keyboard focus; pending/insufficient-balance buttons do not animate or double-start; OS reduced motion removes shimmer and movement');
 
+  }
   const practice = await open('lobby', 390); await startStudent(practice);
   let dialog = await exitDialog(practice);
   assert.match(await dialog.textContent(), /위스는 변동되지 않습니다/);
@@ -504,6 +508,9 @@ try {
   assert.equal(await practice.evaluate(() => window.navalQa.finishAttempts.length), 0);
   assert.equal(await practice.getByRole('textbox', { name: '단어 입력' }).evaluate(element => document.activeElement === element), true);
   await practice.getByRole('textbox', { name: '단어 입력' }).focus(); await practice.setViewportSize({ width: 390, height: 360 }); await practice.clock.runFor(250);
+  const compactGeometry = await practice.evaluate(() => ({sceneHeight:document.querySelector('.naval-scene').getBoundingClientRect().height, controls:['.naval-hud','#naval-answer-input','.weplay-exit-button'].map(selector=>{const rect=document.querySelector(selector).getBoundingClientRect();return {selector,top:rect.top,bottom:rect.bottom};}),viewport:visualViewport.height}));
+  assert.ok(compactGeometry.sceneHeight >= 340 && compactGeometry.controls.every(rect => rect.top >= 0 && rect.bottom <= compactGeometry.viewport), JSON.stringify(compactGeometry));
+  layoutMeasurements.push({case:'keyboard-390x360',...compactGeometry});
   dialog = await exitDialog(practice);
   await capture(practice, 'exit-practice-keyboard-viewport-390x360');
   await dialog.getByRole('button', { name: '계속하기', exact: true }).click();
@@ -524,15 +531,25 @@ try {
   const pending = await open('lobby', 768); await startStudent(pending, 'challenge');
   await pending.evaluate(() => { window.navalQa.holdAnswer = 1; window.navalQa.failFinish = 1; });
   await answerVisible(pending);
+  await pending.locator('.weplay-game-loading').waitFor();
+  assert.equal(await pending.locator('#naval-answer-input').isDisabled(), true);
+  assert.equal(await pending.locator('.weplay-exit-button').first().isDisabled(), true);
+  await pending.locator('.weplay-exit-button').first().dispatchEvent('click');
+  await pending.keyboard.press('Escape');
+  assert.equal(await pending.locator('.weplay-exit-dialog[open]').count(), 0, 'Pending answer blocks opening or canceling exit');
+  await pending.evaluate(() => window.navalQa.releaseAnswer());
+  await pending.locator('.weplay-game-loading').waitFor({state:'hidden'});
+  await pending.evaluate(() => { window.navalQa.holdFinish = true; });
   dialog = await exitDialog(pending);
   assert.match(await dialog.textContent(), /참가비는 반환되지 않으며/);
   await dialog.getByRole('button', { name: '현재 기록으로 종료', exact: true }).evaluate(button => { button.click(); button.click(); });
   await pending.clock.runFor(1000);
-  assert.equal(await pending.evaluate(() => window.navalQa.finishAttempts.length), 0, 'Exit waits for the in-flight accepted answer');
+  assert.equal(await pending.evaluate(() => window.navalQa.finishAttempts.length), 1);
+  await pending.locator('.weplay-game-loading').waitFor();
   await pending.keyboard.press('Escape');
-  assert.equal(await pending.locator('.weplay-exit-dialog[open]').count(), 1, 'Confirmed exit cannot be canceled while settling');
-  assert.equal(await pending.getByRole('textbox', { name: '단어 입력' }).isDisabled(), true);
-  await pending.evaluate(() => window.navalQa.releaseAnswer()); await pending.clock.runFor(2000);
+  assert.equal(await pending.locator('.weplay-exit-dialog[open]').count(), 0, 'Native exit dialog closes behind the game loading overlay while settling');
+  assert.equal(await pending.locator('#naval-answer-input').isDisabled(), true);
+  await pending.evaluate(() => { window.navalQa.holdFinish = false; window.navalQa.releaseFinish(); }); await pending.clock.runFor(2000);
   await dialog.getByRole('button', { name: '종료 다시 시도', exact: true }).waitFor();
   assert.equal(await pending.evaluate(() => window.navalQa.finishAttempts.length), 1);
   assert.equal(await dialog.getByRole('button', { name: '종료 다시 시도', exact: true }).evaluate(element => document.activeElement === element), true);
@@ -551,7 +568,7 @@ try {
   await pending.getByRole('button', { name: '게임 메인으로', exact: true }).click();
   assert.equal(await pending.locator('.weplay-selected-mode').textContent(), '난이도');
   await pending.close();
-  checks.push('Challenge exit waits pending answer, locks input, ignores duplicate confirm/Escape, focuses failed-settlement retry, retries exitEarly once and keeps correctCount1 plus challenge receipt/mode');
+  checks.push('Challenge answer/settlement waits use game loading, lock input and native-dialog actions, focus failed-settlement retry, retry exitEarly once and keep correctCount1 plus challenge receipt/mode');
 
   const legacy = await open('lobby', 390, 'legacy=1'); await startStudent(legacy);
   assert.equal(await legacy.locator('.naval-game').count(), 0);

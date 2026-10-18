@@ -16,6 +16,7 @@ import {
 import {
   getLegalYutMoves,
   YUT_ROLES,
+  YUT_MOVE_ANIMATION_MS,
   addYutEmote,
   YUT_EMOTE_COOLDOWN_MS,
   YUT_EMOTE_VISIBLE_MS,
@@ -32,8 +33,107 @@ import type useYutMusic from "../useYutMusic";
 import { PROFESSIONS, YutSprite, YutIcon } from "./YutArt";
 import YutBoard, { yutNodeLabel } from "./YutBoard";
 import YutThrow3D from "./YutThrow3D";
+import WeplayGameLoading from "../WeplayGameLoading";
 import "@fontsource/noto-serif-kr/600.css";
 import "./yut.css";
+import "./yut-feedback.css";
+
+async function withYutTimeout<T>(request: Promise<T>): Promise<T> {
+  let timer: number | undefined;
+  try {
+    return await Promise.race([
+      request,
+      new Promise<never>((_resolve, reject) => {
+        timer = window.setTimeout(
+          () =>
+            reject(
+              Object.assign(
+                new Error(
+                  "연결이 지연되었습니다. 방 상태를 다시 확인해 주세요.",
+                ),
+                { code: "deadline-exceeded" },
+              ),
+            ),
+          15000,
+        );
+      }),
+    ]);
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export function YutVictory({
+  room,
+  uid,
+  local,
+  busy,
+  onClaim,
+}: {
+  room: YutRoom;
+  uid: string;
+  local: boolean;
+  busy: boolean;
+  onClaim: () => void;
+}) {
+  const winner = room.players.find((player) => player.uid === room.winnerUid);
+  const reward = local ? undefined : room.reward;
+  return (
+    <div
+      className="yut-victory"
+      role="status"
+      aria-live="polite"
+      data-winner={room.winnerUid || ""}
+    >
+      <div className="yut-victory-petals" aria-hidden="true">
+        {Array.from({ length: 14 }, (_, index) => (
+          <i
+            key={index}
+            style={{ "--petal-index": index } as React.CSSProperties}
+          />
+        ))}
+      </div>
+      <div className="yut-victory-emblem" aria-hidden="true">
+        {winner && <YutSprite role={winner.role} pose="win" />}
+      </div>
+      <span className="yut-victory-ribbon">이번 판의 우승</span>
+      <h2>{winner?.name || "참가자"}</h2>
+      <strong className="yut-victory-congratulation">축하합니다!</strong>
+      {reward && (
+        <div className="yut-reward-receipt" data-reward-status={reward.status}>
+          {reward.status === "paid" ? (
+            <>
+              <strong>+{reward.amount.toLocaleString()} 위스</strong>
+              <span>우승 보상 지급 완료</span>
+            </>
+          ) : reward.status === "pending" ? (
+            <>
+              <strong>{reward.amount.toLocaleString()} 위스 지급 대기</strong>
+              {reward.uid === uid ? (
+                <button
+                  className="yut-button"
+                  type="button"
+                  disabled={busy}
+                  onClick={onClaim}
+                >
+                  보상 지급 다시 시도
+                </button>
+              ) : (
+                <span>우승자의 보상 지급을 기다리고 있습니다.</span>
+              )}
+            </>
+          ) : (
+            <span>
+              {room.finishReason === "forfeit"
+                ? "중도 퇴장으로 끝난 판은 보상이 없습니다."
+                : "이번 판은 위스 보상이 없습니다."}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The gauge changes the toss animation only; the server still chooses the result. */
 function YutPowerThrow({
@@ -182,12 +282,14 @@ function GameDialog({
   onConfirm,
   throwSeconds = 5,
   moveSeconds = 25,
+  blocked = false,
 }: {
   kind: "rules" | "leave";
   onClose: () => void;
   onConfirm: () => void;
   throwSeconds?: number;
   moveSeconds?: number;
+  blocked?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -199,7 +301,11 @@ function GameDialog({
     <dialog
       className="yut-dialog"
       ref={ref}
-      onCancel={onClose}
+      {...(blocked ? { inert: "" } : {})}
+      onCancel={(event) => {
+        if (blocked) event.preventDefault();
+        else onClose();
+      }}
       aria-labelledby="yut-dialog-title"
     >
       <div className="yut-dialog-top">
@@ -415,6 +521,14 @@ export default function YutGame({
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [pending, setPending] = useState("");
+  const [throwDelayed, setThrowDelayed] = useState(false);
+  const networkBusy = loading || Boolean(pending);
+  useEffect(() => {
+    setThrowDelayed(false);
+    if (pending !== "throw") return;
+    const timer = window.setTimeout(() => setThrowDelayed(true), 2500);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
   const [disconnected, setDisconnected] = useState(false);
   const [needsSync, setNeedsSync] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -549,6 +663,7 @@ export default function YutGame({
     });
   }, [room?.id, room?.revision, settling]);
   useEffect(() => {
+    if (moving) return;
     if (throwKey && room?.pendingThrow)
       setToss({
         key: throwKey,
@@ -558,7 +673,7 @@ export default function YutGame({
             ?.power ?? 0.65,
         room,
       });
-  }, [throwKey]);
+  }, [throwKey, moving]);
   const acceptRoom = useCallback((next: YutRoom | null) => {
     setRoom((previous) =>
       previous &&
@@ -577,18 +692,41 @@ export default function YutGame({
         0,
         shellRef.current?.getBoundingClientRect().top || 0,
       );
-      const available =
-        window.innerHeight - top - (window.innerHeight <= 560 ? 8 : 20);
       const compact =
         window.innerWidth > window.innerHeight && window.innerHeight <= 560;
-      const board = shellRef.current?.querySelector(".yut-isometric-board");
+      const frame = shellRef.current?.closest(".weplay-game-frame");
+      const available = Math.min(
+        window.innerHeight - top - (compact ? 8 : 20),
+        document.fullscreenElement === shellRef.current
+          ? Infinity
+          : frame?.clientHeight || Infinity,
+      );
+      const height = (selector: string) =>
+        shellRef.current?.querySelector(selector)?.getBoundingClientRect()
+          .height || 0;
+      const style = (selector: string) => {
+        const node = shellRef.current?.querySelector(selector);
+        return node ? getComputedStyle(node) : null;
+      };
+      const value = (input?: string) => parseFloat(input || "0") || 0;
+      const matchStyle = style(".yut-match"),
+        boardStyle = style(".yut-isometric-board-wrap"),
+        dockStyle = style(".yut-action-dock");
+      const shellStyle = shellRef.current
+        ? getComputedStyle(shellRef.current)
+        : null;
       const overhead =
-        board && shellRef.current
-          ? shellRef.current.getBoundingClientRect().height -
-            board.getBoundingClientRect().height
-          : compact
-            ? 180
-            : 330;
+        height(".yut-topbar") +
+        height(".yut-match-heading") +
+        height(".yut-action-dock") +
+        height(".yut-event") +
+        value(matchStyle?.paddingTop) +
+        value(matchStyle?.paddingBottom) +
+        value(boardStyle?.paddingTop) +
+        value(dockStyle?.marginTop) +
+        value(shellStyle?.borderTopWidth) +
+        value(shellStyle?.borderBottomWidth) +
+        8;
       setPortrait(portraitViewport());
       setBoardMaxWidth(
         Math.max(
@@ -599,10 +737,14 @@ export default function YutGame({
     };
     measure();
     const frame = window.requestAnimationFrame(measure);
+    const observer = new ResizeObserver(measure);
+    const frameNode = shellRef.current?.closest(".weplay-game-frame");
+    if (frameNode) observer.observe(frameNode);
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, { passive: true });
     return () => {
       window.cancelAnimationFrame(frame);
+      observer.disconnect();
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure);
     };
@@ -728,7 +870,7 @@ export default function YutGame({
       return;
     }
     setLoading(true);
-    void getYutLobby(config)
+    void withYutTimeout(getYutLobby(config))
       .then((data) => {
         if (!mounted.current || generation.current !== run) return;
         setLobby(data);
@@ -885,6 +1027,11 @@ export default function YutGame({
       window.innerWidth <= 1023
     )
       void requestLandscape();
+    if (
+      ["throw", "move", "skip", "start"].includes(action) &&
+      roomRef.current?.status === "finished"
+    )
+      return;
     music.start();
     setError("");
     setNote("");
@@ -912,12 +1059,14 @@ export default function YutGame({
     pendingRef.current = true;
     setPending(action);
     try {
-      const result = await commandYutRoom(config, {
-        action,
-        requestKey: requestKey(),
-        ...(room ? { roomId: room.id, expectedRevision: room.revision } : {}),
-        ...extra,
-      });
+      const result = await withYutTimeout(
+        commandYutRoom(config, {
+          action,
+          requestKey: requestKey(),
+          ...(room ? { roomId: room.id, expectedRevision: room.revision } : {}),
+          ...extra,
+        }),
+      );
       if (
         !mounted.current ||
         identityRef.current !== scope ||
@@ -933,7 +1082,7 @@ export default function YutGame({
       if (action === "leave" || action === "close") roomRef.current = null;
       acceptRoom(action === "leave" || action === "close" ? null : result.room);
       if (action === "leave" || action === "close") {
-        const refreshed = await getYutLobby(config);
+        const refreshed = await withYutTimeout(getYutLobby(config));
         if (
           mounted.current &&
           identityRef.current === scope &&
@@ -972,7 +1121,6 @@ export default function YutGame({
   };
   const player = room?.players.find((item) => item.uid === uid);
   const turn = room?.players.find((item) => item.uid === room.turnUid);
-  const winner = room?.players.find((item) => item.uid === room.winnerUid);
   const myTurn = room?.turnUid === uid;
   const moves = room ? getLegalYutMoves(room, uid) : [];
   const seconds = room
@@ -997,7 +1145,8 @@ export default function YutGame({
   const finishing = Boolean(
     room?.status === "finished" &&
     (moving ||
-      (room.lastEvent.move && serverClock < room.lastEvent.atMs + 1500)),
+      (room.lastEvent.move &&
+        serverClock < room.lastEvent.atMs + YUT_MOVE_ANIMATION_MS)),
   );
   useEffect(() => {
     if (
@@ -1180,738 +1329,781 @@ export default function YutGame({
       aria-label="마우저구 윷놀이"
       data-motion-paused={hidden || portrait}
     >
-      <div className="yut-topbar">
-        <span className="yut-topbar-brand">
-          WESTORY <b>·</b> WEPLAY
-        </span>
-        <div className="yut-topbar-actions">
-          {room && !portrait && (
-            <div className="yut-emote-control" ref={emotePanel}>
-              <button
-                ref={emoteButton}
-                type="button"
-                className="yut-icon-button"
-                aria-label="감정표현"
-                title="감정표현"
-                aria-expanded={emoteOpen}
-                aria-controls="yut-emote-menu"
-                onClick={() => {
-                  setEmoteOpen((value) => !value);
-                  setEmoteError("");
-                }}
-              >
-                <YutIcon name="emote" />
-              </button>
-              {emoteOpen && (
-                <div
-                  className="yut-emote-menu"
-                  id="yut-emote-menu"
-                  role="group"
-                  aria-label="감정표현 선택"
+      <div className="yut-game-content" {...(networkBusy ? { inert: "" } : {})}>
+        <div className="yut-topbar">
+          <span className="yut-topbar-brand">
+            WESTORY <b>·</b> WEPLAY
+          </span>
+          <div className="yut-topbar-actions">
+            {room && !portrait && (
+              <div className="yut-emote-control" ref={emotePanel}>
+                <button
+                  ref={emoteButton}
+                  type="button"
+                  className="yut-icon-button"
+                  aria-label="감정표현"
+                  title="감정표현"
+                  aria-expanded={emoteOpen}
+                  aria-controls="yut-emote-menu"
+                  onClick={() => {
+                    setEmoteOpen((value) => !value);
+                    setEmoteError("");
+                  }}
                 >
-                  <div className="yut-emote-options">
-                    {(Object.keys(EMOTES) as YutEmoteKind[]).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        disabled={emotePending || emoteCooldown > 0}
-                        onClick={() => void sendEmote(kind)}
-                        aria-label={EMOTES[kind].label}
-                      >
-                        <span aria-hidden="true">{EMOTES[kind].symbol}</span>
-                        <span>{EMOTES[kind].label}</span>
-                      </button>
-                    ))}
+                  <YutIcon name="emote" />
+                </button>
+                {emoteOpen && (
+                  <div
+                    className="yut-emote-menu"
+                    id="yut-emote-menu"
+                    role="group"
+                    aria-label="감정표현 선택"
+                  >
+                    <div className="yut-emote-options">
+                      {(Object.keys(EMOTES) as YutEmoteKind[]).map((kind) => (
+                        <button
+                          key={kind}
+                          type="button"
+                          disabled={emotePending || emoteCooldown > 0}
+                          onClick={() => void sendEmote(kind)}
+                          aria-label={EMOTES[kind].label}
+                        >
+                          <span aria-hidden="true">{EMOTES[kind].symbol}</span>
+                          <span>{EMOTES[kind].label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {emoteCooldown > 0 && (
+                      <p role="status">
+                        {emoteCooldown}초 뒤 다시 보낼 수 있습니다.
+                      </p>
+                    )}
+                    {emoteError && <p role="alert">{emoteError}</p>}
                   </div>
-                  {emoteCooldown > 0 && (
-                    <p role="status">
-                      {emoteCooldown}초 뒤 다시 보낼 수 있습니다.
-                    </p>
-                  )}
-                  {emoteError && <p role="alert">{emoteError}</p>}
-                </div>
-              )}
-            </div>
-          )}
-          <button
-            type="button"
-            className="yut-icon-button"
-            aria-label="게임 규칙 보기"
-            title="게임 규칙"
-            onClick={() => setDialog("rules")}
-          >
-            <YutIcon name="info" />
-          </button>
-          <button
-            type="button"
-            className="yut-icon-button"
-            aria-label={room ? "방 나가기" : "전체 게임"}
-            title={room ? "방 나가기" : "전체 게임"}
-            onClick={back}
-            disabled={Boolean(pending)}
-          >
-            <YutIcon name="back" />
-          </button>
-          <button
-            type="button"
-            className="yut-icon-button"
-            aria-label={
-              music.failed
-                ? "음악 재시도"
-                : music.enabled
-                  ? "음악 끄기"
-                  : "음악 켜기"
-            }
-            title={
-              music.failed
-                ? "음악 재시도"
-                : music.enabled
-                  ? "음악 끄기"
-                  : "음악 켜기"
-            }
-            aria-pressed={music.enabled}
-            onClick={music.toggle}
-          >
-            <YutIcon name={music.enabled ? "sound" : "muted"} />
-          </button>
-        </div>
-      </div>
-      {(error || note || disconnected || needsSync) && (
-        <div
-          className={`yut-message ${error || disconnected || needsSync ? "is-error" : ""}`}
-          role={error || disconnected || needsSync ? "alert" : "status"}
-        >
-          <span>{error || note || "방 상태를 다시 확인해 주세요."}</span>
-          {!local && (error || disconnected || needsSync) && (
-            <button
-              type="button"
-              className="yut-button"
-              onClick={() => setRetry((value) => value + 1)}
-              disabled={Boolean(pending) || loading}
-            >
-              방 상태 다시 확인
-            </button>
-          )}
-          {!disconnected && !needsSync && (
+                )}
+              </div>
+            )}
             <button
               type="button"
               className="yut-icon-button"
-              aria-label="알림 닫기"
-              onClick={() => {
-                setError("");
-                setNote("");
-              }}
+              aria-label="게임 규칙 보기"
+              title="게임 규칙"
+              onClick={() => setDialog("rules")}
             >
-              ×
+              <YutIcon name="info" />
             </button>
-          )}
-        </div>
-      )}
-      {portrait ? (
-        <div className="yut-orientation-gate" role="status">
-          <YutIcon name="rotate" />
-          <h1>가로로 펼치는 윷판</h1>
-          <p>휴대폰을 가로로 돌려 주세요.</p>
-          <button
-            className="yut-button yut-button--primary"
-            type="button"
-            onClick={() => void requestLandscape()}
-          >
-            가로 전체 화면으로 열기
-          </button>
-          {room?.status === "playing" && !local && (
-            <p className="yut-orientation-notice">
-              온라인 판의 차례 시간은 계속 흐릅니다.
-            </p>
-          )}
-        </div>
-      ) : !room ? (
-        <div className="yut-entry">
-          <div className="yut-entry-scene" aria-hidden="true" />
-          <div className="yut-entry-title">
-            <span className="yut-title-ornament" aria-hidden="true">
-              馬 牛 豬 狗
-            </span>
-            <h1>
-              마우저구<span>윷놀이</span>
-            </h1>
-            <div className="yut-title-rule" aria-hidden="true">
-              <i />
-              <span>윷</span>
-              <i />
-            </div>
-          </div>
-          <div className="yut-entry-menu">
-            <fieldset className="yut-single-count">
-              <legend>싱글 참가 인원</legend>
-              {([2, 3, 4] as const).map((count) => (
-                <button
-                  key={count}
-                  type="button"
-                  className={singleCount === count ? "is-selected" : ""}
-                  aria-pressed={singleCount === count}
-                  onClick={() => setSingleCount(count)}
-                  disabled={Boolean(pending) || loading}
-                >
-                  {count}명
-                </button>
-              ))}
-            </fieldset>
             <button
               type="button"
-              className="yut-button yut-button--primary yut-wide yut-single-start"
-              onClick={() => beginLocal("single")}
-              disabled={
-                Boolean(pending) ||
-                loading ||
-                (portal === "student" &&
-                  (lobby?.enabled !== true || !settings.allowSolo))
-              }
+              className="yut-icon-button"
+              aria-label={room ? "방 나가기" : "전체 게임"}
+              title={room ? "방 나가기" : "전체 게임"}
+              onClick={back}
+              disabled={Boolean(pending)}
             >
-              혼자서 시작 <YutIcon name="arrow" />
+              <YutIcon name="back" />
             </button>
-            {loading ? (
-              <p className="yut-loading" role="status">
-                윷판을 준비하고 있습니다.
-              </p>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="yut-button yut-wide"
-                  disabled={
-                    busy ||
-                    !lobby ||
-                    !settings.allowMultiplayer ||
-                    (portal === "student" && !lobby.enabled)
-                  }
-                  onClick={() =>
-                    void command("match", {
-                      maxPlayers: settings.defaultPlayerCount,
-                    })
-                  }
-                >
-                  {pending === "match" ? "친구를 찾는 중…" : "여럿이서 시작"}
-                  <YutIcon name="arrow" />
-                </button>
-                <button
-                  type="button"
-                  className="yut-button yut-wide yut-create-start"
-                  disabled={
-                    busy ||
-                    !lobby ||
-                    !settings.allowMultiplayer ||
-                    (portal === "student" && !lobby.enabled)
-                  }
-                  onClick={() => setDialog("create")}
-                >
-                  새 판 만들기
-                  <YutIcon name="arrow" />
-                </button>
-                <form
-                  className="yut-join"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    if (
-                      code.trim() &&
-                      settings.allowMultiplayer &&
-                      settings.allowPrivateRooms &&
-                      remainingPrivate !== 0
-                    )
-                      void command("join", { code: code.trim().toUpperCase() });
-                  }}
-                >
-                  <label className="yut-label" htmlFor="yut-room-code">
-                    비밀방 코드
-                  </label>
-                  <div>
-                    <input
-                      id="yut-room-code"
-                      value={code}
-                      onChange={(event) =>
-                        setCode(
-                          event.target.value
-                            .replace(/[^a-zA-Z0-9]/g, "")
-                            .slice(0, 6)
-                            .toUpperCase(),
-                        )
-                      }
-                      placeholder="6자리 코드"
-                      autoComplete="off"
-                      spellCheck={false}
-                      maxLength={6}
-                      disabled={busy}
-                    />
-                    <button
-                      className="yut-button"
-                      type="submit"
-                      disabled={
-                        busy ||
-                        !lobby ||
-                        code.length !== 6 ||
-                        !settings.allowMultiplayer ||
-                        !settings.allowPrivateRooms ||
-                        remainingPrivate === 0 ||
-                        (portal === "student" && !lobby.enabled)
-                      }
-                    >
-                      {pending === "join" ? "입장 중" : "들어가기"}
-                    </button>
-                  </div>
-                </form>
-                {remainingPrivate !== null && (
-                  <p className="yut-private-quota">
-                    오늘 비밀방 참가 {remainingPrivate}/
-                    {YUT_PRIVATE_DAILY_LIMIT}회 남음
-                  </p>
-                )}
-              </>
-            )}
-            {portal === "teacher" && (
+            <button
+              type="button"
+              className="yut-icon-button"
+              aria-label={
+                music.failed
+                  ? "음악 재시도"
+                  : music.enabled
+                    ? "음악 끄기"
+                    : "음악 켜기"
+              }
+              title={
+                music.failed
+                  ? "음악 재시도"
+                  : music.enabled
+                    ? "음악 끄기"
+                    : "음악 켜기"
+              }
+              aria-pressed={music.enabled}
+              onClick={music.toggle}
+            >
+              <YutIcon name={music.enabled ? "sound" : "muted"} />
+            </button>
+          </div>
+        </div>
+        {(error || note || disconnected || needsSync) && (
+          <div
+            className={`yut-message ${error || disconnected || needsSync ? "is-error" : ""}`}
+            role={error || disconnected || needsSync ? "alert" : "status"}
+          >
+            <span>{error || note || "방 상태를 다시 확인해 주세요."}</span>
+            {!local && (error || disconnected || needsSync) && (
               <button
                 type="button"
-                className="yut-practice"
-                onClick={() => beginLocal("preview")}
+                className="yut-button"
+                onClick={() => setRetry((value) => value + 1)}
                 disabled={Boolean(pending) || loading}
               >
-                대기실부터 체험하기
-                <YutIcon name="arrow" />
+                방 상태 다시 확인
               </button>
             )}
-            <p className="yut-entry-meta">
-              싱글 1인 · 온라인 2–4인 <span>·</span> 위스 변동 없음
-            </p>
-          </div>
-        </div>
-      ) : room.status === "waiting" ? (
-        <div className="yut-waiting">
-          <div className="yut-waiting-heading">
-            <div>
-              <span className="yut-eyebrow">
-                {local ? "체험 · 기록 미반영" : room.classLabel}
-              </span>
-              <h1>한 판의 인연</h1>
-            </div>
-            <div className="yut-room-code">
-              {local ? (
-                <span>컴퓨터와 연습</span>
-              ) : room.visibility === "public" ? (
-                <span>공개방 · 빠른 참가</span>
-              ) : (
-                <>
-                  <span>방 코드</span>
-                  <strong>{room.code}</strong>
-                  <button
-                    type="button"
-                    className="yut-icon-button"
-                    aria-label="방 코드 복사"
-                    title="방 코드 복사"
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(room.code).then(
-                        () => setNote("방 코드를 복사했습니다."),
-                        () => setNote(`방 코드: ${room.code}`),
-                      );
-                    }}
-                  >
-                    <YutIcon name="copy" />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="yut-waiting-seats">
-            {[0, 1, 2, 3].map((index) => {
-              const person = room.players.find(
-                (person) => YUT_ROLES.indexOf(person.role) === index,
-              );
-              const blocked = room.blockedSeats?.includes(index) || false;
-              const canChange = room.hostUid === uid && !local;
-              return (
-                <div
-                  key={index}
-                  className={`yut-seat ${person ? "is-filled" : ""} ${blocked ? "is-blocked" : ""}`}
-                >
-                  {person ? (
-                    <>
-                      <span className="yut-seat-job">
-                        {PROFESSIONS[person.role].clan}
-                      </span>
-                      <div className="yut-avatar">
-                        {emoteBubble(person.uid)}
-                        <YutSprite role={person.role} />
-                      </div>
-                      <strong>
-                        {person.name}
-                        {person.uid === uid && person.name !== "나" && (
-                          <span className="yut-me">나</span>
-                        )}
-                      </strong>
-                      <span
-                        className={`yut-seat-status ${person.ready ? "is-ready" : ""}`}
-                      >
-                        {person.uid === room.hostUid
-                          ? "방장"
-                          : person.ready
-                            ? "준비 완료"
-                            : "준비 중"}
-                      </span>
-                    </>
-                  ) : canChange ? (
-                    <button
-                      type="button"
-                      className="yut-seat-toggle"
-                      aria-label={`${index + 1}번 자리 ${blocked ? "열기" : "막기"}`}
-                      aria-pressed={blocked}
-                      disabled={
-                        busy ||
-                        (!blocked && (room.blockedSeats?.length || 0) >= 2)
-                      }
-                      onClick={() =>
-                        void command("seat", { seat: index, blocked: !blocked })
-                      }
-                    >
-                      <span className="yut-empty-seat" aria-hidden="true">
-                        {blocked ? "×" : "+"}
-                      </span>
-                      <strong>{blocked ? "막힌 자리" : "기다리는 자리"}</strong>
-                      <span>{blocked ? "눌러서 열기" : "눌러서 막기"}</span>
-                    </button>
-                  ) : (
-                    <>
-                      <div className="yut-empty-seat" aria-hidden="true">
-                        {blocked ? "×" : "—"}
-                      </div>
-                      <span>{blocked ? "막힌 자리" : "기다리는 자리"}</span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="yut-waiting-footer">
-            <span>
-              {room.players.length}/{4 - (room.blockedSeats?.length || 0)}명
-            </span>
-            {room.hostUid === uid ? (
+            {!disconnected && !needsSync && (
               <button
-                className="yut-button yut-button--primary"
                 type="button"
-                onClick={() => void command("start")}
+                className="yut-icon-button"
+                aria-label="알림 닫기"
+                onClick={() => {
+                  setError("");
+                  setNote("");
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
+        {portrait ? (
+          <div className="yut-orientation-gate" role="status">
+            <YutIcon name="rotate" />
+            <h1>가로로 펼치는 윷판</h1>
+            <p>휴대폰을 가로로 돌려 주세요.</p>
+            <button
+              className="yut-button yut-button--primary"
+              type="button"
+              onClick={() => void requestLandscape()}
+            >
+              가로 전체 화면으로 열기
+            </button>
+            {room?.status === "playing" && !local && (
+              <p className="yut-orientation-notice">
+                온라인 판의 차례 시간은 계속 흐릅니다.
+              </p>
+            )}
+          </div>
+        ) : !room ? (
+          <div className="yut-entry">
+            <div className="yut-entry-scene" aria-hidden="true" />
+            <div className="yut-entry-title">
+              <span className="yut-title-ornament" aria-hidden="true">
+                馬 牛 豬 狗
+              </span>
+              <h1>
+                마우저구<span>윷놀이</span>
+              </h1>
+              <div className="yut-title-rule" aria-hidden="true">
+                <i />
+                <span>윷</span>
+                <i />
+              </div>
+            </div>
+            <div className="yut-entry-menu">
+              <fieldset className="yut-single-count">
+                <legend>싱글 참가 인원</legend>
+                {([2, 3, 4] as const).map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    className={singleCount === count ? "is-selected" : ""}
+                    aria-pressed={singleCount === count}
+                    onClick={() => setSingleCount(count)}
+                    disabled={Boolean(pending) || loading}
+                  >
+                    {count}명
+                  </button>
+                ))}
+              </fieldset>
+              <button
+                type="button"
+                className="yut-button yut-button--primary yut-wide yut-single-start"
+                onClick={() => beginLocal("single")}
                 disabled={
-                  busy ||
-                  room.players.length < 2 ||
-                  room.players.some((person) => !person.ready)
+                  Boolean(pending) ||
+                  loading ||
+                  (portal === "student" &&
+                    (lobby?.enabled !== true || !settings.allowSolo))
                 }
               >
-                {pending === "start" ? "시작하는 중…" : "윷판 펼치기"}
-                <YutIcon name="arrow" />
+                혼자서 시작 <YutIcon name="arrow" />
               </button>
-            ) : (
-              <button
-                className={`yut-button ${player?.ready ? "" : "yut-button--primary"}`}
-                type="button"
-                disabled={busy}
-                onClick={() => void command("ready", { ready: !player?.ready })}
-              >
-                {player?.ready ? "준비 취소" : "준비 완료"}
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="yut-match">
-          <div className="yut-match-heading">
-            <div>
-              <h1>마우저구 윷놀이</h1>
-              <span className="yut-eyebrow">
-                {local
-                  ? `${localMode === "single" ? "싱글 모드" : "교사 체험"} · 기록 미반영`
-                  : `${room.classLabel} · ${room.visibility === "public" ? "공개방" : room.code}`}
-              </span>
-            </div>
-            <div className="yut-turn-state">
-              {room.status === "finished" && !settling && !finishing ? (
-                <span>판 종료</span>
+              {loading ? (
+                <p className="yut-loading" role="status">
+                  윷판을 준비하고 있습니다.
+                </p>
               ) : (
                 <>
-                  <span aria-live="polite">
-                    {displayRoom?.turnUid === uid
-                      ? "내 차례"
-                      : `${displayTurn?.name || "친구"}의 차례`}
-                  </span>
-                  <strong className={seconds <= 10 ? "is-low" : ""}>
-                    {settling || moving || phaseWaiting ? "—" : seconds}
-                    <small>
-                      {settling || moving || phaseWaiting ? "연출 중" : "초"}
-                    </small>
-                  </strong>
+                  <button
+                    type="button"
+                    className="yut-button yut-wide"
+                    disabled={
+                      busy ||
+                      !lobby ||
+                      !settings.allowMultiplayer ||
+                      (portal === "student" && !lobby.enabled)
+                    }
+                    onClick={() =>
+                      void command("match", {
+                        maxPlayers: settings.defaultPlayerCount,
+                      })
+                    }
+                  >
+                    {pending === "match" ? "친구를 찾는 중…" : "여럿이서 시작"}
+                    <YutIcon name="arrow" />
+                  </button>
+                  <button
+                    type="button"
+                    className="yut-button yut-wide yut-create-start"
+                    disabled={
+                      busy ||
+                      !lobby ||
+                      !settings.allowMultiplayer ||
+                      (portal === "student" && !lobby.enabled)
+                    }
+                    onClick={() => setDialog("create")}
+                  >
+                    새 판 만들기
+                    <YutIcon name="arrow" />
+                  </button>
+                  <form
+                    className="yut-join"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (
+                        code.trim() &&
+                        settings.allowMultiplayer &&
+                        settings.allowPrivateRooms &&
+                        remainingPrivate !== 0
+                      )
+                        void command("join", {
+                          code: code.trim().toUpperCase(),
+                        });
+                    }}
+                  >
+                    <label className="yut-label" htmlFor="yut-room-code">
+                      비밀방 코드
+                    </label>
+                    <div>
+                      <input
+                        id="yut-room-code"
+                        value={code}
+                        onChange={(event) =>
+                          setCode(
+                            event.target.value
+                              .replace(/[^a-zA-Z0-9]/g, "")
+                              .slice(0, 6)
+                              .toUpperCase(),
+                          )
+                        }
+                        placeholder="6자리 코드"
+                        autoComplete="off"
+                        spellCheck={false}
+                        maxLength={6}
+                        disabled={busy}
+                      />
+                      <button
+                        className="yut-button"
+                        type="submit"
+                        disabled={
+                          busy ||
+                          !lobby ||
+                          code.length !== 6 ||
+                          !settings.allowMultiplayer ||
+                          !settings.allowPrivateRooms ||
+                          remainingPrivate === 0 ||
+                          (portal === "student" && !lobby.enabled)
+                        }
+                      >
+                        {pending === "join" ? "입장 중" : "들어가기"}
+                      </button>
+                    </div>
+                  </form>
+                  {remainingPrivate !== null && (
+                    <p className="yut-private-quota">
+                      오늘 비밀방 참가 {remainingPrivate}/
+                      {YUT_PRIVATE_DAILY_LIMIT}회 남음
+                    </p>
+                  )}
                 </>
               )}
+              {portal === "teacher" && (
+                <button
+                  type="button"
+                  className="yut-practice"
+                  onClick={() => beginLocal("preview")}
+                  disabled={Boolean(pending) || loading}
+                >
+                  대기실부터 체험하기
+                  <YutIcon name="arrow" />
+                </button>
+              )}
+              <p className="yut-entry-meta">
+                싱글 1인 · 온라인 2–4인 <span>·</span> 위스 변동 없음
+              </p>
             </div>
           </div>
-          <div
-            className={`yut-match-stage ${settling || pending === "throw" ? "is-tossing" : ""}`}
-          >
-            <div className="yut-players" aria-label="참가자 현황">
-              {(displayRoom || room).players.map((person) => {
-                const activeTurn =
-                  displayRoom?.turnUid === person.uid &&
-                  room.status !== "finished";
-                const last = revealedThrows[person.uid];
+        ) : room.status === "waiting" ? (
+          <div className="yut-waiting">
+            <div className="yut-waiting-heading">
+              <div>
+                <span className="yut-eyebrow">
+                  {local ? "체험 · 기록 미반영" : room.classLabel}
+                </span>
+                <h1>한 판의 인연</h1>
+              </div>
+              <div className="yut-room-code">
+                {local ? (
+                  <span>컴퓨터와 연습</span>
+                ) : room.visibility === "public" ? (
+                  <span>공개방 · 빠른 참가</span>
+                ) : (
+                  <>
+                    <span>방 코드</span>
+                    <strong>{room.code}</strong>
+                    <button
+                      type="button"
+                      className="yut-icon-button"
+                      aria-label="방 코드 복사"
+                      title="방 코드 복사"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(room.code).then(
+                          () => setNote("방 코드를 복사했습니다."),
+                          () => setNote(`방 코드: ${room.code}`),
+                        );
+                      }}
+                    >
+                      <YutIcon name="copy" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="yut-waiting-seats">
+              {[0, 1, 2, 3].map((index) => {
+                const person = room.players.find(
+                  (person) => YUT_ROLES.indexOf(person.role) === index,
+                );
+                const blocked = room.blockedSeats?.includes(index) || false;
+                const canChange = room.hostUid === uid && !local;
                 return (
                   <div
-                    className={`yut-player yut-player--seat-${YUT_ROLES.indexOf(person.role)} ${activeTurn ? "is-turn" : ""} ${!person.active ? "is-left" : ""}`}
-                    key={person.uid}
+                    key={index}
+                    className={`yut-seat ${person ? "is-filled" : ""} ${blocked ? "is-blocked" : ""}`}
                   >
-                    <div className="yut-avatar">
-                      {emoteBubble(person.uid)}
-                      <YutSprite
-                        role={person.role}
-                        pose={
-                          room.status === "finished" &&
-                          room.winnerUid === person.uid
-                            ? "win"
-                            : activeTurn
-                              ? settling
-                                ? "throw"
-                                : "turn"
-                              : "idle"
+                    {person ? (
+                      <>
+                        <span className="yut-seat-job">
+                          {PROFESSIONS[person.role].clan}
+                        </span>
+                        <div className="yut-avatar">
+                          {emoteBubble(person.uid)}
+                          <YutSprite role={person.role} />
+                        </div>
+                        <strong>
+                          {person.name}
+                          {person.uid === uid && person.name !== "나" && (
+                            <span className="yut-me">나</span>
+                          )}
+                        </strong>
+                        <span
+                          className={`yut-seat-status ${person.ready ? "is-ready" : ""}`}
+                        >
+                          {person.uid === room.hostUid
+                            ? "방장"
+                            : person.ready
+                              ? "준비 완료"
+                              : "준비 중"}
+                        </span>
+                      </>
+                    ) : canChange ? (
+                      <button
+                        type="button"
+                        className="yut-seat-toggle"
+                        aria-label={`${index + 1}번 자리 ${blocked ? "열기" : "막기"}`}
+                        aria-pressed={blocked}
+                        disabled={
+                          busy ||
+                          (!blocked && (room.blockedSeats?.length || 0) >= 2)
                         }
-                      />
-                    </div>
-                    <div className="yut-player-details">
-                      <strong title={person.name}>
-                        {person.name}
-                        {person.uid === uid && person.name !== "나" && (
-                          <span className="yut-me">나</span>
-                        )}
-                      </strong>
-                      <span>
-                        {PROFESSIONS[person.role].clan} · 완주{" "}
-                        {
-                          person.pieces.filter(
-                            (piece) => piece.node === "finish",
-                          ).length
+                        onClick={() =>
+                          void command("seat", {
+                            seat: index,
+                            blocked: !blocked,
+                          })
                         }
-                        /{person.pieces.length}
-                      </span>
-                      <span className="yut-player-status">
-                        {!person.active
-                          ? "퇴장"
-                          : room.status === "finished"
-                            ? person.uid === room.winnerUid
-                              ? "승리"
-                              : "판 종료"
-                            : activeTurn
-                              ? person.uid === uid
-                                ? "내 차례"
-                                : "진행 중"
-                              : "기다리는 중"}
-                      </span>
-                    </div>
-                    {last && (
-                      <span
-                        className="yut-player-last"
-                        aria-label={`마지막 윷 결과 ${last.label}`}
                       >
-                        {last.label}
-                      </span>
+                        <span className="yut-empty-seat" aria-hidden="true">
+                          {blocked ? "×" : "+"}
+                        </span>
+                        <strong>
+                          {blocked ? "막힌 자리" : "기다리는 자리"}
+                        </strong>
+                        <span>{blocked ? "눌러서 열기" : "눌러서 막기"}</span>
+                      </button>
+                    ) : (
+                      <>
+                        <div className="yut-empty-seat" aria-hidden="true">
+                          {blocked ? "×" : "—"}
+                        </div>
+                        <span>{blocked ? "막힌 자리" : "기다리는 자리"}</span>
+                      </>
                     )}
                   </div>
                 );
               })}
             </div>
-            <div className="yut-board-area">
-              <YutBoard
-                room={displayRoom || room}
-                uid={uid}
-                selectedPiece={selectedPiece}
-                onSelectPiece={setSelectedPiece}
-                moves={moves}
-                onMove={movePiece}
-                selectedMove={selectedMove}
-                onMotionChange={setMoving}
-                disabled={
-                  busy || settling || moving || phaseWaiting || seconds === 0
-                }
-                revealMoves={resultVisible && !moving && !phaseWaiting}
-              >
-                {room.status !== "finished" || settling || finishing ? (
-                  <>
-                    {(settling || pending === "throw") && (
-                      <div className="yut-toss-dimmer" aria-hidden="true" />
-                    )}
-                    <YutThrow3D
-                      power={currentToss?.power ?? throwPower}
-                      throwKey={currentToss?.key || null}
-                      sticks={currentToss?.sticks || null}
-                      rolling={pending === "throw"}
-                      onComplete={completeToss}
-                    />
-                    {celebrating && currentToss?.room.pendingThrow && (
-                      <div
-                        className="yut-landing-result"
-                        role="status"
-                        aria-live="assertive"
-                      >
-                        <strong>{currentToss.room.pendingThrow.label}!</strong>
-                        <span>
-                          {currentToss.room.pendingThrow.value}칸
-                          {currentToss.room.pendingThrow.value >= 4
-                            ? " · 한 번 더"
-                            : ""}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="yut-finish" role="status">
-                    {winner && <YutSprite role={winner.role} pose="win" />}
-                    <span>이번 판의 승자</span>
-                    <h2>{winner?.name || "참가자"}</h2>
-                  </div>
-                )}
-              </YutBoard>
-            </div>
-            <div className="yut-action-dock">
-              <div className="yut-throw-result" role="status">
-                {settling || pending === "throw" ? (
-                  <span>
-                    {celebrating ? "윷 결과를 확인하세요" : "윷을 던지는 중"}
-                  </span>
-                ) : room.pendingThrow ? (
-                  <>
-                    <strong>{room.pendingThrow.label}</strong>
-                    <span>
-                      {room.pendingThrow.value}칸
-                      {room.pendingThrow.value >= 4 && " · 한 번 더"}
-                    </span>
-                  </>
-                ) : room.status === "finished" ? (
-                  <span>한 판, 잘 놀았습니다.</span>
-                ) : !myTurn ? (
-                  <span>{turn?.name || "친구"} 님의 차례</span>
-                ) : null}
-              </div>
-              {primaryAction === "again" && !settling && !finishing ? (
+            <div className="yut-waiting-footer">
+              <span>
+                {room.players.length}/{4 - (room.blockedSeats?.length || 0)}명
+              </span>
+              {room.hostUid === uid ? (
                 <button
                   className="yut-button yut-button--primary"
+                  type="button"
+                  onClick={() => void command("start")}
+                  disabled={
+                    busy ||
+                    room.players.length < 2 ||
+                    room.players.some((person) => !person.ready)
+                  }
+                >
+                  {pending === "start" ? "시작하는 중…" : "윷판 펼치기"}
+                  <YutIcon name="arrow" />
+                </button>
+              ) : (
+                <button
+                  className={`yut-button ${player?.ready ? "" : "yut-button--primary"}`}
                   type="button"
                   disabled={busy}
                   onClick={() =>
-                    local
-                      ? setRoom(
-                          createYutPreview({
-                            mode: localMode || "preview",
-                            playerCount: singleCount,
-                            throwSeconds: settings.throwSeconds,
-                            moveSeconds: settings.moveSeconds,
-                          }),
-                        )
-                      : void command("leave")
+                    void command("ready", { ready: !player?.ready })
                   }
                 >
-                  새 판 준비하기
-                  <YutIcon name="arrow" />
+                  {player?.ready ? "준비 취소" : "준비 완료"}
                 </button>
-              ) : primaryAction === "skip" ? (
-                <button
-                  type="button"
-                  className="yut-button yut-button--primary"
-                  disabled={busy}
-                  onClick={() => void command("skip")}
-                >
-                  다음 차례로 넘기기
-                </button>
-              ) : primaryAction === "throw" ? (
-                <YutPowerThrow
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="yut-match">
+            <div className="yut-match-heading">
+              <div>
+                <h1>마우저구 윷놀이</h1>
+                <span className="yut-eyebrow">
+                  {local
+                    ? `${localMode === "single" ? "싱글 모드" : "교사 체험"} · 기록 미반영`
+                    : `${room.classLabel} · ${room.visibility === "public" ? "공개방" : room.code}`}
+                </span>
+              </div>
+              <div className="yut-turn-state">
+                {room.status === "finished" ? (
+                  <span>판 종료</span>
+                ) : (
+                  <>
+                    <span aria-live="polite">
+                      {displayRoom?.turnUid === uid
+                        ? "내 차례"
+                        : `${displayTurn?.name || "친구"}의 차례`}
+                    </span>
+                    <strong className={seconds <= 10 ? "is-low" : ""}>
+                      {settling || moving || phaseWaiting ? "—" : seconds}
+                      <small>
+                        {settling || moving || phaseWaiting ? "연출 중" : "초"}
+                      </small>
+                    </strong>
+                  </>
+                )}
+              </div>
+            </div>
+            <div
+              className={`yut-match-stage ${settling || pending === "throw" ? "is-tossing" : ""}`}
+            >
+              <div className="yut-players" aria-label="참가자 현황">
+                {(displayRoom || room).players.map((person) => {
+                  const activeTurn =
+                    displayRoom?.turnUid === person.uid &&
+                    room.status !== "finished";
+                  const last = revealedThrows[person.uid];
+                  return (
+                    <div
+                      className={`yut-player yut-player--seat-${YUT_ROLES.indexOf(person.role)} ${activeTurn ? "is-turn" : ""} ${!person.active ? "is-left" : ""}`}
+                      key={person.uid}
+                    >
+                      <div className="yut-avatar">
+                        {emoteBubble(person.uid)}
+                        <YutSprite
+                          role={person.role}
+                          pose={
+                            room.status === "finished" &&
+                            room.winnerUid === person.uid
+                              ? "win"
+                              : activeTurn
+                                ? settling
+                                  ? "throw"
+                                  : "turn"
+                                : "idle"
+                          }
+                        />
+                      </div>
+                      <div className="yut-player-details">
+                        <strong title={person.name}>
+                          {person.name}
+                          {person.uid === uid && person.name !== "나" && (
+                            <span className="yut-me">나</span>
+                          )}
+                        </strong>
+                        <span>
+                          {PROFESSIONS[person.role].clan} · 완주{" "}
+                          {
+                            person.pieces.filter(
+                              (piece) => piece.node === "finish",
+                            ).length
+                          }
+                          /{person.pieces.length}
+                        </span>
+                        <span className="yut-player-status">
+                          {!person.active
+                            ? "퇴장"
+                            : room.status === "finished"
+                              ? person.uid === room.winnerUid
+                                ? "승리"
+                                : "판 종료"
+                              : activeTurn
+                                ? person.uid === uid
+                                  ? "내 차례"
+                                  : "진행 중"
+                                : "기다리는 중"}
+                        </span>
+                      </div>
+                      {last && (
+                        <span
+                          className="yut-player-last"
+                          aria-label={`마지막 윷 결과 ${last.label}`}
+                        >
+                          {last.label}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="yut-board-area">
+                <YutBoard
+                  room={displayRoom || room}
+                  uid={uid}
+                  selectedPiece={selectedPiece}
+                  onSelectPiece={setSelectedPiece}
+                  moves={moves}
+                  onMove={movePiece}
+                  selectedMove={selectedMove}
+                  onMotionChange={setMoving}
                   disabled={
+                    room.status !== "playing" ||
                     busy ||
                     settling ||
                     moving ||
                     phaseWaiting ||
-                    portrait ||
-                    hidden ||
-                    Boolean(dialog)
+                    seconds === 0
                   }
-                  onThrow={(power) => {
-                    setThrowPower(power);
-                    void command("throw", { power });
-                  }}
-                />
-              ) : myTurn && room.phase === "move" && resultVisible ? (
-                <div className="yut-move-confirm">
-                  <span className="yut-move-hint">
-                    {selectedMove
-                      ? `${yutNodeLabel(selectedMove.targetNode)}까지`
-                      : "화살표로 이동할 길을 고르세요"}
-                  </span>
+                  revealMoves={
+                    room.status === "playing" &&
+                    resultVisible &&
+                    !moving &&
+                    !phaseWaiting
+                  }
+                >
+                  {room.status !== "finished" || settling || finishing ? (
+                    <>
+                      {(settling || pending === "throw") && (
+                        <div className="yut-toss-dimmer" aria-hidden="true" />
+                      )}
+                      <YutThrow3D
+                        power={currentToss?.power ?? throwPower}
+                        throwKey={currentToss?.key || null}
+                        sticks={currentToss?.sticks || null}
+                        rolling={pending === "throw"}
+                        onComplete={completeToss}
+                      />
+                      {celebrating && currentToss?.room.pendingThrow && (
+                        <div
+                          className="yut-landing-result"
+                          role="status"
+                          aria-live="assertive"
+                        >
+                          <strong>
+                            {currentToss.room.pendingThrow.label}!
+                          </strong>
+                          <span>
+                            {currentToss.room.pendingThrow.value}칸
+                            {currentToss.room.pendingThrow.value >= 4
+                              ? " · 한 번 더"
+                              : ""}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <YutVictory
+                      room={room}
+                      uid={uid}
+                      local={local}
+                      busy={busy}
+                      onClaim={() => void command("claimReward")}
+                    />
+                  )}
+                </YutBoard>
+              </div>
+              <div className="yut-action-dock">
+                <div className="yut-throw-result" role="status">
+                  {settling || pending === "throw" ? (
+                    <span>
+                      {celebrating ? "윷 결과를 확인하세요" : "윷을 던지는 중"}
+                    </span>
+                  ) : room.pendingThrow ? (
+                    <>
+                      <strong>{room.pendingThrow.label}</strong>
+                      <span>
+                        {room.pendingThrow.value}칸
+                        {room.pendingThrow.value >= 4 && " · 한 번 더"}
+                      </span>
+                    </>
+                  ) : room.status === "finished" ? (
+                    <span>한 판, 잘 놀았습니다.</span>
+                  ) : !myTurn ? (
+                    <span>{turn?.name || "친구"} 님의 차례</span>
+                  ) : null}
+                </div>
+                {primaryAction === "again" && !settling && !finishing ? (
+                  <button
+                    className="yut-button yut-button--primary"
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      local
+                        ? setRoom(
+                            createYutPreview({
+                              mode: localMode || "preview",
+                              playerCount: singleCount,
+                              throwSeconds: settings.throwSeconds,
+                              moveSeconds: settings.moveSeconds,
+                            }),
+                          )
+                        : void command("leave")
+                    }
+                  >
+                    새 판 준비하기
+                    <YutIcon name="arrow" />
+                  </button>
+                ) : primaryAction === "skip" ? (
                   <button
                     type="button"
                     className="yut-button yut-button--primary"
+                    disabled={busy}
+                    onClick={() => void command("skip")}
+                  >
+                    다음 차례로 넘기기
+                  </button>
+                ) : primaryAction === "throw" ? (
+                  <YutPowerThrow
                     disabled={
-                      !selectedMove ||
                       busy ||
+                      settling ||
                       moving ||
                       phaseWaiting ||
-                      seconds === 0
+                      portrait ||
+                      hidden ||
+                      Boolean(dialog)
                     }
-                    onClick={() => {
-                      if (selectedMove)
-                        void command("move", {
-                          pieceId: selectedMove.pieceId,
-                          route: selectedMove.route,
-                        });
+                    onThrow={(power) => {
+                      setThrowPower(power);
+                      void command("throw", { power });
                     }}
-                  >
-                    결정
-                  </button>
-                </div>
-              ) : null}
+                  />
+                ) : room.status === "playing" &&
+                  myTurn &&
+                  room.phase === "move" &&
+                  resultVisible ? (
+                  <div className="yut-move-confirm">
+                    <span className="yut-move-hint">
+                      {selectedMove
+                        ? `${yutNodeLabel(selectedMove.targetNode)}까지`
+                        : "화살표로 이동할 길을 고르세요"}
+                    </span>
+                    <button
+                      type="button"
+                      className="yut-button yut-button--primary"
+                      disabled={
+                        !selectedMove ||
+                        busy ||
+                        moving ||
+                        phaseWaiting ||
+                        seconds === 0
+                      }
+                      onClick={() => {
+                        if (selectedMove)
+                          void command("move", {
+                            pieceId: selectedMove.pieceId,
+                            route: selectedMove.route,
+                          });
+                      }}
+                    >
+                      결정
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="yut-event" aria-live="polite">
+              {resultVisible && !finishing && room.lastEvent.kind !== "throw"
+                ? room.lastEvent.text
+                : ""}
             </div>
           </div>
-          <div className="yut-event" aria-live="polite">
-            {resultVisible && room.lastEvent.kind !== "throw"
-              ? room.lastEvent.text
-              : ""}
-          </div>
-        </div>
-      )}
-      <button
-        type="button"
-        className="yut-floating-fullscreen"
-        aria-label={fullscreen ? "전체 화면 나가기" : "게임 전체 화면"}
-        title={fullscreen ? "전체 화면 나가기" : "게임 전체 화면"}
-        onClick={() => {
-          if (fullscreen) void document.exitFullscreen?.();
-          else void requestLandscape();
-        }}
-      >
-        <YutIcon name="rotate" />
-        <span>{fullscreen ? "전체 화면 나가기" : "전체 화면"}</span>
-      </button>
-      {dialog === "create" && (
-        <CreateRoomDialog
-          initialCount={settings.defaultPlayerCount}
-          allowPrivate={settings.allowPrivateRooms}
-          remaining={remainingPrivate}
-          onClose={() => setDialog(null)}
-          onCreate={(maxPlayers, visibility) => {
-            setDialog(null);
-            void command("create", { maxPlayers, visibility });
+        )}
+        <button
+          type="button"
+          className="yut-floating-fullscreen"
+          aria-label={fullscreen ? "전체 화면 나가기" : "게임 전체 화면"}
+          title={fullscreen ? "전체 화면 나가기" : "게임 전체 화면"}
+          onClick={() => {
+            if (fullscreen) void document.exitFullscreen?.();
+            else void requestLandscape();
           }}
-        />
-      )}
-      {dialog && dialog !== "create" && (
-        <GameDialog
-          kind={dialog}
-          throwSeconds={room?.throwSeconds ?? settings.throwSeconds}
-          moveSeconds={room?.moveSeconds ?? settings.moveSeconds}
-          onClose={() => setDialog(null)}
-          onConfirm={() => {
-            setDialog(null);
-            void command("leave");
-          }}
+        >
+          <YutIcon name="rotate" />
+          <span>{fullscreen ? "전체 화면 나가기" : "전체 화면"}</span>
+        </button>
+        {dialog === "create" && (
+          <CreateRoomDialog
+            initialCount={settings.defaultPlayerCount}
+            allowPrivate={settings.allowPrivateRooms}
+            remaining={remainingPrivate}
+            onClose={() => setDialog(null)}
+            onCreate={(maxPlayers, visibility) => {
+              setDialog(null);
+              void command("create", { maxPlayers, visibility });
+            }}
+          />
+        )}
+        {dialog && dialog !== "create" && (
+          <GameDialog
+            kind={dialog}
+            blocked={networkBusy}
+            throwSeconds={room?.throwSeconds ?? settings.throwSeconds}
+            moveSeconds={room?.moveSeconds ?? settings.moveSeconds}
+            onClose={() => setDialog(null)}
+            onConfirm={() => {
+              setDialog(null);
+              void command("leave");
+            }}
+          />
+        )}
+      </div>
+      {(loading || (pending && pending !== "throw") || throwDelayed) && (
+        <WeplayGameLoading
+          theme="yut"
+          label={
+            throwDelayed
+              ? "윷 결과를 기다리고 있습니다."
+              : pending === "claimReward"
+                ? "우승 보상을 확인하고 있습니다."
+                : loading
+                  ? "윷판을 준비하고 있습니다."
+                  : "윷판을 이어가고 있습니다."
+          }
         />
       )}
     </section>

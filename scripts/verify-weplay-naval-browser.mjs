@@ -15,6 +15,7 @@ try { playwright = require('playwright'); }
 catch { playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')); }
 const core = require(path.join(root, 'functions/weplayCore.js'));
 const finalEffectsOnly = process.env.WEPLAY_QA_FOCUS === 'final-effects';
+const managementOnly = process.env.WEPLAY_QA_FOCUS === 'management';
 const evidence = process.env.WEPLAY_QA_EVIDENCE_DIR
   ? path.resolve(process.env.WEPLAY_QA_EVIDENCE_DIR)
   : path.join(root, '.superloopy/sessions/weplay-naval-effects-20260929/evidence');
@@ -39,6 +40,7 @@ export const getHttpsCallable=async name=>async data=>{
   if(name==='previewWeplayGame'){const response=await fetch('/session',{method:'POST',body:JSON.stringify({...data,now:Date.now()})});qa.session=await response.json();return {data:qa.session};}
   throw new Error('Unexpected student/Firebase callable in teacher preview: '+name);
 };
+export const getHistoryDictionaryCallable=getHttpsCallable;
 export const db={};
 export const getFirebaseStorage=async()=>({});
 `;
@@ -74,16 +76,16 @@ function Fixture({session}){
 const params=new URLSearchParams(location.search);
 const[result,setResult]=useState(view==='result'?{sessionId:'result-fixture',difficulty:session.difficulty,mode:params.get('mode')==='challenge'?'challenge':'practice',correctCount:37,totalWords:60,score:12500,reward:5,cost:2,netWis:3,balance:103,finishedAtMs:Date.now(),missedWords:session.words.filter(word=>word.kind==='normal').slice(0,3),battleVersion:1,battle:{...simulateWeplayBattle(session,0),outcome:params.get('outcome')==='defeat'?'defeat':'victory',sunkShips:3,cannonShots:18,specialCount:2}}:null);
 const[replaying,setReplaying]=useState(false);
-return <MemoryRouter><AppToastProvider><AppDialogProvider>{!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page' style={params.has('container')?{width:Number(params.get('container')),marginLeft:480}:undefined}>{view!=='result'&&<Game session={session} config={config} preview transport={qa.transport} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview={view!=='result'||params.get('preview')==='1'} replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
+return <MemoryRouter initialEntries={['/teacher/weplay?game=history-rain']}><AppToastProvider><AppDialogProvider>{!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page' style={params.has('container')?{width:Number(params.get('container')),marginLeft:480}:undefined}>{view!=='result'&&<Game session={session} config={config} preview transport={qa.transport} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview={view!=='result'||params.get('preview')==='1'} replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
 function render(session){createRoot(document.getElementById('root')).render(<Fixture session={session}/>);}
 setup().catch(error=>{qa.error=error.message;throw error;});
 `;
 const bundled = await build({
   stdin: { contents: harness, loader: 'tsx', resolveDir: root }, bundle: true, write: false,
   format: 'esm', platform: 'browser', target: 'es2022', outfile: path.join(os.tmpdir(), 'westory-naval-qa.js'), external: ['/assets/*'],
-  loader: { '.svg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"' },
+  loader: { '.svg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env.BASE_URL': '"/"' },
   plugins: [{ name: 'naval-service-fixture', setup(plugin) {
-    plugin.onResolve({ filter: /^fixture:|(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/firebase$|^\.\/firebase$/ }, () => ({ path: 'service', namespace: 'fixture' }));
+    plugin.onResolve({ filter: /^fixture:|(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/firebase$|(?:^|\/)historyDictionarySession$|^\.\/firebase$/ }, () => ({ path: 'service', namespace: 'fixture' }));
     plugin.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: service, loader: 'ts', resolveDir: root }));
   } }],
 });
@@ -202,7 +204,7 @@ async function advanceTo(page, elapsed) {
 }
 let failure = null;
 try {
-  if (!finalEffectsOnly) {
+  if (!finalEffectsOnly && !managementOnly) {
   assert.equal(core.DEFAULT_GAME_SETTINGS.difficulties.mild.durationSeconds, 90, 'Naval defaults must be 90 seconds');
   checks.push('90-second default contract');
   for (const width of [320, 390, 768, 1280]) {
@@ -364,7 +366,7 @@ try {
   const afterSpecial = await currentBattle(special);
   assert.equal(afterSpecial.specialCount, 1);
   assert.equal(afterSpecial.damageDealt - beforeSpecial.damageDealt, 45);
-  await special.locator('.naval-effect--special').waitFor();
+  await special.locator('.naval-special-attack').waitFor();
   await special.clock.runFor(450);
   await special.waitForTimeout(600);
   await capture(special, 'naval-special-activation-1280');
@@ -391,7 +393,7 @@ try {
   await advanceTo(lastStand, 64999);
   assert.equal((await answerVisible(lastStand, true)).accepted, true);
   await lastStand.clock.runFor(50);
-  await lastStand.locator('.naval-effect--special').waitFor();
+  await lastStand.locator('.naval-special-attack').waitFor();
   await lastStand.clock.runFor(450);
   await lastStand.waitForTimeout(600);
   await capture(lastStand, 'naval-last-stand-390');
@@ -454,15 +456,22 @@ try {
   await reordered.locator('.naval-game').waitFor();
   await reordered.evaluate(() => { window.navalQa.holdFirst = true; });
   await advanceTo(reordered, 200); await answerVisible(reordered);
-  await advanceTo(reordered, 1700); await answerVisible(reordered);
+  await reordered.locator('.weplay-game-loading').waitFor();
+  assert.equal(await reordered.locator('.naval-scene').evaluate(element => element.inert), true);
+  assert.equal(await reordered.locator('#naval-answer-input').isDisabled(), true);
+  await advanceTo(reordered, 1700);
+  await reordered.locator('.naval-command').dispatchEvent('submit');
+  assert.equal(await reordered.evaluate(() => window.navalQa.answers.length), 1, 'Pending answer blocks additional keyboard/form submits');
+  await reordered.evaluate(() => window.navalQa.releaseFirst());
+  await reordered.locator('.weplay-game-loading').waitFor({state:'hidden'});
+  await answerVisible(reordered);
   await reordered.locator('.naval-effect--cannon').waitFor();
   await reordered.clock.runFor(450);
   assert.equal(await reordered.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 88');
-  await reordered.evaluate(() => window.navalQa.releaseFirst());
   await reordered.clock.runFor(100);
   assert.equal(await reordered.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 88');
   assert.equal(await reordered.locator('.naval-ammo').getAttribute('aria-label'), '포탄 장전 0 / 2');
-  checks.push('Reversed answer responses merge accepted timestamp snapshots without losing hits or firing twice');
+  checks.push('Pending answer uses themed loading, locks game input and rejects another submit; acknowledgement unlocks the next answer without losing hits or firing twice');
   await reordered.close();
 
   for (const releaseAt of [8200, 8450]) {
@@ -472,15 +481,16 @@ try {
     await canceled.evaluate(() => { window.navalQa.holdAnswer = 2; });
     await advanceTo(canceled, 1700); await answerVisible(canceled);
     await advanceTo(canceled, releaseAt);
-    if (releaseAt === 8450) assert.equal(await canceled.locator('.naval-health--allied').getAttribute('aria-label'), '아군 체력 92');
+    assert.equal(await canceled.locator('.naval-health--allied').getAttribute('aria-label'), '아군 체력 100', 'Immediate predicted cannon already postpones the enemy shot while acknowledgement is pending');
     await canceled.evaluate(() => window.navalQa.releaseFirst());
     await canceled.clock.runFor(500);
     assert.equal(await canceled.locator('.naval-health--allied').getAttribute('aria-label'), '아군 체력 100', 'Delayed accepted cannon cancels the enemy shot without an old impact callback lowering restored HP');
     await canceled.close();
   }
-  checks.push('Delayed accepted cannon cancels enemy autoattack before/after visual arrival; canceled callback cannot overwrite restored allied HP');
+  checks.push('Immediate cannon feedback postpones enemy autoattack while its response is pending; accepted acknowledgement cannot reapply an old enemy impact');
   }
 
+  if (!managementOnly) {
   const completion = await open('battle', 768);
   await completion.locator('.naval-game').waitFor();
   await advanceTo(completion, 200); await answerVisible(completion);
@@ -514,28 +524,31 @@ try {
   assert.equal(await delayed.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 4');
   await delayed.evaluate(() => { window.navalQa.holdAnswer = 18; });
   assert.equal((await answerVisible(delayed)).accepted, true);
-  await advanceTo(delayed, 91700);
-  assert.equal(await delayed.evaluate(() => window.navalQa.completions.length), 0);
-  await delayed.evaluate(() => window.navalQa.releaseFirst());
   await delayed.locator('.naval-effect--cannon').waitFor();
+
   assert.equal(await delayed.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 4');
   await delayed.clock.runFor(450);
   await delayed.locator('.naval-effect--sunk').waitFor();
   assert.equal(await delayed.locator('.naval-result').count(), 0, 'Delayed final response must not skip its sinking scene');
   assert.equal(await delayed.locator('.naval-screen-message').count(), 0, 'Final sinking remains visible without the time-ended overlay');
-  assert.equal(await delayed.getByRole('textbox', { name: '단어 입력' }).isDisabled(), true, 'Input remains locked after time end even while final animation is visible');
+  assert.equal(await delayed.locator('#naval-answer-input').isDisabled(), true, 'Input remains locked while the final answer is pending');
   assert.equal(await delayed.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 0', 'Sunk enemy HP stays zero during its sinking animation');
   await delayed.clock.runFor(900);
   assert.equal(await delayed.locator('.naval-result').count(), 0, 'Result waits until the 1100ms sinking animation completes');
   await delayed.waitForTimeout(400);
   await capture(delayed, 'naval-final-late-response-sinking-1280');
-  await delayed.clock.runFor(1800);
+  await advanceTo(delayed, 91700);
+  assert.equal(await delayed.evaluate(() => window.navalQa.completions.length), 0);
+  await delayed.locator('.weplay-game-loading').waitFor();
+  await delayed.evaluate(() => window.navalQa.releaseFirst());
+  await delayed.clock.runFor(300);
   await delayed.locator('.naval-result').waitFor();
   assert.equal(await delayed.evaluate(() => window.navalQa.completions.length), 1);
   assert.equal(await delayed.evaluate(() => window.navalQa.completed.battle.sunkShips), 1);
   await capture(delayed, 'naval-final-late-response-result-1280');
-  checks.push('Final cannon answer received 1700ms after time end preserves pre-arrival HP, zero HP during sinking, full 420+1100ms final animation, then settles once');
+  checks.push('Final cannon prediction preserves pre-arrival HP and 420+1100ms sinking while pending; response received 1700ms after time end unlocks settlement exactly once');
   await delayed.close();
+  }
 
   if (!finalEffectsOnly) {
   const legacy = await open('battle', 390, 'legacy=1');
@@ -570,13 +583,18 @@ try {
   assert.equal(await management.evaluate(() => window.navalQa.settings.difficulties.mild.durationSeconds), 120);
   await capture(management, 'naval-teacher-settings-1280');
   checks.push('Teacher time defaults/minimum are 90; 89 disables save; 120 saves through management boundary');
-  await management.getByRole('button', { name: '체험 시작', exact: true }).click();
+  await management.getByRole('button', { name: '체험하기', exact: true }).click();
+  await management.getByRole('button', { name: /건너뛰기/ }).click();
+  await management.clock.runFor(32);
+  await management.getByRole('button', { name: '연습 체험 시작', exact: true }).click();
   await management.locator('.naval-game').waitFor();
   await advanceTo(management, 122100);
   await management.locator('.naval-result').waitFor();
   assert.match(await management.locator('.naval-result-settlement').textContent(), /교사 체험/);
   await capture(management, 'naval-teacher-real-flow-result-1280');
   await management.getByRole('button', { name: '다시 체험', exact: true }).click();
+  await management.locator('.weplay-launch').waitFor();
+  await management.getByRole('button', { name: '연습 체험 시작', exact: true }).click();
   await management.locator('.naval-game').waitFor();
   assert.equal(await management.evaluate(() => window.navalQa.calls.filter(call => call.name === 'previewWeplayGame').length), 2);
   assert.equal(await management.evaluate(() => window.navalQa.calls.some(call => /^(start|answer|finish)Weplay/.test(call.name))), false);

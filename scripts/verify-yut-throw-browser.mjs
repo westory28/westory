@@ -239,16 +239,14 @@ try {
     const animation = await page
       .locator('[data-motion="capture"]')
       .evaluate((node) =>
-        node
-          .getAnimations()
-          .map((animation) => ({
-            duration: animation.effect.getTiming().duration,
-            frames: animation.effect.getKeyframes().length,
-          })),
+        node.getAnimations().map((animation) => ({
+          duration: animation.effect.getTiming().duration,
+          frames: animation.effect.getKeyframes().length,
+        })),
       );
     assert.ok(
-      animation.some((item) => item.duration === 720 && item.frames === 7),
-      "three distinct 240ms hops",
+      animation.some((item) => item.duration === 220 && item.frames === 4),
+      "sequential 220ms hops with painted landings",
     );
     await page.waitForTimeout(1100);
     assert.equal(await page.locator('[data-motion="capture"]').count(), 0);

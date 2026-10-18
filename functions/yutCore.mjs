@@ -185,6 +185,7 @@ export function moveYut(source, uid, pieceId, route, nowMs) {
   const movement = { uid, pieceId, route, path: destination.path, capturedUids: [...capturedUids] };
   if (player.pieces.every((entry) => entry.node === 'finish')) {
     room.status = 'finished'; room.winnerUid = uid; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0; room.extraThrows = 0;
+    room.finishReason = 'completion';
     return event(room, 'finish', `${player.name} 님이 승리했습니다.`, nowMs, movement);
   }
   if (room.extraThrows > 0) { room.extraThrows -= 1; beginPhase(room, 'throw', nowMs, YUT_MOVE_ANIMATION_MS); }
@@ -208,6 +209,7 @@ export function leaveYutRoom(source, uid, nowMs) {
   if (!remaining.length) { room.status = 'closed'; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0; }
   else if (room.status === 'playing' && remaining.length === 1) {
     room.status = 'finished'; room.winnerUid = remaining[0].uid; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0;
+    room.finishReason = 'forfeit';
   } else if (room.status === 'playing' && room.turnUid === uid) nextTurn(room, nowMs);
   return event(room, 'leave', `${player.name} 님이 나갔습니다.`, nowMs);
 }

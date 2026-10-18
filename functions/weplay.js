@@ -1,6 +1,6 @@
 const {
   TOTAL_WORDS, START_DELAY_MS, PERIOD_SETTLEMENT_DELAY_MS, DIFFICULTIES,
-  hash, validatePolicy, readPolicy, effectiveLessons, extractLessonWords,
+  hash, validatePolicy, validateYutWinnerReward, readPolicy, effectiveLessons, extractLessonWords,
   buildWords, assessAnswer, gameReward, periodBounds, compareEntries,
   GAME_ID, validateUnitIds, validateGameSettings, readGameSettings, uniqueWordCount,
   DEFAULT_DIFFICULTY_SETTINGS, readDifficulties, gameCatalog, filterDifficultyWords,
@@ -353,12 +353,29 @@ function createWeplayFunctions(deps) {
     let validated;
     try { validated = validatePolicy(request.data?.policy); }
     catch (error) { invalid(error.message); }
+    const changesYutReward = Object.hasOwn(request.data.policy, 'yutWinnerReward');
+    if (changesYutReward && (!Number.isSafeInteger(request.data.policy.version) || request.data.policy.version < 0)) invalid('현재 운영 정책 버전을 확인해 주세요.');
     return db.runTransaction(async (transaction) => {
       const policyRef = ref(scope, 'weplay_policies', 'current');
       const previous = await transaction.get(policyRef);
+      const previousVersion = Number(previous.data()?.version || 0);
+      if (changesYutReward && request.data.policy.version !== previousVersion) throw new HttpsError('aborted', '다른 곳에서 운영 정책을 바꿨습니다. 새로 불러온 뒤 다시 저장해 주세요.');
+      if (!Number.isSafeInteger(previousVersion) || previousVersion < 0 || previousVersion >= Number.MAX_SAFE_INTEGER) throw new HttpsError('failed-precondition', '운영 정책 버전을 확인해 주세요.');
+      if (changesYutReward) {
+        const [configDoc, pointerDoc, manifestDoc] = await transaction.getAll(db.doc('site_settings/config'), db.doc('site_settings/semester_active'), db.doc(`semester_manifests/${scope.year}-${scope.semester}`));
+        const config = configDoc.data() || {}, pointer = pointerDoc.data() || {}, manifest = manifestDoc.data() || {};
+        if (String(config.year) !== scope.year || String(config.semester) !== scope.semester || pointer.semesterId !== `${scope.year}-${scope.semester}`
+          || manifest.semesterId !== pointer.semesterId || manifest.status !== 'ACTIVE' || manifest.readOnly === true
+          || !Number.isSafeInteger(manifest.revision) || manifest.revision < 1 || pointer.revision !== manifest.revision) throw new HttpsError('failed-precondition', '현재 운영 중인 학기에서 보상 정책을 저장해 주세요.');
+      }
       const meta = (await transaction.get(ref(scope, 'weplay_meta', 'current'))).data();
       const current = meta?.periodId ? (await transaction.get(ref(scope, 'weplay_periods', meta.periodId))).data() : null;
-      const policy = { ...validated, version: Number(previous.data()?.version || 0) + 1 };
+      const policy = { ...validated, version: previousVersion + 1 };
+      // A cached policy editor predating Yut must not disable its rewards.
+      if (!changesYutReward) {
+        try { policy.yutWinnerReward = validateYutWinnerReward(previous.data()?.yutWinnerReward); }
+        catch { throw new HttpsError('failed-precondition', '윷놀이 우승 보상 설정을 확인해 주세요.'); }
+      }
       transaction.set(policyRef, { ...policy, updatedAt: FieldValue.serverTimestamp(), updatedBy: manager.uid });
       return { policy, currentRankingPeriod: current && current.endsAtMs > Date.now() ? publicPeriod(current) : null };
     });

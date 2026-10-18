@@ -1,6 +1,7 @@
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import NumericInput from "../../../../components/common/NumericInput";
+import { InfoHelp } from "../../../../components/common/InfoHelp";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { getWeplayGameTitle } from "../../../../lib/weplayTitle";
 import { getYearSemester } from "../../../../lib/semesterScope";
@@ -24,6 +25,7 @@ interface WeplayPolicyPanelProps {
 
 interface PolicyDraft {
   enabled: boolean;
+  yutWinnerReward: { enabled: boolean; amount: string };
   challengeCost: string;
   dailyChallengeLimit: string;
   resultRewards: { minCorrect: number; amount: string }[];
@@ -55,6 +57,10 @@ const toRankDraft = (rewards: WeplayRankRewards) => ({
 
 const toDraft = (policy: WeplayPolicy): PolicyDraft => ({
   enabled: policy.enabled,
+  yutWinnerReward: {
+    enabled: policy.yutWinnerReward?.enabled === true,
+    amount: String(policy.yutWinnerReward?.amount ?? 0),
+  },
   challengeCost: String(policy.challengeCost),
   dailyChallengeLimit: String(policy.dailyChallengeLimit),
   resultRewards: policy.resultRewards.map((reward) => ({
@@ -133,18 +139,19 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
   canManage,
   active,
 }) => {
-  const { menuConfig } = useAuth();
+  const { menuConfig, currentUser } = useAuth();
   const { showToast } = useAppToast();
   const scope = useMemo(
     () => getYearSemester(config),
     [config?.year, config?.semester],
   );
-  const scopeKey = `${scope.year}/${scope.semester}`;
+  const scopeKey = `${currentUser?.uid}/${scope.year}/${scope.semester}/${canManage}`;
   const scopeReady = Boolean(config?.year && config?.semester);
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
   const panelRef = useRef<HTMLElement>(null);
   const savingRef = useRef(false);
+  const saveGeneration = useRef(0);
   const [loadedScope, setLoadedScope] = useState("");
   const [savedPolicy, setSavedPolicy] = useState<WeplayPolicy | null>(null);
   const [draft, setDraft] = useState<PolicyDraft | null>(null);
@@ -158,6 +165,17 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
     message: string;
   } | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [conflict, setConflict] = useState(false);
+
+  useEffect(() => {
+    saveGeneration.current += 1;
+    savingRef.current = false;
+    setSaving(false);
+    setConflict(false);
+    return () => {
+      saveGeneration.current += 1;
+    };
+  }, [scopeKey]);
 
   useEffect(() => {
     if (!active || loadedScope === scopeKey) return;
@@ -177,6 +195,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
         setSavedPolicy(result.policy);
         setDraft(toDraft(result.policy));
         setPeriod(result.currentRankingPeriod);
+        setConflict(false);
         setLoading(false);
         setLoadedScope(scopeKey);
       })
@@ -223,6 +242,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
       !savedPolicy ||
       !dirty ||
       savingRef.current ||
+      conflict ||
       loadedScope !== scopeKey
     )
       return;
@@ -258,7 +278,16 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
     });
     const nextPolicy: WeplayPolicy = {
       ...savedPolicy,
+      version: savedPolicy.version ?? 0,
       enabled: draft.enabled,
+      yutWinnerReward: {
+        enabled: draft.yutWinnerReward.enabled,
+        amount: parseInteger(
+          "weplay-yut-winner-amount",
+          draft.yutWinnerReward.amount,
+          10000,
+        ),
+      },
       challengeCost: parseInteger("weplay-cost", draft.challengeCost, 10000),
       dailyChallengeLimit: parseInteger(
         "weplay-daily-limit",
@@ -297,9 +326,14 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
     setSaving(true);
     setFeedback(null);
     const savingScope = scopeKey;
+    const savingGeneration = ++saveGeneration.current;
     try {
       const result = await saveWeplayPolicy(scope, nextPolicy);
-      if (currentScope.current !== savingScope) return;
+      if (
+        currentScope.current !== savingScope ||
+        saveGeneration.current !== savingGeneration
+      )
+        return;
       setSavedPolicy(result.policy);
       setDraft(toDraft(result.policy));
       setPeriod(result.currentRankingPeriod);
@@ -308,21 +342,30 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
         title: "정책 저장 완료",
         message: "위플레이 정책을 저장했습니다.",
       });
-    } catch {
-      if (currentScope.current === savingScope)
-        showToast({
-          tone: "error",
-          title: "정책 저장 실패",
-          message:
-            "정책을 저장하지 못했습니다. 입력한 값은 유지됩니다. 다시 저장해 주세요.",
-        });
+    } catch (error) {
+      if (
+        currentScope.current === savingScope &&
+        saveGeneration.current === savingGeneration
+      ) {
+        const changed = String(
+          (error as { code?: string })?.code || "",
+        ).includes("aborted");
+        setConflict(changed);
+        const message = changed
+          ? "다른 곳에서 정책이 변경되었습니다. 최신 정책을 불러온 뒤 다시 확인해 주세요."
+          : "정책을 저장하지 못했습니다. 입력한 값은 유지됩니다. 다시 저장해 주세요.";
+        if (changed) setFeedback({ tone: "error", message });
+        else showToast({ tone: "error", title: "정책 저장 실패", message });
+      }
     } finally {
-      savingRef.current = false;
-      setSaving(false);
+      if (saveGeneration.current === savingGeneration) {
+        savingRef.current = false;
+        setSaving(false);
+      }
     }
   };
 
-  const disabled = !canManage || saving || !active;
+  const disabled = !canManage || saving || !active || conflict;
   const ready = scopeReady && loadedScope === scopeKey && draft && savedPolicy;
 
   return (
@@ -344,7 +387,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
       }}
     >
       <header className="weplay-policy__header">
-        <h3 id="weplay-policy-title">{getWeplayGameTitle(menuConfig)}</h3>
+        <h3 id="weplay-policy-title">위플레이</h3>
         {ready && (
           <span
             className={
@@ -381,8 +424,51 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
               위플레이 정책을 수정할 권한이 없습니다.
             </p>
           )}
+          <fieldset className="weplay-policy__group">
+            <legend>마우저구 윷놀이</legend>
+            <div className="weplay-policy__toggle-row">
+              <label className="weplay-policy__toggle">
+                <input
+                  type="checkbox"
+                  disabled={disabled}
+                  checked={draft.yutWinnerReward.enabled}
+                  onChange={(event) =>
+                    updateDraft((previous) => ({
+                      ...previous,
+                      yutWinnerReward: {
+                        ...previous.yutWinnerReward,
+                        enabled: event.target.checked,
+                      },
+                    }))
+                  }
+                />
+                <span>멀티플레이 1등 위스 지급</span>
+              </label>
+              <InfoHelp label="윷놀이 1등 지급 기준">
+                온라인에서 완주한 1등 학생에게만 지급합니다. 싱글, 교사 체험,
+                다른 참가자의 이탈로 끝난 판은 제외됩니다. 변경한 정책은 다음
+                판부터 적용되며, 0위스는 지급하지 않습니다.
+              </InfoHelp>
+            </div>
+            <div className="weplay-policy__grid">
+              <NumberField
+                id="weplay-yut-winner-amount"
+                label="1등 지급액"
+                accessibleLabel="윷놀이 1등 지급액"
+                value={draft.yutWinnerReward.amount}
+                disabled={disabled}
+                error={errors["weplay-yut-winner-amount"]}
+                onChange={(amount) =>
+                  updateDraft((previous) => ({
+                    ...previous,
+                    yutWinnerReward: { ...previous.yutWinnerReward, amount },
+                  }))
+                }
+              />
+            </div>
+          </fieldset>
           <fieldset className="weplay-policy__group" disabled={disabled}>
-            <legend>위스 도전</legend>
+            <legend>{getWeplayGameTitle(menuConfig)} · 위스 도전</legend>
             <p className="weplay-policy__notice">
               변경한 정책은 다음 판부터 적용됩니다. 진행 중인 판은 시작할 때의
               정책을 따릅니다.
@@ -546,6 +632,18 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
             </p>
           )}
           <footer className="weplay-policy__footer">
+            {conflict && (
+              <button
+                type="button"
+                className="weplay-policy__secondary"
+                onClick={() => {
+                  setLoadedScope("");
+                  setRetryKey((key) => key + 1);
+                }}
+              >
+                최신 정책 불러오기
+              </button>
+            )}
             <button
               type="button"
               className="weplay-policy__primary"

@@ -9,6 +9,9 @@ export interface YutRoom {
   id: string; code: string; classId: string; classLabel: string; hostUid: string;
   visibility?: 'public' | 'private'; maxPlayers?: number; pieceCount?: number; throwSeconds?: number; moveSeconds?: number;
   status: 'waiting' | 'playing' | 'finished' | 'closed'; revision: number;
+  finishReason?: 'completion' | 'forfeit';
+  winnerRewardPolicy?: { enabled: boolean; amount: number; version: number };
+  reward?: { status: 'paid' | 'pending' | 'not-awarded'; uid: string; amount: number; policyVersion: number; reason?: 'disabled' | 'ineligible' | 'account-unavailable'; settledAtMs?: number };
   syncRevision?: number; emotes?: Record<string, YutEmote>; blockedSeats?: number[];
   players: YutPlayer[]; participantUids: string[]; turnUid: string | null;
   phase: 'throw' | 'move'; pendingThrow: { value: number; label: string; sticks: boolean[] } | null;

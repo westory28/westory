@@ -13,7 +13,8 @@
     "fix:legacy-student-profile-emojis": "node scripts/fix-legacy-student-profile-emojis.cjs",
     "reclaim:lesson-core-points": "node scripts/reclaim-lesson-core-point-unit-rewards.cjs",
     "test:yut": "node --test scripts/verify-yut-core.mjs",
-    "test:yut-integration": "firebase emulators:exec --only firestore --config ../firebase.login-test.json --project demo-westory-session-yut \"node scripts/verify-yut-integration.cjs\""
+    "test:yut-integration": "firebase emulators:exec --only firestore --config ../firebase.login-test.json --project demo-westory-session-yut \"node scripts/verify-yut-integration.cjs\"",
+    "test:yut-reward": "firebase emulators:exec --only firestore --config ../firebase.login-test.json --project demo-westory-session-yut-reward \"node scripts/verify-yut-reward-integration.cjs\""
   },
   "engines": {
     "node": "22"

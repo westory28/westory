@@ -1,5 +1,6 @@
 import React, {
   useEffect,
+  useCallback,
   useId,
   useLayoutEffect,
   useRef,
@@ -303,22 +304,12 @@ function BoardSurface({ prefix }: { prefix: string }) {
           </g>
         );
       })}
-      <g className="yut-board-finish-mark" fill="#c5ac76">
-        <path
-          d="M386 493h45m-8-5 8 5-8 5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        />
-        <text x="451" y="497" textAnchor="middle">
-          완주
-        </text>
-      </g>
     </svg>
   );
 }
 
 type PieceMotion = {
+  id: string;
   origin: YutNode;
   path: YutNode[];
   kind: "land" | "capture" | "win" | "caught";
@@ -344,6 +335,7 @@ function MovingPawn({
   selectable,
   motion,
   onSelect,
+  onMotionComplete,
 }: {
   role: YutRole;
   node: YutNode;
@@ -352,39 +344,100 @@ function MovingPawn({
   selectable: boolean;
   motion?: PieceMotion;
   onSelect: () => void;
+  onMotionComplete: (id: string) => void;
 }) {
   const button = useRef<HTMLButtonElement>(null);
+  const complete = useRef(onMotionComplete);
+  complete.current = onMotionComplete;
   useLayoutEffect(() => {
-    if (!motion || !button.current || motion.kind === "caught") return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const element = button.current;
+    if (!motion || !element) return;
+    let finishedTimer: number | undefined;
+    if (motion.kind === "caught") {
+      finishedTimer = window.setTimeout(
+        () => complete.current(motion.id),
+        motion.travelMs + 300,
+      );
+      return () => window.clearTimeout(finishedTimer);
+    }
+    // Tile traversal is game feedback. Reduced motion removes tilt and squash,
+    // while retaining each landing so the player can follow the chosen route.
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     const nodes = [motion.origin, ...motion.path];
-    const frames: Keyframe[] = [];
     const steps = nodes.length - 1;
-    nodes.forEach((point, index) => {
-      const current = nodePosition(point);
-      frames.push({
-        ...pointStyle(current),
-        offset: index / steps,
-        transform: "translate(-50%, -88%) translateY(0) rotate(0deg)",
-      });
-      if (index < steps) {
-        const next = nodePosition(nodes[index + 1]);
-        frames.push({
-          ...pointStyle([
-            (current[0] + next[0]) / 2,
-            (current[1] + next[1]) / 2,
-          ]),
-          offset: (index + 0.5) / steps,
-          transform: `translate(-50%, -88%) translateY(-14px) rotate(${next[0] >= current[0] ? 5 : -5}deg)`,
-        });
+    if (!steps) return;
+    let active = true;
+    let animation: Animation | undefined;
+    let landingFrame = 0;
+    const hop = async () => {
+      try {
+        for (let index = 0; index < steps && active; index++) {
+          const current = nodePosition(nodes[index]),
+            next = nodePosition(nodes[index + 1]);
+          const tilt = reduced ? 0 : next[0] >= current[0] ? 5 : -5;
+          const previousAnimation = animation;
+          animation = element.animate(
+            [
+              {
+                ...pointStyle(current),
+                offset: 0,
+                transform: "translate(-50%, -88%)",
+              },
+              {
+                ...pointStyle([
+                  (current[0] + next[0]) / 2,
+                  (current[1] + next[1]) / 2,
+                ]),
+                offset: 0.4,
+                transform: `translate(-50%, -88%) translateY(-${reduced ? 7 : 16}px) rotate(${tilt}deg)`,
+              },
+              {
+                ...pointStyle(next),
+                offset: 0.78,
+                transform: reduced
+                  ? "translate(-50%, -88%)"
+                  : "translate(-50%, -88%) scale(1.04,.96)",
+              },
+              {
+                ...pointStyle(next),
+                offset: 1,
+                transform: "translate(-50%, -88%)",
+              },
+            ],
+            {
+              duration: motion.travelMs / steps,
+              easing: "linear",
+              fill: "both",
+            },
+          );
+          previousAnimation?.cancel();
+          await animation.finished;
+          // A painted landing separates every hop, including under busy React
+          // renders. One long timeline can jump over a tile on a dropped frame.
+          await new Promise<void>((resolve) => {
+            landingFrame = requestAnimationFrame(() => resolve());
+          });
+        }
+        if (active)
+          finishedTimer = window.setTimeout(
+            () => complete.current(motion.id),
+            300,
+          );
+      } catch {
+        /* Replaced moves and unmount cancel their own animation. */
       }
-    });
-    const animation = button.current.animate(frames, {
-      duration: motion.travelMs,
-      easing: "linear",
-    });
-    return () => animation.cancel();
-  }, [motion]);
+    };
+    void hop();
+    return () => {
+      active = false;
+      cancelAnimationFrame(landingFrame);
+      window.clearTimeout(finishedTimer);
+      animation?.cancel();
+    };
+    // The stable event ID survives clock ticks and new room object identities.
+  }, [motion?.id]);
   if ((node === "home" || node === "finish") && !motion) return null;
   return (
     <button
@@ -405,6 +458,8 @@ function MovingPawn({
       aria-label={`${name} ${PROFESSIONS[role].clan}, ${yutNodeLabel(node)}${selectable ? ", 선택" : ""}`}
       onClick={onSelect}
       data-motion={motion?.kind || "idle"}
+      data-motion-id={motion?.id}
+      data-pawn-node={node}
     >
       <span className="yut-isometric-pawn" aria-hidden="true">
         <i className="yut-pawn-foot-shadow" />
@@ -457,9 +512,28 @@ export default function YutBoard({
   const callback = useRef(onMotionChange);
   callback.current = onMotionChange;
   const [motions, setMotions] = useState<Record<string, PieceMotion>>({});
+  const motionTimer = useRef<number | undefined>(undefined);
+  const activeMotions = useRef(new Set<string>());
+  const completeMotion = useCallback((id: string) => {
+    if (!activeMotions.current.delete(id) || activeMotions.current.size) return;
+    window.clearTimeout(motionTimer.current);
+    setMotions({});
+    callback.current?.(false);
+  }, []);
   useLayoutEffect(() => {
     const before = previous.current;
     previous.current = room;
+    if (
+      before.id !== room.id ||
+      room.status === "waiting" ||
+      room.status === "closed"
+    ) {
+      window.clearTimeout(motionTimer.current);
+      activeMotions.current.clear();
+      setMotions({});
+      callback.current?.(false);
+      return;
+    }
     const next: Record<string, PieceMotion> = {};
     if (
       before.id === room.id &&
@@ -479,6 +553,7 @@ export default function YutBoard({
               ? eventMove.path
               : [piece.node];
           next[`${player.uid}-${piece.id}`] = {
+            id: `${room.id}:${room.revision}:${player.uid}:${piece.id}`,
             origin: old.node,
             path,
             kind: caught
@@ -489,30 +564,42 @@ export default function YutBoard({
                   ? "capture"
                   : "land",
             travelMs: Math.min(
-              1200,
+              1100,
               Math.max(
-                240,
-                (caught ? eventMove?.path?.length || 1 : path.length) * 240,
+                220,
+                (caught ? eventMove?.path?.length || 1 : path.length) * 220,
               ),
             ),
           };
         }
       }
     }
-    setMotions(next);
     const active = Object.values(next);
-    callback.current?.(active.length > 0);
+    // Non-movement snapshots (for example an opponent leaving) must not cancel
+    // a move already on screen. Only a new move or leaving the board replaces it.
     if (!active.length) return;
-    const timer = window.setTimeout(
+    window.clearTimeout(motionTimer.current);
+    activeMotions.current = new Set(active.map((motion) => motion.id));
+    setMotions(next);
+    callback.current?.(true);
+    motionTimer.current = window.setTimeout(
       () => {
+        activeMotions.current.clear();
         setMotions({});
         callback.current?.(false);
       },
-      Math.max(...active.map((item) => item.travelMs)) + 300,
+      // Finish from the actual animation, not wall-clock time before its first
+      // rendered frame. This bounded fallback only handles suspended animations.
+      6000,
     );
-    return () => window.clearTimeout(timer);
   }, [room.id, room.revision]);
-  useEffect(() => () => callback.current?.(false), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(motionTimer.current);
+      callback.current?.(false);
+    },
+    [],
+  );
   const destinations = revealMoves
     ? moves.filter((move) => move.pieceId === selectedPiece)
     : [];
@@ -585,6 +672,7 @@ export default function YutBoard({
                 }
                 motion={motions[`${player.uid}-${item.id}`]}
                 onSelect={() => onSelectPiece(item.id)}
+                onMotionComplete={completeMotion}
               />
             )),
           )}

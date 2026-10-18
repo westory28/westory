@@ -147,7 +147,11 @@ test('home pieces do not stack; exact final corner requires one extra step', () 
   room.turnUid = 'a'; room.phase = 'throw';
   room = moveYut(roll(room, 1), 'a', '1', 'outer', now + 3);
   assert.equal(room.status, 'finished'); assert.equal(room.winnerUid, 'a');
+  assert.equal(room.finishReason, 'completion');
   assert.deepEqual(room.lastEvent.move.path, ['finish']);
+  assert.throws(() => throwYut(room, 'b', [true, false, false, false], now + 4));
+  assert.throws(() => coreMoveYut(room, 'b', '1', 'outer', now + 4));
+  assert.throws(() => skipYutTurn(room, now + 4));
 });
 test('invalid turn, phase, route and expiry cannot mutate the game', () => {
   const room = game();
@@ -166,6 +170,7 @@ test('host migrates in waiting; active leaving forfeits and last remaining playe
   assert.equal(room.turnUid, 'b'); assert.equal(room.status, 'playing');
   room = leaveYutRoom(room, 'c', now);
   assert.equal(room.status, 'finished'); assert.equal(room.winnerUid, 'b');
+  assert.equal(room.finishReason, 'forfeit');
 });
 test('many seeded matches end with valid positions and exactly one winner', () => {
   let seed = 8221;

@@ -25,6 +25,7 @@ export interface WeplayPolicy {
   resultRewards: { minCorrect: number; amount: number }[];
   rankingPeriod: "weekly" | "monthly";
   rankingRewards: Record<WeplayDifficulty, WeplayRankRewards>;
+  yutWinnerReward?: { enabled: boolean; amount: number };
   version?: number;
 }
 export interface WeplayPeriod {

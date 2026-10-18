@@ -8,3 +8,8 @@ Nanum Brush Script by NHN Corporation, SIL Open Font License 1.1.
 Official Google Fonts distribution subset for 도개걸윷모! (unmodified downloaded font).
 Source: https://fonts.googleapis.com/css2?family=Nanum+Brush+Script&text=%EB%8F%84%EA%B0%9C%EA%B1%B8%EC%9C%B7%EB%AA%A8!
 License: NanumBrushScript-OFL.txt
+
+East Sea Dokdo by YoonDesign Inc., SIL Open Font License 1.1.
+Official Google Fonts distribution subset for 도개걸윷모! (unmodified downloaded font).
+Source: https://fonts.googleapis.com/css2?family=East+Sea+Dokdo&text=%EB%8F%84%EA%B0%9C%EA%B1%B8%EC%9C%B7%EB%AA%A8!
+License: EastSeaDokdo-OFL.txt
