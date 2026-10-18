@@ -7,6 +7,7 @@ import WisProductCard, {
 import WisProductDetailModal from "../../../../components/common/WisProductDetailModal";
 import { getPointFeedbackToneClass } from "../../../../constants/pointLabels";
 import { formatWisAmount } from "../../../../lib/pointFormatters";
+import { getProductCardImage } from "../../../../lib/pointProductImages";
 import type { PointProduct } from "../../../../types";
 import "./TeacherWisShop.css";
 
@@ -138,7 +139,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
 
   return (
     <section className="teacher-wis-shop" aria-label="상점 상품 관리">
-      <header className="teacher-wis-shop__heading">
+      <header className="ws-page-header teacher-wis-shop__heading">
         <div>
           <span className="teacher-wis-shop__eyebrow">위스 상점</span>
           <h2>상품과 재고</h2>
@@ -294,9 +295,9 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                       }
                       aria-label={`${product.name} 상세 보기`}
                     >
-                      {product.previewImageUrl || product.imageUrl ? (
+                      {getProductCardImage(product) ? (
                         <img
-                          src={product.previewImageUrl || product.imageUrl}
+                          src={getProductCardImage(product)}
                           alt=""
                           loading="lazy"
                           decoding="async"

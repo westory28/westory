@@ -196,24 +196,28 @@
   margin: 0;
 }
 .teacher-wis-shop__products {
-  border-top: 1px solid var(--ws-border, #e5e7eb);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 24px;
 }
 
 .teacher-wis-shop__product {
   display: grid;
-  grid-template-columns: 128px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 24px;
-  padding: 24px 0;
-  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #ffffff);
 }
 
 .teacher-wis-shop__product-image {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 128px;
-  aspect-ratio: 3 / 4;
+  width: 100%;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
   border-radius: 8px;
   background: var(--ws-surface-subtle, #f8fafc);
@@ -288,9 +292,9 @@
   line-height: 1.6;
 }
 .teacher-wis-shop__stock {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 24px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   margin: 16px 0 0;
 }
 .teacher-wis-shop__stock div {
@@ -320,8 +324,13 @@
 }
 .teacher-wis-shop__product-actions {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.teacher-wis-shop__product-actions .teacher-wis-shop__button:first-child {
+  flex: 1 0 100%;
 }
 .teacher-wis-shop__product-actions .teacher-wis-shop__button {
   padding-right: 12px;
@@ -753,18 +762,6 @@
 }
 
 @media (max-width: 1023px) {
-  .teacher-wis-shop__product {
-    grid-template-columns: 96px minmax(0, 1fr);
-    gap: 16px;
-  }
-  .teacher-wis-shop__product-image {
-    width: 96px;
-  }
-  .teacher-wis-shop__product-actions {
-    grid-column: 2;
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
   .teacher-wis-shop__order-detail {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -793,16 +790,8 @@
     width: 100%;
     justify-content: space-between;
   }
-  .teacher-wis-shop__stock {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
-  .teacher-wis-shop__product-actions {
-    grid-column: 1 / -1;
-  }
-  .teacher-wis-shop__product-actions .teacher-wis-shop__button:first-child {
-    flex: 1;
+  .teacher-wis-shop__products {
+    gap: 16px;
   }
   .teacher-wis-shop__price {
     font-size: 18px;

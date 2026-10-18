@@ -301,7 +301,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
 
   return (
     <section className="teacher-wis-shop" aria-label="상점 주문 관리">
-      <header className="teacher-wis-shop__heading">
+      <header className="ws-page-header teacher-wis-shop__heading">
         <div>
           <span className="teacher-wis-shop__eyebrow">위스 상점</span>
           <h2>

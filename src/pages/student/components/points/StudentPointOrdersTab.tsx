@@ -33,7 +33,7 @@ const StudentPointOrdersTab: React.FC<StudentPointOrdersTabProps> = ({
   onRefresh,
 }) => (
   <section className="wis-shop" aria-label="주문 내역">
-    <header className="wis-shop-header">
+    <header className="ws-page-header wis-shop-header">
       <h2>주문 내역</h2>
       {onRefresh && (
         <button

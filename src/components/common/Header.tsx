@@ -442,7 +442,7 @@ const Header: React.FC<{
   )
     teacherSidebarGroups.push({
       id: "shop",
-      name: "상점",
+      name: "위스 상점",
       icon: "shop",
       secondary: true,
       children: shopChildren,

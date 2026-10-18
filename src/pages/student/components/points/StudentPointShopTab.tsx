@@ -66,7 +66,7 @@ const StudentPointShopTab: React.FC<StudentPointShopTabProps> = ({
   }, [products, search, availableOnly, sort, balance]);
   return (
     <section className="wis-shop" aria-label="위스 상점">
-      <header className="wis-shop-header">
+      <header className="ws-page-header wis-shop-header">
         <h2>위스 상점</h2>
         <div className="wis-shop-header-actions">
           <div className="wis-shop-balance">
