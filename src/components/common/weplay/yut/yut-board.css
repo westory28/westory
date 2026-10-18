@@ -21,6 +21,7 @@
   height: 100%;
   overflow: visible;
   pointer-events: none;
+  filter: drop-shadow(0 18px 12px #080b09b3) drop-shadow(0 3px 2px #0009);
 }
 .yut-board-corner-glyph {
   font:

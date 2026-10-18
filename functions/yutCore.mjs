@@ -2,7 +2,7 @@
 export const YUT_TURN_MS = 60_000;
 export const YUT_ROOM_MS = 24 * 60 * 60_000;
 export const YUT_ROLES = ['sa', 'nong', 'gong', 'sang'];
-export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg'];
+export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg', 'angry'];
 export const YUT_EMOTE_COOLDOWN_MS = 5_000;
 export const YUT_EMOTE_VISIBLE_MS = 4_000;
 const labels = ['', '도', '개', '걸', '윷', '모'];
@@ -23,7 +23,7 @@ const playerFor = (room, uid) => room.players.find((player) => player.uid === ui
 const piecesFor = () => [1, 2].map((id) => ({ id: String(id), node: 'home', lane: 'outer' }));
 export function createYutRoom({ id, code, classId, classLabel, host, nowMs }) {
   return {
-    id, code, classId, classLabel, hostUid: host.uid, status: 'waiting', revision: 0, syncRevision: 0, emotes: {},
+    id, code, classId, classLabel, hostUid: host.uid, status: 'waiting', revision: 0, syncRevision: 0, emotes: {}, blockedSeats: [],
     players: [{ ...host, role: 'sa', ready: true, active: true, pieces: piecesFor() }],
     participantUids: [host.uid], turnUid: null, phase: 'throw', pendingThrow: null,
     extraThrows: 0, turnDeadlineMs: 0, winnerUid: null,
@@ -49,12 +49,24 @@ export function addYutEmote(source, uid, kind, id, nowMs) {
 export function addYutPlayer(source, player, nowMs) {
   if (source.status !== 'waiting') fail('이미 시작되었거나 닫힌 방입니다.');
   if (playerFor(source, player.uid)) return source;
-  if (source.players.length >= 4) fail('방이 가득 찼습니다.');
+  const role = YUT_ROLES.find((value, seat) => !(source.blockedSeats || []).includes(seat) && !source.players.some((entry) => entry.role === value));
+  if (!role) fail('열린 자리가 모두 찼습니다.');
   const room = copy(source);
-  const role = YUT_ROLES.find((value) => !room.players.some((entry) => entry.role === value));
   room.players.push({ uid: player.uid, name: player.name, role, ready: false, active: true, pieces: piecesFor() });
   room.participantUids.push(player.uid);
   return event(room, 'join', `${player.name} 님이 들어왔습니다.`, nowMs);
+}
+export function setYutSeat(source, uid, seat, blocked, nowMs) {
+  if (source.status !== 'waiting' || source.hostUid !== uid || !playerFor(source, uid)) fail('대기실의 방장만 자리를 바꿀 수 있습니다.');
+  if (!Number.isInteger(seat) || seat < 0 || seat >= YUT_ROLES.length || typeof blocked !== 'boolean') fail('변경할 자리를 확인해 주세요.');
+  if (blocked && source.players.some((player) => player.role === YUT_ROLES[seat])) fail('참가자가 있는 자리는 닫을 수 없습니다.');
+  const blockedSeats = new Set(source.blockedSeats || []);
+  if (blocked === blockedSeats.has(seat)) return source;
+  if (blocked) blockedSeats.add(seat); else blockedSeats.delete(seat);
+  if (YUT_ROLES.length - blockedSeats.size < 2) fail('자리는 2개 이상 열어 두어야 합니다.');
+  const room = copy(source);
+  room.blockedSeats = [...blockedSeats].sort((a, b) => a - b);
+  return event(room, 'seat', blocked ? '빈자리를 닫았습니다.' : '빈자리를 열었습니다.', nowMs);
 }
 export function readyYutPlayer(source, uid, ready, nowMs) {
   if (source.status !== 'waiting') fail('대기실에서만 준비 상태를 바꿀 수 있습니다.');
@@ -77,11 +89,13 @@ const assertTurn = (room, uid, phase, nowMs) => {
   if (room.phase !== phase) fail(phase === 'throw' ? '먼저 말을 옮겨 주세요.' : '먼저 윷을 던져 주세요.');
   if (nowMs >= room.turnDeadlineMs) fail('차례 시간이 지났습니다. 다음 차례로 넘겨 주세요.');
 };
-export function throwYut(source, uid, sticks, nowMs) {
+export function throwYut(source, uid, sticks, nowMs, power) {
   assertTurn(source, uid, 'throw', nowMs);
   if (!Array.isArray(sticks) || sticks.length !== 4 || sticks.some((value) => typeof value !== 'boolean')) fail('윷 결과가 올바르지 않습니다.');
+  if (power !== undefined && (!Number.isFinite(power) || power < 0 || power > 1)) fail('던지는 세기를 확인해 주세요.');
   const room = copy(source), count = sticks.filter(Boolean).length, value = count || 5;
   room.pendingThrow = { value, label: labels[value], sticks: [...sticks] };
+  playerFor(room, uid).lastThrow = { value, label: labels[value], atMs: nowMs, ...(power === undefined ? {} : { power }) };
   room.phase = 'move';
   if (value >= 4) room.extraThrows += 1;
   return event(room, 'throw', `${playerFor(room, uid).name} · ${labels[value]}`, nowMs);

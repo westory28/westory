@@ -23,7 +23,7 @@ try {
       ),
   );
 }
-const evidence = path.join(root, "output/yut-revision-20261018");
+const evidence = path.join(root, "output/yut-controls-20261018");
 await fs.mkdir(evidence, { recursive: true });
 const modulePath = (value) =>
   JSON.stringify(path.join(root, value).replaceAll("\\", "/"));
@@ -100,6 +100,7 @@ const fontFiles = new Map(
     ]),
 );
 let room = null;
+let enabled = true;
 const commands = [];
 const history = new Map();
 let throwIndex = 0;
@@ -120,13 +121,19 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/qa/reset") {
       room = null;
+      enabled = true;
       commands.length = 0;
       history.clear();
       throwIndex = 0;
       return json({ ok: true });
     }
+    if (url.pathname === "/qa/publication") {
+      enabled = url.searchParams.get("enabled") === "true";
+      return json({ enabled });
+    }
     if (url.pathname === "/qa/lobby")
       return json({
+        enabled,
         room:
           room?.participantUids.includes(uid) && room.status !== "closed"
             ? room
@@ -138,6 +145,7 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/qa/state")
       return json({ room: room?.participantUids.includes(uid) ? room : null });
     if (url.pathname === "/qa/command") {
+      if (!enabled) throw new Error("지금은 이 게임을 이용할 수 없습니다.");
       const chunks = [];
       for await (const chunk of request) chunks.push(chunk);
       const data = JSON.parse(Buffer.concat(chunks).toString());
@@ -165,6 +173,8 @@ const server = http.createServer(async (request, response) => {
         room = core.addYutPlayer(room, { uid, name: "둘째 학생" }, now);
       } else if (data.action === "ready")
         room = core.readyYutPlayer(room, uid, data.ready, now);
+      else if (data.action === "seat")
+        room = core.setYutSeat(room, uid, data.seat, data.blocked, now);
       else if (data.action === "start") room = core.startYutGame(room, now);
       else if (data.action === "throw") {
         const throws = [
@@ -177,6 +187,7 @@ const server = http.createServer(async (request, response) => {
           uid,
           throws[throwIndex++ % throws.length],
           now,
+          data.power,
         );
       } else if (data.action === "move")
         room = core.moveYut(room, uid, data.pieceId, data.route, now);
@@ -273,11 +284,25 @@ async function capture(page, name) {
   );
   assert.equal(overflow, false, name + " horizontal overflow");
 }
+async function throwWithPower(page, duration = 420) {
+  const button = page.getByRole("button", { name: "윷 던지기", exact: true });
+  await button.waitFor();
+  const box = await button.boundingBox();
+  assert.ok(box);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(duration);
+  await page.mouse.up();
+}
 // Acceptance steps below intentionally use user-visible controls, not internal component state.
 try {
   const intro = await open(1280, "portal=student&uid=qa-intro");
   await intro.locator("section.weplay-studio-intro").waitFor();
-  assert.equal(await intro.evaluate(() => window.yutQA?.calls.length || 0), 0);
+  assert.ok(
+    await intro.evaluate(() =>
+      window.yutQA.calls.every((call) => call.endpoint === "lobby"),
+    ),
+  );
   await intro.waitForTimeout(1050);
   await capture(intro, "studio-intro");
   await intro.getByRole("button", { name: /건너뛰기/ }).press("Escape");
@@ -285,7 +310,7 @@ try {
     .getByRole("button", { name: "새로운 판 만들기", exact: true })
     .waitFor();
   checks.push(
-    "Studio opening precedes all game network calls; Escape skips and restores lobby.",
+    "Publication is checked before intro; opening performs no game commands and Escape restores lobby.",
   );
   await intro.close();
   for (const width of [320, 390, 768, 1280, 1440]) {
@@ -334,7 +359,7 @@ try {
       .click();
     await page.getByRole("dialog", { name: "윷판의 약속" }).waitFor();
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: "윷 던지기", exact: true }).click();
+    await throwWithPower(page);
     await page.locator(".yut-throw-3d.is-rolling").waitFor();
     assert.equal(
       await page.locator(".yut-isometric-destination").count(),
@@ -343,7 +368,11 @@ try {
     );
     await page.waitForTimeout(850);
     await capture(page, "yut-3d-flight-" + width);
+    await page.locator(".yut-landing-result").waitFor();
+    assert.equal(await page.locator(".yut-isometric-destination").count(), 0);
+    await capture(page, "yut-large-result-" + width);
     await page.locator(".yut-isometric-destination").first().waitFor();
+    assert.ok(await page.locator(".yut-player-last").count());
     await capture(page, "yut-move-" + width);
     await page.locator(".yut-isometric-destination").first().click();
     assert.equal(
@@ -365,6 +394,26 @@ try {
     .getByRole("button", { name: "새로운 판 만들기", exact: true })
     .click();
   await host.getByRole("heading", { name: "한 판의 인연" }).waitFor();
+  await host
+    .getByRole("button", { name: "4번 자리 막기", exact: true })
+    .click();
+  await host
+    .getByRole("button", { name: "4번 자리 열기", exact: true })
+    .waitFor();
+  await host
+    .getByRole("button", { name: "3번 자리 막기", exact: true })
+    .click();
+  await host
+    .getByRole("button", { name: "3번 자리 열기", exact: true })
+    .waitFor();
+  assert.deepEqual(room.blockedSeats, [2, 3]);
+  assert.equal(
+    await host
+      .getByRole("button", { name: "2번 자리 막기", exact: true })
+      .isEnabled(),
+    false,
+  );
+  await capture(host, "yut-online-two-seat-waiting");
   assert.equal(
     await host
       .getByRole("button", { name: "윷판 펼치기", exact: true })
@@ -379,8 +428,8 @@ try {
   await guest.getByRole("button", { name: "준비 취소", exact: true }).waitFor();
   const emoteRevision = room.revision;
   await guest.getByRole("button", { name: "감정표현", exact: true }).click();
-  await guest.getByRole("button", { name: "안녕!", exact: true }).click();
-  await host.locator('[data-emote-kind="hello"]').waitFor();
+  await guest.getByRole("button", { name: "으으!", exact: true }).click();
+  await host.locator('[data-emote-kind="angry"]').waitFor();
   assert.equal(
     room.revision,
     emoteRevision,
@@ -401,7 +450,16 @@ try {
     await guest.getByRole("button", { name: "윷 던지기", exact: true }).count(),
     0,
   );
-  await host.getByRole("button", { name: "윷 던지기", exact: true }).click();
+  await throwWithPower(host);
+  await host.locator(".yut-landing-result").waitFor();
+  assert.equal(
+    await host
+      .locator(".yut-landing-result")
+      .innerText()
+      .then((text) => text.includes("개!")),
+    true,
+  );
+  await capture(host, "yut-online-large-result");
   await host
     .getByRole("button", { name: /바깥 2칸으로 이동/, exact: true })
     .click();
@@ -412,7 +470,7 @@ try {
   await guest.reload();
   await skip(guest);
   await guest.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
-  await guest.getByRole("button", { name: "윷 던지기", exact: true }).click();
+  await throwWithPower(guest);
   await guest
     .getByRole("button", { name: /바깥 1칸으로 이동/, exact: true })
     .click();
@@ -473,17 +531,32 @@ try {
   await fetch(base + "/qa/reset");
   const solo = await open(1280, "portal=student&uid=qa-solo", 800, "reduce");
   await skip(solo);
+  await solo.getByRole("button", { name: "2명", exact: true }).click();
   await solo
     .getByRole("button", { name: "싱글 모드 시작", exact: true })
     .click();
   await solo.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
-  const soloCalls = await solo.evaluate(() => window.yutQA.calls.length);
+  assert.equal(await solo.locator(".yut-player").count(), 2);
   await capture(solo, "yut-student-single");
   await solo.getByRole("button", { name: "감정표현", exact: true }).click();
   await solo.getByRole("button", { name: "우와!", exact: true }).click();
   await solo.locator('[data-emote-kind="wow"]').waitFor();
   const started = Date.now();
-  await solo.getByRole("button", { name: "윷 던지기", exact: true }).click();
+  const soloThrow = solo.getByRole("button", {
+    name: "윷 던지기",
+    exact: true,
+  });
+  await soloThrow.focus();
+  await solo.keyboard.down("Space");
+  await solo.waitForTimeout(350);
+  await solo.keyboard.press("Escape");
+  await solo.keyboard.up("Space");
+  assert.equal(
+    await solo.locator(".yut-throw-3d.is-rolling").count(),
+    0,
+    "Escape cancels charging without a throw",
+  );
+  await throwWithPower(solo);
   await solo.locator(".yut-throw-3d.is-rolling").waitFor();
   await solo.waitForTimeout(700);
   assert.equal(
@@ -494,17 +567,20 @@ try {
   await capture(solo, "yut-reduced-motion-flight");
   await solo.locator(".yut-isometric-destination").first().waitFor();
   assert.ok(
-    Date.now() - started >= 1800,
-    "flight is not skipped under reduced motion",
+    Date.now() - started >= 3500,
+    "flight and result hold are not skipped under reduced motion",
   );
   await solo.locator(".yut-isometric-destination").first().click();
   await solo
     .getByRole("button", { name: "윷 던지기", exact: true })
     .waitFor({ timeout: 45000 });
   assert.equal(
-    await solo.evaluate(() => window.yutQA.calls.length),
-    soloCalls,
-    "solo bot play has no server commands",
+    await solo.evaluate(
+      () =>
+        window.yutQA.calls.filter((call) => call.endpoint === "command").length,
+    ),
+    0,
+    "solo bot play has no server commands; publication reads remain active",
   );
   assert.equal(commands.length, 0);
   await solo.setViewportSize({ width: 390, height: 844 });
@@ -516,7 +592,7 @@ try {
   await solo.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
   await solo.close();
   checks.push(
-    "Student single mode plays with three randomized bots without server writes; fixed emotes show in local/online play, cooldown blocks repeat, game revision stays stable; reduced-motion flight remains visible; portrait pauses and restores solo.",
+    "Student 2-player single mode plays with one randomized bot without server writes; angry emote synchronizes online, cooldown blocks repeat, game revision stays stable; reduced-motion flight and large result remain visible; Escape cancels charging and portrait pauses/restores solo.",
   );
   assert.deepEqual(errors, []);
 } finally {

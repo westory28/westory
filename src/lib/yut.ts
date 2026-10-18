@@ -15,9 +15,39 @@ export type {
   YutEmoteKind,
 } from "../../functions/yutCore.mjs";
 export interface YutLobby {
+  enabled: boolean;
   room: YutRoom | null;
   classes: { id: string; label: string }[];
   classId: string;
+  serverNowMs: number;
+}
+export interface YutSettings {
+  enabled: boolean;
+  version: number;
+  updatedAtMs?: number;
+}
+export interface YutManagedRoom {
+  id: string;
+  code: string;
+  status: "waiting" | "playing";
+  revision: number;
+  hostUid: string;
+  createdAtMs: number;
+  expiresAtMs: number;
+  turnUid: string | null;
+  players: {
+    uid: string;
+    name: string;
+    role: string;
+    classLabel: string;
+    studentNumber: string | number;
+    active: boolean;
+  }[];
+}
+export interface YutManagement {
+  settings: YutSettings;
+  rooms: YutManagedRoom[];
+  truncated: boolean;
   serverNowMs: number;
 }
 export interface YutCommand {
@@ -31,6 +61,7 @@ export interface YutCommand {
     | "skip"
     | "leave"
     | "close"
+    | "seat"
     | "emote";
   requestKey: string;
   roomId?: string;
@@ -40,7 +71,10 @@ export interface YutCommand {
   ready?: boolean;
   pieceId?: string;
   route?: YutRoute;
-  kind?: "hello" | "nice" | "oops" | "wow" | "thanks" | "gg";
+  seat?: number;
+  blocked?: boolean;
+  power?: number;
+  kind?: "hello" | "nice" | "oops" | "wow" | "thanks" | "gg" | "angry";
 }
 async function call<T>(
   name: string,
@@ -56,6 +90,17 @@ async function call<T>(
 }
 export const getYutLobby = (config: WeplayConfig) =>
   call<YutLobby>("getYutLobby", config);
+export const getYutManagement = (config: WeplayConfig) =>
+  call<YutManagement>("getYutManagement", config);
+export const saveYutSettings = (
+  config: WeplayConfig,
+  data: { enabled: boolean; expectedVersion: number },
+) =>
+  call<{ settings: YutSettings; serverNowMs: number }>(
+    "saveYutSettings",
+    config,
+    data,
+  );
 export const commandYutRoom = (config: WeplayConfig, data: YutCommand) =>
   call<{ room: YutRoom | null; serverNowMs: number }>(
     "commandYutRoom",

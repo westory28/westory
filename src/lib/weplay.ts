@@ -190,7 +190,7 @@ export const finishWeplayGame = (
 
 export const WEPLAY_GAMES = [
   { id: "history-rain", name: DEFAULT_WEPLAY_GAME_TITLE },
-  { id: "joseon-yut", name: "사농공상 윷놀이" },
+  { id: "joseon-yut", name: "마우저구 윷놀이" },
 ] as const;
 export const getWeplayNormalWordCount = (durationSeconds: number) =>
   Math.round((durationSeconds * 2) / 3);

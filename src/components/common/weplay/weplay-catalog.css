@@ -25,11 +25,13 @@
 }
 .weplay-catalog-grid > li {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .weplay-game-card {
   display: block;
   overflow: hidden;
-  height: 100%;
+  flex: 1;
   color: var(--ws-text, #1f2937);
   text-decoration: none;
   background: var(--ws-surface, #fff);
@@ -40,8 +42,12 @@
 .weplay-game-card:hover {
   border-color: var(--ws-primary, #2563eb);
 }
+.weplay-game-card.is-unavailable:hover { border-color: var(--ws-border, #e5e7eb); }
+.weplay-game-card.is-unavailable .weplay-game-card-action { color: var(--ws-text-muted, #6b7280); }
+.weplay-catalog-retry { min-height: 44px; padding: 8px 16px; margin-top: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: var(--ws-primary, #2563eb); cursor: pointer; font: inherit; }
 .weplay-game-card:focus-visible,
-.weplay-catalog-back:focus-visible {
+.weplay-catalog-back:focus-visible,
+.weplay-catalog-retry:focus-visible {
   outline: 2px solid var(--ws-ring, #3b82f6);
   outline-offset: 4px;
 }
@@ -75,8 +81,8 @@
   width: 100%;
   text-align: center;
   color: #fff0c5;
-  font: 800 clamp(26px, 3vw, 40px)/1.3 serif;
-  letter-spacing: 0.12em;
+  font: 800 clamp(24px, 2vw, 32px)/1.3 serif;
+  letter-spacing: 0.04em;
   text-shadow: 0 2px 3px #281b10;
 }
 .weplay-yut-cover-cast {

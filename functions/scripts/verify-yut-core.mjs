@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS } from '../yutCore.mjs';
+import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, setYutSeat, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS } from '../yutCore.mjs';
 const now = 1000;
 function game(count = 2) {
   let room = createYutRoom({ id: 'room', code: 'ABC234', classId: 'class', classLabel: '1학년 1반', host: { uid: 'a', name: '가' }, nowMs: now });
@@ -11,6 +11,37 @@ function game(count = 2) {
   return startYutGame(room, now);
 }
 const roll = (room, value) => throwYut(room, room.turnUid, Array.from({ length: 4 }, (_, index) => index < (value === 5 ? 0 : value)), now + 1);
+test('host controls empty waiting seats; role seats stay fixed through leave and rejoin', () => {
+  const original = createYutRoom({ id: 'r', code: 'ABC234', classId: '', classLabel: '', host: { uid: 'a', name: 'a' }, nowMs: now });
+  assert.throws(() => setYutSeat(original, 'b', 1, true, now));
+  assert.throws(() => setYutSeat(original, 'a', 0, true, now));
+  assert.throws(() => setYutSeat(original, 'a', 4, true, now));
+  let room = setYutSeat(setYutSeat(original, 'a', 1, true, now), 'a', 3, true, now);
+  assert.deepEqual(original.blockedSeats, []);
+  assert.throws(() => setYutSeat(room, 'a', 2, true, now), /2개/);
+  room = addYutPlayer(room, { uid: 'b', name: 'b' }, now);
+  assert.equal(room.players[1].role, 'gong');
+  assert.throws(() => addYutPlayer(room, { uid: 'c', name: 'c' }, now));
+  assert.throws(() => setYutSeat(room, 'a', 2, true, now));
+  room = leaveYutRoom(room, 'a', now);
+  assert.equal(room.hostUid, 'b'); assert.equal(room.players[0].role, 'gong');
+  room = addYutPlayer(room, { uid: 'c', name: 'c' }, now);
+  assert.equal(room.players[1].role, 'sa');
+  room = readyYutPlayer(room, 'c', true, now);
+  room = startYutGame(room, now);
+  assert.throws(() => setYutSeat(room, 'b', 1, false, now));
+});
+test('last throw persists after a move; visual power cannot alter the result', () => {
+  const original = game(), sticks = [true, false, false, false];
+  const soft = throwYut(original, 'a', sticks, now + 1, 0), strong = throwYut(original, 'a', sticks, now + 1, 1);
+  assert.deepEqual(soft.pendingThrow, strong.pendingThrow);
+  assert.equal(original.players[0].lastThrow, undefined);
+  assert.deepEqual(strong.players[0].lastThrow, { value: 1, label: '도', atMs: now + 1, power: 1 });
+  const moved = moveYut(strong, 'a', '1', 'outer', now + 2);
+  assert.deepEqual(moved.players[0].lastThrow, strong.players[0].lastThrow);
+  assert.throws(() => throwYut(original, 'a', sticks, now + 1, 2));
+  assert.throws(() => throwYut(original, 'a', sticks, now + 1, NaN));
+});
 test('fixed emotes are immutable and isolated from the game revision, deadline and event', () => {
   const original = game(4);
   let room = original;

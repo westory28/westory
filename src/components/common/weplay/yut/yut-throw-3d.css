@@ -12,6 +12,7 @@
 
 .yut-throw-3d.is-settled {
   opacity: 0;
+  transition-delay: 900ms;
 }
 
 .yut-throw-3d__canvas,
@@ -84,7 +85,7 @@
     transform: translateY(80%) rotate(-40deg) scale(0.8);
   }
   35% {
-    transform: translateY(-58%) rotate(510deg) scale(1.12);
+    transform: translateY(var(--throw-apex, -58%)) rotate(510deg) scale(1.12);
   }
   72% {
     transform: translateY(0) rotate(1068deg) scale(1);
@@ -101,7 +102,7 @@
     transform: translateY(90%) rotate(40deg) scale(0.8);
   }
   38% {
-    transform: translateY(-50%) rotate(-490deg) scale(1.12);
+    transform: translateY(var(--throw-apex, -50%)) rotate(-490deg) scale(1.12);
   }
   75% {
     transform: translateY(12px) rotate(-1070deg) scale(1);

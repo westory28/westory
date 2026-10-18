@@ -23,6 +23,11 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     return { year: data.year, semester: data.semester, id: `${data.year}-${data.semester}` };
   };
   const ref = (scope, collection, id) => db.doc(`years/${scope.year}/semesters/${scope.semester}/${collection}/${id}`);
+  const settingsFrom = (data) => {
+    const valid = !!data && typeof data.enabled === 'boolean' && Number.isSafeInteger(data.version) && data.version >= 0;
+    return { enabled: valid && data.enabled === true, version: valid ? data.version : 0,
+      ...(Number.isFinite(data?.updatedAtMs) && data.updatedAtMs >= 0 ? { updatedAtMs: data.updatedAtMs } : {}) };
+  };
   const readClass = async (reader, scope, classId) => {
     if (!identifier(classId)) fail('permission-denied', '현재 학급 정보를 확인해 주세요.');
     const classroom = (await reader.get(db.doc(`semester_classes/${classId}`))).data();
@@ -41,10 +46,13 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (profile.isDeleted || profile.deletedAt || profile.weplayDeletionPending || (Object.hasOwn(profile, 'registrationApprovalStatus') && profile.registrationApprovalStatus !== 'APPROVED')) fail('permission-denied', '이 계정으로 게임에 참가할 수 없습니다.');
     if (String(config.year) !== scope.year || String(config.semester) !== scope.semester || pointer.semesterId !== scope.id
       || manifest.status !== 'ACTIVE' || manifest.readOnly === true || !Number.isSafeInteger(manifest.revision) || manifest.revision < 1 || pointer.revision !== manifest.revision) fail('failed-precondition', '현재 운영 중인 학기에서 이용해 주세요.');
-    const manager = email === ADMIN_EMAIL || profile.role === 'teacher'
+    const canWrite = email === ADMIN_EMAIL || profile.role === 'teacher';
+    const manager = canWrite
       || (profile.role === 'staff' && profile.teacherPortalEnabled === true && Array.isArray(profile.staffPermissions) && profile.staffPermissions.includes('lesson_read'));
-    if (manager) return { uid, manager, name: '선생님', classId: '', enrollmentId: '', slotId: '' };
+    const settings = settingsFrom((await reader.get(ref(scope, 'weplay_games', 'joseon-yut'))).data());
+    if (manager) return { uid, manager, canWrite, settings, name: '선생님', classId: '', enrollmentId: '', slotId: '' };
     if (profile.role !== 'student') fail('permission-denied', '게임을 이용할 권한이 없습니다.');
+    if (!settings.enabled) fail('permission-denied', '지금은 윷놀이가 열려 있지 않습니다.');
     const slotId = `slot_${hash(`${scope.id}\n${uid}`).slice(0, 40)}`;
     const slot = (await reader.get(db.doc(`semester_enrollment_slots/${slotId}`))).data() || {};
     if (slot.studentUid !== uid || slot.semesterId !== scope.id || !identifier(slot.activeEnrollmentId) || (slot.status !== undefined && slot.status !== 'ACTIVE')) fail('permission-denied', '현재 학기의 수강 정보를 확인해 주세요.');
@@ -52,7 +60,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (enrollment.studentUid !== uid || enrollment.semesterId !== scope.id || enrollment.enrollmentStatus !== 'ACTIVE' || enrollment.readOnly === true || !identifier(enrollment.classId)) fail('permission-denied', '현재 학기의 수강 정보를 확인해 주세요.');
     const classroom = await readClass(reader, scope, enrollment.classId);
     const rawName = text(profile.name || profile.studentName, 20), number = text(enrollment.studentNumber || profile.studentNumber || profile.number, 3).replace(/[^0-9]/g, '');
-    return { uid, manager: false, classId: enrollment.classId, enrollmentId: slot.activeEnrollmentId, slotId, classroom,
+    return { uid, manager: false, settings, classId: enrollment.classId, enrollmentId: slot.activeEnrollmentId, slotId, classroom,
       name: `${number ? `${number}번 ` : ''}${rawName ? `${rawName[0]}${'○'.repeat(Math.min(3, Math.max(1, rawName.length - 1)))}` : '학생'}` };
   };
   const checkRoomAccess = (actor, room) => {
@@ -74,14 +82,71 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       // Cached teacher clients require a nonempty selection before creating a
       // room. This virtual option exposes no actual class directory and is
       // ignored by create; current clients no longer show a class selector.
-      return { room, classes: actor.manager ? [{ id: 'school', label: '전체 학생' }] : [],
+      return { room, enabled: actor.settings.enabled, classes: actor.manager ? [{ id: 'school', label: '전체 학생' }] : [],
         classId: actor.manager ? 'school' : '', serverNowMs: now() };
+    });
+  };
+  const getYutManagement = async (request) => {
+    await assertSession(request);
+    const scope = scopeFrom(request.data);
+    return db.runTransaction(async (transaction) => {
+      const actor = await authority(transaction, request, scope);
+      if (!actor.manager) fail('permission-denied', '게임 관리 권한이 필요합니다.');
+      const serverNowMs = now();
+      // Filter active status in the query, so newer completed rooms cannot hide
+      // an older live room. The dedicated composite index bounds this at 101.
+      const snapshot = await transaction.get(db.collection(`years/${scope.year}/semesters/${scope.semester}/yut_rooms`)
+        .where('status', 'in', ['waiting', 'playing'])
+        .where('expiresAtMs', '>', serverNowMs).orderBy('expiresAtMs', 'desc').limit(101));
+      const active = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }));
+      const cache = new Map();
+      const read = (path) => {
+        if (!cache.has(path)) cache.set(path, transaction.get(db.doc(path)).then((entry) => entry.data() || {}));
+        return cache.get(path);
+      };
+      const rooms = await Promise.all(active.slice(0, 100).map(async (room) => ({
+        id: room.id, code: room.code, status: room.status, revision: room.revision, hostUid: room.hostUid,
+        createdAtMs: room.createdAtMs, expiresAtMs: room.expiresAtMs, turnUid: room.turnUid,
+        players: await Promise.all(room.players.map(async (player) => {
+          const result = { uid: player.uid, name: player.name, role: player.role, classLabel: '', studentNumber: '', active: player.active };
+          const profile = await read(`users/${player.uid}`);
+          if (profile.isDeleted || profile.deletedAt || profile.weplayDeletionPending) return { ...result, name: '탈퇴한 참가자' };
+          if (profile.role === 'teacher' || profile.role === 'staff') return { ...result, name: text(profile.name || '선생님', 40) };
+          const enrollmentId = room.enrollmentIds?.[player.uid], slotId = room.enrollmentSlotIds?.[player.uid];
+          if (profile.role !== 'student' || !identifier(enrollmentId) || !identifier(slotId)) return result;
+          const [enrollment, slot] = await Promise.all([read(`semester_enrollments/${enrollmentId}`), read(`semester_enrollment_slots/${slotId}`)]);
+          if (enrollment.studentUid !== player.uid || enrollment.semesterId !== scope.id || enrollment.enrollmentStatus !== 'ACTIVE'
+            || enrollment.readOnly === true || !identifier(enrollment.classId) || slot.studentUid !== player.uid
+            || slot.semesterId !== scope.id || slot.activeEnrollmentId !== enrollmentId || (slot.status !== undefined && slot.status !== 'ACTIVE')) return result;
+          const classroom = await read(`semester_classes/${enrollment.classId}`);
+          if (classroom.semesterId !== scope.id || classroom.status !== 'ACTIVE' || classroom.readOnly === true) return result;
+          return { ...result, name: text(enrollment.studentName || profile.name || profile.studentName || player.name, 40),
+            studentNumber: text(enrollment.studentNumber, 10),
+            classLabel: text(classroom.displayName || `${classroom.grade || ''}학년 ${classroom.classNumber || ''}반`, 60) };
+        })),
+      })));
+      return { settings: actor.settings, rooms, truncated: active.length > 100, serverNowMs };
+    });
+  };
+  const saveYutSettings = async (request) => {
+    await assertSession(request);
+    const scope = scopeFrom(request.data), data = request.data;
+    if (typeof data.enabled !== 'boolean' || !Number.isSafeInteger(data.expectedVersion) || data.expectedVersion < 0
+      || Object.keys(data).some((field) => !['year', 'semester', '_session', 'enabled', 'expectedVersion'].includes(field))) fail('invalid-argument', '게임 공개 설정을 확인해 주세요.');
+    return db.runTransaction(async (transaction) => {
+      const actor = await authority(transaction, request, scope);
+      if (!actor.canWrite) fail('permission-denied', '교사만 게임 공개 설정을 바꿀 수 있습니다.');
+      if (data.expectedVersion !== actor.settings.version) fail('aborted', '다른 곳에서 공개 설정을 바꿨습니다. 새로 불러온 뒤 다시 저장해 주세요.');
+      if (actor.settings.version >= Number.MAX_SAFE_INTEGER) fail('failed-precondition', '공개 설정 버전을 확인해 주세요.');
+      const serverNowMs = now(), settings = { enabled: data.enabled, version: actor.settings.version + 1, updatedAtMs: serverNowMs };
+      transaction.set(ref(scope, 'weplay_games', 'joseon-yut'), { ...settings, updatedBy: actor.uid });
+      return { settings, serverNowMs };
     });
   };
   const commandYutRoom = async (request) => {
     await assertSession(request);
     const scope = scopeFrom(request.data), data = request.data, action = data.action;
-    if (!['create', 'join', 'ready', 'start', 'throw', 'move', 'skip', 'leave', 'close', 'emote'].includes(action)
+    if (!['create', 'join', 'ready', 'start', 'throw', 'move', 'skip', 'leave', 'close', 'emote', 'seat'].includes(action)
       || typeof data.requestKey !== 'string' || !/^[a-zA-Z0-9_-]{12,100}$/.test(data.requestKey)) fail('invalid-argument', '게임 요청을 다시 확인해 주세요.');
     if (!['create', 'join'].includes(action) && !identifier(data.roomId)) fail('invalid-argument', '방 정보를 새로 불러와 주세요.');
     if (!['create', 'join', 'emote'].includes(action) && (!Number.isSafeInteger(data.expectedRevision) || data.expectedRevision < 0)) fail('invalid-argument', '방 정보를 새로 불러와 주세요.');
@@ -91,11 +156,15 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     const code = typeof data.code === 'string' ? data.code.trim().toUpperCase() : '';
     if (action === 'join' && !/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/.test(code)) fail('invalid-argument', '참가 코드 6자리를 입력해 주세요.');
     if (action === 'ready' && typeof data.ready !== 'boolean') fail('invalid-argument', '준비 상태를 확인해 주세요.');
+    if (action === 'seat' && (!Number.isInteger(data.seat) || data.seat < 0 || data.seat > 3 || typeof data.blocked !== 'boolean')) fail('invalid-argument', '변경할 자리를 확인해 주세요.');
+    if (action === 'throw' && data.power !== undefined && (!Number.isFinite(data.power) || data.power < 0 || data.power > 1)) fail('invalid-argument', '던지는 세기를 확인해 주세요.');
     if (action === 'move' && (!['1', '2'].includes(data.pieceId) || !['outer', 'a', 'b'].includes(data.route))) fail('invalid-argument', '이동할 말과 길을 선택해 주세요.');
     // Preserve existing command fingerprints across deployment, including a
     // retry whose first response was lost before this version was deployed.
     const fingerprintFields = [action, data.roomId || '', action === 'emote' ? null : data.expectedRevision ?? null, code, data.classId || '', data.ready ?? null, data.pieceId || '', data.route || ''];
     if (action === 'emote') fingerprintFields.push(data.kind);
+    if (action === 'seat') fingerprintFields.push(data.seat, data.blocked);
+    if (action === 'throw' && data.power !== undefined) fingerprintFields.push('power', data.power);
     const fingerprint = hash(JSON.stringify(fingerprintFields));
     const generatedCode = Array.from({ length: 6 }, () => alphabet[random(alphabet.length)]).join('');
     // Draw once before transaction retries; a transaction retry cannot reroll.
@@ -150,10 +219,10 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         room = (await transaction.get(ref(scope, 'yut_rooms', roomId))).data();
         checkRoomAccess(actor, room);
         const participant = room.participantUids.includes(actor.uid);
-        if (!participant && !(action === 'close' && actor.manager)) fail('permission-denied', '참가 중인 방에서만 이용할 수 있습니다.');
+        if (!participant && !(action === 'close' && actor.canWrite)) fail('permission-denied', '참가 중인 방에서만 이용할 수 있습니다.');
         if (action !== 'emote' && room.revision !== data.expectedRevision) fail('aborted', '다른 참가자의 동작이 먼저 반영되었습니다. 최신 화면에서 다시 눌러 주세요.');
         if (action === 'emote' && Number(player.lastEmoteAtMs || 0) + core.YUT_EMOTE_COOLDOWN_MS > receivedAt) fail('resource-exhausted', '감정표현은 5초마다 보낼 수 있습니다.');
-        if (['start', 'close'].includes(action) && room.hostUid !== actor.uid && !(action === 'close' && actor.manager)) fail('permission-denied', '방장만 시작하거나 방을 닫을 수 있습니다.');
+        if (['start', 'close'].includes(action) && room.hostUid !== actor.uid && !(action === 'close' && actor.canWrite)) fail('permission-denied', '방장만 시작하거나 방을 닫을 수 있습니다.');
         if (action === 'start') {
           // Every participant still needs an active enrollment in this semester,
           // but each may belong to a different class.
@@ -180,8 +249,9 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         }
         try {
           if (action === 'ready') room = core.readyYutPlayer(room, actor.uid, data.ready, receivedAt);
+          if (action === 'seat') room = core.setYutSeat(room, actor.uid, data.seat, data.blocked, receivedAt);
           if (action === 'start') room = core.startYutGame(room, receivedAt);
-          if (action === 'throw') room = core.throwYut(room, actor.uid, sticks, receivedAt);
+          if (action === 'throw') room = core.throwYut(room, actor.uid, sticks, receivedAt, data.power);
           if (action === 'move') room = core.moveYut(room, actor.uid, data.pieceId, data.route, receivedAt);
           if (action === 'skip') room = core.skipYutTurn(room, receivedAt);
           if (action === 'leave') room = core.leaveYutRoom(room, actor.uid, receivedAt);
@@ -201,7 +271,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       return { room: returnedRoomId ? publicRoom(room) : null, serverNowMs: receivedAt };
     });
   };
-  return { getYutLobby, commandYutRoom };
+  return { getYutLobby, commandYutRoom, getYutManagement, saveYutSettings };
 }
 
 module.exports = { createYutHandlers };

@@ -7,6 +7,7 @@ import {
   skipYutTurn,
   startYutGame,
   throwYut,
+  setYutSeat,
   type YutRoom,
   type YutMove,
 } from "../../functions/yutCore.mjs";
@@ -18,11 +19,17 @@ type BotStrategy = "capture" | "race" | "stack";
 type LocalRoom = YutRoom & { localBotStrategies?: Record<string, BotStrategy> };
 
 export function createYutPreview(
-  options: { mode?: YutLocalMode; random?: () => number; nowMs?: number } = {},
+  options: {
+    mode?: YutLocalMode;
+    playerCount?: 2 | 3 | 4;
+    random?: () => number;
+    nowMs?: number;
+  } = {},
 ): YutRoom {
   const random = options.random || Math.random;
   const nowMs = options.nowMs ?? Date.now();
   const single = options.mode === "single";
+  const playerCount = options.playerCount ?? 4;
   let room: LocalRoom = createYutRoom({
     id: `local-${single ? "single" : "preview"}-${nowMs}-${Math.floor(random() * 1e6)}`,
     code: single ? "싱글" : "체험",
@@ -40,18 +47,23 @@ export function createYutPreview(
     ];
   }
   room.localBotStrategies = {};
-  ["우가", "저가", "구가"].forEach((name, index) => {
+  ["우가", "저가", "구가"].slice(0, playerCount - 1).forEach((name, index) => {
     const uid = `yut-preview-bot-${index}`;
     room = addYutPlayer(room, { uid, name }, nowMs);
     room = readyYutPlayer(room, uid, true, nowMs);
     room.localBotStrategies![uid] = strategies[index];
   });
+  for (let seat = playerCount; seat < 4; seat++)
+    room = setYutSeat(room, YUT_PREVIEW_UID, seat, true, nowMs);
   return single ? startYutGame(room, nowMs) : room;
 }
 
 export function previewYutCommand(
   room: YutRoom,
-  data: Pick<YutCommand, "action" | "pieceId" | "route">,
+  data: Pick<
+    YutCommand,
+    "action" | "pieceId" | "route" | "power" | "seat" | "blocked"
+  >,
   uid = YUT_PREVIEW_UID,
   random = Math.random,
   nowMs = Date.now(),
@@ -63,10 +75,17 @@ export function previewYutCommand(
       uid,
       Array.from({ length: 4 }, () => random() < 0.5),
       nowMs,
+      data.power ?? 0.65,
     );
   if (data.action === "move" && data.pieceId && data.route)
     return moveYut(room, uid, data.pieceId, data.route, nowMs);
   if (data.action === "skip") return skipYutTurn(room, nowMs);
+  if (
+    data.action === "seat" &&
+    data.seat !== undefined &&
+    data.blocked !== undefined
+  )
+    return setYutSeat(room, uid, data.seat, data.blocked, nowMs);
   throw new Error("현재 화면에서 사용할 수 없는 동작입니다.");
 }
 

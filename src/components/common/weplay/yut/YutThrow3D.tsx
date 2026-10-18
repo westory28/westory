@@ -9,14 +9,15 @@ export default function YutThrow3D({
   throwKey,
   sticks,
   rolling,
+  power = 0.65,
   onComplete,
 }: YutThrow3DProps) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<YutThrowScene | null>(null);
   const callback = useRef(onComplete);
   callback.current = onComplete;
-  const state = useRef({ throwKey, sticks, rolling });
-  state.current = { throwKey, sticks, rolling };
+  const state = useRef({ throwKey, sticks, rolling, power });
+  state.current = { throwKey, sticks, rolling, power };
   const seen = useRef(new Set<string>());
   const [fallback, setFallback] = useState(false);
   const [fallbackKey, setFallbackKey] = useState<string | null>(null);
@@ -58,8 +59,8 @@ export default function YutThrow3D({
   useEffect(() => {
     if (rolling || (throwKey && !seen.current.has(throwKey))) setSettled(false);
     else if (throwKey && seen.current.has(throwKey)) setSettled(true);
-    scene.current?.update({ throwKey, sticks, rolling });
-  }, [throwKey, sticks, rolling, fallback]);
+    scene.current?.update({ throwKey, sticks, rolling, power });
+  }, [throwKey, sticks, rolling, fallback, power]);
 
   useEffect(() => {
     if (
@@ -109,6 +110,9 @@ export default function YutThrow3D({
       className={`yut-throw-3d ${settled ? "is-settled" : "is-rolling"}`}
       aria-hidden="true"
       data-renderer={fallback ? "fallback" : "webgl"}
+      data-power={
+        Number.isFinite(power) ? Math.max(0, Math.min(1, power)) : 0.65
+      }
     >
       <div ref={host} className="yut-throw-3d__canvas" />
       {fallback && (
@@ -124,6 +128,7 @@ export default function YutThrow3D({
               style={
                 {
                   "--throw-play-state": hidden ? "paused" : "running",
+                  "--throw-apex": `${-35 - (Number.isFinite(power) ? Math.max(0, Math.min(1, power)) : 0.65) * 40}%`,
                 } as CSSProperties
               }
             >
