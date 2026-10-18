@@ -123,18 +123,48 @@ try {
     const decoder = new AudioContext();
     try {
       const clip = await decoder.decodeAudioData(buffer);
-      return { duration: clip.duration, sampleRate: clip.sampleRate, channels: clip.numberOfChannels };
+      const samples = clip.getChannelData(0);
+      let sum = 0, samplePeak = 0, clippedSamples = 0;
+      for (const sample of samples) {
+        sum += sample * sample;
+        samplePeak = Math.max(samplePeak, Math.abs(sample));
+        if (Math.abs(sample) >= .999) clippedSamples++;
+      }
+      const windowRms = seconds => {
+        const size = Math.round(clip.sampleRate * seconds), values = [];
+        for (let start = 0; start + size <= samples.length; start += size) {
+          let power = 0;
+          for (let index = start; index < start + size; index++) power += samples[index] ** 2;
+          values.push(Math.sqrt(power / size));
+        }
+        return values;
+      };
+      return {
+        duration: clip.duration, sampleRate: clip.sampleRate, channels: clip.numberOfChannels,
+        samplePeak, rms: Math.sqrt(sum / samples.length), clippedSamples,
+        loopStep: Math.abs(samples[0] - samples[samples.length - 1]),
+        minimumQuarterSecondRms: Math.min(...windowRms(.25)),
+        fourBarRms: windowRms(7.5),
+      };
     } finally { await decoder.close(); }
   }, musicUrl);
   assert.ok(Math.abs(decoded.duration - 45) < 0.02, `Expected the actual 45-second music clip, received ${decoded.duration}s.`);
+  assert.equal(decoded.channels, 1, 'The score retains its lightweight mono delivery format.');
+  assert.equal(decoded.clippedSamples, 0, 'The rendered battle score must not clip.');
+  assert.ok(decoded.samplePeak <= .8 && decoded.samplePeak >= .55, 'The score keeps headroom for layered combat effects.');
+  assert.ok(decoded.rms > .12 && decoded.rms < .32, 'The score has useful level without flattening its dynamics.');
+  assert.ok(decoded.loopStep < .04, `The loop boundary must not introduce a large sample jump: ${decoded.loopStep}`);
+  assert.ok(decoded.minimumQuarterSecondRms > .01, 'No silence or fade-out interrupts the battle loop.');
+  assert.ok(Math.max(...decoded.fourBarRms) / Math.min(...decoded.fourBarRms) > 1.35, 'The restrained phrase and full ensemble retain audible dynamic contrast.');
   checks.push({ name: 'actual WAV decoded', ...decoded });
 
   await page.getByRole('button', { name: '게임 시작', exact: true }).click();
   await waitPlaying(page);
   assert.equal(await button(page).getAttribute('aria-label'), '소리 끄기');
   assert.equal(await button(page).getAttribute('aria-pressed'), 'true');
-  const active = await page.evaluate(() => { const a = window.musicQa.players.at(-1); return { duration: a.duration, volume: a.volume, loop: a.loop, error: a.error?.message || null }; });
+  const active = await page.evaluate(() => { const a = window.musicQa.players.at(-1); return { duration: a.duration, volume: a.volume, loop: a.loop, source: new URL(a.src).pathname + new URL(a.src).search, error: a.error?.message || null }; });
   assert.ok(Math.abs(active.duration - 45) < 0.02);
+  assert.equal(active.source, `${musicUrl}?v=naval-war-2`, 'The updated naval score bypasses the cached previous arrangement.');
   assert.equal(active.loop, true);
   assert.ok(Math.abs(active.volume - 0.28) < 0.001);
   assert.equal(active.error, null);

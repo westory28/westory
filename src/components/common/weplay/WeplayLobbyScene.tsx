@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 
-const LOBBY_IMAGE = `${import.meta.env.BASE_URL}assets/weplay/naval/lobby-yi-sunsin.webp`;
+const LOBBY_IMAGE = `${import.meta.env.BASE_URL}assets/weplay/naval/lobby-yi-sunsin.webp?v=sujagi-2`;
 const SCENE_WIDTH = 1672;
 const SCENE_HEIGHT = 941;
 const PLUME_PATCH = { x: 440, y: 0, width: 780, height: 450 };
@@ -13,7 +13,11 @@ const PLUME_FIELD = `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="${SCENE_WIDTH}" height="${SCENE_HEIGHT}" viewBox="0 0 ${SCENE_WIDTH} ${SCENE_HEIGHT}"><defs><linearGradient id="root" x1="${PLUME_ROOT.x}" y1="${PLUME_ROOT.y}" x2="${PLUME_TIP.x}" y2="${PLUME_TIP.y}" gradientUnits="userSpaceOnUse"><stop stop-color="white" stop-opacity="0"/><stop offset=".16" stop-color="white" stop-opacity=".2"/><stop offset=".5" stop-color="white"/><stop offset="1" stop-color="white"/></linearGradient><filter id="soft"><feGaussianBlur stdDeviation="10"/></filter></defs><path d="${PLUME_PATH}" fill="url(#root)" filter="url(#soft)"/></svg>`,
 )}`;
 
-export default function WeplayLobbyScene() {
+export default function WeplayLobbyScene({
+  paused = false,
+}: {
+  paused?: boolean;
+}) {
   const filterId = `weplay-plume-${useId().replace(/:/g, "")}`;
   const sceneRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<SVGSVGElement>(null);
@@ -27,8 +31,10 @@ export default function WeplayLobbyScene() {
     const overlay = overlayRef.current;
     if (!scene || !overlay) return;
 
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let visible = false;
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    );
+    let visible = typeof IntersectionObserver === "undefined";
     let frame: number | null = null;
     let lastTick: number | null = null;
     let lastPaint = 0;
@@ -54,7 +60,11 @@ export default function WeplayLobbyScene() {
         );
         displacementRef.current?.setAttribute(
           "scale",
-          String(80 + Math.sin(phase + 0.8) * 8),
+          String(
+            reducedMotion?.matches
+              ? 50 + Math.sin(phase + 0.8) * 5
+              : 80 + Math.sin(phase + 0.8) * 8,
+          ),
         );
         lastPaint = now;
       }
@@ -62,12 +72,13 @@ export default function WeplayLobbyScene() {
     };
 
     const syncMotion = () => {
-      const running = visible && !document.hidden && !reducedMotion.matches;
-      overlay.dataset.motion = reducedMotion.matches
-        ? "reduced"
-        : running
-          ? "running"
-          : "paused";
+      // The requested plume remains animated with reduced motion, at a smaller
+      // displacement. The explicit control can pause it in either preference.
+      const running = visible && !document.hidden && !paused;
+      overlay.dataset.motion = running ? "running" : "paused";
+      overlay.dataset.motionIntensity = reducedMotion?.matches
+        ? "gentle"
+        : "full";
       if (running && frame === null) {
         lastTick = null;
         frame = window.requestAnimationFrame(tick);
@@ -76,27 +87,27 @@ export default function WeplayLobbyScene() {
         frame = null;
         lastTick = null;
       }
-      if (reducedMotion.matches) {
-        displacementRef.current?.setAttribute("scale", "0");
-      }
     };
 
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      syncMotion();
-    });
-    observer.observe(scene);
+    const observer =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(([entry]) => {
+            visible = entry.isIntersecting;
+            syncMotion();
+          });
+    observer?.observe(scene);
     document.addEventListener("visibilitychange", syncMotion);
-    reducedMotion.addEventListener("change", syncMotion);
+    reducedMotion?.addEventListener("change", syncMotion);
     syncMotion();
 
     return () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
-      observer.disconnect();
+      observer?.disconnect();
       document.removeEventListener("visibilitychange", syncMotion);
-      reducedMotion.removeEventListener("change", syncMotion);
+      reducedMotion?.removeEventListener("change", syncMotion);
     };
-  }, []);
+  }, [paused]);
 
   return (
     <div ref={sceneRef} className="weplay-launch-art">

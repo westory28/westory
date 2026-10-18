@@ -15,6 +15,7 @@ try { playwright = require('playwright'); }
 catch { playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')); }
 const core = require(path.join(root, 'functions/weplayCore.js'));
 const motionOnly = process.argv.includes('--motion-only');
+const loadingOnly = process.argv.includes('--loading-only');
 const evidence = process.env.WEPLAY_QA_EVIDENCE_DIR
   ? path.resolve(process.env.WEPLAY_QA_EVIDENCE_DIR)
   : path.join(root, '.superloopy/sessions/weplay-lobby-exit-20260929/evidence');
@@ -41,7 +42,7 @@ const readonly=view==='readonly';
 export const userData={uid:'naval-qa',role:view==='lobby'||readonly?'student':'teacher',teacherPortalEnabled:true,staffPermissions:readonly?['lesson_read']:[],email:'qa@example.invalid',name:'검증 교사',weplayGuideCompleted:true};
 export const auth={currentUser:{uid:'naval-qa',email:'qa@example.invalid'}};
 export const useAuth=()=>({config,currentUser:auth.currentUser,userData,menuConfig});
-export const qa=window.navalQa={calls:[],writes:[],answers:[],completions:[],finishAttempts:[],settings:${JSON.stringify(core.DEFAULT_GAME_SETTINGS)},lessons:${JSON.stringify(lessons)},policy:{...${JSON.stringify(core.DEFAULT_POLICY)},challengeCost:7},balance:params.get('poor')==='1'?0:34,failFinish:0,fail:{},hold:{}};
+export const qa=window.navalQa={calls:[],writes:[],answers:[],completions:[],finishAttempts:[],settings:${JSON.stringify(core.DEFAULT_GAME_SETTINGS)},lessons:${JSON.stringify(lessons)},policy:{...${JSON.stringify(core.DEFAULT_POLICY)},challengeCost:7},balance:params.get('poor')==='1'?0:34,failFinish:0,fail:{},hold:{getWeplayManagement:params.has('holdManagement')}};
 qa.ranking=params.get('ranking')==='full'?${JSON.stringify(rankingFixtures)}:params.get('ranking')==='single'?${JSON.stringify(rankingFixtures.slice(0, 1))}:[];
 qa.records=params.get('records')==='full'?${JSON.stringify(recordFixtures)}:[];
 qa.period={id:'qa-week',startsAtMs:1791126000000,endsAtMs:1791730800000,rankingPeriod:'weekly',rankingRewards:{mild:{first:10,second:5,third:3},medium:{first:20,second:10,third:6},spicy:{first:30,second:15,third:9}},status:'open'};
@@ -99,7 +100,7 @@ function Fixture({session}){
 const params=new URLSearchParams(location.search);
 const[result,setResult]=useState(view==='result'?{sessionId:'result-fixture',difficulty:session.difficulty,mode:params.get('mode')==='challenge'?'challenge':'practice',correctCount:37,totalWords:60,score:12500,reward:5,cost:2,netWis:3,balance:103,finishedAtMs:Date.now(),missedWords:session.words.filter(word=>word.kind==='normal').slice(0,3),battleVersion:1,battle:{...simulateWeplayBattle(session,0),outcome:params.get('outcome')==='defeat'?'defeat':'victory',sunkShips:3,cannonShots:18,specialCount:2}}:null);
 const[replaying,setReplaying]=useState(false);
-return <MemoryRouter initialEntries={[(view==='lobby'?'/student/weplay':'/teacher/weplay')+(params.has('catalog')?'':'?game=history-rain')]}><AppToastProvider><AppDialogProvider>{view==='lobby'?<StudentWeplay/>:!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page'>{!result&&<Game session={session} config={config} preview transport={qa.transport} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
+return <MemoryRouter initialEntries={[(view==='lobby'?'/student/weplay':'/teacher/weplay')+(params.has('catalog')?'':'?game=history-rain'+(params.has('previewRoute')?'&view=preview':''))]}><AppToastProvider><AppDialogProvider>{view==='lobby'?<StudentWeplay/>:!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page'>{!result&&<Game session={session} config={config} preview transport={qa.transport} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
 function render(session){createRoot(document.getElementById('root')).render(<Fixture session={session}/>);}
 setup().catch(error=>{qa.error=error.message;throw error;});
 `;
@@ -201,6 +202,9 @@ async function measureLobbyScene(page) {
     const overlaps = (a, b) => Math.min(a.right, b.right) > Math.max(a.left, b.left) && Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top);
     // Landmarks come from the generated 1672x941 artwork, independently of the CSS layout.
     const admiralHead = project(260, 180, 580, 540);
+    const admiralCrest = project(400, 0, 480, 180);
+    const motionControl = rect(element.querySelector('.weplay-lobby-motion'));
+    const recordControls = [...element.querySelectorAll('.weplay-lobby-actions button')].map(rect);
     const enemySail = project(760, 460, 870, 570);
     const visibleArt = { left: Math.max(stage.left, art.left), right: Math.min(stage.right, art.right), top: Math.max(stage.top, art.top), bottom: Math.min(stage.bottom, art.bottom) };
     const visibleSail = { left: Math.max(enemySail.left, visibleArt.left), right: Math.min(enemySail.right, visibleArt.right), top: Math.max(enemySail.top, visibleArt.top), bottom: Math.min(enemySail.bottom, visibleArt.bottom) };
@@ -209,13 +213,15 @@ async function measureLobbyScene(page) {
     const plume = element.querySelector('.weplay-lobby-plume');
     const controls = [...element.querySelectorAll('button,select')].map(control => ({ label: control.textContent || control.getAttribute('aria-label'), ...rect(control) }));
     return {
-      stage, art, menu, admiralHead, enemySail,
+      stage, art, menu, admiralHead, admiralCrest, motionControl, enemySail,
       imageLoaded: raster.complete && raster.naturalWidth === 1672 && raster.naturalHeight === 941 && raster.src.includes('lobby-yi-sunsin.webp'),
       imageFit: rasterStyle.objectFit,
       imageAnimation: rasterStyle.animationName,
       menuInside: inside(menu, stage),
       headVisible: inside(admiralHead, visibleArt),
       headClearOfMenu: !overlaps(admiralHead, menu),
+      motionClearOfHead: !overlaps(motionControl, admiralHead) && !overlaps(motionControl, admiralCrest),
+      motionClearOfRecords: recordControls.every(control => !overlaps(motionControl, control)),
       enemySailVisible: (area(visibleSail) - area(obscuredSail)) / area(enemySail) >= 0.5,
       controls,
       controlsInside: controls.every(control => inside(control, stage)),
@@ -231,40 +237,130 @@ function assertLobbyScene(geometry, label) {
   assert.equal(geometry.imageAnimation, 'none', `${label}: the full raster remains still while only the plume moves`);
   assert.ok(geometry.menuInside && geometry.controlsInside, `${label}: in-game menu and controls stay inside the stage ${JSON.stringify(geometry)}`);
   assert.ok(geometry.headVisible && geometry.headClearOfMenu, `${label}: admiral's rear-view helmet remains visible and clear of the menu ${JSON.stringify(geometry)}`);
+  assert.ok(geometry.motionClearOfHead && geometry.motionClearOfRecords, `${label}: plume control does not cover the helmet crest or record controls ${JSON.stringify(geometry)}`);
   assert.ok(geometry.enemySailVisible, `${label}: enemy fleet remains visible beside the admiral ${JSON.stringify(geometry)}`);
   assert.ok(geometry.textFits && geometry.controls.every(control => control.width >= 44 && control.height >= 44), `${label}: labels fit and controls preserve 44px targets ${JSON.stringify(geometry.controls)}`);
 }
 async function verifyLobbyMotion() {
-  const animatedLobby = await open('lobby', 1280);
-  await animatedLobby.locator('.weplay-lobby-plume[data-motion="running"]').waitFor();
-  const geometry = await measureLobbyScene(animatedLobby);
   const plumeScale = page => page.locator('.weplay-lobby-plume feDisplacementMap').getAttribute('scale');
-  const motionDirectory = path.join(evidence, 'motion');
-  await fs.mkdir(motionDirectory, { recursive: true });
-  const frames = [];
-  for (let index = 0; index < 24; index++) {
-    await animatedLobby.clock.runFor(160);
-    const name = `plume-${String(index).padStart(2, '0')}.png`;
-    await animatedLobby.locator('.weplay-launch-art').screenshot({ path: path.join(motionDirectory, name) });
-    frames.push({ name, scale: await plumeScale(animatedLobby) });
+  async function captureWind(page, name, intensity) {
+    await page.locator(`.weplay-lobby-plume[data-motion="running"][data-motion-intensity="${intensity}"]`).waitFor();
+    const geometry = await measureLobbyScene(page);
+    assertLobbyScene(geometry, `${name} motion lobby`);
+    const motionDirectory = path.join(evidence, 'motion', name);
+    await fs.mkdir(motionDirectory, { recursive: true });
+    const frames = [];
+    for (let index = 0; index < 24; index++) {
+      await page.clock.runFor(160);
+      const file = `plume-${String(index).padStart(2, '0')}.png`;
+      await page.locator('.weplay-launch-art').screenshot({ path: path.join(motionDirectory, file) });
+      frames.push({ name: file, scale: await plumeScale(page) });
+    }
+    assert.ok(new Set(frames.map(frame => frame.scale)).size > 1, `${name}: requested plume animation remains visible`);
+    const range = intensity === 'gentle' ? [45, 55] : [72, 88];
+    assert.ok(frames.every(frame => Number(frame.scale) >= range[0] && Number(frame.scale) <= range[1]), `${name}: bounded ${intensity} displacement`);
+    await fs.writeFile(path.join(motionDirectory, 'frames.json'), JSON.stringify({ intervalMs: 160, geometry, frames }, null, 2));
+    return motionDirectory;
   }
-  assert.ok(new Set(frames.map(frame => frame.scale)).size > 1, 'Wind changes the plume displacement without moving the scene');
-  await fs.writeFile(path.join(motionDirectory, 'frames.json'), JSON.stringify({ intervalMs: 160, geometry, frames }, null, 2));
+  async function verifyPauseAndResume(page, directory) {
+    await page.getByRole('button', { name: '깃 움직임 멈추기', exact: true }).click();
+    await page.locator('.weplay-lobby-plume[data-motion="paused"]').waitFor();
+    await page.getByRole('button', { name: '깃 움직임 켜기', exact: true }).waitFor();
+    await page.mouse.move(0, 0);
+    await page.clock.runFor(350);
+    const pausedScale = await plumeScale(page);
+    await page.locator('.weplay-launch-art').screenshot({ path: path.join(directory, 'paused-00.png') });
+    await page.clock.runFor(700);
+    assert.equal(await plumeScale(page), pausedScale, 'Explicit pause stops the plume in either OS preference');
+    await page.locator('.weplay-launch-art').screenshot({ path: path.join(directory, 'paused-01.png') });
+    await page.getByRole('button', { name: '깃 움직임 켜기', exact: true }).press('Enter');
+    await page.locator('.weplay-lobby-plume[data-motion="running"]').waitFor();
+    await page.clock.runFor(350);
+    const resumedScale = await plumeScale(page);
+    await page.clock.runFor(350);
+    assert.notEqual(await plumeScale(page), resumedScale, 'Keyboard resume restarts the plume after the visibility observer reconnects');
+  }
+  const animatedLobby = await open('lobby', 1280);
+  const normalDirectory = await captureWind(animatedLobby, 'normal-1280', 'full');
+  await verifyPauseAndResume(animatedLobby, normalDirectory);
   await animatedLobby.emulateMedia({ reducedMotion: 'reduce' });
-  await animatedLobby.locator('.weplay-lobby-plume[data-motion="reduced"]').waitFor({ state: 'attached' });
-  const reducedScale = await plumeScale(animatedLobby);
+  await animatedLobby.locator('.weplay-lobby-plume[data-motion="running"][data-motion-intensity="gentle"]').waitFor();
   await animatedLobby.clock.runFor(350);
-  assert.equal(await plumeScale(animatedLobby), reducedScale, 'Changing the OS preference stops the plume motion');
+  const gentleScale = await plumeScale(animatedLobby);
+  await animatedLobby.clock.runFor(350);
+  assert.notEqual(await plumeScale(animatedLobby), gentleScale, 'Changing the OS preference keeps the requested plume flutter active');
+  assert.ok(Number(await plumeScale(animatedLobby)) >= 45 && Number(await plumeScale(animatedLobby)) <= 55, 'Live reduced motion uses the smaller displacement');
   await animatedLobby.close();
   const reducedLobby = await open('lobby', 390, '', { reducedMotion: 'reduce' });
-  await reducedLobby.locator('.weplay-lobby-plume[data-motion="reduced"]').waitFor({ state: 'attached' });
-  assertLobbyScene(await measureLobbyScene(reducedLobby), '390px reduced-motion lobby');
-  const stillScale = await plumeScale(reducedLobby);
-  await reducedLobby.clock.runFor(350);
-  assert.equal(await plumeScale(reducedLobby), stillScale, 'Reduced motion is respected on the first lobby render');
+  const reducedDirectory = await captureWind(reducedLobby, 'reduced-390', 'gentle');
+  await verifyPauseAndResume(reducedLobby, reducedDirectory);
   await capture(reducedLobby, 'lobby-reduced-motion-390');
   await reducedLobby.close();
-  checks.push('Plume displacement changes in the normal lobby; 24 rendered frames capture one wind cycle; initial and live OS reduced-motion preferences stop it while the full scene and in-game menu stay still');
+  checks.push('Normal and OS reduced-motion lobbies both animate the requested local plume; each captures 24 rendered frames, reduced mode uses gentler displacement, and live OS changes keep flutter running');
+  checks.push('An accessible 44px control explicitly pauses the plume in either OS preference, two paused frames retain the same displacement, and keyboard resume restarts motion');
+}
+async function verifyLoadingLifecycle() {
+  const initial = await open('management', 390, 'previewRoute=1&holdManagement=1');
+  await initial.locator('.weplay-game-loading.is-naval').waitFor();
+  await initial.getByRole('status').filter({ hasText: '게임을 불러오고 있습니다' }).waitFor();
+  assert.equal(await initial.locator('.weplay-game-frame').getAttribute('aria-busy'), 'true');
+  await capture(initial, 'loading-teacher-initial-390');
+  await initial.evaluate(() => window.navalQa.releaseCall());
+  await initial.locator('.weplay-studio-intro').waitFor();
+  await skipStudioIntro(initial);
+  await initial.locator('.weplay-start').waitFor();
+  assert.equal(await initial.evaluate(() => window.navalQa.calls.some(call => /^(start|preview)WeplayGame$/.test(call.name))), false, 'Initial teacher loading only reads settings and does not start a game');
+  await initial.close();
+  for (const width of [390, 1280]) {
+    for (const view of ['lobby', 'management']) {
+      const page = await open(view, width);
+      if (view === 'management') {
+        await page.getByRole('button', { name: '체험하기', exact: true }).click();
+        await skipStudioIntro(page);
+      }
+      const endpoint = view === 'lobby' ? 'startWeplayGame' : 'previewWeplayGame';
+      const start = page.locator('.weplay-start');
+      await start.waitFor();
+      await page.evaluate(name => { window.navalQa.fail[name] = 1; }, endpoint);
+      await start.click();
+      await page.locator(view === 'lobby' ? '.weplay-error[role="alert"]' : '.teacher-weplay-error[role="alert"]').waitFor();
+      await page.locator('.weplay-game-loading').waitFor({ state: 'hidden' });
+      assert.equal(await start.isEnabled(), true, `${view}: failed start unlocks retry`);
+      await page.evaluate(name => { window.navalQa.hold[name] = true; }, endpoint);
+      await start.click();
+      const overlay = page.locator('.weplay-game-loading.is-naval');
+      await overlay.waitFor();
+      const frame = page.locator('.weplay-game-frame:has(.weplay-game-loading)');
+      assert.equal(await frame.getAttribute('aria-busy'), 'true');
+      assert.equal(await frame.locator('.weplay-game-frame__body').getAttribute('inert'), '');
+      assert.equal(await start.isDisabled(), true);
+      assert.equal(await page.locator('.weplay-mode-choice button').evaluateAll(buttons => buttons.every(button => button.disabled)), true);
+      assert.equal(await overlay.getByRole('status').evaluate(element => element === document.activeElement), true, `${view}: loading status receives focus`);
+      const bounds = await overlay.boundingBox(), stage = await frame.boundingBox();
+      assert.ok(bounds.x >= stage.x - 1 && bounds.y >= stage.y - 1 && bounds.x + bounds.width <= stage.x + stage.width + 1 && bounds.y + bounds.height <= stage.y + stage.height + 1, `${view}: loading stays within the game stage`);
+      await overlay.locator('.weplay-game-loading__ship').waitFor();
+      const startBounds = await start.boundingBox();
+      await page.mouse.click(startBounds.x + startBounds.width / 2, startBounds.y + startBounds.height / 2);
+      await page.keyboard.press('Enter');
+      assert.equal(await page.evaluate(name => window.navalQa.calls.filter(call => call.name === name).length, endpoint), 2, `${view}: waiting overlay prevents a duplicate retry`);
+      await capture(page, `loading-${view}-${width}`);
+      await page.evaluate(() => window.navalQa.releaseCall());
+      await page.locator('.naval-game').waitFor();
+      await overlay.waitFor({ state: 'hidden' });
+      assert.equal(await page.locator('.weplay-game-frame').getAttribute('aria-busy'), 'false');
+      assert.equal(await page.locator('.weplay-game-frame__body').getAttribute('inert'), null);
+      const calls = await page.evaluate(() => window.navalQa.calls);
+      if (view === 'lobby') {
+        const starts = calls.filter(call => call.name === endpoint);
+        assert.equal(starts[0].data.requestKey, starts[1].data.requestKey, 'Retry preserves the existing student request key');
+      } else {
+        assert.equal(calls.some(call => /^(start|submit|finish)Weplay/.test(call.name)), false, 'Teacher loading never invokes student gameplay');
+      }
+      assert.equal(await page.evaluate(() => window.navalQa.writes.length), 0);
+      await page.close();
+    }
+  }
+  checks.push('Teacher preview initial loading uses the naval stage and proceeds to the lobby without starting a game; 390/1280px student/teacher start failures unlock retry, naval loading remains stage-contained with status focus and inert controls, duplicate gestures issue no extra call, and success restores the frame without settings writes');
 }
 async function answerVisible(page, special = false) {
   const prompt = page.locator(special ? '.naval-special > strong' : '.naval-word > strong').first();
@@ -342,6 +438,7 @@ async function exitDialog(page) {
 let failure = null;
 try {
   if (motionOnly) await verifyLobbyMotion();
+  else if (loadingOnly) await verifyLoadingLifecycle();
   else {
   if (process.env.WEPLAY_QA_EXIT_ONLY !== '1') {
   for (const width of [390, 768, 1280]) {
@@ -593,7 +690,7 @@ try {
   assert.equal(await poor.locator('.weplay-start').isDisabled(), true); await poor.locator('.weplay-start').hover();
   assert.equal(await poor.locator('.weplay-start').evaluate(element => getComputedStyle(element, '::before').animationName), 'none');
   await capture(poor, 'lobby-disabled-challenge-390'); await poor.close();
-  checks.push('Start shimmer works on hover and keyboard focus; pending/insufficient-balance buttons do not animate or double-start; OS reduced motion removes shimmer and movement');
+  checks.push('Start shimmer works on hover and keyboard focus; pending/insufficient-balance buttons do not animate or double-start; OS reduced motion removes button shimmer and elevation');
 
   }
   const practice = await open('lobby', 390); await startStudent(practice);

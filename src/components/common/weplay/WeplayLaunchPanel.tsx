@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   WEPLAY_DIFFICULTY_LABELS,
   type WeplayDifficulty,
@@ -33,13 +33,31 @@ export default function WeplayLaunchPanel({
   onDifficultyChange,
   onStart,
 }: Props) {
+  const [motionPaused, setMotionPaused] = useState(false);
   return (
     <section
       className={`weplay-panel weplay-launch is-${mode}`}
       aria-label="게임 대기 화면"
     >
-      <WeplayLobbyScene />
-      {actions && <div className="weplay-launch-actions">{actions}</div>}
+      <WeplayLobbyScene paused={motionPaused} />
+      <div className={`weplay-launch-actions${actions ? " has-records" : ""}`}>
+        <button
+          type="button"
+          className="weplay-lobby-motion"
+          aria-label={motionPaused ? "깃 움직임 켜기" : "깃 움직임 멈추기"}
+          title={motionPaused ? "깃 움직임 켜기" : "깃 움직임 멈추기"}
+          onClick={() => setMotionPaused((value) => !value)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+            {motionPaused ? (
+              <path d="M8 5v14l11-7Z" fill="currentColor" />
+            ) : (
+              <path d="M7 5v14M17 5v14" stroke="currentColor" strokeWidth="4" />
+            )}
+          </svg>
+        </button>
+        {actions}
+      </div>
       <div className="weplay-launch-controls">
         <div
           className="weplay-mode weplay-mode-choice"

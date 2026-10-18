@@ -405,7 +405,15 @@ function NavalWeplayManagement() {
             </div>
           </div>
           {loading || (data && loadedScope !== scope) ? (
-            <p role="status">게임 정보를 불러오는 중입니다.</p>
+            previewView ? (
+              <div className="weplay-page">
+                <WeplayGameFrame busy label="게임을 불러오고 있습니다">
+                  <div aria-hidden="true" />
+                </WeplayGameFrame>
+              </div>
+            ) : (
+              <p role="status">게임 정보를 불러오는 중입니다.</p>
+            )
           ) : !data || !draft ? (
             <>
               <p role="alert" className="teacher-weplay-error">
@@ -648,7 +656,7 @@ function NavalWeplayManagement() {
                     </div>
                     <img
                       className="teacher-weplay-preview-art"
-                      src={`${import.meta.env.BASE_URL}assets/weplay/naval/catalog-yi-sunsin.webp`}
+                      src={`${import.meta.env.BASE_URL}assets/weplay/naval/catalog-yi-sunsin.webp?v=sujagi-2`}
                       alt=""
                       width={960}
                       height={720}

@@ -81,3 +81,81 @@
 @media (prefers-reduced-motion: reduce) {
   .weplay-game-loading__dots i { animation: none; }
 }
+
+/* Naval loading is part of the battlefield; the Yut plaque stays unchanged. */
+.weplay-game-loading.is-naval {
+  --loading-ink: #171e24;
+  --loading-sea: #163c4e;
+  --loading-gold: #d8ae66;
+  --loading-parchment: #f4e5c5;
+  padding: 16px;
+  background: color-mix(in srgb, var(--loading-ink) 82%, transparent);
+  color: var(--loading-parchment);
+}
+.is-naval .weplay-game-loading__plaque {
+  box-sizing: border-box;
+  width: min(360px, 100%);
+  min-width: 0;
+  gap: 16px;
+  padding: 24px;
+  border-color: var(--loading-gold);
+  background: radial-gradient(ellipse at top, var(--loading-sea), var(--loading-ink));
+  box-shadow: 0 12px 32px #0006, inset 0 0 0 4px var(--loading-ink);
+}
+.is-naval .weplay-game-loading__plaque strong {
+  color: var(--loading-parchment);
+  text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.weplay-game-loading__fleet {
+  display: block;
+  width: min(240px, 100%);
+  height: auto;
+  overflow: hidden;
+  fill: none;
+  stroke: var(--loading-gold);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.weplay-game-loading__ship { animation: weplay-naval-ship 1800ms ease-in-out infinite; }
+.weplay-game-loading__roof,
+.weplay-game-loading__hull { fill: var(--loading-sea); }
+.weplay-game-loading__flag { fill: var(--loading-parchment); }
+.weplay-game-loading__hull-line { stroke-width: 1; }
+.weplay-game-loading__ports { fill: var(--loading-ink); stroke-width: 1; }
+.weplay-game-loading__oars {
+  transform-origin: 120px 96px;
+  animation: weplay-naval-row 1800ms ease-in-out infinite;
+  stroke-width: 3;
+}
+.weplay-game-loading__water { stroke: var(--loading-parchment); }
+.weplay-game-loading__wave { animation: weplay-naval-wave 1800ms linear infinite; }
+.weplay-game-loading__wave.is-distant { opacity: .45; animation-direction: reverse; }
+.is-naval .weplay-game-loading__dots { gap: 12px; }
+.is-naval .weplay-game-loading__dots i {
+  width: 8px;
+  height: 8px;
+  opacity: .45;
+  background: var(--loading-gold);
+  animation: weplay-naval-progress 1800ms ease-in-out infinite;
+}
+.is-naval .weplay-game-loading__dots i:nth-child(2) { animation-delay: 300ms; }
+.is-naval .weplay-game-loading__dots i:nth-child(3) { animation-delay: 600ms; }
+.weplay-game-loading.is-naval[data-motion="paused"] :is(.weplay-game-loading__ship, .weplay-game-loading__oars, .weplay-game-loading__wave, .weplay-game-loading__dots i) { animation-play-state: paused; }
+@keyframes weplay-naval-ship { 50% { transform: translateY(-4px); } }
+@keyframes weplay-naval-row {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+@keyframes weplay-naval-wave { to { transform: translateX(-60px); } }
+@keyframes weplay-naval-progress {
+  0%, 100% { opacity: .45; }
+  45%, 55% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .is-naval :is(.weplay-game-loading__ship, .weplay-game-loading__oars, .weplay-game-loading__wave) { animation: none; transform: none; }
+  /* Progress remains visible without movement or scale, as requested. */
+  .is-naval .weplay-game-loading__dots i { animation-name: weplay-naval-progress; }
+}

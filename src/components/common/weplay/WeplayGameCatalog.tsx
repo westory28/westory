@@ -37,7 +37,7 @@ export default function WeplayGameCatalog({
                 </div>
               ) : (
                 <img
-                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/catalog-yi-sunsin.webp`}
+                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/catalog-yi-sunsin.webp?v=sujagi-2`}
                   alt=""
                   width={960}
                   height={720}

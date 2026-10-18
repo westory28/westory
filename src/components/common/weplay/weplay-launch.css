@@ -37,9 +37,6 @@
   pointer-events: none;
   user-select: none;
 }
-.weplay-launch-art .weplay-lobby-plume[data-motion="reduced"] {
-  visibility: hidden;
-}
 .weplay-launch::before {
   position: absolute;
   z-index: -1;
@@ -54,6 +51,11 @@
   );
 }
 .weplay-launch .weplay-launch-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
   grid-row: 1;
   justify-self: end;
   min-width: 0;
@@ -64,7 +66,8 @@
   flex-wrap: wrap;
   margin: 0;
 }
-.weplay-page .weplay-launch-actions .weplay-lobby-actions button {
+.weplay-page .weplay-launch-actions .weplay-lobby-actions button,
+.weplay-page .weplay-launch .weplay-lobby-motion {
   min-height: 44px;
   padding: 8px 12px;
   border: 1px solid var(--launch-gold);
@@ -72,7 +75,22 @@
   color: var(--launch-text);
   background: color-mix(in srgb, var(--launch-ink) 90%, transparent);
 }
-.weplay-page .weplay-launch-actions .weplay-lobby-actions button:hover {
+.weplay-page .weplay-launch .weplay-lobby-motion {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+}
+.weplay-page .weplay-launch .has-records .weplay-lobby-motion {
+  top: 68px;
+}
+.weplay-page .weplay-launch-actions .weplay-lobby-actions button:hover,
+.weplay-page .weplay-launch .weplay-lobby-motion:hover {
   color: var(--launch-ink);
   background: var(--launch-parchment);
 }
@@ -272,6 +290,13 @@
   .weplay-launch .weplay-launch-actions {
     margin: 8px;
     max-width: calc(100% - 16px);
+  }
+  .weplay-page .weplay-launch .weplay-lobby-motion {
+    top: 8px;
+    right: 8px;
+  }
+  .weplay-page .weplay-launch .has-records .weplay-lobby-motion {
+    top: 60px;
   }
   .weplay-page .weplay-launch-actions .weplay-lobby-actions button {
     padding: 8px;

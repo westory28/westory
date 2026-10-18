@@ -1098,7 +1098,7 @@ async function verifyOpeningLayout() {
   await verifyLinkedIntro();
 }
 async function verifyCommonGameFrame() {
-  for (const width of [390, 768, 1280, 1366, 1920]) {
+  for (const width of [320, 390, 768, 1280, 1366, 1920]) {
     for (const portal of ["student", "teacher"]) {
       const bounds = [];
       for (const game of ["history-rain", "joseon-yut"]) {
@@ -1124,6 +1124,22 @@ async function verifyCommonGameFrame() {
           if(portal==='teacher') assert.equal(await page.locator('.teacher-weplay-preview > .teacher-weplay-section-title').count(),0,'Removing the preview title also removes its row');
           const menu = await page.locator('.weplay-launch-controls').boundingBox();
           assert(menu.x>=inner.x-1 && menu.y>=inner.y-1 && menu.x+menu.width<=inner.x+inner.width+1 && menu.y+menu.height<=inner.y+inner.height+1,JSON.stringify({portal,width,inner,menu}));
+          const controls = await page.locator('.weplay-launch button').evaluateAll(buttons=>buttons.map(button=>{const r=button.getBoundingClientRect();return {label:button.getAttribute('aria-label')||button.textContent,x:r.x,y:r.y,width:r.width,height:r.height};}));
+          assert(controls.every(control=>control.width>=44 && control.height>=44 && control.x>=inner.x-1 && control.y>=inner.y-1 && control.x+control.width<=inner.x+inner.width+1 && control.y+control.height<=inner.y+inner.height+1),JSON.stringify({portal,width,inner,controls}));
+          assert.equal(await page.getByRole('button',{name:'깃 움직임 멈추기',exact:true}).count(),1);
+          const controlPlacement = await page.locator('.weplay-launch').evaluate(element=>{
+            const image=element.querySelector('.weplay-launch-art > img'), imageBox=image.getBoundingClientRect(), scale=Math.max(imageBox.width/image.naturalWidth,imageBox.height/image.naturalHeight);
+            const pause=element.querySelector('.weplay-lobby-motion').getBoundingClientRect();
+            const crest={left:imageBox.left+400*scale,right:imageBox.left+480*scale,top:imageBox.top,bottom:imageBox.top+180*scale};
+            const overlaps=(a,b)=>Math.min(a.right,b.right)>Math.max(a.left,b.left)&&Math.min(a.bottom,b.bottom)>Math.max(a.top,b.top);
+            return {helmetClear:!overlaps(pause,crest),recordsClear:[...element.querySelectorAll('.weplay-lobby-actions button')].every(button=>!overlaps(pause,button.getBoundingClientRect()))};
+          });
+          assert(controlPlacement.helmetClear && controlPlacement.recordsClear,JSON.stringify({portal,width,controlPlacement}));
+          if(width===320 || width===390) {
+            const actions = await page.locator('.weplay-launch-actions').boundingBox();
+            assert(actions.y+actions.height<=menu.y,JSON.stringify({portal,width,actions,menu}));
+            await capture(page,`frame-${portal}-${game}-${width}-lobby`);
+          }
         }
         if(game === 'joseon-yut') await page.waitForFunction(()=>document.fonts.check('400 120px "Yut Brush"','도개걸윷모!'));
         if(game === 'joseon-yut' && width >= 1280) {
@@ -1154,7 +1170,7 @@ async function verifyCommonGameFrame() {
       assert.equal(bounds[0].height,bounds[1].height);
     }
   }
-  checks.push('Both portals: naval/Yut share stage width, height and page gutters at390/768/1280/1366/1920, including late-loaded settings styles; opening/lobby/play keep the same viewport; brush font loads before the first throw.');
+  checks.push('Both portals: naval/Yut share stage width, height and page gutters at320/390/768/1280/1366/1920, including late-loaded settings styles; the new 44px plume control and wrapped lobby actions stay inside the stage and above the menu; opening/lobby/play keep the same viewport; brush font loads before the first throw.');
 }
 try {
   if (audioOnly) await verifyAudioBrowser();

@@ -1,5 +1,19 @@
 # 내가 충무공이라고?! 이미지 소재
 
+## 수자기와 깃 움직임 정정 (2026-10-18)
+
+아군 판옥선의 일본식 원형 꽃 문양을 제거하고 누런 천·검은 `帥`자·붉은 가장자리의 수자기로 교체했습니다. 작은 아군 깃발은 문양 없는 황색·붉은 천으로 정리했습니다. 멀리 있는 일본 함대는 유지했습니다. `lobby-yi-sunsin.webp`(1672×941)와 같은 장면의 `catalog-yi-sunsin.webp`(960×720)를 함께 교체했고 `?v=sujagi-2`로 이전 브라우저 캐시와 구분합니다.
+
+근거: [국립국어원 수기/수자기 정의](https://kli.korean.go.kr/term/trgtWord/indexTrgtWord.do?trgtWordNo=2280429)의 누런 바탕·검은 帥자 설명과 [강화전쟁박물관 수자기 설명](https://www.ganghwa.go.kr/open_content/museum_war/bbs/bbsMsgDetail.do?bcd=relic&msg_seq=464&pgno=6)의 지휘관 군기 성격을 참고했습니다. 후자는 1871년 어재연 장군의 유물이며 이순신이 사용한 실물로 혼동하지 않습니다. 박물관 사진은 수정·배포하지 않았습니다.
+
+내장 `image_gen`의 부분 편집으로 기존 장면의 깃발만 수정했습니다. 원본 PNG는 `exec-04dd8f04-2424-49e4-81a5-bff208b65d17.png`이며, 결과를 확인한 뒤 WebP 압축과 기존 썸네일 크롭만 적용했습니다. 깃 형태·좌표·인물·함대 구도는 유지했습니다.
+
+최종 편집 프롬프트:
+
+> Use case: precise-object-edit. Edit the provided 1672x941 game lobby artwork. Change ONLY the ALLIED FLAGS in the LEFT FOREGROUND on the Korean panokseon where Admiral Yi Sun-sin stands. The existing dark banners with circular flower/Japanese clan crests are WRONG. Completely remove every Japanese flower/circle crest on ALL banners and small flags in the leftmost 240 pixels, including those behind his left shoulder. Replace the two large foreground flags with historical Korean commander Sujagi banners: weathered warm YELLOW/OCHRE cloth, narrow muted RED cloth edging/streamers, and ONE large legible BLACK brush-written Chinese character exactly '帥' (commander). The main flag at x120-235,y130-310 must show the complete and correct character 帥 without a circle or floral crest. The taller left flag around x40-105,y60-220 should also carry 帥; simplify the small distant allied flags to plain red/yellow cloth without emblems. This is a Joseon naval commander scene, NOT Japanese allied soldiers. Preserve all distant enemy ships at x600-1672, with their existing tiny flags. CRITICAL preserve Admiral's helmet, armor, shoulders, silhouette, exact framing, face-hidden rear view, red plume shape and all plume strand positions at (460,85)-(1180,425), ocean, sunset, fleet count and painterly warm 3D game style exactly. Do not move the camera or redraw the plume. Maintain original image dimensions and composition. No added UI, labels, logos, watermark or new objects. No Japanese mon, cherry blossom crests, rising suns or Japanese flags anywhere in the foreground Korean camp. Only correct the left foreground flags. The character on the flags must be 帥, not 师, 水, 壽 or any other glyph.
+
+사용자 요청에 따라 OS 동작 감소가 깃을 숨기거나 멈추지 않습니다. 정상 변형 scale은 80±8, 동작 감소는 50±5이며 같은 3.8초 주기로 깃 영역만 움직입니다. 명시적 멈춤/켜기, 비활성 탭·화면 밖 일시정지는 유지합니다. 이 계약은 아래 최초 버전의 동작 감소 정지 설명을 대체합니다.
+
 ## 판옥선 위 이순신 대기 화면 (2026-10-18)
 
 - `lobby-yi-sunsin.webp`: 내장 `image_gen`으로 생성한 1672×941 대기 장면.
@@ -40,9 +54,13 @@
 
 게임은 이미지를 별도 레이어로 움직이며, 체력·시간·점수·입력창은 실제 HTML 요소입니다. 화면 전체를 한 장의 이미지로 대체하지 않습니다.
 
-## 배경음악 (2026-10-07)
+## 배경음악 (2026-10-18)
 
-`tide-of-victory.wav`는 이 게임을 위해 새로 작곡·합성한 45초 루프입니다. D단조 오음음계, 6/8박자의 선율에 현을 뜯는 소리, 관악기풍 선율, 낮은 현악과 북을 겹쳤습니다. 기존 사극의 음악이나 외부 음원을 샘플링하지 않았습니다. 생성 원본은 `scripts/generate-weplay-score.py`이며, 고정 시드로 동일한 PCM 음원을 재현합니다. 형식은 모노 22,050Hz/16비트 WAV입니다. 실제 전통 악기 녹음이 아닌 합성 음색입니다. 첫 재생은 사용자의 게임 시작 또는 음악 버튼 조작으로 이루어지고, 탭이 숨겨지거나 화면을 떠나면 정지합니다.
+`tide-of-victory.wav`는 이 게임을 위해 새로 작곡·합성한 45초 전투 루프입니다. 기존의 차분한 6/8박자 곡을 128BPM·4/4박자·24마디의 힘찬 전투 편곡으로 교체했습니다. 조선시대 악사의 합주를 주제로, 북·장구를 떠올리게 하는 낮고 높은 타격음, 징 느낌의 금속 잔향, 태평소 느낌의 관악 선율과 빠른 현 반복구를 겹쳤습니다. 네 마디 단위로 진격·응답·절제·돌격·절정·복귀를 구성하고, 마지막 북 연타와 잔향은 첫 마디로 이어집니다. D단조 오음음계를 중심으로 새 선율과 짧은 꾸밈음을 작곡했습니다.
+
+기존 사극의 음악이나 외부 음원을 샘플링하지 않았으며 외부 생성 API도 사용하지 않았습니다. 생성 원본은 `scripts/generate-weplay-score.py`이고, 고정 시드 `20261018`로 동일한 PCM 음원을 재현합니다. 실제 전통 악기 녹음이나 역사적 연주법의 정확한 복원이 아닌 수학적 합성 음색입니다. 형식은 기존과 같은 모노 22,050Hz/16비트 WAV이며 약 1.98MB입니다. 피크를 0.75로 제한해 약 2.5dB의 여유를 두고, 게임 재생 볼륨 0.28과 기존 효과음·음소거 설정을 유지합니다. 첫 재생은 사용자의 게임 시작 또는 음악 버튼 조작으로 이루어지고, 탭이 숨겨지거나 화면을 떠나면 정지합니다. 윷놀이 음악과 공용 인트로는 변경하지 않았습니다.
+
+검증: `scripts/verify-weplay-music-browser.mjs`가 실제 WAV 디코딩·클리핑·루프 경계·무음 구간·구간 강약과 실제 브라우저의 제스처 재생, 반복, 음소거 저장, 탭 숨김/복귀, 화면 이탈, 자동재생 차단 뒤 재시도를 검사합니다.
 
 ## 전투 효과음 (2026-10-07)
 

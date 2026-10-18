@@ -19,7 +19,7 @@ let audiblePlayer: HTMLAudioElement | null = null;
 
 export default function useWeplayMusic(
   active = true,
-  source = `${import.meta.env.BASE_URL}assets/weplay/naval/tide-of-victory.wav`,
+  source = `${import.meta.env.BASE_URL}assets/weplay/naval/tide-of-victory.wav?v=naval-war-2`,
 ) {
   const [muted, setMuted] = useState(isWeplayAudioMuted);
   const [started, setStarted] = useState(false);
