@@ -1207,19 +1207,24 @@
     padding: 24px;
   }
 }
+.yut-game[data-motion-paused="true"] *,
+.yut-game[data-motion-paused="true"] *::before,
+.yut-game[data-motion-paused="true"] *::after {
+  animation-play-state: paused !important;
+}
 @media (prefers-reduced-motion: reduce) {
-  .yut-game
-    *:not(
-      .yut-throw-3d,
-      .yut-throw-3d *,
-      .yut-frame-sprite,
-      .yut-drawn-frame,
-      .yut-entry-scene-frame
-    ),
-  .yut-game *:not(.yut-throw-3d, .yut-throw-3d *)::before,
-  .yut-game *:not(.yut-throw-3d, .yut-throw-3d *)::after {
-    animation: none !important;
-    transition: none !important;
+  /* Keep game feedback visible; soften only the large result's entrance. */
+  .yut-game .yut-landing-result {
+    animation-name: yut-ink-arrive-soft;
+    animation-duration: 360ms;
+  }
+}
+@keyframes yut-ink-arrive-soft {
+  from {
+    opacity: 0.15;
+  }
+  to {
+    opacity: 1;
   }
 }
 /* Keep parchment grain visible without competing with functional text. */

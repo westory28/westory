@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import yutFrames from "./yut/yutCharacterFrames.json";
 import "./weplay-game-frame.css";
+import "./yut/yut-loading.css";
 
 /** Local to the game stage. The caller makes its game controls inert while busy. */
 export default function WeplayGameLoading({
@@ -11,6 +13,7 @@ export default function WeplayGameLoading({
 }) {
   const status = useRef<HTMLDivElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
+  const [artFailed, setArtFailed] = useState(false);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     status.current?.focus({ preventScroll: true });
@@ -20,21 +23,24 @@ export default function WeplayGameLoading({
   }, []);
   useEffect(() => {
     const element = overlay.current;
-    if (theme !== "naval" || !element) return;
-    let visible = false;
+    if (!element) return;
+    let visible = typeof IntersectionObserver === "undefined";
     const syncMotion = () => {
       element.dataset.motion =
         visible && !document.hidden ? "running" : "paused";
     };
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      syncMotion();
-    });
-    observer.observe(element);
+    const observer =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(([entry]) => {
+            visible = entry.isIntersecting;
+            syncMotion();
+          });
+    observer?.observe(element);
     document.addEventListener("visibilitychange", syncMotion);
     syncMotion();
     return () => {
-      observer.disconnect();
+      observer?.disconnect();
       document.removeEventListener("visibilitychange", syncMotion);
     };
   }, [theme]);
@@ -42,7 +48,7 @@ export default function WeplayGameLoading({
     <div
       ref={overlay}
       className={`weplay-game-loading is-${theme}`}
-      data-motion={theme === "naval" ? "paused" : undefined}
+      data-motion="paused"
     >
       <div
         className="weplay-game-loading__plaque"
@@ -102,9 +108,73 @@ export default function WeplayGameLoading({
             </g>
           </svg>
         ) : (
-          <span className="weplay-game-loading__seal" aria-hidden="true">
-            W
-          </span>
+          <div
+            className="weplay-game-loading__yut-art"
+            data-art={artFailed ? "fallback" : "portraits"}
+            aria-hidden="true"
+          >
+            {!artFailed && (
+              <div
+                className="weplay-game-loading__yut-portraits"
+                onErrorCapture={() => setArtFailed(true)}
+              >
+                {yutFrames.idle.rows.map((row, index) => {
+                  const [x, y, width, height, dx, dy] = row.frames[0];
+                  return (
+                    <span
+                      className="weplay-game-loading__yut-portrait"
+                      key={index}
+                    >
+                      <svg
+                        viewBox={`0 0 ${row.size} ${row.size}`}
+                        focusable="false"
+                      >
+                        <svg
+                          x={dx}
+                          y={dy}
+                          width={width}
+                          height={height}
+                          viewBox={`${x} ${y} ${width} ${height}`}
+                          overflow="hidden"
+                        >
+                          <image
+                            href={`${import.meta.env.BASE_URL}assets/weplay/yut/animation-idle.webp`}
+                            width={yutFrames.idle.width}
+                            height={yutFrames.idle.height}
+                            onError={() => setArtFailed(true)}
+                          />
+                        </svg>
+                      </svg>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <svg
+              className="weplay-game-loading__yut-sticks"
+              viewBox="0 0 72 40"
+              focusable="false"
+            >
+              {[0, 1, 2, 3].map((index) => (
+                <g
+                  key={index}
+                  className="weplay-game-loading__yut-stick"
+                  style={{ animationDelay: `${index * 140}ms` }}
+                >
+                  <rect
+                    x={6 + index * 16}
+                    y="7"
+                    width="11"
+                    height="28"
+                    rx={index === 1 ? 2 : 5}
+                  />
+                  <path
+                    d={`M${9 + index * 16} 13l5 5m-5 0 5-5m-5 11 5 5m-5 0 5-5`}
+                  />
+                </g>
+              ))}
+            </svg>
+          </div>
         )}
         <strong>{label}</strong>
         <span className="weplay-game-loading__dots" aria-hidden="true">

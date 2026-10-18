@@ -190,10 +190,31 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .yut-victory {
-    animation: none;
+    animation-name: yut-victory-arrive-soft;
   }
-  .yut-victory-petals {
-    display: none;
+  .yut-victory-petals i {
+    animation-name: yut-victory-petal-soft;
+  }
+}
+@keyframes yut-victory-arrive-soft {
+  from {
+    opacity: 0.15;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes yut-victory-petal-soft {
+  0% {
+    opacity: 0;
+    transform: rotate(calc(var(--petal-index) * 25.7deg)) translateY(-24px);
+  }
+  25% {
+    opacity: 0.65;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--petal-index) * 25.7deg)) translateY(-64px);
   }
 }
 

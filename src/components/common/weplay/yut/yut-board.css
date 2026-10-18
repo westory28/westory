@@ -286,9 +286,19 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .yut-isometric-board .yut-isometric-piece {
-    transition: none;
+    transition-duration: 120ms;
   }
-  .yut-isometric-board .yut-isometric-destination {
-    animation: none;
+  .yut-pawn-expression {
+    animation-name: yut-pawn-reaction-soft;
+  }
+}
+@keyframes yut-pawn-reaction-soft {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  30%,
+  65% {
+    opacity: 1;
   }
 }

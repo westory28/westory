@@ -21,11 +21,14 @@ try {
   );
 }
 const entryPolishOnly = process.env.YUT_MOVEMENT_QA_SECTION === "entry-polish";
+const motionAuditOnly = process.env.YUT_MOVEMENT_QA_SECTION === "motion-audit";
 const evidence = path.join(
   root,
-  entryPolishOnly
-    ? "output/yut-entry-polish-20261018"
-    : "output/yut-movement-20261018",
+  motionAuditOnly
+    ? "output/yut-motion-complete-20261018"
+    : entryPolishOnly
+      ? "output/yut-entry-polish-20261018"
+      : "output/yut-movement-20261018",
 );
 await fs.mkdir(evidence, { recursive: true });
 const source = (p) => JSON.stringify(path.join(root, p).replaceAll("\\", "/"));
@@ -67,7 +70,7 @@ qa.bump=()=>qa.emit({...qa.room,revision:qa.room.revision+1,syncRevision:qa.room
 qa.repeat=()=>qa.emit({...qa.room,syncRevision:qa.room.syncRevision+1});
 qa.prepareThrow=value=>{const room={...qa.room,turnUid:'qa',phase:'throw',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+25000};qa.emit(core.throwYut(room,'qa',sticks(value),Date.now()-4000));};
 qa.preparePiece=(pieceId,node,value)=>{const room=JSON.parse(JSON.stringify(qa.room));if(node)room.players[0].pieces.find(piece=>piece.id===pieceId).node=node;Object.assign(room,{turnUid:'qa',phase:'throw',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+25000});qa.emit(core.throwYut(room,'qa',sticks(value),Date.now()-4000));};
-export const getYutLobby=async()=>{if(params.has('slow-lobby'))await new Promise(r=>setTimeout(r,700));return{enabled:true,settings:DEFAULT_YUT_SETTINGS,privatePlaysRemaining:5,playerName:'김테스트(3학년 2반)',room:qa.room,classes:[],classId:'',serverNowMs:Date.now()}};
+export const getYutLobby=async()=>{if(params.has('hold-lobby')&&!qa.lobbyReleased)await new Promise(resolve=>qa.resolveLobby=()=>{qa.lobbyReleased=true;resolve()});if(params.has('slow-lobby'))await new Promise(r=>setTimeout(r,700));return{enabled:true,settings:DEFAULT_YUT_SETTINGS,privatePlaysRemaining:5,playerName:'김테스트(3학년 2반)',room:qa.room,classes:[],classId:'',serverNowMs:Date.now()}};
 export const subscribeYutRoom=(_config,_id,onRoom)=>{listeners.add(onRoom);return()=>listeners.delete(onRoom)};
 export const commandYutRoom=async(_config,data)=>{qa.calls.push(data);if(qa.delay)await new Promise(r=>setTimeout(r,qa.delay));if(qa.fail){qa.fail=false;throw new Error('검증용 연결 오류')}if(data.action==='move')qa.move(data.route,data.pieceId,data.stack);else if(data.action==='claimReward'){qa.emit({...qa.room,syncRevision:(qa.room.syncRevision||0)+1,reward:{...qa.room.reward,status:qa.claimPaid?'paid':'pending'}})}else if(data.action==='start')qa.emit(core.startYutGame(qa.room,Date.now()));else if(data.action==='throw')qa.emit(core.throwYut(qa.room,'qa',sticks(qa.throwValue||1),Date.now(),data.power));else if(data.action==='leave')qa.emit(null);return{room:qa.room,serverNowMs:Date.now()}};
 export const yutErrorMessage=error=>error.message;
@@ -80,10 +83,12 @@ function Art(){const action=new URLSearchParams(location.search).get('art');retu
 const bundle = await build({
   stdin: {
     contents:
+      `import ${source("src/assets/index.css")};\n` +
       harness.replace(
         "createRoot(document.getElementById('root')).render(<App/>);",
         "",
-      ) + artHarness,
+      ) +
+      artHarness,
     loader: "tsx",
     resolveDir: root,
   },
@@ -91,7 +96,7 @@ const bundle = await build({
   write: false,
   format: "esm",
   outfile: path.join(os.tmpdir(), "yut-motion.js"),
-  loader: { ".woff2": "file", ".woff": "file" },
+  loader: { ".woff2": "file", ".woff": "file", ".svg": "dataurl" },
   define: {
     "process.env.NODE_ENV": '"production"',
     "import.meta.env.BASE_URL": '"/"',
@@ -172,21 +177,23 @@ const twoPiecesOnly = process.env.YUT_MOVEMENT_QA_SECTION === "two-pieces";
 const artOnly = process.env.YUT_MOVEMENT_QA_SECTION === "art";
 const report = {
   passed: false,
-  section: entryPolishOnly
-    ? "entry-polish"
-    : artOnly
-      ? "art"
-      : twoPiecesOnly
-        ? process.env.YUT_TWO_QA_PHASE
-          ? "two-pieces-" + process.env.YUT_TWO_QA_PHASE
-          : "two-pieces"
-        : captureOnly
-          ? "capture"
-          : gaugeOnly
-            ? "gauge"
-            : presentationOnly
-              ? "presentation"
-              : "all",
+  section: motionAuditOnly
+    ? "motion-audit"
+    : entryPolishOnly
+      ? "entry-polish"
+      : artOnly
+        ? "art"
+        : twoPiecesOnly
+          ? process.env.YUT_TWO_QA_PHASE
+            ? "two-pieces-" + process.env.YUT_TWO_QA_PHASE
+            : "two-pieces"
+          : captureOnly
+            ? "capture"
+            : gaugeOnly
+              ? "gauge"
+              : presentationOnly
+                ? "presentation"
+                : "all",
   checks: [],
   errors: [],
   paths: {},
@@ -201,6 +208,11 @@ async function open(
     viewport: { width, height },
     reducedMotion,
   });
+  await page.route("https://fonts.googleapis.com/**", (route) =>
+    route.fulfill({ contentType: "text/css", body: "" }),
+  );
+  if (query.includes("fail-loading-art"))
+    await page.route("**/animation-idle.webp", (route) => route.abort());
   page.qaAssetRequests = [];
   page.on("request", (request) => {
     if (request.url().includes("/assets/weplay/yut/"))
@@ -993,233 +1005,361 @@ async function verifyEntryPolish() {
 }
 async function verifyEntryArtwork() {
   for (const [label, reduced, query, width, height] of [
-    ["normal", "no-preference", "", 1280, 800],
-    ["reduce", "reduce", "", 1280, 800],
-    ["save-data", "no-preference", "&save-data", 1280, 800],
-    ["tablet", "no-preference", "", 768, 600],
+    ["desktop", "no-preference", "", 1440, 900],
+    ["desktop-reduce", "reduce", "", 1440, 900],
     ["landscape", "reduce", "", 844, 390],
+    ["tablet", "no-preference", "", 768, 600],
+    ["save-data", "reduce", "&save-data", 844, 390],
   ]) {
     const page = await open("scenario=entry" + query, reduced, width, height),
       scene = page.locator(".yut-entry-scene");
     await scene.waitFor();
-    assert.match(
-      await scene.locator("img").first().getAttribute("src"),
-      /catalog-toss\.webp$/,
+    if (label === "save-data") {
+      await page.waitForTimeout(300);
+      assert.equal(await scene.locator(".yut-entry-scene-still").count(), 1);
+      assert.equal(await scene.locator(".yut-entry-actor").count(), 0);
+      assert.equal(await page.locator(".yut-entry-motion-toggle").count(), 0);
+      assert.equal(
+        page.qaAssetRequests.filter((url) =>
+          /entry-(?:background|characters|sticks)\.webp/.test(url),
+        ).length,
+        0,
+      );
+      await page.screenshot({
+        path: path.join(evidence, "layered-" + label + ".png"),
+      });
+      await page.close();
+      continue;
+    }
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".yut-entry-scene")?.dataset.sceneReady ===
+        "true",
     );
-    if (label !== "save-data") {
-      await page.waitForFunction(
-        () =>
-          document.querySelector(".yut-entry-scene")?.dataset.sceneReady ===
-          "true",
+    assert.equal(await scene.locator(".yut-entry-actor").count(), 4);
+    assert.equal(await scene.locator(".yut-entry-actor-frame").count(), 12);
+    assert.equal(await scene.locator(".yut-entry-stick").count(), 4);
+    const layers = await scene
+      .locator(".yut-entry-background,.yut-entry-foreground")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => ({
+          href: node.href.baseVal,
+          animation: getComputedStyle(node).animationName,
+          transform: getComputedStyle(node).transform,
+        })),
       );
-      assert.equal(await scene.locator("img").count(), 3);
-      const before = page.qaAssetRequests.filter((url) =>
-        /(?:catalog-toss|entry-toss-[bc])\.webp/.test(url),
-      );
-      assert.equal(before.length, 3, "Each whole-scene image is loaded once");
-      const frames = await scene.evaluate((node) => {
-        const animated = Array.from(node.querySelectorAll("img")).slice(1),
-          animations = animated.flatMap((frame) => frame.getAnimations());
-        const times = animations.map((animation) => animation.currentTime),
-          durations = animations.map((animation) =>
-            Number(animation.effect.getTiming().duration),
+    assert.equal(new Set(layers.map((layer) => layer.href)).size, 1);
+    assert.ok(
+      layers.every(
+        (layer) => layer.animation === "none" && layer.transform === "none",
+      ),
+    );
+    const before = page.qaAssetRequests.filter((url) =>
+      /entry-(?:background|characters|sticks)\.webp/.test(url),
+    );
+    assert.equal(
+      before.length,
+      3,
+      "Each independent entry layer downloads once",
+    );
+    assert.equal(new Set(before).size, 3);
+    const frames = await scene.evaluate((node) => {
+      const actors = Array.from(node.querySelectorAll(".yut-entry-actor"));
+      return actors.map((actor) => {
+        const drawn = Array.from(
+            actor.querySelectorAll(".yut-entry-actor-frame"),
+          ),
+          animations = drawn.flatMap((frame) => frame.getAnimations()),
+          times = animations.map((animation) => animation.currentTime),
+          timings = animations.map((animation) => animation.effect.getTiming());
+        const poses = [0.05, 0.22, 0.62, 0.8].map((progress) => {
+          animations.forEach(
+            (animation, index) =>
+              (animation.currentTime =
+                Number(timings[index].duration) * (1 + progress) +
+                timings[index].delay),
           );
-        const samples = [0, 0.2625, 0.675, 1.2625, 1.675, 2.2625].map(
-          (progress) => {
-            animations.forEach(
-              (animation, index) =>
-                (animation.currentTime = durations[index] * progress),
-            );
-            return animated.map((frame) =>
-              Number(getComputedStyle(frame).opacity),
-            );
-          },
-        );
+          return drawn.map((frame) => Number(getComputedStyle(frame).opacity));
+        });
         animations.forEach(
           (animation, index) => (animation.currentTime = times[index]),
         );
-        return {
-          samples,
-          durations,
-          sources: animated.map((frame) => frame.src),
-        };
+        return { role: actor.dataset.role, timings, poses };
       });
+    });
+    const expected = { horse: 4800, ox: 5600, pig: 6400, dog: 7200 };
+    for (const actor of frames) {
+      assert.equal(actor.timings.length, 3);
       assert.ok(
-        frames.durations.every(
-          (duration) => duration === (reduced === "reduce" ? 12000 : 8000),
+        actor.timings.every(
+          (timing) =>
+            Math.abs(
+              timing.duration -
+                expected[actor.role] * (reduced === "reduce" ? 1.5 : 1),
+            ) < 1e-6,
         ),
+        JSON.stringify({ label, actor }),
       );
-      assert.deepEqual(frames.samples, [
-        [0, 0],
-        [1, 0],
-        [0, 1],
-        [1, 0],
-        [0, 1],
-        [1, 0],
-      ]);
-      await hidePage(page, true);
-      await page.waitForFunction(
-        () =>
-          document.querySelector(".yut-game")?.dataset.motionPaused === "true",
-      );
-      assert.ok(
-        await scene
-          .locator("img")
-          .evaluateAll((nodes) =>
-            nodes
-              .slice(1)
-              .every(
-                (node) =>
-                  getComputedStyle(node).animationPlayState === "paused",
-              ),
-          ),
-      );
-      await assertEntryAnimationState(scene, "paused");
-      await hidePage(page, false);
-      await assertEntryAnimationState(scene, "running");
-      const toggle = page.locator(".yut-entry-motion-toggle");
-      await toggle.waitFor();
-      assert.equal(await toggle.getAttribute("aria-pressed"), "false");
-      const accessibleName =
-        (await toggle.getAttribute("aria-label")) || (await toggle.innerText());
-      assert.ok(accessibleName.trim().length > 0);
-      assert.equal(
-        await page
-          .getByRole("button", { name: accessibleName, exact: true })
-          .count(),
-        1,
-        "Motion control is exposed to assistive technology",
-      );
-      const geometry = await toggle.evaluate((node) => {
-        const box = node.getBoundingClientRect(),
-          hit = document.elementFromPoint(
-            box.x + box.width / 2,
-            box.y + box.height / 2,
-          );
-        return {
-          box: box.toJSON(),
-          reachable: hit === node || node.contains(hit),
-        };
-      });
-      assert.ok(
-        geometry.reachable &&
-          geometry.box.width >= 44 &&
-          geometry.box.height >= 44,
-        "Motion toggle stays reachable with a usable target",
-      );
-      await toggle.press("Enter");
-      assert.equal(await toggle.getAttribute("aria-pressed"), "true");
-      await assertEntryAnimationState(scene, "paused");
-      await hidePage(page, true);
-      await hidePage(page, false);
-      await assertEntryAnimationState(scene, "paused");
-      await page.screenshot({
-        path: path.join(evidence, "art-paused-" + label + ".png"),
-      });
-      await toggle.press("Enter");
-      assert.equal(await toggle.getAttribute("aria-pressed"), "false");
-      await assertEntryAnimationState(scene, "running");
-      await scene.evaluate(
-        (node) => (node.style.transform = "translateX(-10000px)"),
-      );
-      await page.waitForFunction(
-        () =>
-          document.querySelector(".yut-entry-scene")?.dataset.sceneVisible ===
-          "false",
-      );
-      assert.ok(
-        await scene
-          .locator("img")
-          .evaluateAll((nodes) =>
-            nodes
-              .slice(1)
-              .every(
-                (node) =>
-                  getComputedStyle(node).animationPlayState === "paused",
-              ),
-          ),
-      );
-      await assertEntryAnimationState(scene, "paused");
-      await scene.evaluate((node) => (node.style.transform = ""));
-      await page.waitForFunction(
-        () =>
-          document.querySelector(".yut-entry-scene")?.dataset.sceneVisible ===
-          "true",
-      );
-      await assertEntryAnimationState(scene, "running");
-      await page.waitForTimeout(400);
-      assert.equal(
-        page.qaAssetRequests.filter((url) =>
-          /(?:catalog-toss|entry-toss-[bc])\.webp/.test(url),
-        ).length,
-        before.length,
-        "Repeated whole-art frames do not request images again",
-      );
-      report.paths["entryArtwork-" + label] = { ...frames, toggle: geometry };
-    } else {
-      await page.waitForTimeout(400);
-      assert.equal(await scene.locator("img").count(), 1);
-      assert.equal(
-        page.qaAssetRequests.filter((url) => /entry-toss-[bc]\.webp/.test(url))
-          .length,
-        0,
-        "Save-data skips animated-art downloads",
-      );
-      assert.equal(
-        await page.locator(".yut-entry-motion-toggle").count(),
-        0,
-        "Save-data still does not expose an ineffective motion control",
+      assert.deepEqual(
+        actor.poses,
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+          [1, 0, 0],
+        ],
+        "Independent actors display exactly one of three intact poses",
       );
     }
+    assert.equal(
+      new Set(frames.map((actor) => actor.timings[0].delay)).size,
+      4,
+    );
+    const sourceBounds = await scene
+      .locator(".yut-entry-actor-frame")
+      .evaluateAll(async (nodes) => {
+        const url = nodes[0].querySelector("image").href.baseVal,
+          image = new Image();
+        image.src = url;
+        await image.decode();
+        const canvas = document.createElement("canvas"),
+          context = canvas.getContext("2d", { willReadFrequently: true });
+        return nodes.map((node) => {
+          const source =
+              node.dataset.sourceRect?.split(",").map(Number) ||
+              node.getAttribute("viewBox").split(/\s+/).map(Number),
+            [x, y, w, h] = source;
+          canvas.width = w;
+          canvas.height = h;
+          context.clearRect(0, 0, w, h);
+          context.drawImage(image, x, y, w, h, 0, 0, w, h);
+          const data = context.getImageData(0, 0, w, h).data;
+          let minX = w,
+            minY = h,
+            maxX = -1,
+            maxY = -1,
+            transparent = 0;
+          for (let py = 0; py < h; py++)
+            for (let px = 0; px < w; px++) {
+              const alpha = data[(py * w + px) * 4 + 3];
+              if (alpha < 16) transparent++;
+              else {
+                minX = Math.min(minX, px);
+                minY = Math.min(minY, py);
+                maxX = Math.max(maxX, px);
+                maxY = Math.max(maxY, py);
+              }
+            }
+          return {
+            role: node.closest(".yut-entry-actor").dataset.role,
+            frame: node.dataset.frame,
+            source,
+            minX,
+            minY,
+            maxX,
+            maxY,
+            transparent: transparent / (w * h),
+          };
+        });
+      });
+    for (const source of sourceBounds) {
+      assert.ok(
+        source.transparent > 0.1,
+        "Character cutouts retain actual alpha: " + JSON.stringify(source),
+      );
+      assert.ok(
+        source.minX > 0 &&
+          source.minY > 0 &&
+          source.maxX < source.source[2] - 1 &&
+          source.maxY < source.source[3] - 1,
+        "Source viewport includes complete pose with a transparent border: " +
+          JSON.stringify(source),
+      );
+    }
+    assert.ok(
+      await scene.locator(".yut-entry-actor-frame").evaluateAll((nodes) =>
+        nodes.every((node) => {
+          const image = node.querySelector("image"),
+            clip = image.getAttribute("clip-path"),
+            rect = node.querySelector("clipPath rect"),
+            view = node.viewBox.baseVal;
+          return (
+            clip === `url(#${rect.parentElement.id})` &&
+            ["x", "y", "width", "height"].every(
+              (key) => Number(rect.getAttribute(key)) === view[key],
+            )
+          );
+        }),
+      ),
+      "Each source image is clipped to its own intact pose, including nested-SVG letterboxing",
+    );
+    const bounds = await scene.boundingBox(),
+      clip = { x: bounds.x + 10, y: bounds.y + 10, width: 35, height: 20 };
+    const snapshot = async (progress) => {
+      await scene.evaluate(
+        (node, progress) =>
+          node.getAnimations({ subtree: true }).forEach((animation) => {
+            const timing = animation.effect.getTiming();
+            animation.currentTime =
+              Number(timing.duration) * (1 + progress) + timing.delay;
+          }),
+        progress,
+      );
+      return {
+        background: Buffer.from(await page.screenshot({ clip })).toString(
+          "base64",
+        ),
+        whole: Buffer.from(await scene.screenshot()).toString("base64"),
+      };
+    };
+    const first = await snapshot(0.05),
+      second = await snapshot(0.62);
+    assert.equal(
+      first.background,
+      second.background,
+      "Roof/background pixels remain identical while independent character poses change",
+    );
+    assert.notEqual(
+      first.whole,
+      second.whole,
+      "Character pose change visibly alters the scene",
+    );
+    const toggle = page.locator(".yut-entry-motion-toggle");
+    assert.equal(await toggle.getAttribute("aria-pressed"), "false");
+    await toggle.press("Enter");
+    assert.equal(await toggle.getAttribute("aria-pressed"), "true");
+    await assertEntryAnimationState(scene, "paused");
+    await hidePage(page, true);
+    await hidePage(page, false);
+    await assertEntryAnimationState(scene, "paused");
+    await toggle.press("Enter");
+    await assertEntryAnimationState(scene, "running");
+    await hidePage(page, true);
+    await assertEntryAnimationState(scene, "paused");
+    await hidePage(page, false);
+    await assertEntryAnimationState(scene, "running");
+    await scene.evaluate(
+      (node) => (node.style.transform = "translateX(-10000px)"),
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".yut-entry-scene")?.dataset.sceneVisible ===
+        "false",
+    );
+    await assertEntryAnimationState(scene, "paused");
+    await scene.evaluate((node) => (node.style.transform = ""));
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".yut-entry-scene")?.dataset.sceneVisible ===
+        "true",
+    );
+    await assertEntryAnimationState(scene, "running");
+    assert.equal(
+      page.qaAssetRequests.filter((url) =>
+        /entry-(?:background|characters|sticks)\.webp/.test(url),
+      ).length,
+      before.length,
+    );
+    assert.equal(await page.locator(".yut-entry-window > span").count(), 3);
+    assert.equal(
+      await page
+        .locator(".yut-entry-window")
+        .evaluate((node) => getComputedStyle(node).pointerEvents),
+      "none",
+    );
+    for (const control of [
+      toggle,
+      page.getByRole("button", { name: "혼자서 시작", exact: true }),
+      page.getByRole("button", { name: "게임 규칙 보기", exact: true }),
+    ]) {
+      assert.ok(
+        await control.evaluate((node) => {
+          const box = node.getBoundingClientRect(),
+            hit = document.elementFromPoint(
+              box.x + box.width / 2,
+              box.y + box.height / 2,
+            );
+          return (
+            box.width >= 44 &&
+            box.height >= 44 &&
+            (hit === node || node.contains(hit))
+          );
+        }),
+        "Entry layers never obscure menu or motion controls",
+      );
+    }
+    await toggle.click();
     await page.screenshot({
-      path: path.join(evidence, "art-" + label + ".png"),
+      path: path.join(evidence, "layered-" + label + ".png"),
     });
+    const quota = page.locator(".yut-private-quota");
+    await quota.scrollIntoViewIfNeeded();
+    const menuReachability = await quota.evaluate((node) => {
+      const menu = node.closest(".yut-entry-menu"),
+        box = node.getBoundingClientRect(),
+        frame = menu.getBoundingClientRect();
+      return {
+        overflow: getComputedStyle(menu).overflowY,
+        scrollTop: menu.scrollTop,
+        quota: box.toJSON(),
+        menu: frame.toJSON(),
+        visible: box.top >= frame.top && box.bottom <= frame.bottom,
+      };
+    });
+    assert.ok(
+      menuReachability.visible,
+      "Private-room quota remains reachable by scrolling within the menu",
+    );
+    report.paths["layered-" + label] = {
+      frames,
+      sourceBounds,
+      layers,
+      backgroundPixelEqual: true,
+      requests: before.length,
+      menuReachability,
+    };
     await page.close();
   }
   const portrait = await open("scenario=entry", "reduce", 390, 844);
   await portrait.locator(".yut-orientation-gate").waitFor();
-  assert.equal(
-    await portrait.locator(".yut-entry-motion-toggle").count(),
-    0,
-    "Portrait rotation guide does not leave an offscreen entry control focusable",
-  );
-  await portrait.screenshot({ path: path.join(evidence, "art-portrait.png") });
+  assert.equal(await portrait.locator(".yut-entry-motion-toggle").count(), 0);
+  await portrait.screenshot({
+    path: path.join(evidence, "layered-portrait.png"),
+  });
   await portrait.close();
   report.checks.push(
-    "Normal/reduced entry uses three whole images loaded once with 8s/12s loops; keyboard pause/resume preserves manual choice through visibility changes; hidden/offscreen stops actual animation time; motion controls fit desktop/tablet/mobile and save-data retains the single still",
+    "Fixed-background pixel identity, independent intact actor frames/alpha, staggered normal/reduced timing, pause/resume, cached layers, safe menu/window stacking and save-data still passed",
   );
 }
 async function assertEntryAnimationState(scene, state) {
-  await scene.page().waitForFunction(
-    ({ selector, state }) => {
-      const nodes = Array.from(document.querySelectorAll(selector)),
-        animations = nodes.flatMap((node) => node.getAnimations());
-      return (
-        animations.length === 2 &&
-        animations.every((animation) => animation.playState === state)
-      );
-    },
-    { selector: ".yut-entry-scene-frame--1,.yut-entry-scene-frame--2", state },
+  await scene.page().waitForFunction((state) => {
+    const node = document.querySelector(".yut-entry-scene"),
+      animations = node?.getAnimations({ subtree: true }) || [];
+    return (
+      animations.length === 16 &&
+      animations.every((animation) => animation.playState === state)
+    );
+  }, state);
+  await scene.evaluate((node) =>
+    Promise.all(
+      node.getAnimations({ subtree: true }).map((animation) => animation.ready),
+    ),
   );
   if (state === "paused") {
     const read = () =>
       scene.evaluate((node) =>
-        Array.from(node.querySelectorAll("img"))
-          .flatMap((image) => image.getAnimations())
+        node
+          .getAnimations({ subtree: true })
           .map((animation) => animation.currentTime),
       );
     const before = await read();
     await scene.page().waitForTimeout(100);
-    assert.deepEqual(
-      await read(),
-      before,
-      "Paused scene holds actual animation time",
-    );
+    assert.deepEqual(await read(), before);
   }
 }
-async function verifyIdleOffsets() {
+async function verifyIdleOffsets(reducedMotion = "no-preference") {
   for (const scenario of ["waiting-four", "two-home"]) {
-    const page = await open("scenario=" + scenario);
+    const page = await open("scenario=" + scenario, reducedMotion);
     const sprites = page.locator(
       scenario === "waiting-four"
         ? ".yut-seat .yut-frame-sprite"
@@ -1407,9 +1547,9 @@ async function verifyExplicitPieceControls() {
     "Explicit 1/2 piece buttons expose selection to keyboard users, clear stale destinations, fit mobile/desktop, and send only the confirmed second-piece move",
   );
 }
-async function verifyBonusReveal() {
+async function verifyBonusReveal(reducedMotion = "no-preference") {
   for (const value of [1, 4, 5]) {
-    const page = await open("scenario=waiting", "no-preference", 844, 390);
+    const page = await open("scenario=waiting", reducedMotion, 844, 390);
     await page
       .getByRole("button", { name: "윷판 펼치기", exact: true })
       .click();
@@ -1462,11 +1602,11 @@ async function verifyBonusReveal() {
     "Real throw reveal distinguishes normal results from gold Yut/Mo bonus announcements without leaving the mobile frame",
   );
 }
-async function verifyTwoChoices() {
+async function verifyTwoChoices(reducedMotion = "no-preference") {
   for (const carry of [false, true]) {
     const page = await open(
       "scenario=two-choice",
-      "no-preference",
+      reducedMotion,
       carry ? 1280 : 844,
       carry ? 800 : 390,
     );
@@ -1952,8 +2092,329 @@ async function verifyTwoGroupAndFinish() {
   );
   await game.close();
 }
+async function verifyThemedLoading(
+  reducedMotion,
+  fallback = false,
+  width = 844,
+  height = 390,
+) {
+  const page = await open(
+      "scenario=waiting&hold-lobby" + (fallback ? "&fail-loading-art" : ""),
+      reducedMotion,
+      width,
+      height,
+    ),
+    loader = page.locator(".weplay-game-loading.is-yut"),
+    art = loader.locator(".weplay-game-loading__yut-art");
+  await loader.waitFor();
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".weplay-game-loading")?.dataset.motion ===
+      "running",
+  );
+  assert.equal(
+    await loader.locator(".weplay-game-loading__seal").count(),
+    0,
+    "Yut loading never shows the generic W seal",
+  );
+  assert.equal(
+    await loader.locator(".weplay-game-loading__yut-stick").count(),
+    4,
+  );
+  assert.equal(
+    await page.locator(".yut-game-content").evaluate((node) => node.inert),
+    true,
+  );
+  await page.keyboard.press("Tab");
+  assert.equal(
+    await page.evaluate(() =>
+      Boolean(document.activeElement.closest("[inert]")),
+    ),
+    false,
+  );
+  if (fallback) {
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".weplay-game-loading__yut-art")?.dataset.art ===
+        "fallback",
+    );
+    assert.equal(
+      await loader.locator(".weplay-game-loading__yut-portrait").count(),
+      0,
+    );
+  } else {
+    assert.equal(await art.getAttribute("data-art"), "portraits");
+    assert.equal(
+      await loader.locator(".weplay-game-loading__yut-portrait").count(),
+      4,
+    );
+  }
+  const samples = await loader.evaluate((node) => {
+    const animated = Array.from(
+        node.querySelectorAll(
+          ".weplay-game-loading__yut-portrait,.weplay-game-loading__yut-stick,.weplay-game-loading__dots i",
+        ),
+      ),
+      animations = animated.flatMap((child) => child.getAnimations()),
+      times = animations.map((animation) => animation.currentTime),
+      samples = [0, 700, 1200].map((time) => {
+        animations.forEach((animation) => (animation.currentTime = time));
+        return animated.map((child) => ({
+          opacity: getComputedStyle(child).opacity,
+          transform: getComputedStyle(child).transform,
+        }));
+      });
+    const timings = animations.map((animation) => animation.effect.getTiming());
+    animations.forEach(
+      (animation, index) => (animation.currentTime = times[index]),
+    );
+    return { samples, timings };
+  });
+  assert.equal(samples.timings.length, fallback ? 7 : 11);
+  assert.ok(samples.timings.every((timing) => timing.duration === 1400));
+  assert.notDeepEqual(
+    samples.samples[0].map((item) => item.opacity),
+    samples.samples[1].map((item) => item.opacity),
+    "Theme progress remains visibly animated with global CSS",
+  );
+  if (reducedMotion === "reduce")
+    assert.ok(
+      samples.samples.every((frame) =>
+        frame.every((item) => item.transform === "none"),
+      ),
+      "Reduced loading changes opacity without spatial movement",
+    );
+  await hidePage(page, true);
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".weplay-game-loading")?.dataset.motion ===
+      "paused",
+  );
+  await loader.evaluate((node) =>
+    Promise.all(
+      node.getAnimations({ subtree: true }).map((animation) => animation.ready),
+    ),
+  );
+  const read = () =>
+    loader.evaluate((node) =>
+      node
+        .getAnimations({ subtree: true })
+        .map((animation) => ({
+          time: animation.currentTime,
+          state: animation.playState,
+        })),
+    );
+  const paused = await read();
+  assert.ok(paused.every((item) => item.state === "paused"));
+  await page.waitForTimeout(120);
+  assert.deepEqual(await read(), paused);
+  await hidePage(page, false);
+  await loader.evaluate(
+    (node) => (node.style.transform = "translateX(-10000px)"),
+  );
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".weplay-game-loading")?.dataset.motion ===
+      "paused",
+  );
+  await loader.evaluate((node) => (node.style.transform = ""));
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".weplay-game-loading")?.dataset.motion ===
+      "running",
+  );
+  const box = await loader
+    .locator(".weplay-game-loading__plaque")
+    .boundingBox();
+  assert.ok(
+    box.x >= 0 &&
+      box.y >= 0 &&
+      box.x + box.width <= width &&
+      box.y + box.height <= height,
+    "Themed loading plaque fits viewport",
+  );
+  const label = reducedMotion + "-" + width + (fallback ? "-fallback" : "");
+  await page.screenshot({
+    path: path.join(evidence, "loading-" + label + ".png"),
+  });
+  await page.evaluate(() => window.qa.resolveLobby());
+  await loader.waitFor({ state: "detached" });
+  assert.equal(
+    await page.locator(".yut-game-content").evaluate((node) => node.inert),
+    false,
+  );
+  if (width >= height) {
+    const start = page.getByRole("button", {
+      name: "윷판 펼치기",
+      exact: true,
+    });
+    await page.evaluate(() => {
+      window.qa.delay = 500;
+      window.qa.fail = true;
+    });
+    await start.click();
+    await loader.waitFor();
+    await page.keyboard.press("Enter");
+    assert.equal(
+      await page.evaluate(() => window.qa.calls.length),
+      1,
+      "Busy network state prevents keyboard duplicates",
+    );
+    await page.getByText("검증용 연결 오류", { exact: true }).waitFor();
+    assert.equal(await loader.count(), 0);
+    assert.equal(
+      await page.locator(".yut-game-content").evaluate((node) => node.inert),
+      false,
+    );
+  }
+  report.paths["loading-" + label] = { samples, box };
+  await page.close();
+}
+async function verifyMotionFeedback(reducedMotion) {
+  const page = await open("board=1&scenario=capture", reducedMotion, 1280, 800);
+  await page.waitForTimeout(150);
+  await observeCapture(page);
+  await page.evaluate(() => window.qa.move("a"));
+  const moving = page.locator(".is-moving:not(.is-caught)").first();
+  await moving.waitFor();
+  const hop = await moving.evaluate((node) =>
+    node
+      .getAnimations()
+      .flatMap((animation) => animation.effect.getKeyframes())
+      .map((frame) => String(frame.transform)),
+  );
+  assert.ok(
+    hop.some((transform) =>
+      transform.includes(
+        "translateY(-" + (reducedMotion === "reduce" ? 12 : 32) + "px)",
+      ),
+    ),
+  );
+  const walking = await inspectSpriteFrames(
+    moving.locator(".yut-frame-sprite"),
+  );
+  const reaction = page.locator(".yut-capture-reaction");
+  await reaction.waitFor();
+  const burst = await reaction
+    .locator(".yut-capture-burst")
+    .evaluate((node) => ({
+      animation: getComputedStyle(node).animationName,
+      duration: getComputedStyle(node).animationDuration,
+    }));
+  assert.notEqual(burst.animation, "none");
+  const caught = await inspectSpriteFrames(
+    reaction.locator(".yut-frame-sprite"),
+  );
+  await page.screenshot({
+    path: path.join(evidence, "capture-global-" + reducedMotion + ".png"),
+  });
+  await reaction.waitFor({ state: "detached" });
+  assert.equal(await page.evaluate(() => window.qa.steps.length), 5);
+  report.paths["capture-global-" + reducedMotion] = {
+    hop,
+    walking,
+    caught,
+    burst,
+  };
+  await page.close();
+  const game = await open("scenario=finish-four", reducedMotion, 844, 390);
+  await game.locator(".yut-isometric-destination").first().click();
+  await game.getByRole("button", { name: "결정", exact: true }).click();
+  await game.locator(".yut-victory").waitFor();
+  const winner = await inspectSpriteFrames(
+    game.locator(".yut-victory .yut-frame-sprite"),
+  );
+  const feedback = await game
+    .locator(".yut-victory")
+    .evaluate((node) => ({
+      name: getComputedStyle(node).animationName,
+      duration: getComputedStyle(node).animationDuration,
+      petals: Array.from(node.querySelectorAll(".yut-victory-petals i")).map(
+        (child) => ({
+          display: getComputedStyle(child).display,
+          name: getComputedStyle(child).animationName,
+          duration: getComputedStyle(child).animationDuration,
+        }),
+      ),
+    }));
+  assert.notEqual(feedback.name, "none");
+  assert.equal(feedback.duration, "0.6s");
+  assert.ok(
+    feedback.petals.length > 0 &&
+      feedback.petals.every(
+        (item) => item.name !== "none" && item.display !== "none",
+      ),
+  );
+  await game.screenshot({
+    path: path.join(evidence, "victory-global-" + reducedMotion + ".png"),
+  });
+  report.paths["victory-global-" + reducedMotion] = { winner, feedback };
+  await game.close();
+}
+async function verifyMotionAudit() {
+  const phase = process.env.YUT_MOTION_QA_PHASE;
+  if (phase === "entry-final") {
+    await verifyEntryArtwork();
+    return;
+  }
+  if (phase === "entry-layout") {
+    for (const [width, height] of [
+      [1440, 900],
+      [844, 390],
+      [768, 600],
+    ]) {
+      const page = await open("scenario=entry", "no-preference", width, height);
+      await page.waitForFunction(
+        () =>
+          document.querySelector(".yut-entry-scene")?.dataset.sceneReady ===
+          "true",
+      );
+      await page.locator(".yut-entry-motion-toggle").click();
+      await page.waitForTimeout(150);
+      await page.screenshot({
+        path: path.join(evidence, "entry-layered-" + width + ".png"),
+      });
+      report.paths["entry-layered-" + width] = await page
+        .locator(".yut-entry-scene")
+        .evaluate((node) => ({
+          box: node.getBoundingClientRect().toJSON(),
+          actors: Array.from(node.querySelectorAll(".yut-entry-actor")).map(
+            (actor) => ({
+              role: actor.dataset.role,
+              box: actor.getBoundingClientRect().toJSON(),
+            }),
+          ),
+        }));
+      await page.close();
+    }
+    report.checks.push(
+      "Layered entry layout screenshots recorded for parent visual review",
+    );
+    return;
+  }
+  for (const reduced of ["no-preference", "reduce"]) {
+    if (!phase || phase === "loading") await verifyThemedLoading(reduced);
+    if (!phase || phase === "feedback") await verifyMotionFeedback(reduced);
+    if (!phase || phase === "play") {
+      await verifyIdleOffsets(reduced);
+      await verifyBonusReveal(reduced);
+      await verifyTwoChoices(reduced);
+    }
+  }
+  if (!phase || phase === "loading") {
+    await verifyThemedLoading("reduce", true);
+    await verifyThemedLoading("reduce", false, 390, 844);
+  }
+  report.checks.push(
+    "Actual global CSS " +
+      (phase || "loading, feedback and play") +
+      " audit passed under both OS motion preferences; assertions and measured frames are recorded below",
+  );
+}
 try {
-  if (entryPolishOnly) {
+  if (motionAuditOnly) {
+    await verifyMotionAudit();
+  } else if (entryPolishOnly) {
     await verifyEntryPolish();
   } else if (artOnly) {
     await verifyArtSheets();
@@ -2896,23 +3357,25 @@ try {
   await fs.writeFile(
     path.join(
       evidence,
-      entryPolishOnly
-        ? process.env.YUT_ENTRY_QA_PHASE
-          ? "report-" + process.env.YUT_ENTRY_QA_PHASE + ".json"
-          : "report.json"
-        : artOnly
-          ? "report-art.json"
-          : twoPiecesOnly
-            ? process.env.YUT_TWO_QA_PHASE
-              ? "report-two-pieces-" + process.env.YUT_TWO_QA_PHASE + ".json"
-              : "report-two-pieces.json"
-            : captureOnly
-              ? "report-capture-timing.json"
-              : gaugeOnly
-                ? "report-gauge.json"
-                : presentationOnly
-                  ? "report-presentation.json"
-                  : "report.json",
+      motionAuditOnly && process.env.YUT_MOTION_QA_PHASE
+        ? "report-" + process.env.YUT_MOTION_QA_PHASE + ".json"
+        : entryPolishOnly
+          ? process.env.YUT_ENTRY_QA_PHASE
+            ? "report-" + process.env.YUT_ENTRY_QA_PHASE + ".json"
+            : "report.json"
+          : artOnly
+            ? "report-art.json"
+            : twoPiecesOnly
+              ? process.env.YUT_TWO_QA_PHASE
+                ? "report-two-pieces-" + process.env.YUT_TWO_QA_PHASE + ".json"
+                : "report-two-pieces.json"
+              : captureOnly
+                ? "report-capture-timing.json"
+                : gaugeOnly
+                  ? "report-gauge.json"
+                  : presentationOnly
+                    ? "report-presentation.json"
+                    : "report.json",
     ),
     JSON.stringify(report, null, 2),
   );

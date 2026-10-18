@@ -35,6 +35,10 @@
 .yut-game .yut-waiting {
   padding-top: 64px;
 }
+/* Recovery stays below the independent toolbar so its button remains reachable. */
+.yut-game:not(.yut-game--match) .yut-message {
+  margin-top: 64px;
+}
 .yut-game .yut-entry {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 30%);
   align-items: center;
@@ -319,6 +323,9 @@
   }
 }
 @media (max-width: 820px) and (orientation: landscape) {
+  .yut-game--match .yut-message {
+    margin-top: 56px;
+  }
   .yut-game--match .yut-floating-controls {
     top: 4px;
     bottom: auto;
@@ -337,6 +344,14 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .yut-landing-result.is-bonus::before {
-    animation: none;
+    animation-name: yut-bonus-ink-soft;
+  }
+}
+@keyframes yut-bonus-ink-soft {
+  from {
+    opacity: 0.15;
+  }
+  to {
+    opacity: 1;
   }
 }

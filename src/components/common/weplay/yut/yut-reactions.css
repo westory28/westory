@@ -148,9 +148,17 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .yut-capture-burst {
-    animation: none;
+    animation-name: yut-capture-pop-soft;
   }
   .yut-turn-gauge-track i {
-    transition: none;
+    transition-duration: 120ms;
+  }
+}
+@keyframes yut-capture-pop-soft {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 1;
   }
 }

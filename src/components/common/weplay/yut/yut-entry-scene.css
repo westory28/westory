@@ -7,6 +7,7 @@
 }
 .yut-game .yut-entry {
   background: #241b13;
+  isolation: isolate;
 }
 .yut-game .yut-entry-scene {
   overflow: hidden;
@@ -21,51 +22,152 @@
   background: linear-gradient(0deg, #20150d99, transparent 30%);
   pointer-events: none;
 }
-.yut-entry-scene-frame {
+.yut-entry-stage,
+.yut-entry-scene-still {
   position: absolute;
   inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center;
   pointer-events: none;
 }
-.yut-entry-scene-frame--1,
-.yut-entry-scene-frame--2 {
+.yut-entry-actor-frame {
+  overflow: hidden;
   opacity: 0;
-  animation: yut-entry-pose-b 8s steps(1, end) infinite;
+  animation: yut-entry-actor-base var(--actor-duration) steps(1, end)
+    var(--actor-delay) infinite;
 }
-.yut-entry-scene-frame--2 {
-  animation-name: yut-entry-pose-c;
+.yut-entry-actor-frame--1 {
+  animation-name: yut-entry-actor-blink;
 }
-/* Different characters react at each beat; the shared thumbnail separates the beats. */
-@keyframes yut-entry-pose-b {
+.yut-entry-actor-frame--2 {
+  animation-name: yut-entry-actor-gesture;
+}
+@keyframes yut-entry-actor-base {
   0%,
-  20%,
-  30%,
+  26%,
+  68%,
+  100% {
+    opacity: 1;
+  }
+  18%,
+  58% {
+    opacity: 0;
+  }
+}
+@keyframes yut-entry-actor-blink {
+  0%,
+  26%,
   100% {
     opacity: 0;
   }
-  24% {
+  18% {
     opacity: 1;
   }
 }
-@keyframes yut-entry-pose-c {
+@keyframes yut-entry-actor-gesture {
   0%,
-  61%,
-  74%,
+  68%,
   100% {
     opacity: 0;
   }
-  66% {
+  58% {
     opacity: 1;
   }
 }
-.yut-game[data-motion-paused="true"] .yut-entry-scene-frame,
-.yut-entry-scene[data-scene-visible="false"] .yut-entry-scene-frame,
-.yut-entry-scene[data-scene-paused="true"] .yut-entry-scene-frame {
+.yut-entry-stick {
+  animation: yut-entry-stick-float 4800ms ease-in-out var(--stick-delay)
+    infinite alternate;
+}
+.yut-entry-stick > svg {
+  overflow: hidden;
+}
+@keyframes yut-entry-stick-float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-12px);
+  }
+}
+.yut-game[data-motion-paused="true"] .yut-entry-actor-frame,
+.yut-game[data-motion-paused="true"] .yut-entry-stick,
+.yut-entry-scene[data-scene-visible="false"] .yut-entry-actor-frame,
+.yut-entry-scene[data-scene-visible="false"] .yut-entry-stick,
+.yut-entry-scene[data-scene-paused="true"] .yut-entry-actor-frame,
+.yut-entry-scene[data-scene-paused="true"] .yut-entry-stick {
   animation-play-state: paused !important;
+}
+/* Joseon sesal changho: fine vertical wooden bars, clustered horizontal ties, hanji. */
+.yut-game .yut-entry-window {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: calc(max(280px, 30%) + 36px);
+  display: flex;
+  padding: 12px;
+  gap: 8px;
+  pointer-events: none;
+  border-left: 8px solid #4b2e1c;
+  background: linear-gradient(90deg, #563822, #392317);
+  box-shadow: inset 8px 0 16px #120c0980;
+}
+.yut-entry-window > span {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border: 5px solid #694323;
+  background-color: #d9bd86;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 17px,
+      #68462a 17px 20px,
+      #ad8150 20px 21px
+    ),
+    repeating-linear-gradient(18deg, #f7ebca50 0 1px, transparent 1px 4px),
+    linear-gradient(90deg, #cdb17fe0, #f0dfbbe0);
+  background-size: auto, auto, auto;
+  box-shadow:
+    inset 0 0 20px #62432177,
+    1px 0 0 #b78a57;
+}
+.yut-entry-window > span > i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12%;
+  height: 40px;
+  background: repeating-linear-gradient(
+    0deg,
+    #714c2c 0 3px,
+    #a67d4c 3px 4px,
+    transparent 4px 9px
+  );
+  pointer-events: none;
+}
+.yut-entry-window > span > i:nth-child(2) {
+  top: calc(50% - 20px);
+}
+.yut-entry-window > span > i:nth-child(3) {
+  top: auto;
+  bottom: 12%;
+}
+.yut-game .yut-entry-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, #291b15a8, transparent 30%, #2e1c1266);
+}
+.yut-game .yut-entry-menu {
+  position: relative;
+  z-index: 1;
+  box-shadow:
+    0 12px 28px #170d08ad,
+    inset 0 0 0 1px #f8e7c2;
 }
 .yut-game .yut-entry-motion-toggle {
   position: absolute;
@@ -80,16 +182,29 @@
   color: #fff2d2;
 }
 @media (prefers-reduced-motion: reduce) {
-  .yut-game .yut-entry-scene-frame--1,
-  .yut-game .yut-entry-scene-frame--2 {
-    animation-duration: 12s !important;
-    animation-iteration-count: infinite !important;
-    animation-timing-function: steps(1, end) !important;
+  .yut-game .yut-entry-actor-frame {
+    animation-duration: calc(var(--actor-duration) * 1.5);
+  }
+  .yut-game .yut-entry-stick {
+    animation-name: yut-entry-stick-small;
+  }
+  @keyframes yut-entry-stick-small {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-3px);
+    }
   }
 }
 @media (orientation: landscape) and (max-height: 560px) {
   .yut-game .yut-entry-scene {
     right: calc(max(280px, 34%) + 20px);
+  }
+  .yut-game .yut-entry-window {
+    width: calc(max(280px, 34%) + 20px);
+    padding: 8px;
+    gap: 4px;
   }
   .yut-game .yut-entry-motion-toggle {
     right: calc(max(280px, 34%) + 32px);
@@ -97,7 +212,13 @@
   }
 }
 @media (max-width: 820px) {
-  .yut-entry-scene-frame {
+  .yut-entry-actor[data-role="ox"] {
+    transform: translate(160px, -180px);
+  }
+  .yut-entry-actor[data-role="dog"] {
+    transform: translateX(-160px);
+  }
+  .yut-entry-scene-still {
     object-fit: contain;
   }
 }

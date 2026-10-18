@@ -1,0 +1,141 @@
+/* The same original animal artwork and wooden sticks identify Yut at every load. */
+.weplay-game-loading.is-yut .weplay-game-loading__plaque {
+  box-sizing: border-box;
+  min-width: min(260px, 100%);
+  max-width: 100%;
+  gap: 12px;
+  padding: 24px;
+}
+.weplay-game-loading.is-yut .weplay-game-loading__plaque > strong {
+  max-width: 100%;
+  color: #fff2d2;
+  text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.weplay-game-loading__yut-art {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.weplay-game-loading__yut-portraits {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.weplay-game-loading__yut-portrait {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border: 1px solid #d8ae66;
+  border-radius: 50%;
+  background: #d5b77b;
+  box-shadow: inset 0 0 0 2px #3b281b;
+  animation: yut-loading-portrait 1400ms ease-in-out infinite;
+}
+.weplay-game-loading__yut-portrait:nth-child(2) {
+  animation-delay: 210ms;
+}
+.weplay-game-loading__yut-portrait:nth-child(3) {
+  animation-delay: 420ms;
+}
+.weplay-game-loading__yut-portrait:nth-child(4) {
+  animation-delay: 630ms;
+}
+.weplay-game-loading__yut-portrait > svg {
+  position: absolute;
+  top: -3%;
+  left: 50%;
+  width: 190%;
+  max-width: none;
+  height: auto;
+  transform: translateX(-50%);
+  image-rendering: pixelated;
+}
+.weplay-game-loading__yut-sticks {
+  width: 72px;
+  height: 40px;
+  overflow: visible;
+}
+.weplay-game-loading__yut-stick {
+  animation: yut-loading-stick 1400ms ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.weplay-game-loading__yut-stick rect {
+  fill: #d5b77b;
+  stroke: #6b4023;
+  stroke-width: 1.5;
+}
+.weplay-game-loading__yut-stick path {
+  fill: none;
+  stroke: #6b4023;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+.weplay-game-loading.is-yut .weplay-game-loading__dots i {
+  animation: yut-loading-progress 1400ms ease-in-out infinite;
+}
+.weplay-game-loading.is-yut .weplay-game-loading__dots i:nth-child(2) {
+  animation-delay: 210ms;
+}
+.weplay-game-loading.is-yut .weplay-game-loading__dots i:nth-child(3) {
+  animation-delay: 420ms;
+}
+.weplay-game-loading.is-yut[data-motion="paused"]
+  :is(
+    .weplay-game-loading__yut-portrait,
+    .weplay-game-loading__yut-stick,
+    .weplay-game-loading__dots i
+  ) {
+  animation-play-state: paused !important;
+}
+@keyframes yut-loading-portrait {
+  0%,
+  100% {
+    opacity: 0.65;
+    border-color: #9b773f;
+  }
+  40%,
+  60% {
+    opacity: 1;
+    border-color: #fff2d2;
+  }
+}
+@keyframes yut-loading-stick {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.65;
+  }
+  40%,
+  60% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+@keyframes yut-loading-progress {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  40%,
+  60% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .weplay-game-loading__yut-portrait {
+    animation-timing-function: steps(1, end);
+  }
+  .weplay-game-loading__yut-stick {
+    animation-name: yut-loading-progress;
+    animation-timing-function: steps(1, end);
+  }
+  .weplay-game-loading.is-yut .weplay-game-loading__dots i {
+    animation-timing-function: steps(1, end);
+  }
+}

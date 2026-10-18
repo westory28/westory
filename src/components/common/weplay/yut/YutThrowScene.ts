@@ -636,20 +636,22 @@ export class YutThrowScene {
       }
     }
     const dustTime = clamp((time - 0.9) / 0.5);
-    this.dust.visible = !this.media.matches && dustTime > 0 && dustTime < 1;
+    const dustStrength = this.media.matches ? 0.55 : 1;
+    this.dust.visible = dustTime > 0 && dustTime < 1;
     for (let n = 0; n < 96; n++) {
       const origin = yutThrowPlan(n % 4, this.power, this.key || ""),
         angle = n * 2.399;
-      const speed = 0.12 + ((n * 17) % 31) / 80;
+      const speed = (0.12 + ((n * 17) % 31) / 80) * dustStrength;
       this.dustPositions[n * 3] = origin.x + Math.cos(angle) * dustTime * speed;
       this.dustPositions[n * 3 + 1] =
-        0.025 + Math.sin(dustTime * Math.PI) * (0.05 + (n % 5) * 0.035);
+        0.025 +
+        Math.sin(dustTime * Math.PI) * (0.05 + (n % 5) * 0.035) * dustStrength;
       this.dustPositions[n * 3 + 2] =
         origin.z + Math.sin(angle) * dustTime * speed;
     }
     this.dust.geometry.getAttribute("position").needsUpdate = true;
     (this.dust.material as THREE.PointsMaterial).opacity =
-      0.18 * Math.pow(1 - dustTime, 2);
+      0.18 * dustStrength * Math.pow(1 - dustTime, 2);
   }
 
   private render() {
