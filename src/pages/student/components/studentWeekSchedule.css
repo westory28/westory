@@ -183,7 +183,7 @@
 }
 
 .student-week-strip__day.has-ribbon strong {
-  color: var(--week-ribbon-text-color);
+  color: white;
   background: var(--week-ribbon-color);
 }
 

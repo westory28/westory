@@ -251,12 +251,12 @@ try {
       const counts = [1, 7, 3, 3, 2, 2, 12];
       const expectedBackgrounds = [
         null,
-        "rgb(139, 92, 246)",
-        "rgb(239, 68, 68)",
-        "rgb(234, 179, 8)",
-        "rgb(16, 185, 129)",
-        "rgb(59, 130, 246)",
-        "rgb(59, 130, 246)",
+        "rgb(112, 73, 198)",
+        "rgb(173, 48, 48)",
+        "rgb(123, 93, 2)",
+        "rgb(8, 108, 74)",
+        "rgb(42, 94, 178)",
+        "rgb(42, 94, 178)",
       ];
       for (let index = 0; index < counts.length; index++) {
         const day = days.nth(index);
@@ -298,7 +298,7 @@ try {
           layout.inside && layout.oneLine && !layout.overflow,
           JSON.stringify({ width, role, index, layout }),
         );
-        if (expectedBackgrounds[index])
+        if (expectedBackgrounds[index]) {
           assert.equal(
             await day
               .locator("strong")
@@ -306,6 +306,14 @@ try {
             expectedBackgrounds[index],
             `${role}: category importance determines the day color`,
           );
+          assert.equal(
+            await day
+              .locator("strong")
+              .evaluate((node) => getComputedStyle(node).color),
+            "rgb(255, 255, 255)",
+            `${role}: numbers inside colored day circles stay white`,
+          );
+        }
       }
       assert.deepEqual(
         await days

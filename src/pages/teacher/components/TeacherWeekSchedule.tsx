@@ -12,7 +12,6 @@ import type { CalendarEvent } from "../../../types";
 import {
   getScheduleCategoryMeta,
   getScheduleEventColor,
-  getScheduleEventTextColor,
   type ScheduleCategory,
 } from "../../../lib/scheduleCategories";
 import {
@@ -361,8 +360,10 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 (event) => event.eventType !== "holiday",
               );
               const ribbonColor = ribbonEvent
-                ? getScheduleCategoryMeta(ribbonEvent.eventType, categories)
-                    .color
+                ? readableEventColor(
+                    getScheduleCategoryMeta(ribbonEvent.eventType, categories)
+                      .color,
+                  )
                 : undefined;
               const dayDescription = dayEvents
                 .map(
@@ -381,10 +382,6 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                     ribbonEvent && ribbonColor
                       ? ({
                           "--week-ribbon-color": ribbonColor,
-                          "--week-ribbon-text-color": getScheduleEventTextColor(
-                            { eventType: ribbonEvent.eventType },
-                            categories,
-                          ),
                         } as React.CSSProperties)
                       : undefined
                   }
