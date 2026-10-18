@@ -23,7 +23,7 @@ try {
       ),
   );
 }
-const evidence = path.join(root, "output/yut-20261018");
+const evidence = path.join(root, "output/yut-revision-20261018");
 await fs.mkdir(evidence, { recursive: true });
 const modulePath = (value) =>
   JSON.stringify(path.join(root, value).replaceAll("\\", "/"));
@@ -35,7 +35,7 @@ const qa=window.yutQA={calls:[],failNext:false,dropNextResponse:false};
 async function request(endpoint,data){qa.calls.push({endpoint,data});if(qa.failNext){qa.failNext=false;throw new Error('검증용 연결 오류: 다시 시도해 주세요.');}const response=await fetch('/qa/'+endpoint+'?uid='+uid,{method:data?'POST':'GET',headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});const result=await response.json();if(!response.ok)throw Object.assign(new Error(result.error),{code:'aborted'});if(qa.dropNextResponse){qa.dropNextResponse=false;throw new Error('응답 연결이 끊겼습니다.');}return result;}
 export const getYutLobby=()=>request('lobby');
 export const commandYutRoom=(_config,data)=>request('command',data);
-export function subscribeYutRoom(_config,roomId,onRoom,onError){let stopped=false,last=-1;const read=async()=>{try{const response=await fetch('/qa/state?uid='+uid);const value=await response.json();if(!stopped&&(value.room?.revision??-2)!==last){last=value.room?.revision??-2;onRoom(value.room);}}catch(error){if(!stopped)onError(error);}};read();const timer=setInterval(read,100);return()=>{stopped=true;clearInterval(timer);};}
+export function subscribeYutRoom(_config,roomId,onRoom,onError){let stopped=false,last=-1;const read=async()=>{try{const response=await fetch('/qa/state?uid='+uid);const value=await response.json();const revision=value.room?.syncRevision??value.room?.revision??-2;if(!stopped&&revision!==last){last=revision;onRoom(value.room);}}catch(error){if(!stopped)onError(error);}};read();const timer=setInterval(read,100);return()=>{stopped=true;clearInterval(timer);};}
 export const yutErrorMessage=error=>error?.message||'다시 시도해 주세요.';
 `;
 const harness = `
@@ -131,8 +131,8 @@ const server = http.createServer(async (request, response) => {
           room?.participantUids.includes(uid) && room.status !== "closed"
             ? room
             : null,
-        classes: [{ id: "qa-class", label: "1학년 1반" }],
-        classId: "qa-class",
+        classes: [],
+        classId: "",
         serverNowMs: Date.now(),
       });
     if (url.pathname === "/qa/state")
@@ -145,7 +145,7 @@ const server = http.createServer(async (request, response) => {
       if (history.has(data.requestKey))
         return json(history.get(data.requestKey));
       if (
-        !["create", "join"].includes(data.action) &&
+        !["create", "join", "emote"].includes(data.action) &&
         data.expectedRevision !== room?.revision
       )
         throw new Error("방 상태가 바뀌었습니다. 다시 시도해 주세요.");
@@ -154,8 +154,8 @@ const server = http.createServer(async (request, response) => {
         room = core.createYutRoom({
           id: "browser-qa-room",
           code: "AB2345",
-          classId: "qa-class",
-          classLabel: "1학년 1반",
+          classId: "",
+          classLabel: "함께하는 윷판",
           host: { uid, name: "첫째 학생" },
           nowMs: now,
         });
@@ -184,6 +184,8 @@ const server = http.createServer(async (request, response) => {
       else if (data.action === "leave")
         room = core.leaveYutRoom(room, uid, now);
       else if (data.action === "close") room = core.closeYutRoom(room, now);
+      else if (data.action === "emote")
+        room = core.addYutEmote(room, uid, data.kind, data.requestKey, now);
       const result = {
         room:
           room?.participantUids.includes(uid) && data.action !== "leave"
@@ -238,9 +240,15 @@ const browser = await playwright.chromium.launch({
 });
 const checks = [],
   errors = [];
-async function open(width, query = "") {
+async function open(
+  width,
+  query = "",
+  height = 900,
+  reducedMotion = "no-preference",
+) {
   const page = await browser.newPage({
-    viewport: { width, height: 900 },
+    viewport: { width, height },
+    reducedMotion,
     deviceScaleFactor: 1,
   });
   page.on("pageerror", (error) => errors.push(error.message));
@@ -283,10 +291,30 @@ try {
   for (const width of [320, 390, 768, 1280, 1440]) {
     const page = await open(width, "portal=teacher&uid=qa-teacher");
     await skip(page);
+    if (width < 1024) {
+      await page
+        .getByText("휴대폰을 가로로 돌려 주세요.", { exact: true })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "새로운 판 만들기", exact: true })
+          .count(),
+        0,
+      );
+      await capture(page, "yut-portrait-gate-" + width);
+      await page.setViewportSize({
+        width: width === 320 ? 640 : width === 390 ? 844 : 1024,
+        height: width === 768 ? 768 : 390,
+      });
+    }
     await page
       .getByRole("button", { name: "새로운 판 만들기", exact: true })
       .waitFor();
     await page.evaluate(() => document.fonts.ready);
+    assert.equal(
+      await page.getByLabel("함께할 학급", { exact: true }).count(),
+      0,
+    );
     await capture(page, "yut-lobby-" + width);
     await page
       .getByRole("button", { name: "대기실부터 체험하기", exact: true })
@@ -326,12 +354,12 @@ try {
     await page.close();
   }
   checks.push(
-    "Teacher preview opens waiting room; play/throw/move/rules at 320/390/768/1280/1440 without network writes or horizontal overflow.",
+    "Portrait 320/390/768 shows rotation gate without room-start controls; 640/844/1024 landscape and 1280/1440 desktop support waiting/play/throw/move/rules without network writes or overflow; class selector removed.",
   );
   await fetch(base + "/qa/reset");
   const host = await open(1280, "portal=student&uid=qa-host");
   await skip(host);
-  const guest = await open(390, "portal=student&uid=qa-guest");
+  const guest = await open(844, "portal=student&uid=qa-guest", 390);
   await skip(guest);
   await host
     .getByRole("button", { name: "새로운 판 만들기", exact: true })
@@ -347,6 +375,25 @@ try {
   await guest.getByRole("button", { name: "들어가기", exact: true }).click();
   await guest.getByRole("heading", { name: "한 판의 인연" }).waitFor();
   await guest.getByRole("button", { name: "준비 완료", exact: true }).click();
+  // Capture the revision only after the preceding ready command is acknowledged.
+  await guest.getByRole("button", { name: "준비 취소", exact: true }).waitFor();
+  const emoteRevision = room.revision;
+  await guest.getByRole("button", { name: "감정표현", exact: true }).click();
+  await guest.getByRole("button", { name: "안녕!", exact: true }).click();
+  await host.locator('[data-emote-kind="hello"]').waitFor();
+  assert.equal(
+    room.revision,
+    emoteRevision,
+    "emotes do not invalidate game commands",
+  );
+  await guest.getByRole("button", { name: "감정표현", exact: true }).click();
+  assert.equal(
+    await guest
+      .getByRole("button", { name: "좋아요!", exact: true })
+      .isEnabled(),
+    false,
+  );
+  await guest.keyboard.press("Escape");
   await host.getByRole("button", { name: "윷판 펼치기", exact: true }).click();
   await host.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
   await guest.locator(".yut-board").waitFor();
@@ -386,7 +433,7 @@ try {
     "Two independent browsers create/join/ready/start, enforce turn visibility, synchronize both moves, reload/rejoin the same match, and settle when opponent leaves.",
   );
   await fetch(base + "/qa/reset");
-  const recovery = await open(390, "portal=student&uid=qa-recovery");
+  const recovery = await open(844, "portal=student&uid=qa-recovery", 390);
   await skip(recovery);
   await recovery
     .getByRole("button", { name: "새로운 판 만들기", exact: true })
@@ -422,6 +469,54 @@ try {
   await recovery.close();
   checks.push(
     "Lost create response blocks duplicate commands; authoritative refresh restores the one committed room.",
+  );
+  await fetch(base + "/qa/reset");
+  const solo = await open(1280, "portal=student&uid=qa-solo", 800, "reduce");
+  await skip(solo);
+  await solo
+    .getByRole("button", { name: "싱글 모드 시작", exact: true })
+    .click();
+  await solo.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
+  const soloCalls = await solo.evaluate(() => window.yutQA.calls.length);
+  await capture(solo, "yut-student-single");
+  await solo.getByRole("button", { name: "감정표현", exact: true }).click();
+  await solo.getByRole("button", { name: "우와!", exact: true }).click();
+  await solo.locator('[data-emote-kind="wow"]').waitFor();
+  const started = Date.now();
+  await solo.getByRole("button", { name: "윷 던지기", exact: true }).click();
+  await solo.locator(".yut-throw-3d.is-rolling").waitFor();
+  await solo.waitForTimeout(700);
+  assert.equal(
+    await solo.locator(".yut-isometric-destination").count(),
+    0,
+    "reduced motion still shows flight",
+  );
+  await capture(solo, "yut-reduced-motion-flight");
+  await solo.locator(".yut-isometric-destination").first().waitFor();
+  assert.ok(
+    Date.now() - started >= 1800,
+    "flight is not skipped under reduced motion",
+  );
+  await solo.locator(".yut-isometric-destination").first().click();
+  await solo
+    .getByRole("button", { name: "윷 던지기", exact: true })
+    .waitFor({ timeout: 45000 });
+  assert.equal(
+    await solo.evaluate(() => window.yutQA.calls.length),
+    soloCalls,
+    "solo bot play has no server commands",
+  );
+  assert.equal(commands.length, 0);
+  await solo.setViewportSize({ width: 390, height: 844 });
+  await solo
+    .getByText("휴대폰을 가로로 돌려 주세요.", { exact: true })
+    .waitFor();
+  await solo.waitForTimeout(1500);
+  await solo.setViewportSize({ width: 844, height: 390 });
+  await solo.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
+  await solo.close();
+  checks.push(
+    "Student single mode plays with three randomized bots without server writes; fixed emotes show in local/online play, cooldown blocks repeat, game revision stays stable; reduced-motion flight remains visible; portrait pauses and restores solo.",
   );
   assert.deepEqual(errors, []);
 } finally {

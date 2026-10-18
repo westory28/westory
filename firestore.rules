@@ -1266,24 +1266,27 @@ service cloud.firestore {
             && manifest.get('readOnly', false) == false && manifest.revision is int
             && manifest.revision >= 1 && pointer.revision == manifest.revision;
         }
-        function currentYutMember() {
-          let profile = userProfile();
+        function currentYutStudentMember() {
           let enrollmentId = resource.data.enrollmentIds.get(request.auth.uid, 'none');
           let enrollment = get(/databases/$(database)/documents/semester_enrollments/$(enrollmentId)).data;
           let slotId = resource.data.enrollmentSlotIds.get(request.auth.uid, 'none');
           let slot = get(/databases/$(database)/documents/semester_enrollment_slots/$(slotId)).data;
-          let classroom = get(/databases/$(database)/documents/semester_classes/$(resource.data.classId)).data;
+          let classroom = get(/databases/$(database)/documents/semester_classes/$(enrollment.classId)).data;
+          return enrollment.studentUid == request.auth.uid
+            && enrollment.semesterId == year + '-' + semester
+            && enrollment.enrollmentStatus == 'ACTIVE' && enrollment.get('readOnly', false) == false
+            && slot.studentUid == request.auth.uid && slot.semesterId == year + '-' + semester
+            && slot.activeEnrollmentId == enrollmentId && slot.get('status', 'ACTIVE') == 'ACTIVE'
+            && classroom.semesterId == year + '-' + semester && classroom.status == 'ACTIVE'
+            && classroom.get('readOnly', false) == false;
+        }
+        function currentYutMember() {
+          let profile = userProfile();
           return profile.get('isDeleted', false) == false && profile.get('deletedAt', null) == null
             && profile.get('weplayDeletionPending', false) == false
-            && classroom.semesterId == year + '-' + semester && classroom.status == 'ACTIVE'
-            && classroom.get('readOnly', false) == false
             && (request.auth.token.email == 'westoria28@gmail.com' || profile.role == 'teacher'
               || (profile.role == 'staff' && hasPermission('lesson_read'))
-              || (profile.role == 'student' && enrollment.studentUid == request.auth.uid
-                && enrollment.semesterId == year + '-' + semester && enrollment.classId == resource.data.classId
-                && enrollment.enrollmentStatus == 'ACTIVE' && enrollment.get('readOnly', false) == false
-                && slot.studentUid == request.auth.uid && slot.semesterId == year + '-' + semester
-                && slot.activeEnrollmentId == enrollmentId && slot.get('status', 'ACTIVE') == 'ACTIVE'));
+              || (profile.role == 'student' && currentYutStudentMember()));
         }
         allow get: if canUseWestory() && hasActiveApplicationSession()
           && request.auth.uid in resource.data.participantUids

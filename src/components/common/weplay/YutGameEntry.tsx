@@ -15,7 +15,8 @@ export default function YutGameEntry({
 }) {
   const [introduced, setIntroduced] = useState(false);
   const [params, setParams] = useSearchParams();
-  const music = useYutMusic();
+  const [musicActive, setMusicActive] = useState(true);
+  const music = useYutMusic(musicActive);
   return (
     <main
       className={introduced ? "weplay-yut-page" : "weplay-page"}
@@ -38,6 +39,7 @@ export default function YutGameEntry({
         <Suspense fallback={<p role="status">윷판을 준비하고 있습니다.</p>}>
           <YutGame
             music={music}
+            onMusicActiveChange={setMusicActive}
             portal={portal}
             preview={portal === "teacher" && params.get("view") === "preview"}
             onBack={() => setParams({})}

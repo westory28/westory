@@ -1,11 +1,14 @@
 export type YutRole = 'sa' | 'nong' | 'gong' | 'sang';
 export type YutRoute = 'outer' | 'a' | 'b';
+export type YutEmoteKind = 'hello' | 'nice' | 'oops' | 'wow' | 'thanks' | 'gg';
+export interface YutEmote { id: string; uid: string; kind: YutEmoteKind; atMs: number }
 export type YutNode = 'home' | 'finish' | `o${number}` | 'a1' | 'a2' | 'center' | 'a4' | 'a5' | 'b1' | 'b2' | 'b4' | 'b5';
 export interface YutPiece { id: string; node: YutNode; lane: YutRoute }
 export interface YutPlayer { uid: string; name: string; role: YutRole; ready: boolean; active: boolean; pieces: YutPiece[] }
 export interface YutRoom {
   id: string; code: string; classId: string; classLabel: string; hostUid: string;
   status: 'waiting' | 'playing' | 'finished' | 'closed'; revision: number;
+  syncRevision?: number; emotes?: Record<string, YutEmote>;
   players: YutPlayer[]; participantUids: string[]; turnUid: string | null;
   phase: 'throw' | 'move'; pendingThrow: { value: number; label: string; sticks: boolean[] } | null;
   extraThrows: number; turnDeadlineMs: number; winnerUid: string | null;
@@ -16,6 +19,10 @@ export interface YutMove { pieceId: string; route: YutRoute; targetNode: YutNode
 export const YUT_TURN_MS: number;
 export const YUT_ROOM_MS: number;
 export const YUT_ROLES: YutRole[];
+export const YUT_EMOTE_KINDS: YutEmoteKind[];
+export const YUT_EMOTE_COOLDOWN_MS: number;
+export const YUT_EMOTE_VISIBLE_MS: number;
+export function addYutEmote(room: YutRoom, uid: string, kind: YutEmoteKind, id: string, nowMs: number): YutRoom;
 export function createYutRoom(options: { id: string; code: string; classId: string; classLabel: string; host: { uid: string; name: string }; nowMs: number }): YutRoom;
 export function addYutPlayer(room: YutRoom, player: { uid: string; name: string }, nowMs: number): YutRoom;
 export function readyYutPlayer(room: YutRoom, uid: string, ready: boolean, nowMs: number): YutRoom;

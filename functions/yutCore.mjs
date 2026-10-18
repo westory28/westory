@@ -2,6 +2,9 @@
 export const YUT_TURN_MS = 60_000;
 export const YUT_ROOM_MS = 24 * 60 * 60_000;
 export const YUT_ROLES = ['sa', 'nong', 'gong', 'sang'];
+export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg'];
+export const YUT_EMOTE_COOLDOWN_MS = 5_000;
+export const YUT_EMOTE_VISIBLE_MS = 4_000;
 const labels = ['', '도', '개', '걸', '윷', '모'];
 const diagonals = {
   a: ['o5', 'a1', 'a2', 'center', 'a4', 'a5', 'o15'],
@@ -10,6 +13,7 @@ const diagonals = {
 const fail = (message) => { throw new Error(message); };
 const copy = (room) => JSON.parse(JSON.stringify(room));
 const event = (room, kind, text, nowMs) => {
+  room.syncRevision = (room.syncRevision ?? room.revision) + 1;
   room.revision += 1;
   room.updatedAtMs = nowMs;
   room.lastEvent = { kind, text, atMs: nowMs };
@@ -19,13 +23,28 @@ const playerFor = (room, uid) => room.players.find((player) => player.uid === ui
 const piecesFor = () => [1, 2].map((id) => ({ id: String(id), node: 'home', lane: 'outer' }));
 export function createYutRoom({ id, code, classId, classLabel, host, nowMs }) {
   return {
-    id, code, classId, classLabel, hostUid: host.uid, status: 'waiting', revision: 0,
+    id, code, classId, classLabel, hostUid: host.uid, status: 'waiting', revision: 0, syncRevision: 0, emotes: {},
     players: [{ ...host, role: 'sa', ready: true, active: true, pieces: piecesFor() }],
     participantUids: [host.uid], turnUid: null, phase: 'throw', pendingThrow: null,
     extraThrows: 0, turnDeadlineMs: 0, winnerUid: null,
     lastEvent: { kind: 'create', text: '새 판이 열렸습니다.', atMs: nowMs },
     createdAtMs: nowMs, updatedAtMs: nowMs, expiresAtMs: nowMs + YUT_ROOM_MS,
   };
+}
+export function addYutEmote(source, uid, kind, id, nowMs) {
+  if (!YUT_EMOTE_KINDS.includes(kind)) fail('정해진 감정표현을 선택해 주세요.');
+  if (!['waiting', 'playing', 'finished'].includes(source.status) || !source.participantUids.includes(uid) || !playerFor(source, uid)) fail('참가 중인 방에서만 감정표현을 보낼 수 있습니다.');
+  if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{12,100}$/.test(id) || !Number.isFinite(nowMs)) fail('감정표현 요청을 확인해 주세요.');
+  if (source.emotes?.[uid]?.id === id) {
+    if (source.emotes[uid].kind !== kind) fail('같은 요청 번호로 다른 감정표현을 보낼 수 없습니다.');
+    return source;
+  }
+  if (source.emotes?.[uid] && nowMs < source.emotes[uid].atMs + YUT_EMOTE_COOLDOWN_MS) fail('감정표현은 5초마다 보낼 수 있습니다.');
+  const room = copy(source);
+  room.emotes = Object.fromEntries(Object.entries(room.emotes || {}).filter(([memberUid]) => room.participantUids.includes(memberUid) && playerFor(room, memberUid)));
+  room.emotes[uid] = { id, uid, kind, atMs: nowMs };
+  room.syncRevision = (room.syncRevision ?? room.revision) + 1;
+  return room;
 }
 export function addYutPlayer(source, player, nowMs) {
   if (source.status !== 'waiting') fail('이미 시작되었거나 닫힌 방입니다.');
@@ -149,6 +168,7 @@ export function leaveYutRoom(source, uid, nowMs) {
   const room = copy(source), player = playerFor(room, uid);
   if (!player) fail('이 방의 참가자가 아닙니다.');
   room.participantUids = room.participantUids.filter((value) => value !== uid);
+  if (room.emotes) delete room.emotes[uid];
   if (room.status === 'waiting') room.players = room.players.filter((entry) => entry.uid !== uid);
   else { player.active = false; player.pieces = piecesFor(); }
   const remaining = room.players.filter((entry) => entry.active && entry.uid !== uid);

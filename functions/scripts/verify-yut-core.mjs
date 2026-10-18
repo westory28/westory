@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom } from '../yutCore.mjs';
+import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS } from '../yutCore.mjs';
 const now = 1000;
 function game(count = 2) {
   let room = createYutRoom({ id: 'room', code: 'ABC234', classId: 'class', classLabel: '1학년 1반', host: { uid: 'a', name: '가' }, nowMs: now });
@@ -11,6 +11,39 @@ function game(count = 2) {
   return startYutGame(room, now);
 }
 const roll = (room, value) => throwYut(room, room.turnUid, Array.from({ length: 4 }, (_, index) => index < (value === 5 ? 0 : value)), now + 1);
+test('fixed emotes are immutable and isolated from the game revision, deadline and event', () => {
+  const original = game(4);
+  let room = original;
+  for (const player of room.players) room = addYutEmote(room, player.uid, 'hello', `emote_${player.uid}_000001`, now);
+  assert.equal(room.revision, original.revision);
+  assert.equal(room.syncRevision, original.syncRevision + 4);
+  assert.equal(room.turnDeadlineMs, original.turnDeadlineMs);
+  assert.deepEqual(room.lastEvent, original.lastEvent);
+  assert.equal(room.updatedAtMs, original.updatedAtMs);
+  assert.deepEqual(original.emotes, {});
+  assert.equal(Object.keys(room.emotes).length, 4);
+  assert.equal(addYutEmote(room, 'a', 'hello', 'emote_a_000001', now + 1), room);
+  assert.throws(() => addYutEmote(room, 'a', 'nice', 'emote_a_000001', now + 1));
+  assert.throws(() => addYutEmote(room, 'a', 'nice', 'emote_a_000002', now + YUT_EMOTE_COOLDOWN_MS - 1));
+  room = addYutEmote(room, 'a', 'nice', 'emote_a_000002', now + YUT_EMOTE_COOLDOWN_MS);
+  assert.equal(room.emotes.a.kind, 'nice');
+  assert.equal(Object.keys(room.emotes).length, 4);
+  room = leaveYutRoom(room, 'a', now + YUT_EMOTE_COOLDOWN_MS + 1);
+  assert.equal(room.emotes.a, undefined);
+  assert.equal(YUT_EMOTE_VISIBLE_MS, 4000);
+});
+test('emotes reject arbitrary text, nonparticipants and closed rooms; legacy rooms gain sync revision', () => {
+  const original = game();
+  for (const kind of YUT_EMOTE_KINDS) assert.equal(addYutEmote(original, 'a', kind, 'emote_allowlist', now).emotes.a.kind, kind);
+  assert.throws(() => addYutEmote(original, 'a', '자유 채팅', 'emote_invalid', now));
+  assert.throws(() => addYutEmote(original, 'outsider', 'hello', 'emote_invalid', now));
+  assert.throws(() => addYutEmote(closeYutRoom(original, now), 'a', 'hello', 'emote_invalid', now));
+  const finished = leaveYutRoom(original, 'b', now);
+  assert.equal(addYutEmote(finished, 'a', 'gg', 'emote_finished', now).emotes.a.kind, 'gg');
+  delete original.syncRevision; delete original.emotes;
+  assert.equal(addYutEmote(original, 'a', 'wow', 'emote_legacy1', now).syncRevision, original.revision + 1);
+  assert.equal(roll(original, 2).syncRevision, original.revision + 1);
+});
 test('all 16 physical throws give correct values; no back-do; source immutable', () => {
   const original = game(), frequencies = {};
   for (let bits = 0; bits < 16; bits += 1) {

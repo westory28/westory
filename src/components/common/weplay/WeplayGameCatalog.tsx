@@ -24,17 +24,39 @@ export default function WeplayGameCatalog({
               className="weplay-game-card"
               to={`/${portal}/weplay?game=${game.id}`}
             >
-              <img
-                src={`${import.meta.env.BASE_URL}assets/weplay/${game.id === "joseon-yut" ? "yut/catalog.svg" : "naval/lobby-turtle-ship.webp"}`}
-                alt=""
-                width={1200}
-                height={900}
-              />
+              {game.id === "joseon-yut" ? (
+                <div className="weplay-yut-cover" aria-hidden="true">
+                  <img
+                    src={`${import.meta.env.BASE_URL}assets/weplay/yut/courtyard.webp`}
+                    alt=""
+                    width={1672}
+                    height={941}
+                  />
+                  <span className="weplay-yut-cover-title">사농공상</span>
+                  <div className="weplay-yut-cover-cast">
+                    {["0% 0%", "100% 0%", "0% 100%", "100% 100%"].map(
+                      (position) => (
+                        <span
+                          key={position}
+                          style={{ backgroundPosition: position }}
+                        />
+                      ),
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <img
+                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/lobby-turtle-ship.webp`}
+                  alt=""
+                  width={1200}
+                  height={900}
+                />
+              )}
               <div className="weplay-game-card-body">
                 <h2>{game.id === "history-rain" ? gameTitle : game.name}</h2>
                 <span className="weplay-game-card-kind">
                   {game.id === "joseon-yut"
-                    ? "전통 · 전략 · 2~4인"
+                    ? "전통 · 전략 · 1~4인"
                     : "역사 · 타자 · 1인"}
                 </span>
                 <span className="weplay-game-card-action">

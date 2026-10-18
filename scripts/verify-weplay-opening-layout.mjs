@@ -510,6 +510,12 @@ try {
         await headerOrder(page, label.startsWith("teacher"));
       else {
         await page.locator(".yut-game").waitFor();
+        assert.equal(
+          await page.locator(".weplay-yut-page > .yut-game").count(),
+          1,
+        );
+        assert.equal(await page.locator(".weplay-page .yut-game").count(), 0);
+        assert((await page.locator(".yut-game").boundingBox()).width <= 1360);
         const music = page.getByRole("button", { name: /음악 켜기|음악 끄기/ });
         assert.equal(
           await music.evaluate((element) =>
@@ -517,6 +523,7 @@ try {
           ),
           label.startsWith("teacher") ? "방 나가기" : "전체 게임",
         );
+        await capture(page, `${label}-${reduced}-game`);
       }
       const calls = await page.evaluate(() =>
         window.openingQa.calls.map((call) => call.name),
@@ -589,6 +596,36 @@ try {
   }
   checks.push(
     "390/768px student opening/lobby remain within the document width and support pointer skip.",
+  );
+  for (const width of [390, 768]) {
+    const page = await open("/student/weplay?game=joseon-yut", width);
+    await page.locator(".weplay-studio-intro").waitFor();
+    await page.getByRole("button", { name: /건너뛰기/ }).click();
+    await page.locator(".yut-orientation-gate").waitFor();
+    assert.equal(
+      await page.getByRole("button", { name: "싱글 모드 시작" }).count(),
+      0,
+    );
+    await capture(page, "student-yut-portrait-" + width);
+    await page.setViewportSize({
+      width: width === 390 ? 844 : 1024,
+      height: width === 390 ? 390 : 768,
+    });
+    await page.clock.runFor(50);
+    await page.getByRole("button", { name: "싱글 모드 시작" }).waitFor();
+    assert.equal(await page.locator(".yut-orientation-gate").count(), 0);
+    assert.equal(await page.locator(".weplay-yut-page > .yut-game").count(), 1);
+    await capture(page, "student-yut-landscape-" + width);
+    assert.deepEqual(
+      await page.evaluate(() =>
+        window.openingQa.calls.map((call) => call.name),
+      ),
+      ["getYutLobby"],
+    );
+    await page.close();
+  }
+  checks.push(
+    "Merged Yut under the real portal layout retains the game-specific wrapper and 1360px bound; portrait 390/768 gates entry, and landscape rotation restores the lobby without duplicate reads/writes or page overflow.",
   );
   assert.deepEqual(errors, []);
   assert.deepEqual(externalRequests, []);

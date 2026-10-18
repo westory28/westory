@@ -1,4 +1,5 @@
-.weplay-page, .weplay-yut-page { max-width: var(--ws-page-max, 1280px); margin: 0 auto; padding: 24px; color: var(--ws-text, #1f2937); font-size: 16px; }
+.weplay-page { max-width: var(--ws-page-max, 1280px); margin: 0 auto; padding: 24px; color: var(--ws-text, #1f2937); font-size: 16px; }
+.weplay-yut-page { min-width: 0; }
 .weplay-game-navigation { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .weplay-game-navigation .weplay-catalog-back { margin: 0; white-space: nowrap; }
 .weplay-game-navigation .weplay-music-button { margin-left: 0; }
