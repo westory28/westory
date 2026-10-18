@@ -53,6 +53,33 @@ export const calendarEventEndDate = (event: CalendarEvent) => {
   return end;
 };
 
+export const formatCalendarEventDateRange = (
+  event: CalendarEvent,
+  compact = false,
+) => {
+  const start = calendarDateKey(event.start);
+  if (!start) return "";
+  const end = calendarEventEndDate(event);
+  const sameYear = start.slice(0, 4) === end.slice(0, 4);
+  const sameMonth = start.slice(0, 7) === end.slice(0, 7);
+  const day = (date: string) => Number(date.slice(8, 10));
+  const dateLabel = (date: string) => {
+    const month = Number(date.slice(5, 7));
+    const year = sameYear ? "" : date.slice(0, 4);
+    return compact
+      ? `${year ? `${year}/` : ""}${month}/${day(date)}`
+      : `${year ? `${year}년 ` : ""}${month}월 ${day(date)}일`;
+  };
+  if (end <= start) return dateLabel(start);
+  if (sameMonth) {
+    const month = Number(start.slice(5, 7));
+    return compact
+      ? `${month}/${day(start)}–${day(end)}`
+      : `${month}월 ${day(start)}–${day(end)}일`;
+  }
+  return `${dateLabel(start)}–${dateLabel(end)}`;
+};
+
 export const eventIncludesDate = (event: CalendarEvent, date: string) => {
   const start = calendarDateKey(event.start);
   const end = calendarEventEndDate(event);

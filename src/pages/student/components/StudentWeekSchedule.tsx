@@ -21,9 +21,8 @@ import StudentScheduleTitle from "./StudentScheduleTitle";
 import AttendanceStamp from "./AttendanceStamp";
 import "./studentWeekSchedule.css";
 import {
-  calendarDateKey,
-  calendarEventEndDate,
   eventIncludesDate,
+  formatCalendarEventDateRange,
   getKoreanDateKey,
   getWeekEvents,
   getWeekStart,
@@ -51,8 +50,6 @@ interface Props {
 
 const readableDate = (date: string) =>
   `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
-const compactDate = (date: string) =>
-  `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
 
 // Keep the configured hue readable on both white and the date badge's 22% tint.
 const readableEventColor = (color: string) => {
@@ -412,17 +409,12 @@ const StudentWeekSchedule: React.FC<Props> = ({
               </p>
             )}
             {displayedEvents.map((event) => {
-              const start = calendarDateKey(event.start);
-              const end = calendarEventEndDate(event);
               const meta = getScheduleCategoryMeta(event.eventType, categories);
               const eventColor =
                 event.eventType === "holiday"
                   ? "var(--ws-danger-text, #b91c1c)"
                   : getScheduleEventColor(event, categories);
-              const dateLabel =
-                end > start
-                  ? `${readableDate(start)} – ${readableDate(end)}`
-                  : readableDate(start);
+              const dateLabel = formatCalendarEventDateRange(event);
               const periodLabel =
                 event.eventType === "holiday"
                   ? "종일"
@@ -467,9 +459,7 @@ const StudentWeekSchedule: React.FC<Props> = ({
                       className="student-week-event__date-label student-week-event__date-label--compact"
                       aria-hidden="true"
                     >
-                      {end > start
-                        ? `${compactDate(start)}–${compactDate(end)}`
-                        : compactDate(start)}
+                      {formatCalendarEventDateRange(event, true)}
                     </span>
                   </span>
                   <span className="student-week-event__body">

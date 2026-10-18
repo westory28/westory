@@ -77,6 +77,43 @@ assert.equal(
   "2026-09-27",
 );
 
+for (const [item, full, compact] of [
+  [event("one-day", "2026-10-19"), "10월 19일", "10/19"],
+  [event("same-day", "2026-10-19", "2026-10-19"), "10월 19일", "10/19"],
+  [event("same-month", "2026-10-19", "2026-10-22"), "10월 19–22일", "10/19–22"],
+  [
+    event("cross-month", "2026-10-30", "2026-11-02"),
+    "10월 30일–11월 2일",
+    "10/30–11/2",
+  ],
+  [
+    event("cross-year", "2026-12-31", "2027-01-02"),
+    "2026년 12월 31일–2027년 1월 2일",
+    "2026/12/31–2027/1/2",
+  ],
+  [
+    event("same-month-next-year", "2026-10-19", "2027-10-22"),
+    "2026년 10월 19일–2027년 10월 22일",
+    "2026/10/19–2027/10/22",
+  ],
+  [
+    event("leap-day", "2024-02-28", "2024-03-01"),
+    "2월 28일–3월 1일",
+    "2/28–3/1",
+  ],
+  [event("reversed-end", "2026-10-19", "2026-10-18"), "10월 19일", "10/19"],
+  [
+    event("zoned", "2026-10-18T15:00:00Z", "2026-10-22T15:00:00Z"),
+    "10월 19–22일",
+    "10/19–22",
+  ],
+  [midnight, "9월 27일", "9/27"],
+  [event("invalid", "invalid"), "", ""],
+]) {
+  assert.equal(week.formatCalendarEventDateRange(item), full, item.id);
+  assert.equal(week.formatCalendarEventDateRange(item, true), compact, item.id);
+}
+
 const events = [
   event("outside-after", "2026-09-27"),
   event("period3", "2026-09-22", undefined, "period3"),
@@ -107,5 +144,5 @@ assert.equal(
 );
 
 console.log(
-  "Teacher dashboard week checks passed: KST, Sunday–Saturday/month/year boundaries, inclusive stored ranges, timed midnight, sorting and complete weekly list.",
+  "Teacher dashboard week checks passed: KST, Sunday–Saturday/month/year boundaries, inclusive stored ranges, timed midnight, complete date labels, sorting and complete weekly list.",
 );

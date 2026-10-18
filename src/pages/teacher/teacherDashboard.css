@@ -251,12 +251,17 @@
   overflow: hidden;
 }
 
-.teacher-week-strip__number,
-.teacher-week-event__date-label {
+.teacher-week-strip__number {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.teacher-week-event__date-label {
+  display: inline-block;
+  white-space: nowrap;
   vertical-align: middle;
 }
 
@@ -421,10 +426,10 @@
 }
 
 .teacher-week-event {
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   width: 100%;
   min-height: 80px;
   padding: 8px 4px;
@@ -441,15 +446,12 @@
 }
 
 .teacher-week-event__date {
-  justify-self: start;
+  flex: 0 0 auto;
   padding: 4px 8px;
   font-size: var(--ws-type-body, 1rem);
   font-weight: 700;
   color: var(--schedule-event-text-color);
-  max-width: 100%;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .teacher-week-event__date-badge {
@@ -464,6 +466,7 @@
 
 .teacher-week-event__body {
   display: flex;
+  flex: 1 1 240px;
   align-items: center;
   min-width: 0;
   gap: 12px;
@@ -717,7 +720,6 @@
     order: 2;
   }
   .teacher-week-event {
-    grid-template-columns: auto minmax(0, 1fr);
     gap: 4px;
   }
   .teacher-week-event__date {
@@ -759,16 +761,14 @@
     align-items: start;
   }
   .teacher-week-event__body {
-    display: contents;
+    flex-wrap: wrap;
   }
   .teacher-week-event__title {
-    grid-column: 2;
-    grid-row: 1;
-    width: 100%;
+    flex-basis: 100%;
   }
   .teacher-week-event__metadata {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    margin-left: auto;
+    max-width: 100%;
     justify-content: flex-end;
     flex-wrap: wrap;
   }
