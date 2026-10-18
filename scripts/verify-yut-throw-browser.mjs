@@ -98,10 +98,15 @@ const browser = await chromium.launch({
   args: ["--enable-unsafe-swiftshader"],
 });
 const report = { checks: [], errors: [] };
-async function fresh(options = {}, noGL = false) {
+async function fresh(options = {}, noGL = false, frameDelayMs = 0) {
   const context = await browser.newContext(options);
   await context.addInitScript(
-    ({ noGL }) => {
+    ({ noGL, frameDelayMs }) => {
+      if (frameDelayMs) {
+        window.requestAnimationFrame = (callback) =>
+          window.setTimeout(() => callback(performance.now()), frameDelayMs);
+        window.cancelAnimationFrame = (id) => window.clearTimeout(id);
+      }
       window.qa = { count: 0, moves: 0, hidden: false };
       Object.defineProperty(document, "hidden", {
         configurable: true,
@@ -124,7 +129,7 @@ async function fresh(options = {}, noGL = false) {
         };
       }
     },
-    { noGL },
+    { noGL, frameDelayMs },
   );
   const page = await context.newPage();
   page.on("pageerror", (e) => report.errors.push(e.message));
@@ -133,6 +138,39 @@ async function fresh(options = {}, noGL = false) {
   return { context, page };
 }
 try {
+  {
+    const { context, page } = await fresh({}, false, 200);
+    // Warm the real WebGL shaders before measuring the animation clock.
+    await page.evaluate(() =>
+      window.qa.update({
+        throwKey: "slow-gpu-warmup",
+        sticks: [true, false, true, false],
+      }),
+    );
+    await page.waitForFunction(() => window.qa.count === 1);
+    await page.evaluate(() => {
+      window.qa.startedAt = performance.now();
+      window.qa.update({
+        throwKey: "slow-gpu",
+        sticks: [false, false, false, false],
+        power: 0.95,
+      });
+    });
+    await page.waitForFunction(() => window.qa.count === 2, null, {
+      timeout: 4500,
+    });
+    const elapsed = await page.evaluate(
+      () => window.qa.completedAt - window.qa.startedAt,
+    );
+    assert.ok(
+      elapsed >= 2200 && elapsed < 3500,
+      `slow GPU duration: ${elapsed}ms`,
+    );
+    report.checks.push(
+      "5fps WebGL still settles in real time (2.25 seconds plus frame scheduling), without stretching the player's turn",
+    );
+    await context.close();
+  }
   for (const width of [390, 768, 1280]) {
     const { context, page } = await fresh({ viewport: { width, height: 900 } });
     assert.ok(

@@ -496,9 +496,9 @@ export class YutThrowScene {
   private tick = (now: number) => {
     this.frame = 0;
     if (this.disposed || document.hidden || !this.running) return;
-    const dt = this.lastFrame
-      ? Math.min((now - this.lastFrame) / 1000, 0.05)
-      : 0;
+    // Visibility changes reset lastFrame. While visible, use real elapsed time:
+    // capping each frame stretches a short throw into an entire turn on slow GPUs.
+    const dt = this.lastFrame ? Math.max(0, (now - this.lastFrame) / 1000) : 0;
     this.lastFrame = now;
     // Wait at the apex until the server result arrives. Never guess final faces.
     this.elapsed = this.result
