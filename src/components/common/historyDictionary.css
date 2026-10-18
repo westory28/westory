@@ -190,6 +190,15 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+fieldset.history-dictionary-readonly:disabled,
+.history-dictionary-readonly :is(input, textarea):disabled {
+  opacity: 1;
+}
+.history-dictionary-readonly :is(input, textarea):disabled {
+  color: var(--ws-text, #1f2937);
+  -webkit-text-fill-color: var(--ws-text, #1f2937);
+  cursor: text;
+}
 .history-dictionary-count {
   font-size: 14px;
   color: var(--ws-text-muted, #6b7280);

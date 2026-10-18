@@ -110,34 +110,39 @@ export const getHistoryDictionaryCatalog =
     return catalog;
   };
 
-let searchIndex:
-  | {
-      term: HistoryDictionaryCatalogTerm;
-      word: string;
-      aliases: string[];
-      text: string;
-    }[]
-  | undefined;
+const searchIndexes = new WeakMap<
+  HistoryDictionaryCatalogTerm[],
+  {
+    term: HistoryDictionaryCatalogTerm;
+    word: string;
+    aliases: string[];
+    text: string;
+  }[]
+>();
 
 /** Exact words and aliases precede partial names, then meaning/topic matches. */
 export const searchHistoryDictionaryCatalog = (
   query: string,
   limit = 80,
+  terms: HistoryDictionaryCatalogTerm[] = getHistoryDictionaryCatalog(),
 ): HistoryDictionaryCatalogTerm[] => {
   const count = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 80;
-  const terms = getHistoryDictionaryCatalog();
   if (!count) return [];
   const normalized = normalize(query.trim());
   if (!normalized) return terms.slice(0, count);
   const tokens = query.trim().split(/\s+/u).map(normalize).filter(Boolean);
-  searchIndex ||= terms.map((term) => ({
-    term,
-    word: normalize(term.word),
-    aliases: term.aliases.map(normalize),
-    text: normalize(
-      [term.word, ...term.aliases, term.definition, ...term.tags].join(" "),
-    ),
-  }));
+  let searchIndex = searchIndexes.get(terms);
+  if (!searchIndex) {
+    searchIndex = terms.map((term) => ({
+      term,
+      word: normalize(term.word),
+      aliases: term.aliases.map(normalize),
+      text: normalize(
+        [term.word, ...term.aliases, term.definition, ...term.tags].join(" "),
+      ),
+    }));
+    searchIndexes.set(terms, searchIndex);
+  }
   return searchIndex
     .flatMap((entry) => {
       const score =

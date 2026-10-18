@@ -10721,13 +10721,17 @@ exports.requestHistoryDictionaryTerm = onCall({ region: REGION, enforceAppCheck:
 
 const saveStudentHistoryDictionaryWordOperation = async (request, context) => {
     const dictionaryScope = assertYearSemester(request.data);
+    const sourceScope = {
+      year: request.data.sourceYear ?? dictionaryScope.year,
+      semester: request.data.sourceSemester ?? dictionaryScope.semester,
+    };
     const { uid } = context.identity;
     const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
     if (!termId) {
       throw new HttpsError("invalid-argument", "termId is required.");
     }
 
-    const termRef = db.doc(getHistoryDictionaryTermPath(dictionaryScope, termId));
+    const termRef = db.doc(getHistoryDictionaryTermPath(sourceScope, termId));
     const wordRef = db.doc(getStudentHistoryDictionaryWordPath(dictionaryScope, uid, termId));
     return context.runTransaction(async (transaction) => {
       const [termSnap, wordSnap] = await Promise.all([
@@ -10759,6 +10763,9 @@ const saveStudentHistoryDictionaryWordOperation = async (request, context) => {
           definition: sanitizeHistoryDictionaryText(term.definition, 1200),
           studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
           tags: sanitizeHistoryDictionaryTags(term.tags),
+          definitionSource: "teacher",
+          sourceYear: sourceScope.year,
+          sourceSemester: sourceScope.semester,
           status: "saved",
           requestId: "",
           requestOriginTermId: "",
@@ -10767,7 +10774,7 @@ const saveStudentHistoryDictionaryWordOperation = async (request, context) => {
         },
         { merge: true },
       );
-      return { termId, saved: true };
+      return { termId, saved: true, sourceYear: sourceScope.year, sourceSemester: sourceScope.semester };
     });
   };
 exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION, enforceAppCheck: true }, async () => { throw new HttpsError("failed-precondition", "화면을 새로고침한 뒤 다시 저장해 주세요.", { reason: "HISTORY_DICTIONARY_COMMAND_REQUIRED" }); });

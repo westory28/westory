@@ -17,9 +17,11 @@ import {
   getHistoryDictionaryCallable,
 } from "./historyDictionarySession";
 import { getSemesterCollectionPath } from "./semesterScope";
+import type { HistoryDictionaryCatalogTerm } from "./historyDictionaryCatalog";
 import type {
   HistoryDictionaryRequest,
   HistoryDictionaryTerm,
+  HistoryDictionarySource,
   StudentHistoryDictionaryWord,
   SystemConfig,
 } from "../types";
@@ -69,6 +71,7 @@ const timestampFromMs = (value: unknown) => {
 const mapTeacherStudentWordData = (
   data: Record<string, unknown>,
 ): StudentHistoryDictionaryWord => ({
+  ...data,
   id: String(data.id || ""),
   uid: String(data.uid || ""),
   termId: String(data.termId || ""),
@@ -79,7 +82,7 @@ const mapTeacherStudentWordData = (
   definition: String(data.definition || ""),
   studentLevel: String(data.studentLevel || ""),
   tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
-  status: "saved",
+  status: data.status === "requested" ? "requested" : "saved",
   requestId: String(data.requestId || ""),
   studentName: String(data.studentName || "학생"),
   grade: String(data.grade || ""),
@@ -109,6 +112,85 @@ const getYearSemester = (config: ConfigLike) => {
 };
 const scopedPath = (config: ConfigLike, name: string) =>
   getSemesterCollectionPath(getYearSemester(config), name);
+
+const sourceMetadata = (
+  data: Record<string, unknown>,
+  config: ConfigLike,
+): HistoryDictionarySource => {
+  const scope = getYearSemester(config);
+  const sourcePath = String(data.sourcePath || "");
+  const match =
+    /^years\/(\d{4})\/semesters\/([12])\/(?:history_dictionary_terms\/[^/]+|dictionary_students\/[^/]+\/history_dictionary_words\/[^/]+)$/.exec(
+      sourcePath,
+    );
+  const legacy =
+    /^(?:history_dictionary_terms\/[^/]+|users\/[^/]+\/history_dictionary_words\/[^/]+)$/.test(
+      sourcePath,
+    );
+  if (!match && !legacy)
+    throw new Error(
+      "사전 자료의 저장 위치를 확인하지 못했습니다. 다시 불러와 주세요.",
+    );
+  const sourceScope = match
+    ? { year: match[1], semester: match[2] }
+    : getYearSemester({
+        year: String(data.sourceYear || ""),
+        semester: String(data.sourceSemester || ""),
+      });
+  return {
+    sourcePath,
+    sourceYear: sourceScope.year,
+    sourceSemester: sourceScope.semester,
+    readOnly:
+      legacy ||
+      data.readOnly === true ||
+      sourceScope.year !== scope.year ||
+      sourceScope.semester !== scope.semester,
+    writeVersion:
+      typeof data.writeVersion === "string" ? data.writeVersion : undefined,
+    createdAtMs: Number(data.createdAtMs || 0),
+    updatedAtMs: Number(data.updatedAtMs || 0),
+  };
+};
+
+export const mergeHistoryDictionaryContinuity = <
+  T extends HistoryDictionarySource & {
+    word: string;
+    normalizedWord?: string;
+    uid?: string;
+    updatedAt?: unknown;
+    createdAt?: unknown;
+  },
+>(
+  items: T[],
+  config: ConfigLike,
+  studentWords = false,
+): T[] => {
+  const scope = getYearSemester(config);
+  const rank = (item: T) =>
+    !item.readOnly &&
+    item.sourceYear === scope.year &&
+    item.sourceSemester === scope.semester
+      ? 1
+      : 0;
+  const sorted = [...items].sort(
+    (a, b) =>
+      rank(b) - rank(a) ||
+      Number(b.sourceYear || 0) - Number(a.sourceYear || 0) ||
+      Number(b.sourceSemester || 0) - Number(a.sourceSemester || 0) ||
+      (b.updatedAtMs || dictionaryTimestamp(b.updatedAt || b.createdAt)) -
+        (a.updatedAtMs || dictionaryTimestamp(a.updatedAt || a.createdAt)),
+  );
+  const unique = new Map<string, T>();
+  for (const item of sorted) {
+    const normalized = normalizeHistoryDictionaryWord(
+      item.normalizedWord || item.word,
+    );
+    const key = studentWords ? `${item.uid || ""}:${normalized}` : normalized;
+    if (!unique.has(key)) unique.set(key, item);
+  }
+  return [...unique.values()].sort(newestDictionaryFirst);
+};
 
 type WriteVersion = string | null;
 const versions = new Map<string, WriteVersion>();
@@ -163,6 +245,158 @@ const versionConflictError = () =>
     { code: "history-dictionary/version-conflict" },
   );
 let versionOwner = "";
+const loadContinuityItems = async (
+  kind: "catalog" | "terms" | "words" | "studentWords",
+  config: ConfigLike,
+  isActive: () => boolean = () => true,
+) => {
+  const scope = getYearSemester(config);
+  const user = auth.currentUser;
+  if (!user) throw new Error("다시 로그인해 주세요.");
+  const uid = user.uid;
+  const authTime = (await getIdTokenResult(user)).authTime;
+  const assertIdentity = async () => {
+    const currentAuthTime = (await getIdTokenResult(user)).authTime;
+    if (
+      !isActive() ||
+      auth.currentUser !== user ||
+      auth.currentUser?.uid !== uid ||
+      currentAuthTime !== authTime
+    )
+      throw new Error(
+        "로그인 또는 학기 정보가 변경되었습니다. 다시 불러와 주세요.",
+      );
+  };
+  await assertIdentity();
+  const callable = await getHistoryDictionaryCallable(
+    "getHistoryDictionaryContinuity",
+  );
+  const items: Record<string, unknown>[] = [];
+  const cursors = new Set<string>();
+  let after = "";
+  do {
+    await assertIdentity();
+    const response = await callable({
+      kind,
+      ...scope,
+      ...(after ? { after } : {}),
+    });
+    await assertIdentity();
+    const data = response.data as {
+      items?: Record<string, unknown>[];
+      nextCursor?: string | null;
+    };
+    if (!Array.isArray(data?.items))
+      throw new Error("사전 자료를 확인하지 못했습니다. 다시 불러와 주세요.");
+    items.push(...data.items);
+    after = typeof data.nextCursor === "string" ? data.nextCursor : "";
+    if (after && cursors.has(after))
+      throw new Error("사전 목록 조회가 중단되었습니다. 다시 불러와 주세요.");
+    if (after) cursors.add(after);
+  } while (after);
+  await assertIdentity();
+  const owner = `${uid}:${authTime}`;
+  if (versionOwner && versionOwner !== owner) {
+    versions.clear();
+    pendingCommands.clear();
+    conflictedIntents.clear();
+  }
+  versionOwner = owner;
+  return items;
+};
+
+const rememberContinuitySource = (
+  data: Record<string, unknown>,
+  config: ConfigLike,
+) => {
+  const source = sourceMetadata(data, config);
+  if (source.sourcePath && source.writeVersion)
+    versions.set(source.sourcePath, source.writeVersion);
+  return source;
+};
+const continuityTerms = async (
+  config: ConfigLike,
+  isActive?: () => boolean,
+  previousOnly = false,
+) => {
+  const items = await loadContinuityItems("terms", config, isActive);
+  const scope = getYearSemester(config);
+  const terms = items.map(
+    (item) =>
+      ({
+        ...item,
+        ...rememberContinuitySource(item, config),
+        normalizedWord: normalizeHistoryDictionaryWord(
+          String(item.normalizedWord || item.word || ""),
+        ),
+        createdAt: timestampFromMs(item.createdAtMs),
+        updatedAt: timestampFromMs(item.updatedAtMs),
+      }) as unknown as HistoryDictionaryTerm,
+  );
+  return mergeHistoryDictionaryContinuity(
+    previousOnly
+      ? terms.filter(
+          (item) =>
+            item.readOnly ||
+            item.sourceYear !== scope.year ||
+            item.sourceSemester !== scope.semester,
+        )
+      : terms,
+    config,
+  );
+};
+const continuityWords = async (
+  kind: "words" | "studentWords",
+  config: ConfigLike,
+  isActive?: () => boolean,
+  previousOnly = false,
+) => {
+  const items = await loadContinuityItems(kind, config, isActive);
+  const scope = getYearSemester(config);
+  const words = items.map((item) => ({
+    ...mapTeacherStudentWordData(item),
+    ...rememberContinuitySource(item, config),
+    id:
+      kind === "studentWords"
+        ? `${String(item.uid)}:${String(item.termId || item.id)}`
+        : String(item.id || item.termId),
+  }));
+  return mergeHistoryDictionaryContinuity(
+    previousOnly
+      ? words.filter(
+          (item) =>
+            item.readOnly ||
+            item.sourceYear !== scope.year ||
+            item.sourceSemester !== scope.semester,
+        )
+      : words,
+    config,
+    true,
+  );
+};
+export const loadHistoryDictionaryCatalog = async (
+  config: ConfigLike,
+): Promise<HistoryDictionaryCatalogTerm[]> => {
+  const items = await loadContinuityItems("catalog", config);
+  return items.map((item) => {
+    if (
+      typeof item.id !== "string" ||
+      typeof item.word !== "string" ||
+      typeof item.definition !== "string" ||
+      !Array.isArray(item.attributions) ||
+      !["history", "place"].includes(String(item.kind))
+    )
+      throw new Error(
+        "사전 자료의 형식을 확인하지 못했습니다. 다시 불러와 주세요.",
+      );
+    return {
+      ...item,
+      aliases: Array.isArray(item.aliases) ? item.aliases : [],
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      facetIds: Array.isArray(item.facetIds) ? item.facetIds : [],
+    } as unknown as HistoryDictionaryCatalogTerm;
+  });
+};
 const readRequestVersion = async (path: string, studentUid: string) => {
   if (versions.has(path)) return versions.get(path)!;
   const split = path.lastIndexOf("/");
@@ -194,12 +428,13 @@ const executeDictionaryCommand = async (
   };
   await ensureHistoryDictionarySession();
   await assertIdentity();
-  if (versionOwner && versionOwner !== uid) {
+  const owner = `${uid}:${authTime}`;
+  if (versionOwner && versionOwner !== owner) {
     versions.clear();
     pendingCommands.clear();
     conflictedIntents.clear();
   }
-  versionOwner = uid;
+  versionOwner = owner;
   const scope = getYearSemester(input as ConfigLike);
   const root = scopedPath(scope, "").replace(/\/$/, "");
   const key = JSON.stringify([uid, authTime, commandType, input]);
@@ -243,8 +478,17 @@ const executeDictionaryCommand = async (
         "approveHistoryDictionaryTermForRequests",
       ].includes(commandType)
     ) {
+      const sourceScope =
+        commandType === "saveStudentHistoryDictionaryWord" &&
+        input.sourceYear &&
+        input.sourceSemester
+          ? getYearSemester({
+              year: String(input.sourceYear),
+              semester: String(input.sourceSemester),
+            })
+          : scope;
       payload.expectedTermVersion = await readVersion(
-        `${root}/${TERMS_COLLECTION}/${termId}`,
+        scopedPath(sourceScope, `${TERMS_COLLECTION}/${termId}`),
       );
     }
     if (requestId)
@@ -292,13 +536,17 @@ const command = async (name: string) => (input: Record<string, unknown>) =>
   executeDictionaryCommand(name, input);
 
 const subscribeAfterSession = (
-  start: (fail: (error: Error) => void) => Unsubscribe,
+  start: (fail: (error: Error) => void, isActive: () => boolean) => Unsubscribe,
   onError?: (error: Error) => void,
 ): Unsubscribe => {
   let cancelled = false;
+  const user = auth.currentUser;
+  const uid = user?.uid;
+  const isActive = () =>
+    !cancelled && auth.currentUser === user && auth.currentUser?.uid === uid;
   let unsubscribe: Unsubscribe | undefined;
   const fail = (error: unknown) => {
-    if (cancelled) return;
+    if (!isActive()) return;
     const normalized =
       error instanceof Error ? error : new Error(String(error));
     console.error("Failed to load history dictionary:", normalized);
@@ -306,7 +554,7 @@ const subscribeAfterSession = (
   };
   void ensureHistoryDictionarySession()
     .then(() => {
-      if (!cancelled) unsubscribe = start(fail);
+      if (isActive()) unsubscribe = start(fail, isActive);
     })
     .catch(fail);
   return () => {
@@ -321,21 +569,81 @@ export const loadPublishedHistoryDictionaryTerm = async (
 ) => {
   const normalizedWord = normalizeHistoryDictionaryWord(word);
   if (!normalizedWord) return null;
-  const path = scopedPath(config, TERMS_COLLECTION);
-  await ensureHistoryDictionarySession();
-  const snapshot = await getDocs(
-    query(
-      collection(db, path),
-      where("normalizedWord", "==", normalizedWord),
-      where("status", "==", "published"),
-      limit(1),
-    ),
+  const terms = await continuityTerms(config);
+  return (
+    terms.find(
+      (term) =>
+        term.normalizedWord === normalizedWord && term.status === "published",
+    ) || null
   );
-  const term = snapshot.empty
-    ? null
-    : rememberDocument<HistoryDictionaryTerm>(snapshot.docs[0]);
-  return term?.status === "published" ? term : null;
 };
+
+const subscribeContinuity = <
+  T extends HistoryDictionaryTerm | StudentHistoryDictionaryWord,
+>(
+  kind: "terms" | "words",
+  config: ConfigLike,
+  path: string,
+  onChange: (items: T[]) => void,
+  onError?: (error: Error) => void,
+  uid?: string,
+): Unsubscribe =>
+  subscribeAfterSession((fail, isActive) => {
+    let live: T[] | null = null;
+    let previous: T[] | null = null;
+    let closed = false;
+    const active = () => !closed && isActive();
+    const emit = () => {
+      if (active() && live !== null && previous !== null)
+        onChange(
+          mergeHistoryDictionaryContinuity(
+            [...live, ...previous],
+            config,
+            kind === "words",
+          ),
+        );
+    };
+    const scope = getYearSemester(config);
+    const unsubscribe = onSnapshot(
+      query(collection(db, path)),
+      (snapshot) => {
+        if (!active()) return;
+        live = snapshot.docs.map((item) => ({
+          ...rememberDocument<T>(item),
+          ...(uid ? { uid } : {}),
+          sourcePath: item.ref.path,
+          sourceYear: scope.year,
+          sourceSemester: scope.semester,
+          readOnly: false,
+          writeVersion: versionFor(item.data()) || undefined,
+        }));
+        emit();
+      },
+      (error) => {
+        if (active()) fail(error);
+      },
+    );
+    const history =
+      kind === "terms"
+        ? continuityTerms(config, active, true)
+        : continuityWords("words", config, active, true);
+    void history
+      .then((items) => {
+        if (!active()) return;
+        previous = items as T[];
+        for (const item of live || [])
+          if (item.sourcePath && item.writeVersion)
+            versions.set(item.sourcePath, item.writeVersion);
+        emit();
+      })
+      .catch((error) => {
+        if (active()) fail(error);
+      });
+    return () => {
+      closed = true;
+      unsubscribe();
+    };
+  }, onError);
 
 export const subscribeStudentHistoryDictionaryWords = (
   uid: string,
@@ -343,29 +651,13 @@ export const subscribeStudentHistoryDictionaryWords = (
   config: ConfigLike,
   onError?: (error: Error) => void,
 ): Unsubscribe =>
-  subscribeAfterSession(
-    (fail) =>
-      onSnapshot(
-        query(
-          collection(
-            db,
-            scopedPath(
-              config,
-              `dictionary_students/${uid}/history_dictionary_words`,
-            ),
-          ),
-        ),
-        (snapshot) =>
-          onChange(
-            snapshot.docs
-              .map((item) =>
-                rememberDocument<StudentHistoryDictionaryWord>(item),
-              )
-              .sort(newestDictionaryFirst),
-          ),
-        fail,
-      ),
+  subscribeContinuity(
+    "words",
+    config,
+    scopedPath(config, `dictionary_students/${uid}/history_dictionary_words`),
+    onChange,
     onError,
+    uid,
   );
 
 export const subscribeTeacherHistoryDictionaryRequests = (
@@ -374,15 +666,17 @@ export const subscribeTeacherHistoryDictionaryRequests = (
   onError?: (error: Error) => void,
 ): Unsubscribe =>
   subscribeAfterSession(
-    (fail) =>
+    (fail, isActive) =>
       onSnapshot(
         query(collection(db, scopedPath(config, REQUESTS_COLLECTION))),
-        (snapshot) =>
+        (snapshot) => {
+          if (!isActive()) return;
           onChange(
             snapshot.docs
               .map((item) => rememberDocument<HistoryDictionaryRequest>(item))
               .sort(newestDictionaryFirst),
-          ),
+          );
+        },
         fail,
       ),
     onError,
@@ -390,78 +684,23 @@ export const subscribeTeacherHistoryDictionaryRequests = (
 
 export const loadTeacherStudentHistoryDictionaryWords = async (
   config: ConfigLike,
-) => {
-  const scope = getYearSemester(config);
-  const user = auth.currentUser;
-  if (!user) throw new Error("다시 로그인해 주세요.");
-  const authTime = (await getIdTokenResult(user)).authTime;
-  const callable = await getHistoryDictionaryCallable(
-    "listStudentHistoryDictionaryWordsForTeacher",
-  );
-  const words = new Map<string, StudentHistoryDictionaryWord>();
-  const cursors = new Set<string>();
-  let after = "";
-  do {
-    const result = await callable({ ...scope, ...(after ? { after } : {}) });
-    if (
-      auth.currentUser !== user ||
-      (await getIdTokenResult(user)).authTime !== authTime
-    )
-      throw new Error("로그인 상태가 변경되었습니다. 다시 로그인해 주세요.");
-    const data = result.data as {
-      words?: Record<string, unknown>[];
-      nextCursor?: string;
-    };
-    for (const item of Array.isArray(data.words) ? data.words : []) {
-      if (typeof item.writeVersion === "string") {
-        versions.set(
-          scopedPath(
-            scope,
-            `dictionary_students/${String(item.uid)}/history_dictionary_words/${String(item.termId)}`,
-          ),
-          item.writeVersion,
-        );
-      }
-      const word = mapTeacherStudentWordData(item);
-      words.set(word.id, word);
-    }
-    after = typeof data.nextCursor === "string" ? data.nextCursor : "";
-    if (after && cursors.has(after))
-      throw new Error("단어 목록 조회가 중단되었습니다. 다시 불러와 주세요.");
-    if (after) cursors.add(after);
-  } while (after);
-  return [...words.values()].sort(newestDictionaryFirst);
-};
+) => continuityWords("studentWords", config);
 
 export const subscribeTeacherHistoryDictionaryTerms = (
   onChange: (terms: HistoryDictionaryTerm[]) => void,
   onError: ((error: Error) => void) | undefined,
   config: ConfigLike,
 ): Unsubscribe =>
-  subscribeAfterSession(
-    (fail) =>
-      onSnapshot(
-        query(collection(db, scopedPath(config, TERMS_COLLECTION))),
-        (snapshot) =>
-          onChange(
-            snapshot.docs
-              .map((item) => rememberDocument<HistoryDictionaryTerm>(item))
-              .sort(newestDictionaryFirst),
-          ),
-        fail,
-      ),
+  subscribeContinuity(
+    "terms",
+    config,
+    scopedPath(config, TERMS_COLLECTION),
+    onChange,
     onError,
   );
 
-export const loadTeacherHistoryDictionaryTerms = async (config: ConfigLike) => {
-  const path = scopedPath(config, TERMS_COLLECTION);
-  await ensureHistoryDictionarySession();
-  const snapshot = await getDocs(query(collection(db, path)));
-  return snapshot.docs
-    .map((item) => rememberDocument<HistoryDictionaryTerm>(item))
-    .sort(newestDictionaryFirst);
-};
-
+export const loadTeacherHistoryDictionaryTerms = async (config: ConfigLike) =>
+  continuityTerms(config);
 export const requestHistoryDictionaryTerm = async (
   config: ConfigLike,
   input: {
@@ -481,13 +720,35 @@ export const requestHistoryDictionaryTerm = async (
   });
 };
 
+export const canSaveHistoryDictionaryTermToNotebook = (
+  source: HistoryDictionarySource,
+) =>
+  /^years\/\d{4}\/semesters\/[12]\/history_dictionary_terms\/[^/]+$/.test(
+    source.sourcePath || "",
+  );
+
 export const saveStudentHistoryDictionaryWord = async (
   termId: string,
   config: ConfigLike,
+  source?: Pick<
+    HistoryDictionarySource,
+    "sourceYear" | "sourceSemester" | "sourcePath"
+  >,
 ) => {
+  if (source?.sourcePath && !canSaveHistoryDictionaryTermToNotebook(source))
+    throw new Error(
+      "이전 저장 방식의 풀이는 현재 단어장에 저장할 수 없습니다.",
+    );
   const { year, semester } = getYearSemester(config);
   const callable = await command("saveStudentHistoryDictionaryWord");
-  await callable({ year, semester, termId });
+  await callable({
+    year,
+    semester,
+    termId,
+    ...(source?.sourceYear && source?.sourceSemester
+      ? { sourceYear: source.sourceYear, sourceSemester: source.sourceSemester }
+      : {}),
+  });
 };
 
 export const saveStudentHistoryDictionaryEntry = async (input: {

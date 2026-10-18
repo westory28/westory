@@ -1,5 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { HistoryDictionaryCatalogTerm } from "../../lib/historyDictionaryCatalog";
+import { useAuth } from "../../contexts/AuthContext";
+import { loadHistoryDictionaryCatalog } from "../../lib/historyDictionary";
 import {
   HISTORY_DICTIONARY_THEME_HELP,
   type HistoryDictionaryFacet,
@@ -81,6 +83,7 @@ export default function HistoryDictionaryCatalogBrowser({
   chooseLabel = "내 말로 정리하기",
   disabled = false,
 }: Props) {
+  const { currentUser, config, configReady } = useAuth();
   const [catalog, setCatalog] = useState<HistoryDictionaryCatalogTerm[]>([]);
   const [facets, setFacets] = useState<HistoryDictionaryFacet[]>([]);
   const [query, setQuery] = useState("");
@@ -105,14 +108,21 @@ export default function HistoryDictionaryCatalogBrowser({
     let active = true;
     setLoading(true);
     setFailed(false);
+    setCatalog([]);
+    if (!configReady || !config || !currentUser?.uid) {
+      setLoading(!configReady);
+      if (configReady) setFailed(true);
+      return;
+    }
     Promise.all([
       import("../../lib/historyDictionaryCatalog"),
       import("../../lib/historyDictionaryThemes"),
+      loadHistoryDictionaryCatalog(config),
     ])
-      .then(([module, themes]) => {
+      .then(([module, themes, items]) => {
         if (active) {
           searchCatalog.current = module.searchHistoryDictionaryCatalog;
-          setCatalog(module.getHistoryDictionaryCatalog());
+          setCatalog(items);
           setFacets(themes.historyDictionaryFacets);
         }
       })
@@ -125,10 +135,11 @@ export default function HistoryDictionaryCatalogBrowser({
     return () => {
       active = false;
     };
-  }, [retry]);
+  }, [retry, configReady, config?.year, config?.semester, currentUser]);
 
   const searched = useMemo(() => {
-    const entries = searchCatalog.current?.(query, catalog.length) || [];
+    const entries =
+      searchCatalog.current?.(query, catalog.length, catalog) || [];
     return query.trim()
       ? entries
       : [...entries].sort(compareHistoryDictionaryHeadwords);

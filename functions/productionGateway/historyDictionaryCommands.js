@@ -34,7 +34,7 @@ const version = value => {
 };
 const fields = {
   requestHistoryDictionaryTerm: ["word", "memo", "warningAccepted", "expectedWordVersion", "expectedRequestVersion"],
-  saveStudentHistoryDictionaryWord: ["termId", "expectedWordVersion", "expectedTermVersion"],
+  saveStudentHistoryDictionaryWord: ["termId", "sourceYear", "sourceSemester", "expectedWordVersion", "expectedTermVersion"],
   saveStudentHistoryDictionaryEntry: ["word", "definition", "expectedWordVersion"],
   deleteStudentHistoryDictionaryWord: ["termId", "expectedWordVersion"],
   deleteStudentHistoryDictionaryWordByTeacher: ["uid", "termId", "requestId", "word", "normalizedWord", "reason", "expectedWordVersion", "expectedRequestVersion"],
@@ -50,6 +50,10 @@ const normalizeHistoryDictionaryPayload = (commandType, input) => {
   if (!/^\d{4}$/.test(payload.year) || !["1", "2"].includes(payload.semester)) invalid();
   for (const key of fields[commandType]) {
     if (key.startsWith("expected")) { if (Object.hasOwn(input, key)) payload[key] = version(input[key]); continue; }
+    if (key === "sourceYear" || key === "sourceSemester") {
+      if (Object.hasOwn(input, key)) payload[key] = text(input[key], key === "sourceYear" ? 4 : 1, true);
+      continue;
+    }
     if (key === "tags") {
       const tags = input.tags ?? [];
       if (!Array.isArray(tags) || tags.length > 12) invalid();
@@ -61,6 +65,11 @@ const normalizeHistoryDictionaryPayload = (commandType, input) => {
     }
     const maxima = { word: 40, normalizedWord: 40, definition: 1200, memo: 240, reason: 160, studentLevel: 80, relatedUnitId: 120 };
     payload[key] = text(input[key] ?? "", maxima[key], ["word", "definition"].includes(key) && commandType !== "deleteStudentHistoryDictionaryWordByTeacher");
+  }
+  if (commandType === "saveStudentHistoryDictionaryWord"
+    && (Object.hasOwn(payload, "sourceYear") || Object.hasOwn(payload, "sourceSemester"))) {
+    if (typeof payload.sourceYear !== "string" || !/^\d{4}$/.test(payload.sourceYear)
+      || !["1", "2"].includes(payload.sourceSemester)) invalid();
   }
   return payload;
 };
@@ -88,8 +97,20 @@ const createHistoryDictionaryCommandAdapter = ({ db, operations, prepareContext 
       if (!targetTermId) invalid();
       await check("expectedWordVersion", dictionaryWordPath(payload, uid, targetTermId));
     }
-    if (["saveStudentHistoryDictionaryWord", "saveHistoryDictionaryTerm", "approveHistoryDictionaryTermForRequests"].includes(commandType))
-      await check("expectedTermVersion", dictionaryTermPath(payload, termId));
+    if (["saveStudentHistoryDictionaryWord", "saveHistoryDictionaryTerm", "approveHistoryDictionaryTermForRequests"].includes(commandType)) {
+      const source = commandType === "saveStudentHistoryDictionaryWord"
+        ? { year: payload.sourceYear ?? payload.year, semester: payload.sourceSemester ?? payload.semester }
+        : payload;
+      if (source.year !== payload.year || source.semester !== payload.semester) {
+        const sourceId = `${source.year}-${source.semester}`;
+        const sourceManifest = await transaction.get(`semester_manifests/${sourceId}`);
+        if (Number(source.year) * 2 + Number(source.semester) >= Number(payload.year) * 2 + Number(payload.semester)
+          || !sourceManifest.exists || sourceManifest.data?.semesterId !== sourceId
+          || !["CLOSED", "ARCHIVED"].includes(sourceManifest.data?.status))
+          fail("HISTORY_DICTIONARY_SOURCE_SEMESTER_UNAVAILABLE", "가져올 단어의 이전 학기를 확인할 수 없습니다. 사전을 다시 불러와 주세요.", "failed-precondition");
+      }
+      await check("expectedTermVersion", dictionaryTermPath(source, termId));
+    }
     if (requestId) await check("expectedRequestVersion", dictionaryRequestPath(payload, requestId));
     const prepared = await prepareContext({ ...context, uid, termId, requestId, student });
     const result = await operations[commandType]({ data: payload }, {

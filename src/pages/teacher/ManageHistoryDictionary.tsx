@@ -206,7 +206,7 @@ const ManageHistoryDictionary: React.FC = () => {
     setTagInput("");
     setUploadRows([]);
     setUploadFileName("");
-  }, [configReady, config?.year, config?.semester, currentUser?.uid]);
+  }, [configReady, config?.year, config?.semester, currentUser]);
 
   useEffect(() => {
     setLoadErrors({});
@@ -245,13 +245,7 @@ const ManageHistoryDictionary: React.FC = () => {
       unsubscribeRequests();
       unsubscribeTerms();
     };
-  }, [
-    configReady,
-    config?.year,
-    config?.semester,
-    currentUser?.uid,
-    reloadKey,
-  ]);
+  }, [configReady, config?.year, config?.semester, currentUser, reloadKey]);
 
   useEffect(() => {
     setStudentWords([]);
@@ -285,13 +279,7 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [
-    configReady,
-    config?.semester,
-    config?.year,
-    currentUser?.uid,
-    reloadKey,
-  ]);
+  }, [configReady, config?.semester, config?.year, currentUser, reloadKey]);
 
   useEffect(() => {
     setNotificationRequests([]);
@@ -320,7 +308,7 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [configReady, config?.semester, config?.year, currentUser?.uid]);
+  }, [configReady, config?.semester, config?.year, currentUser]);
 
   useEffect(() => {
     if (activePanel !== "terms") setSelectedTermId("");
@@ -450,12 +438,15 @@ const ManageHistoryDictionary: React.FC = () => {
       ? visibleStudentWords[0] || null
       : null;
   const normalizedEditorWord = normalizeHistoryDictionaryWord(word);
+  const selectedSource = selectedStudentWord || selectedTerm;
+  const editorReadOnly = Boolean(selectedSource?.readOnly);
   const matchingTerm = useMemo(() => {
     const target = selectedRequest?.normalizedWord || normalizedEditorWord;
     if (!target) return null;
     return (
       terms.find(
         (item) =>
+          !item.readOnly &&
           item.normalizedWord === target &&
           item.status === "published" &&
           item.definition,
@@ -494,6 +485,7 @@ const ManageHistoryDictionary: React.FC = () => {
     setWord(selectedRequest.word);
     const term = terms.find(
       (item) =>
+        !item.readOnly &&
         item.normalizedWord === selectedRequest.normalizedWord &&
         item.status === "published",
     );
@@ -505,7 +497,7 @@ const ManageHistoryDictionary: React.FC = () => {
 
   useEffect(() => {
     if (!selectedTerm) return;
-    const sourceKey = `term:${selectedTerm.id}`;
+    const sourceKey = `term:${selectedTerm.sourcePath || selectedTerm.id}`;
     if (editorSourceRef.current === sourceKey) return;
     editorSourceRef.current = sourceKey;
     setWord(selectedTerm.word);
@@ -517,7 +509,7 @@ const ManageHistoryDictionary: React.FC = () => {
 
   useEffect(() => {
     if (!selectedStudentWord) return;
-    const sourceKey = `student:${selectedStudentWord.id}`;
+    const sourceKey = `student:${selectedStudentWord.sourcePath || selectedStudentWord.id}`;
     if (editorSourceRef.current === sourceKey) return;
     editorSourceRef.current = sourceKey;
     setSelectedStudentWordId(selectedStudentWord.id);
@@ -836,7 +828,13 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleSaveTerm = async () => {
-    if (!word.trim() || definition.trim().length < 5 || busyMessage) return;
+    if (
+      editorReadOnly ||
+      !word.trim() ||
+      definition.trim().length < 5 ||
+      busyMessage
+    )
+      return;
     setBusyMessage(
       "역사 사전 풀이를 저장하고 요청 학생에게 배포하는 중입니다.",
     );
@@ -877,6 +875,7 @@ const ManageHistoryDictionary: React.FC = () => {
 
   const handleSaveStudentWord = async () => {
     if (
+      editorReadOnly ||
       !selectedStudentWord?.uid ||
       !selectedStudentWord.termId ||
       !word.trim() ||
@@ -938,7 +937,7 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleApproveExisting = async (requestId?: string) => {
-    if (!matchingTerm || busyMessage) return;
+    if (!matchingTerm || matchingTerm.readOnly || busyMessage) return;
     setBusyMessage("기존 뜻풀이를 승인하고 학생 단어장에 반영하는 중입니다.");
     try {
       await approveHistoryDictionaryTermForRequests(config, {
@@ -1007,6 +1006,7 @@ const ManageHistoryDictionary: React.FC = () => {
 
   const handleDeleteStudentWord = async () => {
     if (
+      editorReadOnly ||
       !selectedStudentWord?.uid ||
       !selectedStudentWord.termId ||
       busyMessage
@@ -1202,7 +1202,9 @@ const ManageHistoryDictionary: React.FC = () => {
                                       {item.word}
                                     </span>
                                     <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
-                                      학생용
+                                      {item.readOnly
+                                        ? `${item.sourceYear}년 ${item.sourceSemester}학기`
+                                        : "학생용"}
                                     </span>
                                   </div>
                                   <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
@@ -1325,7 +1327,9 @@ const ManageHistoryDictionary: React.FC = () => {
                                       {item.word}
                                     </span>
                                     <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">
-                                      직접 등록
+                                      {item.readOnly
+                                        ? `${item.sourceYear}년 ${item.sourceSemester}학기`
+                                        : "직접 등록"}
                                     </span>
                                   </div>
                                   <div className="mt-2 text-xs font-semibold text-slate-500">
@@ -1823,7 +1827,7 @@ const ManageHistoryDictionary: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => void handleDeleteStudentWord()}
-                          disabled={Boolean(busyMessage)}
+                          disabled={Boolean(busyMessage) || editorReadOnly}
                           className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-rose-100 bg-white px-3 text-xs font-extrabold text-rose-600 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <i
@@ -1834,10 +1838,12 @@ const ManageHistoryDictionary: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-emerald-900">
-                      학생 단어장에만 반영됩니다. 공식 역사 사전 등록 단어는
-                      바뀌지 않습니다.
-                    </p>
+                    {!editorReadOnly && (
+                      <p className="mt-3 text-sm leading-6 text-emerald-900">
+                        학생 단어장에만 반영됩니다. 공식 역사 사전 등록 단어는
+                        바뀌지 않습니다.
+                      </p>
+                    )}
                   </section>
                 )}
 
@@ -1922,7 +1928,16 @@ const ManageHistoryDictionary: React.FC = () => {
                   </section>
                 )}
 
-                <section className="mt-6 space-y-5">
+                {editorReadOnly && (
+                  <p className="mt-5 text-sm font-semibold text-slate-500">
+                    {selectedSource?.sourceYear}년{" "}
+                    {selectedSource?.sourceSemester}학기 · 읽기 전용
+                  </p>
+                )}
+                <fieldset
+                  disabled={editorReadOnly}
+                  className={`mt-6 min-w-0 space-y-5${editorReadOnly ? " history-dictionary-readonly" : ""}`}
+                >
                   <label className="block">
                     <span className="text-sm font-extrabold text-slate-800">
                       단어
@@ -2072,7 +2087,7 @@ const ManageHistoryDictionary: React.FC = () => {
                       ))}
                     </div>
                   </section>
-                </section>
+                </fieldset>
 
                 <div className="mt-7 flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
                   <button
@@ -2104,6 +2119,7 @@ const ManageHistoryDictionary: React.FC = () => {
                         : void handleSaveTerm()
                     }
                     disabled={
+                      editorReadOnly ||
                       Boolean(busyMessage) ||
                       !word.trim() ||
                       definition.trim().length < (selectedStudentWord ? 2 : 5)

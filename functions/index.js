@@ -8447,5 +8447,7 @@ exports.getWisEconomyState = require('./studentWisQuery').getWisEconomyState;
 // Use the reviewed scoped query, preserving the live teacher archive boundary.
 exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
   require('./historyDictionaryQuery').createHistoryDictionaryQueryHandler({ db }));
+exports.getHistoryDictionaryContinuity = onCall({ region: REGION, timeoutSeconds: 60, memory: '256MiB' },
+  require('./historyDictionaryContinuity').createHistoryDictionaryContinuityHandler({ db }));
 
 exports.claimStudentLearningReward = onCall({ region: REGION }, require("./studentLearningReward").createStudentLearningRewardHandler({ db, loadPolicy }));

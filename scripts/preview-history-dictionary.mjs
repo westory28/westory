@@ -1,7 +1,7 @@
 /** Real dictionary UI with in-memory fixtures. No Firebase connection or live writes.
  * node scripts/preview-history-dictionary.mjs
  * ?mode=student|floating|teacher&width=390|768|1280
- * Optional: &empty=1&listError=1&saveError=1&lookupError=1&delay=1000
+ * Optional: &empty=1&listError=1&saveError=1&lookupError=1&delay=1000&archived=1&catalogError=1
  * Browser interaction is intentionally left to the approved browser tool.
  */
 import { build } from "esbuild";
@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stubs = `
+import {getHistoryDictionaryCatalog} from './src/lib/historyDictionaryCatalog';
 const params=new URLSearchParams(location.search);
 const config={year:'2026',semester:'2'};
 const currentUser={uid:'dictionary-fixture',email:'fixture@example.invalid'};
@@ -20,19 +21,24 @@ export const canWriteLessonManagement=()=>params.get('readonly')!=='1';
 export const useAppToast=()=>({showToast:(value)=>{document.getElementById('qa-feedback').textContent=value.title+' '+(value.message||'')}});
 export const getHistoryDictionaryErrorMessage=(error)=>error.message||'잠시 후 다시 시도해 주세요.';
 export const normalizeHistoryDictionaryWord=(value)=>value.trim().replace(/\\s+/g,' ').toLowerCase();
-const saved=(word,definition,status='saved')=>({id:'word-'+word,termId:'term-'+word,word,normalizedWord:normalizeHistoryDictionaryWord(word),definition,status,uid:currentUser.uid});
+export const canSaveHistoryDictionaryTermToNotebook=(term)=>Boolean(term?.sourcePath?.startsWith('years/'));
+const origin=params.has('archived')?{year:'2026',semester:'1',sourceYear:'2026',sourceSemester:'1',readOnly:true}:{year:'2026',semester:'2',sourceYear:'2026',sourceSemester:'2',readOnly:false};
+const saved=(word,definition,status='saved')=>({id:'word-'+word,termId:'term-'+word,word,normalizedWord:normalizeHistoryDictionaryWord(word),definition,status,uid:currentUser.uid,...origin,sourcePath:'years/2026/semesters/'+origin.semester+'/dictionary_students/'+currentUser.uid+'/history_dictionary_words/term-'+word});
+const teacherTerm={id:'teacher-term',word:'율령',normalizedWord:'율령',definition:'국가가 백성을 다스리기 위해 마련한 법과 행정 규정.',status:'published',tags:[],studentLevel:'중학생 수준',...origin,sourcePath:'years/2026/semesters/'+origin.semester+'/history_dictionary_terms/teacher-term'};
 let words=params.has('empty')?[]:[saved('율령','나라를 다스리기 위해 정한 법과 제도'),saved('집현전','세종 때 학문 연구와 정책 자문을 맡던 기관')];
 const listeners=new Set();let listFailed=false,saveFailed=false,lookupFailed=false;
 const delay=()=>new Promise(resolve=>setTimeout(resolve,Number(params.get('delay')||300)));
+let catalogFailed=false;
+export const loadHistoryDictionaryCatalog=async()=>{await delay();if(params.has('catalogError')&&!catalogFailed){catalogFailed=true;throw Error('사전을 불러오지 못했습니다. 다시 불러와 주세요.')}return getHistoryDictionaryCatalog();};
 const notify=()=>listeners.forEach(listener=>listener([...words]));
 const trace=(action,payload)=>{const output=document.getElementById('qa-calls');output.textContent=JSON.stringify({action,...payload})};
 export const subscribeStudentHistoryDictionaryWords=(uid,onData,config,onError)=>{listeners.add(onData);const timer=setTimeout(()=>{if(params.has('listError')&&!listFailed){listFailed=true;onError(Error('연결을 확인하고 다시 불러와 주세요.'));return;}onData([...words])},300);return()=>{clearTimeout(timer);listeners.delete(onData)}};
 export const saveStudentHistoryDictionaryEntry=async(input)=>{trace('save-own',input);await delay();if(params.has('saveError')&&!saveFailed){saveFailed=true;throw Error('저장하지 못했습니다. 입력 내용은 유지됩니다. 다시 저장해 주세요.')}words=words.filter(item=>item.normalizedWord!==normalizeHistoryDictionaryWord(input.word));words.push(saved(input.word,input.definition));notify();return {reward:{awarded:true,amount:2}}};
 export const deleteStudentHistoryDictionaryWord=async(config,termId)=>{trace('delete',{termId});await delay();words=words.filter(item=>item.termId!==termId);notify();return {reward:{reclaimed:true,amount:2}}};
-export const loadPublishedHistoryDictionaryTerm=async(word)=>{trace('lookup',{word});await delay();if(params.has('lookupError')&&!lookupFailed){lookupFailed=true;throw Error('뜻풀이를 불러오지 못했습니다. 다시 확인해 주세요.')}return word==='율령'?{id:'teacher-term',word,definition:'국가가 백성을 다스리기 위해 마련한 법과 행정 규정.',status:'published'}:null};
-export const saveStudentHistoryDictionaryWord=async()=>{trace('save-teacher',{});await delay();words=words.filter(item=>item.word!=='율령');words.push(saved('율령','국가가 백성을 다스리기 위해 마련한 법과 행정 규정.'));notify();return {}};
+export const loadPublishedHistoryDictionaryTerm=async(word)=>{trace('lookup',{word});await delay();if(params.has('lookupError')&&!lookupFailed){lookupFailed=true;throw Error('뜻풀이를 불러오지 못했습니다. 다시 확인해 주세요.')}return word==='율령'?teacherTerm:null};
+export const saveStudentHistoryDictionaryWord=async(termId,config,source)=>{trace('save-teacher',{termId,sourceYear:source?.sourceYear,sourceSemester:source?.sourceSemester});await delay();words=words.filter(item=>item.word!=='율령');words.push({...saved('율령','국가가 백성을 다스리기 위해 마련한 법과 행정 규정.'),year:'2026',semester:'2',readOnly:false});notify();return {}};
 export const requestHistoryDictionaryTerm=async(config,input)=>{trace('request',input);await delay();words=words.filter(item=>item.normalizedWord!==normalizeHistoryDictionaryWord(input.word));words.push(saved(input.word,'','requested'));notify();return {}};
-export const subscribeTeacherHistoryDictionaryTerms=(onData,onError)=>{const timers=[setTimeout(()=>onData([{id:'term1',word:'율령',normalizedWord:'율령',definition:'국가가 백성을 다스리기 위해 마련한 법과 행정 규정.',status:'published',tags:[],studentLevel:'중학생 수준'}]),100)];if(params.has('listError')&&!listFailed){listFailed=true;timers.push(setTimeout(()=>onError(Error('연결을 확인하고 다시 불러와 주세요.')),800));}return()=>timers.forEach(clearTimeout)};
+export const subscribeTeacherHistoryDictionaryTerms=(onData,onError)=>{const timers=[setTimeout(()=>onData([teacherTerm]),100)];if(params.has('listError')&&!listFailed){listFailed=true;timers.push(setTimeout(()=>onError(Error('연결을 확인하고 다시 불러와 주세요.')),800));}return()=>timers.forEach(clearTimeout)};
 export const subscribeTeacherHistoryDictionaryRequests=(onData)=>{const timer=setTimeout(()=>onData([]),100);return()=>clearTimeout(timer)};
 export const loadTeacherStudentHistoryDictionaryWords=async()=>words;
 export const loadTeacherHistoryDictionaryTerms=async()=>[];
@@ -80,6 +86,7 @@ const compiled = await build({
         builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
           contents: stubs,
           loader: "js",
+          resolveDir: root,
         }));
       },
     },

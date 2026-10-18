@@ -49,11 +49,27 @@ const modules = {
     },
     getHistoryDictionaryCallable: async (name) => async (input) => {
       writes.push({ name, input });
-      if (
-        name === "listStudentHistoryDictionaryWordsForTeacher" &&
-        teacherPages.length
-      )
-        return { data: teacherPages.shift() };
+      if (name === "getHistoryDictionaryContinuity") {
+        if (teacherPages.length) return { data: teacherPages.shift() };
+        const rows = queryRows || [
+          snapshot(`${root}/history_dictionary_terms/${snapshotId}`),
+        ];
+        return {
+          data: {
+            items: rows.map((row) => ({
+              id: row.id,
+              ...row.data(),
+              sourcePath: row.ref.path,
+              writeVersion: row.data().updatedAt
+                ? `${row.data().updatedAt.seconds}:${row.data().updatedAt.nanoseconds}`
+                : "legacy",
+              createdAtMs: (row.data().createdAt?.seconds || 0) * 1000,
+              updatedAtMs: (row.data().updatedAt?.seconds || 0) * 1000,
+            })),
+            nextCursor: "",
+          },
+        };
+      }
       if (failWrite) throw new Error("network failure");
       if (writeConflict)
         throw {
@@ -144,7 +160,8 @@ assert.equal(
   "unmount must cancel delayed subscription",
 );
 await exports.loadPublishedHistoryDictionaryTerm("역사", scope);
-assert.equal(reads.at(-1).path, `${root}/history_dictionary_terms`);
+assert.equal(writes.at(-1).name, "getHistoryDictionaryContinuity");
+assert.equal(writes.at(-1).input.kind, "terms");
 await exports.saveHistoryDictionaryTerm(scope, {
   word: "역사",
   definition: "사전 설명입니다",
@@ -247,11 +264,7 @@ queryRows = Array.from({ length: 605 }, (_, index) =>
 const completeTerms = await exports.loadTeacherHistoryDictionaryTerms(scope);
 assert.equal(completeTerms.length, 605);
 assert.equal(completeTerms[0].word, "단어 604");
-assert.equal(
-  reads.at(-1).constraints.length,
-  0,
-  "Do not omit older or undated documents with an orderBy/limit query",
-);
+assert.equal(writes.at(-1).input.kind, "terms");
 let completeWords;
 const stopAllWords = exports.subscribeStudentHistoryDictionaryWords(
   "other-user",
@@ -267,7 +280,7 @@ assert.equal(subscriptions.at(-1).constraints.length, 0);
 queryRows = null;
 teacherPages = [
   {
-    words: [
+    items: [
       {
         id: "student:one",
         uid: "student",
@@ -275,12 +288,13 @@ teacherPages = [
         word: "첫째",
         updatedAtMs: 1000,
         writeVersion: "1:0",
+        sourcePath: `${root}/dictionary_students/student/history_dictionary_words/one`,
       },
     ],
     nextCursor: "page-1",
   },
   {
-    words: [
+    items: [
       {
         id: "student:two",
         uid: "student",
@@ -288,6 +302,7 @@ teacherPages = [
         word: "둘째",
         updatedAtMs: 2000,
         writeVersion: "2:0",
+        sourcePath: `${root}/dictionary_students/student/history_dictionary_words/two`,
       },
     ],
     nextCursor: "",
@@ -299,8 +314,8 @@ assert.equal(teacherWords.length, 2);
 assert.equal(teacherWords[0].word, "둘째");
 assert.equal(writes.at(-1).input.after, "page-1");
 teacherPages = [
-  { words: [], nextCursor: "same" },
-  { words: [], nextCursor: "same" },
+  { items: [], nextCursor: "same" },
+  { items: [], nextCursor: "same" },
 ];
 await assert.rejects(
   exports.loadTeacherStudentHistoryDictionaryWords(scope),
@@ -324,3 +339,4 @@ assert.ok(
 );
 assert.ok(!source.includes("collectionGroup"), "no global dictionary queries");
 console.log("history dictionary contract checks passed");
+await import("./verify-history-dictionary-continuity.mjs");

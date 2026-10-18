@@ -29,6 +29,29 @@ const {
   getHistoryDictionaryCatalogSource,
 } = load("src/lib/historyDictionaryCatalog.ts");
 const terms = getHistoryDictionaryCatalog();
+const databaseCatalog = [
+  {
+    ...terms[0],
+    id: "database-only",
+    word: "새 학습용어",
+    aliases: ["새 별칭"],
+    definition: "서버에서 추가한 새로운 풀이입니다.",
+  },
+];
+assert.equal(
+  searchHistoryDictionaryCatalog("새 별칭", 80, databaseCatalog)[0]?.id,
+  "database-only",
+);
+assert.equal(
+  searchHistoryDictionaryCatalog("고려", 80, databaseCatalog).length,
+  0,
+  "Provided database catalog must not search the static bundle",
+);
+assert.equal(
+  searchHistoryDictionaryCatalog("새 별칭", 80, []).length,
+  0,
+  "Different catalog arrays must not reuse a stale search index",
+);
 const { getHistoryDictionaryFacet } = load(
   "src/lib/historyDictionaryThemes.ts",
 );

@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import {
+  canSaveHistoryDictionaryTermToNotebook,
   deleteStudentHistoryDictionaryWord,
   loadPublishedHistoryDictionaryTerm,
   normalizeHistoryDictionaryWord,
@@ -35,6 +36,9 @@ export default function StudentHistoryDictionaryWorkspace() {
   const [initial, setInitial] = useState("");
   const [word, setWord] = useState("");
   const [definition, setDefinition] = useState("");
+  const [selectedSource, setSelectedSource] = useState("");
+  const [selectedArchive, setSelectedArchive] =
+    useState<StudentHistoryDictionaryWord | null>(null);
   const [reference, setReference] =
     useState<HistoryDictionaryCatalogTerm | null>(null);
   const [teacherTerm, setTeacherTerm] = useState<HistoryDictionaryTerm | null>(
@@ -56,13 +60,25 @@ export default function StudentHistoryDictionaryWorkspace() {
   const baseDraft = useRef({ word: "", definition: "" });
   const id = useId();
   const scopeKey = `${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`;
-  const scopeRef = useRef({ key: scopeKey });
-  if (scopeRef.current.key !== scopeKey) scopeRef.current = { key: scopeKey };
+  const scopeRef = useRef({ key: scopeKey, user: currentUser });
+  if (
+    scopeRef.current.key !== scopeKey ||
+    scopeRef.current.user !== currentUser
+  )
+    scopeRef.current = { key: scopeKey, user: currentUser };
   const ready = Boolean(currentUser?.uid && configReady && config);
   const currentWord = word.trim();
   const normalizedWord = normalizeHistoryDictionaryWord(currentWord);
   const selectedWord =
-    words.find((item) => item.normalizedWord === normalizedWord) || null;
+    words.find((item) =>
+      selectedSource
+        ? (item.sourcePath || item.id) === selectedSource
+        : !item.readOnly && item.normalizedWord === normalizedWord,
+    ) || selectedArchive;
+  const readOnly = Boolean(selectedWord?.readOnly);
+  const canSaveTeacher = Boolean(
+    teacherTerm && canSaveHistoryDictionaryTermToNotebook(teacherTerm),
+  );
   const requested = selectedWord?.status === "requested";
   const initialCounts = useMemo(
     () => getHistoryDictionaryInitialCounts(words.map((item) => item.word)),
@@ -89,11 +105,13 @@ export default function StudentHistoryDictionaryWorkspace() {
   useEffect(() => {
     // A new object also invalidates work from an earlier visit to this account
     // and semester, including a rapid account switch back to the same UID.
-    scopeRef.current = { key: scopeKey };
+    scopeRef.current = { key: scopeKey, user: currentUser };
     setWords([]);
     setInitial("");
     setWord("");
     setDefinition("");
+    setSelectedSource("");
+    setSelectedArchive(null);
     setReference(null);
     setRequestOpen(false);
     setMemo("");
@@ -107,9 +125,9 @@ export default function StudentHistoryDictionaryWorkspace() {
     pending.current = false;
     baseDraft.current = { word: "", definition: "" };
     return () => {
-      scopeRef.current = { key: "" };
+      scopeRef.current = { key: "", user: null };
     };
-  }, [scopeKey]);
+  }, [scopeKey, currentUser]);
 
   useEffect(() => {
     if (!ready || !currentUser?.uid) {
@@ -138,7 +156,7 @@ export default function StudentHistoryDictionaryWorkspace() {
       active = false;
       unsubscribe();
     };
-  }, [scopeKey, ready, retry]);
+  }, [scopeKey, ready, retry, currentUser]);
 
   useEffect(() => {
     setTeacherTerm(null);
@@ -161,6 +179,7 @@ export default function StudentHistoryDictionaryWorkspace() {
     nextWord = "",
     nextDefinition = "",
     entry: HistoryDictionaryCatalogTerm | null = null,
+    savedWord: StudentHistoryDictionaryWord | null = null,
   ) => {
     if (pending.current) return;
     const dirty =
@@ -175,6 +194,10 @@ export default function StudentHistoryDictionaryWorkspace() {
       return;
     setWord(nextWord);
     setDefinition(nextDefinition);
+    setSelectedSource(savedWord?.sourcePath || savedWord?.id || "");
+    setSelectedArchive(savedWord?.readOnly ? savedWord : null);
+    setRequestOpen(false);
+    setWarningAccepted(false);
     setReference(entry);
     setMemo("");
     setError("");
@@ -208,7 +231,7 @@ export default function StudentHistoryDictionaryWorkspace() {
   };
 
   const save = () => {
-    if (!currentWord || definition.trim().length < 2) return;
+    if (readOnly || !currentWord || definition.trim().length < 2) return;
     if (reference && definition.trim() === reference.definition.trim()) {
       setError(
         "사전 뜻풀이를 그대로 옮기지 말고, 이해한 내용을 자신의 말로 적어 주세요.",
@@ -234,6 +257,7 @@ export default function StudentHistoryDictionaryWorkspace() {
 
   const remove = () => {
     if (
+      readOnly ||
       !selectedWord?.termId ||
       !window.confirm(
         `“${selectedWord.word}”을 내 단어장에서 삭제할까요? 지급된 사전 위스가 있으면 함께 회수됩니다.`,
@@ -248,6 +272,8 @@ export default function StudentHistoryDictionaryWorkspace() {
       if (!isCurrent()) return;
       setWord("");
       setDefinition("");
+      setSelectedSource("");
+      setSelectedArchive(null);
       setReference(null);
       baseDraft.current = { word: "", definition: "" };
       setFeedback(
@@ -280,9 +306,13 @@ export default function StudentHistoryDictionaryWorkspace() {
   };
 
   const saveTeacher = () => {
-    if (!teacherTerm) return;
+    if (readOnly || !teacherTerm || !canSaveTeacher) return;
     void run("teacher-save", async (isCurrent) => {
-      await saveStudentHistoryDictionaryWord(teacherTerm.id, config);
+      await saveStudentHistoryDictionaryWord(
+        teacherTerm.id,
+        config,
+        teacherTerm,
+      );
       if (!isCurrent()) return;
       setDefinition(teacherTerm.definition);
       baseDraft.current = { word, definition: teacherTerm.definition };
@@ -291,7 +321,7 @@ export default function StudentHistoryDictionaryWorkspace() {
   };
 
   const sendRequest = () => {
-    if (!currentWord || !warningAccepted || requested) return;
+    if (readOnly || !currentWord || !warningAccepted || requested) return;
     void run("request", async (isCurrent) => {
       await requestHistoryDictionaryTerm(config, {
         word: currentWord,
@@ -332,8 +362,9 @@ export default function StudentHistoryDictionaryWorkspace() {
           onChoose={(entry) => {
             const existing = words.find(
               (item) =>
+                !item.readOnly &&
                 item.normalizedWord ===
-                normalizeHistoryDictionaryWord(entry.word),
+                  normalizeHistoryDictionaryWord(entry.word),
             );
             replaceDraft(entry.word, existing?.definition || "", entry);
           }}
@@ -405,16 +436,29 @@ export default function StudentHistoryDictionaryWorkspace() {
                       key={item.id}
                       className="history-dictionary-word"
                       type="button"
-                      aria-pressed={item.normalizedWord === normalizedWord}
+                      aria-pressed={Boolean(
+                        selectedWord &&
+                        (item.sourcePath || item.id) ===
+                          (selectedWord.sourcePath || selectedWord.id),
+                      )}
                       disabled={Boolean(busy)}
                       onClick={() =>
-                        replaceDraft(item.word, item.definition || "")
+                        replaceDraft(
+                          item.word,
+                          item.definition || "",
+                          null,
+                          item,
+                        )
                       }
                     >
                       <span className="history-dictionary-row">
                         <strong>{item.word}</strong>
                         <span className="history-dictionary-count">
-                          {item.status === "requested" ? "요청 중" : "저장됨"}
+                          {item.readOnly
+                            ? `${item.sourceYear}년 ${item.sourceSemester}학기 · 읽기 전용`
+                            : item.status === "requested"
+                              ? "요청 중"
+                              : "저장됨"}
                         </span>
                       </span>
                       {item.definition && <p>{item.definition}</p>}
@@ -436,8 +480,23 @@ export default function StudentHistoryDictionaryWorkspace() {
             aria-label="단어 정리"
             aria-busy={Boolean(busy)}
           >
-            <h2>{selectedWord ? "단어 수정" : "새 단어 등록"}</h2>
-            <fieldset disabled={Boolean(busy) || !ready}>
+            <h2>
+              {readOnly
+                ? "이전 학기 단어"
+                : selectedWord
+                  ? "단어 수정"
+                  : "새 단어 등록"}
+            </h2>
+            {readOnly && (
+              <p className="history-dictionary-count">
+                {selectedWord?.sourceYear}년 {selectedWord?.sourceSemester}학기
+                · 읽기 전용
+              </p>
+            )}
+            <fieldset
+              disabled={Boolean(busy) || !ready || readOnly}
+              className={readOnly ? "history-dictionary-readonly" : undefined}
+            >
               <label
                 className="history-dictionary-field"
                 htmlFor={`${id}-word`}
@@ -453,6 +512,8 @@ export default function StudentHistoryDictionaryWorkspace() {
                   placeholder="예: 율령"
                   onChange={(event) => {
                     setWord(event.target.value);
+                    setSelectedSource("");
+                    setSelectedArchive(null);
                     setError("");
                     setFeedback("");
                     if (
@@ -571,12 +632,16 @@ export default function StudentHistoryDictionaryWorkspace() {
                     <button
                       className="history-dictionary-button"
                       type="button"
-                      disabled={Boolean(busy) || !ready}
+                      disabled={
+                        Boolean(busy) || !ready || readOnly || !canSaveTeacher
+                      }
                       onClick={saveTeacher}
                     >
-                      {busy === "teacher-save"
-                        ? "저장 중…"
-                        : "선생님 뜻풀이로 저장"}
+                      {!canSaveTeacher
+                        ? "이전 자료 · 저장할 수 없음"
+                        : busy === "teacher-save"
+                          ? "저장 중…"
+                          : "선생님 뜻풀이로 저장"}
                     </button>
                   </>
                 ) : (
@@ -590,7 +655,11 @@ export default function StudentHistoryDictionaryWorkspace() {
                   type="button"
                   aria-expanded={requestOpen}
                   disabled={
-                    !currentWord || requested || Boolean(busy) || !ready
+                    readOnly ||
+                    !currentWord ||
+                    requested ||
+                    Boolean(busy) ||
+                    !ready
                   }
                   onClick={() => {
                     setWarningAccepted(false);
@@ -617,7 +686,7 @@ export default function StudentHistoryDictionaryWorkspace() {
                       lang="ko"
                       value={memo}
                       maxLength={240}
-                      disabled={Boolean(busy)}
+                      disabled={Boolean(busy) || readOnly}
                       onChange={(event) => setMemo(event.target.value)}
                     />
                   </label>
@@ -625,7 +694,7 @@ export default function StudentHistoryDictionaryWorkspace() {
                     <input
                       type="checkbox"
                       checked={warningAccepted}
-                      disabled={Boolean(busy)}
+                      disabled={Boolean(busy) || readOnly}
                       onChange={(event) =>
                         setWarningAccepted(event.target.checked)
                       }
@@ -637,7 +706,9 @@ export default function StudentHistoryDictionaryWorkspace() {
                   <button
                     className="history-dictionary-button is-primary"
                     type="button"
-                    disabled={!warningAccepted || Boolean(busy) || !ready}
+                    disabled={
+                      !warningAccepted || Boolean(busy) || !ready || readOnly
+                    }
                     onClick={sendRequest}
                   >
                     {busy === "request" ? "요청 중…" : "요청 보내기"}

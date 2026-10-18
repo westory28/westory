@@ -12,6 +12,16 @@
 
 이 문서는 현재 확인된 Vercel 운영 절차다. GitHub Pages 워크플로 성공만으로 `www.westory.kr` 반영을 대신 확인하지 않는다. Functions 또는 Rules 변경이 있으면 루트 AGENTS.md의 별도 Firebase 배포 절차도 따른다.
 
+## 사전 자료의 학기 유지 (2026-10-18)
+
+기본 역사·지명 사전은 Firestore `history_dictionary_catalog`에 안정된 항목 ID로 저장한다. 앱은 `getHistoryDictionaryContinuity`에서 이 자료를 읽는다. 출처, 이용 조건, 별칭과 분류를 함께 보존하며, 학기 전환 때 초기화하거나 다시 생성하지 않는다.
+
+교사 등록 단어와 학생 단어장은 기존 `years/{year}/semesters/{semester}` 원본 경로를 유지한다. 현재 학기와 종료·보관된 이전 학기를 함께 조회하며, 같은 단어는 현재 학기, 최신 이전 학기 순으로 표시한다. 이전 기록은 읽기 전용이다. 학생은 본인 단어장만 조회하고, 교사가 제공한 이전 풀이를 현재 학기에 명시적으로 저장할 때에는 원본 풀이와 현재 단어의 버전을 각각 검사한다. 자동 복사나 보상 지급은 하지 않는다. 개인정보 삭제 절차는 기존 보관 자료에도 계속 적용된다.
+
+기본 사전 갱신은 `node scripts/sync-history-dictionary-catalog.mjs --project history-quiz-yongsin`으로 변경 계획을 먼저 확인한다. 적용할 때에는 출력된 `sourceHash`, `planHash`를 각각 `--expect-source-sha`, `--expect-plan-sha`에 넣고 `--apply`를 추가한다. 이 도구는 관리 대상 항목만 버전 조건으로 생성·수정하며, 삭제하지 않는다. 적용 후 전체 항목과 출처를 다시 읽어 확인한다. 2026-10-18 최초 저장분은 2,373개(역사 133개·지명 2,240개), 출처 2,994건이다.
+
+조회·저장 검증은 `npm run verify:history-dictionary`와 `npm --prefix functions run check`에 포함된다. 이 패치의 Firebase 배포 대상은 서울 `getHistoryDictionaryContinuity`, `executeCommand` 두 함수다. 규칙이나 기존 사전 mutation callable을 일괄 배포하지 않는다.
+
 ## Windows 작업 환경 확인
 
 회사 PC에서도 매 작업 시작 시 `git fetch origin --prune` 후 HEAD와 `origin/main`을 비교한다. 미커밋 변경이 없고 뒤처지기만 한 경우 `git merge --ff-only origin/main`으로 동기화한다. 다른 PC의 작업을 강제 push로 덮어쓰지 않는다.

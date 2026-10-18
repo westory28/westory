@@ -88,8 +88,10 @@
       "sourceFile": "historyDictionaryCommands.js",
       "file": "historyDictionaryCommands.js",
       "originalSha256": "91deb9c0b63c3f1d3cf8a1031d737071b585b4c4c8b5e66a584ae7a6248245eb",
-      "sha256": "e1261994e29696eaab38704ab1221cff1e7e430058ffb1e0071ca3762ecae9ec",
-      "changes": []
+      "sha256": "496ef8e753bdcd5b5c37b71f04a4e49baaff1f122ba7b6c5de4791a28f47e66d",
+      "changes": [
+        "2026-10-18: Permit explicit copying of a published prior-semester dictionary definition into the active student notebook; validate archived source scope and preserve separate source/current CAS without rewards."
+      ]
     },
     {
       "sourceFile": "historyDictionaryDelete.js",
@@ -165,11 +167,12 @@
       "sourceFile": "index.js",
       "file": "productionSource.js",
       "originalSha256": "b1e4d2e8137f26f789f1037850e668c5194b5089421225d1ee275b6869b672cf",
-      "sha256": "772963d4cd7d70439e8e3fbdfed9317cb909cd7253e5b695f83858c324527e4f",
+      "sha256": "1ae2192378a324fda6d17bb36c787a0e74b1ded7c1178d9e94f32b91db21fd9c",
       "changes": [
         "Reuse the root initialized Firebase Admin app.",
         "Lesson core-point record and completion catalog now exclude deleted/foreign-class sources and require an active writable semester, enrollment and classroom.",
-        "2026-10-15: atomic History Classroom save and audited teacher-direct exemption."
+        "2026-10-15: atomic History Classroom save and audited teacher-direct exemption.",
+        "2026-10-18: Permit explicit copying of a published prior-semester dictionary definition into the active student notebook; validate archived source scope and preserve separate source/current CAS without rewards."
       ]
     },
     {
