@@ -529,13 +529,15 @@ try {
       .getByRole("link", { name: "전체 게임", exact: true })
       .boundingBox();
     assert.ok(
-      allGames.y >= heading.y - 8,
+      allGames.y + allGames.height / 2 >= heading.y + heading.height / 2 - 8,
       "catalog action is no longer above the title",
     );
     if (width >= 768)
       assert.ok(
         allGames.x > heading.x + heading.width &&
-          Math.abs(allGames.y - heading.y) < 12,
+          Math.abs(
+            allGames.y + allGames.height / 2 - (heading.y + heading.height / 2),
+          ) < 12,
         "management actions share title row",
       );
     await page.screenshot({

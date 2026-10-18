@@ -222,7 +222,10 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                     <span className="wis-ranking-profile" aria-hidden="true">
                       {entry.profileIcon || defaultProfileIcon}
                     </span>
-                    <span className="wis-ranking-name">
+                    <span
+                      className="wis-ranking-name"
+                      title={entry.displayName || entry.studentName}
+                    >
                       {entry.displayName || entry.studentName}
                     </span>
                   </span>
@@ -233,14 +236,12 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                   />
                 </span>
                 <span className="wis-ranking-classroom">
-                  <span>
-                    {entry.grade}학년 {entry.class}반
-                  </span>
-                  {entry.number && <span>{entry.number}번</span>}
+                  {entry.grade}학년 {entry.class}반
                 </span>
                 <span
                   className="wis-ranking-score"
                   aria-label={`${formatWis(entry.cumulativeEarned)} 위스`}
+                  title={`${formatWis(entry.cumulativeEarned)} 위스`}
                 >
                   <span>{formatWis(entry.cumulativeEarned)}</span>
                   <WisIcon />
