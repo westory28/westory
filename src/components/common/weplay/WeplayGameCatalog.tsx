@@ -29,24 +29,11 @@ export default function WeplayGameCatalog({
               {game.id === "joseon-yut" ? (
                 <div className="weplay-yut-cover" aria-hidden="true">
                   <img
-                    src={`${import.meta.env.BASE_URL}assets/weplay/yut/courtyard.webp`}
+                    src={`${import.meta.env.BASE_URL}assets/weplay/yut/catalog-toss.webp`}
                     alt=""
-                    width={1672}
-                    height={941}
+                    width={1448}
+                    height={1086}
                   />
-                  <span className="weplay-yut-cover-title">
-                    마우저구 윷놀이
-                  </span>
-                  <div className="weplay-yut-cover-cast">
-                    {["0% 0%", "100% 0%", "0% 100%", "100% 100%"].map(
-                      (position) => (
-                        <span
-                          key={position}
-                          style={{ backgroundPosition: position }}
-                        />
-                      ),
-                    )}
-                  </div>
                 </div>
               ) : (
                 <img

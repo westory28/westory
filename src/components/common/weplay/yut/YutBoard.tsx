@@ -336,6 +336,7 @@ function MovingPawn({
   motion,
   onSelect,
   onMotionComplete,
+  onStep,
 }: {
   role: YutRole;
   node: YutNode;
@@ -345,10 +346,13 @@ function MovingPawn({
   motion?: PieceMotion;
   onSelect: () => void;
   onMotionComplete: (id: string) => void;
+  onStep?: (index: number) => void;
 }) {
   const button = useRef<HTMLButtonElement>(null);
   const complete = useRef(onMotionComplete);
   complete.current = onMotionComplete;
+  const step = useRef(onStep);
+  step.current = onStep;
   useLayoutEffect(() => {
     const element = button.current;
     if (!motion || !element) return;
@@ -391,7 +395,7 @@ function MovingPawn({
                   (current[1] + next[1]) / 2,
                 ]),
                 offset: 0.4,
-                transform: `translate(-50%, -88%) translateY(-${reduced ? 7 : 16}px) rotate(${tilt}deg)`,
+                transform: `translate(-50%, -88%) translateY(-${reduced ? 12 : 32}px) rotate(${tilt}deg)`,
               },
               {
                 ...pointStyle(next),
@@ -414,6 +418,7 @@ function MovingPawn({
           );
           previousAnimation?.cancel();
           await animation.finished;
+          if (active && !document.hidden) step.current?.(index);
           // A painted landing separates every hop, including under busy React
           // renders. One long timeline can jump over a tile on a dropped frame.
           await new Promise<void>((resolve) => {
@@ -494,6 +499,7 @@ export default function YutBoard({
   revealMoves = true,
   selectedMove = null,
   onMotionChange,
+  onStep,
 }: {
   room: YutRoom;
   uid: string;
@@ -506,6 +512,7 @@ export default function YutBoard({
   revealMoves?: boolean;
   selectedMove?: YutMove | null;
   onMotionChange?: (moving: boolean) => void;
+  onStep?: (index: number) => void;
 }) {
   const prefix = `yut-board-${useId().replace(/:/g, "")}`;
   const previous = useRef(room);
@@ -673,6 +680,7 @@ export default function YutBoard({
                 motion={motions[`${player.uid}-${item.id}`]}
                 onSelect={() => onSelectPiece(item.id)}
                 onMotionComplete={completeMotion}
+                onStep={onStep}
               />
             )),
           )}

@@ -30,7 +30,7 @@ export const YUT_PRIVATE_DAILY_LIMIT=5;
 export const DEFAULT_YUT_SETTINGS={enabled:true,version:1,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:2,throwSeconds:5,moveSeconds:25};
 export const normalizeYutSettings=value=>({...DEFAULT_YUT_SETTINGS,...value});
 function seed(kind){let room=core.createYutRoom({id:'qa-'+kind,code:'AB1234',classId:'',classLabel:'검증 윷판',host:{uid:'qa',name:'검증 학생'},nowMs:Date.now(),maxPlayers:2});room=core.addYutPlayer(room,{uid:'other',name:'상대 학생'},Date.now());room=core.readyYutPlayer(room,'other',true,Date.now());if(kind==='waiting')return room;room=core.startYutGame(room,Date.now()-10000);room.players[0].pieces[0].node=kind==='finish'?'o18':'o5';room=core.throwYut(room,'qa',kind==='finish'?[true,true,true,false]:[false,false,false,false],Date.now()-4000);room.turnDeadlineMs=Date.now()+25000;return room;}
-const qa=window.qa={room:seed(params.get('scenario')||'finish'),delay:0,fail:false,claimPaid:false,calls:[],motion:[],frames:[]};
+const qa=window.qa={room:seed(params.get('scenario')||'finish'),delay:0,fail:false,claimPaid:false,calls:[],motion:[],frames:[],steps:[]};
 qa.emit=room=>{qa.room=room;listeners.forEach(listener=>listener(room));};
 qa.move=(route='a')=>{const room=core.moveYut(qa.room,'qa','1',route,Date.now());if(room.status==='finished')room.reward={status:'pending',uid:'qa',amount:7,policyVersion:1,reason:'account-unavailable'};qa.emit(room)};
 qa.bump=()=>qa.emit({...qa.room,revision:qa.room.revision+1,syncRevision:qa.room.syncRevision+1,lastEvent:{kind:'leave',atMs:Date.now(),text:'연결 상태 갱신'}});
@@ -41,7 +41,7 @@ export const yutErrorMessage=error=>error.message;
 export const getLegalYutMoves=core.getLegalYutMoves;
 `;
 const harness = `import React,{useState,useEffect}from'react';import{createRoot}from'react-dom/client';import Game from ${source("src/components/common/weplay/yut/YutGame.tsx")};import Board from ${source("src/components/common/weplay/yut/YutBoard.tsx")};import Frame from ${source("src/components/common/weplay/WeplayGameFrame.tsx")};import{getYutLobby,subscribeYutRoom,getLegalYutMoves}from ${source("src/lib/yut.ts")};
-function App(){const[room,setRoom]=useState(window.qa.room);useEffect(()=>{const off=subscribeYutRoom(null,null,setRoom);const timer=setInterval(()=>setRoom(old=>({...old})),35);return()=>{off();clearInterval(timer)}},[]);const board=new URLSearchParams(location.search).has('board');return board?<div className="board-fixture yut-game"><Board room={room} uid="qa" selectedPiece="1" onSelectPiece={()=>{}} moves={getLegalYutMoves(room,'qa')} onMove={()=>{}} disabled={room.status==='finished'} onMotionChange={value=>window.qa.motion.push({value,at:performance.now()})}/></div>:<Frame theme="yut"><Game portal="student" onBack={()=>{}} music={{enabled:false,failed:false,start:()=>{},toggle:()=>{}}} onMusicActiveChange={()=>{}}/></Frame>};createRoot(document.getElementById('root')).render(<App/>);`;
+function App(){const[room,setRoom]=useState(window.qa.room);useEffect(()=>{const off=subscribeYutRoom(null,null,setRoom);const timer=setInterval(()=>setRoom(old=>({...old})),35);return()=>{off();clearInterval(timer)}},[]);const board=new URLSearchParams(location.search).has('board');return board?<div className="board-fixture yut-game"><Board room={room} uid="qa" selectedPiece="1" onSelectPiece={()=>{}} moves={getLegalYutMoves(room,'qa')} onMove={()=>{}} disabled={room.status==='finished'} onMotionChange={value=>window.qa.motion.push({value,at:performance.now()})} onStep={index=>{const node=document.querySelector('[data-motion="land"]'),style=getComputedStyle(node),bounds=node.closest('.yut-board').getBoundingClientRect();window.qa.steps.push({index,at:performance.now(),x:parseFloat(style.left)/bounds.width*720,y:parseFloat(style.top)/bounds.height*560,lift:new DOMMatrixReadOnly(style.transform).m42+node.offsetHeight*.88});}}/></div>:<Frame theme="yut"><Game portal="student" onBack={()=>{}} music={{enabled:false,failed:false,start:()=>{},toggle:()=>{}}} onMusicActiveChange={()=>{}}/></Frame>};createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
   bundle: true,
@@ -134,6 +134,26 @@ async function open(
     reducedMotion,
   });
   page.on("pageerror", (error) => report.errors.push(error.message));
+  await page.addInitScript(() => {
+    localStorage.setItem("westory.weplay.musicMuted", "false");
+    window.motionAudio = [];
+    const NativeAudioContext = window.AudioContext;
+    window.AudioContext = class extends NativeAudioContext {
+      createBufferSource() {
+        const source = super.createBufferSource(),
+          start = source.start.bind(source);
+        source.start = (...args) => {
+          window.motionAudio.push({
+            duration: source.buffer?.duration,
+            rate: source.playbackRate.value,
+            at: performance.now(),
+          });
+          return start(...args);
+        };
+        return source;
+      }
+    };
+  });
   await page.goto(base + "/?" + query);
   await page.locator(".yut-game").waitFor();
   return page;
@@ -166,7 +186,7 @@ try {
             t: performance.now() - start,
             x: (parseFloat(style.left) / board.width) * 720,
             y: (parseFloat(style.top) / board.height) * 560,
-            lift: matrix.m42 + node.getBoundingClientRect().height * 0.88,
+            lift: matrix.m42 + node.offsetHeight * 0.88,
             start: node.getAnimations()[0]?.startTime,
           });
         }
@@ -201,8 +221,9 @@ try {
     }
     assert.ok(frames.length > 20, `${reduced}: actual intermediate frames`);
     assert.ok(
-      Math.min(...frames.map((f) => f.lift)) < -3,
-      `${reduced}: visible hop arc`,
+      Math.min(...frames.map((f) => f.lift)) <
+        (reduced === "reduce" ? -9 : -24),
+      `${reduced}: increased hop height exceeds the former 7/16px arc`,
     );
     const starts = new Set(
       frames.map((frame) => frame.start).filter((value) => value != null),
@@ -216,9 +237,27 @@ try {
       motion.map((item) => item.value),
       [true, false],
     );
+    const steps = await page.evaluate(() => window.qa.steps);
+    assert.deepEqual(
+      steps.map((step) => step.index),
+      [0, 1, 2, 3, 4],
+      "Each real landing calls its effect once despite changing callback identities",
+    );
+    steps.forEach((step, index) => {
+      assert.ok(
+        Math.abs(step.x - expected[index][0]) < 2 &&
+          Math.abs(step.y - expected[index][1]) < 2,
+        "Landing callback matches the reached tile",
+      );
+      assert.ok(
+        Math.abs(step.lift) < 1,
+        "Landing effect runs at ground contact, not midair",
+      );
+    });
+    report.paths[reduced + "-landings"] = steps;
     report.paths[reduced] = frames;
     report.checks.push(
-      `${reduced}: five actual tile arrivals and hop arcs survive 35ms re-renders plus a mid-move revision`,
+      `${reduced}: higher hops and five ground-contact callbacks in tile order survive 35ms re-renders plus a mid-move revision without duplicate effects`,
     );
     await page.close();
   }
@@ -257,6 +296,21 @@ try {
       path: path.join(evidence, "winning-hop-" + reduced + ".png"),
     });
     await page.locator(".yut-victory").waitFor();
+    const stepsPlayed = await page.evaluate(() =>
+      window.motionAudio.filter(
+        (event) => Math.abs(event.duration - 0.14) < 0.001,
+      ),
+    );
+    assert.equal(
+      stepsPlayed.length,
+      3,
+      "Actual game plays one step sound per o19/o20/finish landing",
+    );
+    assert.deepEqual(
+      stepsPlayed.map((event) => Math.round(event.rate * 100) / 100),
+      [1, 1.06, 1.12],
+    );
+    report.paths[reduced + "-completion-audio"] = stepsPlayed;
     await page.getByText("7 위스 지급 대기", { exact: true }).waitFor();
     const victoryBox = await page.locator(".yut-victory").boundingBox(),
       frameBox = await page.locator(".weplay-game-frame").boundingBox();
@@ -288,7 +342,7 @@ try {
       path: path.join(evidence, "victory-paid-" + reduced + ".png"),
     });
     report.checks.push(
-      `${reduced}: completion immediately closes gameplay, final hops precede celebration, pending reward retries to paid receipt`,
+      `${reduced}: actual game plays three landing cues once before celebration; completion closes gameplay and pending reward retries to paid receipt`,
     );
     await page.close();
   }
@@ -362,8 +416,22 @@ try {
     await loading.locator(".yut-game-content").evaluate((node) => node.inert),
     false,
   );
+  const throwAudio = await loading.evaluate(() => window.motionAudio);
+  assert.equal(
+    throwAudio.filter((event) => Math.abs(event.duration - 0.28) < 0.001)
+      .length,
+    1,
+    "Actual YutGame connects one release cue to its throw",
+  );
+  assert.equal(
+    throwAudio.filter((event) => Math.abs(event.duration - 0.17) < 0.001)
+      .length,
+    4,
+    "Actual YutGame connects four first-contact cues without duplicate callbacks",
+  );
+  report.paths["game-throw-audio"] = throwAudio;
   report.checks.push(
-    "themed lobby/command loading makes controls inert, keyboard cannot enter, failed request unlocks, delayed throw shows loading only after 2.5 seconds",
+    "Actual YutGame plays one release and four contacts; themed loading locks input, failure unlocks, and delayed throw shows loading only after 2.5 seconds",
   );
   await loading.evaluate(() => (window.qa.delay = 16000));
   await loading.locator(".yut-isometric-destination").first().click();

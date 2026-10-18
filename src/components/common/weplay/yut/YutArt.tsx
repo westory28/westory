@@ -1,4 +1,5 @@
 import React from "react";
+import "./yut-character.css";
 
 export type YutProfession = "sa" | "nong" | "gong" | "sang";
 export type YutSpritePose = "idle" | "turn" | "throw" | "win" | "caught";

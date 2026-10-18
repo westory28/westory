@@ -74,7 +74,7 @@ class WeplaySoundEngine {
       void this.context.resume().catch(() => {});
   };
 
-  play = (cue: WeplaySoundCue) => {
+  play = (cue: WeplaySoundCue, playbackRate = 1) => {
     this.unlock();
     const context = this.context;
     if (!context || this.closed || this.muted || document.hidden) return;
@@ -98,7 +98,16 @@ class WeplaySoundEngine {
         if (oldest) this.voices.delete(oldest);
       }
       const source = context.createBufferSource();
+      if (!this.buffers.has(cue)) {
+        const { samples, sampleRate } = renderWeplaySound(cue);
+        const buffer = context.createBuffer(1, samples.length, sampleRate);
+        buffer.getChannelData(0).set(samples);
+        this.buffers.set(cue, buffer);
+      }
       source.buffer = this.buffers.get(cue) || null;
+      source.playbackRate.value = Number.isFinite(playbackRate)
+        ? Math.max(0.8, Math.min(1.2, playbackRate))
+        : 1;
       if (!source.buffer || !this.output) return;
       source.connect(this.output);
       this.voices.add(source);
@@ -152,7 +161,8 @@ export default function useWeplaySoundEffects() {
   }, []);
   const unlock = useCallback(() => engine.current?.unlock(), []);
   const play = useCallback(
-    (cue: WeplaySoundCue) => engine.current?.play(cue),
+    (cue: WeplaySoundCue, playbackRate?: number) =>
+      engine.current?.play(cue, playbackRate),
     [],
   );
   return { unlock, play };

@@ -73,32 +73,6 @@
   inset: 0;
   height: 100%;
   object-fit: cover;
-  filter: brightness(0.68);
-}
-.weplay-yut-cover-title {
-  position: absolute;
-  top: 10%;
-  width: 100%;
-  text-align: center;
-  color: #fff0c5;
-  font: 800 clamp(24px, 2vw, 32px)/1.3 serif;
-  letter-spacing: 0.04em;
-  text-shadow: 0 2px 3px #281b10;
-}
-.weplay-yut-cover-cast {
-  position: absolute;
-  inset: 26% 1% 5%;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  align-items: end;
-}
-.weplay-yut-cover-cast > span {
-  width: 150%;
-  margin-left: -25%;
-  aspect-ratio: 1;
-  background-image: url("/assets/weplay/yut/characters.webp");
-  background-size: 200% 200%;
-  filter: drop-shadow(0 3px 2px #20180ca6);
 }
 .weplay-game-card .weplay-game-card-body h2 {
   margin: 0 0 8px;

@@ -1,7 +1,7 @@
 .weplay-page { max-width: var(--ws-page-max, 1280px); margin: 0 auto; padding: 24px; color: var(--ws-text, #1f2937); font-size: 16px; }
 .weplay-yut-page { min-width: 0; }
 .weplay-game-navigation { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.weplay-game-navigation .weplay-catalog-back { margin: 0; white-space: nowrap; }
+.weplay-game-navigation .weplay-catalog-back { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin: 0; padding: 8px 16px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: var(--radius-md, 8px); background: var(--ws-surface, #fff); color: var(--ws-text, #1f2937); font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap; }
 .weplay-game-navigation .weplay-music-button { margin-left: 0; }
 .weplay-page *, .weplay-page *::before, .weplay-page *::after { box-sizing: border-box; }
 .weplay-heading, .weplay-game-meta, .weplay-game-footer, .weplay-result { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
