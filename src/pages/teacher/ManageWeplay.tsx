@@ -42,6 +42,7 @@ import { getWeplayGameTitle } from "../../lib/weplayTitle";
 
 import YutManagement from "./components/YutManagement";
 import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
+import { prepareWeplayIntroAudio } from "../../components/common/weplay/weplayIntroAudio";
 
 export default function ManageWeplay() {
   const [params] = useSearchParams();
@@ -603,6 +604,7 @@ function NavalWeplayManagement() {
                         className="teacher-weplay-button is-primary"
                         disabled={saving}
                         onClick={() => {
+                          prepareWeplayIntroAudio();
                           setError("");
                           setParams({ game: game.id, view: "preview" });
                         }}

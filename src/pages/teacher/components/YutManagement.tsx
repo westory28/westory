@@ -23,6 +23,7 @@ import {
 import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import YutGameEntry from "../../../components/common/weplay/YutGameEntry";
+import { prepareWeplayIntroAudio } from "../../../components/common/weplay/weplayIntroAudio";
 import "../../../components/common/portalPage.css";
 import "./YutManagement.css";
 
@@ -282,12 +283,30 @@ export default function YutManagement() {
           <Link
             className="yut-management-button"
             to="/teacher/weplay?game=joseon-yut&view=preview"
+            onClick={(event) => {
+              if (
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.shiftKey &&
+                !event.altKey
+              )
+                prepareWeplayIntroAudio();
+            }}
           >
             체험하기
           </Link>
           <Link
             className="yut-management-button"
             to="/teacher/weplay?game=joseon-yut&view=online"
+            onClick={(event) => {
+              if (
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.shiftKey &&
+                !event.altKey
+              )
+                prepareWeplayIntroAudio();
+            }}
           >
             온라인 대기방
           </Link>
