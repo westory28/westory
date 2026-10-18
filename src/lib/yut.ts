@@ -12,6 +12,7 @@ export type {
   YutRole,
   YutNode,
   YutRoute,
+  YutEmoteKind,
 } from "../../functions/yutCore.mjs";
 export interface YutLobby {
   room: YutRoom | null;
@@ -29,7 +30,8 @@ export interface YutCommand {
     | "move"
     | "skip"
     | "leave"
-    | "close";
+    | "close"
+    | "emote";
   requestKey: string;
   roomId?: string;
   expectedRevision?: number;
@@ -38,6 +40,7 @@ export interface YutCommand {
   ready?: boolean;
   pieceId?: string;
   route?: YutRoute;
+  kind?: "hello" | "nice" | "oops" | "wow" | "thanks" | "gg";
 }
 async function call<T>(
   name: string,
@@ -84,7 +87,7 @@ export function yutErrorMessage(error: unknown): string {
   if (/unavailable|deadline|network/.test(failure?.code || ""))
     return "연결이 원활하지 않습니다. 방 상태를 확인한 뒤 다시 시도해 주세요.";
   if (/permission-denied/.test(failure?.code || ""))
-    return "현재 학급의 게임 참여 권한을 확인해 주세요.";
+    return "현재 학교와 학기의 게임 참여 권한을 확인해 주세요.";
   if (/aborted/.test(failure?.code || ""))
     return "방 상태가 바뀌었습니다. 새로 표시된 차례를 확인해 주세요.";
   return failure?.message && !/^(internal|INTERNAL)$/.test(failure.message)

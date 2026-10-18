@@ -25,31 +25,106 @@ export function finalYutRotation(flat: boolean, index: number) {
   return new THREE.Euler(0, layout[index].yaw, flat ? Math.PI : 0, "YXZ");
 }
 
-function woodTexture(flat: boolean) {
+let atlasPromise: Promise<HTMLImageElement> | undefined;
+function loadWoodAtlas() {
+  return (atlasPromise ||= new Promise((resolve, reject) => {
+    const atlas = new Image();
+    atlas.onload = () => resolve(atlas);
+    atlas.onerror = reject;
+    atlas.src = `${import.meta.env.BASE_URL}assets/weplay/yut/materials.webp`;
+  }));
+}
+
+function woodTextures(
+  flat: boolean,
+  endGrain = false,
+  atlas?: HTMLImageElement,
+) {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
-  canvas.height = 1024;
+  canvas.height = endGrain ? 256 : 1024;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas texture unavailable");
-  context.fillStyle = flat ? "#dfbe83" : "#b78956";
-  context.fillRect(0, 0, 256, 1024);
-  // Deterministic original wood grain. No fetched images or game assets.
-  for (let line = 0; line < 120; line++) {
-    const x = (line * 41.73) % 256;
+  const height = canvas.height;
+  const grain = context.createImageData(256, height);
+  // A fixed seed keeps the carved cypress surface reproducible on every client.
+  let seed = flat ? 173 : endGrain ? 811 : 431;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < 256; x++) {
+      const wavyX = x + Math.sin(y * 0.011) * 4 + Math.sin(y * 0.027) * 1.6;
+      const ring = endGrain
+        ? Math.sin(Math.hypot(x - 116, (y - 310) * 1.3) * 0.2)
+        : Math.sin(wavyX * 0.58) * 0.55 + Math.sin(wavyX * 0.17) * 0.45;
+      const pore = random();
+      const variation =
+        ring * 15 + (random() - 0.5) * 16 - (pore < 0.025 ? 30 : 0);
+      const offset = (y * 256 + x) * 4;
+      const base = flat
+        ? [190, 151, 95]
+        : endGrain
+          ? [166, 125, 74]
+          : [160, 117, 65];
+      grain.data[offset] = base[0] + variation;
+      grain.data[offset + 1] = base[1] + variation * 0.8;
+      grain.data[offset + 2] = base[2] + variation * 0.58;
+      grain.data[offset + 3] = 255;
+    }
+  }
+  context.putImageData(grain, 0, 0);
+  if (atlas && !endGrain) {
+    // Use the original painted wood quadrant; retain cut end-grain and engraved marks.
+    context.filter = flat
+      ? "saturate(.52) brightness(1.26)"
+      : "saturate(.62) brightness(1.08)";
+    context.drawImage(
+      atlas,
+      0,
+      0,
+      atlas.width / 2,
+      atlas.height / 2,
+      0,
+      0,
+      256,
+      height,
+    );
+    context.filter = "none";
+  }
+  // Long fibres, weather checks and pale chipped edges give the wood a hand-worked finish.
+  for (let line = 0; line < 240 && !endGrain; line++) {
+    const x = random() * 256;
+    const start = random() * height;
     context.strokeStyle =
-      line % 3 ? "rgba(61,31,10,.10)" : "rgba(255,233,177,.18)";
-    context.lineWidth = line % 5 ? 0.7 : 2.1;
+      line % 4
+        ? `rgba(66,39,17,${0.12 + random() * 0.22})`
+        : "rgba(240,214,162,.29)";
+    context.lineWidth = line % 7 ? 0.6 : 1.6;
     context.beginPath();
-    context.moveTo(x, 0);
-    for (let y = 32; y <= 1024; y += 32)
-      context.lineTo(x + Math.sin(y * 0.008 + line) * (2 + (line % 8)), y);
+    context.moveTo(x, start);
+    for (
+      let y = start;
+      y <= Math.min(height, start + 90 + random() * 360);
+      y += 12
+    )
+      context.lineTo(x + Math.sin(y * 0.014 + line) * (1 + (line % 4)), y);
     context.stroke();
   }
+  for (let chip = 0; chip < 48; chip++) {
+    const x = chip % 2 ? random() * 11 : 245 + random() * 11;
+    context.fillStyle = "rgba(235,205,153,.35)";
+    context.fillRect(x, random() * height, 1 + random() * 3, 2 + random() * 12);
+  }
   if (flat) {
-    context.strokeStyle = "#392416";
-    context.lineWidth = 16;
-    context.lineCap = "round";
+    context.strokeStyle = "#48301c";
+    context.lineWidth = 13;
+    context.lineCap = "square";
     for (const y of [235, 512, 789]) {
+      context.shadowColor = "#f1cd89";
+      context.shadowOffsetX = 2;
+      context.shadowOffsetY = 3;
       context.beginPath();
       context.moveTo(75, y - 46);
       context.lineTo(181, y + 46);
@@ -57,14 +132,41 @@ function woodTexture(flat: boolean) {
       context.lineTo(75, y + 46);
       context.stroke();
     }
-    context.strokeStyle = "rgba(62,34,16,.5)";
-    context.lineWidth = 3;
-    context.strokeRect(20, 42, 216, 940);
+    context.shadowOffsetX = context.shadowOffsetY = 0;
+    context.strokeStyle = "rgba(70,41,18,.5)";
+    context.lineWidth = 2;
+    context.strokeRect(17, 34, 222, 956);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
-  return texture;
+  const reliefCanvas = document.createElement("canvas");
+  reliefCanvas.width = 256;
+  reliefCanvas.height = height;
+  const reliefContext = reliefCanvas.getContext("2d")!;
+  reliefContext.drawImage(canvas, 0, 0);
+  const relief = reliefContext.getImageData(0, 0, 256, height);
+  for (let i = 0; i < relief.data.length; i += 4) {
+    const value = Math.min(
+      255,
+      relief.data[i] * 0.65 + relief.data[i + 1] * 0.35,
+    );
+    relief.data[i] = relief.data[i + 1] = relief.data[i + 2] = value;
+  }
+  reliefContext.putImageData(relief, 0, 0);
+  const bump = new THREE.CanvasTexture(reliefCanvas);
+  bump.anisotropy = 4;
+  const roughCanvas = document.createElement("canvas");
+  roughCanvas.width = 256;
+  roughCanvas.height = height;
+  for (let i = 0; i < relief.data.length; i += 4)
+    relief.data[i] =
+      relief.data[i + 1] =
+      relief.data[i + 2] =
+        220 + relief.data[i] * 0.12;
+  roughCanvas.getContext("2d")!.putImageData(relief, 0, 0);
+  const roughness = new THREE.CanvasTexture(roughCanvas);
+  return { color: texture, bump, roughness };
 }
 
 /** A real beveled half-cylinder; the flat face is at local negative Y. */
@@ -86,6 +188,25 @@ export function createYutGeometry() {
     steps: 1,
   });
   geometry.translate(0, -radius / 2, -length / 2);
+  // ExtrudeGeometry's world-space UVs cut off the grain; wrap fibres along Z instead.
+  const points = geometry.getAttribute("position"),
+    normals = geometry.getAttribute("normal"),
+    uv = geometry.getAttribute("uv");
+  for (let i = 0; i < points.count; i++) {
+    const x = points.getX(i),
+      y = points.getY(i),
+      z = points.getZ(i);
+    if (Math.abs(normals.getZ(i)) > 0.75)
+      uv.setXY(i, (x + 0.218) / 0.436, (y + 0.118) / 0.236);
+    else
+      uv.setXY(
+        i,
+        normals.getY(i) < -0.5
+          ? (x + 0.218) / 0.436
+          : Math.atan2(y + 0.1, x) / Math.PI,
+        (z + 0.878) / 1.756,
+      );
+  }
   return geometry;
 }
 
@@ -135,15 +256,15 @@ export class YutThrowScene {
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.domElement.setAttribute("aria-hidden", "true");
     this.host.appendChild(this.renderer.domElement);
     this.camera.position.set(0, 6.2, 6.8);
     this.camera.lookAt(0, 0.75, 0);
-    this.world.add(new THREE.HemisphereLight(0xfff1d6, 0x233849, 2.3));
-    const key = new THREE.DirectionalLight(0xfff2dc, 3.4);
+    this.world.add(new THREE.HemisphereLight(0xfff1d6, 0x3c352b, 1.65));
+    const key = new THREE.DirectionalLight(0xfff2dc, 2.8);
     key.position.set(-2, 8, 3);
     key.castShadow = true;
     const shadowSize = host.clientWidth < 600 ? 512 : 1024;
@@ -156,7 +277,7 @@ export class YutThrowScene {
     key.shadow.bias = -0.0002;
     key.shadow.radius = 3;
     this.world.add(key);
-    const rim = new THREE.DirectionalLight(0xc3e4ff, 2);
+    const rim = new THREE.DirectionalLight(0xd8dfc2, 1.1);
     rim.position.set(3, 4, -3);
     this.world.add(rim);
     const floor = new THREE.Mesh(
@@ -168,24 +289,54 @@ export class YutThrowScene {
     floor.receiveShadow = true;
     this.world.add(floor);
 
-    const grain = woodTexture(false),
-      marked = woodTexture(true);
-    this.textures.push(grain, marked);
+    const grain = woodTextures(false),
+      marked = woodTextures(true),
+      endGrain = woodTextures(false, true);
+    for (const material of [grain, marked, endGrain])
+      this.textures.push(material.color, material.bump, material.roughness);
     const bodyMaterial = new THREE.MeshStandardMaterial({
-      map: grain,
+      map: grain.color,
+      bumpMap: grain.bump,
+      bumpScale: 0.028,
+      roughnessMap: grain.roughness,
       color: 0xffffff,
-      roughness: 0.57,
+      roughness: 1,
       metalness: 0,
     });
     const capMaterial = new THREE.MeshStandardMaterial({
-      color: 0xcead7c,
-      roughness: 0.72,
+      map: endGrain.color,
+      bumpMap: endGrain.bump,
+      bumpScale: 0.018,
+      roughnessMap: endGrain.roughness,
+      roughness: 0.96,
     });
     const flatMaterial = new THREE.MeshStandardMaterial({
-      map: marked,
-      roughness: 0.72,
+      map: marked.color,
+      bumpMap: marked.bump,
+      bumpScale: 0.024,
+      roughnessMap: marked.roughness,
+      roughness: 0.94,
       metalness: 0,
     });
+    void loadWoodAtlas()
+      .then((atlas) => {
+        if (this.disposed) return;
+        for (const [material, flat] of [
+          [bodyMaterial, false],
+          [flatMaterial, true],
+        ] as const) {
+          const painted = woodTextures(flat, false, atlas);
+          this.textures.push(painted.color, painted.bump, painted.roughness);
+          material.map = painted.color;
+          material.bumpMap = painted.bump;
+          material.roughnessMap = painted.roughness;
+          material.needsUpdate = true;
+        }
+        this.render();
+      })
+      .catch(() => {
+        /* Locally synthesized grain remains usable if the asset cannot load. */
+      });
     const bodyGeometry = createYutGeometry();
     const flatGeometry = new THREE.PlaneGeometry(0.375, 1.69);
     for (let index = 0; index < 4; index++) {
@@ -256,7 +407,6 @@ export class YutThrowScene {
       this.contextLost,
     );
     document.addEventListener("visibilitychange", this.visibility);
-    this.media.addEventListener("change", this.motionChanged);
     this.resize();
   }
 
@@ -286,7 +436,8 @@ export class YutThrowScene {
       this.key = state.throwKey;
       this.result = [...state.sticks];
       this.didComplete = false;
-      if (this.seen.has(state.throwKey) || this.media.matches || this.broken) {
+      if (this.broken) return;
+      if (this.seen.has(state.throwKey)) {
         if (this.seen.has(state.throwKey)) this.didComplete = true;
         this.elapsed = DURATION;
         this.pose();
@@ -310,10 +461,6 @@ export class YutThrowScene {
     this.running = true;
     this.trailPoints.forEach((points) => points.splice(0));
     this.lastFrame = 0;
-    if (this.media.matches) {
-      this.pose();
-      this.render();
-    }
     this.schedule();
   }
 
@@ -335,7 +482,6 @@ export class YutThrowScene {
     if (
       !this.disposed &&
       !this.broken &&
-      !this.media.matches &&
       !document.hidden &&
       this.running &&
       !this.frame
@@ -461,20 +607,11 @@ export class YutThrowScene {
       this.schedule();
     }
   };
-  private motionChanged = () => {
-    if (this.media.matches && this.result) {
-      this.elapsed = DURATION;
-      this.pose();
-      this.render();
-      this.complete();
-    }
-  };
   private contextLost = (event: Event) => {
     event.preventDefault();
     this.broken = true;
     this.cancelFrame();
     this.onFallback();
-    if (this.result) this.complete();
   };
 
   dispose() {
@@ -483,7 +620,6 @@ export class YutThrowScene {
     this.cancelFrame();
     this.resizeObserver.disconnect();
     document.removeEventListener("visibilitychange", this.visibility);
-    this.media.removeEventListener("change", this.motionChanged);
     this.renderer.domElement.removeEventListener(
       "webglcontextlost",
       this.contextLost,

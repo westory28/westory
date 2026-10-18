@@ -1,6 +1,6 @@
 import React, { useId } from "react";
 import type { YutMove, YutNode, YutRoom } from "../../../../lib/yut";
-import { PROFESSIONS } from "./YutArt";
+import { PROFESSIONS, YutSprite } from "./YutArt";
 import "./yut-board.css";
 
 const WIDTH = 720;
@@ -26,34 +26,10 @@ Object.assign(positions, {
   finish: [450, 490],
 });
 const zones = [
-  {
-    light: "#dcece2",
-    face: "#89ac99",
-    edge: "#427564",
-    ink: "#234e43",
-    glyph: "士",
-  },
-  {
-    light: "#e0e7ee",
-    face: "#8d9cae",
-    edge: "#4b6076",
-    ink: "#2f435a",
-    glyph: "農",
-  },
-  {
-    light: "#f3e1d7",
-    face: "#ca9a83",
-    edge: "#a46853",
-    ink: "#793e30",
-    glyph: "工",
-  },
-  {
-    light: "#f6edce",
-    face: "#d8bf80",
-    edge: "#aa8548",
-    ink: "#755822",
-    glyph: "商",
-  },
+  { light: "#9d9e7b", face: "#777f59", edge: "#48523d", ink: "#303d2d" },
+  { light: "#a6a18c", face: "#838578", edge: "#555b50", ink: "#343c36" },
+  { light: "#b59474", face: "#9d7657", edge: "#70503c", ink: "#513c2b" },
+  { light: "#baaa77", face: "#a08a59", edge: "#74623e", ink: "#51492e" },
 ];
 const pointStyle = ([x, y]: [number, number]) => ({
   left: `${(x / WIDTH) * 100}%`,
@@ -73,114 +49,240 @@ export const yutNodeLabel = (node: YutNode) =>
           : `지름길 ${node.slice(1)}칸`;
 
 function BoardSurface({ prefix }: { prefix: string }) {
+  const materials = `${import.meta.env.BASE_URL}assets/weplay/yut/materials.webp`;
   return (
     <svg
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      preserveAspectRatio="none"
       className="yut-isometric-surface"
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id={`${prefix}-ivory`} x1="0" y1="0" x2=".8" y2="1">
-          <stop stopColor="#fff9e7" />
-          <stop offset=".55" stopColor="#e8d9b9" />
-          <stop offset="1" stopColor="#cfbb91" />
-        </linearGradient>
-        <linearGradient id={`${prefix}-bronze`} x1="0" y1="0" x2="0" y2="1">
-          <stop stopColor="#b69a63" />
-          <stop offset=".45" stopColor="#8f7349" />
-          <stop offset="1" stopColor="#65513b" />
-        </linearGradient>
-        <radialGradient id={`${prefix}-floor`}>
-          <stop stopColor="#faf4e1" />
-          <stop offset="1" stopColor="#e0d1b3" />
-        </radialGradient>
-        {zones.map((zone, index) => (
-          <linearGradient
-            key={index}
-            id={`${prefix}-tile-${index}`}
-            x1="0"
-            y1="0"
-            x2=".65"
-            y2="1"
-          >
-            <stop stopColor={zone.light} />
-            <stop offset="1" stopColor={zone.face} />
-          </linearGradient>
-        ))}
-        <filter
-          id={`${prefix}-shadow`}
-          x="-20%"
-          y="-20%"
-          width="140%"
-          height="160%"
+        <pattern
+          id={`${prefix}-wood`}
+          width="192"
+          height="192"
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(34)"
+          viewBox="0 0 627 627"
         >
-          <feGaussianBlur stdDeviation="9" />
-        </filter>
+          <image href={materials} width="1254" height="1254" />
+          <rect width="627" height="627" fill="#242618" opacity=".25" />
+        </pattern>
+        <pattern
+          id={`${prefix}-earth`}
+          width="228"
+          height="196"
+          patternUnits="userSpaceOnUse"
+          viewBox="0 0 627 627"
+          preserveAspectRatio="none"
+        >
+          <image href={materials} width="1254" height="1254" y="-627" />
+          <rect width="627" height="627" fill="#36432b" opacity=".16" />
+        </pattern>
+        <pattern
+          id={`${prefix}-dirt`}
+          width="150"
+          height="126"
+          patternUnits="userSpaceOnUse"
+          viewBox="0 0 627 627"
+          preserveAspectRatio="none"
+        >
+          <image
+            href={materials}
+            width="1254"
+            height="1254"
+            x="-627"
+            y="-627"
+          />
+          <rect width="627" height="627" fill="#6d6245" opacity=".22" />
+        </pattern>
+        <pattern
+          id={`${prefix}-stone`}
+          width="37"
+          height="29"
+          patternUnits="userSpaceOnUse"
+        >
+          <path
+            d="M1 5h7m15-1h7M9 23h11m8-8h6M2 14h4"
+            stroke="#eee0b0"
+            strokeWidth="1"
+            opacity=".32"
+          />
+          <path
+            d="m17 0-3 6 4 4-2 6m21 7-8-3-4 3M0 26l7-2"
+            stroke="#313828"
+            strokeWidth=".7"
+            opacity=".4"
+            fill="none"
+          />
+          <path
+            d="M4 8h2m16 12h2m4-12h3M9 17h2m20 10h3"
+            stroke="#3b3928"
+            strokeWidth="1"
+            opacity=".25"
+          />
+        </pattern>
+        <pattern
+          id={`${prefix}-bronze`}
+          width="23"
+          height="19"
+          patternUnits="userSpaceOnUse"
+        >
+          <rect width="23" height="19" fill="#82683f" />
+          <path d="M0 3h7m7 8h9M3 17h6" stroke="#b39859" strokeWidth="1" />
+          <path
+            d="M6 7h3m8-5h4M0 14h4m12 4h4"
+            stroke="#4e553d"
+            strokeWidth="2"
+          />
+        </pattern>
+        <clipPath id={`${prefix}-ground-clip`}>
+          <polygon points="132,255 360,98 588,255 360,412" />
+        </clipPath>
       </defs>
       <ellipse
         cx="360"
-        cy="399"
-        rx="280"
-        ry="106"
-        fill="#090f16"
-        opacity=".24"
-        filter={`url(#${prefix}-shadow)`}
+        cy="409"
+        rx="292"
+        ry="102"
+        fill="#0d130c"
+        opacity=".38"
       />
       <path
         d="M12 255 360 14 708 255 708 278 360 520 12 278Z"
-        fill={`url(#${prefix}-bronze)`}
-        stroke="#6e583c"
-        strokeWidth="2"
+        fill={`url(#${prefix}-wood)`}
+        stroke="#332a1e"
+        strokeWidth="3"
       />
-      <path d="M360 495 708 255V278L360 520Z" fill="#705f45" opacity=".38" />
+      <path d="M360 495 708 255V278L360 520Z" fill="#24251a" opacity=".36" />
       <path
         d="M15 266 360 505 705 266M15 274 360 513 705 274"
         fill="none"
-        stroke="#ead4a2"
+        stroke="#ab8b50"
         strokeWidth="1.4"
-        opacity=".55"
+        opacity=".7"
       />
       <polygon
         points="12,255 360,14 708,255 360,495"
-        fill={`url(#${prefix}-ivory)`}
-        stroke="#f5e9c8"
-        strokeWidth="3"
+        fill={`url(#${prefix}-wood)`}
+        stroke="#b59b61"
+        strokeWidth="2"
       />
       <polygon
-        points="29,255 360,26 691,255 360,484"
+        points="27,255 360,25 693,255 360,485"
         fill="none"
-        stroke="#a98b52"
-        strokeWidth="1.5"
+        stroke="#302c1e"
+        strokeWidth="4"
+      />
+      <polygon
+        points="30,255 360,28 690,255 360,482"
+        fill="none"
+        stroke="#c2a975"
+        strokeWidth="1"
       />
       <polygon
         points="132,255 360,98 588,255 360,412"
-        fill={`url(#${prefix}-floor)`}
-        stroke="#ad986e"
-        strokeWidth="1.3"
+        fill={`url(#${prefix}-earth)`}
+        stroke="#413e29"
+        strokeWidth="3"
       />
+      <g clipPath={`url(#${prefix}-ground-clip)`}>
+        <path
+          d="M143 256H577M360 109V402"
+          stroke="#465132"
+          strokeWidth="28"
+          opacity=".65"
+        />
+        <path
+          d="M143 255H577M360 109V402"
+          stroke={`url(#${prefix}-dirt)`}
+          strokeWidth="24"
+        />
+        {Array.from({ length: 32 }, (_, i) => {
+          const x = 158 + ((i * 73) % 405),
+            y = 117 + ((i * 53) % 279);
+          return (
+            <g key={i} transform={`translate(${x} ${y})`}>
+              <path
+                d="m-7 3 3-7 1 5 3-10 1 9 5-6-2 8"
+                stroke="#3e5130"
+                strokeWidth="3"
+                fill="none"
+              />
+              <path
+                d="m-6 2 3-5m3 3 1-6m2 7 3-5"
+                stroke="#a3a866"
+                strokeWidth="1"
+                fill="none"
+              />
+            </g>
+          );
+        })}
+        <g transform="translate(264 181)">
+          <ellipse cy="24" rx="37" ry="13" fill="#242c1e" opacity=".4" />
+          <path
+            d="m-25 14 25-16 26 16-26 16Z"
+            fill="#777760"
+            stroke="#b2a685"
+          />
+          <path
+            d="M-21 15V-5M20 15V-5M0 25V4"
+            stroke="#473421"
+            strokeWidth="5"
+          />
+          <path
+            d="M-19 13V-4M22 13V-4M2 23V4"
+            stroke="#a3824c"
+            strokeWidth="1.5"
+          />
+          <path
+            d="M-35-3Q-20-9-15-18L0-29 16-18Q22-8 35-3L0 19Z"
+            fill="#364436"
+            stroke="#222d24"
+            strokeWidth="2"
+          />
+          <path
+            d="m-31-4 31 18L31-4M-22-8 22 5M-14-15 22-1M-5-22 21-7"
+            fill="none"
+            stroke="#718168"
+            strokeWidth="2"
+          />
+          <path
+            d="M-35-3 0 19 35-3M0-29V14"
+            stroke="#a79965"
+            fill="none"
+            strokeWidth="1.4"
+          />
+        </g>
+        <g transform="translate(461 328)">
+          <ellipse cy="7" rx="27" ry="9" fill="#283122" opacity=".4" />
+          <path
+            d="m-23 3 6-12 13-4 15 10-4 13-20 2Zm22-1 10-15 12 1 8 13-9 10-17-2Z"
+            fill="#777a65"
+            stroke="#4b5441"
+            strokeWidth="2"
+          />
+          <path
+            d="m-17-8 11-3 8 5m11-6 8 1 5 6"
+            stroke="#b0ad87"
+            strokeWidth="2"
+            fill="none"
+          />
+          <path
+            d="m-28 11 3-12 3 9 5-6m30 9 4-12 2 8 5-5"
+            stroke="#65753d"
+            strokeWidth="3"
+            fill="none"
+          />
+        </g>
+      </g>
       <polygon
-        points="143,255 360,105 577,255 360,405"
+        points="132,255 360,98 588,255 360,412"
         fill="none"
-        stroke="#fff9e6"
-        strokeWidth="2"
+        stroke="#b29b62"
+        strokeWidth="1.2"
       />
-      <g fill="none" stroke="#bba67d" strokeWidth="1.5" opacity=".45">
-        <path d="M220 207c-20-18-50 6-27 18 17 9 32-11 20-18m-27 30c12-5 30 1 36 9M489 207c20-18 50 6 27 18-17 9-32-11-20-18m27 30c-12-5-30 1-36 9" />
-        <path d="M254 310c-15 16 8 34 19 16 9-14-7-25-18-16m27 7c6-11 21-13 31-10M466 310c15 16-8 34-19 16-9-14 7-25 18-16m-27 7c-6-11-21-13-31-10" />
-        <path
-          d="M294 168q66-39 132 0M287 347q73 41 146 0"
-          strokeDasharray="2 7"
-        />
-      </g>
-      <g stroke="#aa9164" fill="none">
-        <path d="M70 255H650M360 55V455" strokeWidth="2" opacity=".38" />
-        <path
-          d="M70 258H650M363 55V455"
-          stroke="#fff9e9"
-          strokeWidth="1"
-          opacity=".6"
-        />
-      </g>
       {Object.entries(positions)
         .filter(([node]) => !node.startsWith("o") && node !== "finish")
         .map(([node, [x, y]]) => (
@@ -190,16 +292,23 @@ function BoardSurface({ prefix }: { prefix: string }) {
               cy={y + 4}
               rx={node === "center" ? 27 : 17}
               ry={node === "center" ? 19 : 12}
-              fill="#b6a17b"
+              fill="#3b402b"
             />
             <ellipse
               cx={x}
               cy={y}
               rx={node === "center" ? 27 : 17}
               ry={node === "center" ? 19 : 12}
-              fill="#f5e9cd"
-              stroke="#b39a65"
-              strokeWidth="1.5"
+              fill="#b0a27b"
+              stroke="#ded0a4"
+              strokeWidth="1.2"
+            />
+            <ellipse
+              cx={x}
+              cy={y}
+              rx={node === "center" ? 26 : 16}
+              ry={node === "center" ? 18 : 11}
+              fill={`url(#${prefix}-stone)`}
             />
             <ellipse
               cx={x}
@@ -207,15 +316,15 @@ function BoardSurface({ prefix }: { prefix: string }) {
               rx={node === "center" ? 20 : 11}
               ry={node === "center" ? 13 : 7}
               fill="none"
-              stroke="#c9b482"
+              stroke="#6f714e"
               strokeWidth="1"
             />
             {node === "center" && (
               <path
                 d={`M${x - 9} ${y}q9-13 18 0-9 13-18 0M${x} ${y - 9}q13 9 0 18-13-9 0-18`}
-                stroke="#b59b63"
+                stroke="#605f3f"
                 fill="none"
-                strokeWidth="1.2"
+                strokeWidth="1.5"
               />
             )}
           </g>
@@ -223,8 +332,7 @@ function BoardSurface({ prefix }: { prefix: string }) {
       {Array.from({ length: 20 }, (_, index) => {
         const number = index + 1,
           [x, y] = positions[`o${number}`],
-          zoneIndex = Math.floor(index / 5),
-          zone = zones[zoneIndex];
+          zone = zones[Math.floor(index / 5)];
         const corner = number % 5 === 0,
           rx = corner ? 54 : 43,
           ry = corner ? 37 : 30,
@@ -234,44 +342,70 @@ function BoardSurface({ prefix }: { prefix: string }) {
             <polygon
               points={`${x - rx},${y} ${x},${y + ry} ${x + rx},${y} ${x + rx},${y + depth} ${x},${y + ry + depth} ${x - rx},${y + depth}`}
               fill={zone.edge}
-              stroke="#8e7957"
-              strokeWidth=".7"
+              stroke="#343c2a"
+              strokeWidth="1"
             />
             <polygon
               points={`${x},${y + ry} ${x + rx},${y} ${x + rx},${y + depth} ${x},${y + ry + depth}`}
-              fill="#2d3540"
-              opacity=".15"
+              fill="#20291c"
+              opacity=".23"
+            />
+            <path
+              d={`M${x - rx + 4} ${y + 5} ${x} ${y + ry + 5} ${x + rx - 4} ${y + 5}`}
+              fill="none"
+              stroke={zone.light}
+              strokeWidth=".8"
+              opacity=".55"
             />
             <polygon
               points={diamond(x, y - 3, rx, ry)}
-              fill={`url(#${prefix}-tile-${zoneIndex})`}
-              stroke="#fff7e1"
-              strokeWidth="1.6"
+              fill={zone.face}
+              stroke={zone.light}
+              strokeWidth="2"
             />
             <polygon
-              points={diamond(x, y - 3, rx - 6, ry - 5)}
+              points={diamond(x, y - 3, rx - 2, ry - 2)}
+              fill={`url(#${prefix}-stone)`}
+            />
+            <polygon
+              points={diamond(x, y - 3, rx - 7, ry - 6)}
               fill="none"
               stroke={zone.edge}
+              strokeWidth="1.3"
+            />
+            <path
+              d={`M${x - rx + 8} ${y - 6} ${x} ${y - ry + 3} ${x + rx - 7} ${y - 6}`}
+              fill="none"
+              stroke="#d0c397"
               strokeWidth=".8"
-              opacity=".6"
+              opacity=".7"
             />
             {corner ? (
               <>
                 <path
                   d={`M${x - 18} ${y - 3}q18-25 36 0-18 25-36 0`}
-                  fill={zone.light}
-                  stroke={zone.edge}
+                  fill={`url(#${prefix}-bronze)`}
+                  stroke="#c7b47f"
                   strokeWidth="1"
                 />
-                <text
-                  x={x}
-                  y={y + 3}
-                  textAnchor="middle"
-                  fill={zone.ink}
-                  className="yut-board-corner-glyph"
-                >
-                  {number === 20 ? "始" : zone.glyph}
-                </text>
+                {number === 20 ? (
+                  <text
+                    x={x}
+                    y={y + 3}
+                    textAnchor="middle"
+                    fill="#ede0b1"
+                    className="yut-board-corner-glyph"
+                  >
+                    始
+                  </text>
+                ) : (
+                  <path
+                    d={`m${x - 9} ${y - 3} 9-7 9 7-9 7Zm9-13v5m-18 8h5m13 0h5m-5 9v-5`}
+                    stroke="#d3c28f"
+                    strokeWidth="1.4"
+                    fill="none"
+                  />
+                )}
               </>
             ) : (
               <>
@@ -280,7 +414,6 @@ function BoardSurface({ prefix }: { prefix: string }) {
                   fill="none"
                   stroke={zone.ink}
                   strokeWidth="1.5"
-                  opacity=".65"
                 />
                 <text
                   x={x}
@@ -311,74 +444,12 @@ function BoardSurface({ prefix }: { prefix: string }) {
   );
 }
 
-function Pawn({
-  role,
-  prefix,
-}: {
-  role: keyof typeof PROFESSIONS;
-  prefix: string;
-}) {
-  const color = PROFESSIONS[role].color;
+function Pawn({ role }: { role: keyof typeof PROFESSIONS }) {
   return (
-    <svg viewBox="0 0 52 66" className="yut-isometric-pawn" aria-hidden="true">
-      <defs>
-        <linearGradient id={`${prefix}-pawn`} x1="0" y1="0" x2="1" y2=".4">
-          <stop stopColor="#fff0ca" />
-          <stop offset=".22" stopColor={color} />
-          <stop offset=".62" stopColor={color} />
-          <stop offset="1" stopColor="#273c3e" />
-        </linearGradient>
-      </defs>
-      <ellipse cx="26" cy="59" rx="21" ry="6" fill="#172523" opacity=".25" />
-      <path
-        d="M10 49c0-4 7-5 9-13V25h14v11c2 8 9 9 9 13v5c-8 7-24 7-32 0Z"
-        fill={`url(#${prefix}-pawn)`}
-        stroke="#6c6753"
-        strokeWidth="1"
-      />
-      <ellipse
-        cx="26"
-        cy="50"
-        rx="16"
-        ry="6"
-        fill={color}
-        stroke="#e2d0a0"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M13 54q13 6 26 0"
-        stroke="#e9d9af"
-        fill="none"
-        strokeWidth="1.4"
-      />
-      <circle
-        cx="26"
-        cy="23"
-        r="17"
-        fill={`url(#${prefix}-pawn)`}
-        stroke="#ddc798"
-        strokeWidth="2"
-      />
-      <circle
-        cx="26"
-        cy="23"
-        r="12.5"
-        fill="#f4e9cf"
-        stroke="#927e50"
-        strokeWidth="1"
-      />
-      <text x="26" y="29" textAnchor="middle" fill="#34413b">
-        {PROFESSIONS[role].name}
-      </text>
-      <path
-        d="M15 15q4-6 10-6"
-        stroke="#fff9e8"
-        fill="none"
-        strokeWidth="2"
-        strokeLinecap="round"
-        opacity=".8"
-      />
-    </svg>
+    <span className="yut-isometric-pawn" aria-hidden="true">
+      <i className="yut-pawn-foot-shadow" />
+      <YutSprite role={role} />
+    </span>
   );
 }
 
@@ -456,10 +527,7 @@ export default function YutBoard({
                   aria-pressed={selectable ? selected : undefined}
                   aria-label={`${player.name} ${PROFESSIONS[player.role].job}, 말 ${pieces.map((piece) => piece.id).join("·")}, ${yutNodeLabel(node)}${selectable ? ", 선택" : ""}`}
                 >
-                  <Pawn
-                    role={player.role}
-                    prefix={`${prefix}-${player.role}-${node}`}
-                  />
+                  <Pawn role={player.role} />
                   <span className="yut-isometric-piece-count">
                     {pieces.length > 1 ? "×2" : pieces[0].id}
                   </span>
