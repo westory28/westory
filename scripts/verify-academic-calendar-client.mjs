@@ -5,8 +5,9 @@ import vm from "node:vm";
 import test from "node:test";
 import { build } from "esbuild";
 
-// Compile the real adapter, replacing its sole runtime dependency before it
-// loads. These checks cannot initialize Firebase or contact production.
+// Compile the real adapter with isolated Firebase and step-up boundaries.
+// These checks cannot initialize Firebase or contact production. The common
+// step-up implementation has its own verify-sensitive-operation.mjs suite.
 const compiled = await build({
   entryPoints: [
     fileURLToPath(new URL("../src/lib/academicCalendar.ts", import.meta.url)),
@@ -20,7 +21,7 @@ const compiled = await build({
       name: "isolated-calendar-firebase",
       setup(builder) {
         builder.onResolve(
-          { filter: /^(\.\/firebase|firebase\/auth)$/ },
+          { filter: /^(\.\/firebase|\.\/sensitiveOperation|firebase\/auth)$/ },
           ({ path }) => ({
             path,
             namespace: "calendar-test",
@@ -30,9 +31,11 @@ const compiled = await build({
           { filter: /.*/, namespace: "calendar-test" },
           ({ path }) => ({
             contents:
-              path === "firebase/auth"
-                ? "export const GoogleAuthProvider = globalThis.__calendarFirebase.GoogleAuthProvider; export const reauthenticateWithPopup = globalThis.__calendarFirebase.reauthenticateWithPopup;"
-                : "export const auth = globalThis.__calendarFirebase.auth; export const getHttpsCallable = globalThis.__calendarFirebase.getHttpsCallable;",
+              path === "./sensitiveOperation"
+                ? "export const ensureSensitiveOperation = globalThis.__calendarFirebase.ensureSensitiveOperation;"
+                : path === "firebase/auth"
+                  ? "export const GoogleAuthProvider = globalThis.__calendarFirebase.GoogleAuthProvider; export const reauthenticateWithPopup = globalThis.__calendarFirebase.reauthenticateWithPopup;"
+                  : "export const auth = globalThis.__calendarFirebase.auth; export const getHttpsCallable = globalThis.__calendarFirebase.getHttpsCallable;",
             loader: "js",
           }),
         );
@@ -71,36 +74,62 @@ const operation = () => ({
     description: undefined,
   },
 });
+const deleteOperation = () => ({
+  action: "DELETE_EVENT",
+  year: 2026,
+  semester: 2,
+  eventId: "event-1",
+  expectedRevision: 1,
+});
+const ordinaryOperations = () => [
+  operation(),
+  { action: "SAVE_CATEGORIES", year: 2026, semester: 2, items: [] },
+  { action: "SYNC_HOLIDAYS", year: 2026, semester: 2, holidays: [] },
+];
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const failure = (code) => Object.assign(new Error(code), { code });
 
 function harness(options = {}) {
-  const calls = { resolved: [], open: [], manage: [], reauth: [] };
-  let tokenAuthTime = options.authTime ?? authTime;
+  const calls = {
+    resolved: [],
+    open: [],
+    manage: [],
+    sensitive: [],
+    reauth: [],
+    tokens: 0,
+  };
+  let tokenAuthTime = "authTime" in options ? options.authTime : authTime;
+  const controls = {
+    setAuthTime(value) {
+      tokenAuthTime = value;
+    },
+  };
   const auth = {
     currentUser: {
       uid: "calendar-admin",
       email: "admin@example.test",
       async getIdTokenResult() {
-        options.onToken?.(auth);
+        calls.tokens += 1;
+        await options.onToken?.(auth, controls, calls.tokens);
         return { claims: { auth_time: String(tokenAuthTime) } };
       },
     },
   };
   const getHttpsCallable = async (name) => {
     calls.resolved.push(name);
-    options.onResolve?.(name, auth);
+    await options.onResolve?.(name, auth, controls);
     if (name === "openApplicationSession")
       return async (payload) => {
         calls.open.push(clone(payload));
-        options.onOpen?.(auth);
+        const openedAuthTime = tokenAuthTime;
+        await options.onOpen?.(auth, controls);
         const openError =
           typeof options.openError === "function"
             ? options.openError(calls.open.length)
             : options.openError;
         if (openError) throw openError;
         return {
-          data: { ...session, authTime: tokenAuthTime, ...options.session },
+          data: { ...session, authTime: openedAuthTime, ...options.session },
         };
       };
     assert.equal(
@@ -111,7 +140,7 @@ function harness(options = {}) {
     return async (payload) => {
       calls.manage.push(clone(payload));
       return options.manage
-        ? options.manage(payload, calls.manage.length, auth)
+        ? options.manage(payload, calls.manage.length, auth, controls)
         : { data: { eventId: "saved-event", revision: 1 } };
     };
   };
@@ -122,10 +151,14 @@ function harness(options = {}) {
   }
   const reauthenticateWithPopup = async (user, provider) => {
     calls.reauth.push({ uid: user.uid, parameters: provider.parameters });
-    if (options.popupError) throw options.popupError;
-    options.onReauth?.(auth);
-    tokenAuthTime = authTime;
-    return { user: options.reauthUser || user };
+    throw new Error(
+      "Calendar adapter must use the shared sensitive-operation flow",
+    );
+  };
+  const ensureSensitiveOperation = async () => {
+    calls.sensitive.push(auth.currentUser?.uid);
+    if (options.sensitiveError) throw options.sensitiveError;
+    await options.onSensitive?.(auth, controls);
   };
   class Clock extends Date {
     static now() {
@@ -141,6 +174,7 @@ function harness(options = {}) {
       getHttpsCallable,
       GoogleAuthProvider,
       reauthenticateWithPopup,
+      ensureSensitiveOperation,
     },
   });
   vm.runInContext(compiled.outputFiles[0].text, context);
@@ -163,8 +197,9 @@ test("session handshake, scope strings, proof and event fields reach the callabl
   assert.equal(
     client.calls.reauth.length,
     0,
-    "Fresh authentication must not open a popup",
+    "Ordinary saves must not open a popup",
   );
+  assert.equal(client.calls.sensitive.length, 0);
   const payload = client.calls.manage[0];
   assert.equal(payload.year, "2026");
   assert.equal(payload.semester, "2");
@@ -250,30 +285,29 @@ test("definite failure is not retried and the next save uses a fresh ID", async 
   }
 });
 
-test("a changed user before mutation is rejected at every awaited boundary", async () => {
-  const replaceUser = (auth) => {
-    auth.currentUser = { uid: "different-user" };
-  };
-  for (const options of [
-    { onToken: replaceUser },
-    {
-      onResolve: (name, auth) => {
-        if (name === "openApplicationSession") replaceUser(auth);
+test("different users and replacement User objects with the same UID cannot mutate", async () => {
+  for (const uid of ["different-user", "calendar-admin"]) {
+    const replaceUser = (auth) => {
+      auth.currentUser = { ...auth.currentUser, uid };
+    };
+    for (const options of [
+      { onToken: replaceUser },
+      {
+        onResolve: (name, auth) => {
+          if (name === "openApplicationSession") replaceUser(auth);
+        },
       },
-    },
-    { onOpen: replaceUser },
-    {
-      onResolve: (name, auth) => {
-        if (name === "manageAcademicCalendar") replaceUser(auth);
+      { onOpen: replaceUser },
+      {
+        onResolve: (name, auth) => {
+          if (name === "manageAcademicCalendar") replaceUser(auth);
+        },
       },
-    },
-  ]) {
-    const client = harness(options);
-    await assert.rejects(
-      client.mutateAcademicCalendar(operation()),
-      /로그인 사용자가 바뀌었습니다/,
-    );
-    assert.equal(client.calls.manage.length, 0);
+    ]) {
+      const client = harness(options);
+      await assert.rejects(client.mutateAcademicCalendar(operation()));
+      assert.equal(client.calls.manage.length, 0);
+    }
   }
 });
 
@@ -283,6 +317,12 @@ test("stale or mismatched session data never reaches calendar mutation", async (
     { authTime: authTime - 1 },
     { authorityGeneration: "old-generation" },
     { protocolVersion: 1 },
+    { protocolVersion: undefined },
+    { protocolVersion: null },
+    { protocolVersion: "2" },
+    { protocolVersion: NaN },
+    { protocolVersion: Infinity },
+    { protocolVersion: 2.5 },
     { revision: "stale-revision" },
   ]) {
     const client = harness({ session: stale });
@@ -314,121 +354,248 @@ test("signed-out requests cannot resolve or call any Firebase endpoint", async (
   assert.deepEqual(client.calls.resolved, []);
 });
 
-test("older explicit mutations reauthenticate the same account and use fresh token proof", async () => {
-  for (const input of [
-    operation(),
-    {
-      action: "DELETE_EVENT",
-      year: 2026,
-      semester: 2,
-      eventId: "event-1",
-      expectedRevision: 1,
-    },
-    { action: "SAVE_CATEGORIES", year: 2026, semester: 2, items: [] },
-  ]) {
-    const client = harness({ authTime: authTime - 600 });
-    await client.mutateAcademicCalendar(input);
-    assert.deepEqual(clone(client.calls.reauth), [
-      {
-        uid: "calendar-admin",
-        parameters: { login_hint: "admin@example.test" },
-      },
-    ]);
-    assert.equal(client.calls.manage.length, 1);
-    assert.equal(client.calls.open.length, 1);
-  }
-  for (const invalidTime of [authTime + 3600, "invalid"]) {
-    const client = harness({ authTime: invalidTime });
-    await client.mutateAcademicCalendar(operation());
-    assert.equal(client.calls.reauth.length, 1);
+test("15-, 30- and 50-minute-old authentication permits repeated ordinary mutations without step-up", async () => {
+  for (const minutes of [15, 30, 50]) {
+    const client = harness({ authTime: authTime + 60 - minutes * 60 });
+    for (let repeat = 0; repeat < 3; repeat += 1) {
+      for (const input of ordinaryOperations()) {
+        await client.mutateAcademicCalendar(input);
+      }
+    }
+    assert.equal(client.calls.manage.length, 9);
+    assert.equal(
+      client.calls.open.length,
+      9,
+      "Every mutation must validate its session",
+    );
+    assert.equal(client.calls.sensitive.length, 0);
+    assert.equal(client.calls.reauth.length, 0);
+    assert.equal(
+      new Set(client.calls.manage.map((call) => call.requestId)).size,
+      9,
+    );
   }
 });
 
-test("automatic holiday synchronization never opens a popup", async () => {
-  const input = {
-    action: "SYNC_HOLIDAYS",
-    year: 2026,
-    semester: 2,
-    holidays: [],
-  };
-  const client = harness({ authTime: authTime - 600 });
-  await client.mutateAcademicCalendar(input);
+test("invalid authentication epochs are rejected without endpoint calls or a popup", async () => {
+  for (const value of [
+    undefined,
+    null,
+    "invalid",
+    0,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    const client = harness({ authTime: value });
+    await assert.rejects(client.mutateAcademicCalendar(operation()));
+    assert.deepEqual(client.calls.resolved, []);
+    assert.equal(client.calls.manage.length, 0);
+    assert.equal(client.calls.sensitive.length, 0);
+    assert.equal(client.calls.reauth.length, 0);
+  }
+});
+
+test("delete uses the shared step-up before a fresh handshake and retains revision proof", async () => {
+  const client = harness({
+    authTime: authTime - 1800,
+    onSensitive: (_auth, controls) => controls.setAuthTime(authTime),
+    session: { authTime },
+  });
+  await client.mutateAcademicCalendar(deleteOperation());
+  assert.deepEqual(client.calls.sensitive, ["calendar-admin"]);
   assert.equal(client.calls.reauth.length, 0);
-  const expired = harness({
+  assert.equal(client.calls.open.length, 1);
+  assert.equal(client.calls.manage.length, 1);
+  assert.equal(client.calls.manage[0].action, "DELETE_EVENT");
+  assert.equal(client.calls.manage[0].eventId, "event-1");
+  assert.equal(client.calls.manage[0].expectedRevision, 1);
+  assert.equal(client.calls.manage[0]._session.revision, session.revision);
+});
+
+test("delete cancellation, popup errors and step-up failures preserve input without any write", async () => {
+  for (const code of [
+    "auth/reauthentication-cancelled",
+    "auth/popup-blocked",
+    "auth/popup-closed-by-user",
+    "auth/cancelled-popup-request",
+    "functions/unauthenticated",
+    "functions/permission-denied",
+    "auth/network-request-failed",
+  ]) {
+    const client = harness({
+      authTime: authTime - 600,
+      sensitiveError: failure(code),
+    });
+    const input = deleteOperation();
+    const before = clone(input);
+    await assert.rejects(client.mutateAcademicCalendar(input), { code });
+    assert.deepEqual(clone(input), before);
+    assert.equal(client.calls.sensitive.length, 1);
+    assert.equal(client.calls.reauth.length, 0);
+    assert.deepEqual(client.calls.resolved, []);
+    assert.equal(client.calls.open.length, 0);
+    assert.equal(client.calls.manage.length, 0);
+  }
+});
+
+test("expired ordinary sessions never start reauthentication or automatic reopen loops", async () => {
+  for (const reason of [
+    "SESSION_REAUTH_REQUIRED",
+    "SESSION_EXPIRED",
+    "SESSION_IDLE_EXPIRED",
+  ]) {
+    const expired = Object.assign(failure("functions/unauthenticated"), {
+      details: { reason },
+    });
+    for (const input of ordinaryOperations()) {
+      const client = harness({ authTime: authTime - 1800, openError: expired });
+      await assert.rejects(client.mutateAcademicCalendar(input), {
+        code: expired.code,
+      });
+      assert.equal(client.calls.open.length, 1);
+      assert.equal(client.calls.manage.length, 0);
+      assert.equal(client.calls.sensitive.length, 0);
+      assert.equal(client.calls.reauth.length, 0);
+      const rejectedWrite = harness({
+        manage: () => {
+          throw expired;
+        },
+      });
+      await assert.rejects(rejectedWrite.mutateAcademicCalendar(input), {
+        code: expired.code,
+      });
+      assert.equal(rejectedWrite.calls.open.length, 1);
+      assert.equal(
+        rejectedWrite.calls.manage.length,
+        1,
+        "A definite expiry must not replay a mutation",
+      );
+      assert.equal(rejectedWrite.calls.sensitive.length, 0);
+      assert.equal(rejectedWrite.calls.reauth.length, 0);
+    }
+  }
+});
+
+test("delete never repeats step-up when its subsequent session handshake expires", async () => {
+  const client = harness({
     openError: Object.assign(failure("functions/unauthenticated"), {
       details: { reason: "SESSION_REAUTH_REQUIRED" },
     }),
   });
-  await assert.rejects(expired.mutateAcademicCalendar(input));
-  assert.equal(expired.calls.reauth.length, 0);
-  assert.equal(expired.calls.manage.length, 0);
+  await assert.rejects(client.mutateAcademicCalendar(deleteOperation()));
+  assert.equal(client.calls.sensitive.length, 1);
+  assert.equal(client.calls.reauth.length, 0);
+  assert.equal(client.calls.open.length, 1);
+  assert.equal(client.calls.manage.length, 0);
 });
 
-test("popup cancellation or blocking retains the operation without a write", async () => {
-  for (const code of [
-    "auth/popup-blocked",
-    "auth/popup-closed-by-user",
-    "auth/cancelled-popup-request",
-  ]) {
+test("User replacement during shared delete step-up stops before the handshake", async () => {
+  for (const uid of ["different-user", "calendar-admin"]) {
     const client = harness({
-      authTime: authTime - 600,
-      popupError: failure(code),
+      onSensitive: (auth) => {
+        auth.currentUser = { ...auth.currentUser, uid };
+      },
     });
-    const input = operation();
-    const before = clone(input);
-    await assert.rejects(client.mutateAcademicCalendar(input), { code });
-    assert.deepEqual(clone(input), before);
+    await assert.rejects(client.mutateAcademicCalendar(deleteOperation()));
     assert.equal(client.calls.open.length, 0);
     assert.equal(client.calls.manage.length, 0);
-    assert.match(
-      client.academicCalendarErrorMessage(failure(code)),
-      /입력 내용은 유지됩니다/,
-    );
   }
 });
 
-test("session expiry allows one explicit reauthentication and never loops", async () => {
-  const expired = Object.assign(failure("functions/unauthenticated"), {
-    details: { reason: "SESSION_REAUTH_REQUIRED" },
-  });
-  const recovered = harness({
-    openError: (count) => (count === 1 ? expired : null),
-  });
-  await recovered.mutateAcademicCalendar(operation());
-  assert.equal(recovered.calls.reauth.length, 1);
-  assert.equal(recovered.calls.open.length, 2);
-  assert.equal(recovered.calls.manage.length, 1);
-  const neverRecovered = harness({ openError: expired });
-  await assert.rejects(neverRecovered.mutateAcademicCalendar(operation()));
-  assert.equal(neverRecovered.calls.reauth.length, 1);
-  assert.equal(neverRecovered.calls.open.length, 2);
-  assert.equal(neverRecovered.calls.manage.length, 0);
-  const alreadyReauthenticated = harness({
-    authTime: authTime - 600,
-    openError: expired,
-  });
-  await assert.rejects(
-    alreadyReauthenticated.mutateAcademicCalendar(operation()),
-  );
-  assert.equal(alreadyReauthenticated.calls.reauth.length, 1);
-  assert.equal(alreadyReauthenticated.calls.open.length, 1);
-});
-
-test("identity changes during popup authentication never write calendar data", async () => {
+test("authentication epoch changes at awaited boundaries cannot send a stale mutation", async () => {
   for (const options of [
     {
-      onReauth: (auth) => {
-        auth.currentUser = { uid: "different-user" };
+      onToken: (_auth, controls, count) => {
+        if (count === 2) controls.setAuthTime(authTime + 1);
       },
     },
-    { reauthUser: { uid: "different-user" } },
+    {
+      onResolve: (name, _auth, controls) => {
+        if (name === "openApplicationSession")
+          controls.setAuthTime(authTime + 1);
+      },
+    },
+    { onOpen: (_auth, controls) => controls.setAuthTime(authTime + 1) },
+    {
+      onResolve: (name, _auth, controls) => {
+        if (name === "manageAcademicCalendar")
+          controls.setAuthTime(authTime + 1);
+      },
+    },
   ]) {
-    const client = harness({ authTime: authTime - 600, ...options });
-    await assert.rejects(
-      client.mutateAcademicCalendar(operation()),
-      /계정|사용자/,
-    );
-    assert.equal(client.calls.open.length, 0);
+    const client = harness(options);
+    await assert.rejects(client.mutateAcademicCalendar(operation()));
     assert.equal(client.calls.manage.length, 0);
+    assert.equal(client.calls.sensitive.length, 0);
+  }
+});
+
+test("identity or epoch changes while a mutation completes reject its result and prevent retry", async () => {
+  for (const change of [
+    (auth) => {
+      auth.currentUser = { ...auth.currentUser };
+    },
+    (_auth, controls) => controls.setAuthTime(authTime + 1),
+  ]) {
+    for (const uncertainFailure of [false, true]) {
+      const client = harness({
+        manage: (_payload, _count, auth, controls) => {
+          change(auth, controls);
+          if (uncertainFailure) throw failure("functions/unavailable");
+          return { data: { revision: 1 } };
+        },
+      });
+      await assert.rejects(client.mutateAcademicCalendar(operation()));
+      assert.equal(
+        client.calls.manage.length,
+        1,
+        "A changed authority must never replay the pending mutation",
+      );
+      assert.equal(client.calls.sensitive.length, 0);
+      assert.equal(client.calls.reauth.length, 0);
+    }
+  }
+});
+
+test("a successful write rejected after authority changes retains its receipt for the next explicit retry", async () => {
+  for (const change of [
+    (auth) => {
+      auth.currentUser = { ...auth.currentUser };
+    },
+    (_auth, controls) => controls.setAuthTime(authTime + 1),
+  ]) {
+    const client = harness({
+      manage: (_payload, count, auth, controls) => {
+        if (count === 1) change(auth, controls);
+        return { data: { eventId: "saved-event", revision: 1 } };
+      },
+    });
+    await assert.rejects(client.mutateAcademicCalendar(operation()));
+    assert.equal(client.calls.manage.length, 1);
+    const requestId = client.calls.manage[0].requestId;
+    assert.deepEqual(clone(await client.mutateAcademicCalendar(operation())), {
+      eventId: "saved-event",
+      revision: 1,
+    });
+    assert.equal(
+      client.calls.open.length,
+      2,
+      "Explicit retry must validate the new session",
+    );
+    assert.equal(client.calls.manage.length, 2);
+    assert.equal(
+      client.calls.manage[1].requestId,
+      requestId,
+      "The committed write must not become a new creation after reauthentication",
+    );
+    assert.equal(client.calls.sensitive.length, 0);
+    assert.equal(client.calls.reauth.length, 0);
+    await client.mutateAcademicCalendar(operation());
+    assert.notEqual(
+      client.calls.manage[2].requestId,
+      requestId,
+      "An acknowledged operation must release the old receipt",
+    );
   }
 });

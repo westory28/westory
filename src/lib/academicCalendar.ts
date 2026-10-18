@@ -1,5 +1,5 @@
 import { auth, getHttpsCallable } from "./firebase";
-import { GoogleAuthProvider, reauthenticateWithPopup } from "firebase/auth";
+import { ensureSensitiveOperation } from "./sensitiveOperation";
 import type { CalendarEvent } from "../types";
 import type { ScheduleCategory } from "./scheduleCategories";
 
@@ -62,34 +62,31 @@ export const mutateAcademicCalendar = async <
   const user = auth.currentUser;
   if (!user) throw new Error("로그인 후 다시 저장해 주세요.");
   const assertSameUser = () => {
-    if (auth.currentUser?.uid !== user.uid)
+    if (auth.currentUser !== user)
       throw new Error(
         "로그인 사용자가 바뀌었습니다. 화면을 새로고침해 주세요.",
       );
   };
-  let token = await user.getIdTokenResult();
-  assertSameUser();
-  const explicitMutation = operation.action !== "SYNC_HOLIDAYS";
-  let reauthenticated = false;
-  const reauthenticate = async () => {
+  // Routine calendar edits use the active application session. Only permanent
+  // deletion needs step-up authentication, through the shared user-click flow.
+  if (operation.action === "DELETE_EVENT") {
+    await ensureSensitiveOperation();
     assertSameUser();
-    const provider = new GoogleAuthProvider();
-    if (user.email) provider.setCustomParameters({ login_hint: user.email });
-    const result = await reauthenticateWithPopup(user, provider);
-    assertSameUser();
-    if (result.user.uid !== user.uid)
-      throw new Error("같은 관리자 계정으로 인증한 뒤 다시 저장해 주세요.");
-    token = await user.getIdTokenResult(true);
-    assertSameUser();
-    reauthenticated = true;
-  };
-  const authAge = Date.now() - Number(token.claims.auth_time) * 1000;
-  if (
-    explicitMutation &&
-    (!Number.isFinite(authAge) || authAge < -60000 || authAge > 240000)
-  ) {
-    await reauthenticate();
   }
+  const token = await user.getIdTokenResult();
+  assertSameUser();
+  const authTime = Number(token.claims.auth_time);
+  if (!Number.isSafeInteger(authTime) || authTime <= 0)
+    throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요.");
+  const assertSameSession = async () => {
+    assertSameUser();
+    const currentToken = await user.getIdTokenResult();
+    assertSameUser();
+    if (Number(currentToken.claims.auth_time) !== authTime)
+      throw new Error(
+        "로그인 상태가 바뀌었습니다. 입력을 확인한 뒤 다시 저장해 주세요.",
+      );
+  };
   const open = await getHttpsCallable<
     { authorityGeneration: string; protocolVersion: number },
     {
@@ -105,32 +102,13 @@ export const mutateAcademicCalendar = async <
     authorityGeneration: generation,
     protocolVersion: 2,
   };
-  let session;
-  try {
-    ({ data: session } = await open(handshake));
-  } catch (error) {
-    assertSameUser();
-    const reason = String(
-      (error as { details?: { reason?: string } })?.details?.reason || "",
-    );
-    if (
-      !explicitMutation ||
-      reauthenticated ||
-      ![
-        "SESSION_REAUTH_REQUIRED",
-        "SESSION_EXPIRED",
-        "SESSION_IDLE_EXPIRED",
-      ].includes(reason)
-    )
-      throw error;
-    await reauthenticate();
-    ({ data: session } = await open(handshake));
-  }
-  assertSameUser();
+  const { data: session } = await open(handshake);
+  await assertSameSession();
   if (
     session.status !== "active" ||
-    session.authTime !== Number(token.claims.auth_time) ||
+    session.authTime !== authTime ||
     session.authorityGeneration !== generation ||
+    !Number.isInteger(session.protocolVersion) ||
     session.protocolVersion < 2 ||
     !/^[a-f0-9]{64}$/.test(session.revision)
   ) {
@@ -160,19 +138,23 @@ export const mutateAcademicCalendar = async <
     "manageAcademicCalendar",
   );
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    assertSameUser();
+    await assertSameSession();
+    let response;
     try {
-      const response = await call(payload);
-      assertSameUser();
-      pendingRequestIds.delete(key);
-      return response.data;
+      response = await call(payload);
     } catch (error) {
       if (!isRetryable(error)) {
         pendingRequestIds.delete(key);
         throw error;
       }
       if (attempt === 1) throw error;
+      continue;
     }
+    // A committed write may outlive its auth epoch. Keep its receipt ID until
+    // the result can be accepted so an explicit retry cannot create a duplicate.
+    await assertSameSession();
+    pendingRequestIds.delete(key);
+    return response.data;
   }
   throw new Error("저장 결과를 확인하지 못했습니다. 다시 시도해 주세요.");
 };
@@ -184,11 +166,13 @@ export const academicCalendarErrorMessage = (error: unknown) => {
     return "인증 팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 저장해 주세요. 입력 내용은 유지됩니다.";
   if (/popup-closed-by-user|cancelled-popup-request/.test(code))
     return "인증이 완료되지 않았습니다. 다시 저장하여 인증을 마쳐 주세요. 입력 내용은 유지됩니다.";
+  if (/reauthentication-cancelled/.test(code))
+    return "재인증을 취소했습니다. 일정은 변경되지 않았습니다.";
   if (/user-mismatch/.test(code))
     return "현재 로그인한 관리자 계정으로 인증해 주세요. 입력 내용은 유지됩니다.";
   const reason = (error as { details?: { reason?: string } })?.details?.reason;
   if (reason === "RECENT_AUTH_REQUIRED")
-    return "보안을 위해 다시 로그인한 뒤 일정을 저장해 주세요.";
+    return "일정을 삭제하려면 현재 계정으로 다시 인증해 주세요.";
   if (/unauthenticated/.test(code))
     return "로그인 세션이 만료되었습니다. 다시 로그인한 뒤 저장해 주세요.";
   if (/permission-denied/.test(code))

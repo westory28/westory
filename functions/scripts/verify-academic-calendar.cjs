@@ -50,6 +50,14 @@ async function rejects(mutate, code, reason, data = {}) {
   await assert.rejects(() => f.handler(req), (error) => error.code === code && (!reason || error.details?.reason === reason));
   assert.equal(f.writes, 0); checks++;
 }
+function setAuthAge(f, req, ageSeconds) {
+  const authTime = NOW / 1000 - ageSeconds;
+  const session = { ...f.docs.get(sessionPath), authTime };
+  f.docs.delete(sessionPath);
+  f.docs.set(`application_sessions/admin/sessions/${authTime}`, session);
+  req.auth.token.auth_time = authTime;
+  return session;
+}
 async function main() {
   const f = fixture();
   const created = await f.handler(request());
@@ -77,33 +85,64 @@ async function main() {
   const categories = [{ key: 'exam', label: '시험', color: '#ef4444', emoji: '🔴', order: 0, hidden: true, locked: true }, { key: 'event', label: '행사', color: '#22c55e', emoji: '🟢', order: 1 }];
   assert.deepEqual(await f.handler(request({ action: 'SAVE_CATEGORIES', requestId: 'categories', items: categories })), { saved: true });
   assert.deepEqual(f.docs.get('site_settings/schedule_categories').items, categories); checks++;
-  await rejects((f) => { delete f.docs.get(sessionPath).highRiskExpiresAt; }, 'unauthenticated', 'SESSION_EXPIRED', { action: 'SAVE_CATEGORIES', items: categories });
-  await rejects((f) => { f.docs.get(sessionPath).highRiskExpiresAt = Timestamp.fromMillis(NOW - 1); }, 'unauthenticated', 'SESSION_EXPIRED', { action: 'SAVE_CATEGORIES', items: categories });
+  const existingPath = 'years/2026/semesters/2/calendar/existing';
+  const routineMutations = [
+    {},
+    { eventId: 'existing', expectedRevision: 1 },
+    { action: 'SAVE_CATEGORIES', items: categories },
+    { action: 'SYNC_HOLIDAYS', holidays: [{ title: '추석', start: '2026-09-25', source: 'generated' }] },
+  ];
+  for (const mutation of routineMutations) {
+    for (const authAge of [301, 3601]) {
+      for (const highRiskExpiry of [undefined, Timestamp.fromMillis(NOW - 1)]) {
+        const routine = fixture({ WESTORY_SESSION_IDLE_MODE: 'ENFORCE' });
+        routine.docs.set(existingPath, { ...event, revision: 1 });
+        const req = request(mutation);
+        const session = setAuthAge(routine, req, authAge);
+        session.highRiskExpiresAt = highRiskExpiry;
+        const result = await routine.handler(req);
+        const written = routine.writes;
+        assert.ok(written > 0, 'routine mutation must save with an active general session after five minutes');
+        assert.deepEqual(await routine.handler(req), result);
+        assert.equal(routine.writes, written, 'routine retry remains idempotent'); checks++;
+      }
+    }
+    for (const mutate of [
+      (f) => { f.docs.get(sessionPath).status = 'revoked'; },
+      (f) => { f.docs.get(sessionPath).authTime = AUTH_TIME - 1; },
+      (f) => { f.docs.get(sessionPath).generalExpiresAt = Timestamp.fromMillis(NOW - 1); },
+      (f, req) => { req.data._session = { ...proof, revision: 'b'.repeat(64) }; },
+    ]) {
+      await rejects(mutate, 'unauthenticated', null, mutation);
+    }
+  }
+  const deletion = { action: 'DELETE_EVENT', eventId: 'existing' };
+  await rejects((f) => { delete f.docs.get(sessionPath).highRiskExpiresAt; }, 'unauthenticated', 'SESSION_EXPIRED', deletion);
+  await rejects((f) => { f.docs.get(sessionPath).highRiskExpiresAt = Timestamp.fromMillis(NOW - 1); }, 'unauthenticated', 'SESSION_EXPIRED', deletion);
   for (const authAge of [301, -61]) {
-    await rejects((f, req) => {
-      const authTime = NOW / 1000 - authAge;
-      const session = { ...f.docs.get(sessionPath), authTime };
-      f.docs.delete(sessionPath);
-      f.docs.set(`application_sessions/admin/sessions/${authTime}`, session);
-      req.auth.token.auth_time = authTime;
-    }, 'failed-precondition', 'RECENT_AUTH_REQUIRED', { action: 'SAVE_CATEGORIES', items: categories });
+    await rejects((f, req) => { setAuthAge(f, req, authAge); }, 'failed-precondition', 'RECENT_AUTH_REQUIRED', deletion);
   }
-  for (const mutation of [{}, { action: 'DELETE_EVENT', eventId: 'existing' }, { action: 'SYNC_HOLIDAYS', holidays: [{ title: '추석', start: '2026-09-25', source: 'generated' }] }]) {
-    await rejects((f) => { delete f.docs.get(sessionPath).highRiskExpiresAt; }, 'unauthenticated', 'SESSION_EXPIRED', mutation);
-    await rejects((f) => { f.docs.get(sessionPath).highRiskExpiresAt = Timestamp.fromMillis(NOW - 1); }, 'unauthenticated', 'SESSION_EXPIRED', mutation);
-    await rejects((f, req) => {
-      const authTime = NOW / 1000 - 301;
-      const session = { ...f.docs.get(sessionPath), authTime };
-      f.docs.delete(sessionPath);
-      f.docs.set(`application_sessions/admin/sessions/${authTime}`, session);
-      req.auth.token.auth_time = authTime;
-    }, 'failed-precondition', 'RECENT_AUTH_REQUIRED', mutation);
+  for (const authAge of [300, -60]) {
+    const boundary = fixture(); boundary.docs.set(existingPath, { ...event, revision: 0 });
+    const req = request(deletion); setAuthAge(boundary, req, authAge);
+    assert.deepEqual(await boundary.handler(req), { deleted: true }); checks++;
   }
+  const deleteRetry = fixture(); deleteRetry.docs.set(existingPath, { ...event, revision: 0 });
+  const deleteRequest = request(deletion); await deleteRetry.handler(deleteRequest);
+  const deleteWrites = deleteRetry.writes; setAuthAge(deleteRetry, deleteRequest, 301);
+  await assert.rejects(() => deleteRetry.handler(deleteRequest), (error) => error.details.reason === 'RECENT_AUTH_REQUIRED');
+  assert.equal(deleteRetry.writes, deleteWrites, 'deletion retry must recheck recent authentication'); checks++;
   for (const mode of ['OBSERVE_ONLY', 'DISABLED']) {
-    const categoryObserver = fixture(); Object.assign(categoryObserver.docs.get(sessionPath), { authorityModeAtOpen: mode, highRiskExpiresAt: Timestamp.fromMillis(NOW - 1) });
-    await categoryObserver.handler(request({ action: 'SAVE_CATEGORIES', items: categories })); checks++;
-    const categoryEnforced = fixture({ WESTORY_SESSION_IDLE_MODE: 'ENFORCE' }); Object.assign(categoryEnforced.docs.get(sessionPath), { authorityModeAtOpen: mode, highRiskExpiresAt: Timestamp.fromMillis(NOW - 1) });
-    await assert.rejects(() => categoryEnforced.handler(request({ action: 'SAVE_CATEGORIES', items: categories })), (error) => error.code === 'unauthenticated'); checks++;
+    const observer = fixture({ WESTORY_SESSION_IDLE_MODE: mode }); observer.docs.set(existingPath, { ...event, revision: 0 });
+    Object.assign(observer.docs.get(sessionPath), { authorityModeAtOpen: mode, highRiskExpiresAt: Timestamp.fromMillis(NOW - 1) });
+    await observer.handler(request(deletion)); checks++;
+    const enforced = fixture({ WESTORY_SESSION_IDLE_MODE: 'ENFORCE' }); Object.assign(enforced.docs.get(sessionPath), { authorityModeAtOpen: mode, highRiskExpiresAt: Timestamp.fromMillis(NOW - 1) });
+    await assert.rejects(() => enforced.handler(request(deletion)), (error) => error.code === 'unauthenticated');
+    assert.equal(enforced.writes, 0); checks++;
+    const stale = fixture({ WESTORY_SESSION_IDLE_MODE: mode });
+    const req = request(deletion); setAuthAge(stale, req, 301).authorityModeAtOpen = mode;
+    await assert.rejects(() => stale.handler(req), (error) => error.details.reason === 'RECENT_AUTH_REQUIRED');
+    assert.equal(stale.writes, 0); checks++;
   }
   await rejects((f, req) => { delete req.auth; }, 'unauthenticated');
   await rejects((f, req) => { req.auth.token.email = 'student@yongshin-ms.ms.kr'; }, 'permission-denied', 'CALENDAR_ADMIN_REQUIRED');

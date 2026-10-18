@@ -90,6 +90,22 @@ PC에는 코드와 개발 도구가 있고 실제 로그인 처리는 공통 Fir
 
 로그인 함수 4개의 복구가 다른 모든 운영 Functions의 소스 복구를 뜻하지는 않는다. PC 환경을 맞추기 위한 Functions/rules 일괄 배포는 하지 않고, 다른 백엔드 패치는 대상 운영 소스부터 대조한다.
 
+## 학사 일정 저장과 재인증 (2026-10-18)
+
+`manageAcademicCalendar`의 일정 등록·수정(`SAVE_EVENT`), 분류 저장(`SAVE_CATEGORIES`), 공휴일 동기화(`SYNC_HOLIDAYS`)는 유효한 일반 애플리케이션 세션을 사용한다. 영구 삭제(`DELETE_EVENT`)만 고위험 세션과 최근 5분 이내 인증을 요구한다. 관리자 제한, App Check 운영 모드, 세션 상태·epoch·증명·만료, 현재 학기, revision 충돌, 요청 영수증 검사는 유지한다. 일반 저장에 최근 인증 제한을 다시 추가하지 않는다. 기존 gateway의 일정 생성·수정도 일반 세션 정책이다.
+
+이전 클라이언트는 로그인 4분 후 자동 팝업을 열었고 서버는 5분 후 일반 저장도 거부했다. 로그인 시간(`auth_time`)은 시간 연장으로 갱신되지 않으므로 정상 로그인 중에도 반복 인증이 발생했다. 클라이언트는 이제 삭제에만 공통 `ensureSensitiveOperation`을 사용하며, 만료된 일반 세션을 저장 과정에서 자동 재인증·재개하지 않는다. 작업 중 사용자 또는 인증 epoch가 바뀌면 쓰기·응답 수락을 중단한다. 서버 저장 후 응답 수락이 중단된 경우 같은 요청 영수증을 유지해 명시적 재시도의 중복 생성을 막는다.
+
+검증은 `node scripts/verify-academic-calendar-client.mjs`, `node scripts/verify-sensitive-operation.mjs`, `npm --prefix functions run check`, `npm run build`로 수행한다. `scripts/verify-academic-calendar-emulator.cjs`는 로컬 Auth·Firestore·Functions 에뮬레이터에서 실제 adapter·세션 callable·일정 callable·rules를 함께 검증한다. 삭제의 공통 인증 경로에는 Vercel Production의 `VITE_FIREBASE_APPCHECK_SITE_KEY`가 필요하다. 환경 변수 값이나 세션 토큰을 검증 기록에 남기지 않는다.
+
+배포 전 운영 `manageAcademicCalendar` 및 세션 의존 소스를 대조한다. 이 패치의 백엔드 대상은 아래 함수 하나이며 로그인 함수·rules 전체를 다시 배포하지 않는다. 백엔드 배포 후 프론트엔드를 배포·승격하고 실제 운영 일정 저장을 확인한다.
+
+```powershell
+. .\scripts\use-westory-node.ps1
+firebase deploy --only "functions:manageAcademicCalendar" --project history-quiz-yongsin
+firebase functions:list --project history-quiz-yongsin
+```
+
 ## 역사 사전 조회 비용과 캐시 (2026-10-18)
 
 `history_dictionary_catalog`는 학기와 무관한 영구 원본이다. 기본 사전 조회 함수는 이 컬렉션을 스캔하지 않는다. `history_dictionary_catalog_snapshots/current`의 버전과 같은 컬렉션의 불변 gzip/base64 조각을 읽는다. 현재 3,367개 단어는 조각 1개(압축 399,735바이트)에 들어간다. 사전 데이터 읽기는 서버 최초 조회 2문서, 이후 조회 및 클라이언트 버전 일치 시 1문서다. 세션·사용자·학기 권한 확인용 읽기는 별도이며 그대로 유지한다.
